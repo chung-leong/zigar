@@ -12,9 +12,8 @@ import {
 } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import {
-  ALIGN, COPIER, NAME, NORMALIZER, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE, TAG,
-  VIVIFICATOR,
-  WRITE_DISABLER
+  ALIGN, COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE,
+  TAG, TYPE, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -159,12 +158,12 @@ export function defineUnionShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: getUnionIterator },
+    [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [PROP_GETTERS]: { value: memberValueGetters },
-    [NORMALIZER]: { value: normalizeUnion },
     [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
   };  
@@ -172,6 +171,7 @@ export function defineUnionShape(structure, env) {
     tag: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },    
+    [TYPE]: { value: structure.type },
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field
@@ -182,14 +182,6 @@ export function defineUnionShape(structure, env) {
     }
   }
 };
-
-export function normalizeUnion(cb, options) {
-  const object = {};
-  for (const [ name, value ] of getUnionEntries.call(this, options)) {
-    object[name] = cb(value);
-  }
-  return object;
-}
 
 export function getUnionEntries(options) {
   return {

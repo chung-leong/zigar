@@ -6,10 +6,9 @@ import {
   attachDescriptors, createConstructor, createPropertyApplier, makeReadOnly
 } from './object.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf,
-  normalizeValue
+  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE, WRITE_DISABLER } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, SIZE, TYPE, WRITE_DISABLER } from './symbol.js';
 import { getPrimitiveType } from './types.js';
 
 export function definePrimitive(structure, env) {
@@ -46,13 +45,13 @@ export function definePrimitive(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeValue },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };

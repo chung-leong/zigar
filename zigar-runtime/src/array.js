@@ -11,8 +11,8 @@ import {
   getTypedArrayDescriptor, getValueOf, handleError
 } from './special.js';
 import {
-  ALIGN, ARRAY, COMPAT, CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, MEMORY, NORMALIZER, PARENT,
-  POINTER_VISITOR, PROXY, SIZE, SLOTS, VIVIFICATOR, WRITE_DISABLER
+  ALIGN, ARRAY, COMPAT, CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
+  MEMORY, PARENT, POINTER_VISITOR, PROXY, SIZE, SLOTS, TYPE, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -82,10 +82,10 @@ export function defineArray(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
+    [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-    [NORMALIZER]: { value: normalizeArray },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
@@ -93,6 +93,7 @@ export function defineArray(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -120,14 +121,6 @@ export function makeArrayReadOnly() {
 
 export function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
-}
-
-export function normalizeArray(cb, options) {
-  const array = [];
-  for (const [ index, value ] of getArrayEntries.call(this, options)) {
-    array.push(cb(value));
-  }
-  return array;
 }
 
 export function getArrayIterator() {

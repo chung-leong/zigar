@@ -375,7 +375,9 @@ describe('Enumeration functions', function() {
       expect(JSON.stringify(Hello.Cat)).to.equal('"Cat"');
       const object = new Hello(undefined);
       object.dataView.setInt32(0, -1, true);
-      expect(() => JSON.stringify(object)).to.throw(TypeError);
+      expect(() => object.valueOf()).to.throw(TypeError);
+      expect(() => JSON.stringify(object)).to.not.throw();
+      expect(JSON.stringify(object)).to.contain("error");
     })
     it('should return undefined when look-up of enum item fails', function() {
       const structure = env.beginStructure({

@@ -3,7 +3,7 @@ import { AccessingOpaque, CreatingOpaque } from './error.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor } from './object.js';
 import { convertToJSON, getDataViewDescriptor, getValueOf } from './special.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, SIZE } from './symbol.js';
+import { ALIGN, COMPAT, COPIER, SIZE, TYPE } from './symbol.js';
 
 export function defineOpaque(structure, env) {
   const {
@@ -29,16 +29,12 @@ export function defineOpaque(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeOpaque },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
-
-function normalizeOpaque(cb) {
-  return {};
-}

@@ -75,7 +75,7 @@ describe('Error set functions', function() {
       expect(JSON.stringify(Hello.UnableToRetrieveMemoryLocation)).to.equal('{"error":"Unable to retrieve memory location"}');
       expect(JSON.stringify(object)).to.equal('{"error":"Unable to retrieve memory location"}');
       object.dataView.setInt16(0, -1);
-      expect(() => JSON.stringify(object)).to.throw(TypeError);
+      expect(() => object.valueOf()).to.throw(TypeError);
     })
     it('should define anyerror', function() {
       // define error first

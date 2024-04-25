@@ -8,7 +8,7 @@ import {
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, CLASS, COPIER, GETTER, NORMALIZER, PROPS, SIZE, WRITE_DISABLER } from './symbol.js';
+import { ALIGN, CLASS, COPIER, GETTER, PROPS, SIZE, TYPE, WRITE_DISABLER } from './symbol.js';
 import { isErrorJSON } from './types.js';
 
 let currentGlobalSet;
@@ -71,7 +71,6 @@ export function defineErrorSet(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: get },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
@@ -81,6 +80,7 @@ export function defineErrorSet(structure, env) {
     // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
     // so we can add names to it as error sets are defined
     [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };

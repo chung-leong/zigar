@@ -180,8 +180,8 @@ pub const Host = struct {
         }
     }
 
-    pub fn castView(_: Host, structure: Value, dv: Value, writable: bool) !Value {
-        if (_castView(structure, dv, writable)) |object| {
+    pub fn castView(_: Host, memory: Memory, structure: Value) !Value {
+        if (_castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure)) |object| {
             return object;
         } else {
             return Error.unable_to_create_object;

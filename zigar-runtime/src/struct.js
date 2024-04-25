@@ -9,10 +9,11 @@ import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
 } from './special.js';
 import {
-  ALIGN, COPIER, MEMORY, NORMALIZER, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, VIVIFICATOR, WRITE_DISABLER
+  ALIGN, COPIER, ENTRIES_GETTER, MEMORY, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, TUPLE, TYPE,
+  VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
-import { getVectorEntriesIterator, getVectorIterator, normalizeVector } from './vector.js';
+import { getVectorEntries, getVectorIterator } from './vector.js';
 
 export function defineStructShape(structure, env) {
   const {
@@ -53,29 +54,23 @@ export function defineStructShape(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    entries: isTuple && { value: getVectorEntriesIterator },
+    entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
-    [NORMALIZER]: { value: (isTuple) ? normalizeVector : normalizeStruct },
     [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
+    [TUPLE]: { value: isTuple },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-export function normalizeStruct(cb, options) {
-  const object = {};
-  for (const [ name, value ] of getStructEntries.call(this, options)) {
-    object[name] = cb(value);
-  }
-  return object;
 }
 
 export function getStructEntries(options) {

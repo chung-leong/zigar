@@ -5,11 +5,11 @@ import { Environment } from '../src/environment.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
-  getTypedArrayDescriptor, getValueOf,
+  getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
+  getTypedArrayDescriptor
 } from '../src/special.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { COPIER, MEMORY, NORMALIZER } from '../src/symbol.js';
+import { COPIER, MEMORY } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Special property functions', function() {
@@ -286,37 +286,7 @@ describe('Special property functions', function() {
       expect(() => set.call(object, 1)).to.throw(TypeError);
     })
   })
-  describe('getValueOf', function() {
-    it('should invoke normalizer function', function() {
-      let cb, options;
-      const object = {
-        [NORMALIZER](arg1, arg2) {
-          cb = arg1;
-          options = arg2;
-          return 1234;
-        }
-      };
-      const result = getValueOf.call(object);
-      expect(result).to.equal(1234);
-      expect(cb).to.be.a('function');
-      expect(options).to.be.an('object');
-    })
-  })
   describe('convertToJSON', function() {
-    it('should invoke normalizer function', function() {
-      let cb, options;
-      const object = {
-        [NORMALIZER](arg1, arg2) {
-          cb = arg1;
-          options = arg2;
-          return 1234;
-        }
-      };
-      const result = convertToJSON.call(object);
-      expect(result).to.equal(1234);
-      expect(cb).to.be.a('function');
-      expect(options).to.be.an('object');
-    })
     it('should enable correct output from JSON.stringify()', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,

@@ -425,5 +425,14 @@ export function addTests(importModule, options) {
       expect(() => user.address.street = "Nowhere").to.throw(TypeError);
       expect(() => user.address.zip = 33333).to.throw(TypeError);
     });
+    it('should correctly handle recursive structure', async function() {
+      this.timeout(120000);
+      const { getRoot } = await importTest('handle-recursive-structure');
+      const root = getRoot();
+      const parent = root.valueOf();
+      const [ child1, child2 ]= parent.children;
+      expect(child1.parent).to.equal(parent);
+      expect(child2.parent).to.equal(parent);
+    });
   })
 }

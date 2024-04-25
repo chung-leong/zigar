@@ -2,11 +2,15 @@ import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
-import { attachDescriptors, createConstructor, createPropertyApplier, getSelf, makeReadOnly } from './object.js';
+import {
+  attachDescriptors, createConstructor, createPropertyApplier, getSelf, makeReadOnly
+} from './object.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, COMPAT, COPIER, NORMALIZER, PROP_SETTERS, SIZE, WRITE_DISABLER } from './symbol.js';
+import {
+  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, PROP_SETTERS, SIZE, TYPE, WRITE_DISABLER
+} from './symbol.js';
 
 export function defineVector(structure, env) {
   const {
@@ -69,8 +73,8 @@ export function defineVector(structure, env) {
     entries: { value: getVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
+    [ENTRIES_GETTER]: { value: getVectorEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeVector },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
@@ -78,16 +82,9 @@ export function defineVector(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-export function normalizeVector(cb) {
-  const array = [];
-  for (const value of this) {
-    array.push(cb(value));
-  }
-  return array;
 }
 
 export function getVectorIterator() {

@@ -1,6 +1,7 @@
 import {
   canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
-  getPointerVisitor, makeArrayReadOnly, normalizeArray, transformIterable
+  getPointerVisitor, makeArrayReadOnly,
+  transformIterable
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
@@ -15,7 +16,7 @@ import {
   getTypedArrayDescriptor, getValueOf
 } from './special.js';
 import {
-  ALIGN, COMPAT, COPIER, LENGTH, MEMORY, NORMALIZER, POINTER_VISITOR, SIZE, VIVIFICATOR,
+  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, LENGTH, MEMORY, POINTER_VISITOR, SIZE, TYPE, VIVIFICATOR,
   WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
@@ -119,10 +120,10 @@ export function defineSlice(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
+    [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-    [NORMALIZER]: { value: normalizeArray },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
@@ -130,6 +131,7 @@ export function defineSlice(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }

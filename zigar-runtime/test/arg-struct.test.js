@@ -105,6 +105,7 @@ describe('ArgStruct functions', function() {
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
+      object.pet.valueOf();
       expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define an argument struct with pointer as return value', function() {      

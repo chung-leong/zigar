@@ -9,9 +9,8 @@ import { attachDescriptors, createConstructor, defineProperties } from './object
 import { convertToJSON, getValueOf } from './special.js';
 import {
   ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER,
-  LOCATION_SETTER, MEMORY, NORMALIZER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE,
-  SLOTS, TARGET_GETTER, TARGET_SETTER,
-  WRITE_DISABLER
+  LOCATION_SETTER, MEMORY, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
+  TARGET_GETTER, TARGET_SETTER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -194,7 +193,6 @@ export function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
   };
@@ -203,6 +201,7 @@ export function definePointer(structure, env) {
     const: { value: isConst },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -213,16 +212,6 @@ function makePointerReadOnly() {
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
   Object.defineProperty(pointer, CONST_TARGET, { value: pointer });
-}
-
-function normalizePointer(cb) {
-  let value;
-  try {
-    value = this['*'];
-  } catch (err) {
-    value = Symbol.for('inaccessible');
-  }
-  return cb(value);
 }
 
 function deleteTarget() {

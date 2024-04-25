@@ -8,7 +8,7 @@ import {
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, COPIER, MORE, NAME, NORMALIZER, SIZE, TAG, WRITE_DISABLER } from './symbol.js';
+import { ALIGN, COPIER, MORE, NAME, SIZE, TAG, TYPE, WRITE_DISABLER } from './symbol.js';
 
 export function defineEnumerationShape(structure, env) {
   const {
@@ -76,19 +76,15 @@ export function defineEnumerationShape(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeEnumerationItem },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 };
-
-export function normalizeEnumerationItem(cb) {
-  return cb(this.$[NAME]);
-}
 
 export function appendEnumeration(enumeration, name, item) {
   if (name !== undefined) {

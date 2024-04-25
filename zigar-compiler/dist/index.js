@@ -520,6 +520,8 @@ const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
 const NAME = Symbol('name');
+const TYPE = Symbol('type');
+const TUPLE = Symbol('tuple');
 const CLASS = Symbol('class');
 const TAG = Symbol('tag');
 const PROPS = Symbol('props');
@@ -531,6 +533,7 @@ const LOCATION_GETTER = Symbol('addressGetter');
 const LOCATION_SETTER = Symbol('addressSetter');
 const TARGET_GETTER = Symbol('targetGetter');
 const TARGET_SETTER = Symbol('targetSetter');
+const ENTRIES_GETTER = Symbol('entriesGetter');
 const FIXED_LOCATION = Symbol('fixedLocation');
 const PROP_GETTERS = Symbol('propGetters');
 const PROP_SETTERS = Symbol('propSetters');
@@ -547,7 +550,6 @@ const CONST_TARGET = Symbol('constTarget');
 const CONST_PROXY = Symbol('constProxy');
 const COPIER = Symbol('copier');
 const RESETTER = Symbol('resetter');
-const NORMALIZER = Symbol('normalizer');
 const VIVIFICATOR = Symbol('vivificator');
 const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
@@ -2276,55 +2278,78 @@ function decodeBase64(str) {
 }
 
 function getValueOf() {
-  const map = new Map();
-  const options = { error: 'throw' };
-  const process = function(value) {
-    const normalizer = value?.[NORMALIZER];
-    if (normalizer) {
-      let result = map.get(value);
-      if (result === undefined) {
-        result = normalizer.call(value, process, options);
-        map.set(value, result);
-      }
-      return result;
-    } else {
-      return value;
-    }
-  };
-  return process(this);
+  return normalizeObject(this, false);
+}
+
+function convertToJSON() {
+  return normalizeObject(this, true);
 }
 
 const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
-function convertToJSON() {
-  const map = new Map();
-  const options = { error: 'return' };
+function normalizeObject(object, forJSON) {
+  const error = (forJSON) ? 'return' : 'throw';
+  const resultMap = new Map();
   const process = function(value) {
-    const normalizer = value?.[NORMALIZER];
-    let result;
-    if (normalizer) {
-      result = map.get(value);
-      if (result === undefined) {
-        result = normalizer.call(value, process, options);
-        map.set(value, result);
+    // handle type (i.e. constructor) like a struct
+    const type = (typeof(value) === 'function') ? StructureType.Struct : value?.constructor?.[TYPE];
+    if (type === undefined) {
+      if (forJSON) {
+        if (typeof(value) === 'bigint' && INT_MIN <= value && value <= INT_MAX) {
+          return Number(object);
+        } else if (value instanceof Error) {
+          return { error: value.message };
+        }
       }
-    } else {
-      result = value;
+      return value;
     }
-    if (typeof(result) === 'bigint' && INT_MIN <= result && result <= INT_MAX) {
-      result = Number(value);
-    } else if (typeof(result?.toJSON) === 'function') {
-      result = result.toJSON();
+    let result = resultMap.get(value);
+    if (result === undefined) {
+      let entries;
+      switch (type) {
+        case StructureType.Struct:
+        case StructureType.PackedStruct:
+        case StructureType.ExternStruct:
+        case StructureType.TaggedUnion:
+        case StructureType.BareUnion:
+        case StructureType.ExternUnion:
+          entries = value[ENTRIES_GETTER]?.({ error });
+          result = value.constructor[TUPLE] ? [] : {};
+          break;
+        case StructureType.Array:
+        case StructureType.Vector:
+        case StructureType.Slice:
+          entries = value[ENTRIES_GETTER]?.({ error });
+          result = [];
+          break;
+        case StructureType.Pointer:
+          try {
+            result = value['*'];
+          } catch (err) {
+            result = Symbol.for('inaccessible');
+          }
+          break;
+        case StructureType.Enumeration:
+          result = handleError(() => String(value), { error });
+          break;
+        case StructureType.Opaque:
+          result = {};
+          break;
+        default:
+          result = handleError(() => value.$, { error }); 
+      }
+      result = process(result);
+      resultMap.set(value, result);
+      if (entries) {
+        for (const [ key, child ] of entries) {
+          result[key] = process(child);
+        }
+      }
     }
     return result;
   };
-  return process(this);
-}
-
-function normalizeValue(cb, options) {
-  const value = handleError(() => this.$, options);
-  return cb(value);
+  return process(object);
 }
 
 function handleError(cb, options = {}) {
@@ -2332,6 +2357,7 @@ function handleError(cb, options = {}) {
   try {
     return cb();
   } catch (err) {
+    debugger;
     if (error === 'return') {
       return err;
     } else {
@@ -2599,7 +2625,6 @@ function definePointer(structure, env) {
     [LOCATION_SETTER]: { value: addressSetter },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizePointer },
     [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
   };
@@ -2608,6 +2633,7 @@ function definePointer(structure, env) {
     const: { value: isConst },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -2618,16 +2644,6 @@ function makePointerReadOnly() {
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
   Object.defineProperty(pointer, CONST_TARGET, { value: pointer });
-}
-
-function normalizePointer(cb) {
-  let value;
-  try {
-    value = this['*'];
-  } catch (err) {
-    value = Symbol.for('inaccessible');
-  }
-  return cb(value);
 }
 
 function deleteTarget() {
@@ -2807,8 +2823,8 @@ function defineVector(structure, env) {
     entries: { value: getVectorEntries },
     delete: { value: getDestructor(structure) },
     [Symbol.iterator]: { value: getVectorIterator },
+    [ENTRIES_GETTER]: { value: getVectorEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeVector },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
@@ -2816,16 +2832,9 @@ function defineVector(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function normalizeVector(cb) {
-  const array = [];
-  for (const value of this) {
-    array.push(cb(value));
-  }
-  return array;
 }
 
 function getVectorIterator() {
@@ -2912,29 +2921,23 @@ function defineStructShape(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    entries: isTuple && { value: getVectorEntriesIterator },
+    entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
-    [NORMALIZER]: { value: (isTuple) ? normalizeVector : normalizeStruct },
     [WRITE_DISABLER]: { value: makeReadOnly },    
     [PROPS]: { value: members.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
+    [TUPLE]: { value: isTuple },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function normalizeStruct(cb, options) {
-  const object = {};
-  for (const [ name, value ] of getStructEntries.call(this, options)) {
-    object[name] = cb(value);
-  }
-  return object;
 }
 
 function getStructEntries(options) {
@@ -3142,10 +3145,10 @@ function defineArray(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
+    [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
-    [NORMALIZER]: { value: normalizeArray },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
@@ -3153,6 +3156,7 @@ function defineArray(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3180,14 +3184,6 @@ function makeArrayReadOnly() {
 
 function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
-}
-
-function normalizeArray(cb, options) {
-  const array = [];
-  for (const [ index, value ] of getArrayEntries.call(this, options)) {
-    array.push(cb(value));
-  }
-  return array;
 }
 
 function getArrayIterator() {
@@ -3456,19 +3452,15 @@ function defineEnumerationShape(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeEnumerationItem },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
-function normalizeEnumerationItem(cb) {
-  return cb(this.$[NAME]);
-}
-
 function appendEnumeration(enumeration, name, item) {
   if (name !== undefined) {
     // enum can have static variables 
@@ -3547,7 +3539,6 @@ function defineErrorSet(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: get },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
@@ -3557,6 +3548,7 @@ function defineErrorSet(structure, env) {
     // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
     // so we can add names to it as error sets are defined
     [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3683,12 +3675,12 @@ function defineErrorUnion(structure, env) {
     [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeValue },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3717,17 +3709,14 @@ function defineOpaque(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeOpaque },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-function normalizeOpaque(cb) {
-  return {};
 }
 
 function defineOptional(structure, env) {
@@ -3791,12 +3780,12 @@ function defineOptional(structure, env) {
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
-    [NORMALIZER]: { value: normalizeValue },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3835,13 +3824,13 @@ function definePrimitive(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [NORMALIZER]: { value: normalizeValue },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
   const staticDescriptors = {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -3936,10 +3925,10 @@ function defineSlice(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
+    [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor() },
-    [NORMALIZER]: { value: normalizeArray },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
   const staticDescriptors = {
@@ -3947,6 +3936,7 @@ function defineSlice(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: elementSize },
+    [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
@@ -4143,12 +4133,12 @@ function defineUnionShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: getUnionIterator },
+    [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor$1(structure, { isChildActive }) },
     [PROP_GETTERS]: { value: memberValueGetters },
-    [NORMALIZER]: { value: normalizeUnion },
     [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
   };  
@@ -4156,6 +4146,7 @@ function defineUnionShape(structure, env) {
     tag: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },    
+    [TYPE]: { value: structure.type },
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
   // replace regular setters with ones that change the active field
@@ -4166,14 +4157,6 @@ function defineUnionShape(structure, env) {
     }
   }
 }
-function normalizeUnion(cb, options) {
-  const object = {};
-  for (const [ name, value ] of getUnionEntries.call(this, options)) {
-    object[name] = cb(value);
-  }
-  return object;
-}
-
 function getUnionEntries(options) {
   return {
     [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
@@ -5674,11 +5657,11 @@ function addStaticMembers(structure, env) {
     toJSON: { value: convertToJSON },
     ...descriptors,
     [Symbol.iterator]: { value: getStructIterator },
+    [ENTRIES_GETTER]: { value: getStructEntries },
     // static variables are objects stored in the static template's slots
     [SLOTS]: template && { value: template[SLOTS] },
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
-    [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {
     for (const { name, slot } of members) {

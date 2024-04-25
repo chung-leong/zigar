@@ -3,8 +3,8 @@ import { appendErrorSet } from './error-set.js';
 import { getDescriptor } from './member.js';
 import { defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
-import { getStructIterator, normalizeStruct } from './struct.js';
-import { NORMALIZER, PROPS, SLOTS } from './symbol.js';
+import { getStructEntries, getStructIterator } from './struct.js';
+import { ENTRIES_GETTER, PROPS, SLOTS } from './symbol.js';
 import { StructureType } from './types.js';
 
 export function addStaticMembers(structure, env) {
@@ -22,11 +22,11 @@ export function addStaticMembers(structure, env) {
     toJSON: { value: convertToJSON },
     ...descriptors,
     [Symbol.iterator]: { value: getStructIterator },
+    [ENTRIES_GETTER]: { value: getStructEntries },
     // static variables are objects stored in the static template's slots
     [SLOTS]: template && { value: template[SLOTS] },
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
-    [NORMALIZER]: { value: normalizeStruct },
   });
   if (type === StructureType.Enumeration) {
     for (const { name, slot } of members) {

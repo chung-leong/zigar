@@ -352,6 +352,8 @@ describe('Optional functions', function() {
       const object = new Hello(array);
       expect(object.$.string).to.equal('This is a test');
       expect(object.$.typedArray).to.eql(array);
+      debugger;
+      object.valueOf();
       expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
       const object2 = new Hello(null);
       expect(object2.$).to.be.null;
