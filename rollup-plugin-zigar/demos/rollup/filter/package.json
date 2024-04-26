@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "rollup": "rollup -c rollup.config.js",
+    "build": "rollup -c rollup.config.js",
     "preview": "http-server ./dist"
   },
   "keywords": [],
@@ -15,6 +15,6 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "http-server": "^14.1.1",
     "rollup": "^4.16.4",
-    "rollup-plugin-zigar": "^0.11.1-beta.4"
+    "rollup-plugin-zigar": "^0.11.1-beta.6"
   }
 }
