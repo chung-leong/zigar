@@ -33,7 +33,7 @@ fn generateFrequenciesForLength(allocator: std.mem.Allocator, poly: []const u8, 
 
         while (i < poly.len) : (i += 1) {
             key = ((key << 2) & mask) | poly[i];
-            var entry = try hash.getOrPutValue(key, 0);
+            const entry = try hash.getOrPutValue(key, 0);
             entry.value_ptr.* += 1;
         }
     }
@@ -85,7 +85,7 @@ fn generateCount(allocator: std.mem.Allocator, poly: []const u8, comptime olig: 
 
         while (i < poly.len) : (i += 1) {
             key = ((key << 2) & mask) | poly[i];
-            var entry = try hash.getOrPutValue(key, 0);
+            const entry = try hash.getOrPutValue(key, 0);
             entry.value_ptr.* += 1;
         }
     }

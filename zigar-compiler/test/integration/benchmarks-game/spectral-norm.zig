@@ -35,9 +35,9 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
 pub fn spectralNorm(n: usize) !f64 {
-    var u = try allocator.alloc(f64, n);
-    var v = try allocator.alloc(f64, n);
-    var scratch = try allocator.alloc(f64, n);
+    const u = try allocator.alloc(f64, n);
+    const v = try allocator.alloc(f64, n);
+    const scratch = try allocator.alloc(f64, n);
 
     for (u) |*e| {
         e.* = 1;

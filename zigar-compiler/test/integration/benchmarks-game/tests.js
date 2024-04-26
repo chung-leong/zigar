@@ -15,7 +15,6 @@ export function addTests(importModule, options) {
     const text = await readFile(path, 'utf-8');
     return text.trim().split(/\r?\n/);
   };
-  skip.if(!process.env.npm_lifecycle_event?.includes(':extended')).  
   describe('Zig Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
       this.timeout(120000);
@@ -147,15 +146,10 @@ export function addTests(importModule, options) {
       const data = await loadData(`fasta-${n}`);
       reverseComplement(data);
       const refData = await loadData(`reverse-complement-${n}`);
-      let different = false;
-      for (let i = 0; i < refData.byteLength; i++) {
-        if (data[i] !== refData[i]) {
-          different = true;
-          break;
-        }
+      expect(data.length).to.be.equal(refData.length);
+      for (let i = 0; i < refData.length; i++) {
+        expect(data[i]).to.equal(refData[i]);
       }
-      expect(refData.byteLength).to.be.above(1000);
-      expect(different).to.be.false;
     })
     it('should produce the right results for the spectral-norm example', async function() {
       this.timeout(120000);

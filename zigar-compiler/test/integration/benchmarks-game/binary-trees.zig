@@ -55,7 +55,7 @@ pub fn binaryTree(n: usize) !void {
     var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
     defer buffered_stdout.flush() catch unreachable;
     const stdout = buffered_stdout.writer();
-    var allocator = gpa.allocator();
+    const allocator = gpa.allocator();
 
     const min_depth: usize = 4;
     const max_depth: usize = n;
@@ -68,7 +68,7 @@ pub fn binaryTree(n: usize) !void {
     const long_lived_tree = try bottomUpTree(allocator, max_depth);
     var depth = min_depth;
     while (depth <= max_depth) : (depth += 2) {
-        var iterations: usize = @intFromFloat(std.math.pow(f32, 2, @as(f32, @floatFromInt(max_depth - depth + min_depth))));
+        const iterations: usize = @intFromFloat(std.math.pow(f32, 2, @as(f32, @floatFromInt(max_depth - depth + min_depth))));
         var check: usize = 0;
 
         var i: usize = 1;
