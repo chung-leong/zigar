@@ -9,11 +9,15 @@ export function addTests(importModule, options) {
     const url = new URL(`./${name}.zig`, import.meta.url).href;
     return importModule(url);
   };
-  const loadData = async (name) => {
+  const loadData = async (name, encoding) => {
     const url = new URL(`./data/${name}.txt`, import.meta.url).href;
     const path = fileURLToPath(url);
-    const text = await readFile(path, 'utf-8');
-    return text.trim().split(/\r?\n/);
+    const data = await readFile(path, encoding);
+    if (typeof(data) === 'string') {
+      return data.trim().split(/\r?\n/);
+    } else {
+      return data;
+    }
   };
   describe('Zig Benchmarks Game', function() {
     it('should produce the right results for the binary-trees example', async function() {
@@ -21,7 +25,7 @@ export function addTests(importModule, options) {
       const { binaryTree } = await importTest('binary-trees');
       const n = 12;
       const lines = await capture(() => binaryTree(n));
-      const refLines = await loadData(`binary-trees-${n}`);
+      const refLines = await loadData(`binary-trees-${n}`, 'utf-8');
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
@@ -40,7 +44,7 @@ export function addTests(importModule, options) {
       const { fasta } = await importTest('fasta');
       const n = 250000;
       const lines = await capture(() => fasta(n));
-      const refLines = await loadData(`fasta-${n}`);
+      const refLines = await loadData(`fasta-${n}`, 'utf-8');
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
@@ -50,7 +54,7 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { kNucleotide } = await importTest('k-nucleotide');
       const n = 250000;
-      const lines = await loadData(`fasta-${n}`); 
+      const lines = await loadData(`fasta-${n}`, 'utf-8'); 
       const start = lines.findIndex(l => l.startsWith('>THREE'));
       if (start === -1) {
         throw new Error('Unable to find starting position');
@@ -58,7 +62,7 @@ export function addTests(importModule, options) {
       const input = lines.slice(start + 1);
       const output = kNucleotide(input);
       const outputLines = [ ...output ].map(a => a.string.split(/\n/)).flat();
-      const refLines = await loadData(`k-nucleotide-${n}`);
+      const refLines = await loadData(`k-nucleotide-${n}`, 'utf-8');
       expect(outputLines).to.eql(refLines);
     })
     it('should produce the right results for the mandelbrot example', async function() {
@@ -66,7 +70,7 @@ export function addTests(importModule, options) {
       const { mandelbrot } = await importTest('mandelbrot');
       const n = 2000;
       const lines = await capture(() => mandelbrot(n));
-      const refLines = await loadData(`mandelbrot-${n}`);
+      const refLines = await loadData(`mandelbrot-${n}`, 'utf-8');
       expect(lines.length).to.not.equal(0);
       for (const [ index, line ] of lines.entries()) {
         expect(line).to.equal(refLines[index]);
@@ -143,13 +147,18 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       const { reverseComplement } = await importTest('reverse-complement');
       const n = 250000;
+      // reverseComplement() modifies the data it's given so we need to use buffers here
       const data = await loadData(`fasta-${n}`);
       reverseComplement(data);
       const refData = await loadData(`reverse-complement-${n}`);
-      expect(data.length).to.be.equal(refData.length);
-      for (let i = 0; i < refData.length; i++) {
-        expect(data[i]).to.equal(refData[i]);
+      expect(data.byteLength).to.be.equal(refData.byteLength);
+      let different = false;
+      for (let i = 0; i < refData.byteLength; i++) {
+        if (data[i] !== refData[i]) {
+          different = true;
+        }
       }
+      expect(different).to.be.false;
     })
     it('should produce the right results for the spectral-norm example', async function() {
       this.timeout(120000);

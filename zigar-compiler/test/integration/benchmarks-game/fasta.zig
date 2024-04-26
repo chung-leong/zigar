@@ -76,10 +76,6 @@ fn generateAndWrap(out: anytype, comptime nucleotides: []const AminoAcid, count:
     }
 }
 
-var buffer: [256]u8 = undefined;
-var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
-var allocator = fixed_allocator.allocator();
-
 pub fn fasta(n: usize) !void {
     var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
     defer buffered_stdout.flush() catch unreachable;
