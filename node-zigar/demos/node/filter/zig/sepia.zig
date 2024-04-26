@@ -339,7 +339,7 @@ pub fn Image(comptime T: type, comptime len: comptime_int, comptime writable: bo
         }
 
         fn sampleNearest(self: @This(), coord: @Vector(2, f32)) FPixel {
-            return self.getPixelAt(coord);
+            return self.getPixelAt(@floor(coord));
         }
 
         fn sampleLinear(self: @This(), coord: @Vector(2, f32)) FPixel {
