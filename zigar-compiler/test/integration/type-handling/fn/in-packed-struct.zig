@@ -6,8 +6,8 @@ fn hello() void {}
 
 pub const StructA = packed struct {
     function1: Fn = hello,
+    number: u3 = 100,
     function2: Fn = hello,
-    number: u10 = 100,
     function3: Fn = hello,
 };
 
