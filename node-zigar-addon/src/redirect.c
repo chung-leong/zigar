@@ -38,13 +38,13 @@ void patch_write_file(void* handle,
     /* find IAT */ 
     ULONG size;
     PVOID data = ImageDirectoryEntryToDataEx(handle, TRUE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size, NULL);
-    PIMAGE_IMPORT_DESCRIPTOR iat_entry = (PIMAGE_IMPORT_DESCRIPTOR) data;
-    /* look for kernel32.dll*/
-    while (iat_entry->Characteristics && iat_entry->Name) {
-        PSTR import_name = (PSTR) (bytes + iat_entry->Name);
+    PIMAGE_IMPORT_DESCRIPTOR iat = (PIMAGE_IMPORT_DESCRIPTOR) data;
+    for (PIMAGE_IMPORT_DESCRIPTOR entry = iat; entry->Characteristics && entry->Name; entry++) {
+        /* look for kernel32.dll*/
+        PSTR import_name = (PSTR) (bytes + entry->Name);
         if (_stricmp(import_name, "kernel32.dll") == 0) {
-            PIMAGE_THUNK_DATA thunk = (PIMAGE_THUNK_DATA) (bytes + iat_entry->FirstThunk);
-            while (thunk->u1.Function) {
+            PIMAGE_THUNK_DATA first_thunk = (PIMAGE_THUNK_DATA) (bytes + entry->FirstThunk);
+            for (PIMAGE_THUNK_DATA thunk = first_thunk; thunk->u1.Function; thunk++) {
                 PROC* fn_pointer = (PROC*) &thunk->u1.Function;
                 if (*fn_pointer == (PROC) WriteFile) {
                     /* make page writable */ 
@@ -59,8 +59,6 @@ void patch_write_file(void* handle,
                         VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
                     }
                     break;
-                } else {
-                    thunk++;
                 }
             }
             break;
