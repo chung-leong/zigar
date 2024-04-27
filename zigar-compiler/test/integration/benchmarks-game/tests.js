@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
     return importModule(url);
   };
   const loadData = async (name, encoding) => {
-    const url = new URL(`./data/${name}.txt`, import.meta.url).href;
+    const url = new URL(`./data/${name}.dat`, import.meta.url).href;
     const path = fileURLToPath(url);
     const data = await readFile(path, encoding);
     if (typeof(data) === 'string') {
