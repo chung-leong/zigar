@@ -1,5 +1,7 @@
 # Zigar
 
+![Logo](./docs/images/logo.png?b)
+
 A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript
 project. 
 
@@ -13,8 +15,6 @@ Consult the [project wiki](https://github.com/chung-leong/zigar/wiki) for more d
 * Support for Webpack, Rollup, and Vite (WebAssembly)
 
 ## Versioning
-
-[RELEASE PENDING]
 
 The major and minor version numbers of Zigar correspond to the version of the Zig compiler
 it's designed for. The current version is 0.11.1. It works with Zig 0.11.0.
