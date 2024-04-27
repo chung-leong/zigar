@@ -6,8 +6,8 @@ export function addTests(importModule, options) {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
   };
-  skip.
   describe('Package manager', function() {
+    skip.
     it('should link in ziglua', async function() {
       this.timeout(300000);
       const { run } = await importTest('use-ziglua/ziglua');
@@ -15,11 +15,13 @@ export function addTests(importModule, options) {
       const lines = await capture(() => run(code));
       expect(lines).to.eql([ 'Hello world' ]);
     })
+    skip.
     it('should link in zig-sqlite', async function() {
       this.timeout(300000);
       const { run } = await importTest('use-zig-sqlite/zig-sqlite');
       run();
     })
+    skip.
     it('should link in zigplotlib', async function() {
       this.timeout(300000);
       const { run } = await importTest('use-zigplotlib/zigplotlib');
