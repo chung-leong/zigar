@@ -5164,6 +5164,10 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (address < 0) {
+      // not sure why address is sometimes negative--I think it's an undefined pointer
+      address = 0;
+    }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
