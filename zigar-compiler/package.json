@@ -1,6 +1,6 @@
 {
   "name": "zigar-compiler",
-  "version": "0.11.1-beta.6",
+  "version": "0.11.1",
   "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
   "type": "module",
