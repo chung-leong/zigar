@@ -25,6 +25,6 @@
     "webpack": "^5.91.0",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.4",
-    "zigar-loader": "^0.11.1-beta.6"
+    "zigar-loader": "^0.11.1"
   }
 }
