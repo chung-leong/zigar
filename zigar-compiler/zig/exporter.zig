@@ -126,6 +126,204 @@ pub const Method = extern struct {
     structure: Value,
 };
 
+fn ComptimeList(comptime T: type) type {
+    return struct {
+        entries: []T,
+        len: comptime_int,
+
+        pub fn init(comptime capacity: comptime_int) @This() {
+            comptime var entries: [capacity]T = undefined;
+            return .{
+                .entries = &entries,
+                .len = 0,
+            };
+        }
+
+        pub fn expand(comptime self: @This()) @This() {
+            const len = self.len + 1;
+            if (len <= self.entries.len) {
+                // adjust len
+                return .{ .entries = self.entries, .len = len };
+            } else {
+                // need new array
+                comptime var capacity = 2;
+                while (capacity < len) {
+                    capacity *= 2;
+                }
+                comptime var entries: [capacity]T = undefined;
+                comptime var index = 0;
+                @setEvalBranchQuota(self.len);
+                inline while (index < self.len) : (index += 1) {
+                    entries[index] = self.entries[index];
+                }
+                return .{ .entries = &entries, .len = len };
+            }
+        }
+
+        pub fn get(comptime self: *@This(), comptime index: comptime_int) *T {
+            return &self.entries[index];
+        }
+    };
+}
+
+const FieldData = struct {
+    index: comptime_int,
+    slot: comptime_int,
+
+    pub fn init(comptime index: comptime_int, comptime slot: comptime_int) @This() {
+        return .{
+            .index = index,
+            .slot = slot,
+        };
+    }
+};
+
+const TypeData = struct {
+    const List = ComptimeList(FieldData);
+
+    Type: type,
+    name: []const u8,
+    slot: comptime_int,
+    fields: List,
+
+    pub fn init(comptime T: type, comptime slot: comptime_int) @This() {
+        return .{
+            .Type = T,
+            .name = @typeName(T),
+            .slot = slot,
+            .fields = List.init(0),
+        };
+    }
+
+    pub fn getField(comptime self: *@This(), comptime field_index: comptime_int) *FieldData {
+        @setEvalBranchQuota(self.fields.len);
+        comptime var index = 0;
+        inline while (index < self.fields.len) : (index += 1) {
+            const ptr = &self.fields.entries[index];
+            if (ptr.index == field_index) {
+                return ptr;
+            }
+        }
+        const slot = self.fields.len;
+        self.fields = self.fields.expand();
+        const ptr = self.fields.get(slot);
+        ptr.* = FieldData.init(field_index, slot);
+        return ptr;
+    }
+};
+
+const TypeDatabase = struct {
+    const List = ComptimeList(TypeData);
+
+    types: List,
+
+    pub fn init(comptime capacity: comptime_int) @This() {
+        return .{
+            .types = List.init(capacity),
+        };
+    }
+
+    pub fn getTypeData(comptime self: *@This(), comptime T: type) *TypeData {
+        @setEvalBranchQuota(self.types.len);
+        comptime var index = 0;
+        inline while (index < self.types.len) : (index += 1) {
+            const ptr = &self.types.entries[index];
+            if (ptr.Type == T) {
+                return ptr;
+            }
+        }
+        const slot = self.types.len;
+        self.types = self.types.expand();
+        const ptr = self.types.get(slot);
+        ptr.* = TypeData.init(T, slot);
+        // replace long and cryptic names with generic one to save space
+        if (isCryptic(ptr.name)) {
+            ptr.name = self.getGenericName(T);
+        }
+        return ptr;
+    }
+
+    pub fn getTypeName(comptime self: *@This(), comptime T: type) []const u8 {
+        return self.getTypeData(T).name;
+    }
+
+    pub fn getTypeSlot(comptime self: *@This(), comptime T: type) comptime_int {
+        return self.getTypeData(T).slot;
+    }
+
+    pub fn getFieldSlot(comptime self: *@This(), comptime T: type, comptime index: comptime_int) comptime_int {
+        return self.getTypeData(T).getField(index).slot;
+    }
+
+    fn getGenericName(comptime self: *@This(), comptime T: type) []const u8 {
+        return switch (@typeInfo(T)) {
+            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{
+                self.getGenericName(eu.error_set),
+                self.getGenericName(eu.payload),
+            }),
+            .Optional => |op| std.fmt.comptimePrint("?{s}", .{
+                self.getGenericName(op.child),
+            }),
+            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{
+                ar.len,
+                self.getGenericName(ar.child),
+            }),
+            .Pointer => |pt| format: {
+                const name = @typeName(T);
+                const size_end_index = find: {
+                    comptime var index = 0;
+                    inline while (index < 50) : (index += 1) {
+                        switch (name[index]) {
+                            ']', '*' => break :find index + 1,
+                            else => {},
+                        }
+                    } else {
+                        break :find 0;
+                    }
+                };
+                const size = name[0..size_end_index];
+                const modifier = if (pt.is_const) "const " else if (pt.is_volatile) "volatile " else "";
+                break :format std.fmt.comptimePrint("{s}{s}{s}", .{
+                    size,
+                    modifier,
+                    self.getGenericName(pt.child),
+                });
+            },
+            else => format: {
+                if (T == anyerror) {
+                    break :format @typeName(T);
+                }
+                const prefix = switch (@typeInfo(T)) {
+                    .Struct => "Struct",
+                    .Union => "Union",
+                    .Opaque => "Opaque",
+                    .Enum => "Enum",
+                    .ErrorSet => "ErrorSet",
+                    else => "Type",
+                };
+                const slot = self.getTypeSlot(T);
+                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, slot });
+            },
+        };
+    }
+
+    fn isCryptic(comptime name: []const u8) bool {
+        if (comptime name.len > 100) {
+            return true;
+        }
+        comptime var index = 0;
+        return inline while (index < name.len) : (index += 1) {
+            if (name[index] == '(') {
+                // keep function call
+                break false;
+            } else if (name[index] == '{') {
+                // anonymous struct or error set
+                break true;
+            }
+        } else false;
+    }
+};
+
 fn NextIntType(comptime T: type) type {
     var info = @typeInfo(T);
     if (info.Int.signedness == .signed) {
