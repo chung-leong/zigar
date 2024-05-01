@@ -134,6 +134,25 @@ pub const Method = extern struct {
     structure: Value,
 };
 
+fn IntType(comptime n: comptime_int) type {
+    comptime var bits = 8;
+    const signedness = if (n < 0) .signed else .unsigned;
+    return inline while (true) : (bits *= 2) {
+        const T = @Type(.{ .Int = .{ .signedness = signedness, .bits = bits } });
+        if (std.math.minInt(T) <= n and n <= std.math.maxInt(T)) {
+            break T;
+        }
+    };
+}
+
+test "IntType" {
+    assertCT(IntType(0) == u8);
+    assertCT(IntType(0xFFFFFFFF) == u32);
+    assertCT(IntType(-0xFFFFFFFF) == i64);
+    assertCT(IntType(123) == u8);
+    assertCT(IntType(-123) == i8);
+}
+
 fn ComptimeList(comptime T: type) type {
     return struct {
         entries: []T,
@@ -344,6 +363,38 @@ const TypeData = struct {
         }
     }
 
+    fn getSentinel(comptime self: @This()) ?@typeInfo(self.Type).Pointer.child {
+        if (@typeInfo(self.Type).Pointer.sentinel) |ptr| {
+            const sentinel_ptr: *const @typeInfo(self.Type).Pointer.child = @alignCast(@ptrCast(ptr));
+            return sentinel_ptr.*;
+        } else {
+            return null;
+        }
+    }
+
+    fn getSelectorType(comptime self: @This()) type {
+        return switch (@typeInfo(self.Type)) {
+            .Union => |un| un.tag_type orelse IntType(un.fields.len),
+            else => @compileError("Not a union"),
+        };
+    }
+
+    fn getSelectorBitOffset(comptime self: @This()) comptime_int {
+        const TT = self.getSelectorType();
+        const fields = @typeInfo(self.Type).Union.fields;
+        // selector comes first unless content needs larger align
+        comptime var offset = 0;
+        inline for (fields) |field| {
+            if (@alignOf(field.type) > @alignOf(TT)) {
+                const new_offset = @sizeOf(field.type) * 8;
+                if (new_offset > offset) {
+                    offset = new_offset;
+                }
+            }
+        }
+        return offset;
+    }
+
     fn isConst(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Pointer => |pt| pt.is_const,
@@ -473,6 +524,27 @@ test "TypeData.getSliceName" {
     assertCT(std.mem.eql(u8, name5[0..3], "[0]"));
     const name6 = comptime TypeData.init([*c]const u8).getSliceName();
     assertCT(std.mem.eql(u8, name6[0..3], "[0]"));
+}
+
+test "TypeData.getSentinel" {
+    assertCT(TypeData.init([*:0]const u8).getSentinel() == 0);
+    assertCT(TypeData.init([*:7]const i32).getSentinel() == 7);
+}
+
+test "TypeData.getSelectorType" {
+    const U = union {
+        a: u32,
+        b: u32,
+    };
+    assertCT(TypeData.init(U).getSelectorType() == u8);
+}
+
+test "TypeData.getSelectorBitOffset" {
+    const Union = union {
+        cat: i32,
+        dog: i32,
+    };
+    assertCT(TypeData.init(Union).getSelectorBitOffset() == 32);
 }
 
 test "TypeData.getField" {
