@@ -142,9 +142,10 @@ pub const Memory = struct {
         const len = switch (pt.size) {
             .One => @sizeOf(pt.child),
             .Slice => @sizeOf(pt.child) * ptr.len,
-            .Many => if (pt.sentinel) |sentinel| find: {
+            .Many => if (pt.sentinel) |opaque_ptr| find: {
+                const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
                 var len: usize = 0;
-                while (ptr[len] != sentinel) {
+                while (ptr[len] != sentinel_ptr.*) {
                     len += 1;
                 }
                 break :find (len + 1) * @sizeOf(pt.child);
@@ -276,7 +277,6 @@ fn ComptimeList(comptime T: type) type {
                 }
                 comptime var entries: [capacity]T = undefined;
                 comptime var index = 0;
-                @setEvalBranchQuota(self.len);
                 inline while (index < self.len) : (index += 1) {
                     entries[index] = self.entries[index];
                 }
@@ -328,7 +328,7 @@ const TypeData = struct {
     Type: type,
     slot: ?usize = null,
     alternate_name: ?[:0]const u8 = null,
-    alternate_structure_type: ?StructureType,
+    alternate_structure_type: ?StructureType = null,
     fields: List,
     is_supported: ?bool = null,
     is_comptime_only: ?bool = null,
@@ -537,6 +537,7 @@ const TypeData = struct {
                 0 => @sizeOf(anyerror) * 8,
                 else => 0,
             },
+            else => @compileError("Not a union, error union, or optional"),
         };
     }
 
@@ -549,7 +550,7 @@ const TypeData = struct {
 
     fn isSlice(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
-            .Pointer => |pt| pt.size == .One,
+            .Pointer => |pt| pt.size != .One,
             else => false,
         };
     }
@@ -589,7 +590,6 @@ const TypeData = struct {
     }
 
     fn getField(comptime self: *@This(), comptime field_index: usize) *FieldData {
-        @setEvalBranchQuota(self.fields.len);
         comptime var index = 0;
         inline while (index < self.fields.len) : (index += 1) {
             const ptr = &self.fields.entries[index];
@@ -779,11 +779,10 @@ const TypeDatabase = struct {
     }
 
     fn getTypeData(comptime self: *@This(), comptime T: type) *TypeData {
-        @setEvalBranchQuota(self.types.len);
         comptime var index = 0;
         inline while (index < self.types.len) : (index += 1) {
             const ptr = &self.types.entries[index];
-            if (ptr.Type == T) {
+            if (comptime ptr.Type == T) {
                 return ptr;
             }
         }
@@ -809,7 +808,7 @@ const TypeDatabase = struct {
     fn isSupported(comptime self: *@This(), comptime T: type) bool {
         const td = self.getTypeData(T);
         if (td.is_supported == null) {
-            td.is_supported = switch (@typeInfo(T)) {
+            td.is_supported = switch (@typeInfo(td.Type)) {
                 .Type,
                 .Bool,
                 .Int,
@@ -860,15 +859,21 @@ const TypeDatabase = struct {
                 => true,
                 .ErrorUnion => |eu| self.isComptimeOnly(eu.payload),
                 inline .Array, .Optional, .Pointer => |ar| self.isComptimeOnly(ar.child),
-                inline .Struct, .Union => |st| inline for (st.fields) |field| {
-                    if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
-                        continue;
+                inline .Struct, .Union => |st| check: {
+                    // set to false to prevent recursion
+                    td.is_comptime_only = false;
+                    inline for (st.fields) |field| {
+                        if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
+                            continue;
+                        }
+                        // structs with comptime fields of comptime type can be created at runtime
+                        if (self.isComptimeOnly(field.type)) {
+                            break :check true;
+                        }
+                    } else {
+                        break :check false;
                     }
-                    // structs with comptime fields of comptime type can be created at runtime
-                    if (self.isComptimeOnly(field.type)) {
-                        break true;
-                    }
-                } else false,
+                },
                 else => false,
             };
         }
@@ -914,7 +919,7 @@ const TypeDatabase = struct {
                         break :check false;
                     }
                     // set to false to prevent recursion
-                    td.is_supported = false;
+                    td.has_pointer = false;
                     inline for (st.fields) |field| {
                         if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
                             continue;
@@ -1015,13 +1020,24 @@ test "TypeDatabase.isSupported" {
         thunk: Thunk,
         ptr: *@This(),
     };
+    const UnionA = union(enum) {
+        cat: u32,
+        dog: u32,
+    };
+    @setEvalBranchQuota(2000);
     assertCT(tdb.isSupported(StructA) == true);
+    assertCT(tdb.isSupported(StructA) == true);
+    assertCT(tdb.isSupported(StructB) == false);
     assertCT(tdb.isSupported(StructB) == false);
     assertCT(tdb.isSupported(Thunk) == false);
     assertCT(tdb.isSupported(*StructA) == true);
     assertCT(tdb.isSupported(*StructB) == false);
     assertCT(tdb.isSupported(StructC) == true);
     assertCT(tdb.isSupported(StructD) == false);
+    assertCT(tdb.isSupported(UnionA) == true);
+    assertCT(tdb.isSupported(@TypeOf(null)) == true);
+    assertCT(tdb.isSupported(@TypeOf(undefined)) == true);
+    assertCT(tdb.isSupported(noreturn) == false);
 }
 
 test "TypeDatabase.isComptimeOnly" {
@@ -1086,11 +1102,11 @@ test "TypeDatabase.isCallable" {
         }
     };
     comptime var tdb = TypeDatabase.init(0);
-    assert(tdb.isCallable(Test.needFn) == true);
-    assert(tdb.isCallable(Test.needOptionalFn) == true);
-    assert(tdb.isCallable(Test.nothing) == false);
-    assert(tdb.isCallable(Test.allocate) == false);
-    assert(tdb.isCallable(std.debug.print) == true);
+    assertCT(tdb.isCallable(Test.needFn) == false);
+    assertCT(tdb.isCallable(Test.needOptionalFn) == false);
+    assertCT(tdb.isCallable(Test.nothing) == true);
+    assertCT(tdb.isCallable(Test.allocate) == true);
+    assertCT(tdb.isCallable(std.debug.print) == false);
 }
 
 test "TypeDatabase.getGenericName" {
