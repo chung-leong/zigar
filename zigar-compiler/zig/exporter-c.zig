@@ -13,9 +13,39 @@ const Method = exporter.Method;
 const Memory = exporter.Memory;
 const Thunk = exporter.Thunk;
 const Error = exporter.Error;
-const missing = exporter.missing;
 
 const Call = *anyopaque;
+
+// struct for C
+const StructureC = extern struct {
+    name: ?[*:0]const u8,
+    structure_type: StructureType,
+    length: usize,
+    byte_size: usize,
+    alignment: u16,
+    is_const: bool = false,
+    is_tuple: bool = false,
+    has_pointer: bool,
+};
+const MemberC = extern struct {
+    name: ?[*:0]const u8,
+    member_type: MemberType,
+    is_required: bool,
+    bit_offset: usize,
+    bit_size: usize,
+    byte_size: usize,
+    slot: usize,
+    structure: ?Value,
+};
+const MethodC = extern struct {
+    name: ?[*:0]const u8,
+    thunk_id: usize,
+    structure: Value,
+};
+
+pub fn missing(comptime T: type) comptime_int {
+    return std.math.maxInt(T);
+}
 
 // support both 0.11 and 0.12
 const enum_little = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
@@ -105,15 +135,35 @@ pub const Host = struct {
     }
 
     pub fn beginStructure(self: Host, def: Structure) !Value {
+        const def_c: StructureC = .{
+            .name = if (def.name) |p| @ptrCast(p) else null,
+            .structure_type = def.structure_type,
+            .length = def.length orelse missing(usize),
+            .byte_size = def.byte_size orelse missing(usize),
+            .alignment = def.alignment orelse missing(u16),
+            .is_const = def.is_const,
+            .is_tuple = def.is_tuple,
+            .has_pointer = def.has_pointer,
+        };
         var structure: Value = undefined;
-        if (imports.begin_structure(self.context, &def, &structure) != .ok) {
+        if (imports.begin_structure(self.context, &def_c, &structure) != .ok) {
             return Error.unable_to_start_structure_definition;
         }
         return structure;
     }
 
     pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
-        if (imports.attach_member(self.context, structure, &member, is_static) != .ok) {
+        const member_c: MemberC = .{
+            .name = if (member.name) |p| @ptrCast(p) else null,
+            .member_type = member.member_type,
+            .is_required = member.is_required,
+            .bit_offset = member.bit_offset orelse missing(usize),
+            .bit_size = member.bit_size orelse missing(usize),
+            .byte_size = member.byte_size orelse missing(usize),
+            .slot = member.slot orelse missing(usize),
+            .structure = member.structure,
+        };
+        if (imports.attach_member(self.context, structure, &member_c, is_static) != .ok) {
             if (is_static) {
                 return Error.unable_to_add_static_member;
             } else {
@@ -123,7 +173,12 @@ pub const Host = struct {
     }
 
     pub fn attachMethod(self: Host, structure: Value, method: Method, is_static_only: bool) !void {
-        if (imports.attach_method(self.context, structure, &method, is_static_only) != .ok) {
+        const method_c: MethodC = .{
+            .name = if (method.name) |p| @ptrCast(p) else null,
+            .thunk_id = method.thunk_id,
+            .structure = method.structure,
+        };
+        if (imports.attach_method(self.context, structure, &method_c, is_static_only) != .ok) {
             return Error.unable_to_add_method;
         }
     }
@@ -262,9 +317,9 @@ const Imports = extern struct {
     cast_view: *const fn (Call, *const Memory, Value, *Value) callconv(.C) Result,
     read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
-    begin_structure: *const fn (Call, *const Structure, *Value) callconv(.C) Result,
-    attach_member: *const fn (Call, Value, *const Member, bool) callconv(.C) Result,
-    attach_method: *const fn (Call, Value, *const Method, bool) callconv(.C) Result,
+    begin_structure: *const fn (Call, *const StructureC, *Value) callconv(.C) Result,
+    attach_member: *const fn (Call, Value, *const MemberC, bool) callconv(.C) Result,
+    attach_method: *const fn (Call, Value, *const MethodC, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_shape: *const fn (Call, Value) callconv(.C) Result,
     end_structure: *const fn (Call, Value) callconv(.C) Result,
