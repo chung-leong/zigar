@@ -19,6 +19,7 @@ export function defineOptional(structure, env) {
     hasPointer,
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  // NOTE: getPresent returns a uint now
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);  
   const get = function() {
@@ -31,7 +32,9 @@ export function defineOptional(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
-  const isChildActive = getPresent;
+  const isChildActive = function () {
+    return !!getPresent.call(this);
+  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
@@ -42,7 +45,7 @@ export function defineOptional(structure, env) {
         }
       }      
     } else if (arg === null) {
-      setPresent.call(this, false);
+      setPresent.call(this, 0);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
@@ -53,7 +56,7 @@ export function defineOptional(structure, env) {
         // since setValue() wouldn't write address into memory when the pointer is in 
         // relocatable memory, we need to use setPresent() in order to write something 
         // non-zero there so that we know the field is populated
-        setPresent.call(this, true);
+        setPresent.call(this, 1);
       }
     }
   };

@@ -253,88 +253,79 @@ test "IntType" {
 
 fn ComptimeList(comptime T: type) type {
     return struct {
-        pointers: []?*T,
+        entries: []T,
         len: comptime_int,
 
         fn init(comptime capacity: comptime_int) @This() {
-            comptime var pointers: [capacity]?*T = undefined;
-            inline for (0..pointers.len) |index| {
-                pointers[index] = null;
-            }
+            comptime var entries: [capacity]T = undefined;
             return .{
-                .pointers = &pointers,
+                .entries = &entries,
                 .len = 0,
             };
         }
 
-        fn expand(comptime self: @This()) @This() {
-            const len = self.len + 1;
-            if (len <= self.pointers.len) {
-                // adjust len
-                comptime var entry: T = undefined;
-                self.pointers[self.len] = &entry;
-                return .{ .pointers = self.pointers, .len = len };
+        fn concat(comptime self: @This(), comptime value: T) @This() {
+            if (self.len < self.entries.len) {
+                self.entries[self.len] = value;
+                return .{ .entries = self.entries, .len = self.len + 1 };
             } else {
                 // need new array
-                comptime var capacity = 2;
-                while (capacity < len) {
-                    capacity *= 2;
+                const capacity = if (self.entries.len > 0) 2 * self.entries.len else 1;
+                comptime var entries: [capacity]T = undefined;
+                inline for (self.entries, 0..) |pointer, index| {
+                    entries[index] = pointer;
                 }
-                comptime var pointers: [capacity]?*T = undefined;
-                inline for (0..pointers.len) |index| {
-                    pointers[index] = if (index < self.pointers.len) self.pointers[index] else null;
-                }
-                comptime var entry: T = undefined;
-                pointers[self.len] = &entry;
-                return .{ .pointers = &pointers, .len = len };
+                entries[self.len] = value;
+                return .{ .entries = &entries, .len = self.len + 1 };
             }
         }
 
-        fn get(comptime self: @This(), comptime index: comptime_int) *T {
-            return self.pointers[index].?;
+        fn slice(comptime self: @This()) []T {
+            return self.entries[0..self.len];
         }
     };
 }
 
-test "ComptimeList.expand" {
+test "ComptimeList.concat" {
     const List = ComptimeList(comptime_int);
     comptime var list = List.init(0);
     inline for (0..17) |index| {
-        list = list.expand();
-        const ptr = list.get(index);
-        ptr.* = index + 1000;
+        list = list.concat(index + 1000);
     }
-    assertCT(list.get(4).* == 1004);
-    inline for (0..17) |_| {
-        list = list.expand();
+    assertCT(list.entries[4] == 1004);
+    inline for (0..17) |index| {
+        list = list.concat(index + 2000);
     }
-    assertCT(list.get(4).* == 1004);
-    assertCT(list.get(16).* == 1016);
+    assertCT(list.entries[0] == 1000);
+    assertCT(list.entries[16] == 1016);
+    assertCT(list.entries[17] == 2000);
+    assertCT(list.entries[33] == 2016);
 }
+
+const TypeAttributes = packed struct {
+    is_supported: bool = false,
+    is_comptime_only: bool = false,
+    has_pointer: bool = false,
+    known: bool = false,
+};
 
 const TypeData = struct {
     Type: type,
     slot: ?usize = null,
-    alternate_name: ?[:0]const u8 = null,
-    alternate_structure_type: ?StructureType = null,
-    is_supported: ?bool = null,
-    is_comptime_only: ?bool = null,
-    has_pointer: ?bool = null,
-
-    fn init(comptime T: type) @This() {
-        return .{ .Type = T };
-    }
+    alt_name: ?[:0]const u8 = null,
+    alt_type: ?StructureType = null,
+    attrs: TypeAttributes = .{},
 
     fn getName(comptime self: @This()) [:0]const u8 {
-        return self.alternate_name orelse @typeName(self.Type);
+        return self.alt_name orelse @typeName(self.Type);
     }
 
     fn getSlot(comptime self: @This()) usize {
-        return self.slot.?;
+        return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
     }
 
     fn getStructureType(comptime self: @This()) StructureType {
-        return self.alternate_structure_type orelse switch (@typeInfo(self.Type)) {
+        return self.alt_type orelse switch (@typeInfo(self.Type)) {
             .Bool,
             .Int,
             .ComptimeInt,
@@ -372,7 +363,7 @@ const TypeData = struct {
             .Bool => .bool,
             .Int => |int| if (int.signedness == .signed) .int else .uint,
             .Float => .float,
-            .Enum => |en| self.getMemberType(en.tag_type),
+            .Enum => |en| getMemberType(.{ .Type = en.tag_type }),
             .ErrorSet => .uint,
             .Struct,
             .Union,
@@ -409,6 +400,7 @@ const TypeData = struct {
 
     pub fn getAlignment(comptime self: @This()) ?u16 {
         return switch (@typeInfo(self.Type)) {
+            .Null, .Undefined => 0,
             .Opaque => null,
             .ErrorSet => @alignOf(anyerror),
             else => return @alignOf(self.Type),
@@ -469,8 +461,8 @@ const TypeData = struct {
                 true => IntType(un.fields.len),
                 false => null,
             },
-            .Optional => |op| switch (@typeInfo(op.payload)) {
-                .Pointer => usize, // the pointer itself
+            .Optional => |op| switch (@typeInfo(op.child)) {
+                .Pointer => usize, // size of the pointer itself
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -494,9 +486,9 @@ const TypeData = struct {
                 }
                 break :get offset;
             },
-            .Optional => |op| switch (@typeInfo(op.payload)) {
-                .Pointer => 0, // the pointer itself
-                else => @sizeOf(self.Type),
+            .Optional => |op| switch (@typeInfo(op.child)) {
+                .Pointer => 0, // offset of the pointer itself
+                else => @sizeOf(op.child) * 8,
             },
             else => @compileError("Not a union or optional"),
         };
@@ -554,7 +546,7 @@ const TypeData = struct {
         };
     }
 
-    fn isBitFields(comptime self: @This()) bool {
+    fn isBitVector(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.Type),
             else => false,
@@ -562,23 +554,21 @@ const TypeData = struct {
     }
 
     fn isSupported(comptime self: @This()) bool {
-        return self.is_supported.?;
+        return self.attrs.is_supported;
     }
 
     fn isComptimeOnly(comptime self: @This()) bool {
-        return self.is_comptime_only.?;
+        return self.attrs.is_comptime_only;
     }
 
     fn hasPointer(comptime self: @This()) bool {
-        return self.has_pointer.?;
+        return self.attrs.has_pointer;
     }
 };
 
 test "TypeData.getName" {
-    assertCT(std.mem.eql(u8, TypeData.init(u32).getName(), "u32"));
-    comptime var td = TypeData.init(void);
-    td.alternate_name = "nothing";
-    assertCT(std.mem.eql(u8, td.getName(), "nothing"));
+    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32 }), "u32"));
+    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .alt_name = "nothing" }), "nothing"));
 }
 
 test "TypeData.getStructureType" {
@@ -589,60 +579,60 @@ test "TypeData.getStructureType" {
     };
     const BareUnion = union {};
     const ExternUnion = extern union {};
-    assertCT(TypeData.init(i32).getStructureType() == .primitive);
-    assertCT(TypeData.init(Enum).getStructureType() == .enumeration);
-    assertCT(TypeData.init(BareUnion).getStructureType() == .bare_union);
-    assertCT(TypeData.init(TaggedUnion).getStructureType() == .tagged_union);
-    assertCT(TypeData.init(ExternUnion).getStructureType() == .extern_union);
+    assertCT(TypeData.getStructureType(.{ .Type = i32 }) == .primitive);
+    assertCT(TypeData.getStructureType(.{ .Type = Enum }) == .enumeration);
+    assertCT(TypeData.getStructureType(.{ .Type = BareUnion }) == .bare_union);
+    assertCT(TypeData.getStructureType(.{ .Type = TaggedUnion }) == .tagged_union);
+    assertCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
 }
 
 test "TypeData.getMemberType" {
-    assertCT(TypeData.init(i32).getMemberType() == .int);
-    assertCT(TypeData.init(u32).getMemberType() == .uint);
-    assertCT(TypeData.init(*u32).getMemberType() == .object);
-    assertCT(TypeData.init(type).getMemberType() == .type);
+    assertCT(TypeData.getMemberType(.{ .Type = i32 }) == .int);
+    assertCT(TypeData.getMemberType(.{ .Type = u32 }) == .uint);
+    assertCT(TypeData.getMemberType(.{ .Type = *u32 }) == .object);
+    assertCT(TypeData.getMemberType(.{ .Type = type }) == .type);
 }
 
 test "TypeData.getByteSize" {
-    assertCT(TypeData.init(void).getByteSize() == 0);
-    assertCT(TypeData.init(@TypeOf(null)).getByteSize() == 0);
-    assertCT(TypeData.init(u8).getByteSize() == 1);
+    assertCT(TypeData.getByteSize(.{ .Type = void }) == 0);
+    assertCT(TypeData.getByteSize(.{ .Type = @TypeOf(null) }) == 0);
+    assertCT(TypeData.getByteSize(.{ .Type = u8 }) == 1);
 }
 
 test "TypeData.getBitSize" {
-    assertCT(TypeData.init(void).getBitSize() == 0);
-    assertCT(TypeData.init(@TypeOf(null)).getBitSize() == 0);
-    assertCT(TypeData.init(u8).getBitSize() == 8);
+    assertCT(TypeData.getBitSize(.{ .Type = void }) == 0);
+    assertCT(TypeData.getBitSize(.{ .Type = @TypeOf(null) }) == 0);
+    assertCT(TypeData.getBitSize(.{ .Type = u8 }) == 8);
 }
 
 test "TypeData.getAlignment" {
-    assertCT(TypeData.init(void).getAlignment() == 1);
-    assertCT(TypeData.init(u8).getAlignment() == 1);
-    assertCT(TypeData.init(u32).getAlignment() == 4);
+    assertCT(TypeData.getAlignment(.{ .Type = void }) == 1);
+    assertCT(TypeData.getAlignment(.{ .Type = u8 }) == 1);
+    assertCT(TypeData.getAlignment(.{ .Type = u32 }) == 4);
 }
 
 test "TypeData.getLength" {
-    assertCT(TypeData.init([5]u8).getLength() == 5);
-    assertCT(TypeData.init(u8).getLength() == null);
-    assertCT(TypeData.init(@Vector(3, f32)).getLength() == 3);
+    assertCT(TypeData.getLength(.{ .Type = [5]u8 }) == 5);
+    assertCT(TypeData.getLength(.{ .Type = u8 }) == null);
+    assertCT(TypeData.getLength(.{ .Type = @Vector(3, f32) }) == 3);
 }
 
 test "TypeData.isConst" {
-    assertCT(TypeData.init(i32).isConst() == false);
-    assertCT(TypeData.init(*i32).isConst() == false);
-    assertCT(TypeData.init(*const i32).isConst() == true);
+    assertCT(TypeData.isConst(.{ .Type = i32 }) == false);
+    assertCT(TypeData.isConst(.{ .Type = *i32 }) == false);
+    assertCT(TypeData.isConst(.{ .Type = *const i32 }) == true);
 }
 
 test "TypeData.isSlice" {
-    assertCT(TypeData.init(i32).isSlice() == false);
-    assertCT(TypeData.init(*i32).isSlice() == false);
-    assertCT(TypeData.init([]i32).isSlice() == true);
-    assertCT(TypeData.init([*]i32).isSlice() == true);
+    assertCT(TypeData.isSlice(.{ .Type = i32 }) == false);
+    assertCT(TypeData.isSlice(.{ .Type = *i32 }) == false);
+    assertCT(TypeData.isSlice(.{ .Type = []i32 }) == true);
+    assertCT(TypeData.isSlice(.{ .Type = [*]i32 }) == true);
 }
 
 test "TypeData.isTuple" {
-    assertCT(TypeData.init(@TypeOf(.{})).isTuple() == true);
-    assertCT(TypeData.init(struct {}).isTuple() == false);
+    assertCT(TypeData.isTuple(.{ .Type = @TypeOf(.{}) }) == true);
+    assertCT(TypeData.isTuple(.{ .Type = struct {} }) == false);
 }
 
 test "TypeData.isPacked" {
@@ -654,41 +644,41 @@ test "TypeData.isPacked" {
         flag1: bool,
         flag2: bool,
     };
-    assertCT(TypeData.init(A).isPacked() == false);
-    assertCT(TypeData.init(B).isPacked() == true);
+    assertCT(TypeData.isPacked(.{ .Type = A }) == false);
+    assertCT(TypeData.isPacked(.{ .Type = B }) == true);
 }
 
-test "TypeData.isBitFields" {
+test "TypeData.isBitVector" {
     const A = @Vector(8, bool);
     const B = @Vector(4, f32);
-    assertCT(TypeData.init(A).isBitFields() == true);
-    assertCT(TypeData.init(B).isBitFields() == false);
+    assertCT(TypeData.isBitVector(.{ .Type = A }) == true);
+    assertCT(TypeData.isBitVector(.{ .Type = B }) == false);
 }
 
 test "TypeData.getSliceLength" {
-    assertCT(TypeData.init([]const u8).getSliceLength() == null);
-    assertCT(TypeData.init([*:0]const u8).getSliceLength() == null);
-    assertCT(TypeData.init([*]const u8).getSliceLength().? == 0);
+    assertCT(TypeData.getSliceLength(.{ .Type = []const u8 }) == null);
+    assertCT(TypeData.getSliceLength(.{ .Type = [*:0]const u8 }) == null);
+    assertCT(TypeData.getSliceLength(.{ .Type = [*]const u8 }).? == 0);
 }
 
 test "TypeData.getSliceName" {
-    const name1 = comptime TypeData.init([]const u8).getSliceName();
+    const name1 = comptime TypeData.getSliceName(.{ .Type = []const u8 });
     assertCT(std.mem.eql(u8, name1[0..3], "[_]"));
-    const name2 = comptime TypeData.init([:0]const u8).getSliceName();
+    const name2 = comptime TypeData.getSliceName(.{ .Type = [:0]const u8 });
     assertCT(std.mem.eql(u8, name2[0..5], "[_:0]"));
-    const name3 = comptime TypeData.init([][4]u8).getSliceName();
+    const name3 = comptime TypeData.getSliceName(.{ .Type = [][4]u8 });
     assertCT(std.mem.eql(u8, name3[0..6], "[_][4]"));
-    const name4 = comptime TypeData.init([*:0]const u8).getSliceName();
+    const name4 = comptime TypeData.getSliceName(.{ .Type = [*:0]const u8 });
     assertCT(std.mem.eql(u8, name4[0..5], "[_:0]"));
-    const name5 = comptime TypeData.init([*]const u8).getSliceName();
+    const name5 = comptime TypeData.getSliceName(.{ .Type = [*]const u8 });
     assertCT(std.mem.eql(u8, name5[0..3], "[0]"));
-    const name6 = comptime TypeData.init([*c]const u8).getSliceName();
+    const name6 = comptime TypeData.getSliceName(.{ .Type = [*c]const u8 });
     assertCT(std.mem.eql(u8, name6[0..3], "[0]"));
 }
 
 test "TypeData.getSentinel" {
-    assertCT(TypeData.init([*:0]const u8).getSentinel() == 0);
-    assertCT(TypeData.init([*:7]const i32).getSentinel() == 7);
+    assertCT(TypeData.getSentinel(.{ .Type = [*:0]const u8 }) == 0);
+    assertCT(TypeData.getSentinel(.{ .Type = [*:7]const i32 }) == 7);
 }
 
 test "TypeData.getSelectorType" {
@@ -697,13 +687,13 @@ test "TypeData.getSelectorType" {
         cat: u32,
         dog: u32,
     };
-    assertCT(TypeData.init(Union).getSelectorType() == Tag);
+    assertCT(TypeData.getSelectorType(.{ .Type = Union }) == Tag);
     if (runtime_safety) {
         const BareUnion = union {
             cat: u32,
             dog: u32,
         };
-        assertCT(TypeData.init(BareUnion).getSelectorType() == u8);
+        assertCT(TypeData.getSelectorType(.{ .Type = BareUnion }) == u8);
     }
 }
 
@@ -712,7 +702,7 @@ test "TypeData.getSelectorBitOffset" {
         cat: i32,
         dog: i32,
     };
-    assertCT(TypeData.init(Union).getSelectorBitOffset() == 32);
+    assertCT(TypeData.getSelectorBitOffset(.{ .Type = Union }) == 32);
 }
 
 test "TypeData.getContentBitOffset" {
@@ -720,206 +710,259 @@ test "TypeData.getContentBitOffset" {
         cat: i32,
         dog: i32,
     };
-    assertCT(TypeData.init(Union).getContentBitOffset() == 0);
+    assertCT(TypeData.getContentBitOffset(.{ .Type = Union }) == 0);
 }
 
-const TypeDataCollector = struct {
-    const List = ComptimeList(TypeData);
+const Function = struct {
+    Type: type,
+    name: [:0]const u8,
+};
 
-    types: List,
-    next_slot: usize = 0,
+const TypeDataCollector = struct {
+    types: ComptimeList(TypeData),
+    functions: ComptimeList(Function),
 
     fn init(comptime capacity: comptime_int) @This() {
         return .{
-            .types = List.init(capacity),
+            .types = ComptimeList(TypeData).init(capacity),
+            .functions = ComptimeList(Function).init(capacity / 8),
         };
     }
 
     fn scan(comptime self: *@This(), comptime T: type) void {
-        _ = self.getTypeData(T);
+        // add all types first
+        self.add(T);
+        // set attributes like is_supported and has_pointer
+        self.setAttributes();
+        // add arg structs once we can determine which functions are callable
+        self.addArgStructs();
+        // assign slots to supported types
+        self.setSlots();
+        // set alternate names of types now that we have the slot
+        self.setNames();
     }
 
     fn createDatabase(comptime self: *const @This()) TypeDatabase(self.types.len) {
-        comptime var db: TypeDatabase(self.types.len) = undefined;
-        for (0..self.types.len) |index| {
-            db.entries[index] = self.types.get(index).*;
-        }
-        return db;
+        return TypeDatabase(self.types.len){ .entries = self.types.entries[0..self.types.len].* };
     }
 
-    fn getTypeData(comptime self: *@This(), comptime T: type) *TypeData {
-        inline for (0..self.types.len) |index| {
-            const td = self.types.get(index);
+    fn append(comptime self: *@This(), comptime T: type) usize {
+        if (self.indexOf(T)) |index| {
+            return index;
+        }
+        const index = self.types.len;
+        self.types = self.types.concat(.{ .Type = T });
+        switch (@typeInfo(T)) {
+            .ErrorUnion => |eu| {
+                self.add(eu.payload);
+                self.add(eu.error_set);
+            },
+            .Fn => |f| {
+                inline for (f.params) |param| {
+                    if (param.type) |PT| {
+                        if (PT != std.mem.Allocator) {
+                            self.add(PT);
+                        }
+                    }
+                }
+                if (f.return_type) |RT| self.add(RT);
+            },
+            inline .Array, .Vector, .Optional, .Pointer => |ar| self.add(ar.child),
+            inline .Struct, .Union => |st| {
+                inline for (st.fields) |field| self.add(field.type);
+            },
+            else => {},
+        }
+        switch (@typeInfo(T)) {
+            inline .Struct, .Union, .Enum, .Opaque => |st| {
+                inline for (st.decls) |decl| {
+                    // decls are accessed through pointers
+                    self.add(@TypeOf(&@field(T, decl.name)));
+                    const decl_value = @field(T, decl.name);
+                    const DT = @TypeOf(decl_value);
+                    switch (@typeInfo(DT)) {
+                        .Type => self.add(decl_value),
+                        .ComptimeFloat => self.add(f64),
+                        .ComptimeInt => self.add(IntType(decl_value)),
+                        // add function to the list so we can create its arg struct later
+                        .Fn => self.functions = self.functions.concat(.{ .Type = DT, .name = decl.name }),
+                        else => {},
+                    }
+                }
+            },
+            else => {},
+        }
+        switch (@typeInfo(T)) {
+            .Pointer => {
+                self.add(usize);
+            },
+            inline .Union, .Optional => {
+                if (self.at(index).getSelectorType()) |ST| {
+                    self.add(ST);
+                }
+            },
+            else => {},
+        }
+        return index;
+    }
+
+    fn add(comptime self: *@This(), comptime T: type) void {
+        _ = self.append(T);
+    }
+
+    fn find(comptime self: *@This(), comptime T: type) bool {
+        return self.indexOf(T) != null;
+    }
+
+    fn get(comptime self: *@This(), comptime T: type) *TypeData {
+        const index = self.indexOf(T) orelse @compileError("No type data: " ++ @typeName(T));
+        return self.at(index);
+    }
+
+    fn at(comptime self: *@This(), comptime index: usize) *TypeData {
+        return &self.types.entries[index];
+    }
+
+    fn indexOf(comptime self: *@This(), comptime T: type) ?usize {
+        return inline for (self.types.slice(), 0..) |*td, index| {
             if (comptime td.Type == T) {
-                return td;
+                break index;
             }
-        } else {
-            const next_index = self.types.len;
-            self.types = self.types.expand();
-            const td = self.types.get(next_index);
-            td.* = TypeData.init(T);
-            if (self.isSupported(T)) {
-                td.slot = self.next_slot;
-                self.next_slot += 1;
-                // replace long and cryptic names with generic one to save space
+        } else null;
+    }
+
+    fn setAttributes(comptime self: *@This()) void {
+        inline for (self.types.slice()) |*td| {
+            self.setAttributesOf(td);
+        }
+    }
+
+    fn getAttributesOf(comptime self: *@This(), comptime T: type) TypeAttributes {
+        const td = self.get(T);
+        self.setAttributesOf(td);
+        return td.attrs;
+    }
+
+    fn setAttributesOf(comptime self: *@This(), comptime td: *TypeData) void {
+        if (td.attrs.known) {
+            return;
+        }
+        // prevent endless recursion
+        td.attrs.known = true;
+        switch (@typeInfo(td.Type)) {
+            .Bool,
+            .Int,
+            .Float,
+            .Void,
+            .ErrorSet,
+            .Enum,
+            .Opaque,
+            .Vector,
+            => td.attrs.is_supported = true,
+            .Type,
+            .ComptimeFloat,
+            .ComptimeInt,
+            .EnumLiteral,
+            .Null,
+            .Undefined,
+            => {
+                td.attrs.is_supported = true;
+                td.attrs.is_comptime_only = true;
+            },
+            .ErrorUnion => |eu| {
+                const payload_attrs = self.getAttributesOf(eu.payload);
+                td.attrs.is_supported = payload_attrs.is_supported;
+                td.attrs.is_comptime_only = payload_attrs.is_comptime_only;
+                td.attrs.has_pointer = payload_attrs.has_pointer;
+            },
+            .Pointer => |pt| {
+                const child_attrs = self.getAttributesOf(pt.child);
+                td.attrs.is_supported = child_attrs.is_supported;
+                td.attrs.is_comptime_only = child_attrs.is_comptime_only;
+                td.attrs.has_pointer = true;
+            },
+            inline .Array, .Optional => |ar| {
+                const child_attrs = self.getAttributesOf(ar.child);
+                td.attrs.is_supported = child_attrs.is_supported;
+                td.attrs.is_comptime_only = child_attrs.is_comptime_only;
+                td.attrs.has_pointer = child_attrs.has_pointer;
+            },
+            .Struct => |st| {
+                td.attrs.is_supported = true;
+                inline for (st.fields) |field| {
+                    if (!field.is_comptime) {
+                        const field_attrs = self.getAttributesOf(field.type);
+                        if (!field_attrs.is_supported) {
+                            td.attrs.is_supported = false;
+                        }
+                        if (field_attrs.is_comptime_only) {
+                            td.attrs.is_comptime_only = true;
+                        }
+                        if (field_attrs.has_pointer) {
+                            td.attrs.has_pointer = true;
+                        }
+                    }
+                }
+            },
+            .Union => |un| {
+                td.attrs.is_supported = true;
+                inline for (un.fields) |field| {
+                    const field_attrs = self.getAttributesOf(field.type);
+                    if (!field_attrs.is_supported) {
+                        td.attrs.is_supported = false;
+                    }
+                    if (field_attrs.is_comptime_only) {
+                        td.attrs.is_comptime_only = true;
+                    }
+                    if (field_attrs.has_pointer and un.tag_type != null) {
+                        // we can only handle pointers in tagged unions
+                        td.attrs.has_pointer = true;
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    fn setSlots(comptime self: *@This()) void {
+        comptime var next = 0;
+        inline for (self.types.slice()) |*td| {
+            if (td.Type != std.mem.Allocator and td.isSupported()) {
+                td.slot = next;
+                next += 1;
+            }
+        }
+    }
+
+    fn setNames(comptime self: *@This()) void {
+        inline for (self.types.slice()) |*td| {
+            if (td.slot != null and td.alt_name == null) {
                 if (isCryptic(td.getName())) {
-                    td.alternate_name = self.getGenericName(T);
-                }
-                // determine these properties as well
-                _ = self.hasPointer(T);
-                _ = self.isComptimeOnly(T);
-
-                // scan decls
-                switch (@typeInfo(T)) {
-                    inline .Struct, .Union, .Enum, .Opaque => |st| {
-                        inline for (st.decls) |decl| {
-                            const decl_ptr = &@field(T, decl.name);
-                            if (comptime self.isSupported(@TypeOf(decl_ptr))) {
-                                // add type only if it's supported
-                                const decl_td = self.getTypeData(@TypeOf(decl_ptr.*));
-                                if (comptime decl_td.Type == type and decl_td.isSupported()) {
-                                    _ = self.getTypeData(decl_ptr.*);
-                                }
-                            }
-                            // see if it's a callable function
-                            switch (@typeInfo(@TypeOf(decl_ptr.*))) {
-                                .Fn => {
-                                    const function = decl_ptr.*;
-                                    if (self.isCallable(function)) {
-                                        // add argument struct
-                                        const ArgT = ArgumentStruct(function);
-                                        // use the name of the function as the type name
-                                        const arg_td = self.getTypeData(ArgT);
-                                        arg_td.alternate_name = decl.name;
-                                        // set the structure type as well
-                                        arg_td.alternate_structure_type = .arg_struct;
-                                    }
-                                },
-                                else => {},
-                            }
-                        }
-                    },
-                    else => {},
+                    td.alt_name = self.getGenericName(td.Type);
                 }
             }
-            return td;
         }
     }
 
-    fn isSupported(comptime self: *@This(), comptime T: type) bool {
-        const td = self.getTypeData(T);
-        if (td.is_supported == null) {
-            td.is_supported = switch (@typeInfo(td.Type)) {
-                .Type,
-                .Bool,
-                .Int,
-                .ComptimeInt,
-                .Float,
-                .ComptimeFloat,
-                .Void,
-                .Null,
-                .Undefined,
-                .ErrorSet,
-                .Enum,
-                .Opaque,
-                .Vector,
-                .EnumLiteral,
-                => true,
-                .ErrorUnion => |eu| self.isSupported(eu.payload),
-                inline .Array, .Optional, .Pointer => |ar| self.isSupported(ar.child),
-                inline .Struct, .Union => |st| check: {
-                    // set to true to prevent recursion
-                    td.is_supported = true;
-                    inline for (st.fields) |field| {
-                        if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
-                            continue;
-                        }
-                        if (!self.isSupported(field.type)) {
-                            break :check false;
-                        }
-                    } else {
-                        break :check true;
-                    }
-                },
-                else => false,
-            };
+    fn addArgStructs(comptime self: *@This()) void {
+        inline for (self.functions.slice()) |function| {
+            if (self.isCallable(function.Type)) {
+                const index = self.append(ArgumentStruct(function.Type));
+                const td = self.at(index);
+                self.setAttributesOf(td);
+                td.alt_type = .arg_struct;
+            }
         }
-        return td.is_supported.?;
     }
 
-    fn isComptimeOnly(comptime self: *@This(), comptime T: type) bool {
-        const td = self.getTypeData(T);
-        if (td.is_comptime_only == null) {
-            td.is_comptime_only = switch (@typeInfo(td.Type)) {
-                .ComptimeFloat,
-                .ComptimeInt,
-                .EnumLiteral,
-                .Type,
-                .Null,
-                .Undefined,
-                => true,
-                .ErrorUnion => |eu| self.isComptimeOnly(eu.payload),
-                inline .Array, .Optional, .Pointer => |ar| self.isComptimeOnly(ar.child),
-                inline .Struct, .Union => |st| check: {
-                    // set to false to prevent recursion
-                    td.is_comptime_only = false;
-                    inline for (st.fields) |field| {
-                        if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
-                            continue;
-                        }
-                        // structs with comptime fields of comptime type can be created at runtime
-                        if (self.isComptimeOnly(field.type)) {
-                            break :check true;
-                        }
-                    } else {
-                        break :check false;
-                    }
-                },
-                else => false,
-            };
-        }
-        return td.is_comptime_only.?;
-    }
-
-    fn hasPointer(comptime self: *@This(), comptime T: type) bool {
-        const td = self.getTypeData(T);
-        if (td.has_pointer == null) {
-            td.has_pointer = switch (@typeInfo(td.Type)) {
-                .Pointer => true,
-                .ErrorUnion => |eu| self.hasPointer(eu.payload),
-                inline .Array, .Optional => |ar| self.hasPointer(ar.child),
-                inline .Struct, .Union => |st| check: {
-                    // pointer in untagged union are not exportable
-                    if (@hasField(@TypeOf(st), "tag_type") and st.tag_type == null) {
-                        break :check false;
-                    }
-                    // set to false to prevent recursion
-                    td.has_pointer = false;
-                    inline for (st.fields) |field| {
-                        if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
-                            continue;
-                        }
-                        if (self.hasPointer(field.type)) {
-                            break :check true;
-                        }
-                    } else {
-                        break :check false;
-                    }
-                },
-                else => false,
-            };
-        }
-        return td.has_pointer.?;
-    }
-
-    fn isCallable(comptime self: *@This(), comptime function: anytype) bool {
-        const f = @typeInfo(@TypeOf(function)).Fn;
+    fn isCallable(comptime self: *@This(), comptime T: type) bool {
+        const f = @typeInfo(T).Fn;
         if (f.is_generic or f.is_var_args) {
             return false;
         }
         inline for (f.params) |param| {
             if (param.type) |PT| {
-                if (PT != std.mem.Allocator and !self.isSupported(PT)) {
+                if (PT != std.mem.Allocator and !self.get(PT).isSupported()) {
                     return false;
                 }
             } else {
@@ -928,7 +971,7 @@ const TypeDataCollector = struct {
             }
         }
         if (f.return_type) |RT| {
-            if (!self.isSupported(RT)) {
+            if (!self.get(RT).isSupported()) {
                 return false;
             }
         } else {
@@ -973,16 +1016,12 @@ const TypeDataCollector = struct {
                 });
             },
             else => format: {
-                if (T == anyerror) {
-                    break :format @typeName(T);
-                }
                 const prefix = switch (@typeInfo(T)) {
                     .Struct => "Struct",
                     .ErrorSet => "ErrorSet",
                     else => "Type",
                 };
-                const slot = self.getTypeData(T).getSlot();
-                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, slot });
+                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, self.get(T).slot.? });
             },
         };
     }
@@ -1004,88 +1043,123 @@ const TypeDataCollector = struct {
     }
 };
 
-test "TypeDataCollector.isSupported" {
+test "TypeDataCollector.scan" {
+    const Test = struct {
+        pub const StructA = struct {
+            number: i32,
+            string: []const u8,
+        };
+    };
     comptime var tdc = TypeDataCollector.init(0);
-    const StructA = struct {
-        number: i32,
-        string: []const u8,
-    };
-    const StructB = struct {
-        thunk: Thunk,
-    };
-    const StructC = struct {
-        number: i32 = 0,
-        ptr: *@This(),
-    };
-    const StructD = struct {
-        thunk: Thunk,
-        ptr: *@This(),
-    };
-    const UnionA = union(enum) {
-        cat: u32,
-        dog: u32,
-    };
-    @setEvalBranchQuota(5000);
-    assertCT(tdc.isSupported(StructA) == true);
-    assertCT(tdc.isSupported(StructA) == true);
-    assertCT(tdc.isSupported(StructB) == false);
-    assertCT(tdc.isSupported(StructB) == false);
-    assertCT(tdc.isSupported(Thunk) == false);
-    assertCT(tdc.isSupported(*StructA) == true);
-    assertCT(tdc.isSupported(*StructB) == false);
-    assertCT(tdc.isSupported(StructC) == true);
-    assertCT(tdc.isSupported(StructD) == false);
-    assertCT(tdc.isSupported(UnionA) == true);
-    assertCT(tdc.isSupported(@TypeOf(null)) == true);
-    assertCT(tdc.isSupported(@TypeOf(undefined)) == true);
-    assertCT(tdc.isSupported(noreturn) == false);
+    comptime tdc.scan(Test);
+    assertCT(tdc.find(Test.StructA) == true);
 }
 
-test "TypeDatabase.isComptimeOnly" {
-    comptime var tdc = TypeDataCollector.init(0);
-    assertCT(tdc.isComptimeOnly(type) == true);
-    assertCT(tdc.isComptimeOnly(*type) == true);
-    assertCT(tdc.isComptimeOnly(*?type) == true);
-}
+test "TypeDataCollector.setAttributes" {
+    const Test = struct {
+        pub const StructA = struct {
+            number: i32,
+            string: []const u8,
+        };
+        pub const StructB = struct {
+            comptime Type: type = Thunk,
+            thunk: Thunk,
+        };
+        pub const StructC = struct {
+            number: i32 = 0,
+            ptr: ?*@This(),
+        };
+        pub const StructD = struct {
+            thunk: Thunk,
+            ptr: *@This(),
+        };
+        pub const UnionA = union(enum) {
+            cat: u32,
+            dog: u32,
 
-test "TypeDatabase.hasPointer" {
-    const A = struct {
-        number: i32,
-    };
-    const B = struct {
-        number: i32,
-        a: A,
-    };
-    const C = struct {
-        number: i32,
-        a: A,
-        pointer: [*]i32,
-    };
-    // const D = union {
-    //     a: A,
-    //     c: C,
-    // };
-    const E = struct {
-        number: i32,
-        comptime pointer: ?*u32 = null,
+            pub const weird = noreturn;
+        };
+        pub const EnumA = enum {
+            apple,
+            orange,
+
+            pub fn hello(_: u17) i18 {
+                return 0;
+            }
+        };
+
+        pub var a: StructA = undefined;
+        pub var b: StructB = undefined;
+        pub const c: StructC = .{ .number = 1, .ptr = null };
+
+        pub const optional_type: ?type = null;
+        pub const Null = null;
+        pub const Undefined = undefined;
+
+        pub const A = struct {
+            number: i32,
+        };
+        pub const B = struct {
+            number: i32,
+            a: A,
+        };
+        pub const C = struct {
+            number: i32,
+            a: A,
+            pointer: [*]i32,
+        };
+        pub const D = union {
+            a: A,
+            c: C,
+        };
+        pub const E = struct {
+            number: i32,
+            comptime pointer: ?*u32 = null,
+        };
+
+        pub var slice_of_slices: [][]u8 = undefined;
+        pub var array_of_pointers: [5]*u8 = undefined;
     };
     @setEvalBranchQuota(5000);
     comptime var tdc = TypeDataCollector.init(0);
-    assertCT(tdc.hasPointer(u8) == false);
-    assertCT(tdc.hasPointer(*u8) == true);
-    assertCT(tdc.hasPointer([]u8) == true);
-    assertCT(tdc.hasPointer([5]*u8) == true);
-    assertCT(tdc.hasPointer([][]u8) == true);
-    assertCT(tdc.hasPointer(A) == false);
-    assertCT(tdc.hasPointer(B) == false);
-    assertCT(tdc.hasPointer(C) == true);
+    comptime tdc.scan(Test);
+    // is_supported
+    assertCT(tdc.get(Test.StructA).isSupported() == true);
+    assertCT(tdc.get(Test.StructB).isSupported() == false);
+    assertCT(tdc.get(Thunk).isSupported() == false);
+    assertCT(tdc.get(*Test.StructA).isSupported() == true);
+    assertCT(tdc.get(*Test.StructB).isSupported() == false);
+    assertCT(tdc.get(Test.StructC).isSupported() == true);
+    assertCT(tdc.get(Test.StructD).isSupported() == false);
+    assertCT(tdc.get(Test.UnionA).isSupported() == true);
+    assertCT(tdc.get(@TypeOf(null)).isSupported() == true);
+    assertCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
+    assertCT(tdc.get(noreturn).isSupported() == false);
+    assertCT(tdc.get(u17).isSupported() == true);
+    assertCT(tdc.get(i18).isSupported() == true);
+    // pointer should include this
+    assertCT(tdc.get(usize).isSupported() == true);
+
+    // is_comptime_only
+    assertCT(tdc.get(type).isComptimeOnly() == true);
+    assertCT(tdc.get(*const type).isComptimeOnly() == true);
+    assertCT(tdc.get(?type).isComptimeOnly() == true);
+    // has_pointer
+    assertCT(tdc.get(i32).hasPointer() == false);
+    assertCT(tdc.get([*]i32).hasPointer() == true);
+    assertCT(tdc.get([]const u8).hasPointer() == true);
+    assertCT(tdc.get([5]*u8).hasPointer() == true);
+    assertCT(tdc.get([][]u8).hasPointer() == true);
+    assertCT(tdc.get(Test.A).hasPointer() == false);
+    assertCT(tdc.get(Test.B).hasPointer() == false);
+    assertCT(tdc.get(Test.C).hasPointer() == true);
     // pointers in union are inaccessible
-    // assertCT(tdc.hasPointer(D) == false);
-    // comptime fields should be ignored
-    assertCT(tdc.hasPointer(E) == false);
+    assertCT(tdc.get(Test.D).hasPointer() == false);
+    // // comptime fields should be ignored
+    assertCT(tdc.get(Test.E).hasPointer() == false);
 }
 
-test "TypeDatabase.isCallable" {
+test "TypeDataCollector.isCallable" {
     const Test = struct {
         pub fn needFn(cb: *const fn () void) void {
             cb();
@@ -1103,27 +1177,36 @@ test "TypeDatabase.isCallable" {
             _ = allocator;
         }
     };
+    @setEvalBranchQuota(15000);
     comptime var tdc = TypeDataCollector.init(0);
-    assertCT(tdc.isCallable(Test.needFn) == false);
-    assertCT(tdc.isCallable(Test.needOptionalFn) == false);
-    assertCT(tdc.isCallable(Test.nothing) == true);
-    assertCT(tdc.isCallable(Test.allocate) == true);
-    assertCT(tdc.isCallable(std.debug.print) == false);
+    comptime tdc.scan(Test);
+    assertCT(tdc.isCallable(@TypeOf(Test.needFn)) == false);
+    assertCT(tdc.isCallable(@TypeOf(Test.needOptionalFn)) == false);
+    assertCT(tdc.isCallable(@TypeOf(Test.nothing)) == true);
+    assertCT(tdc.isCallable(@TypeOf(Test.allocate)) == true);
+    assertCT(tdc.isCallable(@TypeOf(std.debug.print)) == false);
 }
 
-test "TypeDatabase.getGenericName" {
+test "TypeDataCollector.setNames" {
+    const Test = struct {
+        pub const tuple = .{.tuple};
+        pub const Error = error{ a, b, c };
+    };
     comptime var tdc = TypeDataCollector.init(0);
-    const s_name = comptime tdc.getGenericName(@TypeOf(.{.tuple}));
-    assertCT(std.mem.eql(u8, s_name, "Struct0000"));
-    const e_name = comptime tdc.getGenericName(error{ a, b, c });
-    assertCT(std.mem.eql(u8, e_name, "ErrorSet0001"));
+    comptime tdc.scan(Test);
+    const s_td = tdc.get(@TypeOf(Test.tuple));
+    const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
+    assertCT(std.mem.eql(u8, s_td.getName(), s_name));
+    const e_td = tdc.get(Test.Error);
+    const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
+    assertCT(std.mem.eql(u8, e_td.getName(), e_name));
 }
 
 fn TypeDatabase(comptime len: comptime_int) type {
     return struct {
         entries: [len]TypeData,
 
-        fn getTypeData(comptime self: @This(), comptime T: type) TypeData {
+        fn get(comptime self: @This(), comptime T: type) TypeData {
             for (self.entries) |entry| {
                 if (entry.Type == T) {
                     return entry;
@@ -1133,14 +1216,14 @@ fn TypeDatabase(comptime len: comptime_int) type {
             }
         }
 
-        fn isCallable(comptime self: @This(), comptime function: anytype) bool {
-            const f = @typeInfo(@TypeOf(function)).Fn;
+        fn isCallable(comptime self: @This(), comptime T: type) bool {
+            const f = @typeInfo(T).Fn;
             if (f.is_generic or f.is_var_args) {
                 return false;
             }
             inline for (f.params) |param| {
                 if (param.type) |PT| {
-                    if (PT != std.mem.Allocator and !self.getTypeData(PT).isSupported()) {
+                    if (PT != std.mem.Allocator and !self.get(PT).isSupported()) {
                         return false;
                     }
                 } else {
@@ -1149,7 +1232,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
                 }
             }
             if (f.return_type) |RT| {
-                if (!self.getTypeData(RT).isSupported()) {
+                if (!self.get(RT).isSupported()) {
                     return false;
                 }
             } else {
@@ -1161,7 +1244,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
     };
 }
 
-test "TypeDatabase.getTypeData" {
+test "TypeDatabase.get" {
     const Test = struct {
         pub const StructA = struct {
             number: i32,
@@ -1196,20 +1279,20 @@ test "TypeDatabase.getTypeData" {
     // }
     const tdb = comptime tdc.createDatabase();
 
-    assertCT(tdb.getTypeData(Test.StructA).isSupported() == true);
-    assertCT(tdb.getTypeData(Test.StructB).isSupported() == false);
-    assertCT(tdb.getTypeData(Thunk).isSupported() == false);
-    assertCT(tdb.getTypeData(*Test.StructA).isSupported() == true);
-    assertCT(tdb.getTypeData(*const Test.StructA).isSupported() == true);
-    assertCT(tdb.getTypeData(Test.StructC).isSupported() == true);
-    assertCT(tdb.getTypeData(Test.StructD).isSupported() == false);
-    assertCT(tdb.getTypeData(Test.UnionA).isSupported() == true);
+    assertCT(tdb.get(Test.StructA).isSupported() == true);
+    assertCT(tdb.get(Test.StructB).isSupported() == false);
+    assertCT(tdb.get(Thunk).isSupported() == false);
+    assertCT(tdb.get(*Test.StructA).isSupported() == true);
+    assertCT(tdb.get(*const Test.StructA).isSupported() == true);
+    assertCT(tdb.get(Test.StructC).isSupported() == true);
+    assertCT(tdb.get(Test.StructD).isSupported() == false);
+    assertCT(tdb.get(Test.UnionA).isSupported() == true);
 }
 
 // NOTE: error type has to be specified here since the function is called recursively
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(ctx: anytype, comptime T: type) Error!Value {
-    const td = ctx.tdb.getTypeData(T);
+    const td = ctx.tdb.get(T);
     const slot = td.getSlot();
     return ctx.host.readSlot(null, slot) catch create: {
         const def: Structure = .{
@@ -1278,7 +1361,7 @@ fn addPrimitiveMember(ctx: anytype, structure: Value, comptime td: TypeData) !vo
 }
 
 fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.getTypeData(@typeInfo(td.Type).Array.child);
+    const child_td = ctx.tdb.get(@typeInfo(td.Type).Array.child);
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(),
         .bit_size = child_td.getBitSize(),
@@ -1288,8 +1371,8 @@ fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
 }
 
 fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.getTypeData(@typeInfo(td.Type).Vector.child);
-    const child_byte_size = if (td.isBitfields()) null else child_td.getByteSize();
+    const child_td = ctx.tdb.get(@typeInfo(td.Type).Vector.child);
+    const child_byte_size = if (td.isBitVector()) null else child_td.getByteSize();
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(),
         .bit_size = child_td.getBitSize(),
@@ -1299,11 +1382,11 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
 }
 
 fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.getTypeData(@typeInfo(td.Type).Pointer.child);
+    const child_td = ctx.tdb.get(@typeInfo(td.Type).Pointer.child);
     const child_structure = try getStructure(ctx, child_td.Type);
     const target_structure = if (!td.isSlice()) child_structure else define_slice: {
         const Slice = opaque {}; // dummy type
-        const slice_td = ctx.tdb.getTypeData(Slice);
+        const slice_td = ctx.tdb.get(Slice);
         const slice_def: Structure = .{
             .name = td.getSliceName(),
             .structure_type = .slice,
@@ -1350,7 +1433,7 @@ fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void
 fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const st = @typeInfo(td.Type).Struct;
     inline for (st.fields, 0..) |field, index| {
-        const field_td = ctx.tdb.getTypeData(field.type);
+        const field_td = ctx.tdb.get(field.type);
         if (comptime field_td.isSupported()) {
             // comptime fields are not actually stored in the struct
             // fields of comptime types in comptime structs are handled in the same manner
@@ -1402,7 +1485,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         }
         inline for (st.fields, 0..) |field, index| {
             if (field.default_value) |opaque_ptr| {
-                const field_td = ctx.tdb.getTypeData(field.type);
+                const field_td = ctx.tdb.get(field.type);
                 const comptime_only = field.is_comptime or field_td.isComptimeOnly();
                 if (comptime_only and comptime field_td.isSupported()) {
                     // comptime members aren't stored in the struct's memory
@@ -1423,7 +1506,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
 fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const fields = @typeInfo(td.Type).Union.fields;
     inline for (fields, 0..) |field, index| {
-        const field_td = ctx.tdb.getTypeData(field.type);
+        const field_td = ctx.tdb.get(field.type);
         try ctx.host.attachMember(structure, .{
             .name = field.name,
             .member_type = field_td.getMemberType(),
@@ -1435,7 +1518,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
         }, false);
     }
     if (td.getSelectorType()) |TT| {
-        const selector_td = ctx.tdb.getTypeData(TT);
+        const selector_td = ctx.tdb.get(TT);
         try ctx.host.attachMember(structure, .{
             .name = "selector",
             .member_type = selector_td.getMemberType(),
@@ -1449,7 +1532,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
 
 fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     // value always comes first
-    const child_td = ctx.tdb.getTypeData(@typeInfo(td.Type).Optional.child);
+    const child_td = ctx.tdb.get(@typeInfo(td.Type).Optional.child);
     try ctx.host.attachMember(structure, .{
         .name = "value",
         .member_type = child_td.getMemberType(),
@@ -1459,8 +1542,8 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
         .slot = 0,
         .structure = try getStructure(ctx, child_td.Type),
     }, false);
-    const ST = td.getSelectorType();
-    const selector_td = ctx.tdb.getTypeData(ST);
+    const ST = td.getSelectorType().?;
+    const selector_td = ctx.tdb.get(ST);
     try ctx.host.attachMember(structure, .{
         .name = "present",
         .member_type = selector_td.getMemberType(),
@@ -1472,7 +1555,7 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
 }
 
 fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const payload_td = ctx.tdb.getTypeData(@typeInfo(td.Type).ErrorUnion.payload);
+    const payload_td = ctx.tdb.get(@typeInfo(td.Type).ErrorUnion.payload);
     try ctx.host.attachMember(structure, .{
         .name = "value",
         .member_type = payload_td.getMemberType(),
@@ -1482,7 +1565,7 @@ fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !
         .slot = 0,
         .structure = try getStructure(ctx, payload_td.Type),
     }, false);
-    const error_td = ctx.tdb.getTypeData(@typeInfo(td.Type).ErrorUnion.error_set);
+    const error_td = ctx.tdb.get(@typeInfo(td.Type).ErrorUnion.error_set);
     try ctx.host.attachMember(structure, .{
         .name = "error",
         .member_type = error_td.getMemberType(),
@@ -1501,10 +1584,10 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         inline .Struct, .Union, .Enum, .Opaque => |st| {
             inline for (st.decls, 0..) |decl, index| {
                 const decl_ptr = &@field(td.Type, decl.name);
-                const decl_ptr_td = ctx.tdb.getTypeData(@TypeOf(decl_ptr));
+                const decl_ptr_td = ctx.tdb.get(@TypeOf(decl_ptr));
                 if (comptime decl_ptr_td.isSupported()) {
                     // export type only if it's supported
-                    const decl_td = ctx.tdb.getTypeData(@TypeOf(decl_ptr.*));
+                    const decl_td = ctx.tdb.get(@TypeOf(decl_ptr.*));
                     if (comptime decl_td.Type != type or decl_td.isSupported()) {
                         // always export constants while variables can optionally be switch off
                         if (decl_ptr_td.isConst() or !ctx.host.options.omit_variables) {
@@ -1585,9 +1668,9 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                 const decl_value = @field(td.Type, decl.name);
                 switch (@typeInfo(@TypeOf(decl_value))) {
                     .Fn => |f| {
-                        const function = decl_value;
-                        if (ctx.tdb.isCallable(function)) {
-                            const ArgT = ArgumentStruct(function);
+                        const FT = @TypeOf(decl_value);
+                        if (ctx.tdb.isCallable(FT)) {
+                            const ArgT = ArgumentStruct(FT);
                             const arg_structure = try getStructure(ctx, ArgT);
                             // see if the first param is an instance of the type in question or
                             // a pointer to one
@@ -1602,7 +1685,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                             };
                             try ctx.host.attachMethod(structure, .{
                                 .name = decl.name,
-                                .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), function, ArgT)),
+                                .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
                                 .structure = arg_structure,
                             }, is_static_only);
                         }
@@ -1615,8 +1698,8 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     };
 }
 
-fn ArgumentStruct(comptime function: anytype) type {
-    const f = @typeInfo(@TypeOf(function)).Fn;
+fn ArgumentStruct(comptime T: type) type {
+    const f = @typeInfo(T).Fn;
     const count = get: {
         var count = 1;
         for (f.params) |param| {
@@ -1673,18 +1756,18 @@ test "ArgumentStruct" {
             return arg1 < arg2;
         }
     };
-    const ArgA = ArgumentStruct(Test.A);
+    const ArgA = ArgumentStruct(@TypeOf(Test.A));
     const fieldsA = std.meta.fields(ArgA);
     assert(fieldsA.len == 3);
     assert(fieldsA[0].name[0] == '0');
     assert(fieldsA[1].name[0] == '1');
     assert(fieldsA[2].name[0] == 'r');
-    const ArgB = ArgumentStruct(Test.B);
+    const ArgB = ArgumentStruct(@TypeOf(Test.B));
     const fieldsB = std.meta.fields(ArgB);
     assert(fieldsB.len == 2);
     assert(fieldsB[0].name[0] == '0');
     assert(fieldsB[1].name[0] == 'r');
-    const ArgC = ArgumentStruct(Test.C);
+    const ArgC = ArgumentStruct(@TypeOf(Test.C));
     const fieldsC = std.meta.fields(ArgC);
     assert(fieldsC.len == 3);
 }
@@ -1735,7 +1818,7 @@ test "createThunk" {
             return if (a > 10 and b) true else false;
         }
     };
-    const ArgA = ArgumentStruct(Test.A);
+    const ArgA = ArgumentStruct(@TypeOf(Test.A));
     const Host = struct {
         pub fn init(_: *anyopaque, _: ?*anyopaque) @This() {
             return .{};
@@ -1805,7 +1888,7 @@ fn createErrorMessage(host: anytype, err: anyerror) !Value {
 }
 
 fn exportPointerTarget(ctx: anytype, comptime ptr: anytype, comptime is_comptime: bool) !Value {
-    const td = ctx.tdb.getTypeData(@TypeOf(ptr.*));
+    const td = ctx.tdb.get(@TypeOf(ptr.*));
     const value_ptr = get: {
         // values that only exist at comptime need to have their comptime part replaced with void
         // (comptime keyword needed here since expression evaluates to different pointer types)
@@ -1833,7 +1916,7 @@ fn exportError(ctx: anytype, err: anyerror, structure: Value) !Value {
 
 fn exportComptimeValue(ctx: anytype, comptime value: anytype) !Value {
     return switch (@typeInfo(@TypeOf(value))) {
-        .ComptimeInt => exportPointerTarget(ctx, &@as(IntType(i8, value), value), true),
+        .ComptimeInt => exportPointerTarget(ctx, &@as(IntType(value), value), true),
         .ComptimeFloat => exportPointerTarget(ctx, &@as(f64, value), true),
         .EnumLiteral => exportPointerTarget(ctx, @tagName(value), true),
         .Type => getStructure(ctx, value),
@@ -1842,7 +1925,7 @@ fn exportComptimeValue(ctx: anytype, comptime value: anytype) !Value {
 }
 
 fn attachComptimeValues(ctx: anytype, target: Value, comptime value: anytype) !void {
-    const td = ctx.tdb.getTypeData(@TypeOf(value));
+    const td = ctx.tdb.get(@TypeOf(value));
     switch (@typeInfo(td.Type)) {
         .Type => {
             const obj = try getStructure(ctx, value);
@@ -1860,7 +1943,7 @@ fn attachComptimeValues(ctx: anytype, target: Value, comptime value: anytype) !v
         },
         .Struct => |st| {
             inline for (st.fields, 0..) |field, index| {
-                const field_td = ctx.tdb.getTypeData(field.type);
+                const field_td = ctx.tdb.get(field.type);
                 if (field_td.isComptimeOnly()) {
                     const field_value = @field(value, field.name);
                     const obj = try exportComptimeValue(ctx, field_value);
@@ -1873,7 +1956,7 @@ fn attachComptimeValues(ctx: anytype, target: Value, comptime value: anytype) !v
                 const tag: Tag = value;
                 inline for (un.fields, 0..) |field, index| {
                     if (@field(Tag, field.name) == tag) {
-                        const field_td = ctx.tdb.getTypeData(field.type);
+                        const field_td = ctx.tdb.get(field.type);
                         if (field_td.isComptimeOnly()) {
                             const field_value = @field(value, field.name);
                             const obj = try exportComptimeValue(ctx, field_value);

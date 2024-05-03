@@ -165,10 +165,13 @@ export function addTests(importModule, options) {
       expect(module.optional).to.equal(3000);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('3000');
+      module.optional = 700;
+      const [ after1 ] = await capture(() => print());
+      expect(after1).to.equal('700');
       module.optional = null;
       expect(module.optional).to.be.null;
-      const [ after ] = await capture(() => print());
-      expect(after).to.equal('null');
+      const [ after2 ] = await capture(() => print());
+      expect(after2).to.equal('null');
       module.optional = -4000;
       expect(module.optional).to.equal(-4000);
     })
