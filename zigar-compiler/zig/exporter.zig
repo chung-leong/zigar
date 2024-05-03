@@ -271,10 +271,8 @@ fn ComptimeList(comptime T: type) type {
             } else {
                 // need new array
                 const capacity = if (self.entries.len > 0) 2 * self.entries.len else 1;
-                comptime var entries: [capacity]T = undefined;
-                inline for (self.entries, 0..) |pointer, index| {
-                    entries[index] = pointer;
-                }
+                const blank: [capacity - self.entries.len]T = undefined;
+                comptime var entries: [capacity]T = self.entries[0..self.len].* ++ blank;
                 entries[self.len] = value;
                 return .{ .entries = &entries, .len = self.len + 1 };
             }
@@ -305,6 +303,7 @@ test "ComptimeList.concat" {
 const TypeAttributes = packed struct {
     is_supported: bool = false,
     is_comptime_only: bool = false,
+    is_arguments: bool = false,
     has_pointer: bool = false,
     known: bool = false,
 };
@@ -312,12 +311,11 @@ const TypeAttributes = packed struct {
 const TypeData = struct {
     Type: type,
     slot: ?usize = null,
-    alt_name: ?[:0]const u8 = null,
-    alt_type: ?StructureType = null,
+    name: ?[:0]const u8 = null,
     attrs: TypeAttributes = .{},
 
     fn getName(comptime self: @This()) [:0]const u8 {
-        return self.alt_name orelse @typeName(self.Type);
+        return self.name orelse @typeName(self.Type);
     }
 
     fn getSlot(comptime self: @This()) usize {
@@ -325,7 +323,7 @@ const TypeData = struct {
     }
 
     fn getStructureType(comptime self: @This()) StructureType {
-        return self.alt_type orelse switch (@typeInfo(self.Type)) {
+        return if (self.attrs.is_arguments) .arg_struct else switch (@typeInfo(self.Type)) {
             .Bool,
             .Int,
             .ComptimeInt,
@@ -567,8 +565,8 @@ const TypeData = struct {
 };
 
 test "TypeData.getName" {
-    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32 }), "u32"));
-    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .alt_name = "nothing" }), "nothing"));
+    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
+    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .name = "nothing" }), "nothing"));
 }
 
 test "TypeData.getStructureType" {
@@ -721,6 +719,7 @@ const Function = struct {
 const TypeDataCollector = struct {
     types: ComptimeList(TypeData),
     functions: ComptimeList(Function),
+    next_slot: usize = 0,
 
     fn init(comptime capacity: comptime_int) @This() {
         return .{
@@ -732,14 +731,26 @@ const TypeDataCollector = struct {
     fn scan(comptime self: *@This(), comptime T: type) void {
         // add all types first
         self.add(T);
-        // set attributes like is_supported and has_pointer
-        self.setAttributes();
+        inline for (self.types.slice()) |*td| {
+            // set attributes like is_supported and has_pointer
+            self.setAttributes(td);
+            if (td.isSupported()) {
+                // assign slots to supported types
+                self.setSlot(td);
+                // set alternate names of types now that we have the slot
+                self.setName(td);
+            }
+        }
         // add arg structs once we can determine which functions are callable
-        self.addArgStructs();
-        // assign slots to supported types
-        self.setSlots();
-        // set alternate names of types now that we have the slot
-        self.setNames();
+        inline for (self.functions.slice()) |function| {
+            if (self.isCallable(function.Type)) {
+                const index = self.append(ArgumentStruct(function.Type));
+                const td = self.at(index);
+                self.setAttributes(td);
+                self.setSlot(td);
+                td.attrs.is_arguments = true;
+            }
+        }
     }
 
     fn createDatabase(comptime self: *const @This()) TypeDatabase(self.types.len) {
@@ -824,26 +835,42 @@ const TypeDataCollector = struct {
     }
 
     fn indexOf(comptime self: *@This(), comptime T: type) ?usize {
-        return inline for (self.types.slice(), 0..) |*td, index| {
-            if (comptime td.Type == T) {
-                break index;
-            }
+        comptime var i = 0;
+        const e = self.types.entries;
+        const l = self.types.len;
+        return while (i < l) : (i += 8) {
+            if (i + 0 < l and e[i + 0].Type == T) break i + 0;
+            if (i + 1 < l and e[i + 1].Type == T) break i + 1;
+            if (i + 2 < l and e[i + 2].Type == T) break i + 2;
+            if (i + 3 < l and e[i + 3].Type == T) break i + 3;
+            if (i + 4 < l and e[i + 4].Type == T) break i + 4;
+            if (i + 5 < l and e[i + 5].Type == T) break i + 5;
+            if (i + 6 < l and e[i + 6].Type == T) break i + 6;
+            if (i + 7 < l and e[i + 7].Type == T) break i + 7;
         } else null;
     }
 
-    fn setAttributes(comptime self: *@This()) void {
-        inline for (self.types.slice()) |*td| {
-            self.setAttributesOf(td);
-        }
+    fn getSlot(comptime self: *@This(), comptime T: type) usize {
+        const td = self.get(T);
+        self.setSlot(td);
+        return td.slot.?;
     }
 
-    fn getAttributesOf(comptime self: *@This(), comptime T: type) TypeAttributes {
+    fn setSlot(comptime self: *@This(), comptime td: *TypeData) void {
+        if (td.slot != null) {
+            return;
+        }
+        td.slot = self.next_slot;
+        self.next_slot += 1;
+    }
+
+    fn getAttributes(comptime self: *@This(), comptime T: type) TypeAttributes {
         const td = self.get(T);
-        self.setAttributesOf(td);
+        self.setAttributes(td);
         return td.attrs;
     }
 
-    fn setAttributesOf(comptime self: *@This(), comptime td: *TypeData) void {
+    fn setAttributes(comptime self: *@This(), comptime td: *TypeData) void {
         if (td.attrs.known) {
             return;
         }
@@ -870,19 +897,19 @@ const TypeDataCollector = struct {
                 td.attrs.is_comptime_only = true;
             },
             .ErrorUnion => |eu| {
-                const payload_attrs = self.getAttributesOf(eu.payload);
+                const payload_attrs = self.getAttributes(eu.payload);
                 td.attrs.is_supported = payload_attrs.is_supported;
                 td.attrs.is_comptime_only = payload_attrs.is_comptime_only;
                 td.attrs.has_pointer = payload_attrs.has_pointer;
             },
             .Pointer => |pt| {
-                const child_attrs = self.getAttributesOf(pt.child);
+                const child_attrs = self.getAttributes(pt.child);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
             },
             inline .Array, .Optional => |ar| {
-                const child_attrs = self.getAttributesOf(ar.child);
+                const child_attrs = self.getAttributes(ar.child);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = child_attrs.has_pointer;
@@ -891,7 +918,7 @@ const TypeDataCollector = struct {
                 td.attrs.is_supported = true;
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
-                        const field_attrs = self.getAttributesOf(field.type);
+                        const field_attrs = self.getAttributes(field.type);
                         if (!field_attrs.is_supported) {
                             td.attrs.is_supported = false;
                         }
@@ -907,7 +934,7 @@ const TypeDataCollector = struct {
             .Union => |un| {
                 td.attrs.is_supported = true;
                 inline for (un.fields) |field| {
-                    const field_attrs = self.getAttributesOf(field.type);
+                    const field_attrs = self.getAttributes(field.type);
                     if (!field_attrs.is_supported) {
                         td.attrs.is_supported = false;
                     }
@@ -924,34 +951,21 @@ const TypeDataCollector = struct {
         }
     }
 
-    fn setSlots(comptime self: *@This()) void {
-        comptime var next = 0;
-        inline for (self.types.slice()) |*td| {
-            if (td.Type != std.mem.Allocator and td.isSupported()) {
-                td.slot = next;
-                next += 1;
-            }
-        }
+    fn getName(comptime self: *@This(), comptime T: type) [:0]const u8 {
+        const td = self.get(T);
+        self.setName(td);
+        return td.name.?;
     }
 
-    fn setNames(comptime self: *@This()) void {
-        inline for (self.types.slice()) |*td| {
-            if (td.slot != null and td.alt_name == null) {
-                if (isCryptic(td.getName())) {
-                    td.alt_name = self.getGenericName(td.Type);
-                }
-            }
+    fn setName(comptime self: *@This(), comptime td: *TypeData) void {
+        if (td.name != null) {
+            return;
         }
-    }
-
-    fn addArgStructs(comptime self: *@This()) void {
-        inline for (self.functions.slice()) |function| {
-            if (self.isCallable(function.Type)) {
-                const index = self.append(ArgumentStruct(function.Type));
-                const td = self.at(index);
-                self.setAttributesOf(td);
-                td.alt_type = .arg_struct;
-            }
+        const name = @typeName(td.Type);
+        if (isCryptic(name)) {
+            td.name = self.getGenericName(td.Type);
+        } else {
+            td.name = name;
         }
     }
 
@@ -984,23 +998,26 @@ const TypeDataCollector = struct {
     fn getGenericName(comptime self: *@This(), comptime T: type) [:0]const u8 {
         return switch (@typeInfo(T)) {
             .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{
-                self.getGenericName(eu.error_set),
-                self.getGenericName(eu.payload),
+                self.getName(eu.error_set),
+                self.getName(eu.payload),
             }),
             .Optional => |op| std.fmt.comptimePrint("?{s}", .{
-                self.getGenericName(op.child),
+                self.getName(op.child),
             }),
             .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{
                 ar.len,
-                self.getGenericName(ar.child),
+                self.getName(ar.child),
             }),
             .Pointer => |pt| format: {
                 const name = @typeName(T);
                 const size_end_index = find: {
                     comptime var index = 0;
-                    inline while (index < 50) : (index += 1) {
+                    comptime var in_brackets = false;
+                    inline while (index < @min(25, name.len)) : (index += 1) {
                         switch (name[index]) {
-                            ']', '*' => break :find index + 1,
+                            '*' => if (!in_brackets) break :find index + 1,
+                            '[' => in_brackets = true,
+                            ']' => break :find index + 1,
                             else => {},
                         }
                     } else {
@@ -1012,7 +1029,7 @@ const TypeDataCollector = struct {
                 break :format std.fmt.comptimePrint("{s}{s}{s}", .{
                     size,
                     modifier,
-                    self.getGenericName(pt.child),
+                    self.getName(pt.child),
                 });
             },
             else => format: {
@@ -1021,25 +1038,18 @@ const TypeDataCollector = struct {
                     .ErrorSet => "ErrorSet",
                     else => "Type",
                 };
-                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, self.get(T).slot.? });
+                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, self.getSlot(T) });
             },
         };
     }
 
     fn isCryptic(comptime name: []const u8) bool {
-        if (comptime name.len > 100) {
-            return true;
-        }
-        comptime var index = 0;
-        return inline while (index < name.len) : (index += 1) {
-            if (name[index] == '(') {
-                // keep function call
-                break false;
-            } else if (name[index] == '{') {
-                // anonymous struct or error set
-                break true;
-            }
-        } else false;
+        return if (name.len > 100)
+            true
+        else if (name[name.len - 1] == '}')
+            true
+        else
+            false;
     }
 };
 
@@ -1120,7 +1130,7 @@ test "TypeDataCollector.setAttributes" {
         pub var slice_of_slices: [][]u8 = undefined;
         pub var array_of_pointers: [5]*u8 = undefined;
     };
-    @setEvalBranchQuota(5000);
+    @setEvalBranchQuota(1330);
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
     // is_supported
@@ -1177,7 +1187,6 @@ test "TypeDataCollector.isCallable" {
             _ = allocator;
         }
     };
-    @setEvalBranchQuota(15000);
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
     assertCT(tdc.isCallable(@TypeOf(Test.needFn)) == false);
@@ -1269,16 +1278,9 @@ test "TypeDatabase.get" {
         pub const a1: StructA = .{ .number = 123, .string = "Hello" };
         pub var a2: StructA = .{ .number = 123, .string = "Hello" };
     };
-    @setEvalBranchQuota(5000);
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
-    // std.debug.print("\nFound {d}:\n", .{tdc.types.len});
-    // inline for (0..tdc.types.len) |index| {
-    //     const td = tdc.types.get(index);
-    //     std.debug.print("{any} {any}\n", .{ td.Type, td.is_supported });
-    // }
     const tdb = comptime tdc.createDatabase();
-
     assertCT(tdb.get(Test.StructA).isSupported() == true);
     assertCT(tdb.get(Test.StructB).isSupported() == false);
     assertCT(tdb.get(Thunk).isSupported() == false);
