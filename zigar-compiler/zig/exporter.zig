@@ -86,7 +86,7 @@ pub const Value = *opaque {};
 pub const Thunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
 
 pub const Structure = struct {
-    name: ?[:0]const u8 = null,
+    name: ?[]const u8 = null,
     structure_type: StructureType,
     length: ?usize,
     byte_size: ?usize,
@@ -97,7 +97,7 @@ pub const Structure = struct {
 };
 
 pub const Member = struct {
-    name: ?[:0]const u8 = null,
+    name: ?[]const u8 = null,
     member_type: MemberType,
     is_required: bool = false,
     bit_offset: ?usize = null,
@@ -105,6 +105,12 @@ pub const Member = struct {
     byte_size: ?usize = null,
     slot: ?usize = null,
     structure: ?Value,
+};
+
+pub const Method = struct {
+    name: ?[]const u8 = null,
+    thunk_id: usize,
+    structure: Value,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -225,12 +231,6 @@ test "Memory.to" {
     assert(p4[0] == 'H');
     assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
-
-pub const Method = struct {
-    name: ?[:0]const u8 = null,
-    thunk_id: usize,
-    structure: Value,
-};
 
 fn IntType(comptime n: comptime_int) type {
     comptime var bits = 8;
@@ -1556,9 +1556,21 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                 const decl_ptr = &@field(td.Type, decl.name);
                 const decl_ptr_td = ctx.tdb.get(@TypeOf(decl_ptr));
                 if (comptime decl_ptr_td.isSupported()) {
-                    // export type only if it's supported
-                    const decl_td = ctx.tdb.get(@TypeOf(decl_ptr.*));
-                    if (comptime decl_td.Type != type or decl_td.isSupported()) {
+                    const decl_value = decl_ptr.*;
+                    const DT = @TypeOf(decl_value);
+                    const is_supported = comptime check: {
+                        if (DT == type) {
+                            // export type only if it's supported
+                            // not sure why the following line is necessary
+                            const tdb = ctx.tdb;
+                            const target_td = tdb.get(decl_value);
+                            if (!target_td.isSupported()) {
+                                break :check false;
+                            }
+                        }
+                        break :check true;
+                    };
+                    if (is_supported) {
                         // always export constants while variables can optionally be switch off
                         if (decl_ptr_td.isConst() or !ctx.host.options.omit_variables) {
                             const slot = index;
@@ -1566,7 +1578,7 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                                 .name = decl.name,
                                 .member_type = if (decl_ptr_td.isConst()) .@"comptime" else .static,
                                 .slot = slot,
-                                .structure = try getStructure(ctx, decl_td.Type),
+                                .structure = try getStructure(ctx, DT),
                             }, true);
                             const value_obj = try exportPointerTarget(ctx, decl_ptr, decl_ptr_td.isConst());
                             template_maybe = template_maybe orelse try ctx.host.createTemplate(null);
