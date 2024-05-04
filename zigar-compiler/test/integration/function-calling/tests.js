@@ -17,6 +17,31 @@ export function addTests(importModule, options) {
       expect(() => returnNumber(0)).to.throw()
         .with.property('message', 'System is on fire');
     })
+    it('should throw when argument is invalid', async function() {
+      this.timeout(120000);
+      const { accept1, accept2, accept3, accept4, Struct } = await importTest('accept-u8');
+      expect(() => accept1(1, 123)).to.throw()
+        .with.property('message').that.contains('accept1(');
+      expect(() => accept3(1)).to.throw()
+        .with.property('message').that.contains('accept3(');
+      const s = new Struct({});
+      expect(() => s.accept(1)).to.throw()
+        .with.property('message').that.contains('2 arguments');
+      if (runtimeSafety) {
+        expect(() => accept1(-1)).to.throw()
+          .with.property('message').that.contains('accept1(');
+        expect(() => accept2(-1)).to.throw()
+          .with.property('message').that.contains('accept2(');
+        expect(() => accept3(-1, 3)).to.throw()
+          .with.property('message').that.contains('accept3(');
+        expect(() => accept4(1, -1)).to.throw()
+          .with.property('message').that.contains('accept4(');
+        expect(() => s.accept(-1, 1)).to.throw()
+          .with.property('message').that.contains('args[0]');
+        expect(() => s.accept(1, -1)).to.throw()
+          .with.property('message').that.contains('args[1]');
+      }
+    })
     it('should return a slice of the argument', async function() {
       this.timeout(120000);
       const { getSlice } = await importTest('return-slice');

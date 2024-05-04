@@ -190,11 +190,9 @@ export class NoProperty extends TypeError {
 }
 
 export class ArgumentCountMismatch extends Error {
-  constructor(structure, actual) {
-    const { name, instance: { members } } = structure;
-    const argCount = members.length - 1;
-    const s = (argCount !== 1) ? 's' : '';
-    super(`${name} expects ${argCount} argument${s}, received ${actual}`);
+  constructor(name, expected, actual) {
+    const s = (expected !== 1) ? 's' : '';
+    super(`${name}() expects ${expected} argument${s}, received ${actual}`);
   }
 }
 
@@ -342,11 +340,9 @@ export class ZigError extends Error {
   }
 }
 
-export function adjustArgumentError(structure, index, err) {
-  const { name, instance: { members } } = structure;
+export function adjustArgumentError(name, index, argCount, err) {
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
-  const argCount = members.length - 1;
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
   const argLabel = prefix + argName + suffix;

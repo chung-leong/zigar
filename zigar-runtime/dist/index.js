@@ -278,11 +278,9 @@ class NoProperty extends TypeError {
 }
 
 class ArgumentCountMismatch extends Error {
-  constructor(structure, actual) {
-    const { name, instance: { members } } = structure;
-    const argCount = members.length - 1;
-    const s = (argCount !== 1) ? 's' : '';
-    super(`${name} expects ${argCount} argument${s}, received ${actual}`);
+  constructor(name, expected, actual) {
+    const s = (expected !== 1) ? 's' : '';
+    super(`${name}() expects ${expected} argument${s}, received ${actual}`);
   }
 }
 
@@ -423,11 +421,9 @@ class ZigError extends Error {
   }
 }
 
-function adjustArgumentError(structure, index, err) {
-  const { name, instance: { members } } = structure;
+function adjustArgumentError(name, index, argCount, err) {
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
-  const argCount = members.length - 1;
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
   const argLabel = prefix + argName + suffix;
@@ -3293,27 +3289,25 @@ function defineArgStruct(structure, env) {
     align,
     instance: { members },
     hasPointer,
+    name,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = structure.constructor = function(args) {
+  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argCount = argKeys.length;
+  const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};
     }
-    initializer.call(this, args);
-  };
-  const argNames = members.slice(0, -1).map(m => m.name);
-  const argCount = argNames.length;
-  const initializer = function(args) {
     if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(structure, args.length);
+      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
     }
-    for (const [ index, name ] of argNames.entries()) {
+    for (const [ index, key ] of argKeys.entries()) {
       try {
-        this[name] = args[index];
+        this[key] = args[index];
       } catch (err) {
-        throw adjustArgumentError(structure, index, err);
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
   };
@@ -3762,6 +3756,7 @@ function defineOptional(structure, env) {
     hasPointer,
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  // NOTE: getPresent returns a uint now
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);  
   const get = function() {
@@ -3774,7 +3769,9 @@ function defineOptional(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
-  const isChildActive = getPresent;
+  const isChildActive = function () {
+    return !!getPresent.call(this);
+  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
@@ -3785,7 +3782,7 @@ function defineOptional(structure, env) {
         }
       }      
     } else if (arg === null) {
-      setPresent.call(this, false);
+      setPresent.call(this, 0);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
@@ -3796,7 +3793,7 @@ function defineOptional(structure, env) {
         // since setValue() wouldn't write address into memory when the pointer is in 
         // relocatable memory, we need to use setPresent() in order to write something 
         // non-zero there so that we know the field is populated
-        setPresent.call(this, true);
+        setPresent.call(this, 1);
       }
     }
   };
@@ -4538,11 +4535,11 @@ class Environment {
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
+        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
       };
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args));
+        return self.invokeThunk(thunkId, new constructor(args, name, 0));
       };
     }
     Object.defineProperty(f, 'name', { value: name });

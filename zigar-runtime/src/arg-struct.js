@@ -12,27 +12,25 @@ export function defineArgStruct(structure, env) {
     align,
     instance: { members },
     hasPointer,
+    name,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = structure.constructor = function(args) {
+  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argCount = argKeys.length;
+  const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};
     }
-    initializer.call(this, args);
-  };
-  const argNames = members.slice(0, -1).map(m => m.name);
-  const argCount = argNames.length;
-  const initializer = function(args) {
     if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(structure, args.length);
+      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
     }
-    for (const [ index, name ] of argNames.entries()) {
+    for (const [ index, key ] of argKeys.entries()) {
       try {
-        this[name] = args[index];
+        this[key] = args[index];
       } catch (err) {
-        throw adjustArgumentError(structure, index, err);
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
   };

@@ -761,6 +761,7 @@ const TypeDataCollector = struct {
             self.setAttributes(td);
             self.setSlot(td);
             td.attrs.is_arguments = true;
+            td.name = std.fmt.comptimePrint("Arg{d:0>4}", .{td.getSlot()});
         }
     }
 

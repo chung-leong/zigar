@@ -344,7 +344,7 @@ export class Environment {
     this.finalizeShape(options);
     const structure = this.beginStructure({
       type: StructureType.ArgStruct,
-      name: 'factory',
+      name: 'ArgFactory',
       byteSize: 2,
       hasPointer: false,
     });
@@ -485,11 +485,11 @@ export class Environment {
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
+        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
       }
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args));
+        return self.invokeThunk(thunkId, new constructor(args, name, 0));
       }
     }
     Object.defineProperty(f, 'name', { value: name });
