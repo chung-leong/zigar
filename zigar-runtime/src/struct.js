@@ -24,11 +24,17 @@ export function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  for (const member of members) {
+  let getBackingInt, setBackingInt;
+  for (const member of members) {    
     const { get, set } = getDescriptor(member, env);
-    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    if (member.isRequired && set) {
-      set.required = true;
+    if (member.name) {
+      memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      if (member.isRequired && set) {
+        set.required = true;
+      }
+    } else {
+      getBackingInt = get;
+      setBackingInt = set;
     }
   }
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -41,11 +47,23 @@ export function defineStructShape(structure, env) {
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
+    } else if (setBackingInt && (typeof(arg) === 'number' || typeof(arg) === 'bigint')) {
+      setBackingInt.call(this, arg);
     } else if (arg !== undefined) {
       throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const toPrimitive = (getBackingInt)
+  ? function(hint) {
+    switch (hint) {
+      case 'string':
+        return Object.prototype.toString.call(this);
+      default:
+        return getBackingInt.call(this);
+    }
+  } 
+  : null;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -57,6 +75,7 @@ export function defineStructShape(structure, env) {
     entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [Symbol.toPrimitive]: getBackingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },

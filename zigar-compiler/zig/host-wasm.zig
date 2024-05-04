@@ -1,7 +1,6 @@
 const std = @import("std");
 const exporter = @import("exporter.zig");
 const builtin = @import("builtin");
-const assert = std.debug.assert;
 
 pub const Value = exporter.Value;
 pub const Thunk = exporter.Thunk;
@@ -16,7 +15,6 @@ const Method = exporter.Method;
 const Memory = exporter.Memory;
 const MemoryAttributes = exporter.MemoryAttributes;
 const Error = exporter.Error;
-const missing = exporter.missing;
 
 const CallContext = struct {
     allocator: std.mem.Allocator,

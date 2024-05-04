@@ -550,10 +550,6 @@ const TypeData = struct {
         };
     }
 
-    fn isOpaque(comptime self: @This()) bool {
-        return @typeInfo(self.Type) == .Opaque;
-    }
-
     fn isTuple(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Struct => |st| st.is_tuple,
@@ -833,6 +829,7 @@ const TypeDataCollector = struct {
         switch (@typeInfo(T)) {
             .Pointer => self.add(usize),
             .ErrorSet => self.add(ErrorIntType()),
+            .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
                 self.add(ST);
             },
@@ -1361,9 +1358,9 @@ fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void
             .byte_size = child_td.getByteSize(),
             .structure = child_structure,
         }, false);
-        if (comptime !child_td.isOpaque()) {
+        if (comptime @typeInfo(child_td.Type) != .Opaque) {
             // need the check for opaque child, since we cannot define an optional opaque
-            // which getSentinel() returns
+            // which getSentinel() would return
             if (td.getSentinel()) |sentinel| {
                 try ctx.host.attachMember(slice_structure, .{
                     .name = "sentinel",
@@ -1411,6 +1408,17 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                 .structure = try getStructure(ctx, field.type),
             }, false);
         }
+    }
+    if (st.backing_integer) |IT| {
+        // add member for backing int
+        const int_td = ctx.tdb.get(IT);
+        try ctx.host.attachMember(structure, .{
+            .member_type = int_td.getMemberType(),
+            .bit_offset = 0,
+            .bit_size = int_td.getBitSize(),
+            .byte_size = int_td.getByteSize(),
+            .structure = try getStructure(ctx, IT),
+        }, false);
     }
     if (td.getStructureType() != .arg_struct) {
         // add default values

@@ -788,43 +788,51 @@ describe('Struct functions', function() {
       const object = StructB(dv);
       expect(object.a.number).to.equal(1234);
     })
-    it('should define a packed struct that contains another struct', function() {
-      const structureA = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'StructA',
+    it('should define a packed struct', function() {
+      const structure = env.beginStructure({
+        type: StructureType.PackedStruct,
+        name: 'Packed',
         byteSize: 4,
       });
-      env.attachMember(structureA, {
-        type: MemberType.Int,
-        name: 'number',
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'nice',
+        bitSize: 1,
+        bitOffset: 0,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'rich',
+        bitSize: 1,
+        bitOffset: 1,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'young',
+        bitSize: 1,
+        bitOffset: 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(structureA);
-      env.finalizeStructure(structureA);
-      const { constructor: StructA } = structureA;
-      const structureB = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'StructB',
-        byteSize: 4,
-      });
-      env.attachMember(structureB, {
-        type: MemberType.Object,
-        name: 'a',
-        bitSize: 32,
-        bitOffset: 0,
-        slot: 0,
-        structure: structureA,
-      });
-      env.finalizeShape(structureB);
-      env.finalizeStructure(structureB);
-      const { constructor: StructB } = structureB;
-      const buffer = new ArrayBuffer(8);
-      const dv = new DataView(buffer, 4, 4);
-      dv.setInt32(0, 1234, true);
-      const object = StructB(dv);
-      expect(object.a.number).to.equal(1234);
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Packed } = structure;
+      const packed = new Packed({});
+      packed.rich = true;
+      packed.nice = true;
+      packed.young = true;
+      const number = Number(packed);
+      expect(number).to.equal(0x07);
+      expect(packed == 7).to.be.true;
+      expect(String(packed)).to.equal('[object Packed]');
+      const another = new Packed(1 << 0 | 1 << 2);
+      expect(another.nice).to.be.true;
+      expect(another.young).to.be.true;
+      expect(another.rich).to.be.false;
     })
     it('should throw when child struct is not on a byte-boundary', function() {
       const structureA = env.beginStructure({
