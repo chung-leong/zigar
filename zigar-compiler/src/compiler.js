@@ -189,8 +189,7 @@ export function runCompilerSync(zigCmd, soBuildDir) {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 
-    'useLibc', 'isWASM',
+    'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -291,7 +290,6 @@ export function createConfig(srcPath, modPath, options = {}) {
       return `zig ${args.join(' ')}`;
     })(),
   } = options;
-  const suffix = isWASM ? 'wasm' : 'c';
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
@@ -313,8 +311,7 @@ export function createConfig(srcPath, modPath, options = {}) {
       return join(modPath, `${platform}.${arch}.${ext}`);
     }  
   })();
-  const exporterPath = absolute(`../zig/exporter-${suffix}.zig`);
-  const stubPath = absolute(`../zig/stub-${suffix}.zig`);
+  const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
   return {
     platform,
@@ -324,7 +321,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     modulePath,
     moduleDir,
     moduleBuildDir,
-    exporterPath,
     stubPath,
     buildFilePath,
     packageConfigPath: undefined,

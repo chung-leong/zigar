@@ -3727,6 +3727,7 @@ function defineOptional(structure, env) {
     hasPointer,
   } = structure;
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
+  // NOTE: getPresent returns a uint now
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
   const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);  
   const get = function() {
@@ -3739,7 +3740,9 @@ function defineOptional(structure, env) {
     }
   };
   const isValueVoid = members[0].type === MemberType.Void;
-  const isChildActive = getPresent;
+  const isChildActive = function () {
+    return !!getPresent.call(this);
+  };
   const initializer = function(arg) {
     if (arg instanceof constructor) {
       this[COPIER](arg);
@@ -3750,7 +3753,7 @@ function defineOptional(structure, env) {
         }
       }      
     } else if (arg === null) {
-      setPresent.call(this, false);
+      setPresent.call(this, 0);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
@@ -3761,7 +3764,7 @@ function defineOptional(structure, env) {
         // since setValue() wouldn't write address into memory when the pointer is in 
         // relocatable memory, we need to use setPresent() in order to write something 
         // non-zero there so that we know the field is populated
-        setPresent.call(this, true);
+        setPresent.call(this, 1);
       }
     }
   };
@@ -5262,8 +5265,7 @@ function runCompilerSync(zigCmd, soBuildDir) {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [ 
-    'moduleName', 'modulePath', 'moduleDir', 'exporterPath', 'stubPath', 'outputPath', 
-    'useLibc', 'isWASM',
+    'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
   ];  
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5362,7 +5364,6 @@ function createConfig(srcPath, modPath, options = {}) {
       return `zig ${args.join(' ')}`;
     })(),
   } = options;
-  const suffix = isWASM ? 'wasm' : 'c';
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
@@ -5384,8 +5385,7 @@ function createConfig(srcPath, modPath, options = {}) {
       return join(modPath, `${platform}.${arch}.${ext}`);
     }  
   })();
-  const exporterPath = absolute(`../zig/exporter-${suffix}.zig`);
-  const stubPath = absolute(`../zig/stub-${suffix}.zig`);
+  const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
   return {
     platform,
@@ -5395,7 +5395,6 @@ function createConfig(srcPath, modPath, options = {}) {
     modulePath,
     moduleDir,
     moduleBuildDir,
-    exporterPath,
     stubPath,
     buildFilePath,
     packageConfigPath: undefined,

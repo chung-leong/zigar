@@ -1,3 +1,3 @@
-const exporter = @import("exporter");
+const host = @import("./host-c.zig");
 
-export const zig_module = exporter.createModule(@import("module"));
+export const zig_module = host.createModule(@import("module"));

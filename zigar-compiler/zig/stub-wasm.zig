@@ -1,35 +1,35 @@
 const std = @import("std");
-const exporter = @import("exporter");
+const host = @import("./host-wasm.zig");
 
-const Value = exporter.Value;
-const Call = exporter.Call;
+const Value = host.Value;
+const Call = host.Call;
 
 export fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
-    return exporter.allocateExternMemory(len, alignment);
+    return host.allocateExternMemory(len, alignment);
 }
 
 export fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    exporter.freeExternMemory(bytes, len, alignment);
+    host.freeExternMemory(bytes, len, alignment);
 }
 
 export fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
-    return exporter.allocateShadowMemory(call, len, alignment);
+    return host.allocateShadowMemory(call, len, alignment);
 }
 
 export fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) void {
-    exporter.freeShadowMemory(call, bytes, len, alignment);
+    host.freeShadowMemory(call, bytes, len, alignment);
 }
 
 export fn getFactoryThunk() usize {
-    return exporter.getFactoryThunk(@import("module"));
+    return host.getFactoryThunk(@import("module"));
 }
 
 export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
-    return exporter.runThunk(thunk_id, arg_struct);
+    return host.runThunk(thunk_id, arg_struct);
 }
 
 export fn isRuntimeSafetyActive() bool {
-    return exporter.isRuntimeSafetyActive();
+    return host.isRuntimeSafetyActive();
 }
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
