@@ -394,6 +394,7 @@ const TypeData = struct {
         return switch (@typeInfo(self.Type)) {
             .Null, .Undefined => 0,
             .Fn, .Opaque => null,
+            .ErrorSet => @sizeOf(anyerror),
             else => return @sizeOf(self.Type),
         };
     }
@@ -402,6 +403,7 @@ const TypeData = struct {
         return switch (@typeInfo(self.Type)) {
             .Null, .Undefined => 0,
             .Fn, .Opaque => null,
+            .ErrorSet => @bitSizeOf(anyerror),
             else => return @bitSizeOf(self.Type),
         };
     }
@@ -469,6 +471,7 @@ const TypeData = struct {
             },
             .Optional => |op| switch (@typeInfo(op.child)) {
                 .Pointer => usize, // size of the pointer itself
+                .ErrorSet => @Type(.{ .Int = .{ .signedness = .unsigned, .bits = @bitSizeOf(anyerror) } }),
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -493,8 +496,8 @@ const TypeData = struct {
                 break :get offset;
             },
             .Optional => |op| switch (@typeInfo(op.child)) {
-                .Pointer => 0, // offset of the pointer itself
-                else => @sizeOf(op.child) * 8,
+                .Pointer, .ErrorSet => 0, // offset of the pointer/error itself
+                else => getBitSize(.{ .Type = op.child }).?,
             },
             else => @compileError("Not a union or optional"),
         };
@@ -511,12 +514,12 @@ const TypeData = struct {
     fn getContentBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.Type)) {
             .Union => if (self.getSelectorType()) |TT| switch (self.getSelectorBitOffset()) {
-                0 => @sizeOf(TT) * 8,
+                0 => getBitSize(.{ .Type = TT }).?,
                 else => 0,
             } else 0,
             .Optional => 0,
             .ErrorUnion => switch (self.getErrorBitOffset()) {
-                0 => @sizeOf(anyerror) * 8,
+                0 => getBitSize(.{ .Type = anyerror }).?,
                 else => 0,
             },
             else => @compileError("Not a union, error union, or optional"),
