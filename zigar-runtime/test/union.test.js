@@ -606,6 +606,7 @@ describe('Union functions', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       env.finalizeShape(enumStructure);
       const { constructor: HelloTag } = enumStructure;
@@ -628,6 +629,7 @@ describe('Union functions', function() {
         },
       }, true);
       env.finalizeStructure(enumStructure);
+      const { constructor: Enum } = enumStructure;
       const structure = env.beginStructure({
         type: StructureType.TaggedUnion,
         name: 'Hello',
@@ -675,6 +677,8 @@ describe('Union functions', function() {
       expect(object).to.be.an.instanceOf(Hello);
       expect([ ...object ]).to.eql([ [ 'dog', 1234 ] ]);
       const [ [ name, value ] ] = object;
+      expect(name).to.equal('dog')
+      expect(value).to.equal(1234);
       expect(object.valueOf()).to.eql({ dog: 1234 });
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.be.null;
@@ -685,6 +689,8 @@ describe('Union functions', function() {
       expect(object.cat).to.equal(567);
       expect(HelloTag(object)).to.equal(HelloTag.cat);
       expect(Hello.tag).to.equal(HelloTag);
+      expect(object == 'cat').to.be.true;
+      expect(Number(object)).to.equal(200);
     })
     it('should only have a single enumerable property', function() {
       const enumStructure = env.beginStructure({

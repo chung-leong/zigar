@@ -146,6 +146,17 @@ export function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
+  const toPrimitive = (isTagged) 
+  ? function(hint) {
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return getActiveField.call(this);
+      default:
+        return getSelector.call(this, 'number');
+    }
+  }
+  : null;
   const getTagClass = function() { return selectorMember.structure.constructor };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -158,6 +169,7 @@ export function defineUnionShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: getUnionIterator },
+    [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
