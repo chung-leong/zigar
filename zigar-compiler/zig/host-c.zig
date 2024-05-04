@@ -230,41 +230,38 @@ pub const Host = struct {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
-    switch (ptr_align) {
-        0 => {
-            for (bytes[0..len]) |*ptr| ptr.* = 0;
-        },
-        1 => {
-            for (std.mem.bytesAsSlice(u16, bytes[0..len])) |*ptr| ptr.* = 0;
-        },
-        2 => {
-            for (std.mem.bytesAsSlice(u32, bytes[0..len])) |*ptr| ptr.* = 0;
-        },
-        else => {
-            for (std.mem.bytesAsSlice(u64, bytes[0..len])) |*ptr| ptr.* = 0;
-        },
+fn clearBytes(bytes: [*]u8, len: usize) void {
+    var start: usize = 0;
+    inline for (.{ usize, u8 }) |T| {
+        const mask = ~(@as(usize, @sizeOf(T)) - 1);
+        const remaining = len - start;
+        const count = remaining & mask;
+        if (count > 0) {
+            const end = start + count;
+            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
+            start += count;
+            if (start == len) break;
+        }
     }
 }
 
 test "clearBytes" {
-    const len: usize = 64;
-    var ptr_align: u8 = 0;
-    while (ptr_align <= 4) : (ptr_align += 1) {
-        if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-            clearBytes(bytes, len, ptr_align);
-            for (bytes[0..len]) |byte| {
-                assert(byte == 0);
-            }
-            allocator.rawFree(bytes[0..len], ptr_align, 0);
+    const lengths = [_]usize{ 18, 19, 20, 21, 23, 333 };
+    for (lengths) |len| {
+        const ptr_align = 0;
+        const bytes = allocator.rawAlloc(len, ptr_align, 0) orelse @panic("No memory");
+        clearBytes(bytes, len);
+        for (bytes[0..len]) |byte| {
+            assert(byte == 0);
         }
+        allocator.rawFree(bytes[0..len], ptr_align, 0);
     }
 }
 
 fn allocateExternMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
     const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        clearBytes(bytes, len, ptr_align);
+        clearBytes(bytes, len);
         memory.bytes = bytes;
         memory.len = len;
         memory.attributes.alignment = alignment;
@@ -325,7 +322,6 @@ const Imports = extern struct {
     end_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, Value) callconv(.C) Result,
-    get_slot_number: *const fn (Call, u32, u32, *u32) callconv(.C) Result,
 };
 var imports: Imports = undefined;
 
@@ -364,7 +360,7 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
 
 pub fn createModule(comptime T: type) Module {
     return .{
-        .version = 2,
+        .version = 3,
         .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == enum_little,
             .runtime_safety = switch (builtin.mode) {
@@ -397,6 +393,6 @@ test "createModule" {
         }
     };
     const module = createModule(Test);
-    assert(module.version == 2);
+    assert(module.version == 3);
     assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == enum_little));
 }

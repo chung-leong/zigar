@@ -251,6 +251,19 @@ test "IntType" {
     assertCT(IntType(-123) == i8);
 }
 
+fn ErrorIntType() type {
+    return @Type(.{
+        .Int = .{
+            .signedness = .unsigned,
+            .bits = @bitSizeOf(anyerror),
+        },
+    });
+}
+
+test "ErrorIntType" {
+    assertCT(ErrorIntType() == u16);
+}
+
 fn ComptimeList(comptime T: type) type {
     return struct {
         entries: []T,
@@ -258,10 +271,7 @@ fn ComptimeList(comptime T: type) type {
 
         fn init(comptime capacity: comptime_int) @This() {
             comptime var entries: [capacity]T = undefined;
-            return .{
-                .entries = &entries,
-                .len = 0,
-            };
+            return .{ .entries = &entries, .len = 0 };
         }
 
         fn concat(comptime self: @This(), comptime value: T) @This() {
@@ -408,7 +418,7 @@ const TypeData = struct {
         };
     }
 
-    pub fn getAlignment(comptime self: @This()) ?u16 {
+    fn getAlignment(comptime self: @This()) ?u16 {
         return switch (@typeInfo(self.Type)) {
             .Null, .Undefined => 0,
             .Opaque => null,
@@ -471,7 +481,7 @@ const TypeData = struct {
             },
             .Optional => |op| switch (@typeInfo(op.child)) {
                 .Pointer => usize, // size of the pointer itself
-                .ErrorSet => @Type(.{ .Int = .{ .signedness = .unsigned, .bits = @bitSizeOf(anyerror) } }),
+                .ErrorSet => ErrorIntType(),
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -541,10 +551,7 @@ const TypeData = struct {
     }
 
     fn isOpaque(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
-            .Opaque => true,
-            else => false,
-        };
+        return @typeInfo(self.Type) == .Opaque;
     }
 
     fn isTuple(comptime self: @This()) bool {
@@ -779,6 +786,7 @@ const TypeDataCollector = struct {
         }
         const index = self.types.len;
         self.types = self.types.concat(.{ .Type = T });
+        // add fields and function args/retval
         switch (@typeInfo(T)) {
             .ErrorUnion => |eu| {
                 self.add(eu.payload);
@@ -795,10 +803,10 @@ const TypeDataCollector = struct {
                 if (f.return_type) |RT| self.add(RT);
             },
             inline .Array, .Vector, .Optional, .Pointer => |ar| self.add(ar.child),
-            inline .Struct, .Union => |st| {
+            inline .Struct, .Union => |st, Tag| {
                 inline for (st.fields) |field| {
                     self.add(field.type);
-                    if (@hasField(@TypeOf(field), "is_comptime") and field.is_comptime) {
+                    if (Tag == .Struct and field.is_comptime) {
                         // deal with comptime fields
                         const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value.?));
                         self.addTypeOf(def_value_ptr.*);
@@ -807,6 +815,7 @@ const TypeDataCollector = struct {
             },
             else => {},
         }
+        // add decls
         switch (@typeInfo(T)) {
             inline .Struct, .Union, .Enum, .Opaque => |st| {
                 inline for (st.decls) |decl| {
@@ -820,14 +829,12 @@ const TypeDataCollector = struct {
             },
             else => {},
         }
+        // add other implicit types
         switch (@typeInfo(T)) {
-            .Pointer => {
-                self.add(usize);
-            },
-            inline .Union, .Optional => {
-                if (self.at(index).getSelectorType()) |ST| {
-                    self.add(ST);
-                }
+            .Pointer => self.add(usize),
+            .ErrorSet => self.add(ErrorIntType()),
+            inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
+                self.add(ST);
             },
             else => {},
         }
@@ -948,10 +955,7 @@ const TypeDataCollector = struct {
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
-                td.attrs.has_associate = switch (pt.size) {
-                    .One => false,
-                    else => true, // need slot for slice class
-                };
+                td.attrs.has_associate = pt.size != .One; // associated slice class
             },
             inline .Array, .Optional => |ar| {
                 const child_attrs = self.getAttributes(ar.child);
@@ -1007,26 +1011,14 @@ const TypeDataCollector = struct {
             return;
         }
         const name = @typeName(td.Type);
-        if (isCryptic(name)) {
-            td.name = self.getGenericName(td.Type);
-        } else {
-            td.name = name;
-        }
+        td.name = if (isCryptic(name)) self.getGenericName(td.Type) else name;
     }
 
     fn getGenericName(comptime self: *@This(), comptime T: type) [:0]const u8 {
         return switch (@typeInfo(T)) {
-            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{
-                self.getName(eu.error_set),
-                self.getName(eu.payload),
-            }),
-            .Optional => |op| std.fmt.comptimePrint("?{s}", .{
-                self.getName(op.child),
-            }),
-            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{
-                ar.len,
-                self.getName(ar.child),
-            }),
+            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{ self.getName(eu.error_set), self.getName(eu.payload) }),
+            .Optional => |op| std.fmt.comptimePrint("?{s}", .{self.getName(op.child)}),
+            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{ ar.len, self.getName(ar.child) }),
             .Pointer => |pt| format: {
                 const name = @typeName(T);
                 const size_end_index = find: {
@@ -1045,11 +1037,7 @@ const TypeDataCollector = struct {
                 };
                 const size = name[0..size_end_index];
                 const modifier = if (pt.is_const) "const " else if (pt.is_volatile) "volatile " else "";
-                break :format std.fmt.comptimePrint("{s}{s}{s}", .{
-                    size,
-                    modifier,
-                    self.getName(pt.child),
-                });
+                break :format std.fmt.comptimePrint("{s}{s}{s}", .{ size, modifier, self.getName(pt.child) });
             },
             else => format: {
                 const prefix = switch (@typeInfo(T)) {
@@ -1063,7 +1051,7 @@ const TypeDataCollector = struct {
     }
 
     fn isCryptic(comptime name: []const u8) bool {
-        return if (name.len > 100)
+        return if (name.len > 50)
             true
         else if (name[name.len - 1] == '}')
             true
@@ -1652,15 +1640,14 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         inline .Struct, .Union, .Enum, .Opaque => |st| {
             inline for (st.decls) |decl| {
                 const decl_value = @field(td.Type, decl.name);
-                switch (@typeInfo(@TypeOf(decl_value))) {
+                const DT = @TypeOf(decl_value);
+                switch (@typeInfo(DT)) {
                     .Fn => |f| {
-                        const FT = @TypeOf(decl_value);
                         const is_callable = check: {
-                            const fnInfo = @typeInfo(FT).Fn;
-                            if (fnInfo.is_generic or fnInfo.is_var_args) {
+                            if (f.is_generic or f.is_var_args) {
                                 break :check false;
                             }
-                            inline for (fnInfo.params) |param| {
+                            inline for (f.params) |param| {
                                 if (param.type) |PT| {
                                     if (PT != std.mem.Allocator) {
                                         const param_td = ctx.tdb.get(PT);
@@ -1686,7 +1673,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                             }
                         };
                         if (is_callable) {
-                            const ArgT = ArgumentStruct(FT);
+                            const ArgT = ArgumentStruct(DT);
                             const arg_structure = try getStructure(ctx, ArgT);
                             // see if the first param is an instance of the type in question or
                             // a pointer to one

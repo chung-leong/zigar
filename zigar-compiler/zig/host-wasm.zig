@@ -28,7 +28,6 @@ extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(bytes: ?[*]u8, len: usize, copy: bool, structure: Value) ?Value;
 extern fn _getViewAddress(dv: Value) usize;
-extern fn _getSlotNumber(scope: u32, key: u32) u32;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;
 extern fn _writeSlot(container: ?Value, slot: usize, object: ?Value) void;
 extern fn _beginDefinition() Value;
@@ -46,42 +45,22 @@ extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _startCall(call: Call, arg_struct: Value) *anyopaque;
 extern fn _endCall(call: Call, arg_struct: Value) void;
 
-fn strlen(s: [*:0]const u8) usize {
-    var len: usize = 0;
-    return while (s[len] != 0) {
-        len += 1;
-    } else len;
-}
-
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &std.heap.WasmAllocator.vtable,
 };
 
-fn clearBytes(bytes: [*]u8, len: usize, ptr_align: u8) void {
-    switch (ptr_align) {
-        0 => {
-            for (bytes[0..len]) |*ptr| ptr.* = 0;
-        },
-        1 => {
-            for (std.mem.bytesAsSlice(u16, bytes[0..len])) |*ptr| ptr.* = 0;
-        },
-        else => {
-            for (std.mem.bytesAsSlice(u32, bytes[0..len])) |*ptr| ptr.* = 0;
-        },
-    }
-}
-
-test "clearBytes" {
-    const len: usize = 64;
-    var ptr_align: u8 = 0;
-    while (ptr_align <= 4) : (ptr_align += 1) {
-        if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-            clearBytes(bytes, len, ptr_align);
-            for (bytes[0..len]) |byte| {
-                assert(byte == 0);
-            }
-            allocator.rawFree(bytes[0..len], ptr_align, 0);
+fn clearBytes(bytes: [*]u8, len: usize) void {
+    var start: usize = 0;
+    inline for (.{ usize, u8 }) |T| {
+        const mask = ~(@as(usize, @sizeOf(T)) - 1);
+        const remaining = len - start;
+        const count = remaining & mask;
+        if (count > 0) {
+            const end = start + count;
+            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
+            start += count;
+            if (start == len) break;
         }
     }
 }
@@ -165,39 +144,23 @@ pub const Host = struct {
     }
 
     pub fn captureString(_: Host, memory: Memory) !Value {
-        if (_captureString(memory.bytes, memory.len)) |str| {
-            return str;
-        } else {
-            return Error.unable_to_create_string;
-        }
+        return _captureString(memory.bytes, memory.len) orelse
+            Error.unable_to_create_string;
     }
 
     pub fn captureView(_: Host, memory: Memory) !Value {
-        if (_captureView(memory.bytes, memory.len, memory.attributes.is_comptime)) |dv| {
-            return dv;
-        } else {
-            return Error.unable_to_create_data_view;
-        }
+        return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
+            Error.unable_to_create_data_view;
     }
 
     pub fn castView(_: Host, memory: Memory, structure: Value) !Value {
-        if (_castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure)) |object| {
-            return object;
-        } else {
-            return Error.unable_to_create_object;
-        }
-    }
-
-    pub fn getSlotNumber(_: Host, scope: u32, key: u32) !usize {
-        return _getSlotNumber(scope, key);
+        return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
+            Error.unable_to_create_object;
     }
 
     pub fn readSlot(_: Host, container: ?Value, slot: usize) !Value {
-        if (_readSlot(container, slot)) |value| {
-            return value;
-        } else {
-            return Error.unable_to_retrieve_object;
-        }
+        return _readSlot(container, slot) orelse
+            Error.unable_to_retrieve_object;
     }
 
     pub fn writeSlot(_: Host, container: ?Value, slot: usize, value: ?Value) !void {
@@ -210,19 +173,19 @@ pub const Host = struct {
 
     fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
         const T = @TypeOf(value);
-        switch (@typeInfo(T)) {
-            .Optional => {
-                if (value) |v| {
-                    return insertProperty(container, key, v);
-                }
-            },
-            else => {},
+        if (@typeInfo(T) == .Optional) {
+            if (value) |v| try insertProperty(container, key, v);
+            return;
         }
-        const key_str = _captureString(key.ptr, key.len) orelse return Error.unable_to_create_string;
+        const key_str = _captureString(key.ptr, key.len) orelse {
+            return Error.unable_to_create_string;
+        };
         switch (@typeInfo(T)) {
             .Pointer => {
-                if (T == [*:0]const u8) {
-                    const str = _captureString(value, strlen(value)) orelse return Error.unable_to_create_string;
+                if (T == []const u8) {
+                    const str = _captureString(value.ptr, value.len) orelse {
+                        return Error.unable_to_create_string;
+                    };
                     _insertString(container, key_str, str);
                 } else if (T == Value) {
                     _insertObject(container, key_str, value);
@@ -230,21 +193,11 @@ pub const Host = struct {
                     @compileError("No support for value type: " ++ @typeName(T));
                 }
             },
-            .Int => {
-                _insertInteger(container, key_str, @intCast(value));
-            },
-            .Enum => {
-                _insertInteger(container, key_str, @intCast(@intFromEnum(value)));
-            },
-            .Bool => {
-                _insertBoolean(container, key_str, value);
-            },
-            .Optional => {
-                _insertObject(container, key_str, null);
-            },
-            else => {
-                @compileError("No support for value type: " ++ @typeName(T));
-            },
+            .Int => _insertInteger(container, key_str, @intCast(value)),
+            .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
+            .Bool => _insertBoolean(container, key_str, value),
+            .Optional => _insertObject(container, key_str, null),
+            else => @compileError("No support for value type: " ++ @typeName(T)),
         }
     }
 
@@ -252,47 +205,26 @@ pub const Host = struct {
         const structure = beginDefinition();
         try insertProperty(structure, "name", def.name);
         try insertProperty(structure, "type", def.structure_type);
-        if (def.length != missing(usize)) {
-            try insertProperty(structure, "length", def.length);
-        }
-        if (def.byte_size != missing(usize)) {
-            try insertProperty(structure, "byteSize", def.byte_size);
-        }
-        if (def.alignment != missing(u16)) {
-            try insertProperty(structure, "align", def.alignment);
-        }
+        try insertProperty(structure, "length", def.length);
+        try insertProperty(structure, "byteSize", def.byte_size);
+        try insertProperty(structure, "align", def.alignment);
         try insertProperty(structure, "isConst", def.is_const);
         try insertProperty(structure, "isTuple", def.is_tuple);
         try insertProperty(structure, "hasPointer", def.has_pointer);
-        if (_beginStructure(structure)) |s| {
-            return s;
-        } else {
-            return Error.unable_to_start_structure_definition;
-        }
+        return _beginStructure(structure) orelse
+            Error.unable_to_start_structure_definition;
     }
 
     pub fn attachMember(_: Host, structure: Value, member: Member, is_static: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "type", member.member_type);
         try insertProperty(def, "isRequired", member.is_required);
-        if (member.bit_offset != missing(usize)) {
-            try insertProperty(def, "bitOffset", member.bit_offset);
-        }
-        if (member.bit_size != missing(usize)) {
-            try insertProperty(def, "bitSize", member.bit_size);
-        }
-        if (member.byte_size != missing(usize)) {
-            try insertProperty(def, "byteSize", member.byte_size);
-        }
-        if (member.slot != missing(usize)) {
-            try insertProperty(def, "slot", member.slot);
-        }
-        if (member.name) |name| {
-            try insertProperty(def, "name", name);
-        }
-        if (member.structure) |s| {
-            try insertProperty(def, "structure", s);
-        }
+        try insertProperty(def, "bitOffset", member.bit_offset);
+        try insertProperty(def, "bitSize", member.bit_size);
+        try insertProperty(def, "byteSize", member.byte_size);
+        try insertProperty(def, "slot", member.slot);
+        try insertProperty(def, "name", member.name);
+        try insertProperty(def, "structure", member.structure);
         _attachMember(structure, def, is_static);
     }
 
@@ -304,9 +236,7 @@ pub const Host = struct {
         const def = beginDefinition();
         try insertProperty(def, "argStruct", method.structure);
         try insertProperty(def, "thunkId", method.thunk_id);
-        if (method.name) |name| {
-            try insertProperty(def, "name", name);
-        }
+        try insertProperty(def, "name", method.name);
         _attachMethod(structure, def, is_static_only);
     }
 
@@ -319,11 +249,8 @@ pub const Host = struct {
     }
 
     pub fn createTemplate(_: Host, dv: ?Value) !Value {
-        if (_createTemplate(dv)) |templ| {
-            return templ;
-        } else {
-            return Error.unable_to_create_structure_template;
-        }
+        return _createTemplate(dv) orelse
+            Error.unable_to_create_structure_template;
     }
 };
 
@@ -337,11 +264,7 @@ pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     // so the thunk_id is really the thunk itself
     const thunk: Thunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
-    if (thunk(@ptrCast(&call_ctx), arg_ptr)) |result| {
-        return result;
-    } else {
-        return null;
-    }
+    return thunk(@ptrCast(&call_ctx), arg_ptr);
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {

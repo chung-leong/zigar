@@ -657,7 +657,7 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
     module* mod = md->mod = (module*) symbol;
-    if (mod->version != 2) {
+    if (mod->version != 3) {
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 
@@ -678,7 +678,6 @@ napi_value load_module(napi_env env,
     exports->capture_string = capture_string;
     exports->capture_view = capture_view;
     exports->cast_view = cast_view;
-    exports->get_slot_number = get_slot_number;
     exports->read_slot = read_slot;
     exports->write_slot = write_slot;
     exports->begin_structure = begin_structure;

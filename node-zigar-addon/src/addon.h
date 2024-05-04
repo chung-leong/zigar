@@ -123,7 +123,6 @@ typedef struct {
     result (__cdecl *end_structure)(call, napi_value);
     result (__cdecl *create_template)(call, napi_value, napi_value*);
     result (__cdecl *write_to_console)(call, napi_value);
-    result (__cdecl *get_slot_number)(call, uint32_t, uint32_t, uint32_t*);
 } export_table;
 
 typedef struct {
