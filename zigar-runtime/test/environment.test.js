@@ -1163,6 +1163,7 @@ describe('Environment', function() {
   describe('getSpecialExports', function() {    
     it('should return object for controlling module', async function() {
       const env = new Environment();
+      env.init = async () => {};
       env.imports = {
         runThunk: function() {},
       };

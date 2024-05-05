@@ -26,6 +26,10 @@ export class NodeEnvironment extends Environment {
   defaultAlignment = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : 8;
   nullBuffer = new ArrayBuffer(0);
 
+  async init() {
+    return;
+  }
+
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
     const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;    

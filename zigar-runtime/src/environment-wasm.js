@@ -42,8 +42,19 @@ export class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  initPromise = null;
+  customWASI = null;
+  hasCodeSource = false;
   // WASM is always little endian
   littleEndian = true;
+
+  async init(wasi) {
+    if (wasi && this.hasCodeSource) {
+      throw new Error('Cannot set WASI interface after compilation has already begun (consider disabling topLevelAwait)');
+    }
+    this.customWASI = wasi;
+    await this.initPromise;
+  }
 
   allocateHostMemory(len, align) {
     // allocate memory in both JavaScript and WASM space
@@ -253,8 +264,9 @@ export class WebAssemblyEnvironment extends Environment {
 
   async instantiateWebAssembly(source) {
     const res = await source;
+    this.hasCodeSource = true;
     const env = this.exportFunctions();
-    const wasi = this.getWASI();
+    const wasi = this.customWASI || this.getFallbackWASI();
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
@@ -370,7 +382,7 @@ export class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
 
-  getWASI() {
+  getFallbackWASI() {
     return { 
       fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
         if (fd === 1 || fd === 2) {

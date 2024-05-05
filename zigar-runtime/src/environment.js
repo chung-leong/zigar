@@ -19,7 +19,6 @@ export class Environment {
   consolePending = [];
   consoleTimeout = 0;
   viewMap = new WeakMap();
-  initPromise;
   abandoned = false;
   released = false;
   littleEndian = true;
@@ -37,6 +36,10 @@ export class Environment {
 
   /*
   Functions to be defined in subclass:
+
+  init(...): Promise {
+    // a mean to provide initialization parameters
+  }
 
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
@@ -627,7 +630,7 @@ export class Environment {
       return v;
     };
     return {
-      init: () => this.initPromise ?? Promise.resolve(),
+      init: (...args) => this.init(...args),
       abandon: () => this.abandon(),
       released: () => this.released,
       connect: (c) => this.console = c,
