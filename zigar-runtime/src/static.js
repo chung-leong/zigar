@@ -28,7 +28,7 @@ export function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
-  if (type === StructureType.Enumeration) {
+  if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);
     }

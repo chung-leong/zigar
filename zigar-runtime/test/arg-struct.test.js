@@ -45,7 +45,7 @@ describe('ArgStruct functions', function() {
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
       expect(ArgStruct).to.be.a('function');
-      const object = new ArgStruct([ 123, 456 ]);
+      const object = new ArgStruct([ 123, 456 ], 'hello', 0);
       object.retval = 777;
       expect(object.cat).to.equal(123);
       expect(object.dog).to.equal(456);
@@ -104,7 +104,7 @@ describe('ArgStruct functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
-      const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
+      const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ], 'hello', 0);
       object.pet.valueOf();
       expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
@@ -167,7 +167,7 @@ describe('ArgStruct functions', function() {
       const { constructor: Int32 } = intStructure;
       const { constructor: ArgStruct } = structure;
       const int = new Int32(1234);
-      const object = new ArgStruct([ int ]);
+      const object = new ArgStruct([ int ], 'hello', 0);
       const pointers = [], mutabilities = [];
       object[POINTER_VISITOR](function({ isMutable }) {
         pointers.push(this);
@@ -209,8 +209,8 @@ describe('ArgStruct functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
-      expect(() => new ArgStruct([ 123 ])).to.throw();
-      expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw();
+      expect(() => new ArgStruct([ 123 ], 'hello', 0)).to.throw();
+      expect(() => new ArgStruct([ 123, 456, 789 ], 'hello', 0)).to.throw();
     })
     it('should throw with argument name in error message when an invalid argument is encountered', function() {
       const structure = env.beginStructure({
@@ -242,7 +242,7 @@ describe('ArgStruct functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: ArgStruct } = structure;
-      expect(() => new ArgStruct([ 123, -456 ])).to.throw(TypeError)
+      expect(() => new ArgStruct([ 123, -456 ], 'hello', 0)).to.throw(TypeError)
         .with.property('message').that.contains('args[1]');
     })
   })

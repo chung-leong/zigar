@@ -264,16 +264,6 @@ describe('Environment', function() {
       const object = env.castView(1234, 8, true, structure);
     })
   })
-  describe('getSlotNumber', function() {
-    it('should return the same number when the same key is given', function() {
-      const env = new Environment();
-      const s1 = env.getSlotNumber(0, 1234);
-      const s2 = env.getSlotNumber(0, 1234);
-      const s3 = env.getSlotNumber(0, 12345);
-      expect(s2).to.equal(s1);
-      expect(s3).to.not.equal(s1);
-    })
-  })
   describe('readSlot', function() {
     it('should read from global slots where target is null', function() {
       const env = new Environment();
@@ -1205,6 +1195,52 @@ describe('Environment', function() {
       expect(after).to.be.undefined;
       expect(content).to.equal('?');
     })
+    it('should provide functions for obtaining type info', async function() {
+      const env = new Environment();
+      env.imports = {
+        runThunk: function() {},
+      };
+      const { sizeOf, alignOf, typeOf } = env.getSpecialExports();
+      expect(sizeOf).to.be.a('function');
+      expect(alignOf).to.be.a('function');
+      expect(typeOf).to.be.a('function');
+      const structure = env.beginStructure({
+        type: StructureType.PackedStruct,
+        name: 'Packed',
+        byteSize: 4,
+        align: 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'nice',
+        bitSize: 1,
+        bitOffset: 0,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'rich',
+        bitSize: 1,
+        bitOffset: 1,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Bool,
+        name: 'young',
+        bitSize: 1,
+        bitOffset: 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Packed } = structure;
+      expect(sizeOf(Packed)).to.equal(4);
+      expect(alignOf(Packed)).to.equal(2);
+      expect(typeOf(Packed)).to.equal('packed struct');
+    })    
   })
   describe('abandon', function() {
     it('should release imported functions and variables', function() {

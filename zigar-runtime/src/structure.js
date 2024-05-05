@@ -11,7 +11,7 @@ import { definePrimitive } from './primitive.js';
 import { defineSlice } from './slice.js';
 import { defineStructShape } from './struct.js';
 import {
-  MemberType, StructureType, hasStandardFloatSize, hasStandardIntSize, isByteAligned
+    MemberType, StructureType, hasStandardFloatSize, hasStandardIntSize, isByteAligned
 } from './types.js';
 import { defineUnionShape } from './union.js';
 import { defineVector } from './vector.js';
@@ -63,8 +63,8 @@ export function useErrorSet() {
   useErrorSetTransform();
 }
 
-export function useEnumeration() {
-  factories[StructureType.Enumeration] = defineEnumerationShape;
+export function useEnum() {
+  factories[StructureType.Enum] = defineEnumerationShape;
   useEnumerationTransform();
 }
 
@@ -208,7 +208,7 @@ export function useAllStructureTypes() {
   useTaggedUnion();
   useErrorUnion();
   useErrorSet();
-  useEnumeration();
+  useEnum();
   useOptional();
   usePointer();
   useSlice();

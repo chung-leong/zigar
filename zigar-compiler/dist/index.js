@@ -33,7 +33,7 @@ const StructureType = {
   TaggedUnion: 8,
   ErrorUnion: 9,
   ErrorSet: 10,
-  Enumeration: 11,
+  Enum: 11,
   Optional: 12,
   Pointer: 13,
   Slice: 14,
@@ -234,7 +234,7 @@ class InvalidArrayInitializer extends InvalidInitializer {
     if (primitive) {
       let object;
       switch (member.structure?.type) {
-        case StructureType.Enumeration: object = 'enum item'; break;
+        case StructureType.Enum: object = 'enum item'; break;
         case StructureType.ErrorSet: object = 'error'; break;
         default: object = primitive;
       }
@@ -1596,7 +1596,7 @@ function useUndefined() {
 const transformers = {};
 
 function useEnumerationTransform() {
-  transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
+  transformers[StructureType.Enum] = transformEnumerationDescriptor;
 }
 
 function useErrorSetTransform() {
@@ -1778,7 +1778,7 @@ function isValueExpected(structure) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
-    case StructureType.Enumeration:
+    case StructureType.Enum:
     case StructureType.ErrorSet:
       return true;
     default:
@@ -1948,6 +1948,10 @@ function useAllMemberTypes() {
   useInt();
   useUint();
   useFloat();
+  useExtendedBool();
+  useExtendedInt();
+  useExtendedUint();
+  useExtendedFloat();
   useObject();
   useType();
   useComptime();
@@ -2326,7 +2330,7 @@ function normalizeObject(object, forJSON) {
             result = Symbol.for('inaccessible');
           }
           break;
-        case StructureType.Enumeration:
+        case StructureType.Enum:
           result = handleError(() => String(value), { error });
           break;
         case StructureType.Opaque:
@@ -2887,11 +2891,17 @@ function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  for (const member of members) {
+  let getBackingInt, setBackingInt;
+  for (const member of members) {    
     const { get, set } = getDescriptor(member, env);
-    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-    if (member.isRequired && set) {
-      set.required = true;
+    if (member.name) {
+      memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+      if (member.isRequired && set) {
+        set.required = true;
+      }
+    } else {
+      getBackingInt = get;
+      setBackingInt = set;
     }
   }
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -2904,11 +2914,23 @@ function defineStructShape(structure, env) {
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
+    } else if (setBackingInt && (typeof(arg) === 'number' || typeof(arg) === 'bigint')) {
+      setBackingInt.call(this, arg);
     } else if (arg !== undefined) {
       throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const toPrimitive = (getBackingInt)
+  ? function(hint) {
+    switch (hint) {
+      case 'string':
+        return Object.prototype.toString.call(this);
+      default:
+        return getBackingInt.call(this);
+    }
+  } 
+  : null;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -2920,6 +2942,7 @@ function defineStructShape(structure, env) {
     entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [Symbol.toPrimitive]: getBackingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
@@ -4118,6 +4141,17 @@ function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
+  const toPrimitive = (isTagged) 
+  ? function(hint) {
+    switch (hint) {
+      case 'string':
+      case 'default':
+        return getActiveField.call(this);
+      default:
+        return getSelector.call(this, 'number');
+    }
+  }
+  : null;
   const getTagClass = function() { return selectorMember.structure.constructor };
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
@@ -4130,6 +4164,7 @@ function defineUnionShape(structure, env) {
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
     [Symbol.iterator]: { value: getUnionIterator },
+    [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
@@ -4234,8 +4269,8 @@ function useErrorSet() {
   useErrorSetTransform();
 }
 
-function useEnumeration() {
-  factories[StructureType.Enumeration] = defineEnumerationShape;
+function useEnum() {
+  factories[StructureType.Enum] = defineEnumerationShape;
   useEnumerationTransform();
 }
 
@@ -4372,7 +4407,7 @@ function useAllStructureTypes() {
   useTaggedUnion();
   useErrorUnion();
   useErrorSet();
-  useEnumeration();
+  useEnum();
   useOptional();
   usePointer();
   useSlice();
@@ -5656,7 +5691,7 @@ function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
-  if (type === StructureType.Enumeration) {
+  if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);
     }
@@ -5680,7 +5715,6 @@ class Environment {
   runtimeSafety = true;
   comptime = false;
   /* COMPTIME-ONLY */
-  slotNumbers = {};
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
@@ -5876,19 +5910,7 @@ class Environment {
     return object;
   }
 
-  /* COMPTIME-ONLY */
-  getSlotNumber(scope, key) {
-    let slotNumber = this.slotNumbers[scope];
-    if (!slotNumber) {
-      slotNumber = this.slotNumbers[scope] = { next: 0, map: {} };
-    }
-    let slot = slotNumber.map[key];
-    if (slot === undefined) {
-      slot = slotNumber.map[key] = slotNumber.next++;
-    }
-    return slot;
-  }
-  
+  /* COMPTIME-ONLY */ 
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -6347,7 +6369,6 @@ class WebAssemblyEnvironment extends Environment {
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'iibv', returnType: 'v' },
-    getSlotNumber: { argType: 'ii', returnType: 'i' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
     getViewAddress: { argType: 'v', returnType: 'i' },

@@ -2,8 +2,10 @@ import { expect } from 'chai';
 
 import {
   MemberType,
+  StructureType,
   getIntRange,
   getPrimitiveClass,
+  getStructureName,
   getTypeName,
   isExtendedType
 } from '../src/types.js';
@@ -158,6 +160,15 @@ describe('Data view functions', function() {
       for (const member of members) {
         expect(getPrimitiveClass(member)).to.be.undefined;
       }
+    })
+  })
+  describe('getStructureName', function() {
+    it('should return the name of structure type', function() {
+      expect(getStructureName(StructureType.Array)).to.equal('array');
+      expect(getStructureName(StructureType.Struct)).to.equal('struct');
+      expect(getStructureName(StructureType.PackedStruct)).to.equal('packed struct');
+      expect(getStructureName(StructureType.TaggedUnion)).to.equal('tagged union');
+      expect(getStructureName(StructureType.Enum)).to.equal('enum');
     })
   })
   describe('isExtendedType', function() {

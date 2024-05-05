@@ -597,7 +597,7 @@ describe('Union functions', function() {
     })
     it('should define a simple tagged union', function() {
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });
@@ -694,7 +694,7 @@ describe('Union functions', function() {
     })
     it('should only have a single enumerable property', function() {
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 4,
       });
@@ -794,7 +794,7 @@ describe('Union functions', function() {
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });
@@ -899,7 +899,7 @@ describe('Union functions', function() {
       env.finalizeStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });
@@ -1002,7 +1002,7 @@ describe('Union functions', function() {
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });
@@ -1107,7 +1107,7 @@ describe('Union functions', function() {
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });
@@ -1216,7 +1216,7 @@ describe('Union functions', function() {
       env.finalizeStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
       const enumStructure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'HelloTag',
         byteSize: 2,
       });

@@ -275,7 +275,7 @@ describe('Code generation', function() {
     it('should generate code for defining a standard enum type', function() {
       const enumSetStructure = {
         constructor: null,
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: "enum {}",
         byteSize: 2,
         hasPointer: false,
@@ -326,13 +326,13 @@ describe('Code generation', function() {
       };
       const def = { structures: [ enumSetStructure, structure ], options, keys: { MEMORY, SLOTS }};
       const { code } = generateCode(def, params);
-      expect(code).to.contain('useEnumeration()');
+      expect(code).to.contain('useEnum()');
       expect(code).to.contain('enum {}');
     })
     it('should generate code for defining a non-standard enum type', function() {
       const enumSetStructure = {
         constructor: null,
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: "enum {}",
         byteSize: 2,
         hasPointer: false,
@@ -389,7 +389,7 @@ describe('Code generation', function() {
     it('should generate code for exporting types', function() {
       const enumSetStructure = {
         constructor: null,
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: "enum {}",
         byteSize: 2,
         hasPointer: false,

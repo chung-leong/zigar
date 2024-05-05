@@ -2,9 +2,9 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import {
-  getDescriptor,
-  isReadOnly,
-  useAllMemberTypes,
+    getDescriptor,
+    isReadOnly,
+    useAllMemberTypes,
 } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
@@ -362,7 +362,7 @@ describe('Member functions', function() {
         byteSize: 1,
         structure: {
           name: 'DummyEnum',
-          type: StructureType.Enumeration,
+          type: StructureType.Enum,
           constructor: DummyEnum,
         },
       };
@@ -403,7 +403,7 @@ describe('Member functions', function() {
         byteSize: 1,
         structure: {
           name: 'DummyEnum',
-          type: StructureType.Enumeration,
+          type: StructureType.Enum,
           constructor: DummyEnum,
         },
       };
@@ -443,7 +443,7 @@ describe('Member functions', function() {
         bitSize: 4,
         bitOffset: 32,
         structure: { 
-          type: StructureType.Enumeration, 
+          type: StructureType.Enum, 
           constructor: DummyEnum,
         },
       };

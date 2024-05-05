@@ -117,7 +117,7 @@ describe('Static variable functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello'
       });
       env.attachMember(structure, {

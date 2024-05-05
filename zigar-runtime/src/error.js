@@ -130,7 +130,7 @@ export class InvalidArrayInitializer extends InvalidInitializer {
     if (primitive) {
       let object;
       switch (member.structure?.type) {
-        case StructureType.Enumeration: object = 'enum item'; break;
+        case StructureType.Enum: object = 'enum item'; break;
         case StructureType.ErrorSet: object = 'error'; break;
         default: object = primitive;
       }

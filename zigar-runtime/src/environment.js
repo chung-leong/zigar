@@ -8,10 +8,10 @@ import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
   ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER,
-  LOCATION_SETTER, MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, WRITE_DISABLER
+  LOCATION_SETTER, MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
-import { MemberType, StructureType } from './types.js';
+import { MemberType, StructureType, getStructureName } from './types.js';
 
 export class Environment {
   context;
@@ -622,11 +622,18 @@ export class Environment {
   }
 
   getSpecialExports() {
+    const check = (v) => {
+      if (v === undefined) throw new Error('Not a Zig type');
+      return v;
+    };
     return {
       init: () => this.initPromise ?? Promise.resolve(),
       abandon: () => this.abandon(),
       released: () => this.released,
       connect: (c) => this.console = c,
+      sizeOf: (T) => check(T[SIZE]),
+      alignOf: (T) => check(T[ALIGN]),
+      typeOf: (T) => getStructureName(check(T[TYPE])),
     };
   }
 

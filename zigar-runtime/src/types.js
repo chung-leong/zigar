@@ -25,7 +25,7 @@ export const StructureType = {
   TaggedUnion: 8,
   ErrorUnion: 9,
   ErrorSet: 10,
-  Enumeration: 11,
+  Enum: 11,
   Optional: 12,
   Pointer: 13,
   Slice: 14,
@@ -47,6 +47,14 @@ export function getTypeName(member) {
     return `Bool${boolSize}`;
   } else if (type === MemberType.Void) {
     return `Null`;
+  }
+}
+
+export function getStructureName(n) {
+  for (const [ name, value ] of Object.entries(StructureType)) {
+    if (value === n) {
+      return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
+    }
   }
 }
 

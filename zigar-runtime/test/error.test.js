@@ -126,7 +126,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         byteSize: 8,
       };
       const err1 = new EnumExpected(structure, {});
@@ -214,7 +214,7 @@ describe('Error functions', function() {
               bitSize: 32,
               byteSize: 4,
               structure: {
-                type: StructureType.Enumeration,
+                type: StructureType.Enum,
               }
             }
           ],
@@ -402,33 +402,9 @@ describe('Error functions', function() {
   })
   describe('ArgumentCountMismatch', function() {
     it('should throw an error', function() {
-      const structure1 = {
-        name: 'Hello',
-        type: StructureType.BareUnion,
-        byteSize: 8,
-        instance: {
-          members: [
-            { name: 'dog' },
-            { name: 'cat' },
-            { name: 'turkey' },
-            { name: 'retval' },
-          ],
-        }
-      };
-      const structure2 = {
-        name: 'Hello',
-        type: StructureType.BareUnion,
-        byteSize: 8,
-        instance: {
-          members: [
-            { name: 'dog' },
-            { name: 'retval' },
-          ],
-        }
-      };
-      const err1 = new ArgumentCountMismatch(structure1, 0);
-      expect(err1.message).to.contain('0').and.contain('3 arguments');
-      const err2 = new ArgumentCountMismatch(structure2, 0);
+      const err1 = new ArgumentCountMismatch('hello', 3, 1);
+      expect(err1.message).to.contain('1').and.contain('3 arguments');
+      const err2 = new ArgumentCountMismatch('hello', 1, 0);
       expect(err2.message).to.contain('0').and.contain('1 argument,');
     })
   })
@@ -639,25 +615,12 @@ describe('Error functions', function() {
   })
   describe('adjustArgumentError', function() {
     it('should add argument number to an error', function() {
-      const structure = {
-        name: 'Hello',
-        type: StructureType.BareUnion,
-        byteSize: 8,
-        instance: {
-          members: [
-            { name: '0' },
-            { name: '1' },
-            { name: '2' },
-            { name: 'retval' },
-          ],
-        }
-      };
       const err = new TypeError('Something');
-      const err1 = adjustArgumentError(structure, 0, err);
+      const err1 = adjustArgumentError('hello', 0, 3, err);
       expect(err1.message).to.contain('(args[0], ...)').and.contain(err.message);
-      const err2 = adjustArgumentError(structure, 1, err);
+      const err2 = adjustArgumentError('hello', 1, 3, err);
       expect(err2.message).to.contain('(..., args[1], ...)');
-      const err3 = adjustArgumentError(structure, 2, err);
+      const err3 = adjustArgumentError('hello', 2, 3, err);
       expect(err3.message).to.contain('(..., args[2])');
     })
   })

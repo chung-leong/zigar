@@ -58,7 +58,7 @@ pub const StructureType = enum(u32) {
     tagged_union,
     error_union,
     error_set,
-    enumeration,
+    @"enum",
     optional,
     pointer,
     slice,
@@ -367,7 +367,7 @@ const TypeData = struct {
             .ErrorUnion => .error_union,
             .ErrorSet => .error_set,
             .Optional => .optional,
-            .Enum => .enumeration,
+            .Enum => .@"enum",
             .Array => .array,
             .Pointer => .pointer,
             .Vector => .vector,
@@ -599,7 +599,7 @@ test "TypeData.getStructureType" {
     const BareUnion = union {};
     const ExternUnion = extern union {};
     assertCT(TypeData.getStructureType(.{ .Type = i32 }) == .primitive);
-    assertCT(TypeData.getStructureType(.{ .Type = Enum }) == .enumeration);
+    assertCT(TypeData.getStructureType(.{ .Type = Enum }) == .@"enum");
     assertCT(TypeData.getStructureType(.{ .Type = BareUnion }) == .bare_union);
     assertCT(TypeData.getStructureType(.{ .Type = TaggedUnion }) == .tagged_union);
     assertCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
@@ -1280,7 +1280,7 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     switch (comptime td.getStructureType()) {
         .primitive,
         .error_set,
-        .enumeration,
+        .@"enum",
         => try addPrimitiveMember(ctx, structure, td),
         .array => try addArrayMember(ctx, structure, td),
         .@"struct",

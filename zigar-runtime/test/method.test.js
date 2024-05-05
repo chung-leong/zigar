@@ -88,7 +88,7 @@ describe('Method functions', function() {
     it('should attach methods to enum items', function() {
       const env = new NodeEnvironment();
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });

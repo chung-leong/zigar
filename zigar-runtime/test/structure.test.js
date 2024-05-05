@@ -2,10 +2,10 @@ import { expect } from 'chai';
 
 import { Environment } from '../src/environment.js';
 import {
-  findAllObjects,
-  getFeaturesUsed,
-  getStructureFactory,
-  useOpaque
+    findAllObjects,
+    getFeaturesUsed,
+    getStructureFactory,
+    useOpaque
 } from '../src/structure.js';
 import { SLOTS } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
@@ -263,7 +263,7 @@ describe('Structure functions', function() {
     it('should report the need for enum support when enum structure is used', function() {
       const structures = [ 
         {
-          type: StructureType.Enumeration,
+          type: StructureType.Enum,
           instance: { 
             members: [
               {
@@ -282,13 +282,13 @@ describe('Structure functions', function() {
         }
       ];
       const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useEnumeration');
+      expect(features).to.contain('useEnum');
       expect(features).to.contain('useUint');
     })
     it('should report the need for extended enum support when non-standard int is involved', function() {
       const structures = [ 
         {
-          type: StructureType.Enumeration,
+          type: StructureType.Enum,
           instance: { 
             members: [
               {
@@ -307,7 +307,7 @@ describe('Structure functions', function() {
         }
       ];
       const features = getFeaturesUsed(structures);
-      expect(features).to.contain('useEnumeration');
+      expect(features).to.contain('useEnum');
       expect(features).to.contain('useUint');
       expect(features).to.contain('useExtendedUint');
     })

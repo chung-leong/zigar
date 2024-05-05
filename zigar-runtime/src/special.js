@@ -58,7 +58,7 @@ function normalizeObject(object, forJSON) {
             result = Symbol.for('inaccessible');
           }
           break;
-        case StructureType.Enumeration:
+        case StructureType.Enum:
           result = handleError(() => String(value), { error });
           break;
         case StructureType.Opaque:

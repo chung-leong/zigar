@@ -6,7 +6,7 @@ import { useAllStructureTypes } from '../src/structure.js';
 import { ENVIRONMENT, SLOTS, WRITE_DISABLER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
-describe('Enumeration functions', function() {
+describe('Enum functions', function() {
   const env = new NodeEnvironment();
   describe('defineEnumerationShape', function() {
     beforeEach(function() {
@@ -15,7 +15,7 @@ describe('Enumeration functions', function() {
     })
     it('should define an enum class', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -63,7 +63,7 @@ describe('Enumeration functions', function() {
     })
     it('should define a non-exhaustive enum class', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -111,7 +111,7 @@ describe('Enumeration functions', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -150,7 +150,7 @@ describe('Enumeration functions', function() {
     })
     it('should look up the correct enum object', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -187,7 +187,7 @@ describe('Enumeration functions', function() {
     })
     it('should look up the correct enum object by name', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -224,7 +224,7 @@ describe('Enumeration functions', function() {
     })
     it('should throw when given incompatible input', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -262,7 +262,7 @@ describe('Enumeration functions', function() {
     })
     it('should look up the correct enum object when values are not sequential', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -301,7 +301,7 @@ describe('Enumeration functions', function() {
     })
     it('should look up the correct enum object when they represent bigInts', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 8,
       });
@@ -339,7 +339,7 @@ describe('Enumeration functions', function() {
     })
     it('should produce the expected output when JSON.stringify() is used', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -381,7 +381,7 @@ describe('Enumeration functions', function() {
     })
     it('should return undefined when look-up of enum item fails', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -418,7 +418,7 @@ describe('Enumeration functions', function() {
     })
     it('should return undefined when look-up of enum item fails', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -455,7 +455,7 @@ describe('Enumeration functions', function() {
     })
     it('should have correct string tag', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'zig.Hello',
         byteSize: 4,
       });
@@ -493,7 +493,7 @@ describe('Enumeration functions', function() {
     })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -511,7 +511,7 @@ describe('Enumeration functions', function() {
     })
     it('should throw when initializer is not one of the expected types', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -529,7 +529,7 @@ describe('Enumeration functions', function() {
     })
     it('should accept special initializers', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -566,7 +566,7 @@ describe('Enumeration functions', function() {
     })
     it('should throw when initializer is empty', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });
@@ -602,7 +602,7 @@ describe('Enumeration functions', function() {
     })
     it('should throw when invalid indices are encountered', function() {
       const structure = env.beginStructure({
-        type: StructureType.Enumeration,
+        type: StructureType.Enum,
         name: 'Hello',
         byteSize: 4,
       });

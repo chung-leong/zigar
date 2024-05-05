@@ -1,4 +1,4 @@
-import { getBoolAccessor, getNumericAccessor } from './data-view.js';
+import { getBoolAccessor, getNumericAccessor, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint } from './data-view.js';
 import {
   EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, OutOfBound, Overflow, adjustRangeError
 } from './error.js';
@@ -70,7 +70,7 @@ export function useUndefined() {
 const transformers = {};
 
 export function useEnumerationTransform() {
-  transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
+  transformers[StructureType.Enum] = transformEnumerationDescriptor;
 }
 
 export function useErrorSetTransform() {
@@ -260,7 +260,7 @@ export function isValueExpected(structure) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
-    case StructureType.Enumeration:
+    case StructureType.Enum:
     case StructureType.ErrorSet:
       return true;
     default:
@@ -436,6 +436,10 @@ export function useAllMemberTypes() {
   useInt();
   useUint();
   useFloat();
+  useExtendedBool();
+  useExtendedInt();
+  useExtendedUint();
+  useExtendedFloat();
   useObject();
   useType();
   useComptime();

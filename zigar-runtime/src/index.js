@@ -15,15 +15,15 @@ export function createEnvironment(source) {
 
 /* RUNTIME-ONLY */
 export {
-  useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint
+    useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint
 } from './data-view.js';
 export {
-  useBool, useComptime, useFloat, useInt, useLiteral, useNull, useObject, useStatic, useType,
-  useUint, useUndefined, useVoid
+    useBool, useComptime, useFloat, useInt, useLiteral, useNull, useObject, useStatic, useType,
+    useUint, useUndefined, useVoid
 } from './member.js';
 export {
-  useArgStruct, useArray, useBareUnion, useEnumeration, useErrorSet, useErrorUnion,
-  useExternStruct, useExternUnion, useOpaque, useOptional, usePackedStruct, usePointer,
-  usePrimitive, useSlice, useStruct, useTaggedUnion, useVector
+    useArgStruct, useArray, useBareUnion, useEnum, useErrorSet, useErrorUnion,
+    useExternStruct, useExternUnion, useOpaque, useOptional, usePackedStruct, usePointer,
+    usePrimitive, useSlice, useStruct, useTaggedUnion, useVector
 } from './structure.js';
 /* RUNTIME-ONLY-END */

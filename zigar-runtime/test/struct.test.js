@@ -793,6 +793,7 @@ describe('Struct functions', function() {
         type: StructureType.PackedStruct,
         name: 'Packed',
         byteSize: 4,
+        align: 4,
       });
       env.attachMember(structure, {
         type: MemberType.Bool,
