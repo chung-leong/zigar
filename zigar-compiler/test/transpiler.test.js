@@ -35,6 +35,7 @@ describe('Transpilation', function() {
       const options = { 
         optimize: 'ReleaseSmall', 
         embedWASM: false, 
+        stripWASM: false,
         wasmLoader: saveWASM,
       };
       const { code } = await transpile(path, options);
@@ -47,7 +48,6 @@ describe('Transpilation', function() {
       const options = { 
         optimize: 'ReleaseSmall', 
         embedWASM: false, 
-        stripWASM: false,
         wasmLoader: saveWASM, 
       };
       const { code } = await transpile(path, options);
