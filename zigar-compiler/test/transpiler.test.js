@@ -1,15 +1,24 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
+import { parse } from 'path';
 import { fileURLToPath } from 'url';
 
 use(chaiPromised);
 
+import { writeFile } from 'fs/promises';
 import { transpile } from '../src/transpiler.js';
 
 describe('Transpilation', function() {
   const getSamplePath = (name) => {
     const url = new URL(`./zig-samples/basic/${name}.zig`, import.meta.url);
     return fileURLToPath(url);
+  };
+  const saveWASM = async (path, data) => {
+    const { name } = parse(path); 
+    const url = new URL(`./wasm-samples/${name}.wasm`, import.meta.url);
+    const wasmPath = fileURLToPath(url);
+    await writeFile(wasmPath, data);
+    return `readFile("${name}.wasm")`;
   };
   describe('transpile', function() {
     it('should transpile zig source code containing no methods', async function() {
@@ -22,15 +31,39 @@ describe('Transpilation', function() {
     })
     it('should transpile zig source code contain a method', async function() {
       this.timeout(600000);
-      const path = getSamplePath('function-simple');
-      const options = { optimize: 'Debug' };
+      const path = getSamplePath('simple');
+      const options = { 
+        optimize: 'ReleaseSmall', 
+        embedWASM: false, 
+        wasmLoader: saveWASM,
+      };
       const { code } = await transpile(path, options);
       expect(code).to.be.a('string');
       expect(code).to.contain('"add"');
     })
+    it('should transpile zig source code accessing the file system', async function() {
+      this.timeout(600000);
+      const path = getSamplePath('read-file');
+      const options = { 
+        optimize: 'ReleaseSmall', 
+        embedWASM: false, 
+        stripWASM: false,
+        wasmLoader: saveWASM, 
+      };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"readFile"');
+    })
+    it('should transpile zig source code that uses an external package', async function() {
+      this.timeout(600000);
+      const url = new URL(`./integration/package-manager/use-ziglyph/ziglyph.zig`, import.meta.url);
+      const path = fileURLToPath(url);
+      const options = { optimize: 'ReleaseSmall', embedWASM: false, wasmLoader: saveWASM };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"isAlphabetic"');
+    })
     it('should strip out unnecessary code when stripWASM is specified', async function() {
       this.timeout(600000);
-      const path = getSamplePath('function-simple');
+      const path = getSamplePath('simple');
       const options1 = { optimize: 'Debug' };
       const options2 = { optimize: 'Debug', stripWASM: true };
       const { code: before } = await transpile(path, options1);
@@ -39,7 +72,7 @@ describe('Transpilation', function() {
     })
     it('should default to strip WASM when optimize is not Debug', async function() {
       this.timeout(600000);
-      const path = getSamplePath('function-simple');
+      const path = getSamplePath('simple');
       const options1 = { optimize: 'ReleaseSmall', stripWASM: false };
       const options2 = { optimize: 'ReleaseSmall' };
       const { code: before } = await transpile(path, options1);
@@ -48,7 +81,7 @@ describe('Transpilation', function() {
     })
     it('should call wasmLoader when embedWASM is false', async function() {
       this.timeout(600000);
-      const path = getSamplePath('function-simple');
+      const path = getSamplePath('simple');
       let srcPath, wasmDV;
       const wasmLoader = (path, dv) => {
         srcPath = path;
