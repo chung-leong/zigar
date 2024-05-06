@@ -1,2 +1,0 @@
-#!/bin/bash
-node --experimental-loader ../../../node-zigar/dist/index.js --no-warnings $@
