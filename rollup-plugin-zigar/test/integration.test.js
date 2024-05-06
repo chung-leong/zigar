@@ -1,17 +1,35 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
+import { expect } from 'chai';
 import { createHash } from 'crypto';
 import 'mocha-skip-if';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { rollup } from 'rollup';
 import { fileURLToPath } from 'url';
+import { WASI } from 'wasi';
 import { addTests } from '../../zigar-compiler/test/integration/index.js';
 import Zigar from '../dist/index.js';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
   skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (rollup-plugin-zigar, ${optimize})`, function() {
-    addTests(url => importModule(url, optimize), {
+    it ('should make use of WASI object from Node', async function() {
+      this.timeout(120000);
+      const url = new URL(`../../zigar-compiler/test/zig-samples/basic/read-file.zig`, import.meta.url);
+      const { readFile, __zigar } = await importModule(url, { optimize, embedWASM: true, topLevelAwait: false });
+      const wasi = new WASI({
+        version: 'preview1',
+        args: [],
+        env: {},
+        preopens: {
+          '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+        },
+      });
+      await __zigar.init(wasi);
+      const { string } = readFile('/local/hello.txt');
+      expect(string).to.equal('Hello world');
+    })
+    addTests(url => importModule(url, { optimize }), {
       littleEndian: true,
       addressSize: 32,
       target: 'wasm32',
@@ -22,7 +40,12 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
 
 let currentModule;
 
-async function importModule(url, optimize) {
+async function importModule(url, options) {
+  const { 
+    optimize, 
+    embedWASM = false, 
+    topLevelAwait = true 
+  } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
     if (global.gc) {
@@ -40,7 +63,7 @@ async function importModule(url, optimize) {
   const inputOptions = {
     input: path,
     plugins: [
-      Zigar({ optimize, useReadFile: true, keepNames: optimize === 'ReleaseSafe' }),
+      Zigar({ optimize, useReadFile: true, keepNames: optimize === 'ReleaseSafe', topLevelAwait }),
       NodeResolve({
         modulePaths: [ resolve(`../node_modules`) ],
       }),

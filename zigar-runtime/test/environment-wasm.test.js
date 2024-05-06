@@ -695,10 +695,10 @@ describe('WebAssemblyEnvironment', function() {
       }
     })
   })
-  describe('getFallbackWASI', function() {
+  describe('getWASIImport', function() {
     it('should write to console when fd_write is invoked', async function() {
       const env = new WebAssemblyEnvironment();
-      const wasi = env.getFallbackWASI();
+      const wasi = env.getWASIImport();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const bufferAddress = 16;
       const stringAddress = 64;
@@ -719,7 +719,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should write to console when call to fd_write is directed at stderr', async function() {
       const env = new WebAssemblyEnvironment();
-      const wasi = env.getFallbackWASI();
+      const wasi = env.getWASIImport();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const bufferAddress = 16;
       const stringAddress = 64;
@@ -740,7 +740,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should return error code when file descriptor is not stdout or stderr', async function() {
       const env = new WebAssemblyEnvironment();
-      const wasi = env.getFallbackWASI();
+      const wasi = env.getWASIImport();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const bufferAddress = 16;
       const stringAddress = 64;
@@ -761,7 +761,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should fill a buffer with random bytes when random_get is invoked', async function() {
       const env = new WebAssemblyEnvironment();
-      const wasi = env.getFallbackWASI();
+      const wasi = env.getWASIImport();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const bufferAddress = 16;
       const bufferLength = 8;
@@ -778,7 +778,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should do nothing when when unsupported functions are invoked', async function() {
       const env = new WebAssemblyEnvironment();
-      const wasi = env.getFallbackWASI();
+      const wasi = env.getWASIImport();
       expect(() => wasi.proc_exit()).to.not.throw();
       expect(() => wasi.path_open()).to.not.throw();
       expect(() => wasi.fd_read()).to.not.throw();

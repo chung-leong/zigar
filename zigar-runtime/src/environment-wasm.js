@@ -263,11 +263,14 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
+    // give init a chance to run even when WASM compilation happens synchronously
+    await new Promise(r => setTimeout(r, 0));
     const res = await source;
     this.hasCodeSource = true;
-    const env = this.exportFunctions();
-    const wasi = this.customWASI || this.getFallbackWASI();
-    const imports = { env, wasi_snapshot_preview1: wasi };
+    const imports = { 
+      env: this.exportFunctions(), 
+      wasi_snapshot_preview1: this.getWASIImport(),
+    };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
     } else {
@@ -281,6 +284,7 @@ export class WebAssemblyEnvironment extends Environment {
       const { memory, _initialize } = instance.exports;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
+      this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
       // run the init function if there one
@@ -382,36 +386,40 @@ export class WebAssemblyEnvironment extends Environment {
     return args.retval;
   }
 
-  getFallbackWASI() {
-    return { 
-      fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
-        if (fd === 1 || fd === 2) {
-          const dv = new DataView(this.memory.buffer);
-          let written = 0;
-          for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
-            const buf_ptr = dv.getUint32(p, true);
-            const buf_len = dv.getUint32(p + 4, true);
-            const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
-            this.writeToConsole(buf);
-            written += buf_len;
+  getWASIImport() {
+    if (this.customWASI) {
+      return this.customWASI.wasiImport;
+    } else {
+      return { 
+        fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+          if (fd === 1 || fd === 2) {
+            const dv = new DataView(this.memory.buffer);
+            let written = 0;
+            for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+              const buf_ptr = dv.getUint32(p, true);
+              const buf_len = dv.getUint32(p + 4, true);
+              const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+              this.writeToConsole(buf);
+              written += buf_len;
+            }
+            dv.setUint32(written_ptr, written, true);
+            return 0;            
+          } else {
+            return 1;
           }
-          dv.setUint32(written_ptr, written, true);
-          return 0;            
-        } else {
-          return 1;
-        }
-      },
-      random_get: (buf, buf_len) => {
-        const dv = new DataView(this.memory.buffer, buf, buf_len);
-        for (let i = 0; i < buf_len; i++) {
-          dv.setUint8(i, Math.floor(256 * Math.random()));
-        }
-        return 0;
-      },
-      proc_exit: () => {},
-      path_open: () => 1,
-      fd_read: () => 1,
-      fd_close: () => 1,
-    };
+        },
+        random_get: (buf, buf_len) => {
+          const dv = new DataView(this.memory.buffer, buf, buf_len);
+          for (let i = 0; i < buf_len; i++) {
+            dv.setUint8(i, Math.floor(256 * Math.random()));
+          }
+          return 0;
+        },
+        proc_exit: () => {},
+        path_open: () => 1,
+        fd_read: () => 1,
+        fd_close: () => 1,
+      };  
+    }
   }
 }
