@@ -19,18 +19,12 @@ pub fn build(b: *std.Build) void {
     };
     if (@hasDecl(std.Build.Step.Compile, "addModule")) {
         // Zig 0.11.0
-        lib.addModule("exporter", b.createModule(.{
-            .source_file = .{ .path = cfg.exporter_path },
-        }));
         lib.addModule("module", b.createModule(.{
             .source_file = .{ .path = cfg.module_path },
             .dependencies = &imports,
         }));
     } else if (@hasField(std.Build.Step.Compile, "root_module")) {
         // Zig 0.12.0
-        lib.root_module.addImport("exporter", b.createModule(.{
-            .root_source_file = .{ .path = cfg.exporter_path },
-        }));
         lib.root_module.addImport("module", b.createModule(.{
             .root_source_file = .{ .path = cfg.module_path },
             .imports = &imports,

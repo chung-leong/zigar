@@ -122,7 +122,7 @@ describe('WASM stripper', function() {
     })
     it('should handle more complicated file', async function() {
       this.timeout(600000);
-      const path = resolve(`./wasm-samples/ziglyph.zigar.wasm`);
+      const path = resolve(`./wasm-samples/ziglyph.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const module = parseBinary(binary);
@@ -167,14 +167,14 @@ describe('WASM stripper', function() {
   })
   describe('stripUnused', function() {
     it('should remove unused functions', async function() {
-      const path = resolve(`./wasm-samples/integers.zigar.wasm`);
+      const path = resolve(`./wasm-samples/read-file.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const newBinary = stripUnused(binary);
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
     it('should retain names when keepNames is true', async function() {
-      const path = resolve(`./wasm-samples/function-simple.zigar.wasm`);
+      const path = resolve(`./wasm-samples/simple.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);      
       const newBinary = stripUnused(binary, { keepNames: true });

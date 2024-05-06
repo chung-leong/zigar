@@ -70,7 +70,7 @@ pub fn getPtrAlign(alignment: u16) u8 {
 pub fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     const ptr_align = getPtrAlign(alignment);
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        clearBytes(bytes, len, ptr_align);
+        clearBytes(bytes, len);
         return bytes;
     } else {
         return null;

@@ -2102,9 +2102,6 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
         fn exportStructure(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            // inline for (tdb.entries) |entry| {
-            //     std.debug.print("{s} {any}\n", .{ entry.getName(), entry.attrs });
-            // }
             const ctx = .{ .host = host, .tdb = tdb };
             if (getStructure(ctx, T)) |_| {
                 return null;
