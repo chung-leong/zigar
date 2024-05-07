@@ -39,17 +39,17 @@ const BareUnion = union {
 pub var bare_union: BareUnion = .{ .dog = 123 };
 
 pub fn useDog() void {
-    bare_union = .{ .dog = 777 };
+    bare_union = BareUnion{ .dog = 777 };
 }
 
 pub fn useCat() void {
-    bare_union = .{ .cat = 777 };
+    bare_union = BareUnion{ .cat = 777 };
 }
 
 pub fn usePig() void {
-    bare_union = .{ .pig = 777 };
+    bare_union = BareUnion{ .pig = 777 };
 }
 
 pub fn useMonkey() void {
-    bare_union = .{ .monkey = 777 };
+    bare_union = BareUnion{ .monkey = 777 };
 }
