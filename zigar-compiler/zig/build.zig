@@ -17,12 +17,15 @@ pub fn build(b: *std.Build) void {
             .source_file = .{ .path = cfg.module_path },
             .dependencies = &imports,
         }));
+        lib.addIncludePath(.{ .path = cfg.module_dir });
     } else if (@hasField(std.Build.Step.Compile, "root_module")) {
         // Zig 0.12.0
-        lib.root_module.addImport("module", b.createModule(.{
+        const mod = b.createModule(.{
             .root_source_file = .{ .path = cfg.module_path },
             .imports = &imports,
-        }));
+        });
+        mod.addIncludePath(.{ .path = cfg.module_dir });
+        lib.root_module.addImport("module", mod);
         if (cfg.is_wasm) {
             // WASM needs to be compiled as exe
             lib.kind = .exe;
