@@ -4,6 +4,7 @@ import { chaiPromised } from 'chai-promised';
 use(chaiPromised);
 
 export function addTests(importModule, options) {
+  const { target } = options;
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
@@ -17,9 +18,14 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       await expect(importTest('as-function-parameters')).to.eventually.be.rejected;
     })
-    it('should not compile code with function returning no return', async function() {
+    it('should allow function returning no return', async function() {
       this.timeout(120000);
-      await expect(importTest('as-return-value')).to.eventually.be.rejected;
+      const { exit } = await importTest('as-return-value');
+      await expect(exit).to.be.a('function');
+      if (target === 'wasm32') {
+        expect(() => exit(0)).to.not.throw();
+        expect(() => exit(1)).to.throw(Error).that.includes({ message: 'Program exit', code: 1 });
+      }
     })
     it('should not compile code with array of no returns', async function() {
       this.timeout(120000);

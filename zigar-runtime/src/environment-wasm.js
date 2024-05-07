@@ -1,5 +1,5 @@
 import { Environment } from './environment.js';
-import { ZigError } from './error.js';
+import { Exit, ZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
 import { ALIGN, ATTRIBUTES, COPIER, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
@@ -360,30 +360,37 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   invokeThunk(thunkId, args) {
-    // wasm-exporter.zig will invoke startCall() with the context address and the args
-    // we can't do pointer fix up here since we need the context in order to allocate
-    // memory from the WebAssembly allocator; pointer target acquisition will happen in
-    // endCall()
-    const err = this.runThunk(thunkId, args);
-    // errors returned by exported Zig functions are normally written into the
-    // argument object and get thrown when we access its retval property (a zig error union)
-    // error strings returned by the thunk are due to problems in the thunking process
-    // (i.e. bugs in export.zig)
-    if (err) {
-      if (err[Symbol.toStringTag] === 'Promise') {
-        // getting a promise, WASM is not yet ready
-        // wait for fulfillment, then either return result or throw
-        return err.then((err) => {
-          if (err) {
-            throw new ZigError(err);
-          }
-          return args.retval;
-        });
-      } else {
-        throw new ZigError(err);
+    try {
+      // wasm-exporter.zig will invoke startCall() with the context address and the args
+      // we can't do pointer fix up here since we need the context in order to allocate
+      // memory from the WebAssembly allocator; pointer target acquisition will happen in
+      // endCall()
+      const err = this.runThunk(thunkId, args);
+      // errors returned by exported Zig functions are normally written into the
+      // argument object and get thrown when we access its retval property (a zig error union)
+      // error strings returned by the thunk are due to problems in the thunking process
+      // (i.e. bugs in export.zig)
+      if (err) {
+        if (err[Symbol.toStringTag] === 'Promise') {
+          // getting a promise, WASM is not yet ready
+          // wait for fulfillment, then either return result or throw
+          return err.then((err) => {
+            if (err) {
+              throw new ZigError(err);
+            }
+            return args.retval;
+          });
+        } else {
+          throw new ZigError(err);
+        }
+      }
+      return args.retval;      
+    } catch (err) {
+      this.flushConsole();
+      if (!(err instanceof Exit) || err.code !== 0) {
+        throw err;
       }
     }
-    return args.retval;
   }
 
   getWASIImport() {
@@ -447,7 +454,9 @@ export class WebAssemblyEnvironment extends Environment {
         path_symlink: noImpl,
         path_unlink_file: noImpl,       
         poll_oneoff: noImpl,
-        proc_exit: () => {},
+        proc_exit: (code) => {
+          throw new Exit(code);
+        },
         random_get: (buf, buf_len) => {
           const dv = new DataView(this.memory.buffer, buf, buf_len);
           for (let i = 0; i < buf_len; i++) {

@@ -827,6 +827,7 @@ const TypeDataCollector = struct {
         }
         // add other implicit types
         switch (@typeInfo(T)) {
+            .NoReturn => self.add(void),
             .Pointer => self.add(usize),
             .ErrorSet => self.add(ErrorIntType()),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
@@ -930,6 +931,7 @@ const TypeDataCollector = struct {
             .Enum,
             .Opaque,
             .Vector,
+            .NoReturn,
             => td.attrs.is_supported = true,
             .Type,
             .ComptimeFloat,
@@ -1735,11 +1737,15 @@ fn ArgumentStruct(comptime T: type) type {
             index += 1;
         }
     }
+    const RT = switch (f.return_type.?) {
+        noreturn => void,
+        else => f.return_type.?,
+    };
     fields[index] = .{
         .name = "retval",
-        .type = f.return_type.?,
+        .type = RT,
         .is_comptime = false,
-        .alignment = @alignOf(f.return_type.?),
+        .alignment = @alignOf(RT),
         .default_value = null,
     };
     return @Type(.{
@@ -1808,7 +1814,10 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                 .Inline => .auto,
                 else => .never_inline,
             };
-            arg_ptr.*.retval = @call(modifier, function, args);
+            const retval = @call(modifier, function, args);
+            if (comptime @TypeOf(retval) != noreturn) {
+                arg_ptr.retval = retval;
+            }
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {

@@ -340,6 +340,13 @@ export class ZigError extends Error {
   }
 }
 
+export class Exit extends ZigError {
+  constructor(code) {
+    super('Program exit');
+    this.code = code;
+  }
+}
+
 export function adjustArgumentError(name, index, argCount, err) {
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
