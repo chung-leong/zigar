@@ -40,3 +40,15 @@
 .read-the-docs {
   color: #888;
 }
+
+.input {
+  font-family: 'Courier New', Courier, monospace;
+  width: 100%;
+}
+
+.output {
+  font-family: 'Courier New', Courier, monospace;
+  width: 100%;
+  height: 12em;
+  white-space: pre;
+}
