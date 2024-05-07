@@ -125,6 +125,7 @@ export function addTests(importModule, options) {
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.text.string).to.equal('Hello');
       const b = new StructA({ number: 500 });
+      expect(b.text['*'] === module.struct_a.text['*']).to.be.true;
       expect(b.text.string).to.equal('Hello');
       const [ line ] = await capture(() => print(b));
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .text = { 72, 101, 108, 108, 111 } }');
