@@ -263,8 +263,6 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
-    // give init a chance to run even when WASM compilation happens synchronously
-    await new Promise(r => setTimeout(r, 0));
     const res = await source;
     this.hasCodeSource = true;
     const imports = { 

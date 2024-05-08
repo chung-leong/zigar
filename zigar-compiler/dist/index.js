@@ -6647,8 +6647,6 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   async instantiateWebAssembly(source) {
-    // give init a chance to run even when WASM compilation happens synchronously
-    await new Promise(r => setTimeout(r, 0));
     const res = await source;
     this.hasCodeSource = true;
     const imports = { 
@@ -8138,6 +8136,7 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
 async function transpile(path, options) {
   const {
     embedWASM = true,
+    embedExtra = '',
     topLevelAwait = true,
     omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
@@ -8171,7 +8170,7 @@ async function transpile(path, options) {
       dv = stripUnused(dv, { keepNames });
     }
     if (embedWASM) {
-      binarySource = embed(srcPath, dv);
+      binarySource = embed(srcPath, dv, embedExtra);
     } else {
       binarySource = await wasmLoader(srcPath, dv);
     }
@@ -8185,9 +8184,9 @@ async function transpile(path, options) {
   });
 }
 
-function embed(path, dv) {
+function embed(path, dv, extra) {
   const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
-  return `(async () => {
+  return `(async () => {${extra}
   // ${basename(path)}
   const binaryString = atob(${JSON.stringify(base64)});
   const bytes = new Uint8Array(binaryString.length);
