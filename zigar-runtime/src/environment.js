@@ -496,26 +496,31 @@ export class Environment {
       return dest;
     };
     const createObject = (placeholder) => {
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        const dv = this.obtainView(array.buffer, offset, length);
-        const { constructor } = placeholder.structure;
-        const { reloc, const: isConst } = placeholder;
-        const object = constructor.call(ENVIRONMENT, dv);
-        if (isConst) {
-          object[WRITE_DISABLER]?.();
+      const { memory, structure, actual } = placeholder;
+      if (memory) {
+        if (actual) {
+          return actual;
+        } else {
+          const { array, offset, length } = memory;
+          const dv = this.obtainView(array.buffer, offset, length);
+          const { constructor } = structure;
+          const { reloc, const: isConst } = placeholder;
+          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          if (isConst) {
+            object[WRITE_DISABLER]?.();
+          }
+          if (placeholder.slots) {
+            insertObjects(object[SLOTS], placeholder.slots);
+          }
+          if (reloc !== undefined) {
+            // need to replace dataview with one pointing to fixed memory later,
+            // when the VM is up and running
+            this.variables.push({ reloc, object });
+          }
+          return object;    
         }
-        if (placeholder.slots) {
-          insertObjects(object[SLOTS], placeholder.slots);
-        }
-        if (reloc !== undefined) {
-          // need to replace dataview with one pointing to fixed memory later,
-          // when the VM is up and running
-          this.variables.push({ reloc, object });
-        }
-        return object;  
       } else {
-        return placeholder.structure;
+        return structure;
       }
     };
     resetGlobalErrorSet();
