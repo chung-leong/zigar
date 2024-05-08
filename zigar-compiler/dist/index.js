@@ -4443,7 +4443,9 @@ function generateCode(definition, params) {
   add(`} from ${JSON.stringify(runtimeURL)};`);
   // reduce file size by only including code of features actually used
   // dead-code remover will take out code not referenced here
-  add(`\n// activate features`);
+  if (features.length > 0) {
+    add(`\n// activate features`);
+  }
   for (const feature of features) {
     add(`${feature}();`);
   }
@@ -4561,26 +4563,53 @@ function addStructureDefinitions(lines, definition) {
   }
   // define buffers
   const arrayBufferNames = new Map();
+  let hasU;
+  const addU = () => {
+    if (!hasU) {
+      add(`const U = i => new Uint8Array(i);`);
+      hasU = true;
+    }
+  };
   for (const [ index, dv ] of views.entries()) {
     if (!arrayBufferNames.get(dv.buffer)) {
       const varname = `a${index}`;
       arrayBufferNames.set(dv.buffer, varname);
+      let initializers = '';
       if (dv.buffer.byteLength > 0) {
         const ta = new Uint8Array(dv.buffer);
-        add(`const ${varname} = new Uint8Array([ ${ta.join(', ')} ]);`);
-      } else {
-        add(`const ${varname} = new Uint8Array();`);
+        let allZeros = true;
+        for (const byte of ta) {
+          if (byte !== 0) {
+            allZeros = false;
+            break;
+          }
+        }
+        if (allZeros) {
+          initializers = `${ta.length}`;
+        } else {
+          initializers = `[ ${ta.join(', ')} ]`;
+        }
       }
+      addU();
+      add(`const ${varname} = U(${initializers});`);
     }
   }
   // add properties to objects
+  let has$ = false;
+  const add$ = () => {
+    if (!has$) {
+      add(`const $ = Object.assign;`);
+      has$ = true;
+    }
+  };
   if (objects.length > 0) {
     add('\n// define objects');    
     for (const object of objects) {
       const varname = objectNames.get(object);
       const structure = structureMap.get(object.constructor);
       const { [MEMORY]: dv, [SLOTS]: slots } = object;
-      add(`Object.assign(${varname}, {`);
+      add$();
+      add(`$(${varname}, {`);
       if (structure) {
         add(`structure: ${structureNames.get(structure)},`);
       }
@@ -4639,7 +4668,8 @@ function addStructureDefinitions(lines, definition) {
   add('\n// define structures');
   for (const structure of structures) {
     const varname = structureNames.get(structure);
-    add(`Object.assign(${varname}, {`);
+    add$();
+    add(`$(${varname}, {`);
     add(`...s,`);
     for (const [ name, value ] of Object.entries(structure)) {
       if (isDifferent(value, defaultStructure[name])) {
