@@ -1,26 +1,18 @@
-import { execFileSync, execSync } from 'child_process';
+import childProcess from 'child_process';
 import { createHash } from 'crypto';
-import {
-  chmodSync, closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmdirSync,
-  statSync, unlinkSync, writeFileSync, writeSync
-} from 'fs';
 import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import os from 'os';
 import { dirname, join, parse, sep } from 'path';
 import { fileURLToPath } from 'url';
+import { promisify } from 'util';
+
+const execFile = promisify(childProcess.execFile);
 
 export async function findFile(path, follow = true) {
   try {
     return await (follow ? stat(path) : lstat(path));
-  } catch (err) {
-  }
-}
-
-export function findFileSync(path, follow = true) {
-  try {
-    return follow ? statSync(path) : lstatSync(path);
   } catch (err) {
   }
 }
@@ -56,37 +48,6 @@ export async function findMatchingFiles(dir, re) {
   return map;
 }
 
-export function findMatchingFilesSync(dir, re) {
-  const map = new Map();
-  const scanned = new Map();
-  const scan = (dir) => {
-    /* c8 ignore next 3 */
-    if (scanned.get(dir)) {
-      return;
-    } 
-    scanned.set(dir, true);
-    try {
-      const list = readdirSync(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path = join(dir, name);
-        const info = findFileSync(path);
-        if (info?.isDirectory()) {
-          scan(path);
-        } else if (info?.isFile() && re.test(name)) {
-          map.set(path, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
-  };
-  scan(dir);
-  return map;
-}
-
 export async function acquireLock(pidPath, staleTime) {
   while (true)   {
     try {
@@ -97,30 +58,9 @@ export async function acquireLock(pidPath, staleTime) {
       break;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath, staleTime)) {
+        if (await checkPidFile(pidPath, staleTime)) {
           await delay(250);
           continue;
-        }
-        /* c8 ignore next 3 */
-      } else {
-        throw err;
-      }
-    }
-  }
-}
-
-export function acquireLockSync(pidPath, staleTime) {
-  while (true)   {
-    try {
-      createDirectorySync(dirname(pidPath));
-      const handle = openSync(pidPath, 'wx');
-      writeSync(handle, `${process.pid}`);
-      closeSync(handle);
-      break;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath, staleTime)) {
-          delaySync(250);
         }
         /* c8 ignore next 3 */
       } else {
@@ -134,24 +74,20 @@ export async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-export function releaseLockSync(pidPath) {
-  deleteFileSync(pidPath);
-}
-
-function checkPidFile(pidPath, staleTime = 60000 * 5) {
+async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
-    const pid = loadFileSync(pidPath);
+    const pid = await loadFile(pidPath);
     if (pid) {
-      /* c8 ignore next 5 */
-      if (os.platform() === 'win32') {
-        execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
-      } else {
-        execSync(`ps -p ${pid}`).toString();
-      }
+      const program = (os.platform() === 'win32') ? 'tasklist' : 'ps';
+      const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      await execFile(program, args, { windowsHide: true });
     }
-    const last = findFileSync(pidPath)?.mtime /* c8 ignore next */ || 0;
-    const diff = new Date() - last;
+    const stats = await findFile(pidPath);
+    if (!stats) {
+      return false;
+    }
+    const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
     }
@@ -159,7 +95,7 @@ function checkPidFile(pidPath, staleTime = 60000 * 5) {
     stale = true;
   }
   if (stale) {
-    deleteFileSync(pidPath);
+    await deleteFile(pidPath);
   }
   return !stale;
 }
@@ -171,13 +107,6 @@ export async function copyFile(srcPath, dstPath) {
   await chmod(dstPath, info.mode);
 }
 
-export function copyFileSync(srcPath, dstPath) {
-  const info = statSync(srcPath);
-  const data = readFileSync(srcPath);
-  writeFileSync(dstPath, data);
-  chmodSync(dstPath, info.mode);
-}
-
 export async function loadFile(path, def) {
   try {
     return await readFile(path, 'utf8');
@@ -186,27 +115,9 @@ export async function loadFile(path, def) {
   }
 }
 
-export function loadFileSync(path, def) {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
 export async function deleteFile(path) {
   try {
     await unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-export function deleteFileSync(path) {
-  try {
-    unlinkSync(path);
   } catch (err) {
     if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
@@ -230,28 +141,8 @@ export async function createDirectory(path) {
   }
 }
 
-export function createDirectorySync(path) {
-  const exists = findDirectorySync(path);
-  if (!exists) {
-    const { root, dir } = parse(path);
-    createDirectorySync(dir);
-    try {
-      mkdirSync(path);
-      /* c8 ignore next 5 */
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
 export async function findDirectory(path) {
   return findFile(path);
-}
-
-export function findDirectorySync(path) {
-  return findFileSync(path);
 }
 
 export async function deleteDirectory(dir) {
@@ -274,34 +165,8 @@ export async function deleteDirectory(dir) {
   }
 }
 
-export function deleteDirectorySync(dir) {
-  try {
-    const list = readdirSync(dir);
-    for (const name of list) {
-      const path = join(dir, name);
-      const info = findFileSync(path, false);
-      if (info?.isDirectory()) {
-        deleteDirectorySync(path);
-      } else if (info) {
-        deleteFileSync(path);
-      }
-    }
-    rmdirSync(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
 export async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
-}
-
-export function delaySync(ms) {   
-  const buffer = new SharedArrayBuffer(8);
-  const ta = new BigInt64Array(buffer);
-  Atomics.wait(ta, 0, 0n, ms);
 }
 
 export function md5(text) {

@@ -1,5 +1,5 @@
 import { dirname, join, resolve } from 'path';
-import { findFile, findFileSync, loadFile, loadFileSync } from './utility-functions.js';
+import { findFile, loadFile } from './utility-functions.js';
 
 export const optionsForCompile = {
   optimize: {
@@ -135,26 +135,8 @@ export async function findConfigFile(name, dir) {
   }
 }
 
-export function findConfigFileSync(name, dir) {
-  const path = join(dir, name);
-  const info = findFileSync(path);
-  if (info?.isFile()) {
-    return path;
-  } else {
-    const parent = dirname(dir);
-    if (parent !== dir) {
-      return findConfigFileSync(name, parent);
-    }
-  }
-}
-
 export async function loadConfigFile(cfgPath, availableOptions) {
   const text = await loadFile(cfgPath);
-  return processConfigFile(text, cfgPath, availableOptions);
-}
-
-export function loadConfigFileSync(cfgPath, availableOptions) {
-  const text = loadFileSync(cfgPath);
   return processConfigFile(text, cfgPath, availableOptions);
 }
 

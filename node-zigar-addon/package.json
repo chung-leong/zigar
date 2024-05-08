@@ -3,10 +3,6 @@
   "version": "0.11.1",
   "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.js",
-  "exports": {
-    ".": "./dist/index.js",
-    "./cjs": "./dist/index.cjs"
-  },
   "type": "module",
   "directories": {
     "test": "test"

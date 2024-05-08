@@ -3,14 +3,14 @@ import { findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structu
 import { MemberType, StructureType } from '../../zigar-runtime/src/types.js';
 
 export function generateCode(definition, params) {
-  const { structures, options, keys } = definition;
+  const { structures } = definition;
   const {
     runtimeURL,
     binarySource = null,
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    addonDir = null,
+    envOptions,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -32,7 +32,7 @@ export function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${JSON.stringify({ addonDir }, undefined, 2)});`);
+  add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
   add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);

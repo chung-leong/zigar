@@ -1,11 +1,11 @@
 'use strict';
 
-var child_process = require('child_process');
-var fs = require('fs');
+var childProcess = require('child_process');
 var promises = require('fs/promises');
 var os = require('os');
 var path = require('path');
 var url = require('url');
+var util = require('util');
 var crypto = require('crypto');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
@@ -4426,14 +4426,14 @@ function useAllStructureTypes() {
 }
 
 function generateCode(definition, params) {
-  const { structures, options, keys } = definition;
+  const { structures } = definition;
   const {
     runtimeURL,
     binarySource = null,
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    addonDir = null,
+    envOptions,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -4455,7 +4455,7 @@ function generateCode(definition, params) {
   // write out the structures as object literals 
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${JSON.stringify({ addonDir }, undefined, 2)});`);
+  add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
   add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
@@ -4811,16 +4811,11 @@ function* chunk(arr, n) {
   }
 }
 
+const execFile$1 = util.promisify(childProcess.execFile);
+
 async function findFile(path, follow = true) {
   try {
     return await (follow ? promises.stat(path) : promises.lstat(path));
-  } catch (err) {
-  }
-}
-
-function findFileSync(path, follow = true) {
-  try {
-    return follow ? fs.statSync(path) : fs.lstatSync(path);
   } catch (err) {
   }
 }
@@ -4856,37 +4851,6 @@ async function findMatchingFiles(dir, re) {
   return map;
 }
 
-function findMatchingFilesSync(dir, re) {
-  const map = new Map();
-  const scanned = new Map();
-  const scan = (dir) => {
-    /* c8 ignore next 3 */
-    if (scanned.get(dir)) {
-      return;
-    } 
-    scanned.set(dir, true);
-    try {
-      const list = fs.readdirSync(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path$1 = path.join(dir, name);
-        const info = findFileSync(path$1);
-        if (info?.isDirectory()) {
-          scan(path$1);
-        } else if (info?.isFile() && re.test(name)) {
-          map.set(path$1, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
-  };
-  scan(dir);
-  return map;
-}
-
 async function acquireLock(pidPath, staleTime) {
   while (true)   {
     try {
@@ -4897,30 +4861,9 @@ async function acquireLock(pidPath, staleTime) {
       break;
     } catch (err) {
       if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath, staleTime)) {
+        if (await checkPidFile(pidPath, staleTime)) {
           await delay(250);
           continue;
-        }
-        /* c8 ignore next 3 */
-      } else {
-        throw err;
-      }
-    }
-  }
-}
-
-function acquireLockSync(pidPath, staleTime) {
-  while (true)   {
-    try {
-      createDirectorySync(path.dirname(pidPath));
-      const handle = fs.openSync(pidPath, 'wx');
-      fs.writeSync(handle, `${process.pid}`);
-      fs.closeSync(handle);
-      break;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        if (checkPidFile(pidPath, staleTime)) {
-          delaySync(250);
         }
         /* c8 ignore next 3 */
       } else {
@@ -4934,24 +4877,20 @@ async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-function releaseLockSync(pidPath) {
-  deleteFileSync(pidPath);
-}
-
-function checkPidFile(pidPath, staleTime = 60000 * 5) {
+async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
-    const pid = loadFileSync(pidPath);
+    const pid = await loadFile(pidPath);
     if (pid) {
-      /* c8 ignore next 5 */
-      if (os.platform() === 'win32') {
-        child_process.execSync(`tasklist /nh /fi "pid eq ${pid}" | findstr .exe`, { stdio: 'pipe' }).toString();
-      } else {
-        child_process.execSync(`ps -p ${pid}`).toString();
-      }
+      const program = (os.platform() === 'win32') ? 'tasklist' : 'ps';
+      const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      await execFile$1(program, args, { windowsHide: true });
     }
-    const last = findFileSync(pidPath)?.mtime /* c8 ignore next */ || 0;
-    const diff = new Date() - last;
+    const stats = await findFile(pidPath);
+    if (!stats) {
+      return false;
+    }
+    const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
     }
@@ -4959,7 +4898,7 @@ function checkPidFile(pidPath, staleTime = 60000 * 5) {
     stale = true;
   }
   if (stale) {
-    deleteFileSync(pidPath);
+    await deleteFile(pidPath);
   }
   return !stale;
 }
@@ -4971,13 +4910,6 @@ async function copyFile(srcPath, dstPath) {
   await promises.chmod(dstPath, info.mode);
 }
 
-function copyFileSync(srcPath, dstPath) {
-  const info = fs.statSync(srcPath);
-  const data = fs.readFileSync(srcPath);
-  fs.writeFileSync(dstPath, data);
-  fs.chmodSync(dstPath, info.mode);
-}
-
 async function loadFile(path, def) {
   try {
     return await promises.readFile(path, 'utf8');
@@ -4986,27 +4918,9 @@ async function loadFile(path, def) {
   }
 }
 
-function loadFileSync(path, def) {
-  try {
-    return fs.readFileSync(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
 async function deleteFile(path) {
   try {
     await promises.unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-function deleteFileSync(path) {
-  try {
-    fs.unlinkSync(path);
   } catch (err) {
     if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
@@ -5030,28 +4944,8 @@ async function createDirectory(path$1) {
   }
 }
 
-function createDirectorySync(path$1) {
-  const exists = findDirectorySync(path$1);
-  if (!exists) {
-    const { root, dir } = path.parse(path$1);
-    createDirectorySync(dir);
-    try {
-      fs.mkdirSync(path$1);
-      /* c8 ignore next 5 */
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
 async function findDirectory(path) {
   return findFile(path);
-}
-
-function findDirectorySync(path) {
-  return findFileSync(path);
 }
 
 async function deleteDirectory(dir) {
@@ -5074,34 +4968,8 @@ async function deleteDirectory(dir) {
   }
 }
 
-function deleteDirectorySync(dir) {
-  try {
-    const list = fs.readdirSync(dir);
-    for (const name of list) {
-      const path$1 = path.join(dir, name);
-      const info = findFileSync(path$1, false);
-      if (info?.isDirectory()) {
-        deleteDirectorySync(path$1);
-      } else if (info) {
-        deleteFileSync(path$1);
-      }
-    }
-    fs.rmdirSync(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
 async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
-}
-
-function delaySync(ms) {   
-  const buffer = new SharedArrayBuffer(8);
-  const ta = new BigInt64Array(buffer);
-  Atomics.wait(ta, 0, 0n, ms);
 }
 
 function md5(text) {
@@ -5122,7 +4990,7 @@ function getPlatform() {
         isGNU = true;
       } else {
         try {
-          child_process.execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
+          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
           isGNU = true;
           /* c8 ignore next 3 */
         } catch (err) {
@@ -5154,6 +5022,8 @@ function normalizePath(url$1) {
   const path$1 = parts.join(path.sep);
   return { path: path$1, archive }
 }
+
+const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await findFile(srcPath) : null;
@@ -5203,7 +5073,7 @@ async function compile(srcPath, modPath, options) {
             break;
         }
       }
-      const { zigCmd, moduleBuildDir } = config;
+      const { zigPath, zigArgs, moduleBuildDir } = config;
       // only one process can compile a given file at a time
       const pidPath = `${moduleBuildDir}.pid`;
       await acquireLock(pidPath);
@@ -5211,7 +5081,7 @@ async function compile(srcPath, modPath, options) {
         // create config file
         await createProject(config, moduleBuildDir);
         // then run the compiler
-        await runCompiler(zigCmd, moduleBuildDir);
+        await runCompiler(zigPath, zigArgs, moduleBuildDir);
       } finally {
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
@@ -5223,111 +5093,24 @@ async function compile(srcPath, modPath, options) {
   return { outputPath, changed }
 }
 
-function compileSync(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? findFileSync(srcPath) : null;
-  if (srcInfo === undefined) {
-    throw new Error(`Source file not found: ${srcPath}`);
-  }
-  if (srcInfo?.isDirectory()) {
-    srcPath = path.join(srcPath, '?');
-  }
-  const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath } = config;
-  let changed = false;
-  if (srcPath) {
-    const srcFileMap = findMatchingFilesSync(moduleDir, /.\..*$/);
-    // see if the (re-)compilation is necessary
-    const soInfo = findFileSync(outputPath);
-    if (soInfo) {
-      for (const [ path, info ] of srcFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    } else {
-      changed = true;
-    }
-    if (!changed) {
-      // rebuild when exporter or build files have changed
-      const zigFolder = absolute('../zig');
-      const zigFileMap = findMatchingFilesSync(zigFolder, /\.zig$/);
-      for (const [ path, info ] of zigFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    }
-    if (changed) {
-      // add custom build file
-      for (const [ path$1, info ] of srcFileMap) {
-        switch (path.basename(path$1)) {
-          case 'build.zig':
-            config.buildFilePath = path$1;
-            break;
-          case 'build.zig.zon':
-            config.packageConfigPath = path$1;
-            break;
-        }
-      }
-      const { zigCmd, moduleBuildDir } = config;
-      // only one process can compile a given file at a time
-      const pidPath = `${moduleBuildDir}.pid`;
-      acquireLockSync(pidPath);
-      try {
-        // create config file
-        createProjectSync(config, moduleBuildDir);
-        // then run the compiler   
-        runCompilerSync(zigCmd, moduleBuildDir);
-      } finally {
-        if (config.clean) {
-          deleteDirectorySync(moduleBuildDir);
-        }
-        releaseLockSync(pidPath);
-      }
-    } 
-  }
-  return { outputPath, changed }
-}
-
-async function runCompiler(zigCmd, soBuildDir) {
-  const options = {
-    cwd: soBuildDir,
-    windowsHide: true,
-  };
-  return new Promise((resolve, reject) => {
-    child_process.exec(zigCmd, options, (err, stdout, stderr) => {
-      if (err) {
-        const log = stderr;
-        if (log) {
-          const logPath = path.join(soBuildDir, 'log');
-          promises.writeFile(logPath, log);
-          err = new Error(`Zig compilation failed\n\n${log}`);
-        }
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
-function runCompilerSync(zigCmd, soBuildDir) {
-  const options = {
-    cwd: soBuildDir,
-    windowsHide: true,
-    stdio: 'pipe',
-  };
+async function runCompiler(path$1, args, buildDir) {
   try {
-    child_process.execSync(zigCmd, options);
+    const options = {
+      cwd: buildDir,
+      windowsHide: true,
+    }; 
+    return await execFile(path$1, args, options);
   } catch (err) {
-    const log = err.stderr;
-    if (log) {
-      const logPath = path.join(soBuildDir, 'log');
-      fs.writeFileSync(logPath, log);
+    let message = 'Zig compilation failed';
+    if (err.stderr) {
+      try {
+        const logPath = path.join(buildDir, 'log');
+        await promises.writeFile(logPath, err.stderr);
+      } catch (_) {        
+      }
+      message += `\n\n${err.stderr}`;
     }
-    throw new Error(`Zig compilation failed\n\n${log}`);
+    throw new Error(message);
   }
 }
 
@@ -5355,19 +5138,6 @@ async function createProject(config, dir) {
   if (config.packageConfigPath) {
     const packageConfigPath = path.join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
-  }
-}
-
-function createProjectSync(config, dir) {
-  createDirectorySync(dir);
-  const content = formatProjectConfig(config);
-  const cfgFilePath = path.join(dir, 'build-cfg.zig');
-  fs.writeFileSync(cfgFilePath, content);
-  const buildFilePath = path.join(dir, 'build.zig');
-  copyFileSync(config.buildFilePath, buildFilePath);
-  if (config.packageConfigPath) {
-    const packageConfigPath = path.join(dir, 'build.zig.zon');
-    copyFileSync(config.packageConfigPath, packageConfigPath);
   }
 }
 
@@ -5399,39 +5169,8 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     clean = false,
     buildDir = path.join(os.tmpdir(), 'zigar-build'),
-    zigCmd = (() => {
-      // translate from names used by Node to those used by Zig
-      const cpuArchs = {
-        arm: 'arm',
-        arm64: 'aarch64',
-        ia32: 'x86',
-        loong64: 'loong64',
-        mips: 'mips',
-        mipsel: 'mipsel',
-        ppc: 'powerpc',
-        ppc64: 'powerpc64',
-        s390: undefined,
-        s390x: 's390x',
-        x64: 'x86_64',
-      };
-      const osTags = {
-        aix: 'aix',
-        darwin: 'macos',
-        freebsd: 'freebsd',
-        linux: 'linux-gnu',
-        openbsd: 'openbsd',
-        sunos: 'solaris',
-        win32: 'windows',
-      };
-      const cpuArch = cpuArchs[arch] ?? arch;
-      const osTag = osTags[platform] ?? platform;
-      const args = [
-        `build`,
-        `-Doptimize=${optimize}`,
-        `-Dtarget=${cpuArch}-${osTag}`,        
-      ];
-      return `zig ${args.join(' ')}`;
-    })(),
+    zigPath = 'zig',
+    zigArgs: zigArgsStr = '',
   } = options;
   const src = path.parse(srcPath ?? '');
   const mod = path.parse(modPath ?? '');
@@ -5454,6 +5193,41 @@ function createConfig(srcPath, modPath, options = {}) {
       return path.join(modPath, `${platform}.${arch}.${ext}`);
     }  
   })();
+  const zigArgs = [];
+  if (!zigArgs.find(s => /^[^-]/.test(s))) {
+    zigArgs.unshift('build');
+  }
+  if (!zigArgs.find(s => /^\-Doptimize=/.test(s))) {
+    zigArgs.push(`-Doptimize=${optimize}`);
+  }
+  if (!zigArgs.find(s => /^\-Dtarget=/.test(s))) {
+    // translate from names used by Node to those used by Zig
+    const cpuArchs = {
+      arm: 'arm',
+      arm64: 'aarch64',
+      ia32: 'x86',
+      loong64: 'loong64',
+      mips: 'mips',
+      mipsel: 'mipsel',
+      ppc: 'powerpc',
+      ppc64: 'powerpc64',
+      s390: undefined,
+      s390x: 's390x',
+      x64: 'x86_64',
+    };
+    const osTags = {
+      aix: 'aix',
+      darwin: 'macos',
+      freebsd: 'freebsd',
+      linux: 'linux-gnu',
+      openbsd: 'openbsd',
+      sunos: 'solaris',
+      win32: 'windows',
+    };
+    const cpuArch = cpuArchs[arch] ?? arch;
+    const osTag = osTags[platform] ?? platform;
+    zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
+  }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
   return {
@@ -5469,7 +5243,8 @@ function createConfig(srcPath, modPath, options = {}) {
     packageConfigPath: undefined,
     outputPath,
     clean,
-    zigCmd,
+    zigPath,
+    zigArgs,
     useLibc,
     isWASM,
   };
@@ -5620,26 +5395,8 @@ async function findConfigFile(name, dir) {
   }
 }
 
-function findConfigFileSync(name, dir) {
-  const path$1 = path.join(dir, name);
-  const info = findFileSync(path$1);
-  if (info?.isFile()) {
-    return path$1;
-  } else {
-    const parent = path.dirname(dir);
-    if (parent !== dir) {
-      return findConfigFileSync(name, parent);
-    }
-  }
-}
-
 async function loadConfigFile(cfgPath, availableOptions) {
   const text = await loadFile(cfgPath);
-  return processConfigFile(text, cfgPath, availableOptions);
-}
-
-function loadConfigFileSync(cfgPath, availableOptions) {
-  const text = loadFileSync(cfgPath);
   return processConfigFile(text, cfgPath, availableOptions);
 }
 
@@ -8201,10 +7958,8 @@ function embed(path$1, dv, extra) {
 }
 
 exports.compile = compile;
-exports.compileSync = compileSync;
 exports.extractOptions = extractOptions;
 exports.findConfigFile = findConfigFile;
-exports.findConfigFileSync = findConfigFileSync;
 exports.findSourceFile = findSourceFile;
 exports.generateCode = generateCode;
 exports.getArch = getArch;
@@ -8212,7 +7967,6 @@ exports.getCachePath = getCachePath;
 exports.getModuleCachePath = getModuleCachePath;
 exports.getPlatform = getPlatform;
 exports.loadConfigFile = loadConfigFile;
-exports.loadConfigFileSync = loadConfigFileSync;
 exports.normalizePath = normalizePath;
 exports.optionsForCompile = optionsForCompile;
 exports.optionsForTranspile = optionsForTranspile;

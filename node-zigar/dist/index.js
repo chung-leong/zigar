@@ -1,6 +1,5 @@
-import { createRequire } from 'module';
-import { createEnvironment } from 'node-zigar-addon';
-import { dirname, join } from 'path';
+import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon';
+import { dirname, extname, join } from 'path';
 import { cwd } from 'process';
 import { pathToFileURL } from 'url';
 import {
@@ -9,10 +8,10 @@ import {
 } from 'zigar-compiler';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
+const extensionsRegex = /\.(zig|zigar)(\?|$)/;
 
 export async function resolve(specifier, context, nextResolve) {
-  const m = parseZigURL(specifier);
-  if (!m) {
+  if (!extensionsRegex.test(specifier)) {
     return nextResolve(specifier);
   }
   const { parentURL = baseURL } = context;
@@ -24,15 +23,8 @@ export async function resolve(specifier, context, nextResolve) {
   };
 }
 
-const extensionsRegex = /\.(zig|zigar)(\?|$)/;
-
-export function parseZigURL(url) {
-  return extensionsRegex.exec(url);
-}
-
 export async function load(url, context, nextLoad) {
-  const m = parseZigURL(url);
-  if (!m) {
+  if (!extensionsRegex.test(url)) {
     return nextLoad(url);
   }
   const { path, archive } = normalizePath(url);
@@ -49,28 +41,28 @@ export async function load(url, context, nextLoad) {
       Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
     }
   }
-  if (m[2]) {
-    // allow overriding of options using query variables
-    Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
-  }
-  const srcPath = (m[1] === 'zig') ? path : findSourceFile(path, options);
-  const modPath = (m[1] === 'zig') ? getModuleCachePath(path, options) : path;
-  // srcPath can be undefined, in which case compile() will simply return the path to 
-  // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
+  // allow overriding of options using query variables
+  Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
+  const ext = extname(path);
+  const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
+  const modPath = (ext === '.zig') ? getModuleCachePath(path, options) : path;
+  const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
+  const addonDir = join(addonParentDir, 'node-zigar-addon');
+  // build the Node-API addon if necessary
+  const addonPath = buildAddon({ addonDir, recompile: !archive });
+  // compile the module if srcPath isn't undefined; if it is, then compile() will simply return 
+  // the path to the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
   // is absent, compilation does not occur
   const { outputPath } = await compile(srcPath, modPath, options);
-  const addonParentDir = (m[1] === 'zig') ? getCachePath(options) : dirname(path);
-  const addonDir = join(addonParentDir, 'node-zigar-addon');
-  const recompile = !archive;
-  const env = createEnvironment({ addonDir, recompile });  
+  const env = createEnvironment({ addonPath });  
   env.loadModule(outputPath);
   env.acquireStructures(options);
   const definition = env.exportStructures();
-  const require = createRequire(import.meta.url);
   // get the absolute path to node-zigar-addon so the transpiled code can find it
-  const runtimeURL = pathToFileURL(require.resolve('node-zigar-addon'));
+  const runtimeURL = getLibraryPath();
   const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
-  const { code } = generateCode(definition, { runtimeURL, binarySource, addonDir });
+  const envOptions = { addonPath };
+  const { code } = generateCode(definition, { runtimeURL, binarySource, envOptions });
   return {
     format: 'module',
     shortCircuit: true,

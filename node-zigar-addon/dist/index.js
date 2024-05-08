@@ -4,6 +4,7 @@ import { createRequire } from 'module';
 import os from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
+import { runCompiler } from '../../zigar-compiler/src/compiler.js';
 
 export function createEnvironment(options) {
   const { createEnvironment } = loadAddon(options);
@@ -22,42 +23,11 @@ export function getGCStatistics(options) {
   return getGCStatistics();
 }
 
-export function buildAddOn(addonPath, options) {
-  const { platform, arch } = options;
-  const cwd = fileURLToPath(new URL('../', import.meta.url));
-  const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
-  if (platform && arch) {
-    // translate from names used by Node to those used by Zig
-    const cpuArchs = {
-      arm: 'arm',
-      arm64: 'aarch64',
-      ia32: 'x86',
-      loong64: 'loong64',
-      mips: 'mips',
-      mipsel: 'mipsel',
-      ppc: 'powerpc',
-      ppc64: 'powerpc64',
-      s390: undefined,
-      s390x: 's390x',
-      x64: 'x86_64',
-    };
-    const osTags = {
-      aix: 'aix',
-      darwin: 'macos',
-      freebsd: 'freebsd',
-      linux: 'linux-gnu',
-      openbsd: 'openbsd',
-      sunos: 'solaris',
-      win32: 'windows',
-    };
-    const cpuArch = cpuArchs[arch] ?? arch;
-    const osTag = osTags[platform] ?? platform;
-    args.push(`-Dtarget=${cpuArch}-${osTag}`);
-  }
-  execFileSync('zig', args, { cwd, stdio: 'pipe' });
+export function getLibraryPath() {
+  return fileURLToPath(import.meta.url);
 }
 
-function loadAddon(options) {
+export async function buildAddon(options) {
   const { addonDir, recompile = false } = options;
   const arch = getArch();
   const platform = getPlatform();
@@ -77,9 +47,44 @@ function loadAddon(options) {
     } catch (err) {    
     }
     if (!(addonMTime > srcMTime)) {
-      buildAddOn(addonPath, { platform, arch });
+      const cwd = fileURLToPath(new URL('../', import.meta.url));
+      const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
+      if (platform && arch) {
+        // translate from names used by Node to those used by Zig
+        const cpuArchs = {
+          arm: 'arm',
+          arm64: 'aarch64',
+          ia32: 'x86',
+          loong64: 'loong64',
+          mips: 'mips',
+          mipsel: 'mipsel',
+          ppc: 'powerpc',
+          ppc64: 'powerpc64',
+          s390: undefined,
+          s390x: 's390x',
+          x64: 'x86_64',
+        };
+        const osTags = {
+          aix: 'aix',
+          darwin: 'macos',
+          freebsd: 'freebsd',
+          linux: 'linux-gnu',
+          openbsd: 'openbsd',
+          sunos: 'solaris',
+          win32: 'windows',
+        };
+        const cpuArch = cpuArchs[arch] ?? arch;
+        const osTag = osTags[platform] ?? platform;
+        args.push(`-Dtarget=${cpuArch}-${osTag}`);
+      }
+      await runCompiler('zig', args, cwd);
     }
   }
+  return addonPath;
+}
+
+function loadAddon(options) {
+  const { addonPath } = options;
   const require = createRequire(import.meta.url);
   return require(addonPath);
 }

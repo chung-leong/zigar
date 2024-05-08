@@ -1,6 +1,5 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
-import { statSync, utimesSync } from 'fs';
 import { stat, utimes } from 'fs/promises';
 import os, { tmpdir } from 'os';
 
@@ -9,19 +8,14 @@ use(chaiPromised);
 import { fileURLToPath } from 'url';
 import {
   compile,
-  compileSync,
   createConfig,
   getModuleCachePath,
-  runCompiler,
-  runCompilerSync
+  runCompiler
 } from '../src/compiler.js';
 import {
   delay,
-  delaySync,
   findDirectory,
-  findDirectorySync,
-  findFile,
-  findFileSync
+  findFile
 } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
@@ -35,17 +29,6 @@ describe('Compilation', function() {
       const zigCmd = `zig`;
       const promise = runCompiler(zigCmd, tmpdir());
       await expect(promise).to.eventually.be.rejected;
-    })
-  })
-  describe('runCompilerSync', function() {
-    it('should run the Zig compiler', function() {
-      const zigCmd = `zig help`;
-      runCompilerSync(zigCmd, tmpdir());
-      expect(() => runCompilerSync(zigCmd, tmpdir())).to.not.throw();
-    })
-    it('should throw when the Zig compiler returns an error', function() {
-      const zigCmd = `zig`;
-      expect(() => runCompilerSync(zigCmd, tmpdir())).to.throw();
     })
   })
   describe('getModuleCachePath', function () {
@@ -281,139 +264,6 @@ describe('Compilation', function() {
       expect(info).to.be.undefined;
     })
   })
-  describe('compileSync', function() {
-    it('should compile zig source code for C addon', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      const { outputPath } = compileSync(srcPath, modPath, options);
-      const { size } = statSync(outputPath);
-      expect(size).to.be.at.least(1000);
-    })
-    it('should compile code for WASM32', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
-      const modPath = getModuleCachePath(srcPath, options);
-      const { outputPath } = compileSync(srcPath, modPath, options);
-      const { size } = statSync(outputPath);
-      expect(size).to.be.at.least(1000);
-    })
-    it('should compile optimized code', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'wasi' };
-      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
-      const modPath1 = getModuleCachePath(srcPath, options1);
-      const modPath2 = getModuleCachePath(srcPath, options2);
-      const result1 = compileSync(srcPath, modPath1, options1);
-      const result2 = compileSync(srcPath, modPath2, options2);
-      const { size: before } = statSync(result1.outputPath);
-      const { size: after } = statSync(result2.outputPath);
-      expect(after).to.be.below(before);
-    })
-    it('should compile with C library enabled when Zig code imports C code', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/strlen-from-c/strlen.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      forceChangeSync(srcPath, async () => {
-        const { outputPath } = compileSync(srcPath, modPath, options);
-        const { size } = statSync(outputPath);
-        expect(size).to.be.at.least(1000);
-      });
-    })
-    it('should work correctly when the same file is compiled at the same time', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      forceChangeSync(srcPath, async () => {
-        const promise = compile(srcPath, modPath, options);
-        const { outputPath } = compileSync(srcPath, modPath, options);
-        await promise;
-        const { size } = statSync(outputPath);
-        expect(size).to.be.at.least(1000);
-      });
-    })
-    it('should handle directory reference', async function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/int-dir');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      const { outputPath } = compileSync(srcPath, modPath, options);
-      const { size } = statSync(outputPath);
-      expect(size).to.be.at.least(1000);
-    })
-    it('should throw when source file is missing', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/non-existing.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      expect(() => compileSync(srcPath, modPath, options)).to.throw();
-    })
-    it('should return sub-path of module path when source file is omitted', function() {
-      this.timeout(600000);
-      const options = { optimize: 'Debug', platform: 'linux', arch: 'arm64' };
-      const modPath = '/lib/hello.zigar';
-      const { outputPath, changed } = compileSync(null, modPath, options);
-      expect(outputPath).to.equal('/lib/hello.zigar/linux.arm64.so');
-      expect(changed).to.be.false;
-    })
-    it('should use custom build file', async function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/custom/custom.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      const { outputPath } = compileSync(srcPath, modPath, options);
-      const { size } = statSync(outputPath);
-      expect(size).to.be.at.least(1000);
-    })
-    it('should recompile when one of the files has a newer modification date', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/custom/custom.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      compileSync(srcPath, modPath, options);
-      delaySync(1000);
-      forceChangeSync(srcPath, () => {
-        const { changed } = compileSync(srcPath, modPath, options);
-        expect(changed).to.be.true;
-      });
-    })
-    it('should recompile when code exporter has changed', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/custom/custom.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      compileSync(srcPath, modPath, options);
-      const exportPath = absolute('../zig/exporter.zig');
-      delaySync(1000);
-      forceChangeSync(exportPath, async () => {
-        const compiled = compileSync(srcPath, modPath, options);
-        expect(compiled).to.be.true;
-      });
-    })
-    it('should throw when code cannot be compiled', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      expect(() => compileSync(srcPath, modPath, options)).to.throw(Error)
-        .with.property('message').that.contains(`expected ';' after declaration`);
-    })
-    it('should remove build folder when the clean option is given', function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), clean: true };
-      const modPath = getModuleCachePath(srcPath, options);
-      expect(() => compileSync(srcPath, modPath, options)).to.throw(Error);
-      const config = createConfig(srcPath, modPath, options);
-      const info = findDirectorySync(config.outputPath);
-      expect(info).to.be.undefined;
-    })
-  })
 })
 
 async function forceChange(path, cb) {
@@ -424,17 +274,6 @@ async function forceChange(path, cb) {
     await cb();
   } finally {
     await utimes(path, info.atime, info.mtime);
-  }
-}
-
-function forceChangeSync(path, cb) {
-  const info = findFileSync(path);
-  const now = new Date();
-  utimesSync(path, now, now); 
-  try {
-    cb();
-  } finally {
-    utimesSync(path, info.atime, info.mtime);
   }
 }
 

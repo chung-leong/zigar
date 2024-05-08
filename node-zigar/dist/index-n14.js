@@ -1,12 +1,13 @@
-import { load, parseZigURL } from './index.js';
+import { load } from './index.js';
 
 export function resolve(specifier, context, defaultResolve) {
   return defaultResolve(specifier, context, defaultResolve);
 }
 
+const extensionsRegex = /\.(zig|zigar)(\?|$)/;
+
 export async function getFormat(url, context, defaultGetFormat) {
-  const m = parseZigURL(url);
-  if (!m) {
+  if (!extensionsRegex.test(url)) {
     return defaultGetFormat(url, context, defaultGetFormat);
   }
   return { format: 'module' };
