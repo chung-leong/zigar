@@ -70,6 +70,7 @@ void patch_write_file(void* handle,
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 ssize_t write_hook(int fd, 
                    const void* buffer, 
@@ -126,6 +127,10 @@ int fputc_hook(int c,
     return fputc(c, s);
 }
 
+int putchar_hook(int c) {
+    fputc_hook(c, stdout);
+}
+
 int vfprintf_hook(FILE* s,
                   const char* f, 
                   va_list arg) {
@@ -150,12 +155,17 @@ int vfprintf_hook(FILE* s,
     return vfprintf(s, f, arg);
 }
 
+int vprintf_hook(const char* f, 
+                 va_list arg) {
+    return vfprintf_hook(stdout, f, arg);
+}
+
 int fprintf_hook(FILE* s,
                  const char* f,
                  ...) {
     va_list argptr;
     va_start(argptr, f);
-    int n = vfprintf(s, f, argptr);
+    int n = vfprintf_hook(s, f, argptr);
     va_end(argptr);    
     return n;
 }
@@ -164,9 +174,13 @@ int printf_hook(const char* f,
                 ...) {
     va_list argptr;
     va_start(argptr, f);
-    int n = vfprintf(stdout, f, argptr);
+    int n = vfprintf_hook(stdout, f, argptr);
     va_end(argptr);    
     return n;
+}
+
+void perror_hook(const char *s) {
+    printf_hook("%s: %s", strerror(errno));
 }
 
 typedef struct {
@@ -175,15 +189,18 @@ typedef struct {
 } hook;
 
 hook hooks[] = { 
-    { "write",  write_hook },
-    { "fputs", fputs_hook },
-    { "puts", puts_hook },
-    { "fputc", fputc_hook },
-    { "putc", fputc_hook },
-    { "fwrite", fwrite_hook },
-    { "vfprintf", vfprintf_hook },
-    { "fprintf", fprintf_hook },
-    { "printf", printf_hook },
+    { "write",      write_hook },
+    { "fputs",      fputs_hook },
+    { "puts",       puts_hook },
+    { "fputc",      fputc_hook },
+    { "putc",       fputc_hook },
+    { "putchar",    putchar_hook },
+    { "fwrite",     fwrite_hook },
+    { "vfprintf",   vfprintf_hook },
+    { "vprintf",    vprintf_hook },
+    { "fprintf",    fprintf_hook },
+    { "printf",     printf_hook },
+    { "perror",     perror_hook },
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
