@@ -1,10 +1,12 @@
-import { execFileSync } from 'child_process';
+import ChildProcess, { execFileSync } from 'child_process';
 import { readdirSync, statSync } from 'fs';
 import { createRequire } from 'module';
 import os from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
-import { runCompiler } from '../../zigar-compiler/src/compiler.js';
+import { promisify } from 'util';
+
+const execFile = promisify(ChildProcess.execFile);
 
 export function createEnvironment(options) {
   const { createEnvironment } = loadAddon(options);
@@ -27,11 +29,16 @@ export function getLibraryPath() {
   return fileURLToPath(import.meta.url);
 }
 
-export async function buildAddon(options) {
-  const { addonDir, recompile = false } = options;
+export async function buildAddon(addonDir, options) {
+  const { 
+    recompile = false,
+    onStart, 
+    onEnd,
+  } = options;
   const arch = getArch();
   const platform = getPlatform();
-  const addonPath = join(addonDir, `${platform}.${arch}.node`);
+  const outputPath = join(addonDir, `${platform}.${arch}.node`);
+  let changed = false;
   if (recompile) {
     let srcMTime;
     const srcDir = fileURLToPath(new URL('../src', import.meta.url));
@@ -43,12 +50,12 @@ export async function buildAddon(options) {
     }
     let addonMTime;
     try {
-      addonMTime = statSync(addonPath).mtime;
+      addonMTime = statSync(outputPath).mtime;
     } catch (err) {    
     }
-    if (!(addonMTime > srcMTime)) {
+    if (!(addonMTime > srcMTime) || true) {
       const cwd = fileURLToPath(new URL('../', import.meta.url));
-      const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${addonPath}` ];
+      const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
       if (platform && arch) {
         // translate from names used by Node to those used by Zig
         const cpuArchs = {
@@ -77,10 +84,10 @@ export async function buildAddon(options) {
         const osTag = osTags[platform] ?? platform;
         args.push(`-Dtarget=${cpuArch}-${osTag}`);
       }
-      await runCompiler('zig', args, cwd);
+      await runCompiler('zig', args, { cwd, onStart, onEnd });
     }
   }
-  return addonPath;
+  return { outputPath, changed };
 }
 
 function loadAddon(options) {
@@ -118,4 +125,29 @@ function getPlatform() {
 
 function getArch() {
   return os.arch();
+}
+
+async function runCompiler(path, args, options) {
+  const {
+    cwd,
+    onStart,
+    onEnd,
+  } = options;
+  try {
+    onStart?.();
+    return await execFile(path, args, { cwd, windowsHide: true });
+  } catch (err) {
+    let message = 'Zig compilation failed';
+    if (err.stderr) {
+      try {
+        const logPath = join(cwd, 'log');
+        await writeFile(logPath, err.stderr);
+      } catch (_) {        
+      }
+      message += `\n\n${err.stderr}`;
+    }
+    throw new Error(message);
+  } finally {
+    onEnd?.();
+  }
 }

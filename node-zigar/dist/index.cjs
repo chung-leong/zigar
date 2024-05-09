@@ -44,10 +44,14 @@ function startWorker(url) {
 function awaitWorker(worker) {
   const { buffers: { length, data } } = worker.workerData;
   // wait for change to occur
-  for (let i = 0; Atomics.wait(length, 0, 0, (i < 10) ? 10 : 50) === 'timed-out'; i++);
-  const bytes = data.slice(0, length[0]);
-  const decoder = new TextDecoder();
-  return JSON.parse(decoder.decode(bytes));
+  for (let i = 0; Atomics.wait(length, 0, 0, (i < 20) ? 10 : 50) === 'timed-out'; i++);
+  if (length[0] > 0) {
+    const bytes = data.slice(0, length[0]);
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(bytes)); 
+  } else {
+    throw new Error('Worker thread failed');
+  }
 }
 
 exports.createRequire = Module.createRequire;

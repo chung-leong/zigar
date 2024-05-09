@@ -43,6 +43,10 @@ export const optionsForCompile = {
     type: 'object',
     title: 'Map of modules to source files/directories',
   },
+  quiet: {
+    type: 'boolean',
+    title: 'Disable compilation indicator',
+  },
   clean: {
     type: 'boolean',
     title: 'Remove temporary build directory after compilation finishes',

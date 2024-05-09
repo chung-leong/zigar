@@ -1,11 +1,12 @@
 import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon';
-import { dirname, extname, join } from 'path';
+import { dirname, extname, join, parse } from 'path';
 import { cwd } from 'process';
 import { pathToFileURL } from 'url';
 import {
   compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
   getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile
 } from 'zigar-compiler';
+import { hideStatus, showStatus } from './status.js';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
@@ -28,11 +29,13 @@ export async function load(url, context, nextLoad) {
     return nextLoad(url);
   }
   const { path, archive } = normalizePath(url);
+  const platform = getPlatform();
+  const arch = getArch();
   const options = {
     clean: false,
     optimize: 'Debug',
-    platform: getPlatform(),
-    arch: getArch(),
+    platform,
+    arch,
   };
   if (!archive) {
     const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
@@ -49,7 +52,19 @@ export async function load(url, context, nextLoad) {
   const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
   const addonDir = join(addonParentDir, 'node-zigar-addon');
   // build the Node-API addon if necessary
-  const addonPath = buildAddon({ addonDir, recompile: !archive });
+  const addonOptions = { recompile: !archive };
+  if (!options.quiet) {
+    const modName = parse(path).name;
+    Object.assign(options, {
+      onStart: () => showStatus(`Building module "${modName}"`),
+      onEnd: () => hideStatus(),
+    });
+    Object.assign(addonOptions, {
+      onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),
+      onEnd: () => hideStatus(),  
+    });
+  }
+  const { outputPath: addonPath } = await buildAddon(addonDir, addonOptions);
   // compile the module if srcPath isn't undefined; if it is, then compile() will simply return 
   // the path to the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
   // is absent, compilation does not occur

@@ -21,14 +21,26 @@ import {
 describe('Compilation', function() {
   describe('runCompiler', function() {
     it('should run the Zig compiler', async function() {
-      const zigCmd = `zig help`;
-      const promise = runCompiler(zigCmd, tmpdir());
+      const promise = runCompiler('zig', [ 'help' ], { cwd: tmpdir() });
       await expect(promise).to.eventually.be.fulfilled;
     })
     it('should throw when the Zig compiler returns an error', async function() {
-      const zigCmd = `zig`;
-      const promise = runCompiler(zigCmd, tmpdir());
+      const promise = runCompiler('zig', [], { cwd: tmpdir() });
       await expect(promise).to.eventually.be.rejected;
+    })
+    it('should call onStart and onEnd', async function() {
+      let startCount = 0, endCount = 0;
+      const onStart = () => startCount++;
+      const onEnd = () => endCount++;
+      await runCompiler('zig', [ 'help' ], { cwd: tmpdir(), onStart, onEnd });
+      expect(startCount).to.equal(1);
+      expect(endCount).to.equal(1);
+      try {
+        await runCompiler('zig', [], { cwd: tmpdir(), onStart, onEnd });
+      } catch (err) {        
+      }
+      expect(startCount).to.equal(2);
+      expect(endCount).to.equal(2);
     })
   })
   describe('getModuleCachePath', function () {
@@ -47,10 +59,24 @@ describe('Compilation', function() {
   describe('createConfig', function() {
     it('should return custom command when provided', async function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', zigCmd: 'zig build -Dsomething=123' };
+      const options = { optimize: 'Debug', zigPath: 'donut', zigArgs: '-Dsomething=123' };
       const modPath = getModuleCachePath(srcPath, options);
       const config = createConfig(srcPath, modPath, options);
-      expect(config.zigCmd).to.equal(options.zigCmd);
+      expect(config.zigPath).to.equal('donut');
+      expect(config.zigArgs).to.contain('build');
+      expect(config.zigArgs).to.contain('-Dsomething=123');
+    })
+    it('should return override default args', async function() {
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', zigArgs: 'donut -Dtarget=hello -Doptimize=hello' };
+      const modPath = getModuleCachePath(srcPath, options);
+      const config = createConfig(srcPath, modPath, options);
+      expect(config.zigPath).to.equal('zig');
+      expect(config.zigArgs).to.not.contain('build');
+      expect(config.zigArgs).to.contain('donut');
+      expect(config.zigArgs).to.contain('-Dtarget=hello');
+      expect(config.zigArgs).to.contain('-Doptimize=hello');
+      expect(config.zigArgs).to.have.lengthOf(3);
     })
     it('should place DLL inside module folder', function() {
       const srcPath = '/project/src/hello.zig';

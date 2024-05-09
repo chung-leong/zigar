@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { writeFile } from 'fs/promises';
-import { buildAddOn } from 'node-zigar-addon';
+import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
-import { basename, dirname, join } from 'path';
+import { dirname, join, parse } from 'path';
 import { compile, findConfigFile, loadConfigFile, optionsForCompile } from 'zigar-compiler';
+import { hideStatus, showResult, showStatus } from '../dist/status.js';
 
 const possiblePlatforms = [ 
   'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
@@ -46,22 +47,34 @@ async function buildModules() {
   }
   const parentDirs = [];
   for (const [ modPath, srcPath ] of Object.entries(config.sourceFiles)) {
-    console.log(`Building ${basename(modPath)}:`);
+    const modName = parse(modPath).name;
     for (const { platform, arch } of config.targets) {
-      const { outputPath } = await compile(srcPath, modPath, { ...config, platform, arch }); 
-      console.log(`  ${basename(outputPath)}`);
+      const { changed } = await compile(srcPath, modPath, {
+        ...config, 
+        platform, 
+        arch,
+        onStart: () => showStatus(`Building module "${modName}" (${platform}/${arch})`),
+        onEnd: () => hideStatus(),
+      }); 
+      const action = (changed) ? 'Built' : 'Found';
+      showResult(`${action} module "${modName}" (${platform}/${arch})`);
     }
     const parentDir = dirname(modPath);
     if (!parentDirs.includes(parentDir)) {
       parentDirs.push(parentDir);
     }
   }
-  console.log(`Building node-zigar-addon:`);
   for (const parentDir of parentDirs) {
+    const addonDir = join(parentDir, 'node-zigar-addon');
     for (const { platform, arch } of config.targets) {
-      const addonPath = join(parentDir, 'node-zigar-addon', `${platform}.${arch}.node`);
-      buildAddOn(addonPath, { platform, arch });
-      console.log(`  ${basename(addonPath)}`);
+      const { changed } = buildAddon(addonDir, { 
+        platform, 
+        arch,
+        onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),
+        onEnd: () => hideStatus(),          
+      });
+      const action = (changed) ? 'Built' : 'Found';
+      showResult(`${action} Node.js addon (${platform}/${arch})`);
     } 
   }
 }

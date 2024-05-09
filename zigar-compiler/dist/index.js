@@ -5075,10 +5075,11 @@ async function compile(srcPath, modPath, options) {
       const pidPath = `${moduleBuildDir}.pid`;
       await acquireLock(pidPath);
       try {
+        const { onStart, onEnd } = options;
         // create config file
         await createProject(config, moduleBuildDir);
         // then run the compiler
-        await runCompiler(zigPath, zigArgs, moduleBuildDir);
+        await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       } finally {
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
@@ -5090,24 +5091,28 @@ async function compile(srcPath, modPath, options) {
   return { outputPath, changed }
 }
 
-async function runCompiler(path, args, buildDir) {
+async function runCompiler(path, args, options) {
+  const {
+    cwd,
+    onStart,
+    onEnd,
+  } = options;
   try {
-    const options = {
-      cwd: buildDir,
-      windowsHide: true,
-    }; 
-    return await execFile(path, args, options);
+    onStart?.();
+    return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
     let message = 'Zig compilation failed';
     if (err.stderr) {
       try {
-        const logPath = join(buildDir, 'log');
+        const logPath = join(cwd, 'log');
         await writeFile(logPath, err.stderr);
       } catch (_) {        
       }
       message += `\n\n${err.stderr}`;
     }
     throw new Error(message);
+  } finally {
+    onEnd?.();
   }
 }
 
@@ -5190,7 +5195,7 @@ function createConfig(srcPath, modPath, options = {}) {
       return join(modPath, `${platform}.${arch}.${ext}`);
     }  
   })();
-  const zigArgs = [];
+  const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
     zigArgs.unshift('build');
   }
@@ -5223,7 +5228,7 @@ function createConfig(srcPath, modPath, options = {}) {
     };
     const cpuArch = cpuArchs[arch] ?? arch;
     const osTag = osTags[platform] ?? platform;
-    zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
+    zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);    
   }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
@@ -5299,6 +5304,10 @@ const optionsForCompile = {
   sourceFiles: {
     type: 'object',
     title: 'Map of modules to source files/directories',
+  },
+  quiet: {
+    type: 'boolean',
+    title: 'Disable compilation indicator',
   },
   clean: {
     type: 'boolean',
