@@ -7,7 +7,6 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Package manager', function() {
-    skip.
     it('should link in ziglua', async function() {
       this.timeout(300000);
       const { run } = await importTest('use-ziglua/ziglua');

@@ -34,6 +34,7 @@ BOOL WINAPI write_file_hook(HANDLE handle,
 void patch_write_file(void* handle,
                       const char* filename,
                       override_callback cb) {
+    override = cb;
     PBYTE bytes = (PBYTE) handle;
     /* find IAT */ 
     ULONG size;
@@ -54,7 +55,6 @@ void patch_write_file(void* handle,
                     if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
                         /* replace with hook */
                         *fn_pointer = (PROC) write_file_hook;
-                        override = cb;
                         /* restore original flags */
                         VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
                     }
@@ -65,12 +65,132 @@ void patch_write_file(void* handle,
         }
     }
 }
-#elif defined(__ELF__)
+#else
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
+#include <unistd.h>
+
+ssize_t write_hook(int fd, 
+                   const void* buffer, 
+                   size_t len) {
+    // 1 = stdout, 2 = stderr                         
+    if (fd == 1 || fd == 2) {   
+        // return value of zero means success
+        if (override(buffer, len) == 0) {
+            return len;
+        }
+    }
+    return write(fd, buffer, len);
+}
+
+size_t fwrite_hook(const void *ptr, 
+                   size_t size,
+		           size_t n, 
+                   FILE* s) {
+    if (s == stdout || s == stderr) {
+        if (override(ptr, size * n) == 0) {
+            return n;
+        }
+    }
+    return fwrite(ptr, size, n, s);
+}
+
+int fputs_hook(const char *t, 
+               FILE* s) {
+    if (s == stdout || s == stderr) {
+        size_t len = strlen(t);
+        if (override(t, len) == 0) {
+            return len;
+        }
+    }
+    return fputs(t, s);
+}
+
+int puts_hook(const char *t) {
+    size_t len = strlen(t);
+    if (override(t, len) == 0) {
+        return len;
+    }
+    return puts(t);
+}
+
+int fputc_hook(int c,
+               FILE* s) {
+    if (s == stdout || s == stderr) {
+        unsigned char b = c;
+        if (override(&b, 1) == 0) {
+            return 1;
+        }
+    }
+    return fputc(c, s);
+}
+
+int vfprintf_hook(FILE* s,
+                  const char* f, 
+                  va_list arg) {
+    if (s == stdout || s == stderr) {
+        // calculate length first
+        int len = vsnprintf(NULL, 0, f, arg);
+        char fixed_buffer[1024];        
+        char* s = fixed_buffer;
+        bool too_large = len + 1 > sizeof(fixed_buffer);
+        if (too_large) {
+            s = malloc(len + 1);
+        }
+        vsnprintf(s, len + 1, f, arg);
+        bool overrode = override(s, len) == 0;
+        if (too_large) {
+            free(s);
+        }
+        if (overrode) {
+            return len;
+        }
+    }
+    return vfprintf(s, f, arg);
+}
+
+int fprintf_hook(FILE* s,
+                 const char* f,
+                 ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf(s, f, argptr);
+    va_end(argptr);    
+    return n;
+}
+
+int printf_hook(const char* f,
+                ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf(stdout, f, argptr);
+    va_end(argptr);    
+    return n;
+}
+
+typedef struct {
+    const char* name;
+    void* hook;
+} hook;
+
+hook hooks[] = { 
+    { "write",  write_hook },
+    { "fputs", fputs_hook },
+    { "puts", puts_hook },
+    { "fputc", fputc_hook },
+    { "putc", fputc_hook },
+    { "fwrite", fwrite_hook },
+    { "vfprintf", vfprintf_hook },
+    { "fprintf", fprintf_hook },
+    { "printf", printf_hook },
+};
+#define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
+
+#endif
+#if defined(__ELF__)
 #include <fcntl.h>
 #include <dlfcn.h>
-#include <unistd.h>
 #include <sys/mman.h>
 #include <elf.h>
 
@@ -92,18 +212,6 @@ void patch_write_file(void* handle,
     #define REL_PLT ".rel.plt"
 #endif
 
-ssize_t write_hook(int fd, 
-                   const void* buffer, 
-                   size_t len) {    
-    if (fd == 1 || fd == 2) {   /* 1 = stdout, 2 = stderr */
-        /* return value of zero means success */
-        if (override(buffer, len) == 0) {
-            return len;
-        }
-    }
-    return write(fd, buffer, len);
-}
-
 int read_string_table(int fd,
                       Elf_Shdr* strtab,
                       char** ps) {
@@ -121,6 +229,7 @@ int read_string_table(int fd,
 void patch_write_file(void* handle,
                       const char* filename,
                       override_callback cb) {
+    override = cb;
     int fd = open(filename, O_RDONLY);
     if (fd <= 0) {
         return;
@@ -140,7 +249,6 @@ void patch_write_file(void* handle,
      || read_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
         goto exit;
     }
-    const char* func_name = "write";
     Elf_Sym* symbols = NULL;
     size_t symbol_count = 0;
     char* symbol_strs = NULL;
@@ -185,34 +293,39 @@ void patch_write_file(void* handle,
             }
         }
     }
-    /* look for symbol for write() */
-    for (int i = 0; i < symbol_count; i++) {
-        const char* symbol_name = symbol_strs + symbols[i].st_name;
-        if (strcmp(symbol_name, func_name) == 0) {
-            Elf_Rel* plt_entries = (Elf_Rel*) (base_address + rela_plt->sh_addr);
-            size_t plt_entry_count = rela_plt->sh_size / sizeof(Elf_Rel);
-            for (int j = 0; j < plt_entry_count; j++) {
-                if (ELF_R_SYM(plt_entries[j].r_info) == i) {
-                    /* get address to GOT entry */
-                    uintptr_t got_entry_address = base_address + plt_entries[j].r_offset;
-                    /* disable write protection */
-                    int page_size = sysconf(_SC_PAGE_SIZE);
-                    if (page_size == -1) {
-                        goto exit;
+    /* look for symbols for write() */
+    int page_size = 0;
+    for (int k = 0; k < HOOK_COUNT; k++) {
+        for (int i = 0; i < symbol_count; i++) {
+            const char* symbol_name = symbol_strs + symbols[i].st_name;
+            if (strcmp(symbol_name, hooks[k].name) == 0) {
+                Elf_Rel* plt_entries = (Elf_Rel*) (base_address + rela_plt->sh_addr);
+                size_t plt_entry_count = rela_plt->sh_size / sizeof(Elf_Rel);
+                for (int j = 0; j < plt_entry_count; j++) {
+                    if (ELF_R_SYM(plt_entries[j].r_info) == i) {
+                        /* get address to GOT entry */
+                        uintptr_t got_entry_address = base_address + plt_entries[j].r_offset;
+                        /* disable write protection */
+                        if (page_size == 0) {
+                            page_size = sysconf(_SC_PAGE_SIZE);
+                            if (page_size == -1) {
+                                goto exit;
+                            }
+                        }
+                        uintptr_t page_address = got_entry_address & ~(page_size - 1);
+                        if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
+                            goto exit;
+                        }
+                        void** ptr = (void **) got_entry_address;
+                        *ptr = hooks[k].hook;
+                        override = cb;
+                        /* reenable write protection */
+                        mprotect((void*) page_address, page_size, PROT_READ);
+                        break;
                     }
-                    uintptr_t page_address = got_entry_address & ~(page_size - 1);
-                    if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
-                        goto exit;
-                    }
-                    void** ptr = (void **) got_entry_address;
-                    *ptr = write_hook;
-                    override = cb;
-                    /* reenable write protection */
-                    mprotect((void*) page_address, page_size, PROT_READ);
-                    break;
                 }
+                break;
             }
-            break;
         }
     }
 exit:
@@ -224,11 +337,8 @@ exit:
 }
 #elif defined(__MACH__)
 #define __STRICT_BSD__
-#include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
 #include <dlfcn.h>
-#include <unistd.h>
 #include <sys/mman.h>
 #include <mach-o/loader.h>
 #include <mach-o/reloc.h>
@@ -251,18 +361,6 @@ typedef struct ADD_BITS(section)            section;
 typedef struct ADD_BITS(nlist)              nlist;
 typedef struct ADD_BITS(dylib_module)       dylib_module;
 
-ssize_t write_hook(int fd, 
-                   const void* buffer, 
-                   size_t len) {    
-    if (fd == 1 || fd == 2) {   /* 1 = stdout, 2 = stderr */
-        /* return value of zero means success */
-        if (override(buffer, len) == 0) {
-            return len;
-        }
-    }
-    return write(fd, buffer, len);
-}
-
 int read_command(int fd, 
                  load_command* lc, 
                  void *dest,
@@ -277,11 +375,11 @@ int read_command(int fd,
 void patch_write_file(void* handle,
                       const char* filename,
                       override_callback cb) {
+    override = cb;
     int fd = open(filename, O_RDONLY);
     if (fd <= 0) {
         return;
     }
-    const char* func_name = "_write";
     section* data_sections = NULL;
     size_t data_section_count = 0;
     nlist* symbols = NULL;
@@ -297,7 +395,7 @@ void patch_write_file(void* handle,
     load_command load_cmd;
 	off_t pos = sizeof(mach_header);
     /* process mach-o commands */
-	for(int i = 0; i < header.ncmds; i++) {
+	for (int i = 0; i < header.ncmds; i++) {
 		if(lseek(fd, pos, SEEK_SET) < 0 || read(fd, &load_cmd, sizeof(load_cmd)) <= 0) {
 			goto exit;
 		}
@@ -376,18 +474,19 @@ void patch_write_file(void* handle,
     if (base_address == 0 || got_offset == 0) {
         goto exit;
     }
-    for (int i = 0; i < indirect_symbol_count; i++) {
-        nlist* symbol = &symbols[indirect_symbol_indices[i]];
-        const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
-        if (strcmp(symbol_name, func_name) == 0) {
-            /* calculate the address to the GOT entry */
-            uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
-            void** ptr = (void**) got_entry_address;
-            /* insert our hook */
-            *ptr = write_hook;
-            override = cb;
-            break;
-        }
+    for (int k = 0; i < HOOK_COUNT; k++) {
+        for (int i = 0; i < indirect_symbol_count; i++) {
+            nlist* symbol = &symbols[indirect_symbol_indices[i]];
+            const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
+            if (strcmp(symbol_name, hooks[k].name) == 0) {
+                /* calculate the address to the GOT entry */
+                uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
+                void** ptr = (void**) got_entry_address;
+                /* insert our hook */
+                *ptr = hooks[k].hook;
+                break;
+            }
+        }        
     }
 exit:
     free(data_sections);
@@ -402,4 +501,3 @@ void patch_write_file(void* handle,
                       override_callback cb) {
 }
 #endif
-
