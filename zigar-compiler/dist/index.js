@@ -1,4 +1,4 @@
-import childProcess from 'child_process';
+import childProcess, { execFileSync } from 'child_process';
 import { stat, lstat, open, readFile, writeFile, chmod, unlink, mkdir, readdir, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, parse, join, basename, resolve } from 'path';

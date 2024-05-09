@@ -1,4 +1,4 @@
-import childProcess from 'child_process';
+import childProcess, { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
