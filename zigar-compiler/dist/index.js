@@ -2898,19 +2898,16 @@ function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  let getBackingInt, setBackingInt;
-  for (const member of members) {    
+  const fieldMembers = members.filter(m => !!m.name);
+  const backingIntMember = members.find(m => !m.name);
+  for (const member of fieldMembers) {    
     const { get, set } = getDescriptor(member, env);
-    if (member.name) {
-      memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
-      if (member.isRequired && set) {
-        set.required = true;
-      }
-    } else {
-      getBackingInt = get;
-      setBackingInt = set;
+    memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
+    if (member.isRequired && set) {
+      set.required = true;
     }
   }
+  const backingInt = (backingIntMember) ? getDescriptor(backingIntMember, env) : null;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
@@ -2921,41 +2918,44 @@ function defineStructShape(structure, env) {
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
-    } else if (setBackingInt && (typeof(arg) === 'number' || typeof(arg) === 'bigint')) {
-      setBackingInt.call(this, arg);
+    } else if ((typeof(arg) === 'number' || typeof(arg) === 'bigint') && backingInt) {
+      backingInt.set.call(this, arg);
     } else if (arg !== undefined) {
       throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const toPrimitive = (getBackingInt)
+  const toPrimitive = (backingInt)
   ? function(hint) {
     switch (hint) {
       case 'string':
         return Object.prototype.toString.call(this);
       default:
-        return getBackingInt.call(this);
+        return backingInt.get.call(this);
     }
   } 
   : null;
+  const length = (isTuple && members.length > 0)
+  ? parseInt(members[members.length - 1].name) + 1
+  : 0;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
-    length: isTuple && { value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0 },
+    length: isTuple && { value: length },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
-    [Symbol.toPrimitive]: getBackingInt && { value: toPrimitive },
+    [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
     [WRITE_DISABLER]: { value: makeReadOnly },    
-    [PROPS]: { value: members.map(m => m.name) },
+    [PROPS]: { value: fieldMembers.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
