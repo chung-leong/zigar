@@ -111,7 +111,8 @@ int fputs_hook(const char *t,
 int puts_hook(const char *t) {
     size_t len = strlen(t);
     if (override(t, len) == 0) {
-        return len;
+        override("\n", 1);
+        return 1;
     }
     return puts(t);
 }
@@ -128,22 +129,24 @@ int fputc_hook(int c,
 }
 
 int putchar_hook(int c) {
-    fputc_hook(c, stdout);
+    return fputc_hook(c, stdout);
 }
 
 int vfprintf_hook(FILE* s,
                   const char* f, 
                   va_list arg) {
     if (s == stdout || s == stderr) {
-        // calculate length first
-        int len = vsnprintf(NULL, 0, f, arg);
+        // attempt with fixed-size buffer, using a copy of arg
+        va_list arg_copy;
+        memcpy(&arg_copy, arg, sizeof(va_list));
         char fixed_buffer[1024];        
         char* s = fixed_buffer;
+        int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
         bool too_large = len + 1 > sizeof(fixed_buffer);
         if (too_large) {
             s = malloc(len + 1);
+            vsnprintf(s, len + 1, f, arg);
         }
-        vsnprintf(s, len + 1, f, arg);
         bool overrode = override(s, len) == 0;
         if (too_large) {
             free(s);
@@ -180,7 +183,7 @@ int printf_hook(const char* f,
 }
 
 void perror_hook(const char *s) {
-    printf_hook("%s: %s", strerror(errno));
+    printf_hook("%s: %s", s, strerror(errno));
 }
 
 typedef struct {
