@@ -1,0 +1,12 @@
+{
+  "optimize": "ReleaseSmall",
+  "sourceFiles": {
+    "lib/server.zigar": "zig/server.zig"
+  },
+  "targets": [
+    { "platform": "linux", "arch": "x64" },
+    { "platform": "linux", "arch": "arm64" },
+    { "platform": "linux-musl", "arch": "x64" },
+    { "platform": "linux-musl", "arch": "arm64" }
+  ]
+}
