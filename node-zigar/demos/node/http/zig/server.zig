@@ -184,8 +184,10 @@ const ServerStorage = struct {
         std.Thread.Futex.wait(&self.writer_count, 1);
         _ = self.reader_count.fetchAdd(1, .acquire);
         defer {
-            _ = self.reader_count.fetchSub(1, .release);
-            std.Thread.Futex.wake(&self.reader_count, 1);
+            const count = self.reader_count.fetchSub(1, .release);
+            if (count == 0) {
+                std.Thread.Futex.wake(&self.reader_count, 1);
+            }
         }
         return self.map.get(uri);
     }
