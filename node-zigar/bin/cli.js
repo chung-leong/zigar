@@ -67,7 +67,7 @@ async function buildModules() {
   for (const parentDir of parentDirs) {
     const addonDir = join(parentDir, 'node-zigar-addon');
     for (const { platform, arch } of config.targets) {
-      const { changed } = buildAddon(addonDir, { 
+      const { changed } = await buildAddon(addonDir, { 
         platform, 
         arch,
         onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),

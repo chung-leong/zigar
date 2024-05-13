@@ -31,12 +31,12 @@ export function getLibraryPath() {
 
 export async function buildAddon(addonDir, options) {
   const { 
-    recompile = false,
-    onStart, 
+    recompile = true,
+    arch = getArch(),
+    platform = getPlatform(),
+    onStart,
     onEnd,
   } = options;
-  const arch = getArch();
-  const platform = getPlatform();
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
   let changed = false;
   if (recompile) {

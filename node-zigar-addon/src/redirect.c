@@ -138,7 +138,7 @@ int vfprintf_hook(FILE* s,
     if (s == stdout || s == stderr) {
         // attempt with fixed-size buffer, using a copy of arg
         va_list arg_copy;
-        memcpy(&arg_copy, arg, sizeof(va_list));
+        memcpy(&arg_copy, &arg, sizeof(va_list));
         char fixed_buffer[1024];        
         char* s = fixed_buffer;
         int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
