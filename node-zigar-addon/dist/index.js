@@ -1,5 +1,5 @@
 import ChildProcess, { execFileSync } from 'child_process';
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, utimes } from 'fs/promises';
 import { createRequire } from 'module';
 import os from 'os';
 import { join } from 'path';
@@ -159,7 +159,6 @@ async function isOlderThan(targetPath, srcPaths) {
       const info = await stat(path);
       if (info.isFile()) {
         if (targetInfo.mtime < info.mtime) {
-          console.log(path, info);
           return true;
         }
       } else if (info.isDirectory()) {
