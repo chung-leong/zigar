@@ -4,49 +4,11 @@ import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import os from 'os';
-import { dirname, join, parse, sep } from 'path';
+import { dirname, join, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 
 const execFile = promisify(childProcess.execFile);
-
-export async function findFile(path, follow = true) {
-  try {
-    return await (follow ? stat(path) : lstat(path));
-  } catch (err) {
-  }
-}
-
-export async function findMatchingFiles(dir, re) {
-  const map = new Map();
-  const scanned = new Map();
-  const scan = async (dir) => {
-    /* c8 ignore next 3 */
-    if (scanned.get(dir)) {
-      return;
-    } 
-    scanned.set(dir, true);
-    try {
-      const list = await readdir(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path = join(dir, name);
-        const info = await findFile(path);
-        if (info?.isDirectory()) {
-          await scan(path);
-        } else if (info?.isFile() && re.test(name)) {
-          map.set(path, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
-  };
-  await scan(dir);
-  return map;
-}
 
 export async function acquireLock(pidPath, staleTime) {
   while (true)   {
@@ -74,6 +36,48 @@ export async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
+export async function isOlderThan(targetPath, srcPaths) {
+  try {
+    const targetInfo = await stat(targetPath);
+    const checked = new Map();
+    const check = async (path) => {
+      if (!path) {
+        return false;
+      }
+      /* c8 ignore next 3 */      
+      if (checked.get(path)) {
+        return false;
+      }
+      checked.set(path, true);
+      const info = await stat(path);
+      if (info.isFile()) {
+        if (targetInfo.mtime < info.mtime) {
+          return true;
+        }
+      } else if (info.isDirectory()) {
+        const list = await readdir(path);
+        for (const name of list) {
+          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
+            continue;
+          }
+          if (await check(join(path, name))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    for (const srcPath of srcPaths) {
+      if (await check(srcPath)) {
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    return true;
+  }
+}
+
 async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
@@ -83,10 +87,7 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
       const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
       await execFile(program, args, { windowsHide: true });
     }
-    const stats = await findFile(pidPath);
-    if (!stats) {
-      return false;
-    }
+    const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
@@ -126,9 +127,10 @@ export async function deleteFile(path) {
 }
 
 export async function createDirectory(path) {
-  const exists = await findDirectory(path);
-  if (!exists) {
-    const { root, dir } = parse(path);
+  try {
+    await stat(path);
+  } catch (err) {
+    const dir = dirname(path);
     await createDirectory(dir);
     try {
       await mkdir(path);
@@ -141,17 +143,13 @@ export async function createDirectory(path) {
   }
 }
 
-export async function findDirectory(path) {
-  return findFile(path);
-}
-
 export async function deleteDirectory(dir) {
   try {
     const list = await readdir(dir);
     for (const name of list) {
       const path = join(dir, name);
-      const info = await findFile(path, false);
-      if (info?.isDirectory()) {
+      const info = await lstat(path);
+      if (info.isDirectory()) {
         await deleteDirectory(path);
       } else if (info) {
         await deleteFile(path);

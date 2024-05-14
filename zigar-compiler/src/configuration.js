@@ -1,5 +1,6 @@
+import { stat } from 'fs/promises';
 import { dirname, join, resolve } from 'path';
-import { findFile, loadFile } from './utility-functions.js';
+import { loadFile } from './utility-functions.js';
 
 export const optionsForCompile = {
   optimize: {
@@ -128,10 +129,10 @@ class UnknownOption extends Error {
 
 export async function findConfigFile(name, dir) {
   const path = join(dir, name);
-  const info = await findFile(path);
-  if (info?.isFile()) {
+  try {
+    await stat(path);
     return path;
-  } else {
+  } catch (err) {
     const parent = dirname(dir);
     if (parent !== dir) {
       return findConfigFile(name, parent);

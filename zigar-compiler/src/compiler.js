@@ -1,26 +1,18 @@
 import ChildProcess from 'child_process';
-import { writeFile } from 'fs/promises';
+import { stat, utimes, writeFile } from 'fs/promises';
 import os from 'os';
 import { basename, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import {
-  acquireLock,
-  copyFile,
-  createDirectory,
-  deleteDirectory,
-  findFile,
-  findMatchingFiles,
-  getArch, getPlatform, md5, releaseLock
+  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getPlatform, isOlderThan, md5,
+  releaseLock
 } from './utility-functions.js';
 
 const execFile = promisify(ChildProcess.execFile);
 
 export async function compile(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? await findFile(srcPath) : null;
-  if (srcInfo === undefined) {
-    throw new Error(`Source file not found: ${srcPath}`);
-  }
+  const srcInfo = (srcPath) ? await stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = join(srcPath, '?');
   }
@@ -28,41 +20,22 @@ export async function compile(srcPath, modPath, options) {
   const { moduleDir, outputPath } = config;
   let changed = false;
   if (srcPath) {
-    const srcFileMap = await findMatchingFiles(moduleDir, /.\..*$/);
     // see if the (re-)compilation is necessary
-    const soInfo = await findFile(outputPath);
-    if (soInfo) {
-      for (const [ name, info ] of srcFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    } else {
-      changed = true;
-    }
-    if (!changed) {
-      // rebuild when exporter or build files have changed
-      const zigFolder = absolute('../zig');
-      const zigFileMap = await findMatchingFiles(zigFolder, /\.zig$/);
-      for (const [ path, info ] of zigFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    }
+    const zigFolder = absolute('../zig');
+    changed = await isOlderThan(outputPath, [ moduleDir, zigFolder, options.configPath ]);
     if (changed) {
       // add custom build file
-      for (const [ path, info ] of srcFileMap) {
-        switch (basename(path)) {
-          case 'build.zig':
-            config.buildFilePath = path;
-            break;
-          case 'build.zig.zon':
-            config.packageConfigPath = path;
-            break;
-        }
+      try {
+        const path = join(moduleDir, 'build.zig');
+        await stat(path);
+        config.buildFilePath = path;
+      } catch (err) {
+      }
+      try {
+        const path = join(moduleDir, 'build.zig.zon');
+        await stat(path);
+        config.packageConfigPath = path;
+      } catch (err) {
       }
       const { zigPath, zigArgs, moduleBuildDir } = config;
       // only one process can compile a given file at a time
@@ -74,13 +47,16 @@ export async function compile(srcPath, modPath, options) {
         await createProject(config, moduleBuildDir);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
+        // set atime/mtime to current time
+        const now = new Date();
+        await utimes(outputPath, now, now);
       } finally {
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
         }
         await releaseLock(pidPath);
       }
-    }   
+    }
   }
   return { outputPath, changed }
 }

@@ -1,5 +1,5 @@
 import ChildProcess, { execFileSync } from 'child_process';
-import { readdirSync, statSync } from 'fs';
+import { readdir, stat } from 'fs/promises';
 import { createRequire } from 'module';
 import os from 'os';
 import { join } from 'path';
@@ -40,20 +40,9 @@ export async function buildAddon(addonDir, options) {
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
   let changed = false;
   if (recompile) {
-    let srcMTime;
     const srcDir = fileURLToPath(new URL('../src', import.meta.url));
-    for (const file of readdirSync(srcDir)) {
-      const { mtime } = statSync(join(srcDir, file));
-      if (!(srcMTime >= mtime)) {
-        srcMTime = mtime;
-      }
-    }
-    let addonMTime;
-    try {
-      addonMTime = statSync(outputPath).mtime;
-    } catch (err) {    
-    }
-    if (!(addonMTime > srcMTime) || true) {
+    changed = await isOlderThan(outputPath, [ srcDir, options.configPath ]);
+    if (changed) {
       const cwd = fileURLToPath(new URL('../', import.meta.url));
       const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
       if (platform && arch) {
@@ -85,6 +74,8 @@ export async function buildAddon(addonDir, options) {
         args.push(`-Dtarget=${cpuArch}-${osTag}`);
       }
       await runCompiler('zig', args, { cwd, onStart, onEnd });
+      const now = new Date();
+      await utimes(outputPath, now, now);
     }
   }
   return { outputPath, changed };
@@ -149,5 +140,49 @@ async function runCompiler(path, args, options) {
     throw new Error(message);
   } finally {
     onEnd?.();
+  }
+}
+
+async function isOlderThan(targetPath, srcPaths) {
+  try {
+    const targetInfo = await stat(targetPath);
+    const checked = new Map();
+    const check = async (path) => {
+      if (!path) {
+        return false;
+      }
+      /* c8 ignore next 3 */      
+      if (checked.get(path)) {
+        return false;
+      }
+      checked.set(path, true);
+      const info = await stat(path);
+      if (info.isFile()) {
+        if (targetInfo.mtime < info.mtime) {
+          console.log(path, info);
+          return true;
+        }
+      } else if (info.isDirectory()) {
+        const list = await readdir(path);
+        for (const name of list) {
+          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
+            continue;
+          }
+          if (await check(join(path, name))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    for (const srcPath of srcPaths) {
+      if (await check(srcPath)) {
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.log({ path, err });
+    return true;
   }
 }

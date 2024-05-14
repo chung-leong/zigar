@@ -12,11 +12,7 @@ import {
   getModuleCachePath,
   runCompiler
 } from '../src/compiler.js';
-import {
-  delay,
-  findDirectory,
-  findFile
-} from '../src/utility-functions.js';
+import { delay } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
   describe('runCompiler', function() {
@@ -286,14 +282,18 @@ describe('Compilation', function() {
       const modPath = getModuleCachePath(srcPath, options);
       await expect(compile(srcPath, modPath, options)).to.eventually.be.rejectedWith(Error);
       const { moduleBuildDir } = createConfig(srcPath, modPath, options);
-      const info = await findDirectory(moduleBuildDir);
+      let info;
+      try {
+        info = await stat(moduleBuildDir);
+      } catch (err) {        
+      }
       expect(info).to.be.undefined;
     })
   })
 })
 
 async function forceChange(path, cb) {
-  const info = await findFile(path);
+  const info = await stat(path);
   const now = new Date();
   await utimes(path, now, now);
   try {

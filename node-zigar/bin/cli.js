@@ -55,6 +55,7 @@ async function buildModules() {
         arch,
         onStart: () => showStatus(`Building module "${modName}" (${platform}/${arch})`),
         onEnd: () => hideStatus(),
+        configPath,
       }); 
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} module "${modName}" (${platform}/${arch})`);
@@ -71,7 +72,7 @@ async function buildModules() {
         platform, 
         arch,
         onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),
-        onEnd: () => hideStatus(),          
+        onEnd: () => hideStatus(),
       });
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} Node.js addon (${platform}/${arch})`);

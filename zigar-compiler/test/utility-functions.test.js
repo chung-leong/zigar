@@ -12,36 +12,12 @@ import {
   delay,
   deleteDirectory,
   deleteFile,
-  findFile,
-  findMatchingFiles,
   loadFile,
   normalizePath,
   releaseLock,
 } from '../src/utility-functions.js';
 
 describe('Utility functions', function() {
-  describe('findMatchingFiles', function() {
-    it('should not throw when directory is missing', async function() {
-      const path = absolute('./non-existing');
-      await expect(findMatchingFiles(path, /.*/)).to.eventually.be.fulfilled;
-    })
-    it('should find matching files', async function() {
-      const path = absolute('./');
-      const map = await findMatchingFiles(path, /\.zig$/);
-      expect(map.size).to.be.above(0);
-      for (const [ path ] of map) {
-        expect(path).to.match(/\.zig$/);
-      }
-    })
-    it('should ignore node_modules', async function() {
-      const path = absolute('../');
-      const map = await findMatchingFiles(path, /\.js$/);
-      expect(map.size).to.be.above(0);
-      for (const [ path ] of map) {
-        expect(path).to.not.contain('node_modules');
-      }
-    })
-  })
   describe('loadFile', function() {
     it('should load a file', async function() {
       const path = absolute('./zig-samples/basic/console.zig');
@@ -98,7 +74,11 @@ describe('Utility functions', function() {
       await delay(500);
       expect(lock2).to.be.true;
       await releaseLock(path);
-      const info = await findFile(path);
+      let info;
+      try {
+        info = await stat(path);
+      } catch (err) {        
+      }
       expect(info).to.be.undefined;
     })
     it('should detect that existing pid file is stale', async function() {

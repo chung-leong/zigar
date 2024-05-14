@@ -4813,44 +4813,6 @@ function* chunk(arr, n) {
 
 const execFile$1 = util.promisify(childProcess.execFile);
 
-async function findFile(path, follow = true) {
-  try {
-    return await (follow ? promises.stat(path) : promises.lstat(path));
-  } catch (err) {
-  }
-}
-
-async function findMatchingFiles(dir, re) {
-  const map = new Map();
-  const scanned = new Map();
-  const scan = async (dir) => {
-    /* c8 ignore next 3 */
-    if (scanned.get(dir)) {
-      return;
-    } 
-    scanned.set(dir, true);
-    try {
-      const list = await promises.readdir(dir);
-      for (const name of list) {
-        if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-          continue;
-        }
-        const path$1 = path.join(dir, name);
-        const info = await findFile(path$1);
-        if (info?.isDirectory()) {
-          await scan(path$1);
-        } else if (info?.isFile() && re.test(name)) {
-          map.set(path$1, info);
-        }
-      }
-      /* c8 ignore next 2 */
-    } catch (err) {
-    }
-  };
-  await scan(dir);
-  return map;
-}
-
 async function acquireLock(pidPath, staleTime) {
   while (true)   {
     try {
@@ -4877,6 +4839,48 @@ async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
+async function isOlderThan(targetPath, srcPaths) {
+  try {
+    const targetInfo = await promises.stat(targetPath);
+    const checked = new Map();
+    const check = async (path$1) => {
+      if (!path$1) {
+        return false;
+      }
+      /* c8 ignore next 3 */      
+      if (checked.get(path$1)) {
+        return false;
+      }
+      checked.set(path$1, true);
+      const info = await promises.stat(path$1);
+      if (info.isFile()) {
+        if (targetInfo.mtime < info.mtime) {
+          return true;
+        }
+      } else if (info.isDirectory()) {
+        const list = await promises.readdir(path$1);
+        for (const name of list) {
+          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
+            continue;
+          }
+          if (await check(path.join(path$1, name))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    for (const srcPath of srcPaths) {
+      if (await check(srcPath)) {
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    return true;
+  }
+}
+
 async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
@@ -4886,10 +4890,7 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
       const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
       await execFile$1(program, args, { windowsHide: true });
     }
-    const stats = await findFile(pidPath);
-    if (!stats) {
-      return false;
-    }
+    const stats = await promises.stat(pidPath);
     const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
@@ -4929,9 +4930,10 @@ async function deleteFile(path) {
 }
 
 async function createDirectory(path$1) {
-  const exists = await findDirectory(path$1);
-  if (!exists) {
-    const { root, dir } = path.parse(path$1);
+  try {
+    await promises.stat(path$1);
+  } catch (err) {
+    const dir = path.dirname(path$1);
     await createDirectory(dir);
     try {
       await promises.mkdir(path$1);
@@ -4944,17 +4946,13 @@ async function createDirectory(path$1) {
   }
 }
 
-async function findDirectory(path) {
-  return findFile(path);
-}
-
 async function deleteDirectory(dir) {
   try {
     const list = await promises.readdir(dir);
     for (const name of list) {
       const path$1 = path.join(dir, name);
-      const info = await findFile(path$1, false);
-      if (info?.isDirectory()) {
+      const info = await promises.lstat(path$1);
+      if (info.isDirectory()) {
         await deleteDirectory(path$1);
       } else if (info) {
         await deleteFile(path$1);
@@ -5026,10 +5024,7 @@ function normalizePath(url$1) {
 const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? await findFile(srcPath) : null;
-  if (srcInfo === undefined) {
-    throw new Error(`Source file not found: ${srcPath}`);
-  }
+  const srcInfo = (srcPath) ? await promises.stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = path.join(srcPath, '?');
   }
@@ -5037,41 +5032,22 @@ async function compile(srcPath, modPath, options) {
   const { moduleDir, outputPath } = config;
   let changed = false;
   if (srcPath) {
-    const srcFileMap = await findMatchingFiles(moduleDir, /.\..*$/);
     // see if the (re-)compilation is necessary
-    const soInfo = await findFile(outputPath);
-    if (soInfo) {
-      for (const [ name, info ] of srcFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    } else {
-      changed = true;
-    }
-    if (!changed) {
-      // rebuild when exporter or build files have changed
-      const zigFolder = absolute('../zig');
-      const zigFileMap = await findMatchingFiles(zigFolder, /\.zig$/);
-      for (const [ path, info ] of zigFileMap) {
-        if (info.mtime > soInfo.mtime) {
-          changed = true;
-          break;
-        }
-      }
-    }
+    const zigFolder = absolute('../zig');
+    changed = await isOlderThan(outputPath, [ moduleDir, zigFolder, options.configPath ]);
     if (changed) {
       // add custom build file
-      for (const [ path$1, info ] of srcFileMap) {
-        switch (path.basename(path$1)) {
-          case 'build.zig':
-            config.buildFilePath = path$1;
-            break;
-          case 'build.zig.zon':
-            config.packageConfigPath = path$1;
-            break;
-        }
+      try {
+        const path$1 = path.join(moduleDir, 'build.zig');
+        await promises.stat(path$1);
+        config.buildFilePath = path$1;
+      } catch (err) {
+      }
+      try {
+        const path$1 = path.join(moduleDir, 'build.zig.zon');
+        await promises.stat(path$1);
+        config.packageConfigPath = path$1;
+      } catch (err) {
       }
       const { zigPath, zigArgs, moduleBuildDir } = config;
       // only one process can compile a given file at a time
@@ -5083,13 +5059,16 @@ async function compile(srcPath, modPath, options) {
         await createProject(config, moduleBuildDir);
         // then run the compiler
         await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
+        // set atime/mtime to current time
+        const now = new Date();
+        await promises.utimes(outputPath, now, now);
       } finally {
         if (config.clean) {
           await deleteDirectory(moduleBuildDir);
         }
         await releaseLock(pidPath);
       }
-    }   
+    }
   }
   return { outputPath, changed }
 }
@@ -5393,10 +5372,10 @@ class UnknownOption extends Error {
 
 async function findConfigFile(name, dir) {
   const path$1 = path.join(dir, name);
-  const info = await findFile(path$1);
-  if (info?.isFile()) {
+  try {
+    await promises.stat(path$1);
     return path$1;
-  } else {
+  } catch (err) {
     const parent = path.dirname(dir);
     if (parent !== dir) {
       return findConfigFile(name, parent);
