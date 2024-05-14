@@ -138,7 +138,7 @@ int vfprintf_hook(FILE* s,
     if (s == stdout || s == stderr) {
         // attempt with fixed-size buffer, using a copy of arg
         va_list arg_copy;
-        memcpy(&arg_copy, &arg, sizeof(va_list));
+        va_copy(arg_copy, arg);
         char fixed_buffer[1024];        
         char* s = fixed_buffer;
         int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
@@ -494,7 +494,7 @@ void patch_write_file(void* handle,
     if (base_address == 0 || got_offset == 0) {
         goto exit;
     }
-    for (int k = 0; i < HOOK_COUNT; k++) {
+    for (int k = 0; k < HOOK_COUNT; k++) {
         for (int i = 0; i < indirect_symbol_count; i++) {
             nlist* symbol = &symbols[indirect_symbol_indices[i]];
             const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
