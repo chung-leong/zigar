@@ -1,17 +1,12 @@
 const std = @import("std");
 
 const ServerThread = struct {
-    const Error = std.net.Address.ListenError || std.net.Server.AcceptError;
-    const Status = enum(u32) { pending, listening, failed };
-    const AtomicStatus = std.atomic.Value(Status);
-
     address: std.net.Address,
     listen_options: std.net.Address.ListenOptions,
     thread: ?std.Thread = null,
     server: ?*std.net.Server = null,
     connection: ?*std.net.Server.Connection = null,
-    status: AtomicStatus = AtomicStatus.init(.pending),
-    last_error: ?Error = null,
+    last_error: ?(std.net.Address.ListenError || std.net.Server.AcceptError) = null,
     storage: *ServerStorage,
     request_count: u64 = 0,
 
@@ -20,8 +15,9 @@ const ServerThread = struct {
     }
 
     pub fn spawn(self: *@This()) !void {
-        self.thread = try std.Thread.spawn(.{}, run, .{self});
-        std.Thread.Futex.wait(@ptrCast(&self.status), @intFromEnum(Status.pending));
+        var futex_val = std.atomic.Value(u32).init(0);
+        self.thread = try std.Thread.spawn(.{}, run, .{ self, &futex_val });
+        std.Thread.Futex.wait(&futex_val, 0);
         if (self.last_error) |err| {
             return err;
         }
@@ -47,16 +43,16 @@ const ServerThread = struct {
         return .{ .request_count = self.request_count };
     }
 
-    fn run(self: *@This()) void {
-        var server = self.address.listen(self.listen_options) catch |err| {
+    fn run(self: *@This(), futex_ptr: *std.atomic.Value(u32)) void {
+        var listen_result = self.address.listen(self.listen_options);
+        if (listen_result) |*server| {
+            self.server = server;
+        } else |err| {
             self.last_error = err;
-            self.status.store(.failed, .release);
-            std.Thread.Futex.wake(@ptrCast(&self.status), 1);
-            return;
-        };
-        self.server = &server;
-        self.status.store(.listening, .release);
-        std.Thread.Futex.wake(@ptrCast(&self.status), 1);
+        }
+        futex_ptr.store(1, .release);
+        std.Thread.Futex.wake(futex_ptr, 1);
+        var server = self.server orelse return;
         while (true) {
             var connection = server.accept() catch |err| {
                 self.last_error = switch (err) {
@@ -68,7 +64,6 @@ const ServerThread = struct {
             self.handleConnection(&connection);
         }
         self.server = null;
-        self.status.store(.pending, .release);
     }
 
     fn handleConnection(self: *@This(), connection: *std.net.Server.Connection) void {

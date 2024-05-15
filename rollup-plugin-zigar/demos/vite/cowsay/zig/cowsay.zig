@@ -1,6 +1,5 @@
 const c = @cImport({
     @cInclude("cowsay.c");
-    @cInclude("stdio.h");
 });
 
 pub fn cowsay(args: [][*:0]const u8) void {
