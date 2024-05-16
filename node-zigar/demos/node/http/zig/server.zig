@@ -10,8 +10,16 @@ const ServerThread = struct {
     storage: *ServerStorage,
     request_count: u64 = 0,
 
-    pub fn init(address: std.net.Address, listen_options: std.net.Address.ListenOptions, storage: *ServerStorage) @This() {
-        return .{ .address = address, .listen_options = listen_options, .storage = storage };
+    pub fn init(
+        address: std.net.Address,
+        listen_options: std.net.Address.ListenOptions,
+        storage: *ServerStorage,
+    ) @This() {
+        return .{
+            .address = address,
+            .listen_options = listen_options,
+            .storage = storage,
+        };
     }
 
     pub fn spawn(self: *@This()) !void {
@@ -21,6 +29,29 @@ const ServerThread = struct {
         if (self.last_error) |err| {
             return err;
         }
+    }
+
+    fn run(self: *@This(), futex_ptr: *std.atomic.Value(u32)) void {
+        var listen_result = self.address.listen(self.listen_options);
+        if (listen_result) |*server| {
+            self.server = server;
+        } else |err| {
+            self.last_error = err;
+        }
+        futex_ptr.store(1, .release);
+        std.Thread.Futex.wake(futex_ptr, 1);
+        const server = self.server orelse return;
+        while (true) {
+            var connection = server.accept() catch |err| {
+                self.last_error = switch (err) {
+                    std.net.Server.AcceptError.SocketNotListening => null,
+                    else => err,
+                };
+                break;
+            };
+            self.handleConnection(&connection);
+        }
+        self.server = null;
     }
 
     pub fn stop(self: *@This()) void {
@@ -41,29 +72,6 @@ const ServerThread = struct {
 
     pub fn getStats(self: *const @This()) ServerThreadStats {
         return .{ .request_count = self.request_count };
-    }
-
-    fn run(self: *@This(), futex_ptr: *std.atomic.Value(u32)) void {
-        var listen_result = self.address.listen(self.listen_options);
-        if (listen_result) |*server| {
-            self.server = server;
-        } else |err| {
-            self.last_error = err;
-        }
-        futex_ptr.store(1, .release);
-        std.Thread.Futex.wake(futex_ptr, 1);
-        var server = self.server orelse return;
-        while (true) {
-            var connection = server.accept() catch |err| {
-                self.last_error = switch (err) {
-                    std.net.Server.AcceptError.SocketNotListening => null,
-                    else => err,
-                };
-                break;
-            };
-            self.handleConnection(&connection);
-        }
-        self.server = null;
     }
 
     fn handleConnection(self: *@This(), connection: *std.net.Server.Connection) void {
@@ -101,10 +109,10 @@ const Server = struct {
     pub fn init(allocator: std.mem.Allocator, options: ServerOptions) !Server {
         const address = try std.net.Address.resolveIp(options.ip, options.port);
         const threads = try allocator.alloc(ServerThread, options.thread_count);
+        errdefer allocator.free(threads);
         const listen_options = .{ .reuse_address = true };
         const storage = try allocator.create(ServerStorage);
         storage.* = ServerStorage.init(allocator);
-        errdefer allocator.free(threads);
         for (threads) |*thread| {
             thread.* = ServerThread.init(address, listen_options, storage);
         }
@@ -244,5 +252,5 @@ pub fn storeText(opaque_ptr: ServerOpaquePointer, uri: []const u8, text: []const
 
 pub fn getServerStats(allocator: std.mem.Allocator, opaque_ptr: ServerOpaquePointer) !ServerStats {
     const server: *Server = @ptrCast(opaque_ptr);
-    return server.getStats(allocator);
+    try server.getStats(allocator);
 }
