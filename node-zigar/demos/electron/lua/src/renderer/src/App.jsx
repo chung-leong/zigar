@@ -1,32 +1,24 @@
-import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
+import { useCallback, useState } from 'react';
 
 function App() {
-  const ipcHandle = () => window.electron.ipcRenderer.send('ping')
+  const [ code, setCode ] = useState('');
+  const [ output, setOutput ] = useState('');
+  const onCodeChange = useCallback((evt) => {
+    setCode(evt.target.value);
+  }, []);
+  const onRunClick = useCallback((evt) => {
+    window.electron.ipcRenderer.send('run', code);
+  }, [ code ]);
 
   return (
     <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
+      <div className="code-section">
+        <textarea value={code} onChange={onCodeChange}/>
+        <button onClick={onRunClick}>Run</button>
       </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="actions">
-        <div className="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">
-            Documentation
-          </a>
-        </div>
-        <div className="action">
-          <a target="_blank" rel="noreferrer" onClick={ipcHandle}>
-            Send IPC
-          </a>
-        </div>
+      <div className="output-section">
+        <textarea value={output} readOnly={true} />
       </div>
-      <Versions></Versions>
     </>
   )
 }
