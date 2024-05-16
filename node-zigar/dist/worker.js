@@ -8,6 +8,7 @@ import {
 import { hideStatus, showStatus } from './status.js';
 
 const { url, buffers } = workerData;
+let status = 0, result = null;
 try {
   const { path, archive } = normalizePath(url);
   const platform = getPlatform();
@@ -51,14 +52,17 @@ try {
   // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
   // is absent, compilation does not occur
   const { outputPath: modulePath } = await compile(srcPath, modPath, options);
-  const json = JSON.stringify({ addonPath, modulePath });
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(json);
-  for (let i = 0; i < bytes.length; i++) {
-      buffers.data[i] = bytes[i];
-  }
-  buffers.length[0] = bytes.length; 
+  result = { addonPath, modulePath };
+  status = 1;
 } catch (err) {
-  console.error(err);
-  buffers.length[0] = -1;
+  result = { error: err.message };
+  status = 2;
 }
+const json = JSON.stringify(result);
+const encoder = new TextEncoder();
+const bytes = encoder.encode(json);
+for (let i = 0; i < bytes.length; i++) {
+    buffers.data[i] = bytes[i];
+}
+buffers.length[0] = bytes.length; 
+buffers.status[0] = status;

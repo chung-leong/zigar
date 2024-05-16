@@ -2103,7 +2103,7 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
 }
 
 pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
-    @setEvalBranchQuota(10000);
+    @setEvalBranchQuota(200000);
     comptime var tdc = TypeDataCollector.init(256);
     comptime tdc.scan(T);
     const tdb = comptime tdc.createDatabase();

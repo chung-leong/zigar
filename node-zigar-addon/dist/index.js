@@ -181,7 +181,6 @@ async function isOlderThan(targetPath, srcPaths) {
     }
     return false;
   } catch (err) {
-    console.log({ path, err });
     return true;
   }
 }

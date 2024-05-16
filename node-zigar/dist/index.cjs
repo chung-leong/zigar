@@ -24,7 +24,7 @@ Module._load = new Proxy(Module._load, {
     const env = createEnvironment();
     env.loadModule(modulePath);
     env.acquireStructures({});
-    return env.useStructures(); 
+    return env.useStructures();
   }
 });
 
@@ -32,8 +32,9 @@ function startWorker(url) {
   const workerURL = pathToFileURL(join(__dirname, 'worker.js'));
   const workerData = { url, 
     buffers: {
+      status: new Int32Array(new SharedArrayBuffer(4)),
       length: new Int32Array(new SharedArrayBuffer(4)),
-      data: new Uint8Array(new SharedArrayBuffer(1024)),
+      data: new Uint8Array(new SharedArrayBuffer(10240)),
     }
   };
   const worker = new Worker(workerURL, { workerData });
@@ -42,15 +43,16 @@ function startWorker(url) {
 }
 
 function awaitWorker(worker) {
-  const { buffers: { length, data } } = worker.workerData;
+  const { buffers: { status, length, data } } = worker.workerData;
   // wait for change to occur
-  for (let i = 0; Atomics.wait(length, 0, 0, (i < 20) ? 10 : 50) === 'timed-out'; i++);
-  if (length[0] > 0) {
-    const bytes = data.slice(0, length[0]);
-    const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(bytes)); 
+  for (let i = 0; Atomics.wait(status, 0, 0, (i < 20) ? 10 : 50) === 'timed-out'; i++);
+  const bytes = data.slice(0, length[0]);
+  const decoder = new TextDecoder();
+  const result = JSON.parse(decoder.decode(bytes)); 
+  if (status[0] === 1) {
+    return result;
   } else {
-    throw new Error('Worker thread failed');
+    throw new Error(result.error);
   }
 }
 
