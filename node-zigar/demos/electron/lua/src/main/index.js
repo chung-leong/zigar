@@ -3,9 +3,9 @@ import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 
-require('node-zigar/cjs');
-const { __zigar, createLua, freeLua, runLuaCode } = require('../../zig/lua.zig');
-const lua = createLua();
+require('node-zigar/cjs')
+const { __zigar, createLua, freeLua, runLuaCode } = require('../../zig/lua.zig')
+const lua = createLua()
 
 function createWindow() {
   // Create the browser window.
@@ -37,6 +37,7 @@ function createWindow() {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  __zigar.connect({ log: line => mainWindow.webContents.send('log', line) })
 }
 
 // This method will be called when Electron has finished

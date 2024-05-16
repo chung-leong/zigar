@@ -34,6 +34,7 @@ body {
   background-color: transparent;
   color: #ffffff;
   font-family: 'Courier New', Courier, monospace;
+  white-space: pre;
 }
 
 .code-section BUTTON {
@@ -52,4 +53,5 @@ body {
   background-color: transparent;
   color: #999999;
   font-family: 'Courier New', Courier, monospace;
+  white-space: pre;
 }
