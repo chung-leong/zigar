@@ -22,7 +22,7 @@ body {
 }
 
 .code-section {
-  flex: 0 0 100px;
+  flex: 0 0 10em;
   display: flex;
   flex-direction: row;
   width: 100%;
@@ -39,6 +39,10 @@ body {
 
 .code-section BUTTON {
   flex: 0 0 auto;
+  font-size: 1.5em;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 0 1em 0 1em;
 }
 
 .output-section {
@@ -51,7 +55,7 @@ body {
 .output-section TEXTAREA {
   flex: 1 1 auto;
   background-color: transparent;
-  color: #999999;
+  color: #cccccc;
   font-family: 'Courier New', Courier, monospace;
   white-space: pre;
 }

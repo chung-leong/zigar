@@ -4,7 +4,8 @@ import { join } from 'path';
 import icon from '../../resources/icon.png?asset';
 
 require('node-zigar/cjs')
-const { __zigar, createLua, freeLua, runLuaCode } = require('../../zig/lua.zig')
+const { __zigar, createLua, freeLua, runLuaCode } = require('../lib/lua.zigar')
+
 const lua = createLua()
 
 function createWindow() {

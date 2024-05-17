@@ -3,12 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 function App() {
   const [ code, setCode ] = useState('')
   const [ output, setOutput ] = useState('')
-  const lineRefs = useRef([])
-  const onCodeChange = useCallback(evt => setCode(evt.target.value), [])
-  const onRunClick = useCallback(evt => window.electron.ipcRenderer.send('run', code), [ code ])
+  const linesRef = useRef([])
   useEffect(() => {
     window.electron.ipcRenderer.on('log', (_, text) => {
-      const lines = lineRefs.current
+      const lines = linesRef.current
       lines.push(...text.split('\n'))
       while (lines.length > 200) {
         lines.shift()
@@ -17,6 +15,8 @@ function App() {
     })
     return () => window.electron.ipcRenderer.removeAllListeners('log');
   }, [])
+  const onRunClick = useCallback(evt => window.electron.ipcRenderer.send('run', code), [ code ])
+  const onCodeChange = useCallback(evt => setCode(evt.target.value), [])
 
   return (
     <>
