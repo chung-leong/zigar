@@ -207,7 +207,6 @@ hook hooks[] = {
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
-#endif
 #if defined(__ELF__)
 #include <fcntl.h>
 #include <dlfcn.h>
@@ -520,4 +519,5 @@ void patch_write_file(void* handle,
                       const char* filename,
                       override_callback cb) {
 }
+#endif
 #endif
