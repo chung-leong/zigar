@@ -158,9 +158,22 @@ int vfprintf_hook(FILE* s,
     return vfprintf(s, f, arg);
 }
 
+int vfprintf_chk_hook(FILE* s,
+                      int flag,
+                      const char* f,
+                      va_list arg) {
+    return vfprintf_hook(s, f, arg);
+}
+
 int vprintf_hook(const char* f, 
                  va_list arg) {
     return vfprintf_hook(stdout, f, arg);
+}
+
+int vprintf_chk_hook(int flag,
+                     const char* f, 
+                     va_list arg) {
+    return vfprintf_chk_hook(stdout, flag, f, arg);
 }
 
 int fprintf_hook(FILE* s,
@@ -173,11 +186,32 @@ int fprintf_hook(FILE* s,
     return n;
 }
 
+int fprintf_chk_hook(FILE* s,
+                     int flag,
+                     const char* f,
+                     ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf_chk_hook(s, flag, f, argptr);
+    va_end(argptr);    
+    return n;
+}
+
 int printf_hook(const char* f,
                 ...) {
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_hook(stdout, f, argptr);
+    va_end(argptr);    
+    return n;
+}
+
+int printf_chk_hook(int flag, 
+                    const char* f,
+                    ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf_chk_hook(stdout, flag, f, argptr);
     va_end(argptr);    
     return n;
 }
@@ -204,6 +238,10 @@ hook hooks[] = {
     { "fprintf",    fprintf_hook },
     { "printf",     printf_hook },
     { "perror",     perror_hook },
+    { "__vfprintf_chk",   vfprintf_chk_hook },
+    { "__vprintf_chk",    vprintf_chk_hook },
+    { "__fprintf_chk",    fprintf_chk_hook },
+    { "__printf_chk",     printf_chk_hook },
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
