@@ -524,12 +524,12 @@ const TypeData = struct {
     fn getContentBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.Type)) {
             .Union => if (self.getSelectorType()) |TT| switch (self.getSelectorBitOffset()) {
-                0 => getBitSize(.{ .Type = TT }).?,
+                0 => @sizeOf(TT) * 8,
                 else => 0,
             } else 0,
             .Optional => 0,
             .ErrorUnion => switch (self.getErrorBitOffset()) {
-                0 => getBitSize(.{ .Type = anyerror }).?,
+                0 => @sizeOf(anyerror) * 8,
                 else => 0,
             },
             else => @compileError("Not a union, error union, or optional"),
