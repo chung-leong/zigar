@@ -507,7 +507,7 @@ const TypeData = struct {
             },
             .Optional => |op| switch (@typeInfo(op.child)) {
                 .Pointer, .ErrorSet => 0, // offset of the pointer/error itself
-                else => getBitSize(.{ .Type = op.child }).?,
+                else => @sizeOf(op.child) * 8,
             },
             else => @compileError("Not a union or optional"),
         };
