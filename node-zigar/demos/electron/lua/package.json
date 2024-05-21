@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
-    "@electron-toolkit/utils": "^3.0.0"
+    "@electron-toolkit/utils": "^3.0.0",
+    "node-zigar": "^0.11.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^1.0.2",
@@ -30,7 +31,6 @@
     "electron-vite": "^2.2.0",
     "eslint": "^8.56.0",
     "eslint-plugin-react": "^7.33.2",
-    "node-zigar": "^0.11.1",
     "prettier": "^3.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

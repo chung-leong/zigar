@@ -11,12 +11,9 @@ files:
   - '!zig/*'
   - '!zigar-cache/*'
   - '!node-zigar.config.json'
-  - 'node_modules/node-zigar/*'
-  - 'node_modules/node-zigar-addon/*'
-  - '**/*'
 asarUnpack:
   - resources/**
-  - out/lib/*
+  - out/lib/**
 win:
   executableName: lua
 nsis:
