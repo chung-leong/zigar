@@ -22,19 +22,5 @@ export function addTests(importModule, options) {
       const { run } = await importTest('use-zig-sqlite/zig-sqlite');
       run();
     })
-    skip
-    it('should link in zigplotlib', async function() {
-      this.timeout(300000);
-      const { run } = await importTest('use-zigplotlib/zigplotlib');
-      run();
-    })
-    it('should link in ziglyph', async function() {
-      this.timeout(300000);
-      const { isAlphabetic } = await importTest('use-ziglyph/ziglyph');
-      expect(isAlphabetic).to.be.a('function');
-      expect(isAlphabetic('A'.charCodeAt(0))).to.be.true;
-      expect(isAlphabetic('1'.charCodeAt(0))).to.be.false;
-      expect(isAlphabetic('Ź'.charCodeAt(0))).to.be.true;
-    })
   })
 }

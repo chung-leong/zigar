@@ -70,9 +70,13 @@ export function addTests(importModule, options) {
       this.timeout(120000);
       await expect(importTest('in-optional')).to.eventually.be.rejected;
     })
-    it('should not compile code with null error union', async function() {
+    it('should handle null in error union', async function() {
       this.timeout(120000);
-      await expect(importTest('in-error-union')).to.eventually.be.rejected;
+      const { default: module, Error, print } = await importTest('in-error-union');
+      expect(module.error_union1).to.be.null;
+      expect(() => module.error_union2).to.throw(Error.goldfish_died);
+      const [ text ] = await capture(() => print());
+      expect(text).to.equal('null');
     })
     it('should not compile code with null vector', async function() {
       this.timeout(120000);
