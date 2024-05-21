@@ -873,6 +873,44 @@ describe('Struct functions', function() {
       const object = StructB(dv);
       expect(() => object.a.number).to.throw(TypeError);
     })
+    it('should allow child struct in packed struct when it is on a byte-boundary', function() {
+      const structureA = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'StructA',
+        byteSize: 4,
+      });
+      env.attachMember(structureA, {
+        type: MemberType.Int,
+        name: 'number',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(structureA);
+      env.finalizeStructure(structureA);
+      const { constructor: StructA } = structureA;
+      const structureB = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'StructB',
+        byteSize: 5,
+      });
+      env.attachMember(structureB, {
+        type: MemberType.Object,
+        name: 'a',
+        bitSize: 32,
+        bitOffset: 8,
+        slot: 0,
+        structure: structureA,
+      });
+      env.finalizeShape(structureB);
+      env.finalizeStructure(structureB);
+      const { constructor: StructB } = structureB;
+      const buffer = new ArrayBuffer(8);
+      const dv = new DataView(buffer, 3, 5);
+      dv.setInt32(1, 1234, true);
+      const object = StructB(dv);
+      expect(object.a.valueOf()).to.eql({ number: 1234 });
+    })
     it('should define a struct that contains pointers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,

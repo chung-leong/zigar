@@ -12,6 +12,12 @@ describe('NodeEnvironment', function() {
     useAllMemberTypes();
     useAllStructureTypes();
   })
+  describe('init', function() {
+    it('should do nothing', async function() {
+      const env = new NodeEnvironment();
+      await env.init();
+    })
+  })
   describe('getBufferAddress', function() {
     it('should obtain address of memory in an ArrayBuffer with the help of Node API', function() {
       const env = new NodeEnvironment();

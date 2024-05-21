@@ -166,6 +166,11 @@ describe('Environment', function() {
       const dv = env.findMemory(0xaaaaaaaa, 14, 5);
       expect(dv).to.be.null;
     })
+    it('should return null when address is 0 and count is above 0', function() {
+      const env = new Environment();
+      const dv = env.findMemory(0, 14, 5);
+      expect(dv).to.be.null;
+    })
     it('should return empty view when address is invalid and count is 0', function() {
       const env = new Environment();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));

@@ -691,6 +691,7 @@ describe('Union functions', function() {
       expect(Hello.tag).to.equal(HelloTag);
       expect(object == 'cat').to.be.true;
       expect(Number(object)).to.equal(200);
+      expect(`${object}`).to.equal('cat');
     })
     it('should only have a single enumerable property', function() {
       const enumStructure = env.beginStructure({

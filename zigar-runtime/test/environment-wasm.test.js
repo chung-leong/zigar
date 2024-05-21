@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import {
   WebAssemblyEnvironment,
 } from '../src/environment-wasm.js';
+import { Exit } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
@@ -21,7 +22,7 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
       const buffer = await readFile(url.pathname);
-      env.instantiateWebAssembly(buffer);
+      env.loadModule(buffer);
       const wasi = new WASI({
         version: 'preview1',
         args: [],
@@ -173,6 +174,15 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
       const dv = env.obtainFixedView(0, 0);
+      expect(dv.buffer).to.equal(memory.buffer);
+      expect(dv.byteLength).to.equal(0);
+      expect(dv.byteOffset).to.equal(0);
+      expect(dv[ALIGN]).to.be.undefined;
+    })
+    it('should correctly handle negative address', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
+      const dv = env.obtainFixedView(-5000, 0);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(0);
       expect(dv.byteOffset).to.equal(0);
@@ -694,6 +704,37 @@ describe('WebAssemblyEnvironment', function() {
         expect(err).to.have.property('message', 'Too many donuts');
       }
     })
+    it('should throw when function exits with non-zero code', async function() {
+      const env = new WebAssemblyEnvironment();
+      let done;
+      env.initPromise = new Promise(resolve => done = resolve);
+      const promise = env.invokeThunk(100, { retval: 123 });
+      expect(promise).to.be.a('promise');
+      env.runThunk = function(...args) {
+        throw new Exit(-1);
+      };
+      done();
+      try {
+        await promise;
+        expect.fail('Not throwing');
+      } catch (err) {
+        expect(err).to.have.property('message', 'Program exited');
+        expect(err.code).to.equal(-1);
+      }
+    })
+    it('should not throw when function exits with zero', async function() {
+      const env = new WebAssemblyEnvironment();
+      let done;
+      env.initPromise = new Promise(resolve => done = resolve);
+      const promise = env.invokeThunk(100, { retval: 123 });
+      expect(promise).to.be.a('promise');
+      env.runThunk = function(...args) {
+        throw new Exit(0);
+      };
+      done();
+      await promise;
+    })
+
   })
   describe('getWASIImport', function() {
     it('should write to console when fd_write is invoked', async function() {
@@ -779,10 +820,15 @@ describe('WebAssemblyEnvironment', function() {
     it('should do nothing when when unsupported functions are invoked', async function() {
       const env = new WebAssemblyEnvironment();
       const wasi = env.getWASIImport();
-      expect(() => wasi.proc_exit()).to.not.throw();
       expect(() => wasi.path_open()).to.not.throw();
       expect(() => wasi.fd_read()).to.not.throw();
       expect(() => wasi.fd_close()).to.not.throw();
+    })
+    it('should throw exit error when proc_exit is called', async function() {
+      const env = new WebAssemblyEnvironment();
+      const wasi = env.getWASIImport();
+      expect(() => wasi.proc_exit()).to.throw(Error)
+        .with.property('message', 'Program exited');
     })
   })
 })

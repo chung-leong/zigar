@@ -363,31 +363,42 @@ export class WebAssemblyEnvironment extends Environment {
       // we can't do pointer fix up here since we need the context in order to allocate
       // memory from the WebAssembly allocator; pointer target acquisition will happen in
       // endCall()
-      const err = this.runThunk(thunkId, args);
+      const unexpected = this.runThunk(thunkId, args);
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
       // error strings returned by the thunk are due to problems in the thunking process
       // (i.e. bugs in export.zig)
-      if (err) {
-        if (err[Symbol.toStringTag] === 'Promise') {
+      if (unexpected) {
+        if (unexpected[Symbol.toStringTag] === 'Promise') {
           // getting a promise, WASM is not yet ready
           // wait for fulfillment, then either return result or throw
-          return err.then((err) => {
-            if (err) {
-              throw new ZigError(err);
+          return unexpected.then((unexpected) => {
+            if (unexpected) {
+              this.handleError(unexpected);
             }
-            return args.retval;
-          });
+            return args.retval;      
+          }, (err) => {
+            this.handleError(err);
+          })
         } else {
-          throw new ZigError(err);
-        }
+          throw unexpected;
+        }        
       }
       return args.retval;      
     } catch (err) {
-      this.flushConsole();
-      if (!(err instanceof Exit) || err.code !== 0) {
-        throw err;
-      }
+      this.handleError(err);
+    }
+  }
+
+  handleError(unexpected) {
+    if (typeof(unexpected) === 'string') {
+      // an error string
+      throw new ZigError(unexpected);
+    } else if (unexpected instanceof Exit && unexpected.code === 0) {
+      // do nothing when exit code is 0
+      return;
+    } else {
+      throw unexpected;
     }
   }
 

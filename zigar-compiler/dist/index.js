@@ -1,10 +1,10 @@
 import childProcess, { execFileSync } from 'child_process';
-import { open, stat, readdir, readFile, writeFile, chmod, unlink, mkdir, lstat, rmdir, utimes } from 'fs/promises';
+import { createHash } from 'crypto';
+import { chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, utimes, writeFile } from 'fs/promises';
 import os from 'os';
-import { sep, dirname, join, parse, basename, resolve } from 'path';
+import { basename, dirname, join, parse, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
-import { createHash } from 'crypto';
 
 const MemberType = {
   Void: 0,
@@ -433,7 +433,7 @@ class ZigError extends Error {
 
 class Exit extends ZigError {
   constructor(code) {
-    super('Program exit');
+    super('Program exited');
     this.code = code;
   }
 }

@@ -170,6 +170,9 @@ describe('Data view functions', function() {
       expect(getStructureName(StructureType.TaggedUnion)).to.equal('tagged union');
       expect(getStructureName(StructureType.Enum)).to.equal('enum');
     })
+    it('should return undefined when type id is invalid', function() {
+      expect(getStructureName(88)).to.be.undefined;
+    })
   })
   describe('isExtendedType', function() {
     it('should return true when int or float has non-standard number of bits', function() {

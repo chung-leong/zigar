@@ -342,7 +342,7 @@ export class ZigError extends Error {
 
 export class Exit extends ZigError {
   constructor(code) {
-    super('Program exit');
+    super('Program exited');
     this.code = code;
   }
 }
