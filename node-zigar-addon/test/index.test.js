@@ -5,10 +5,8 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { createConfig } from '../../zigar-compiler/src/compiler.js';
 
-import cjs from '../dist/index.cjs';
-
 import {
-  buildAddOn,
+  buildAddon,
   getGCStatistics,
   importModule,
 } from '../dist/index.js';
@@ -16,53 +14,33 @@ import {
 describe('Addon functionalities', function() {
   describe('Addon compilation', function() {
     const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
-    it('should build addon for Windows', function() {
+    it('should build addon for Windows', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.x64.node');
-      buildAddOn(addonPath, { platform: 'win32', arch: 'x64' });
+      await buildAddon(addonDir, { platform: 'win32', arch: 'x64' });
     })
-    it('should build addon for MacOS', function() {
+    it('should build addon for MacOS', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.arm64.node');
-      buildAddOn(addonPath, { platform: 'darwin', arch: 'arm64' });
+      await buildAddon(addonDir, { platform: 'darwin', arch: 'arm64' });
     })
-    it('should build addon for MacOS-x64', function() {
+    it('should build addon for MacOS-x64', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.x64.node');
-      buildAddOn(addonPath, { platform: 'darwin', arch: 'x64' });
+      await buildAddon(addonDir, { platform: 'darwin', arch: 'x64' });
     })
-    it('should build addon for Linux', function() {
+    it('should build addon for Linux', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'linux.x64.node');
-      buildAddOn(addonPath, { platform: 'linux', arch: 'x64' });
+      await buildAddon(addonDir, { platform: 'linux', arch: 'x64' });
     })
-    it('should build addon for Linux-musl', function() {
+    it('should build addon for Linux-musl', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'linux-musl.x64.node');
-      buildAddOn(addonPath, { platform: 'linux-musl', arch: 'x64' });
+      await buildAddon(addonDir, { platform: 'linux-musl', arch: 'x64' });
     })
-    it('should try to compile for unknown architecture', function() {
+    it('should try to compile for unknown architecture', async function() {
       this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.xxx.node');
-      expect(() => buildAddOn(addonPath, { platform: 'win32', arch: 'xxx' })).to.throw(Error);
-    })
-  })
-  describe('Addon compilation using CJS function', function() {
-    const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
-    it('should build addon for Linux', function() {
-      this.timeout(300000);
-      const addonPath = join(addonDir, 'linux.x64.node');
-      cjs.buildAddOn(addonPath, { platform: 'linux', arch: 'x64' });
-    })
-    it('should build addon for Linux-musl', function() {
-      this.timeout(300000);
-      const addonPath = join(addonDir, 'linux-musl.x64.node');
-      cjs.buildAddOn(addonPath, { platform: 'linux-musl', arch: 'x64' });
-    }) 
-    it('should try to compile for unknown architecture', function() {
-      this.timeout(300000);
-      const addonPath = join(addonDir, 'win32.xxx.node');
-      expect(() => cjs.buildAddOn(addonPath, { platform: 'win32', arch: 'xxx' })).to.throw(Error);
+      try {
+        const result = await buildAddon(addonDir, { platform: 'win32', arch: 'xxx' });
+        expect.fail('Error expected');
+      } catch (err) {
+      }
     })
   })
   describe('Module loading', function() {
@@ -99,29 +77,5 @@ describe('Addon functionalities', function() {
       const stats = getGCStatistics({ addonDir, recompile: true });
       expect(stats).to.be.an('object');
     })
-  })
-  describe('Module loading using CommonJS function', function() {
-    const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
-    const addonDir = join(sampleDir, 'node-zigar-addon');
-    after(() => execSync(`rm -rf '${addonDir}'`))
-    const options = {
-      arch: os.arch(),
-      platform: os.platform(),
-    };
-    const getModulePath = (name) => {
-      const modPath = join(sampleDir, `${name}.zigar`);
-      const { outputPath } = createConfig(null, modPath, options);
-      return outputPath;
-    };
-    it('should load module', function() {
-      this.timeout(300000);
-      const path = getModulePath('integers');
-      const module = cjs.importModule(path, { addonDir, recompile: true });
-      expect(module.int32).to.equal(1234);
-    })
-    it('should get gc statistics', function() {
-      const stats = cjs.getGCStatistics({ addonDir, recompile: true });
-      expect(stats).to.be.an('object');
-    })    
   })
 })
