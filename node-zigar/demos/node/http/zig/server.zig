@@ -247,10 +247,10 @@ pub fn stopServer(opaque_ptr: ServerOpaquePointer) void {
 
 pub fn storeText(opaque_ptr: ServerOpaquePointer, uri: []const u8, text: []const u8) !void {
     const server: *Server = @ptrCast(opaque_ptr);
-    try server.storage.put(uri, text);
+    return server.storage.put(uri, text);
 }
 
 pub fn getServerStats(allocator: std.mem.Allocator, opaque_ptr: ServerOpaquePointer) !ServerStats {
     const server: *Server = @ptrCast(opaque_ptr);
-    try server.getStats(allocator);
+    return server.getStats(allocator);
 }
