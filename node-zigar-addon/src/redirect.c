@@ -535,7 +535,7 @@ void patch_write_file(void* handle,
         for (int i = 0; i < indirect_symbol_count; i++) {
             nlist* symbol = &symbols[indirect_symbol_indices[i]];
             const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
-            if (strcmp(symbol_name, hooks[k].name) == 0) {
+            if (symbol_name[0] == '_' && strcmp(symbol_name + 1, hooks[k].name) == 0) {
                 /* calculate the address to the GOT entry */
                 uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
                 void** ptr = (void**) got_entry_address;
