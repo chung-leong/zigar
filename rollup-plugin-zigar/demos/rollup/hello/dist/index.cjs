@@ -29,7 +29,7 @@ const StructureType = {
   TaggedUnion: 8,
   ErrorUnion: 9,
   ErrorSet: 10,
-  Enumeration: 11,
+  Enum: 11,
   Optional: 12,
   Pointer: 13,
   Slice: 14,
@@ -37,6 +37,14 @@ const StructureType = {
   Opaque: 16,
   Function: 17,
 };
+
+function getStructureName(n) {
+  for (const [ name, value ] of Object.entries(StructureType)) {
+    if (value === n) {
+      return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
+    }
+  }
+}
 
 function getPrimitiveClass({ type, bitSize }) {
   if (type === MemberType.Int || type === MemberType.Uint) {
@@ -158,11 +166,9 @@ class NoProperty extends TypeError {
 }
 
 class ArgumentCountMismatch extends Error {
-  constructor(structure, actual) {
-    const { name, instance: { members } } = structure;
-    const argCount = members.length - 1;
-    const s = (argCount !== 1) ? 's' : '';
-    super(`${name} expects ${argCount} argument${s}, received ${actual}`);
+  constructor(name, expected, actual) {
+    const s = (expected !== 1) ? 's' : '';
+    super(`${name}() expects ${expected} argument${s}, received ${actual}`);
   }
 }
 
@@ -213,11 +219,16 @@ class ZigError extends Error {
   }
 }
 
-function adjustArgumentError(structure, index, err) {
-  const { name, instance: { members } } = structure;
+class Exit extends ZigError {
+  constructor(code) {
+    super('Program exited');
+    this.code = code;
+  }
+}
+
+function adjustArgumentError(name, index, argCount, err) {
   // Zig currently does not provide the argument name
   const argName = `args[${index}]`;
-  const argCount = members.length - 1;
   const prefix = (index !== 0) ? '..., ' : '';
   const suffix = (index !== argCount - 1) ? ', ...' : '';
   const argLabel = prefix + argName + suffix;
@@ -978,7 +989,7 @@ function normalizeObject(object, forJSON) {
             result = Symbol.for('inaccessible');
           }
           break;
-        case StructureType.Enumeration:
+        case StructureType.Enum:
           result = handleError(() => String(value), { error });
           break;
         case StructureType.Opaque:
@@ -1205,13 +1216,16 @@ function defineStructShape(structure, env) {
     hasPointer,
   } = structure;  
   const memberDescriptors = {};
-  for (const member of members) {
+  const fieldMembers = members.filter(m => !!m.name);
+  const backingIntMember = members.find(m => !m.name);
+  for (const member of fieldMembers) {    
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
       set.required = true;
     }
   }
+  const backingInt = (backingIntMember) ? getDescriptor(backingIntMember, env) : null;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const propApplier = createPropertyApplier(structure);
   const initializer = function(arg) {
@@ -1222,28 +1236,44 @@ function defineStructShape(structure, env) {
       }
     } else if (arg && typeof(arg) === 'object') {
       propApplier.call(this, arg);
+    } else if ((typeof(arg) === 'number' || typeof(arg) === 'bigint') && backingInt) {
+      backingInt.set.call(this, arg);
     } else if (arg !== undefined) {
       throw new InvalidInitializer(structure, 'object', arg);
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const toPrimitive = (backingInt)
+  ? function(hint) {
+    switch (hint) {
+      case 'string':
+        return Object.prototype.toString.call(this);
+      default:
+        return backingInt.get.call(this);
+    }
+  } 
+  : null;
+  const length = (isTuple && members.length > 0)
+  ? parseInt(members[members.length - 1].name) + 1
+  : 0;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
     base64: getBase64Descriptor(structure),
-    length: isTuple && { value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0 },
+    length: isTuple && { value: length },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
     [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
     [WRITE_DISABLER]: { value: makeReadOnly },    
-    [PROPS]: { value: members.map(m => m.name) },
+    [PROPS]: { value: fieldMembers.map(m => m.name) },
   };
   const staticDescriptors = {
     [ALIGN]: { value: align },
@@ -1373,7 +1403,7 @@ function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
-  if (type === StructureType.Enumeration) {
+  if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);
     }
@@ -1390,27 +1420,25 @@ function defineArgStruct(structure, env) {
     align,
     instance: { members },
     hasPointer,
+    name,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const constructor = structure.constructor = function(args) {
+  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argCount = argKeys.length;
+  const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
     this[MEMORY] = dv;
     if (hasObject) {
       this[SLOTS] = {};
     }
-    initializer.call(this, args);
-  };
-  const argNames = members.slice(0, -1).map(m => m.name);
-  const argCount = argNames.length;
-  const initializer = function(args) {
     if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(structure, args.length);
+      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
     }
-    for (const [ index, name ] of argNames.entries()) {
+    for (const [ index, key ] of argKeys.entries()) {
       try {
-        this[name] = args[index];
+        this[key] = args[index];
       } catch (err) {
-        throw adjustArgumentError(structure, index, err);
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
   };
@@ -1504,7 +1532,6 @@ class Environment {
   consolePending = [];
   consoleTimeout = 0;
   viewMap = new WeakMap();
-  initPromise;
   abandoned = false;
   released = false;
   littleEndian = true;
@@ -1518,6 +1545,10 @@ class Environment {
 
   /*
   Functions to be defined in subclass:
+
+  init(...): Promise {
+    // a mean to provide initialization parameters
+  }
 
   getBufferAddress(buffer: ArrayBuffer): bigint|number {
     // return a buffer's address
@@ -1733,11 +1764,11 @@ class Environment {
     let f;
     if (useThis) {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
+        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
       };
     } else {
       f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args));
+        return self.invokeThunk(thunkId, new constructor(args, name, 0));
       };
     }
     Object.defineProperty(f, 'name', { value: name });
@@ -1754,26 +1785,31 @@ class Environment {
       return dest;
     };
     const createObject = (placeholder) => {
-      if (placeholder.memory) {
-        const { array, offset, length } = placeholder.memory;
-        const dv = this.obtainView(array.buffer, offset, length);
-        const { constructor } = placeholder.structure;
-        const { reloc, const: isConst } = placeholder;
-        const object = constructor.call(ENVIRONMENT, dv);
-        if (isConst) {
-          object[WRITE_DISABLER]?.();
+      const { memory, structure, actual } = placeholder;
+      if (memory) {
+        if (actual) {
+          return actual;
+        } else {
+          const { array, offset, length } = memory;
+          const dv = this.obtainView(array.buffer, offset, length);
+          const { constructor } = structure;
+          const { reloc, const: isConst } = placeholder;
+          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          if (isConst) {
+            object[WRITE_DISABLER]?.();
+          }
+          if (placeholder.slots) {
+            insertObjects(object[SLOTS], placeholder.slots);
+          }
+          if (reloc !== undefined) {
+            // need to replace dataview with one pointing to fixed memory later,
+            // when the VM is up and running
+            this.variables.push({ reloc, object });
+          }
+          return object;    
         }
-        if (placeholder.slots) {
-          insertObjects(object[SLOTS], placeholder.slots);
-        }
-        if (reloc !== undefined) {
-          // need to replace dataview with one pointing to fixed memory later,
-          // when the VM is up and running
-          this.variables.push({ reloc, object });
-        }
-        return object;  
       } else {
-        return placeholder.structure;
+        return structure;
       }
     };
     resetGlobalErrorSet();
@@ -1883,11 +1919,18 @@ class Environment {
   }
 
   getSpecialExports() {
+    const check = (v) => {
+      if (v === undefined) throw new Error('Not a Zig type');
+      return v;
+    };
     return {
-      init: () => this.initPromise ?? Promise.resolve(),
+      init: (...args) => this.init(...args),
       abandon: () => this.abandon(),
       released: () => this.released,
       connect: (c) => this.console = c,
+      sizeOf: (T) => check(T[SIZE]),
+      alignOf: (T) => check(T[ALIGN]),
+      typeOf: (T) => getStructureName(check(T[TYPE])),
     };
   }
 
@@ -2294,7 +2337,6 @@ class WebAssemblyEnvironment extends Environment {
     captureString: { argType: 'ii', returnType: 'v' },
     captureView: { argType: 'iib', returnType: 'v' },
     castView: { argType: 'iibv', returnType: 'v' },
-    getSlotNumber: { argType: 'ii', returnType: 'i' },
     readSlot: { argType: 'vi', returnType: 'v' },
     writeSlot: { argType: 'viv' },
     getViewAddress: { argType: 'v', returnType: 'i' },
@@ -2317,8 +2359,19 @@ class WebAssemblyEnvironment extends Environment {
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  initPromise = null;
+  customWASI = null;
+  hasCodeSource = false;
   // WASM is always little endian
   littleEndian = true;
+
+  async init(wasi) {
+    if (wasi && this.hasCodeSource) {
+      throw new Error('Cannot set WASI interface after compilation has already begun (consider disabling topLevelAwait)');
+    }
+    this.customWASI = wasi;
+    await this.initPromise;
+  }
 
   allocateHostMemory(len, align) {
     // allocate memory in both JavaScript and WASM space
@@ -2359,6 +2412,10 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   obtainFixedView(address, len) {
+    if (address < 0) {
+      // not sure why address is sometimes negative--I think it's an undefined pointer
+      address = 0;
+    }
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
@@ -2519,9 +2576,11 @@ class WebAssemblyEnvironment extends Environment {
 
   async instantiateWebAssembly(source) {
     const res = await source;
-    const env = this.exportFunctions();
-    const wasi = this.getWASI();
-    const imports = { env, wasi_snapshot_preview1: wasi };
+    this.hasCodeSource = true;
+    const imports = { 
+      env: this.exportFunctions(), 
+      wasi_snapshot_preview1: this.getWASIImport(),
+    };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
     } else {
@@ -2535,6 +2594,7 @@ class WebAssemblyEnvironment extends Environment {
       const { memory, _initialize } = instance.exports;
       this.importFunctions(instance.exports);
       this.trackInstance(instance);
+      this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
       // run the init function if there one
@@ -2601,63 +2661,128 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   invokeThunk(thunkId, args) {
-    // wasm-exporter.zig will invoke startCall() with the context address and the args
-    // we can't do pointer fix up here since we need the context in order to allocate
-    // memory from the WebAssembly allocator; pointer target acquisition will happen in
-    // endCall()
-    const err = this.runThunk(thunkId, args);
-    // errors returned by exported Zig functions are normally written into the
-    // argument object and get thrown when we access its retval property (a zig error union)
-    // error strings returned by the thunk are due to problems in the thunking process
-    // (i.e. bugs in export.zig)
-    if (err) {
-      if (err[Symbol.toStringTag] === 'Promise') {
-        // getting a promise, WASM is not yet ready
-        // wait for fulfillment, then either return result or throw
-        return err.then((err) => {
-          if (err) {
-            throw new ZigError(err);
-          }
-          return args.retval;
-        });
-      } else {
-        throw new ZigError(err);
+    try {
+      // wasm-exporter.zig will invoke startCall() with the context address and the args
+      // we can't do pointer fix up here since we need the context in order to allocate
+      // memory from the WebAssembly allocator; pointer target acquisition will happen in
+      // endCall()
+      const unexpected = this.runThunk(thunkId, args);
+      // errors returned by exported Zig functions are normally written into the
+      // argument object and get thrown when we access its retval property (a zig error union)
+      // error strings returned by the thunk are due to problems in the thunking process
+      // (i.e. bugs in export.zig)
+      if (unexpected) {
+        if (unexpected[Symbol.toStringTag] === 'Promise') {
+          // getting a promise, WASM is not yet ready
+          // wait for fulfillment, then either return result or throw
+          return unexpected.then((unexpected) => {
+            if (unexpected) {
+              this.handleError(unexpected);
+            }
+            return args.retval;      
+          }, (err) => {
+            this.handleError(err);
+          })
+        } else {
+          throw unexpected;
+        }        
       }
+      return args.retval;      
+    } catch (err) {
+      this.handleError(err);
     }
-    return args.retval;
   }
 
-  getWASI() {
-    return { 
-      fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
-        if (fd === 1 || fd === 2) {
-          const dv = new DataView(this.memory.buffer);
-          let written = 0;
-          for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
-            const buf_ptr = dv.getUint32(p, true);
-            const buf_len = dv.getUint32(p + 4, true);
-            const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
-            this.writeToConsole(buf);
-            written += buf_len;
+  handleError(unexpected) {
+    if (typeof(unexpected) === 'string') {
+      // an error string
+      throw new ZigError(unexpected);
+    } else if (unexpected instanceof Exit && unexpected.code === 0) {
+      // do nothing when exit code is 0
+      return;
+    } else {
+      throw unexpected;
+    }
+  }
+
+  getWASIImport() {
+    if (this.customWASI) {
+      return this.customWASI.wasiImport;
+    } else {
+      const ENOSYS = 38;
+      const noImpl = () => ENOSYS;
+      return { 
+        args_get: noImpl,
+        args_sizes_get: noImpl,
+        clock_res_get: noImpl,
+        clock_time_get: noImpl,
+        environ_get: noImpl,
+        environ_sizes_get: noImpl,
+        fd_advise: noImpl,
+        fd_allocate: noImpl,
+        fd_close: noImpl,
+        fd_datasync: noImpl,
+        fd_pread: noImpl,
+        fd_pwrite: noImpl,
+        fd_read: noImpl,
+        fd_readdir: noImpl,
+        fd_renumber: noImpl,
+        fd_seek: noImpl,
+        fd_sync: noImpl,
+        fd_tell: noImpl,
+        fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+          if (fd === 1 || fd === 2) {
+            const dv = new DataView(this.memory.buffer);
+            let written = 0;
+            for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+              const buf_ptr = dv.getUint32(p, true);
+              const buf_len = dv.getUint32(p + 4, true);
+              const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+              this.writeToConsole(buf);
+              written += buf_len;
+            }
+            dv.setUint32(written_ptr, written, true);
+            return 0;            
+          } else {
+            return ENOSYS;
           }
-          dv.setUint32(written_ptr, written, true);
-          return 0;            
-        } else {
-          return 1;
-        }
-      },
-      random_get: (buf, buf_len) => {
-        const dv = new DataView(this.memory.buffer, buf, buf_len);
-        for (let i = 0; i < buf_len; i++) {
-          dv.setUint8(i, Math.floor(256 * Math.random()));
-        }
-        return 0;
-      },
-      proc_exit: () => {},
-      path_open: () => 1,
-      fd_read: () => 1,
-      fd_close: () => 1,
-    };
+        },
+        fd_fdstat_get: noImpl,
+        fd_fdstat_set_flags: noImpl,
+        fd_fdstat_set_rights: noImpl,        
+        fd_filestat_get: noImpl,
+        fd_filestat_set_size: noImpl,
+        fd_filestat_set_times: noImpl,
+        fd_prestat_get: noImpl,
+        fd_prestat_dir_name: noImpl,
+        path_create_directory: noImpl,
+        path_filestat_get: noImpl,
+        path_filestat_set_times: noImpl,
+        path_link: noImpl,
+        path_open: noImpl,
+        path_readlink: noImpl,
+        path_remove_directory: noImpl,
+        path_rename: noImpl,
+        path_symlink: noImpl,
+        path_unlink_file: noImpl,       
+        poll_oneoff: noImpl,
+        proc_exit: (code) => {
+          throw new Exit(code);
+        },
+        random_get: (buf, buf_len) => {
+          const dv = new DataView(this.memory.buffer, buf, buf_len);
+          for (let i = 0; i < buf_len; i++) {
+            dv.setUint8(i, Math.floor(256 * Math.random()));
+          }
+          return 0;
+        },
+        sched_yield: noImpl,
+        sock_accept: noImpl,
+        sock_recv: noImpl,
+        sock_send: noImpl,
+        sock_shutdown: noImpl,        
+      };  
+    }
   }
 }
 
@@ -2710,7 +2835,8 @@ const f0 = {
 };
 
 // define structures
-Object.assign(s0, {
+const $ = Object.assign;
+$(s0, {
   ...s,
   name: "void",
   align: 1,
@@ -2727,10 +2853,10 @@ Object.assign(s0, {
     methods: [],
   },
 });
-Object.assign(s1, {
+$(s1, {
   ...s,
   type: 5,
-  name: "hello",
+  name: "Arg0003",
   align: 1,
   instance: {
     members: [
@@ -2748,7 +2874,7 @@ Object.assign(s1, {
     methods: [],
   },
 });
-Object.assign(s2, {
+$(s2, {
   ...s,
   type: 2,
   name: "hello",
@@ -2779,7 +2905,7 @@ env.recreateStructures(structures, options);
 // initiate loading and compilation of WASM bytecodes
 const source = (async () => {
   // hello.zig
-  const binaryString = atob("AGFzbQEAAAABSgxgBH9/f38Bf2AFf39/f38AYAJ/fwF/YAZ/f39/f38Bf2ADf39/AX9gAn9/AGADf39/AGABfwBgAAF/YAF/AX9gBH9/f38AYAAAAlYEA2VudgxfY2FwdHVyZVZpZXcABANlbnYKX3N0YXJ0Q2FsbAACA2VudghfZW5kQ2FsbAAFFndhc2lfc25hcHNob3RfcHJldmlldzEIZmRfd3JpdGUAAAMQDwIABgEECgIICQMCAAMBCwQFAXABCQkFBAEAgQIGCQF/AUGAgIAICweBAQcGbWVtb3J5AgAUYWxsb2NhdGVFeHRlcm5NZW1vcnkABBBmcmVlRXh0ZXJuTWVtb3J5AAYUYWxsb2NhdGVTaGFkb3dNZW1vcnkACBBmcmVlU2hhZG93TWVtb3J5AAkIcnVuVGh1bmsAChVpc1J1bnRpbWVTYWZldHlBY3RpdmUACwkOAQBBAQsIAA4FDQcPEBEKxg0PyQEBAX8CQCAAIABBHyABZ2tBD3FBACABGyIBIAAQBSICRQ0AAkACQAJAIAEOAgABAgsgAiEBA0AgAEUNAyABQQA6AAAgAEF/aiEAIAFBAWohAQwACwsgAkGq1arVeiAAGyEBIABBAXZBACAAGyEAA0AgAEUNAiABQQA7AAAgAEF/aiEAIAFBAmohAQwACwsgAkGq1arVeiAAGyEBIABBAnZBACAAGyEAA0AgAEUNASABQQA2AAAgAEF/aiEAIAFBBGohAQwACwsgAgvOAQEDf0EAIQQCQEF/IAFBBGoiBSAFIAFJGyIBQQEgAnQiAiABIAJLGyICQX9qZyIBRQ0AAkACQEEcQgFBICABa61C//8Dg4anIgVnayIBQQ1PDQAgAUECdCIGQdSMgAhqIgIoAgAiAUUNASACIAUgAWpBfGooAgA2AgAgAQ8LIAJBg4AEakEQdhAMIQQMAQsCQCAGQYiNgAhqIgIoAgAiAUH//wNxDQBBARAMIgFFDQEgAiABIAVqNgIAIAEPCyACIAEgBWo2AgAgAQ8LIAQLGgAgAiAAIAFBHyACZ2tBD3FBACACGyACEAcLoQEBAX8CQAJAQRxCAUEgIAJBBGoiAkEBIAN0IgMgAiADSxsiA0F/amdrrUL//wODhqciAmdrIgVBDU8NACAFQQJ0QdSMgAhqIQMgASACakF8aiECDAELIAFCAUEgIANBg4AEakEQdkF/amdrrUL//wODhqciA0EQdGpBfGohAiADZ0Efc0ECdEG8jYAIaiEDCyACIAMoAgA2AgAgAyABNgIAC04BAX8CQCABDQBBAEEAQQAQAA8LQQAhAwJAIAAoAgAgAUEfIAJna0EPcUEAIAIbQQAgACgCBCgCABEAACICRQ0AIAIgAUEAEAAhAwsgAwsuAAJAIAJFDQAgACgCACABIAJBHyADZ2tBD3FBACADG0EAIAAoAgQoAggRAQALC34BAX8jAEGgwABrIgIkACACQRBqQYDAADYCACACQQxqIAJBFGo2AgAgAkGQiYAINgKcQCACQQA2AgggAkEAKQOQgIAINwMAIAIgAjYCmEAgAkGYwABqIAJBmMAAaiABEAEgABECACEAIAJBmMAAaiABEAIgAkGgwABqJAAgAAsEAEEAC1oBAn8CQEIBQSAgAEF/amdrrUL//wODhqciAWdBH3NBAnRBvI2ACGoiAigCACIARQ0AIAIgAUEQdCAAakF8aigCADYCACAADwtBACABQAAiAEEQdCAAQX9GGwuuAQEBf0F/IARBBGoiBiAGIARJGyIGQQEgA3QiBCAGIARLGyEDAkACQEIBQSAgAkEEaiICIAQgAiAESxsiBEF/amdrrUL//wODhqciAmdBcGpBDEsNACADQX9qZyIEDQFBAA8LQgFBICAEQYOABGpBEHZBf2pna61C//8Dg4anQgFBICADQYOABGpBEHZBf2pna61C//8Dg4anRg8LIAJCAUEgIARrrUL//wODhqdGCzcAAkBBACgC+I2ACA0AQQAgADYC+I2ACAsQEgJAQQAoAviNgAggAEcNAEEAQQA2AviNgAgLQQALswEBB38jAEEQayIEJAAgAEEMaigCACEFIAAoAgghBgJAAkACQAJAIAJBH3ENAEEAIQcMAQsgBEEBIAJ0IgggBSAGaiIHakF/aiIJIAdJIgo6AAwgCg0BIAlBACAIa3EgB2shBwsgByAGaiIHIAFqIgYgAEEQaigCAEsNACAAIAY2AgggBUUNACAFIAdqIQAMAQsgACgCACABIAIgAyAAKAIEKAIAEQAAIQALIARBEGokACAAC48BAQJ/AkACQAJAIABBDGooAgAiBiABSw0AIABBEGooAgAiByAGaiABTQ0AAkAgASACaiAGIAAoAggiAWpGDQAgBCACTQ8LIAEgBCACa2ohBiAEIAJNDQJBACEBIAYgB00NAgwBCyAAKAIAIAEgAiADIAQgBSAAKAIEKAIEEQMAIQELIAEPCyAAIAY2AghBAQteAQF/AkACQCAAQQxqKAIAIgUgAUsNACAAQRBqKAIAIAVqIAFNDQAgASACaiAFIAAoAggiAWpHDQEgACABIAJrNgIIDwsgACgCACABIAIgAyAEIAAoAgQoAggRAQALC4ABAQJ/IwBBEGsiACQAQQAhAQJAQQAtAPyNgAgNAEEAQQE6APyNgAgLAkADQCABQQxGDQEgAEEMIAFrNgIIIAAgAUGYjIAIajYCBEECIABBBGpBASAAQQxqEANB//8DcQ0BIAAoAgwgAWohAQwACwtBAEEAOgD8jYAIIABBEGokAAsL5gwCAEGAgIAIC5AJAwAAAAQAAAAFAAAAAAAAAAAAAAAAAAABRGV2aWNlQnVzeQB1bmFibGVfdG9fYWxsb2NhdGVfbWVtb3J5AHVuYWJsZV90b19mcmVlX21lbW9yeQBPdmVyZmxvdwB1bmFibGVfdG9fY3JlYXRlX2RhdGFfdmlldwBJbnB1dE91dHB1dAB1bmFibGVfdG9fb2J0YWluX3Nsb3QASW52YWxpZEFyZ3VtZW50AE5vU3BhY2VMZWZ0AHVuYWJsZV90b19pbnNlcnRfb2JqZWN0AHVuYWJsZV90b19yZXRyaWV2ZV9vYmplY3QAdW5hYmxlX3RvX2NyZWF0ZV9vYmplY3QAU3lzdGVtUmVzb3VyY2VzAENvbm5lY3Rpb25SZXNldEJ5UGVlcgB1bmFibGVfdG9fYWRkX3N0cnVjdHVyZV9tZW1iZXIAdW5hYmxlX3RvX2FkZF9zdGF0aWNfbWVtYmVyAHVua25vd24AdW5hYmxlX3RvX3N0YXJ0X3N0cnVjdHVyZV9kZWZpbml0aW9uAFV0ZjhFeHBlY3RlZENvbnRpbnVhdGlvbgBMb2NrVmlvbGF0aW9uAHVuYWJsZV90b19yZXRyaWV2ZV9tZW1vcnlfbG9jYXRpb24AV291bGRCbG9jawBOb3RPcGVuRm9yV3JpdGluZwB1bmFibGVfdG9fY3JlYXRlX3N0cmluZwBVdGY4T3ZlcmxvbmdFbmNvZGluZwBGaWxlVG9vQmlnAFV0ZjhFbmNvZGVzU3Vycm9nYXRlSGFsZgB1bmFibGVfdG9fY3JlYXRlX3N0cnVjdHVyZV90ZW1wbGF0ZQB1bmFibGVfdG9fYWRkX3N0cnVjdHVyZV90ZW1wbGF0ZQB1bmFibGVfdG9fZGVmaW5lX3N0cnVjdHVyZQBCcm9rZW5QaXBlAHVuYWJsZV90b193cml0ZV90b19jb25zb2xlAFV0ZjhDb2RlcG9pbnRUb29MYXJnZQB1bmFibGVfdG9fYWRkX21ldGhvZABwb2ludGVyX2lzX2ludmFsaWQAT3BlcmF0aW9uQWJvcnRlZABVbmV4cGVjdGVkAEFjY2Vzc0RlbmllZABEaXNrUXVvdGEASW52YWxpZFV0ZjgAAAAAAAAAAABTAAABCAAAAGABAAEHAAAAIwAAARkAAAA9AAABFQAAALQBAAEiAAAAXAAAARoAAADnAAABFwAAAIMAAAEVAAAAzQAAARkAAAC1AAABFwAAAGgBAAEkAAAAJQEAAR4AAABEAQABGwAAAOECAAEUAAAARQIAASMAAAD0AQABFwAAAGkCAAEgAAAAigIAARoAAACwAgABGgAAAPYCAAESAAAAPAMAAQsAAACNAQABGAAAAAwCAAEUAAAALAIAARgAAADLAgABFQAAAKkAAAELAAAAMgMAAQkAAAAhAgABCgAAAHcAAAELAAAAGAAAAQoAAACZAAABDwAAACUDAAEMAAAApQIAAQoAAAD/AAABDwAAAAkDAAEQAAAA4gEAAREAAACmAQABDQAAANcBAAEKAAAADwEAARUAAAAaAwABCgAAAABBkImACAvDAwYAAAAHAAAACAAAAG5hbWUAdHlwZQBsZW5ndGgAYnl0ZVNpemUAYWxpZ24AaXNDb25zdABpc1R1cGxlAGhhc1BvaW50ZXIAYXJnU3RydWN0AHRodW5rSWQAaXNSZXF1aXJlZABiaXRPZmZzZXQAYml0U2l6ZQBzbG90AHN0cnVjdHVyZQBoZWxsbwAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGhlbGxvfQByZXR2YWwAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBleHBvcnRlci5Bcmd1bWVudFN0cnVjdCgoZnVuY3Rpb24gJ2hlbGxvJyksZm4gKCkgdm9pZCl9AHN0cnVjdHtjb21wdGltZSB0eXBlID0gZXhwb3J0ZXIuQXJndW1lbnRTdHJ1Y3QoKGZ1bmN0aW9uICdoZWxsbycpLGZuICgpIHZvaWQpfQBzdHJ1Y3R7Y29tcHRpbWUgaW5kZXg6IHVzaXplID0gMH0ASGVsbG8gd29ybGQhAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSB2b2lkfQB2b2lkAAA=");
+  const binaryString = atob("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ACgCBCgCBBEDACEBCyABDwsgACAGNgIIQQELXgEBfwJAAkAgAEEMaigCACIFIAFLDQAgAEEQaigCACAFaiABTQ0AIAEgAmogBSAAKAIIIgFqRw0BIAAgASACazYCCA8LIAAoAgAgASACIAMgBCAAKAIEKAIIEQEACwuAAQECfyMAQRBrIgAkAEEAIQECQEEALQCgjIAIDQBBAEEBOgCgjIAICwJAA0AgAUEMRg0BIABBDCABazYCCCAAIAFB4oqACGo2AgRBAiAAQQRqQQEgAEEMahADQf//A3ENASAAKAIMIAFqIQEMAAsLQQBBADoAoIyACCAAQRBqJAALC48LAgBBgICACAvQCQMAAAAEAAAABQAAAAAAAAAAAAAAAAAAAQAAAAARAAAAAAAAABMAAABEZXZpY2VCdXN5AHVuYWJsZV90b19hbGxvY2F0ZV9tZW1vcnkAdW5hYmxlX3RvX2ZyZWVfbWVtb3J5AE92ZXJmbG93AHVuYWJsZV90b19jcmVhdGVfZGF0YV92aWV3AElucHV0T3V0cHV0AHVuYWJsZV90b19vYnRhaW5fc2xvdABJbnZhbGlkQXJndW1lbnQATm9TcGFjZUxlZnQAdW5hYmxlX3RvX2luc2VydF9vYmplY3QAdW5hYmxlX3RvX3JldHJpZXZlX29iamVjdAB1bmFibGVfdG9fY3JlYXRlX29iamVjdABTeXN0ZW1SZXNvdXJjZXMAQ29ubmVjdGlvblJlc2V0QnlQZWVyAHVuYWJsZV90b19hZGRfc3RydWN0dXJlX21lbWJlcgB1bmFibGVfdG9fYWRkX3N0YXRpY19tZW1iZXIAdW5rbm93bgB1bmFibGVfdG9fc3RhcnRfc3RydWN0dXJlX2RlZmluaXRpb24AVXRmOEV4cGVjdGVkQ29udGludWF0aW9uAExvY2tWaW9sYXRpb24AdW5hYmxlX3RvX3JldHJpZXZlX21lbW9yeV9sb2NhdGlvbgBXb3VsZEJsb2NrAE5vdE9wZW5Gb3JXcml0aW5nAHVuYWJsZV90b19jcmVhdGVfc3RyaW5nAFV0ZjhPdmVybG9uZ0VuY29kaW5nAEZpbGVUb29CaWcAVXRmOEVuY29kZXNTdXJyb2dhdGVIYWxmAFV0ZjhDYW5ub3RFbmNvZGVTdXJyb2dhdGVIYWxmAHVuYWJsZV90b19jcmVhdGVfc3RydWN0dXJlX3RlbXBsYXRlAHVuYWJsZV90b19hZGRfc3RydWN0dXJlX3RlbXBsYXRlAHVuYWJsZV90b19kZWZpbmVfc3RydWN0dXJlAEJyb2tlblBpcGUAdW5hYmxlX3RvX3dyaXRlX3RvX2NvbnNvbGUAVXRmOENvZGVwb2ludFRvb0xhcmdlAHVuYWJsZV90b19hZGRfbWV0aG9kAHBvaW50ZXJfaXNfaW52YWxpZABPcGVyYXRpb25BYm9ydGVkAFVuZXhwZWN0ZWQAQWNjZXNzRGVuaWVkAERpc2tRdW90YQBJbnZhbGlkVXRmOAAAAAAAAAAAAAAAYwAAAQgAAABqAwABCwAAAJ0BAAEYAAAAHAIAARQAAAA8AgABGAAAAPkCAAEVAAAAVQIAAR0AAAD9AgABEQAAALkAAAELAAAAcAEAAQcAAAAzAAABGQAAAE0AAAEVAAAAxAEAASIAAABsAAABGgAAAPcAAAEXAAAAkwAAARUAAADdAAABGQAAAMUAAAEXAAAAeAEAASQAAAA1AQABHgAAAFQBAAEbAAAADwMAARQAAABzAgABIwAAAAQCAAEXAAAAlwIAASAAAAC4AgABGgAAAN4CAAEaAAAAJAMAARIAAABgAwABCQAAADECAAEKAAAAhwAAAQsAAAAoAAABCgAAAKkAAAEPAAAAUwMAAQwAAADTAgABCgAAAA8BAAEPAAAANwMAARAAAADyAQABEQAAALYBAAENAAAA5wEAAQoAAAAfAQABFQAAAEgDAAEKAAAAAEHQiYAIC6wBBgAAAAcAAAAIAAAAbmFtZQB0eXBlAGxlbmd0aABieXRlU2l6ZQBhbGlnbgBpc0NvbnN0AGlzVHVwbGUAaGFzUG9pbnRlcgBhcmdTdHJ1Y3QAdGh1bmtJZABoZWxsbwBpc1JlcXVpcmVkAGJpdE9mZnNldABiaXRTaXplAHNsb3QAc3RydWN0dXJlAHJldHZhbABIZWxsbyB3b3JsZCEAQXJnMDAwMwB2b2lkAA==");
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
