@@ -47,5 +47,6 @@ void test_write(void) {
 }
 
 void test_perror(void) {
+    fopen(".", "w");
     perror("Hello");
 }

@@ -1,11 +1,18 @@
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+#if defined(_WIN32)
+    #include <windows.h>
+    #include <io.h>
+#else
+    #include <unistd.h>
+#endif
 #include "./redirect.h"
 
 override_callback override = NULL;
 
 #if defined(_WIN32)
-#include <windows.h>
-#include <imagehlp.h>
-
 BOOL WINAPI write_file_hook(HANDLE handle,
                             LPCVOID buffer,
                             DWORD len,
@@ -31,46 +38,8 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     return WriteFile(handle, buffer, len, written, overlapped);
 }
 
-void patch_write_file(void* handle,
-                      const char* filename,
-                      override_callback cb) {
-    override = cb;
-    PBYTE bytes = (PBYTE) handle;
-    /* find IAT */ 
-    ULONG size;
-    PVOID data = ImageDirectoryEntryToDataEx(handle, TRUE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size, NULL);
-    PIMAGE_IMPORT_DESCRIPTOR iat = (PIMAGE_IMPORT_DESCRIPTOR) data;
-    for (PIMAGE_IMPORT_DESCRIPTOR entry = iat; entry->Characteristics && entry->Name; entry++) {
-        /* look for kernel32.dll*/
-        PSTR import_name = (PSTR) (bytes + entry->Name);
-        if (_stricmp(import_name, "kernel32.dll") == 0) {
-            PIMAGE_THUNK_DATA first_thunk = (PIMAGE_THUNK_DATA) (bytes + entry->FirstThunk);
-            for (PIMAGE_THUNK_DATA thunk = first_thunk; thunk->u1.Function; thunk++) {
-                PROC* fn_pointer = (PROC*) &thunk->u1.Function;
-                if (*fn_pointer == (PROC) WriteFile) {
-                    /* make page writable */ 
-                    MEMORY_BASIC_INFORMATION mbi;
-                    DWORD protect = PAGE_READWRITE;
-                    VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
-                    if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
-                        /* replace with hook */
-                        *fn_pointer = (PROC) write_file_hook;
-                        /* restore original flags */
-                        VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-    }
-}
-#else
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
+typedef SSIZE_T ssize_t;
+#endif
 
 ssize_t write_hook(int fd, 
                    const void* buffer, 
@@ -132,9 +101,9 @@ int putchar_hook(int c) {
     return fputc_hook(c, stdout);
 }
 
-int vfprintf_hook(FILE* s,
-                  const char* f, 
-                  va_list arg) {
+int vfprintf_hook_impl(FILE* s,
+                       const char* f, 
+                       va_list arg) {
     if (s == stdout || s == stderr) {
         // attempt with fixed-size buffer, using a copy of arg
         va_list arg_copy;
@@ -144,8 +113,9 @@ int vfprintf_hook(FILE* s,
         int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
         bool too_large = len + 1 > sizeof(fixed_buffer);
         if (too_large) {
+            va_copy(arg_copy, arg);
             s = malloc(len + 1);
-            vsnprintf(s, len + 1, f, arg);
+            vsnprintf(s, len + 1, f, arg_copy);
         }
         bool overrode = override(s, len) == 0;
         if (too_large) {
@@ -155,25 +125,19 @@ int vfprintf_hook(FILE* s,
             return len;
         }
     }
-    return vfprintf(s, f, arg);
+    return -1;
 }
 
-int vfprintf_chk_hook(FILE* s,
-                      int flag,
-                      const char* f,
-                      va_list arg) {
-    return vfprintf_hook(s, f, arg);
+int vfprintf_hook(FILE* s,
+                  const char* f, 
+                  va_list arg) {
+    int len = vfprintf_hook_impl(s, f, arg);
+    return (len >= 0) ? len : vfprintf(s, f, arg);
 }
 
 int vprintf_hook(const char* f, 
                  va_list arg) {
     return vfprintf_hook(stdout, f, arg);
-}
-
-int vprintf_chk_hook(int flag,
-                     const char* f, 
-                     va_list arg) {
-    return vfprintf_chk_hook(stdout, flag, f, arg);
 }
 
 int fprintf_hook(FILE* s,
@@ -182,17 +146,6 @@ int fprintf_hook(FILE* s,
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_hook(s, f, argptr);
-    va_end(argptr);    
-    return n;
-}
-
-int fprintf_chk_hook(FILE* s,
-                     int flag,
-                     const char* f,
-                     ...) {
-    va_list argptr;
-    va_start(argptr, f);
-    int n = vfprintf_chk_hook(s, flag, f, argptr);
     va_end(argptr);    
     return n;
 }
@@ -206,6 +159,44 @@ int printf_hook(const char* f,
     return n;
 }
 
+void perror_hook(const char *s) {
+    printf_hook("%s: %s", s, strerror(errno));
+}
+
+#if defined(_WIN32)
+int stdio_common_vfprintf_hook(unsigned __int64 options,
+                               FILE* s,
+                               char const* f,
+                               _locale_t locale,
+                               va_list arg) {
+    int len = vfprintf_hook_impl(s, f, arg);
+    return (len >= 0) ? len : __stdio_common_vfprintf(options, s, f, locale, arg);
+}
+#elif defined(__GLIBC__)
+int vfprintf_chk_hook(FILE* s,
+                      int flag,
+                      const char* f,
+                      va_list arg) {
+    return vfprintf_hook(s, f, arg);
+}
+
+int vprintf_chk_hook(int flag,
+                     const char* f, 
+                     va_list arg) {
+    return vfprintf_chk_hook(stdout, flag, f, arg);
+}
+
+int fprintf_chk_hook(FILE* s,
+                     int flag,
+                     const char* f,
+                     ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf_chk_hook(s, flag, f, argptr);
+    va_end(argptr);    
+    return n;
+}
+
 int printf_chk_hook(int flag, 
                     const char* f,
                     ...) {
@@ -215,10 +206,7 @@ int printf_chk_hook(int flag,
     va_end(argptr);    
     return n;
 }
-
-void perror_hook(const char *s) {
-    printf_hook("%s: %s", s, strerror(errno));
-}
+#endif
 
 typedef struct {
     const char* name;
@@ -226,26 +214,80 @@ typedef struct {
 } hook;
 
 hook hooks[] = { 
-    { "write",      write_hook },
-    { "fputs",      fputs_hook },
-    { "puts",       puts_hook },
-    { "fputc",      fputc_hook },
-    { "putc",       fputc_hook },
-    { "putchar",    putchar_hook },
-    { "fwrite",     fwrite_hook },
-    { "vfprintf",   vfprintf_hook },
-    { "vprintf",    vprintf_hook },
-    { "fprintf",    fprintf_hook },
-    { "printf",     printf_hook },
-    { "perror",     perror_hook },
-    { "__vfprintf_chk",   vfprintf_chk_hook },
-    { "__vprintf_chk",    vprintf_chk_hook },
-    { "__fprintf_chk",    fprintf_chk_hook },
-    { "__printf_chk",     printf_chk_hook },
+#if defined(_WIN32)
+    { "WriteFile",                  write_file_hook },
+    { "_write",                     write_hook },
+#else    
+    { "write",                      write_hook },
+#endif    
+    { "fputs",                      fputs_hook },
+    { "puts",                       puts_hook },
+    { "fputc",                      fputc_hook },
+    { "putc",                       fputc_hook },
+    { "putchar",                    putchar_hook },
+    { "fwrite",                     fwrite_hook },
+    { "vfprintf",                   vfprintf_hook },
+    { "vprintf",                    vprintf_hook },
+    { "fprintf",                    fprintf_hook },
+    { "printf",                     printf_hook },
+    { "perror",                     perror_hook },
+#if defined(_WIN32)
+    { "__stdio_common_vfprintf",    stdio_common_vfprintf_hook },
+#elif defined(__GLIBC__)    
+    { "__vfprintf_chk",             vfprintf_chk_hook },
+    { "__vprintf_chk",              vprintf_chk_hook },
+    { "__fprintf_chk",              fprintf_chk_hook },
+    { "__printf_chk",               printf_chk_hook },
+#endif
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
-#if defined(__ELF__)
+#if defined(_WIN32)
+#include <imagehlp.h>
+
+void redirect_io_functions(void* handle,
+                           const char* filename,
+                           override_callback cb) {
+    override = cb;
+    PBYTE bytes = (PBYTE) handle;
+    /* find IAT */ 
+    ULONG size;
+    PVOID data = ImageDirectoryEntryToDataEx(handle, TRUE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size, NULL);
+    PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR) data;
+    for (PIMAGE_IMPORT_DESCRIPTOR entry = import_desc; entry->Characteristics && entry->Name; entry++) {
+        /* look for kernel32.dll*/
+        PSTR import_name = (PSTR) (bytes + entry->Name);
+        PIMAGE_THUNK_DATA addr_table = (PIMAGE_THUNK_DATA) (bytes + entry->FirstThunk);
+        PIMAGE_THUNK_DATA name_table = (PIMAGE_THUNK_DATA) (bytes + entry->OriginalFirstThunk);
+        for (PIMAGE_THUNK_DATA iat_ptr = addr_table, int_ptr = name_table; iat_ptr->u1.Function; iat_ptr++, int_ptr++) {
+            if (!IMAGE_SNAP_BY_ORDINAL(int_ptr->u1.Ordinal)) {
+                PIMAGE_IMPORT_BY_NAME ibm_ptr = (PIMAGE_IMPORT_BY_NAME) (bytes + int_ptr->u1.AddressOfData);
+                int found = 0;
+                for (int k = 0; k < HOOK_COUNT; k++) {
+                    if (strcmp(ibm_ptr->Name, hooks[k].name) == 0) {
+                        PROC* fn_pointer = (PROC*) &iat_ptr->u1.Function;
+                        /* make page writable */ 
+                        MEMORY_BASIC_INFORMATION mbi;
+                        DWORD protect = PAGE_READWRITE;
+                        VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+                        if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
+                            /* replace with hook */
+                            *fn_pointer = hooks[k].hook;
+                            found = 1;
+                            /* restore original flags */
+                            VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
+                        }
+                        break;
+                    }
+                }
+                if (!found) {
+                    //printf("Not found: %s\n", ibm_ptr->Name);
+                }
+            }
+        }
+    }
+}
+#elif defined(__ELF__)
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
@@ -283,9 +325,9 @@ int read_string_table(int fd,
     return 1;
 }
 
-void patch_write_file(void* handle,
-                      const char* filename,
-                      override_callback cb) {
+void redirect_io_functions(void* handle,
+                           const char* filename,
+                           override_callback cb) {
     override = cb;
     int fd = open(filename, O_RDONLY);
     if (fd <= 0) {
@@ -429,9 +471,9 @@ int read_command(int fd,
     return 1;
 }
 
-void patch_write_file(void* handle,
-                      const char* filename,
-                      override_callback cb) {
+void redirect_io_functions(void* handle,
+                           const char* filename,
+                           override_callback cb) {
     override = cb;
     int fd = open(filename, O_RDONLY);
     if (fd <= 0) {
@@ -553,9 +595,8 @@ exit:
     close(fd);
 }
 #else
-void patch_write_file(void* handle,
-                      const char* filename,
-                      override_callback cb) {
+void redirect_io_functions(void* handle,
+                           const char* filename,
+                           override_callback cb) {
 }
-#endif
 #endif

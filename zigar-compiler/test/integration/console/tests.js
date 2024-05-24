@@ -48,7 +48,7 @@ export function addTests(importModule, options) {
       expect(await capture(() => test_puts())).eql([ 'Hello world' ]);
       expect(await capture(() => test_fwrite())).eql([ 'Hello world' ]);
       expect(await capture(() => test_write())).eql([ 'Hello world' ]);
-      expect(await capture(() => test_perror())).eql([ 'Hello: Success' ]);
+      expect(await capture(() => test_perror())).eql([ 'Hello: Permission denied' ]);
     })
   })
 }
