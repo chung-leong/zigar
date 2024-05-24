@@ -1,10 +1,10 @@
 import childProcess, { execFileSync } from 'child_process';
-import { createHash } from 'crypto';
-import { chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, utimes, writeFile } from 'fs/promises';
+import { open, stat, readdir, readFile, writeFile, chmod, unlink, mkdir, lstat, rmdir, utimes } from 'fs/promises';
 import os from 'os';
-import { basename, dirname, join, parse, resolve, sep } from 'path';
+import { sep, dirname, join, parse, basename, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
+import { createHash } from 'crypto';
 
 const MemberType = {
   Void: 0,
@@ -903,6 +903,7 @@ function useExtendedFloat() {
 
 function getExtendedTypeAccessor(access, member) {
   const f = factories$2[member.type];
+
   return f(access, member);
 }
 
@@ -1612,6 +1613,7 @@ function useErrorSetTransform() {
 
 function getDescriptor(member, env) {
   const f = factories$1[member.type];
+
   return f(member, env);
 }
 
@@ -1877,6 +1879,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
   const { bitOffset, byteSize } = member;
   const getter = getDataViewAccessor('get', member);
   const setter = getDataViewAccessor('set', member);
+
   if (bitOffset !== undefined) {
     const offset = bitOffset >> 3;
     return {
@@ -2270,12 +2273,14 @@ function encodeText(text, encoding = 'utf-8') {
 }
 
 function encodeBase64(dv) {
+
   const ta = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   const bstr = String.fromCharCode.apply(null, ta);
   return btoa(bstr);
 }
 
 function decodeBase64(str) {
+
   const bstr = atob(str);
   const ta = new Uint8Array(bstr.length);
   for (let i = 0; i < ta.byteLength; i++) {
@@ -2785,6 +2790,7 @@ function defineVector(structure, env) {
     align,
     instance: { members: [ member ] },
   } = structure;
+
   const { bitSize: elementBitSize, structure: elementStructure } = member;
   const elementDescriptors = {};
   for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
@@ -3120,6 +3126,7 @@ function defineArray(structure, env) {
     instance: { members: [ member ] },
     hasPointer,
   } = structure;
+
   const { get, set } = getDescriptor(member, env);
   const hasStringProp = canBeString(member);
   const propApplier = createPropertyApplier(structure);
@@ -3870,6 +3877,7 @@ function defineSlice(structure, env) {
     },
     hasPointer,
   } = structure;
+
   const { get, set } = getDescriptor(member, env);
   const { byteSize: elementSize, structure: elementStructure } = member;
   const sentinel = getSentinel(structure, env);
@@ -3983,6 +3991,7 @@ function getSentinel(structure, env) {
   if (!sentinel) {
     return;
   }
+
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
@@ -4304,6 +4313,7 @@ function useOpaque() {
 
 function getStructureFactory(type) {
   const f = factories[type];
+
   return f;
 }
 
@@ -4883,9 +4893,13 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   try {
     const pid = await loadFile(pidPath);
     if (pid) {
-      const program = (os.platform() === 'win32') ? 'tasklist' : 'ps';
-      const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      await execFile$1(program, args, { windowsHide: true });
+      const win32 = os.platform() === 'win32';
+      const program = (win32) ? 'tasklist' : 'ps';
+      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      if (win32 && !stdout.includes(pid)) {
+        throw new Error('Process not found');
+      }
     }
     const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
@@ -5499,6 +5513,7 @@ class Environment {
   slots = {};
   structures = [];
   /* COMPTIME-ONLY-END */
+
   imports;
   console = globalThis.console;
 
@@ -5955,6 +5970,7 @@ class Environment {
   }
 
 
+
   getShadowAddress(target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
@@ -6212,6 +6228,7 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   getBufferAddress(buffer) {
+
     return 0;
   }
 
@@ -6492,31 +6509,42 @@ class WebAssemblyEnvironment extends Environment {
       // we can't do pointer fix up here since we need the context in order to allocate
       // memory from the WebAssembly allocator; pointer target acquisition will happen in
       // endCall()
-      const err = this.runThunk(thunkId, args);
+      const unexpected = this.runThunk(thunkId, args);
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
       // error strings returned by the thunk are due to problems in the thunking process
       // (i.e. bugs in export.zig)
-      if (err) {
-        if (err[Symbol.toStringTag] === 'Promise') {
+      if (unexpected) {
+        if (unexpected[Symbol.toStringTag] === 'Promise') {
           // getting a promise, WASM is not yet ready
           // wait for fulfillment, then either return result or throw
-          return err.then((err) => {
-            if (err) {
-              throw new ZigError(err);
+          return unexpected.then((unexpected) => {
+            if (unexpected) {
+              this.handleError(unexpected);
             }
-            return args.retval;
-          });
+            return args.retval;      
+          }, (err) => {
+            this.handleError(err);
+          })
         } else {
-          throw new ZigError(err);
-        }
+          throw unexpected;
+        }        
       }
       return args.retval;      
     } catch (err) {
-      this.flushConsole();
-      if (!(err instanceof Exit) || err.code !== 0) {
-        throw err;
-      }
+      this.handleError(err);
+    }
+  }
+
+  handleError(unexpected) {
+    if (typeof(unexpected) === 'string') {
+      // an error string
+      throw new ZigError(unexpected);
+    } else if (unexpected instanceof Exit && unexpected.code === 0) {
+      // do nothing when exit code is 0
+      return;
+    } else {
+      throw unexpected;
     }
   }
 

@@ -83,9 +83,13 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   try {
     const pid = await loadFile(pidPath);
     if (pid) {
-      const program = (os.platform() === 'win32') ? 'tasklist' : 'ps';
-      const args = (os.platform() === 'win32') ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      await execFile(program, args, { windowsHide: true });
+      const win32 = os.platform() === 'win32';
+      const program = (win32) ? 'tasklist' : 'ps';
+      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      const { stdout } = await execFile(program, args, { windowsHide: true });
+      if (win32 && !stdout.includes(pid)) {
+        throw new Error('Process not found');
+      }
     }
     const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
