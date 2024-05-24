@@ -32,11 +32,11 @@
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "devDependencies": {
     "c8": "^9.1.0",
-    "chai": "^5.1.0",
+    "chai": "^5.1.1",
     "mersenne-twister": "^1.1.0",
     "mocha": "^10.4.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.16.4",
+    "rollup": "^4.18.0",
     "rollup-plugin-strip-code": "^0.2.7"
   }
 }

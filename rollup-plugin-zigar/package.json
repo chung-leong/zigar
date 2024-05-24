@@ -38,10 +38,10 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-replace": "^5.0.5",
     "c8": "^9.1.0",
-    "chai": "^5.1.0",
+    "chai": "^5.1.1",
     "mocha": "^10.4.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.16.4",
-    "vite": "^5.2.10"
+    "rollup": "^4.18.0",
+    "vite": "^5.2.11"
   }
 }
