@@ -1,5 +1,7 @@
 import { write } from 'fs';
 import { isatty } from 'tty';
+import { platform } from 'os';
+import { execSync } from 'child_process';
 
 const statusCharacters = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
 let statusClear;
@@ -7,8 +9,21 @@ let statusClear;
 export function showStatus(message) {
   const fd = 2;
   const tty = isatty(fd);
+  let currentCP;
   hideStatus();
   if (tty) {
+    if (platform() === 'win32') {
+      try {
+        const m = /\d+/.exec(execSync('chcp').toString().trim());
+        if (m) {
+          currentCP = parseInt(m[0]);
+          if (currentCP !== 65001) {
+            execSync('chcp 65001');
+          }
+        }
+      } catch (err) {
+      }
+    }
     let pos = 0;
     const update = () => {
       const c = statusCharacters.charAt(pos++);
@@ -21,6 +36,12 @@ export function showStatus(message) {
     statusClear = () => {
       clearInterval(interval);
       write(fd, '\r\x1b[K', () => {});
+      if (currentCP && currentCP !== 65001) {
+        try {
+          execSync(`chcp ${currentCP}`);
+        } catch (err){
+        }
+      }
     };
     update(); 
   } else {

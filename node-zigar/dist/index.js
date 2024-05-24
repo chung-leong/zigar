@@ -26,7 +26,7 @@ export async function resolve(specifier, context, nextResolve) {
 
 export async function load(url, context, nextLoad) {
   if (!extensionsRegex.test(url)) {
-    return nextLoad(url);
+    return nextLoad(url, context);
   }
   const { path, archive } = normalizePath(url);
   const platform = getPlatform();
@@ -74,7 +74,7 @@ export async function load(url, context, nextLoad) {
   env.acquireStructures(options);
   const definition = env.exportStructures();
   // get the absolute path to node-zigar-addon so the transpiled code can find it
-  const runtimeURL = getLibraryPath();
+  const runtimeURL = pathToFileURL(getLibraryPath()).href;
   const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
   const envOptions = { addonPath };
   const { code } = generateCode(definition, { runtimeURL, binarySource, envOptions });

@@ -5,6 +5,6 @@
 
 typedef unsigned int (*override_callback)(const void*, size_t);
 
-void patch_write_file(void*, const char*, override_callback);
+void redirect_io_functions(void*, const char*, override_callback);
 
 #endif
