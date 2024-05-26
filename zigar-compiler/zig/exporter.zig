@@ -1716,7 +1716,7 @@ fn ArgumentStruct(comptime T: type) type {
     const count = get: {
         var count = 1;
         for (f.params) |param| {
-            if (param.type != std.mem.Allocator) {
+            if (param.type != std.mem.Allocator and param.type != null) {
                 count += 1;
             }
         }
@@ -1725,7 +1725,7 @@ fn ArgumentStruct(comptime T: type) type {
     var fields: [count]std.builtin.Type.StructField = undefined;
     var index = 0;
     for (f.params) |param| {
-        if (param.type != std.mem.Allocator) {
+        if (param.type != std.mem.Allocator and param.type != null) {
             const name = std.fmt.comptimePrint("{d}", .{index});
             fields[index] = .{
                 .name = name,
@@ -1737,10 +1737,10 @@ fn ArgumentStruct(comptime T: type) type {
             index += 1;
         }
     }
-    const RT = switch (f.return_type.?) {
+    const RT = if (f.return_type) |RT| switch (RT) {
         noreturn => void,
-        else => f.return_type.?,
-    };
+        else => RT,
+    } else void;
     fields[index] = .{
         .name = "retval",
         .type = RT,
