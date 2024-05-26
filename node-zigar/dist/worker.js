@@ -66,3 +66,4 @@ for (let i = 0; i < bytes.length; i++) {
 }
 buffers.length[0] = bytes.length; 
 buffers.status[0] = status;
+Atomics.notify(buffers.status, 0);

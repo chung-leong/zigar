@@ -44,8 +44,8 @@ function startWorker(url) {
 
 function awaitWorker(worker) {
   const { buffers: { status, length, data } } = worker.workerData;
-  // wait for change to occur
-  for (let i = 0; Atomics.wait(status, 0, 0, (i < 20) ? 10 : 50) === 'timed-out'; i++);
+  // wait for notification from worker
+  Atomics.wait(status, 0, 0);
   const bytes = data.slice(0, length[0]);
   const decoder = new TextDecoder();
   const result = JSON.parse(decoder.decode(bytes)); 
