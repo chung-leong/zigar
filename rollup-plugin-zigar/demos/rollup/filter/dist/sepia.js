@@ -31,7 +31,7 @@
     TaggedUnion: 8,
     ErrorUnion: 9,
     ErrorSet: 10,
-    Enumeration: 11,
+    Enum: 11,
     Optional: 12,
     Pointer: 13,
     Slice: 14,
@@ -53,6 +53,14 @@
       return `Bool${boolSize}`;
     } else if (type === MemberType.Void) {
       return `Null`;
+    }
+  }
+
+  function getStructureName(n) {
+    for (const [ name, value ] of Object.entries(StructureType)) {
+      if (value === n) {
+        return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
+      }
     }
   }
 
@@ -203,7 +211,7 @@
       if (primitive) {
         let object;
         switch (member.structure?.type) {
-          case StructureType.Enumeration: object = 'enum item'; break;
+          case StructureType.Enum: object = 'enum item'; break;
           case StructureType.ErrorSet: object = 'error'; break;
           default: object = primitive;
         }
@@ -263,11 +271,9 @@
   }
 
   class ArgumentCountMismatch extends Error {
-    constructor(structure, actual) {
-      const { name, instance: { members } } = structure;
-      const argCount = members.length - 1;
-      const s = (argCount !== 1) ? 's' : '';
-      super(`${name} expects ${argCount} argument${s}, received ${actual}`);
+    constructor(name, expected, actual) {
+      const s = (expected !== 1) ? 's' : '';
+      super(`${name}() expects ${expected} argument${s}, received ${actual}`);
     }
   }
 
@@ -380,11 +386,16 @@
     }
   }
 
-  function adjustArgumentError(structure, index, err) {
-    const { name, instance: { members } } = structure;
+  class Exit extends ZigError {
+    constructor(code) {
+      super('Program exited');
+      this.code = code;
+    }
+  }
+
+  function adjustArgumentError(name, index, argCount, err) {
     // Zig currently does not provide the argument name
     const argName = `args[${index}]`;
-    const argCount = members.length - 1;
     const prefix = (index !== 0) ? '..., ' : '';
     const suffix = (index !== argCount - 1) ? ', ...' : '';
     const argLabel = prefix + argName + suffix;
@@ -1178,10 +1189,6 @@
 
   const factories$1 = {};
 
-  function useInt() {
-    factories$1[MemberType.Int] = getIntDescriptor;
-  }
-
   function useUint() {
     factories$1[MemberType.Uint] = getUintDescriptor;
   }
@@ -1205,7 +1212,7 @@
   const transformers = {};
 
   function useEnumerationTransform() {
-    transformers[StructureType.Enumeration] = transformEnumerationDescriptor;
+    transformers[StructureType.Enum] = transformEnumerationDescriptor;
   }
 
   function useErrorSetTransform() {
@@ -1221,12 +1228,6 @@
     const { structure } = member;
     const t = transformers[structure?.type];
     return (t) ? t(descriptor, structure) : descriptor;
-  }
-
-  function getIntDescriptor(member, env) {
-    const getDataViewAccessor = addRuntimeCheck(env, getNumericAccessor);
-    const descriptor = getDescriptorUsing(member, env, getDataViewAccessor);
-    return transformDescriptor(descriptor, member);
   }
 
   function getUintDescriptor(member, env) {
@@ -1344,7 +1345,7 @@
       case StructureType.Primitive:
       case StructureType.ErrorUnion:
       case StructureType.Optional:
-      case StructureType.Enumeration:
+      case StructureType.Enum:
       case StructureType.ErrorSet:
         return true;
       default:
@@ -1859,7 +1860,7 @@
               result = Symbol.for('inaccessible');
             }
             break;
-          case StructureType.Enumeration:
+          case StructureType.Enum:
             result = handleError(() => String(value), { error });
             break;
           case StructureType.Opaque:
@@ -2652,13 +2653,16 @@
       hasPointer,
     } = structure;  
     const memberDescriptors = {};
-    for (const member of members) {
+    const fieldMembers = members.filter(m => !!m.name);
+    const backingIntMember = members.find(m => !m.name);
+    for (const member of fieldMembers) {    
       const { get, set } = getDescriptor(member, env);
       memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
       if (member.isRequired && set) {
         set.required = true;
       }
     }
+    const backingInt = (backingIntMember) ? getDescriptor(backingIntMember, env) : null;
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const propApplier = createPropertyApplier(structure);
     const initializer = function(arg) {
@@ -2669,28 +2673,44 @@
         }
       } else if (arg && typeof(arg) === 'object') {
         propApplier.call(this, arg);
+      } else if ((typeof(arg) === 'number' || typeof(arg) === 'bigint') && backingInt) {
+        backingInt.set.call(this, arg);
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object', arg);
       }
     };
     const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+    const toPrimitive = (backingInt)
+    ? function(hint) {
+      switch (hint) {
+        case 'string':
+          return Object.prototype.toString.call(this);
+        default:
+          return backingInt.get.call(this);
+      }
+    } 
+    : null;
+    const length = (isTuple && members.length > 0)
+    ? parseInt(members[members.length - 1].name) + 1
+    : 0;
     const instanceDescriptors = {
       $: { get: getSelf, set: initializer },
       dataView: getDataViewDescriptor(structure),
       base64: getBase64Descriptor(structure),
-      length: isTuple && { value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0 },
+      length: isTuple && { value: length },
       valueOf: { value: getValueOf },
       toJSON: { value: convertToJSON },
       delete: { value: getDestructor(env) },
       entries: isTuple && { value: getVectorEntries },
       ...memberDescriptors,
       [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+      [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
       [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
       [COPIER]: { value: getMemoryCopier(byteSize) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
       [WRITE_DISABLER]: { value: makeReadOnly },    
-      [PROPS]: { value: members.map(m => m.name) },
+      [PROPS]: { value: fieldMembers.map(m => m.name) },
     };
     const staticDescriptors = {
       [ALIGN]: { value: align },
@@ -2820,7 +2840,7 @@
       // anyerror would have props already
       [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
     });
-    if (type === StructureType.Enumeration) {
+    if (type === StructureType.Enum) {
       for (const { name, slot } of members) {
         appendEnumeration(constructor, name, constructor[SLOTS][slot]);
       }
@@ -2837,27 +2857,25 @@
       align,
       instance: { members },
       hasPointer,
+      name,
     } = structure;
     const hasObject = !!members.find(m => m.type === MemberType.Object);
-    const constructor = structure.constructor = function(args) {
+    const argKeys = members.slice(0, -1).map(m => m.name);
+    const argCount = argKeys.length;
+    const constructor = structure.constructor = function(args, name, offset) {
       const dv = env.allocateMemory(byteSize, align);
       this[MEMORY] = dv;
       if (hasObject) {
         this[SLOTS] = {};
       }
-      initializer.call(this, args);
-    };
-    const argNames = members.slice(0, -1).map(m => m.name);
-    const argCount = argNames.length;
-    const initializer = function(args) {
       if (args.length !== argCount) {
-        throw new ArgumentCountMismatch(structure, args.length);
+        throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
       }
-      for (const [ index, name ] of argNames.entries()) {
+      for (const [ index, key ] of argKeys.entries()) {
         try {
-          this[name] = args[index];
+          this[key] = args[index];
         } catch (err) {
-          throw adjustArgumentError(structure, index, err);
+          throw adjustArgumentError(name, index - offset, argCount - offset, err);
         }
       }
     };
@@ -3493,8 +3511,8 @@
     useErrorSetTransform();
   }
 
-  function useEnumeration() {
-    factories[StructureType.Enumeration] = defineEnumerationShape;
+  function useEnum() {
+    factories[StructureType.Enum] = defineEnumerationShape;
     useEnumerationTransform();
   }
 
@@ -3522,7 +3540,6 @@
     consolePending = [];
     consoleTimeout = 0;
     viewMap = new WeakMap();
-    initPromise;
     abandoned = false;
     released = false;
     littleEndian = true;
@@ -3536,6 +3553,10 @@
 
     /*
     Functions to be defined in subclass:
+
+    init(...): Promise {
+      // a mean to provide initialization parameters
+    }
 
     getBufferAddress(buffer: ArrayBuffer): bigint|number {
       // return a buffer's address
@@ -3751,11 +3772,11 @@
       let f;
       if (useThis) {
         f = function(...args) {
-          return self.invokeThunk(thunkId, new constructor([ this, ...args ]));
+          return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
         };
       } else {
         f = function(...args) {
-          return self.invokeThunk(thunkId, new constructor(args));
+          return self.invokeThunk(thunkId, new constructor(args, name, 0));
         };
       }
       Object.defineProperty(f, 'name', { value: name });
@@ -3772,26 +3793,31 @@
         return dest;
       };
       const createObject = (placeholder) => {
-        if (placeholder.memory) {
-          const { array, offset, length } = placeholder.memory;
-          const dv = this.obtainView(array.buffer, offset, length);
-          const { constructor } = placeholder.structure;
-          const { reloc, const: isConst } = placeholder;
-          const object = constructor.call(ENVIRONMENT, dv);
-          if (isConst) {
-            object[WRITE_DISABLER]?.();
+        const { memory, structure, actual } = placeholder;
+        if (memory) {
+          if (actual) {
+            return actual;
+          } else {
+            const { array, offset, length } = memory;
+            const dv = this.obtainView(array.buffer, offset, length);
+            const { constructor } = structure;
+            const { reloc, const: isConst } = placeholder;
+            const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+            if (isConst) {
+              object[WRITE_DISABLER]?.();
+            }
+            if (placeholder.slots) {
+              insertObjects(object[SLOTS], placeholder.slots);
+            }
+            if (reloc !== undefined) {
+              // need to replace dataview with one pointing to fixed memory later,
+              // when the VM is up and running
+              this.variables.push({ reloc, object });
+            }
+            return object;    
           }
-          if (placeholder.slots) {
-            insertObjects(object[SLOTS], placeholder.slots);
-          }
-          if (reloc !== undefined) {
-            // need to replace dataview with one pointing to fixed memory later,
-            // when the VM is up and running
-            this.variables.push({ reloc, object });
-          }
-          return object;  
         } else {
-          return placeholder.structure;
+          return structure;
         }
       };
       resetGlobalErrorSet();
@@ -3901,11 +3927,18 @@
     }
 
     getSpecialExports() {
+      const check = (v) => {
+        if (v === undefined) throw new Error('Not a Zig type');
+        return v;
+      };
       return {
-        init: () => this.initPromise ?? Promise.resolve(),
+        init: (...args) => this.init(...args),
         abandon: () => this.abandon(),
         released: () => this.released,
         connect: (c) => this.console = c,
+        sizeOf: (T) => check(T[SIZE]),
+        alignOf: (T) => check(T[ALIGN]),
+        typeOf: (T) => getStructureName(check(T[TYPE])),
       };
     }
 
@@ -4312,7 +4345,6 @@
       captureString: { argType: 'ii', returnType: 'v' },
       captureView: { argType: 'iib', returnType: 'v' },
       castView: { argType: 'iibv', returnType: 'v' },
-      getSlotNumber: { argType: 'ii', returnType: 'i' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       getViewAddress: { argType: 'v', returnType: 'i' },
@@ -4335,8 +4367,19 @@
     valueTable = { 0: null };
     valueIndices = new Map;
     memory = null;
+    initPromise = null;
+    customWASI = null;
+    hasCodeSource = false;
     // WASM is always little endian
     littleEndian = true;
+
+    async init(wasi) {
+      if (wasi && this.hasCodeSource) {
+        throw new Error('Cannot set WASI interface after compilation has already begun (consider disabling topLevelAwait)');
+      }
+      this.customWASI = wasi;
+      await this.initPromise;
+    }
 
     allocateHostMemory(len, align) {
       // allocate memory in both JavaScript and WASM space
@@ -4541,9 +4584,11 @@
 
     async instantiateWebAssembly(source) {
       const res = await source;
-      const env = this.exportFunctions();
-      const wasi = this.getWASI();
-      const imports = { env, wasi_snapshot_preview1: wasi };
+      this.hasCodeSource = true;
+      const imports = { 
+        env: this.exportFunctions(), 
+        wasi_snapshot_preview1: this.getWASIImport(),
+      };
       if (res[Symbol.toStringTag] === 'Response') {
         return WebAssembly.instantiateStreaming(res, imports);
       } else {
@@ -4557,6 +4602,7 @@
         const { memory, _initialize } = instance.exports;
         this.importFunctions(instance.exports);
         this.trackInstance(instance);
+        this.customWASI?.initialize?.(instance);
         this.runtimeSafety = this.isRuntimeSafetyActive();
         this.memory = memory;
         // run the init function if there one
@@ -4623,63 +4669,128 @@
     }
 
     invokeThunk(thunkId, args) {
-      // wasm-exporter.zig will invoke startCall() with the context address and the args
-      // we can't do pointer fix up here since we need the context in order to allocate
-      // memory from the WebAssembly allocator; pointer target acquisition will happen in
-      // endCall()
-      const err = this.runThunk(thunkId, args);
-      // errors returned by exported Zig functions are normally written into the
-      // argument object and get thrown when we access its retval property (a zig error union)
-      // error strings returned by the thunk are due to problems in the thunking process
-      // (i.e. bugs in export.zig)
-      if (err) {
-        if (err[Symbol.toStringTag] === 'Promise') {
-          // getting a promise, WASM is not yet ready
-          // wait for fulfillment, then either return result or throw
-          return err.then((err) => {
-            if (err) {
-              throw new ZigError(err);
-            }
-            return args.retval;
-          });
-        } else {
-          throw new ZigError(err);
+      try {
+        // wasm-exporter.zig will invoke startCall() with the context address and the args
+        // we can't do pointer fix up here since we need the context in order to allocate
+        // memory from the WebAssembly allocator; pointer target acquisition will happen in
+        // endCall()
+        const unexpected = this.runThunk(thunkId, args);
+        // errors returned by exported Zig functions are normally written into the
+        // argument object and get thrown when we access its retval property (a zig error union)
+        // error strings returned by the thunk are due to problems in the thunking process
+        // (i.e. bugs in export.zig)
+        if (unexpected) {
+          if (unexpected[Symbol.toStringTag] === 'Promise') {
+            // getting a promise, WASM is not yet ready
+            // wait for fulfillment, then either return result or throw
+            return unexpected.then((unexpected) => {
+              if (unexpected) {
+                this.handleError(unexpected);
+              }
+              return args.retval;      
+            }, (err) => {
+              this.handleError(err);
+            })
+          } else {
+            throw unexpected;
+          }        
         }
+        return args.retval;      
+      } catch (err) {
+        this.handleError(err);
       }
-      return args.retval;
     }
 
-    getWASI() {
-      return { 
-        fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
-          if (fd === 1 || fd === 2) {
-            const dv = new DataView(this.memory.buffer);
-            let written = 0;
-            for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
-              const buf_ptr = dv.getUint32(p, true);
-              const buf_len = dv.getUint32(p + 4, true);
-              const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
-              this.writeToConsole(buf);
-              written += buf_len;
+    handleError(unexpected) {
+      if (typeof(unexpected) === 'string') {
+        // an error string
+        throw new ZigError(unexpected);
+      } else if (unexpected instanceof Exit && unexpected.code === 0) {
+        // do nothing when exit code is 0
+        return;
+      } else {
+        throw unexpected;
+      }
+    }
+
+    getWASIImport() {
+      if (this.customWASI) {
+        return this.customWASI.wasiImport;
+      } else {
+        const ENOSYS = 38;
+        const noImpl = () => ENOSYS;
+        return { 
+          args_get: noImpl,
+          args_sizes_get: noImpl,
+          clock_res_get: noImpl,
+          clock_time_get: noImpl,
+          environ_get: noImpl,
+          environ_sizes_get: noImpl,
+          fd_advise: noImpl,
+          fd_allocate: noImpl,
+          fd_close: noImpl,
+          fd_datasync: noImpl,
+          fd_pread: noImpl,
+          fd_pwrite: noImpl,
+          fd_read: noImpl,
+          fd_readdir: noImpl,
+          fd_renumber: noImpl,
+          fd_seek: noImpl,
+          fd_sync: noImpl,
+          fd_tell: noImpl,
+          fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+            if (fd === 1 || fd === 2) {
+              const dv = new DataView(this.memory.buffer);
+              let written = 0;
+              for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+                const buf_ptr = dv.getUint32(p, true);
+                const buf_len = dv.getUint32(p + 4, true);
+                const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+                this.writeToConsole(buf);
+                written += buf_len;
+              }
+              dv.setUint32(written_ptr, written, true);
+              return 0;            
+            } else {
+              return ENOSYS;
             }
-            dv.setUint32(written_ptr, written, true);
-            return 0;            
-          } else {
-            return 1;
-          }
-        },
-        random_get: (buf, buf_len) => {
-          const dv = new DataView(this.memory.buffer, buf, buf_len);
-          for (let i = 0; i < buf_len; i++) {
-            dv.setUint8(i, Math.floor(256 * Math.random()));
-          }
-          return 0;
-        },
-        proc_exit: () => {},
-        path_open: () => 1,
-        fd_read: () => 1,
-        fd_close: () => 1,
-      };
+          },
+          fd_fdstat_get: noImpl,
+          fd_fdstat_set_flags: noImpl,
+          fd_fdstat_set_rights: noImpl,        
+          fd_filestat_get: noImpl,
+          fd_filestat_set_size: noImpl,
+          fd_filestat_set_times: noImpl,
+          fd_prestat_get: noImpl,
+          fd_prestat_dir_name: noImpl,
+          path_create_directory: noImpl,
+          path_filestat_get: noImpl,
+          path_filestat_set_times: noImpl,
+          path_link: noImpl,
+          path_open: noImpl,
+          path_readlink: noImpl,
+          path_remove_directory: noImpl,
+          path_rename: noImpl,
+          path_symlink: noImpl,
+          path_unlink_file: noImpl,       
+          poll_oneoff: noImpl,
+          proc_exit: (code) => {
+            throw new Exit(code);
+          },
+          random_get: (buf, buf_len) => {
+            const dv = new DataView(this.memory.buffer, buf, buf_len);
+            for (let i = 0; i < buf_len; i++) {
+              dv.setUint8(i, Math.floor(256 * Math.random()));
+            }
+            return 0;
+          },
+          sched_yield: noImpl,
+          sock_accept: noImpl,
+          sock_recv: noImpl,
+          sock_send: noImpl,
+          sock_shutdown: noImpl,        
+        };  
+      }
     }
   }
 
@@ -4695,12 +4806,11 @@
   usePointer();
   useObject();
   useComptime();
-  useInt();
   useFloat();
   useStruct();
   useVector();
   useSlice();
-  useEnumeration();
+  useEnum();
   useExtendedUint();
   useErrorSet();
   useErrorUnion();
@@ -4738,7 +4848,7 @@
   const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {}, s6 = {}, s7 = {}, s8 = {}, s9 = {};
   const s10 = {}, s11 = {}, s12 = {}, s13 = {}, s14 = {}, s15 = {}, s16 = {}, s17 = {}, s18 = {}, s19 = {};
   const s20 = {}, s21 = {}, s22 = {}, s23 = {}, s24 = {}, s25 = {}, s26 = {}, s27 = {}, s28 = {}, s29 = {};
-  const s30 = {}, s31 = {}, s32 = {}, s33 = {}, s34 = {}, s35 = {}, s36 = {}, s37 = {}, s38 = {}, s39 = {};
+  const s30 = {}, s31 = {}, s32 = {}, s33 = {}, s34 = {}, s35 = {}, s36 = {}, s37 = {}, s38 = {};
   const o0 = {}, o1 = {}, o2 = {}, o3 = {}, o4 = {}, o5 = {}, o6 = {}, o7 = {}, o8 = {}, o9 = {};
   const o10 = {}, o11 = {}, o12 = {}, o13 = {}, o14 = {}, o15 = {}, o16 = {}, o17 = {}, o18 = {}, o19 = {};
   const o20 = {}, o21 = {}, o22 = {}, o23 = {}, o24 = {}, o25 = {}, o26 = {}, o27 = {}, o28 = {}, o29 = {};
@@ -4747,60 +4857,62 @@
   const o50 = {}, o51 = {}, o52 = {}, o53 = {}, o54 = {}, o55 = {}, o56 = {}, o57 = {}, o58 = {}, o59 = {};
   const o60 = {}, o61 = {}, o62 = {}, o63 = {}, o64 = {}, o65 = {}, o66 = {}, o67 = {}, o68 = {}, o69 = {};
   const o70 = {};
-  const a0 = new Uint8Array();
-  const a1 = new Uint8Array();
-  const a2 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a3 = new Uint8Array();
-  const a4 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 240, 63 ]);
-  const a5 = new Uint8Array();
-  const a6 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a7 = new Uint8Array();
-  const a8 = new Uint8Array();
-  const a9 = new Uint8Array([ 4 ]);
-  const a10 = new Uint8Array();
-  const a11 = new Uint8Array();
-  const a12 = new Uint8Array([ 122, 5, 0, 1 ]);
-  const a13 = new Uint8Array([ 65, 73, 70, 0 ]);
-  const a14 = new Uint8Array([ 137, 5, 0, 1 ]);
-  const a15 = new Uint8Array([ 65, 100, 111, 98, 101, 32, 83, 121, 115, 116, 101, 109, 115, 0 ]);
-  const a16 = new Uint8Array();
-  const a17 = new Uint8Array([ 2 ]);
-  const a18 = new Uint8Array([ 168, 5, 0, 1 ]);
-  const a19 = new Uint8Array([ 97, 32, 118, 97, 114, 105, 97, 98, 108, 101, 32, 115, 101, 112, 105, 97, 32, 102, 105, 108, 116, 101, 114, 0 ]);
-  const a20 = new Uint8Array();
-  const a21 = new Uint8Array();
-  const a22 = new Uint8Array();
-  const a23 = new Uint8Array([ 0 ]);
-  const a24 = new Uint8Array([ 1 ]);
-  const a25 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a27 = new Uint8Array();
-  const a28 = new Uint8Array();
-  const a29 = new Uint8Array();
-  const a30 = new Uint8Array();
-  const a31 = new Uint8Array([ 4 ]);
-  const a32 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a35 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a37 = new Uint8Array();
-  const a38 = new Uint8Array();
-  const a39 = new Uint8Array();
-  const a40 = new Uint8Array();
-  const a41 = new Uint8Array([ 4 ]);
-  const a42 = new Uint8Array([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]);
-  const a45 = new Uint8Array([ 0, 0, 0, 0 ]);
-  const a46 = new Uint8Array([ 27, 0 ]);
-  const a47 = new Uint8Array([ 27, 0 ]);
-  const a48 = new Uint8Array();
-  const a49 = new Uint8Array();
-  const a50 = new Uint8Array();
-  const a51 = new Uint8Array();
+  const U = i => new Uint8Array(i);
+  const a0 = U();
+  const a1 = U();
+  const a2 = U(8);
+  const a3 = U();
+  const a4 = U([ 0, 0, 0, 0, 0, 0, 240, 63 ]);
+  const a5 = U();
+  const a6 = U(8);
+  const a7 = U();
+  const a8 = U();
+  const a9 = U([ 4 ]);
+  const a10 = U();
+  const a11 = U();
+  const a12 = U([ 124, 4, 0, 1 ]);
+  const a13 = U([ 65, 73, 70, 0 ]);
+  const a14 = U([ 128, 4, 0, 1 ]);
+  const a15 = U([ 65, 100, 111, 98, 101, 32, 83, 121, 115, 116, 101, 109, 115, 0 ]);
+  const a16 = U();
+  const a17 = U([ 2 ]);
+  const a18 = U([ 142, 4, 0, 1 ]);
+  const a19 = U([ 97, 32, 118, 97, 114, 105, 97, 98, 108, 101, 32, 115, 101, 112, 105, 97, 32, 102, 105, 108, 116, 101, 114, 0 ]);
+  const a20 = U();
+  const a21 = U();
+  const a22 = U();
+  const a23 = U(1);
+  const a24 = U([ 1 ]);
+  const a25 = U(24);
+  const a27 = U();
+  const a28 = U();
+  const a29 = U();
+  const a30 = U();
+  const a31 = U([ 4 ]);
+  const a32 = U(24);
+  const a35 = U(24);
+  const a37 = U();
+  const a38 = U();
+  const a39 = U();
+  const a40 = U();
+  const a41 = U([ 4 ]);
+  const a42 = U(24);
+  const a45 = U(4);
+  const a46 = U([ 2, 0 ]);
+  const a47 = U([ 2, 0 ]);
+  const a48 = U();
+  const a49 = U();
+  const a50 = U();
+  const a51 = U();
 
   // define objects
-  Object.assign(o0, {
+  const $ = Object.assign;
+  $(o0, {
     slots: {
       0: o1, 1: o3, 2: o5, 3: o7,
     },
   });
-  Object.assign(o1, {
+  $(o1, {
     structure: s0,
     memory: { array: a0 },
     const: true,
@@ -4808,67 +4920,67 @@
       0: o2,
     },
   });
-  Object.assign(o2, {
-    structure: s11,
-  });
-  Object.assign(o3, {
+  $(o2, {
     structure: s10,
+  });
+  $(o3, {
+    structure: s9,
     memory: { array: a1 },
     const: true,
     slots: {
       0: o4,
     },
   });
-  Object.assign(o4, {
-    structure: s12,
+  $(o4, {
+    structure: s11,
     memory: { array: a2 },
     const: true,
   });
-  Object.assign(o5, {
-    structure: s10,
+  $(o5, {
+    structure: s9,
     memory: { array: a3 },
     const: true,
     slots: {
       0: o6,
     },
   });
-  Object.assign(o6, {
-    structure: s12,
+  $(o6, {
+    structure: s11,
     memory: { array: a4 },
     const: true,
   });
-  Object.assign(o7, {
-    structure: s10,
+  $(o7, {
+    structure: s9,
     memory: { array: a5 },
     const: true,
     slots: {
       0: o8,
     },
   });
-  Object.assign(o8, {
-    structure: s12,
+  $(o8, {
+    structure: s11,
     memory: { array: a6 },
     const: true,
   });
-  Object.assign(o9, {
+  $(o9, {
     slots: {
       0: o10,
     },
   });
-  Object.assign(o10, {
-    structure: s13,
+  $(o10, {
+    structure: s12,
     memory: { array: a7 },
     const: true,
     slots: {
       0: o1, 1: o3, 2: o5, 3: o7,
     },
   });
-  Object.assign(o11, {
+  $(o11, {
     slots: {
       0: o12,
     },
   });
-  Object.assign(o12, {
+  $(o12, {
     structure: s6,
     memory: { array: a8 },
     const: true,
@@ -4876,43 +4988,43 @@
       0: o13,
     },
   });
-  Object.assign(o13, {
-    structure: s7,
+  $(o13, {
+    structure: s1,
     memory: { array: a9 },
     const: true,
   });
-  Object.assign(o14, {
+  $(o14, {
     slots: {
       0: o15,
     },
   });
-  Object.assign(o15, {
-    structure: s15,
+  $(o15, {
+    structure: s14,
     memory: { array: a10 },
     const: true,
     slots: {
       0: o12,
     },
   });
-  Object.assign(o16, {
+  $(o16, {
     slots: {
       0: o17,
     },
   });
-  Object.assign(o17, {
-    structure: s15,
+  $(o17, {
+    structure: s14,
     memory: { array: a11 },
     const: true,
     slots: {
       0: o12,
     },
   });
-  Object.assign(o18, {
+  $(o18, {
     slots: {
       0: o19, 1: o21, 2: o23, 3: o25, 4: o27, 5: o28, 6: o29,
     },
   });
-  Object.assign(o19, {
+  $(o19, {
     structure: s3,
     memory: { array: a12 },
     const: true,
@@ -4920,12 +5032,12 @@
       0: o20,
     },
   });
-  Object.assign(o20, {
+  $(o20, {
     structure: s2,
     memory: { array: a13 },
-    reloc: 16778618,
+    reloc: 16778364,
   });
-  Object.assign(o21, {
+  $(o21, {
     structure: s5,
     memory: { array: a14 },
     const: true,
@@ -4933,12 +5045,12 @@
       0: o22,
     },
   });
-  Object.assign(o22, {
+  $(o22, {
     structure: s4,
     memory: { array: a15 },
-    reloc: 16778633,
+    reloc: 16778368,
   });
-  Object.assign(o23, {
+  $(o23, {
     structure: s6,
     memory: { array: a16 },
     const: true,
@@ -4946,87 +5058,87 @@
       0: o24,
     },
   });
-  Object.assign(o24, {
-    structure: s7,
+  $(o24, {
+    structure: s1,
     memory: { array: a17 },
     const: true,
   });
-  Object.assign(o25, {
-    structure: s9,
+  $(o25, {
+    structure: s8,
     memory: { array: a18 },
     const: true,
     slots: {
       0: o26,
     },
   });
-  Object.assign(o26, {
-    structure: s8,
+  $(o26, {
+    structure: s7,
     memory: { array: a19 },
-    reloc: 16778664,
+    reloc: 16778382,
   });
-  Object.assign(o27, {
-    structure: s14,
+  $(o27, {
+    structure: s13,
     memory: { array: a20 },
     const: true,
     slots: {
       0: o10,
     },
   });
-  Object.assign(o28, {
-    structure: s16,
+  $(o28, {
+    structure: s15,
     memory: { array: a21 },
     const: true,
     slots: {
       0: o15,
     },
   });
-  Object.assign(o29, {
-    structure: s17,
+  $(o29, {
+    structure: s16,
     memory: { array: a22 },
     const: true,
     slots: {
       0: o17,
     },
   });
-  Object.assign(o30, {
+  $(o30, {
     slots: {
       0: o31, 1: o32,
     },
   });
-  Object.assign(o31, {
-    structure: s23,
+  $(o31, {
+    structure: s22,
     memory: { array: a23 },
     const: true,
   });
-  Object.assign(o32, {
-    structure: s23,
+  $(o32, {
+    structure: s22,
     memory: { array: a24 },
     const: true,
   });
-  Object.assign(o33, {
+  $(o33, {
     memory: { array: a25 },
     slots: {
       0: o34,
     },
   });
-  Object.assign(o34, {
-    structure: s21,
+  $(o34, {
+    structure: s20,
     memory: { array: a25, offset: 0, length: 8 },
     slots: {
       0: o35,
     },
   });
-  Object.assign(o35, {
-    structure: s20,
+  $(o35, {
+    structure: s19,
     memory: { array: a27 },
     reloc: 0,
   });
-  Object.assign(o36, {
+  $(o36, {
     slots: {
       0: o37, 1: o39, 2: o41,
     },
   });
-  Object.assign(o37, {
+  $(o37, {
     structure: s0,
     memory: { array: a28 },
     const: true,
@@ -5034,10 +5146,10 @@
       0: o38,
     },
   });
-  Object.assign(o38, {
-    structure: s19,
+  $(o38, {
+    structure: s18,
   });
-  Object.assign(o39, {
+  $(o39, {
     structure: s0,
     memory: { array: a29 },
     const: true,
@@ -5045,10 +5157,10 @@
       0: o40,
     },
   });
-  Object.assign(o40, {
-    structure: s25,
+  $(o40, {
+    structure: s24,
   });
-  Object.assign(o41, {
+  $(o41, {
     structure: s6,
     memory: { array: a30 },
     const: true,
@@ -5056,55 +5168,55 @@
       0: o42,
     },
   });
-  Object.assign(o42, {
-    structure: s7,
+  $(o42, {
+    structure: s1,
     memory: { array: a31 },
     const: true,
   });
-  Object.assign(o43, {
+  $(o43, {
     memory: { array: a32 },
     slots: {
       0: o44,
     },
   });
-  Object.assign(o44, {
-    structure: s26,
+  $(o44, {
+    structure: s25,
     memory: { array: a32 },
     slots: {
       0: o45,
     },
   });
-  Object.assign(o45, {
-    structure: s21,
+  $(o45, {
+    structure: s20,
     memory: { array: a32, offset: 0, length: 8 },
     slots: {
       0: o35,
     },
   });
-  Object.assign(o46, {
+  $(o46, {
     memory: { array: a35 },
     slots: {
       0: o47,
     },
   });
-  Object.assign(o47, {
-    structure: s29,
+  $(o47, {
+    structure: s28,
     memory: { array: a35, offset: 0, length: 8 },
     slots: {
       0: o48,
     },
   });
-  Object.assign(o48, {
-    structure: s28,
+  $(o48, {
+    structure: s27,
     memory: { array: a37 },
     reloc: 0,
   });
-  Object.assign(o49, {
+  $(o49, {
     slots: {
       0: o50, 1: o51, 2: o52,
     },
   });
-  Object.assign(o50, {
+  $(o50, {
     structure: s0,
     memory: { array: a38 },
     const: true,
@@ -5112,7 +5224,7 @@
       0: o38,
     },
   });
-  Object.assign(o51, {
+  $(o51, {
     structure: s0,
     memory: { array: a39 },
     const: true,
@@ -5120,7 +5232,7 @@
       0: o40,
     },
   });
-  Object.assign(o52, {
+  $(o52, {
     structure: s6,
     memory: { array: a40 },
     const: true,
@@ -5128,60 +5240,60 @@
       0: o53,
     },
   });
-  Object.assign(o53, {
-    structure: s7,
+  $(o53, {
+    structure: s1,
     memory: { array: a41 },
     const: true,
   });
-  Object.assign(o54, {
+  $(o54, {
     memory: { array: a42 },
     slots: {
       0: o55,
     },
   });
-  Object.assign(o55, {
-    structure: s30,
+  $(o55, {
+    structure: s29,
     memory: { array: a42 },
     slots: {
       0: o56,
     },
   });
-  Object.assign(o56, {
-    structure: s29,
+  $(o56, {
+    structure: s28,
     memory: { array: a42, offset: 0, length: 8 },
     slots: {
       0: o48,
     },
   });
-  Object.assign(o57, {
+  $(o57, {
     memory: { array: a45 },
   });
-  Object.assign(o58, {
+  $(o58, {
     slots: {
       0: o59,
     },
   });
-  Object.assign(o59, {
-    structure: s33,
+  $(o59, {
+    structure: s32,
     memory: { array: a46 },
     const: true,
   });
-  Object.assign(o60, {
+  $(o60, {
     slots: {
       0: o61,
     },
   });
-  Object.assign(o61, {
-    structure: s36,
+  $(o61, {
+    structure: s35,
     memory: { array: a47 },
     const: true,
   });
-  Object.assign(o62, {
+  $(o62, {
     slots: {
       0: o63, 1: o65, 2: o67, 3: o69,
     },
   });
-  Object.assign(o63, {
+  $(o63, {
     structure: s0,
     memory: { array: a48 },
     const: true,
@@ -5189,10 +5301,10 @@
       0: o64,
     },
   });
-  Object.assign(o64, {
-    structure: s18,
+  $(o64, {
+    structure: s17,
   });
-  Object.assign(o65, {
+  $(o65, {
     structure: s0,
     memory: { array: a49 },
     const: true,
@@ -5200,10 +5312,10 @@
       0: o66,
     },
   });
-  Object.assign(o66, {
-    structure: s27,
+  $(o66, {
+    structure: s26,
   });
-  Object.assign(o67, {
+  $(o67, {
     structure: s0,
     memory: { array: a50 },
     const: true,
@@ -5211,10 +5323,10 @@
       0: o68,
     },
   });
-  Object.assign(o68, {
-    structure: s31,
+  $(o68, {
+    structure: s30,
   });
-  Object.assign(o69, {
+  $(o69, {
     structure: s0,
     memory: { array: a51 },
     const: true,
@@ -5222,24 +5334,24 @@
       0: o70,
     },
   });
-  Object.assign(o70, {
-    structure: s32,
+  $(o70, {
+    structure: s31,
   });
 
   // define functions
   const f0 = {
-    argStruct: s35,
+    argStruct: s34,
     thunkId: 2,
     name: "createOutput",
   };
   const f1 = {
-    argStruct: s38,
+    argStruct: s37,
     thunkId: 3,
     name: "createPartialOutput",
   };
 
   // define structures
-  Object.assign(s0, {
+  $(s0, {
     ...s,
     name: "type",
     align: 1,
@@ -5258,7 +5370,7 @@
       methods: [],
     },
   });
-  Object.assign(s1, {
+  $(s1, {
     ...s,
     name: "u8",
     byteSize: 1,
@@ -5277,7 +5389,7 @@
       methods: [],
     },
   });
-  Object.assign(s2, {
+  $(s2, {
     ...s,
     type: 1,
     name: "[3:0]u8",
@@ -5297,7 +5409,7 @@
       methods: [],
     },
   });
-  Object.assign(s3, {
+  $(s3, {
     ...s,
     type: 13,
     name: "*const [3:0]u8",
@@ -5319,7 +5431,7 @@
       methods: [],
     },
   });
-  Object.assign(s4, {
+  $(s4, {
     ...s,
     type: 1,
     name: "[13:0]u8",
@@ -5339,7 +5451,7 @@
       methods: [],
     },
   });
-  Object.assign(s5, {
+  $(s5, {
     ...s,
     type: 13,
     name: "*const [13:0]u8",
@@ -5361,7 +5473,7 @@
       methods: [],
     },
   });
-  Object.assign(s6, {
+  $(s6, {
     ...s,
     name: "comptime_int",
     align: 1,
@@ -5380,26 +5492,7 @@
       methods: [],
     },
   });
-  Object.assign(s7, {
-    ...s,
-    name: "i8",
-    byteSize: 1,
-    align: 1,
-    instance: {
-      members: [
-        {
-          ...m,
-          type: 2,
-          bitOffset: 0,
-          bitSize: 8,
-          byteSize: 1,
-          structure: s7,
-        },
-      ],
-      methods: [],
-    },
-  });
-  Object.assign(s8, {
+  $(s7, {
     ...s,
     type: 1,
     name: "[23:0]u8",
@@ -5419,7 +5512,7 @@
       methods: [],
     },
   });
-  Object.assign(s9, {
+  $(s8, {
     ...s,
     type: 13,
     name: "*const [23:0]u8",
@@ -5435,13 +5528,13 @@
           bitSize: 32,
           byteSize: 4,
           slot: 0,
-          structure: s8,
+          structure: s7,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s10, {
+  $(s9, {
     ...s,
     name: "comptime_float",
     align: 1,
@@ -5454,13 +5547,13 @@
           bitSize: 0,
           byteSize: 0,
           slot: 0,
-          structure: s10,
+          structure: s9,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s11, {
+  $(s10, {
     ...s,
     name: "f32",
     byteSize: 4,
@@ -5473,13 +5566,13 @@
           bitOffset: 0,
           bitSize: 32,
           byteSize: 4,
-          structure: s11,
+          structure: s10,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s12, {
+  $(s11, {
     ...s,
     name: "f64",
     byteSize: 8,
@@ -5492,16 +5585,16 @@
           bitOffset: 0,
           bitSize: 64,
           byteSize: 8,
-          structure: s12,
+          structure: s11,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s13, {
+  $(s12, {
     ...s,
     type: 2,
-    name: "Struct2890073165",
+    name: "Struct0020",
     align: 1,
     instance: {
       members: [
@@ -5517,31 +5610,31 @@
           type: 7,
           slot: 1,
           name: "minValue",
-          structure: s10,
+          structure: s9,
         },
         {
           ...m,
           type: 7,
           slot: 2,
           name: "maxValue",
-          structure: s10,
+          structure: s9,
         },
         {
           ...m,
           type: 7,
           slot: 3,
           name: "defaultValue",
-          structure: s10,
+          structure: s9,
         },
       ],
       methods: [],
       template: o0
     },
   });
-  Object.assign(s14, {
+  $(s13, {
     ...s,
     type: 2,
-    name: "Struct1446025373",
+    name: "Struct0019",
     align: 1,
     instance: {
       members: [
@@ -5550,17 +5643,17 @@
           type: 7,
           slot: 0,
           name: "intensity",
-          structure: s13,
+          structure: s12,
         },
       ],
       methods: [],
       template: o9
     },
   });
-  Object.assign(s15, {
+  $(s14, {
     ...s,
     type: 2,
-    name: "Struct3832472641",
+    name: "Struct0027",
     align: 1,
     instance: {
       members: [
@@ -5576,10 +5669,10 @@
       template: o11
     },
   });
-  Object.assign(s16, {
+  $(s15, {
     ...s,
     type: 2,
-    name: "Struct2242867897",
+    name: "Struct0026",
     align: 1,
     instance: {
       members: [
@@ -5588,17 +5681,17 @@
           type: 7,
           slot: 0,
           name: "src",
-          structure: s15,
+          structure: s14,
         },
       ],
       methods: [],
       template: o14
     },
   });
-  Object.assign(s17, {
+  $(s16, {
     ...s,
     type: 2,
-    name: "Struct172100005",
+    name: "Struct0029",
     align: 1,
     instance: {
       members: [
@@ -5607,14 +5700,14 @@
           type: 7,
           slot: 0,
           name: "dst",
-          structure: s15,
+          structure: s14,
         },
       ],
       methods: [],
       template: o16
     },
   });
-  Object.assign(s18, {
+  $(s17, {
     ...s,
     type: 2,
     name: "sepia.kernel",
@@ -5647,35 +5740,35 @@
           type: 7,
           slot: 3,
           name: "description",
-          structure: s9,
+          structure: s8,
         },
         {
           ...m,
           type: 7,
           slot: 4,
           name: "parameters",
-          structure: s14,
+          structure: s13,
         },
         {
           ...m,
           type: 7,
           slot: 5,
           name: "inputImages",
-          structure: s16,
+          structure: s15,
         },
         {
           ...m,
           type: 7,
           slot: 6,
           name: "outputImages",
-          structure: s17,
+          structure: s16,
         },
       ],
       methods: [],
       template: o18
     },
   });
-  Object.assign(s19, {
+  $(s18, {
     ...s,
     type: 15,
     name: "@Vector(4, u8)",
@@ -5695,7 +5788,7 @@
       methods: [],
     },
   });
-  Object.assign(s20, {
+  $(s19, {
     ...s,
     type: 14,
     name: "[_]const @Vector(4, u8)",
@@ -5708,13 +5801,13 @@
           type: 5,
           bitSize: 32,
           byteSize: 4,
-          structure: s19,
+          structure: s18,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s21, {
+  $(s20, {
     ...s,
     type: 13,
     name: "[]const @Vector(4, u8)",
@@ -5730,13 +5823,13 @@
           bitSize: 64,
           byteSize: 8,
           slot: 0,
-          structure: s20,
+          structure: s19,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s22, {
+  $(s21, {
     ...s,
     name: "u32",
     byteSize: 4,
@@ -5749,13 +5842,13 @@
           bitOffset: 0,
           bitSize: 32,
           byteSize: 4,
-          structure: s22,
+          structure: s21,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s23, {
+  $(s22, {
     ...s,
     type: 11,
     name: "sepia.ColorSpace",
@@ -5769,7 +5862,7 @@
           bitOffset: 0,
           bitSize: 1,
           byteSize: 1,
-          structure: s23,
+          structure: s22,
         },
       ],
       methods: [],
@@ -5781,21 +5874,21 @@
           type: 7,
           slot: 0,
           name: "srgb",
-          structure: s23,
+          structure: s22,
         },
         {
           ...m,
           type: 7,
           slot: 1,
           name: "display-p3",
-          structure: s23,
+          structure: s22,
         },
       ],
       methods: [],
       template: o30
     },
   });
-  Object.assign(s24, {
+  $(s23, {
     ...s,
     name: "usize",
     byteSize: 4,
@@ -5808,13 +5901,13 @@
           bitOffset: 0,
           bitSize: 32,
           byteSize: 4,
-          structure: s24,
+          structure: s23,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s25, {
+  $(s24, {
     ...s,
     type: 15,
     name: "@Vector(4, f32)",
@@ -5828,13 +5921,13 @@
           type: 4,
           bitSize: 32,
           byteSize: 4,
-          structure: s11,
+          structure: s10,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s26, {
+  $(s25, {
     ...s,
     type: 2,
     name: "sepia.Image(u8,4,false)",
@@ -5852,7 +5945,7 @@
           byteSize: 8,
           slot: 0,
           name: "data",
-          structure: s21,
+          structure: s20,
         },
         {
           ...m,
@@ -5863,7 +5956,7 @@
           byteSize: 4,
           slot: 1,
           name: "width",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -5874,7 +5967,7 @@
           byteSize: 4,
           slot: 2,
           name: "height",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -5884,7 +5977,7 @@
           byteSize: 1,
           slot: 3,
           name: "colorSpace",
-          structure: s23,
+          structure: s22,
         },
         {
           ...m,
@@ -5894,7 +5987,7 @@
           byteSize: 4,
           slot: 4,
           name: "offset",
-          structure: s24,
+          structure: s23,
         },
       ],
       methods: [],
@@ -5928,7 +6021,7 @@
       template: o36
     },
   });
-  Object.assign(s27, {
+  $(s26, {
     ...s,
     type: 2,
     name: "sepia.KernelInput(u8,sepia.kernel)",
@@ -5945,14 +6038,14 @@
           byteSize: 24,
           slot: 0,
           name: "src",
-          structure: s26,
+          structure: s25,
         },
       ],
       methods: [],
       template: o43
     },
   });
-  Object.assign(s28, {
+  $(s27, {
     ...s,
     type: 14,
     name: "[_]@Vector(4, u8)",
@@ -5965,13 +6058,13 @@
           type: 5,
           bitSize: 32,
           byteSize: 4,
-          structure: s19,
+          structure: s18,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s29, {
+  $(s28, {
     ...s,
     type: 13,
     name: "[]@Vector(4, u8)",
@@ -5986,13 +6079,13 @@
           bitSize: 64,
           byteSize: 8,
           slot: 0,
-          structure: s28,
+          structure: s27,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s30, {
+  $(s29, {
     ...s,
     type: 2,
     name: "sepia.Image(u8,4,true)",
@@ -6010,7 +6103,7 @@
           byteSize: 8,
           slot: 0,
           name: "data",
-          structure: s29,
+          structure: s28,
         },
         {
           ...m,
@@ -6021,7 +6114,7 @@
           byteSize: 4,
           slot: 1,
           name: "width",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6032,7 +6125,7 @@
           byteSize: 4,
           slot: 2,
           name: "height",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6042,7 +6135,7 @@
           byteSize: 1,
           slot: 3,
           name: "colorSpace",
-          structure: s23,
+          structure: s22,
         },
         {
           ...m,
@@ -6052,7 +6145,7 @@
           byteSize: 4,
           slot: 4,
           name: "offset",
-          structure: s24,
+          structure: s23,
         },
       ],
       methods: [],
@@ -6086,7 +6179,7 @@
       template: o49
     },
   });
-  Object.assign(s31, {
+  $(s30, {
     ...s,
     type: 2,
     name: "sepia.KernelOutput(u8,sepia.kernel)",
@@ -6103,14 +6196,14 @@
           byteSize: 24,
           slot: 0,
           name: "dst",
-          structure: s30,
+          structure: s29,
         },
       ],
       methods: [],
       template: o54
     },
   });
-  Object.assign(s32, {
+  $(s31, {
     ...s,
     type: 2,
     name: "sepia.KernelParameters(sepia.kernel)",
@@ -6126,17 +6219,17 @@
           byteSize: 4,
           slot: 0,
           name: "intensity",
-          structure: s11,
+          structure: s10,
         },
       ],
       methods: [],
       template: o57
     },
   });
-  Object.assign(s33, {
+  $(s32, {
     ...s,
     type: 10,
-    name: "ErrorSet3691325303",
+    name: "ErrorSet0044",
     byteSize: 2,
     align: 2,
     instance: {
@@ -6147,7 +6240,7 @@
           bitOffset: 0,
           bitSize: 16,
           byteSize: 2,
-          structure: s33,
+          structure: s32,
         },
       ],
       methods: [],
@@ -6159,17 +6252,17 @@
           type: 7,
           slot: 0,
           name: "OutOfMemory",
-          structure: s33,
+          structure: s32,
         },
       ],
       methods: [],
       template: o58
     },
   });
-  Object.assign(s34, {
+  $(s33, {
     ...s,
     type: 9,
-    name: "ErrorSet3691325303!sepia.KernelOutput(u8,sepia.kernel)",
+    name: "ErrorSet0044!sepia.KernelOutput(u8,sepia.kernel)",
     byteSize: 28,
     align: 4,
     hasPointer: true,
@@ -6183,7 +6276,7 @@
           byteSize: 24,
           slot: 0,
           name: "value",
-          structure: s31,
+          structure: s30,
         },
         {
           ...m,
@@ -6192,16 +6285,16 @@
           bitSize: 16,
           byteSize: 2,
           name: "error",
-          structure: s33,
+          structure: s32,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s35, {
+  $(s34, {
     ...s,
     type: 5,
-    name: "createOutput",
+    name: "Arg0050",
     byteSize: 64,
     align: 4,
     hasPointer: true,
@@ -6214,9 +6307,9 @@
           bitOffset: 0,
           bitSize: 32,
           byteSize: 4,
-          slot: 3,
+          slot: 0,
           name: "0",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6225,9 +6318,9 @@
           bitOffset: 32,
           bitSize: 32,
           byteSize: 4,
-          slot: 4,
+          slot: 1,
           name: "1",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6236,9 +6329,9 @@
           bitOffset: 64,
           bitSize: 192,
           byteSize: 24,
-          slot: 0,
+          slot: 2,
           name: "2",
-          structure: s27,
+          structure: s26,
         },
         {
           ...m,
@@ -6247,9 +6340,9 @@
           bitOffset: 256,
           bitSize: 32,
           byteSize: 4,
-          slot: 1,
+          slot: 3,
           name: "3",
-          structure: s32,
+          structure: s31,
         },
         {
           ...m,
@@ -6258,18 +6351,18 @@
           bitOffset: 288,
           bitSize: 224,
           byteSize: 28,
-          slot: 2,
+          slot: 4,
           name: "retval",
-          structure: s34,
+          structure: s33,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s36, {
+  $(s35, {
     ...s,
     type: 10,
-    name: "ErrorSet4203942675",
+    name: "ErrorSet0047",
     byteSize: 2,
     align: 2,
     instance: {
@@ -6280,7 +6373,7 @@
           bitOffset: 0,
           bitSize: 16,
           byteSize: 2,
-          structure: s36,
+          structure: s35,
         },
       ],
       methods: [],
@@ -6292,17 +6385,17 @@
           type: 7,
           slot: 0,
           name: "OutOfMemory",
-          structure: s36,
+          structure: s35,
         },
       ],
       methods: [],
       template: o60
     },
   });
-  Object.assign(s37, {
+  $(s36, {
     ...s,
     type: 9,
-    name: "ErrorSet4203942675!sepia.KernelOutput(u8,sepia.kernel)",
+    name: "ErrorSet0047!sepia.KernelOutput(u8,sepia.kernel)",
     byteSize: 28,
     align: 4,
     hasPointer: true,
@@ -6316,7 +6409,7 @@
           byteSize: 24,
           slot: 0,
           name: "value",
-          structure: s31,
+          structure: s30,
         },
         {
           ...m,
@@ -6325,16 +6418,16 @@
           bitSize: 16,
           byteSize: 2,
           name: "error",
-          structure: s36,
+          structure: s35,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s38, {
+  $(s37, {
     ...s,
     type: 5,
-    name: "createPartialOutput",
+    name: "Arg0051",
     byteSize: 72,
     align: 4,
     hasPointer: true,
@@ -6347,9 +6440,9 @@
           bitOffset: 0,
           bitSize: 32,
           byteSize: 4,
-          slot: 3,
+          slot: 0,
           name: "0",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6358,9 +6451,9 @@
           bitOffset: 32,
           bitSize: 32,
           byteSize: 4,
-          slot: 4,
+          slot: 1,
           name: "1",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6369,9 +6462,9 @@
           bitOffset: 64,
           bitSize: 32,
           byteSize: 4,
-          slot: 5,
+          slot: 2,
           name: "2",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6380,9 +6473,9 @@
           bitOffset: 96,
           bitSize: 32,
           byteSize: 4,
-          slot: 6,
+          slot: 3,
           name: "3",
-          structure: s22,
+          structure: s21,
         },
         {
           ...m,
@@ -6391,9 +6484,9 @@
           bitOffset: 128,
           bitSize: 192,
           byteSize: 24,
-          slot: 0,
+          slot: 4,
           name: "4",
-          structure: s27,
+          structure: s26,
         },
         {
           ...m,
@@ -6402,9 +6495,9 @@
           bitOffset: 320,
           bitSize: 32,
           byteSize: 4,
-          slot: 1,
+          slot: 5,
           name: "5",
-          structure: s32,
+          structure: s31,
         },
         {
           ...m,
@@ -6413,15 +6506,15 @@
           bitOffset: 352,
           bitSize: 224,
           byteSize: 28,
-          slot: 2,
+          slot: 6,
           name: "retval",
-          structure: s37,
+          structure: s36,
         },
       ],
       methods: [],
     },
   });
-  Object.assign(s39, {
+  $(s38, {
     ...s,
     type: 2,
     name: "sepia",
@@ -6467,9 +6560,9 @@
     s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
     s10, s11, s12, s13, s14, s15, s16, s17, s18, s19,
     s20, s21, s22, s23, s24, s25, s26, s27, s28, s29,
-    s30, s31, s32, s33, s34, s35, s36, s37, s38, s39,
+    s30, s31, s32, s33, s34, s35, s36, s37, s38,
   ];
-  const root = s39;
+  const root = s38;
   const options = {
     runtimeSafety: false,
     littleEndian: true,
@@ -6485,7 +6578,7 @@
   // initiate loading and compilation of WASM bytecodes
   const source = (async () => {
     // sepia.zig
-    const binaryString = atob("AGFzbQEAAAABZA5gBH9/f38Bf2AFf39/f38AYAJ/fwF/YAZ/f39/f38Bf2ADf39/AX9gAn9/AGADf39/AGABfwBgAX8Bf2AAAX9gBH9/f38AYAh/f39/f39/fwBgBn9/fX19fQBgBn9/f39/fwACegYDZW52DF9jYXB0dXJlVmlldwAEA2Vudgpfc3RhcnRDYWxsAAIDZW52CF9lbmRDYWxsAAUDZW52E19hbGxvY2F0ZUhvc3RNZW1vcnkAAgNlbnYPX2dldFZpZXdBZGRyZXNzAAgDZW52D19mcmVlSG9zdE1lbW9yeQAGAxYVAgAGAQQKAgkIAwICAAMBCwwNAAMBBAUBcAENDQUEAQCBAgYJAX8BQYCAgAgLB4EBBwZtZW1vcnkCABRhbGxvY2F0ZUV4dGVybk1lbW9yeQAGEGZyZWVFeHRlcm5NZW1vcnkACBRhbGxvY2F0ZVNoYWRvd01lbW9yeQAKEGZyZWVTaGFkb3dNZW1vcnkACwhydW5UaHVuawAMFWlzUnVudGltZVNhZmV0eUFjdGl2ZQANCRIBAEEBCwwAEBEHDwkSExQYGRoK4BoVyQEBAX8CQCAAIABBHyABZ2tBD3FBACABGyIBIAAQByICRQ0AAkACQAJAIAEOAgABAgsgAiEBA0AgAEUNAyABQQA6AAAgAEF/aiEAIAFBAWohAQwACwsgAkGq1arVeiAAGyEBIABBAXZBACAAGyEAA0AgAEUNAiABQQA7AAAgAEF/aiEAIAFBAmohAQwACwsgAkGq1arVeiAAGyEBIABBAnZBACAAGyEAA0AgAEUNASABQQA2AAAgAEF/aiEAIAFBBGohAQwACwsgAgvOAQEDf0EAIQQCQEF/IAFBBGoiBSAFIAFJGyIBQQEgAnQiAiABIAJLGyICQX9qZyIBRQ0AAkACQEEcQgFBICABa61C//8Dg4anIgVnayIBQQ1PDQAgAUECdCIGQZi8gAhqIgIoAgAiAUUNASACIAUgAWpBfGooAgA2AgAgAQ8LIAJBg4AEakEQdhAOIQQMAQsCQCAGQcy8gAhqIgIoAgAiAUH//wNxDQBBARAOIgFFDQEgAiABIAVqNgIAIAEPCyACIAEgBWo2AgAgAQ8LIAQLGgAgAiAAIAFBHyACZ2tBD3FBACACGyACEAkLoQEBAX8CQAJAQRxCAUEgIAJBBGoiAkEBIAN0IgMgAiADSxsiA0F/amdrrUL//wODhqciAmdrIgVBDU8NACAFQQJ0QZi8gAhqIQMgASACakF8aiECDAELIAFCAUEgIANBg4AEakEQdkF/amdrrUL//wODhqciA0EQdGpBfGohAiADZ0Efc0ECdEGAvYAIaiEDCyACIAMoAgA2AgAgAyABNgIAC04BAX8CQCABDQBBAEEAQQAQAA8LQQAhAwJAIAAoAgAgAUEfIAJna0EPcUEAIAIbQQAgACgCBCgCABEAACICRQ0AIAIgAUEAEAAhAwsgAwsuAAJAIAJFDQAgACgCACABIAJBHyADZ2tBD3FBACADG0EAIAAoAgQoAggRAQALC34BAX8jAEGgwABrIgIkACACQRBqQYDAADYCACACQQxqIAJBFGo2AgAgAkGYiIAINgKcQCACQQA2AgggAkEAKQOQgIAINwMAIAIgAjYCmEAgAkGYwABqIAJBmMAAaiABEAEgABECACEAIAJBmMAAaiABEAIgAkGgwABqJAAgAAsEAEEAC1oBAn8CQEIBQSAgAEF/amdrrUL//wODhqciAWdBH3NBAnRBgL2ACGoiAigCACIARQ0AIAIgAUEQdCAAakF8aigCADYCACAADwtBACABQAAiAEEQdCAAQX9GGwuuAQEBf0F/IARBBGoiBiAGIARJGyIGQQEgA3QiBCAGIARLGyEDAkACQEIBQSAgAkEEaiICIAQgAiAESxsiBEF/amdrrUL//wODhqciAmdBcGpBDEsNACADQX9qZyIEDQFBAA8LQgFBICAEQYOABGpBEHZBf2pna61C//8Dg4anQgFBICADQYOABGpBEHZBf2pna61C//8Dg4anRg8LIAJCAUEgIARrrUL//wODhqdGC6ICAQN/IwBB4ABrIgIkAAJAQQAoAry9gAgNAEEAIAA2Ary9gAgLIAEvAAAhAyACQQhqQRhqIAFBEGopAgA3AwAgAkEoaiABQRhqKQIANwMAIAIgAzsBPCACQbCBgAg2AgwgAiABKAIAIgM2AhAgAiABKAIEIgQ2AhQgAiABKQIINwMYIAIgASgCIDYCMCACIAJBOGo2AgggAiAANgI4IAJBxABqIAJBCGogAyAEIAJBCGpBEGogAkEwahAXIAFBPGogAkHEAGpBGGooAgA2AgAgAUE0aiACQcQAakEQaikCADcCACABQSxqIAJBzABqKQIANwIAIAEgAikCRDcCJAJAQQAoAry9gAggAEcNAEEAQQA2Ary9gAgLIAJB4ABqJABBAAuzAgEFfyMAQeAAayICJAACQEEAKAK8vYAIDQBBACAANgK8vYAICyABLwAAIQMgAkEgaiABQRhqKQIANwMAIAJBKGogAUEgaikCADcDACACIAM7ATwgAkGwgYAINgIEIAIgASgCACIDNgIIIAIgASgCBCIENgIMIAIgASgCCCIFNgIQIAIgASgCDCIGNgIUIAIgASkCEDcDGCACIAJBOGo2AgAgAiAANgI4IAIgASgCKDYCMCACQcQAaiACIAMgBCAFIAYgAkEYaiACQTBqEBUgAUHEAGogAkHEAGpBGGooAgA2AgAgAUE8aiACQdQAaikCADcCACABQTRqIAJBzABqKQIANwIAIAEgAikCRDcCLAJAQQAoAry9gAggAEcNAEEAQQA2Ary9gAgLIAJB4ABqJABBAAuzAQEHfyMAQRBrIgQkACAAQQxqKAIAIQUgACgCCCEGAkACQAJAAkAgAkEfcQ0AQQAhBwwBCyAEQQEgAnQiCCAFIAZqIgdqQX9qIgkgB0kiCjoADCAKDQEgCUEAIAhrcSAHayEHCyAHIAZqIgcgAWoiBiAAQRBqKAIASw0AIAAgBjYCCCAFRQ0AIAUgB2ohAAwBCyAAKAIAIAEgAiADIAAoAgQoAgARAAAhAAsgBEEQaiQAIAALjwEBAn8CQAJAAkAgAEEMaigCACIGIAFLDQAgAEEQaigCACIHIAZqIAFNDQACQCABIAJqIAYgACgCCCIBakYNACAEIAJNDwsgASAEIAJraiEGIAQgAk0NAkEAIQEgBiAHTQ0CDAELIAAoAgAgASACIAMgBCAFIAAoAgQoAgQRAwAhAQsgAQ8LIAAgBjYCCEEBC14BAX8CQAJAIABBDGooAgAiBSABSw0AIABBEGooAgAgBWogAU0NACABIAJqIAUgACgCCCIBakcNASAAIAEgAms2AggPCyAAKAIAIAEgAiADIAQgACgCBCgCCBEBAAsL7AcKAX8BfgR/AX0BfwF9AX8BfQF/BH0jAEEwayIIJAAgASkCACEJIAggBSACbCIKQf////8DSzoALAJAAkACQCAKQYCAgIAESQ0AQRshAQwBCwJAAkAgCkECdCIBDQBC/P///w8hCQwBC0IAQoCAgICwAyAJpyABQQJBACAJQiCIpygCABEAACILGyIJQiCIpyIBDQEgCSALrYQhCQsgCEEAOgAoIAUgBGohDEEAIAQgAmwiDWshCyAGKAIMQX9qsyEOIAYoAggiD0F/arMhECAGKAIQIREgByoCACESIAYoAgAhEyAJpyEHAkADQCAEIAxPDQFBACEFAkADQCACIAVGDQECQAJAIAWzQwAAAD+SjiIUIBBfQQFzIASzQwAAAD+SjiIVIA5fQQFzQQF0ckUNAEMAAAAAIRRDAAAAACEVQwAAAAAhFkMAAAAAIRcMAQsCQAJAIBRDAACAT10gFEMAAAAAYHFFDQAgFKkhBgwBC0EAIQYLIAYgEWshBgJAAkAgFUMAAIBPXSAVQwAAAABgcUUNACAVqSEBDAELQQAhAQsgEyAGIA8gAWxqQQJ0aiIGLQADs0MAAH9DlSEXIAYtAAKzQwAAf0OVIRYgBi0AAbNDAAB/Q5UhFSAGLQAAs0MAAH9DlSEUCyAIQRBqQbCAgAggFCAVIBYgFxAWIAhB8ICACCAIKgIQIBJDAAAAACAIKgIcEBYCQAJAIAgqAgxDAAB/Q5QiFEMAAAAAIBRDAAAAAF4bIhRDAAB/QyAUQwAAf0NdGyIUQwAAgE9dIBRDAAAAAGBxRQ0AIBSpIQEMAQtBACEBCyAIKgIAIRUgCCoCBCEWIAgqAgghFCAHIAsgBWogBCACbGpBAnRqIgZBA2ogAToAAAJAAkAgFEMAAH9DlCIUQwAAAAAgFEMAAAAAXhsiFEMAAH9DIBRDAAB/Q10bIhRDAACAT10gFEMAAAAAYHFFDQAgFKkhAQwBC0EAIQELIAYgAToAAgJAAkAgFkMAAH9DlCIUQwAAAAAgFEMAAAAAXhsiFEMAAH9DIBRDAAB/Q10bIhRDAACAT10gFEMAAAAAYHFFDQAgFKkhAQwBC0EAIQELIAYgAToAAQJAAkAgFUMAAH9DlCIUQwAAAAAgFEMAAAAAXhsiFEMAAH9DIBRDAAB/Q10bIhRDAACAT10gFEMAAAAAYHFFDQAgFKkhAQwBC0EAIQELIAYgAToAACAFQQFqIQUMAAsLIARBAWohBAwACwsgAEEAOgAUIAAgDTYCECAAIAM2AgwgACACNgIIIAAgCjYCBCAAIAc2AgAgAEEAOwEYDAELIAAgATsBGAsgCEEwaiQAC8MBACAAQQxqIAFBDGoqAgAgApQgAUEcaioCACADlJIgAUEsaioCACAElJIgAUE8aioCACAFlJI4AgAgACABKgIIIAKUIAFBGGoqAgAgA5SSIAFBKGoqAgAgBJSSIAFBOGoqAgAgBZSSOAIIIAAgASoCBCAClCABQRRqKgIAIAOUkiABQSRqKgIAIASUkiABQTRqKgIAIAWUkjgCBCAAIAEqAgAgApQgASoCECADlJIgASoCICAElJIgASoCMCAFlJI4AgALFAAgACABIAIgA0EAIAMgBCAFEBULHAACQCABQQEgAkEPcXQQAyICDQBBAA8LIAIQBAsEAEEACxAAIAEgAkEBIANBD3F0EAULC6k8AgBBgICACAuYCAQAAAAFAAAABgAAAAAAAAAAAAAAAAAAAXoFAAGJBQABqAUAAQAAAAAAAAAAAAAAAIcWmT51kxg/hxZZPgAAAACiRRY/zcyMvlTjBb8AAAAA1XjpPR1apL5kO58+AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAarx0P5ZDi77NzIy/AAAAANv5Hj/LoSW/mpnZPwAAAAAAAAAAAAAAAAAAAAAAAIA/CgAAAAsAAAAMAAAAdW5hYmxlX3RvX2FsbG9jYXRlX21lbW9yeQB1bmFibGVfdG9fZnJlZV9tZW1vcnkAT3V0T2ZNZW1vcnkAT3ZlcmZsb3cAdW5hYmxlX3RvX2NyZWF0ZV9kYXRhX3ZpZXcAdW5hYmxlX3RvX29idGFpbl9zbG90AE5vU3BhY2VMZWZ0AHVuYWJsZV90b19pbnNlcnRfb2JqZWN0AHVuYWJsZV90b19yZXRyaWV2ZV9vYmplY3QAdW5hYmxlX3RvX2NyZWF0ZV9vYmplY3QAdW5hYmxlX3RvX2FkZF9zdHJ1Y3R1cmVfbWVtYmVyAHVuYWJsZV90b19hZGRfc3RhdGljX21lbWJlcgB1bmtub3duAHVuYWJsZV90b19zdGFydF9zdHJ1Y3R1cmVfZGVmaW5pdGlvbgBVdGY4RXhwZWN0ZWRDb250aW51YXRpb24AdW5hYmxlX3RvX3JldHJpZXZlX21lbW9yeV9sb2NhdGlvbgB1bmFibGVfdG9fY3JlYXRlX3N0cmluZwBVdGY4T3ZlcmxvbmdFbmNvZGluZwBVdGY4RW5jb2Rlc1N1cnJvZ2F0ZUhhbGYAdW5hYmxlX3RvX2NyZWF0ZV9zdHJ1Y3R1cmVfdGVtcGxhdGUAdW5hYmxlX3RvX2FkZF9zdHJ1Y3R1cmVfdGVtcGxhdGUAdW5hYmxlX3RvX2RlZmluZV9zdHJ1Y3R1cmUAdW5hYmxlX3RvX3dyaXRlX3RvX2NvbnNvbGUAVXRmOENvZGVwb2ludFRvb0xhcmdlAHVuYWJsZV90b19hZGRfbWV0aG9kAHBvaW50ZXJfaXNfaW52YWxpZABJbnZhbGlkVXRmOAAAAAAAAAAAAAD4AAABCAAAAMMBAAEHAAAAvAAAARkAAADWAAABFQAAAAkCAAEiAAAAAQEAARoAAABwAQABFwAAABwBAAEVAAAAVgEAARkAAAA+AQABFwAAAMsBAAEkAAAAiAEAAR4AAACnAQABGwAAAAMDAAEUAAAAcgIAASMAAAAsAgABFwAAAJYCAAEgAAAAtwIAARoAAADSAgABGgAAABgDAAESAAAAKwMAAQsAAADwAQABGAAAAEQCAAEUAAAAWQIAARgAAADtAgABFQAAADIBAAELAAAA7AAAAQsAAAAAQZiIgAgL/jMHAAAACAAAAAkAAABuYW1lAHR5cGUAbGVuZ3RoAGJ5dGVTaXplAGFsaWduAGlzQ29uc3QAaXNUdXBsZQBoYXNQb2ludGVyAGlzUmVxdWlyZWQAYml0T2Zmc2V0AGJpdFNpemUAc2xvdABzdHJ1Y3R1cmUAYXJnU3RydWN0AHRodW5rSWQAa2VybmVsAAACSW5wdXQAAE91dHB1dAAAUGFyYW1ldGVycwAAY3JlYXRlT3V0cHV0AABjcmVhdGVQYXJ0aWFsT3V0cHV0AABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gc2VwaWF9AHNlcGlhAABzdHJ1Y3R7Y29tcHRpbWUgdHlwZSA9IGV4cG9ydGVyLmFkZFN0YXRpY01lbWJlcnNfX2Fub25fMTY0Ny5TdGF0aWN9AHN0cnVjdHtjb21wdGltZSBpbmRleDogdXNpemUgPSAwfQBBSUYAbmFtZXNwYWNlAABBZG9iZSBTeXN0ZW1zAHZlbmRvcgAAdmVyc2lvbgAAYSB2YXJpYWJsZSBzZXBpYSBmaWx0ZXIAZGVzY3JpcHRpb24AAHBhcmFtZXRlcnMAAGlucHV0SW1hZ2VzAABvdXRwdXRJbWFnZXMAAHN0cnVjdHtjb21wdGltZSBpbmRleDogdXNpemUgPSAxfQBzcmMAAARzdHJ1Y3R7Y29tcHRpbWUgaW5kZXg6IHVzaXplID0gMn0AZHN0AABzdHJ1Y3R7Y29tcHRpbWUgaW5kZXg6IHVzaXplID0gM30AaW50ZW5zaXR5AAAwAAAxAAAyAAAzAAByZXR2YWwAAHZhbHVlAGVycm9yADQAADUAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSB0eXBlfQB0eXBlAABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gc2VwaWEua2VybmVsfQBzZXBpYS5rZXJuZWwAAHN0cnVjdHtjb21wdGltZSBpbmRleDogdXNpemUgPSA0fQAAAAAAAAAAAAAA8D9zdHJ1Y3R7Y29tcHRpbWUgaW5kZXg6IHVzaXplID0gNX0Ac3RydWN0e2NvbXB0aW1lIGluZGV4OiB1c2l6ZSA9IDZ9AHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBzZXBpYS5LZXJuZWxJbnB1dCh1OCxzZXBpYS5rZXJuZWwpfQBzZXBpYS5LZXJuZWxJbnB1dCh1OCxzZXBpYS5rZXJuZWwpAABzdHJ1Y3R7Y29tcHRpbWUgdHlwZSA9IHNlcGlhLktlcm5lbElucHV0KHU4LHNlcGlhLmtlcm5lbCl9AGRhdGEAAFtfXWNvbnN0IEBWZWN0b3IoNCwgdTgpAAAAd2lkdGgAAGhlaWdodAAAY29sb3JTcGFjZQAAAW9mZnNldAAAUGl4ZWwAAEZQaXhlbAAAY2hhbm5lbHMAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBzZXBpYS5LZXJuZWxPdXRwdXQodTgsc2VwaWEua2VybmVsKX0Ac2VwaWEuS2VybmVsT3V0cHV0KHU4LHNlcGlhLmtlcm5lbCkAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc2VwaWEuS2VybmVsT3V0cHV0KHU4LHNlcGlhLmtlcm5lbCl9AFtfXUBWZWN0b3IoNCwgdTgpAAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHNlcGlhLktlcm5lbFBhcmFtZXRlcnMoc2VwaWEua2VybmVsKX0Ac2VwaWEuS2VybmVsUGFyYW1ldGVycyhzZXBpYS5rZXJuZWwpAABzdHJ1Y3R7Y29tcHRpbWUgdHlwZSA9IHNlcGlhLktlcm5lbFBhcmFtZXRlcnMoc2VwaWEua2VybmVsKX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGV4cG9ydGVyLkFyZ3VtZW50U3RydWN0KChmdW5jdGlvbiAnY3JlYXRlT3V0cHV0JyksZm4gKG1lbS5BbGxvY2F0b3IsIHUzMiwgdTMyLCBzZXBpYS5LZXJuZWxJbnB1dCh1OCxzZXBpYS5rZXJuZWwpLCBzZXBpYS5LZXJuZWxQYXJhbWV0ZXJzKHNlcGlhLmtlcm5lbCkpIEB0eXBlSW5mbyhAdHlwZUluZm8oQFR5cGVPZihzZXBpYS5jcmVhdGVPdXRwdXQpKS5Gbi5yZXR1cm5fdHlwZS4/KS5FcnJvclVuaW9uLmVycm9yX3NldCFzZXBpYS5LZXJuZWxPdXRwdXQodTgsc2VwaWEua2VybmVsKSl9AHN0cnVjdHtjb21wdGltZSB0eXBlID0gZXhwb3J0ZXIuQXJndW1lbnRTdHJ1Y3QoKGZ1bmN0aW9uICdjcmVhdGVPdXRwdXQnKSxmbiAobWVtLkFsbG9jYXRvciwgdTMyLCB1MzIsIHNlcGlhLktlcm5lbElucHV0KHU4LHNlcGlhLmtlcm5lbCksIHNlcGlhLktlcm5lbFBhcmFtZXRlcnMoc2VwaWEua2VybmVsKSkgQHR5cGVJbmZvKEB0eXBlSW5mbyhAVHlwZU9mKHNlcGlhLmNyZWF0ZU91dHB1dCkpLkZuLnJldHVybl90eXBlLj8pLkVycm9yVW5pb24uZXJyb3Jfc2V0IXNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpKX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGV4cG9ydGVyLkFyZ3VtZW50U3RydWN0KChmdW5jdGlvbiAnY3JlYXRlUGFydGlhbE91dHB1dCcpLGZuIChtZW0uQWxsb2NhdG9yLCB1MzIsIHUzMiwgdTMyLCB1MzIsIHNlcGlhLktlcm5lbElucHV0KHU4LHNlcGlhLmtlcm5lbCksIHNlcGlhLktlcm5lbFBhcmFtZXRlcnMoc2VwaWEua2VybmVsKSkgQHR5cGVJbmZvKEB0eXBlSW5mbyhAVHlwZU9mKHNlcGlhLmNyZWF0ZVBhcnRpYWxPdXRwdXQpKS5Gbi5yZXR1cm5fdHlwZS4/KS5FcnJvclVuaW9uLmVycm9yX3NldCFzZXBpYS5LZXJuZWxPdXRwdXQodTgsc2VwaWEua2VybmVsKSl9AHN0cnVjdHtjb21wdGltZSB0eXBlID0gZXhwb3J0ZXIuQXJndW1lbnRTdHJ1Y3QoKGZ1bmN0aW9uICdjcmVhdGVQYXJ0aWFsT3V0cHV0JyksZm4gKG1lbS5BbGxvY2F0b3IsIHUzMiwgdTMyLCB1MzIsIHUzMiwgc2VwaWEuS2VybmVsSW5wdXQodTgsc2VwaWEua2VybmVsKSwgc2VwaWEuS2VybmVsUGFyYW1ldGVycyhzZXBpYS5rZXJuZWwpKSBAdHlwZUluZm8oQHR5cGVJbmZvKEBUeXBlT2Yoc2VwaWEuY3JlYXRlUGFydGlhbE91dHB1dCkpLkZuLnJldHVybl90eXBlLj8pLkVycm9yVW5pb24uZXJyb3Jfc2V0IXNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpKX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9ICpjb25zdCBbMzowXXU4fQAqY29uc3QgWzM6MF11OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9ICpjb25zdCBbMTM6MF11OH0AKmNvbnN0IFsxMzowXXU4AABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gY29tcHRpbWVfaW50fQBjb21wdGltZV9pbnQAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBpOH0AaTgAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSAqY29uc3QgWzIzOjBddTh9ACpjb25zdCBbMjM6MF11OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHN0cnVjdHtjb21wdGltZSBpbnRlbnNpdHk6IHN0cnVjdHtjb21wdGltZSB0eXBlOiB0eXBlID0gZjMyLCBjb21wdGltZSBtaW5WYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAwLCBjb21wdGltZSBtYXhWYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAxLCBjb21wdGltZSBkZWZhdWx0VmFsdWU6IGNvbXB0aW1lX2Zsb2F0ID0gMH0gPSAueyAudHlwZSA9IGYzMiwgLm1pblZhbHVlID0gMCwgLm1heFZhbHVlID0gMSwgLmRlZmF1bHRWYWx1ZSA9IDAgfX19AFN0cnVjdDE0NDYwMjUzNzMAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc3RydWN0e2NvbXB0aW1lIGludGVuc2l0eTogc3RydWN0e2NvbXB0aW1lIHR5cGU6IHR5cGUgPSBmMzIsIGNvbXB0aW1lIG1pblZhbHVlOiBjb21wdGltZV9mbG9hdCA9IDAsIGNvbXB0aW1lIG1heFZhbHVlOiBjb21wdGltZV9mbG9hdCA9IDEsIGNvbXB0aW1lIGRlZmF1bHRWYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAwfSA9IC57IC50eXBlID0gZjMyLCAubWluVmFsdWUgPSAwLCAubWF4VmFsdWUgPSAxLCAuZGVmYXVsdFZhbHVlID0gMCB9fX0AbWluVmFsdWUAAG1heFZhbHVlAABkZWZhdWx0VmFsdWUAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBzdHJ1Y3R7Y29tcHRpbWUgc3JjOiBzdHJ1Y3R7Y29tcHRpbWUgY2hhbm5lbHM6IGNvbXB0aW1lX2ludCA9IDR9ID0gLnsgLmNoYW5uZWxzID0gNCB9fX0AU3RydWN0MjI0Mjg2Nzg5NwAAc3RydWN0e2NvbXB0aW1lIHR5cGUgPSBzdHJ1Y3R7Y29tcHRpbWUgc3JjOiBzdHJ1Y3R7Y29tcHRpbWUgY2hhbm5lbHM6IGNvbXB0aW1lX2ludCA9IDR9ID0gLnsgLmNoYW5uZWxzID0gNCB9fX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHN0cnVjdHtjb21wdGltZSBkc3Q6IHN0cnVjdHtjb21wdGltZSBjaGFubmVsczogY29tcHRpbWVfaW50ID0gNH0gPSAueyAuY2hhbm5lbHMgPSA0IH19fQBTdHJ1Y3QxNzIxMDAwMDUAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc3RydWN0e2NvbXB0aW1lIGRzdDogc3RydWN0e2NvbXB0aW1lIGNoYW5uZWxzOiBjb21wdGltZV9pbnQgPSA0fSA9IC57IC5jaGFubmVscyA9IDQgfX19AHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBzZXBpYS5JbWFnZSh1OCw0LGZhbHNlKX0Ac2VwaWEuSW1hZ2UodTgsNCxmYWxzZSkAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc2VwaWEuSW1hZ2UodTgsNCxmYWxzZSl9AHNyZ2IAAGRpc3BsYXktcDMAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBzZXBpYS5JbWFnZSh1OCw0LHRydWUpfQBzZXBpYS5JbWFnZSh1OCw0LHRydWUpAABzdHJ1Y3R7Y29tcHRpbWUgdHlwZSA9IHNlcGlhLkltYWdlKHU4LDQsdHJ1ZSl9AHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBmMzJ9AGYzMgAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHUzMn0AdTMyAABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gQHR5cGVJbmZvKEB0eXBlSW5mbyhAVHlwZU9mKHNlcGlhLmNyZWF0ZU91dHB1dCkpLkZuLnJldHVybl90eXBlLj8pLkVycm9yVW5pb24uZXJyb3Jfc2V0IXNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpfQBFcnJvclNldDM2OTEzMjUzMDMhc2VwaWEuS2VybmVsT3V0cHV0KHU4LHNlcGlhLmtlcm5lbCkAAE91dE9mTWVtb3J5AABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gQHR5cGVJbmZvKEB0eXBlSW5mbyhAVHlwZU9mKHNlcGlhLmNyZWF0ZVBhcnRpYWxPdXRwdXQpKS5Gbi5yZXR1cm5fdHlwZS4/KS5FcnJvclVuaW9uLmVycm9yX3NldCFzZXBpYS5LZXJuZWxPdXRwdXQodTgsc2VwaWEua2VybmVsKX0ARXJyb3JTZXQ0MjAzOTQyNjc1IXNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpAABzdHJ1Y3R7Y29tcHRpbWUgc3RydWN0dXJlOiB0eXBlID0gWzM6MF11OH0AWzM6MF11OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IFsxMzowXXU4fQBbMTM6MF11OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IFsyMzowXXU4fQBbMjM6MF11OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHN0cnVjdHtjb21wdGltZSB0eXBlOiB0eXBlID0gZjMyLCBjb21wdGltZSBtaW5WYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAwLCBjb21wdGltZSBtYXhWYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAxLCBjb21wdGltZSBkZWZhdWx0VmFsdWU6IGNvbXB0aW1lX2Zsb2F0ID0gMH19AFN0cnVjdDI4OTAwNzMxNjUAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc3RydWN0e2NvbXB0aW1lIHR5cGU6IHR5cGUgPSBmMzIsIGNvbXB0aW1lIG1pblZhbHVlOiBjb21wdGltZV9mbG9hdCA9IDAsIGNvbXB0aW1lIG1heFZhbHVlOiBjb21wdGltZV9mbG9hdCA9IDEsIGNvbXB0aW1lIGRlZmF1bHRWYWx1ZTogY29tcHRpbWVfZmxvYXQgPSAwfX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHN0cnVjdHtjb21wdGltZSBjaGFubmVsczogY29tcHRpbWVfaW50ID0gNH19AFN0cnVjdDM4MzI0NzI2NDEAAHN0cnVjdHtjb21wdGltZSB0eXBlID0gc3RydWN0e2NvbXB0aW1lIGNoYW5uZWxzOiBjb21wdGltZV9pbnQgPSA0fX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IFtdY29uc3QgQFZlY3Rvcig0LCB1OCl9AFtdY29uc3QgQFZlY3Rvcig0LCB1OCkAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBAVmVjdG9yKDQsIHU4KSwgY29tcHRpbWUgc2l6ZTogYnVpbHRpbi5UeXBlLlBvaW50ZXIuU2l6ZSA9IC5TbGljZX0Ac3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHNlcGlhLkNvbG9yU3BhY2V9AHNlcGlhLkNvbG9yU3BhY2UAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSB1c2l6ZX0AdXNpemUAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBAVmVjdG9yKDQsIHU4KX0AQFZlY3Rvcig0LCB1OCkAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBAVmVjdG9yKDQsIGYzMil9AEBWZWN0b3IoNCwgZjMyKQAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IFtdQFZlY3Rvcig0LCB1OCl9AFtdQFZlY3Rvcig0LCB1OCkAAHN0cnVjdHtjb21wdGltZSBzdHJ1Y3R1cmU6IHR5cGUgPSBAdHlwZUluZm8oQHR5cGVJbmZvKEBUeXBlT2Yoc2VwaWEuY3JlYXRlT3V0cHV0KSkuRm4ucmV0dXJuX3R5cGUuPykuRXJyb3JVbmlvbi5lcnJvcl9zZXR9AEVycm9yU2V0MzY5MTMyNTMwMwAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IEB0eXBlSW5mbyhAdHlwZUluZm8oQFR5cGVPZihzZXBpYS5jcmVhdGVQYXJ0aWFsT3V0cHV0KSkuRm4ucmV0dXJuX3R5cGUuPykuRXJyb3JVbmlvbi5lcnJvcl9zZXR9AEVycm9yU2V0NDIwMzk0MjY3NQAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IHU4fQB1OAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGNvbXB0aW1lX2Zsb2F0fQBjb21wdGltZV9mbG9hdAAAc3RydWN0e2NvbXB0aW1lIHN0cnVjdHVyZTogdHlwZSA9IGY2NH0AZjY0AAA=");
+    const binaryString = atob("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dXJyb2dhdGVIYWxmAHVuYWJsZV90b19jcmVhdGVfc3RydWN0dXJlX3RlbXBsYXRlAHVuYWJsZV90b19hZGRfc3RydWN0dXJlX3RlbXBsYXRlAHVuYWJsZV90b19kZWZpbmVfc3RydWN0dXJlAHVuYWJsZV90b193cml0ZV90b19jb25zb2xlAFV0ZjhDb2RlcG9pbnRUb29MYXJnZQB1bmFibGVfdG9fYWRkX21ldGhvZABwb2ludGVyX2lzX2ludmFsaWQASW52YWxpZFV0ZjgAAAAAAAAAAAAAAAAgAQABCAAAABQBAAELAAAAcQMAAQsAAAAYAgABGAAAAGwCAAEUAAAAgQIAARgAAAAzAwABFQAAAJoCAAEdAAAANwMAAREAAABaAQABCwAAAOsBAAEHAAAA5AAAARkAAAD+AAABFQAAADECAAEiAAAAKQEAARoAAACYAQABFwAAAEQBAAEVAAAAfgEAARkAAABmAQABFwAAAPMBAAEkAAAAsAEAAR4AAADPAQABGwAAAEkDAAEUAAAAuAIAASMAAABUAgABFwAAANwCAAEgAAAA/QIAARoAAAAYAwABGgAAAF4DAAESAAAAAEHwiIAIC9gIBwAAAAgAAAAJAAAAQUlGAEFkb2JlIFN5c3RlbXMAYSB2YXJpYWJsZSBzZXBpYSBmaWx0ZXIAbmFtZQB0eXBlAGxlbmd0aABieXRlU2l6ZQBhbGlnbgBpc0NvbnN0AGlzVHVwbGUAaGFzUG9pbnRlcgBpc1JlcXVpcmVkAGJpdE9mZnNldABiaXRTaXplAHNsb3QAc3RydWN0dXJlAGtlcm5lbABJbnB1dABPdXRwdXQAUGFyYW1ldGVycwBhcmdTdHJ1Y3QAdGh1bmtJZABjcmVhdGVPdXRwdXQAY3JlYXRlUGFydGlhbE91dHB1dABzZXBpYQACbmFtZXNwYWNlAHZlbmRvcgB2ZXJzaW9uAGRlc2NyaXB0aW9uAHBhcmFtZXRlcnMAaW5wdXRJbWFnZXMAb3V0cHV0SW1hZ2VzAHNyYwBkc3QAaW50ZW5zaXR5ADAAMQAyADMAcmV0dmFsADQANQBzZXBpYS5rZXJuZWwAc2VwaWEuS2VybmVsSW5wdXQodTgsc2VwaWEua2VybmVsKQBkYXRhAHdpZHRoAGhlaWdodABjb2xvclNwYWNlAG9mZnNldAAEUGl4ZWwARlBpeGVsAGNoYW5uZWxzAHNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpAHNlcGlhLktlcm5lbFBhcmFtZXRlcnMoc2VwaWEua2VybmVsKQBBcmcwMDUwAHZhbHVlAGVycm9yAEFyZzAwNTEAKmNvbnN0IFszOjBddTgAKmNvbnN0IFsxMzowXXU4AGNvbXB0aW1lX2ludAB1OAAqY29uc3QgWzIzOjBddTgAU3RydWN0MDAxOQAAAAAAAAAAAPA/bWluVmFsdWUAbWF4VmFsdWUAZGVmYXVsdFZhbHVlAFN0cnVjdDAwMjYAU3RydWN0MDAyOQBzZXBpYS5JbWFnZSh1OCw0LGZhbHNlKQABc3JnYgBkaXNwbGF5LXAzAHNlcGlhLkltYWdlKHU4LDQsdHJ1ZSkAZjMyAHUzMgBFcnJvclNldDAwNDQhc2VwaWEuS2VybmVsT3V0cHV0KHU4LHNlcGlhLmtlcm5lbCkAT3V0T2ZNZW1vcnkARXJyb3JTZXQwMDQ3IXNlcGlhLktlcm5lbE91dHB1dCh1OCxzZXBpYS5rZXJuZWwpAFszOjBddTgAWzEzOjBddTgAWzIzOjBddTgAU3RydWN0MDAyMABTdHJ1Y3QwMDI3AFtdY29uc3QgQFZlY3Rvcig0LCB1OCkAW19dY29uc3QgQFZlY3Rvcig0LCB1OCkAc2VwaWEuQ29sb3JTcGFjZQB1c2l6ZQBAVmVjdG9yKDQsIHU4KQBAVmVjdG9yKDQsIGYzMikAW11AVmVjdG9yKDQsIHU4KQBbX11AVmVjdG9yKDQsIHU4KQBFcnJvclNldDAwNDQARXJyb3JTZXQwMDQ3AGNvbXB0aW1lX2Zsb2F0AGY2NAA=");
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
