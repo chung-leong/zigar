@@ -29,7 +29,7 @@ Module._load = new Proxy(Module._load, {
 });
 
 function startWorker(url) {
-  const workerURL = pathToFileURL(join(__dirname, 'worker.js'));
+  const workerURL = pathToFileURL(join(__dirname, 'worker.cjs'));
   const workerData = { url, 
     buffers: {
       status: new Int32Array(new SharedArrayBuffer(4)),
@@ -45,10 +45,13 @@ function startWorker(url) {
 function awaitWorker(worker) {
   const { buffers: { status, length, data } } = worker.workerData;
   // wait for notification from worker
-  Atomics.wait(status, 0, 0);
-  const bytes = data.slice(0, length[0]);
-  const decoder = new TextDecoder();
-  const result = JSON.parse(decoder.decode(bytes)); 
+  try {
+    Atomics.wait(status, 0, 0);
+  } catch (err) {
+    while (status[0] === 0);
+  }
+  const bytes = Buffer.from(data.buffer, 0, length[0]);
+  const result = JSON.parse(bytes.toString()); 
   if (status[0] === 1) {
     return result;
   } else {

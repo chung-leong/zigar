@@ -1,35 +1,32 @@
-import ChildProcess, { execFileSync } from 'child_process';
-import { readdir, stat, utimes } from 'fs/promises';
-import { createRequire } from 'module';
-import os from 'os';
-import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { promisify } from 'util';
+const { execFileSync, execFile: execFileAsync } = require('child_process');
+const { promisify } = require('util');
+const execFile = promisify(execFileAsync);
+const { readdir, stat, utimes } = require('fs/promises');
+const os = require('os');
+const { join, resolve } = require('path');
 
-const execFile = promisify(ChildProcess.execFile);
-
-export function createEnvironment(options) {
+function createEnvironment(options) {
   const { createEnvironment } = loadAddon(options);
   return createEnvironment();
 }
 
-export function importModule(soPath, options) {
+function importModule(soPath, options) {
   const env = createEnvironment(options);
   env.loadModule(soPath);
   env.acquireStructures(options);
   return env.useStructures();
 }
 
-export function getGCStatistics(options) {
+function getGCStatistics(options) {
   const { getGCStatistics } = loadAddon(options);
   return getGCStatistics();
 }
 
-export function getLibraryPath() {
-  return fileURLToPath(import.meta.url);
+function getLibraryPath() {
+  return __filename;
 }
 
-export async function buildAddon(addonDir, options) {
+async function buildAddon(addonDir, options) {
   const { 
     recompile = true,
     arch = getArch(),
@@ -40,10 +37,10 @@ export async function buildAddon(addonDir, options) {
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
   let changed = false;
   if (recompile) {
-    const srcDir = fileURLToPath(new URL('../src', import.meta.url));
+    const srcDir = resolve(__dirname, '../src');
     changed = await isOlderThan(outputPath, [ srcDir, options.configPath ]);
     if (changed) {
-      const cwd = fileURLToPath(new URL('../', import.meta.url));
+      const cwd = resolve(__dirname, '../');
       const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
       if (platform && arch) {
         // translate from names used by Node to those used by Zig
@@ -83,7 +80,6 @@ export async function buildAddon(addonDir, options) {
 
 function loadAddon(options) {
   const { addonPath } = options;
-  const require = createRequire(import.meta.url);
   return require(addonPath);
 }
 
@@ -184,3 +180,11 @@ async function isOlderThan(targetPath, srcPaths) {
     return true;
   }
 }
+
+module.exports = {
+  createEnvironment,
+  importModule,
+  getGCStatistics,
+  getLibraryPath,
+  buildAddon,
+};

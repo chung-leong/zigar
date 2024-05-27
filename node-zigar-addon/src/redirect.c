@@ -37,8 +37,6 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     }
     return WriteFile(handle, buffer, len, written, overlapped);
 }
-
-typedef SSIZE_T ssize_t;
 #endif
 
 ssize_t write_hook(int fd, 

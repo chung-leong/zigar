@@ -25,7 +25,7 @@ describe('CommonJS worker', function() {
 })
 
 function startWorker(url) {
-  const workerURL = new URL('../dist/worker.js', import.meta.url);
+  const workerURL = new URL('../dist/worker.cjs', import.meta.url);
   const workerData = { url, 
     buffers: {
       status: new Int32Array(new SharedArrayBuffer(4)),
@@ -42,9 +42,8 @@ function awaitWorker(worker) {
   const { buffers: { status, length, data } } = worker.workerData;
   // wait for change to occur
   for (let i = 0; Atomics.wait(status, 0, 0, (i < 20) ? 10 : 50) === 'timed-out'; i++);
-  const bytes = data.slice(0, length[0]);
-  const decoder = new TextDecoder();
-  const result = JSON.parse(decoder.decode(bytes)); 
+  const bytes = Buffer.from(data.buffer, 0, length[0]);
+  const result = JSON.parse(bytes.toString());
   if (status[0] === 1) {
     return result;
   } else {

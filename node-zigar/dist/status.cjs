@@ -1,12 +1,12 @@
-import { write } from 'fs';
-import { isatty } from 'tty';
-import { platform } from 'os';
-import { execSync } from 'child_process';
+const { write } = require('fs');
+const { isatty } = require('tty');
+const { platform } = require('os');
+const { execSync } = require('child_process');
 
 const statusCharacters = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
 let statusClear;
 
-export function showStatus(message) {
+function showStatus(message) {
   const fd = 2;
   const tty = isatty(fd);
   let currentCP;
@@ -52,14 +52,20 @@ export function showStatus(message) {
   }  
 }
 
-export function hideStatus() {
+function hideStatus() {
   statusClear?.();
   statusClear = null;
 }
 
-export function showResult(message) {
+function showResult(message) {
   const fd = 2;
   const tty = isatty(fd);
   const c = '✓';
   write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
 }
+
+module.exports = {
+  showStatus,
+  hideStatus,
+  showResult,
+};
