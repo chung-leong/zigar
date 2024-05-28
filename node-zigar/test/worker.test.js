@@ -22,6 +22,12 @@ describe('CommonJS worker', function() {
     expect(result).to.have.property('addonPath');
     expect(result).to.have.property('modulePath');
   })
+  it('should throw when file does not exist', function() {
+    const url = new URL('./zig-samples/missing.zig', import.meta.url).href;
+    const worker = startWorker(url);
+    expect(() => awaitWorker(worker)).to.throw(Error)
+      .with.property('message').that.contains('no such file or directory');
+  })
 })
 
 function startWorker(url) {

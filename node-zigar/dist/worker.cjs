@@ -57,7 +57,6 @@
     result = { addonPath, modulePath };
     status = 1;
   } catch (err) {
-    process.stderr.write(err + '');
     result = { error: err.message };
     status = 2;
   }

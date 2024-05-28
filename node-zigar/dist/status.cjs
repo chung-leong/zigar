@@ -12,6 +12,7 @@ function showStatus(message) {
   let currentCP;
   hideStatus();
   if (tty) {
+    /* c8 ignore start */
     if (platform() === 'win32') {
       try {
         const m = /\d+/.exec(execSync('chcp').toString().trim());
@@ -24,6 +25,7 @@ function showStatus(message) {
       } catch (err) {
       }
     }
+    /* c8 ignore end */
     let pos = 0;
     const update = () => {
       const c = statusCharacters.charAt(pos++);
@@ -36,14 +38,17 @@ function showStatus(message) {
     statusClear = () => {
       clearInterval(interval);
       write(fd, '\r\x1b[K', () => {});
+      /* c8 ignore start */
       if (currentCP && currentCP !== 65001) {
         try {
           execSync(`chcp ${currentCP}`);
         } catch (err){
         }
       }
+      /* c8 ignore end */
     };
     update(); 
+    /* c8 ignore next 6 */
   } else {
     write(fd, message, () => {});
     statusClear = () => {
@@ -61,7 +66,12 @@ function showResult(message) {
   const fd = 2;
   const tty = isatty(fd);
   const c = '✓';
-  write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
+  if (tty) {
+    write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
+    /* c8 ignore next 3 */
+  } else {
+    write(fd, `${message}\n`, () => {});
+  }
 }
 
 module.exports = {

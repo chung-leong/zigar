@@ -47,7 +47,9 @@ function awaitWorker(worker) {
   // wait for notification from worker
   try {
     Atomics.wait(status, 0, 0);
+    /* c8 ignore next 4 */
   } catch (err) {
+    // NW.js doesn't allow Atomics.wait() in the main thread
     while (status[0] === 0);
   }
   const bytes = Buffer.from(data.buffer, 0, length[0]);

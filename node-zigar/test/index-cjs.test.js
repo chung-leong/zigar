@@ -9,7 +9,13 @@ describe('CommonJS loader', function() {
       this.timeout(60000);
       const uri = './zig-samples/simple.zig';
       const module = require(uri);
-      expect(module.add).to.be.a('function');
+      expect(module.add).to.be.a('function'); 
+    })
+    it('should throw when file is missing', async function() {
+      this.timeout(60000);
+      const uri = './zig-samples/missing.zig';
+      expect(() => require(uri)).to.throw(Error)
+        .with.property('message').that.contains('no such file or directory');
     })
     it('should ignore URL without the extension zig', async function() {
       const module = require('module');
