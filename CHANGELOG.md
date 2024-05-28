@@ -1,3 +1,18 @@
+## 0.12.0
+
+* Removed support for Zig 0.11.0
+
+## 0.11.2
+
+* Added sizeOf(), alignOf(), and typeOf() to __zigar
+* Added ability to provide custom WASI handler
+* Added compilation indicator to node-zigar
+* Implemented casting from packed structs to number and initialization 
+* Implemented casting from tagged union to string 
+* Implemented redirection of libc io functions 
+* Fixed error reporting
+* General code clean-up
+
 ## 0.11.1
 
 * Completely reworked pointer handling, improving performance and eliminating restrictions on 
