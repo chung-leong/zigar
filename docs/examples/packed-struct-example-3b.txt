@@ -1,0 +1,2 @@
+{ apple: true, banana: false, cantaloupe: false, durian: true, _: 0 }
+{ agnieszka: true, basia: true, celina: false, dagmara: false, _: 0n }
