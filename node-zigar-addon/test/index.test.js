@@ -8,6 +8,7 @@ import { createConfig } from '../../zigar-compiler/src/compiler.js';
 import {
   buildAddon,
   getGCStatistics,
+  getLibraryPath,
   importModule,
 } from '../dist/index.cjs';
 
@@ -37,7 +38,7 @@ describe('Addon functionalities', function() {
     it('should try to compile for unknown architecture', async function() {
       this.timeout(300000);
       try {
-        const result = await buildAddon(addonDir, { platform: 'win32', arch: 'xxx' });
+        const result = await buildAddon(addonDir, { platform: 'xxx', arch: 'xxx' });
         expect.fail('Error expected');
       } catch (err) {
       }
@@ -61,26 +62,36 @@ describe('Addon functionalities', function() {
       const { outputPath } = createConfig(null, modPath, options);
       return outputPath;
     };
-    it('should load module', function() {
-      this.timeout(300000);
-      const path = getModulePath('integers');
-      const module = importModule(path, { addonPath, recompile: true });
-      expect(module.int32).to.equal(1234);
+    describe('importModule', function() {
+      it('should load module', function() {
+        this.timeout(300000);
+        const path = getModulePath('integers');
+        const module = importModule(path, { addonPath, recompile: true });
+        expect(module.int32).to.equal(1234);
+      })
+      it('should throw when module is missing', function() {
+        this.timeout(300000);
+        const path = getModulePath('missing');
+        let error;
+        try {
+          importModule(path, { addonDir });
+        } catch (err) {
+          error = err;
+        }
+        expect(error).to.be.an('error');
+      })      
     })
-    it('should throw when module is missing', function() {
-      this.timeout(300000);
-      const path = getModulePath('missing');
-      let error;
-      try {
-        importModule(path, { addonDir });
-      } catch (err) {
-        error = err;
-      }
-      expect(error).to.be.an('error');
+    describe('getGCStatistics', function() {
+      it('should get gc statistics', function() {
+        const stats = getGCStatistics({ addonPath, recompile: true });
+        expect(stats).to.be.an('object');
+      })  
     })
-    it('should get gc statistics', function() {
-      const stats = getGCStatistics({ addonPath, recompile: true });
-      expect(stats).to.be.an('object');
+    describe('getLibraryPath', function() {
+      it('should return path to library', function() {
+        const path = getLibraryPath();
+        expect(path).to.be.a('string');
+      })
     })
   })
 })
