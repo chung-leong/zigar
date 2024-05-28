@@ -2109,6 +2109,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
     const tdb = comptime tdc.createDatabase();
     const RootFactory = struct {
         fn exportStructure(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
+            @setEvalBranchQuota(200000);
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             const ctx = .{ .host = host, .tdb = tdb };
