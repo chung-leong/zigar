@@ -10,6 +10,7 @@
 * Implemented casting from packed structs to number and initialization 
 * Implemented casting from tagged union to string 
 * Implemented redirection of libc io functions 
+* Made directory containing Zig file available as include directory for C
 * Fixed error reporting
 * General code clean-up
 
