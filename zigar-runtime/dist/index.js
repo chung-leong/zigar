@@ -5150,6 +5150,7 @@ class WebAssemblyEnvironment extends Environment {
     freeShadowMemory: { argType: 'ciii' },
     runThunk: { argType: 'iv', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
+    flushStdout: { argType: '', returnType: '' },
   };
   exports = {
     allocateHostMemory: { argType: 'ii', returnType: 'v' },
@@ -5469,6 +5470,7 @@ class WebAssemblyEnvironment extends Environment {
     // restore the previous context if there's one
     this.endContext();
     if (!this.context && this.flushConsole) {
+      this.flushStdout();
       this.flushConsole();
     }
   }
@@ -5558,9 +5560,11 @@ class WebAssemblyEnvironment extends Environment {
             for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
               const buf_ptr = dv.getUint32(p, true);
               const buf_len = dv.getUint32(p + 4, true);
-              const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
-              this.writeToConsole(buf);
-              written += buf_len;
+              if (buf_len > 0) {
+                const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
+                this.writeToConsole(buf);
+                written += buf_len; 
+              }
             }
             dv.setUint32(written_ptr, written, true);
             return 0;            

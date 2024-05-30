@@ -32,6 +32,10 @@ export fn isRuntimeSafetyActive() bool {
     return host.isRuntimeSafetyActive();
 }
 
+export fn flushStdout() void {
+    host.flushStdout();
+}
+
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     std.debug.print("{s}\n", .{msg});
     return std.process.abort();

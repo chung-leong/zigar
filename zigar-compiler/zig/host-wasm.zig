@@ -273,3 +273,12 @@ pub fn getFactoryThunk(comptime T: type) usize {
 pub fn isRuntimeSafetyActive() bool {
     return builtin.mode == .ReleaseSafe or builtin.mode == .Debug;
 }
+
+pub fn flushStdout() void {
+    if (builtin.link_libc) {
+        const c = @cImport({
+            @cInclude("stdio.h");
+        });
+        _ = c.fflush(c.stdout);
+    }
+}
