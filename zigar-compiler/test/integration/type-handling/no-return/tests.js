@@ -24,7 +24,7 @@ export function addTests(importModule, options) {
       await expect(exit).to.be.a('function');
       if (target === 'wasm32') {
         expect(() => exit(0)).to.not.throw();
-        expect(() => exit(1)).to.throw(Error).that.includes({ message: 'Program exit', code: 1 });
+        expect(() => exit(1)).to.throw(Error).that.includes({ message: 'Program exited', code: 1 });
       }
     })
     it('should not compile code with array of no returns', async function() {

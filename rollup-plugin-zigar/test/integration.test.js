@@ -29,7 +29,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
       const { string } = readFile('/local/hello.txt');
       expect(string).to.equal('Hello world');
     })
-    addTests(url => importModule(url, { optimize }), {
+    addTests((url, options) => importModule(url, { optimize, ...options }), {
       littleEndian: true,
       addressSize: 32,
       target: 'wasm32',
@@ -44,6 +44,7 @@ async function importModule(url, options) {
   const { 
     optimize, 
     embedWASM = false, 
+    useLibc = false, 
     topLevelAwait = true 
   } = options;
   if (currentModule) {
@@ -63,7 +64,14 @@ async function importModule(url, options) {
   const inputOptions = {
     input: path,
     plugins: [
-      Zigar({ optimize, useReadFile: true, keepNames: optimize === 'ReleaseSafe', topLevelAwait }),
+      Zigar({ 
+        optimize, 
+        useReadFile: true, 
+        keepNames: optimize === 'ReleaseSafe', 
+        topLevelAwait, 
+        useLibc, 
+        embedWASM,
+      }),
       NodeResolve({
         modulePaths: [ resolve(`../node_modules`) ],
       }),

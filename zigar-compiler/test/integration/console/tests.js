@@ -2,9 +2,9 @@ import { expect } from 'chai';
 import { capture } from '../capture.js';
 
 export function addTests(importModule, options) {
-  const importTest = async (name) => {
+  const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
-      return importModule(url);
+      return importModule(url, options);
   };    
   describe('Console', function() {
     it('should output to development console', async function() {
@@ -32,7 +32,7 @@ export function addTests(importModule, options) {
         test_fwrite,
         test_write,
         test_perror,
-      } = await importTest('print-thru-c');
+      } = await importTest('print-thru-c', { useLibc: true });
       expect(await capture(() => test_printf())).eql([
         'Hello 1234',
         'Hello Richard Nixon',
