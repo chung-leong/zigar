@@ -407,6 +407,7 @@ export class WebAssemblyEnvironment extends Environment {
       return this.customWASI.wasiImport;
     } else {
       const ENOSYS = 38;
+      const ENOBADF = 8;
       const noImpl = () => ENOSYS;
       return { 
         args_get: noImpl,
@@ -450,7 +451,7 @@ export class WebAssemblyEnvironment extends Environment {
         fd_filestat_get: noImpl,
         fd_filestat_set_size: noImpl,
         fd_filestat_set_times: noImpl,
-        fd_prestat_get: noImpl,
+        fd_prestat_get: () => ENOBADF,
         fd_prestat_dir_name: noImpl,
         path_create_directory: noImpl,
         path_filestat_get: noImpl,
