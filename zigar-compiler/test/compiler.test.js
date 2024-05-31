@@ -289,6 +289,26 @@ describe('Compilation', function() {
       }
       expect(info).to.be.undefined;
     })
+    it('should call onStart and onEnd', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      let onStartCalled = false, onEndCalled = false;
+      const onStart = () => onStartCalled = true;
+      const onEnd = () => onEndCalled = true;
+      const options = { 
+        optimize: 'Debug', 
+        platform: os.platform(), 
+        arch: os.arch(), 
+        onStart,
+        onEnd,
+      };
+      const modPath = getModuleCachePath(srcPath, options);
+      await forceChange(srcPath, async () => {
+        await compile(srcPath, modPath, options);
+        expect(onStartCalled).to.be.true;
+        expect(onEndCalled).to.be.true;
+      });
+    })
   })
 })
 

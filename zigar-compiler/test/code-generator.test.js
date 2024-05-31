@@ -770,5 +770,37 @@ describe('Code generation', function() {
       const def = { structures, options, keys: { MEMORY, SLOTS }};
       const { code } = generateCode(def, params);
     })
-  })
+    it('should include options for environment', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: "f32",
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const envOptions = { addonPath: '/tmp/somewhere' };
+      const def = { structures: [ structure ], options, keys: { MEMORY, SLOTS }};
+      const { code } = generateCode(def, { ...params, envOptions });
+      expect(code).to.contain('addonPath');
+      expect(code).to.contain('/tmp/somewhere');
+    })
+  })  
 })

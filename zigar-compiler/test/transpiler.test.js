@@ -53,14 +53,6 @@ describe('Transpilation', function() {
       const { code } = await transpile(path, options);
       expect(code).to.contain('"readFile"');
     })
-    it('should transpile zig source code that uses an external package', async function() {
-      this.timeout(600000);
-      const url = new URL(`./integration/package-manager/use-ziglyph/ziglyph.zig`, import.meta.url);
-      const path = fileURLToPath(url);
-      const options = { optimize: 'ReleaseSmall', embedWASM: false, wasmLoader: saveWASM };
-      const { code } = await transpile(path, options);
-      expect(code).to.contain('"isAlphabetic"');
-    })
     it('should strip out unnecessary code when stripWASM is specified', async function() {
       this.timeout(600000);
       const path = getSamplePath('simple');

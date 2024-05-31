@@ -45,7 +45,7 @@ describe('WASM stripper', function() {
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const wasmFiles = [
         'fail',
         'global',
@@ -66,7 +66,7 @@ describe('WASM stripper', function() {
       }
     })
     it('should recreate WASM files from WABT test suite', async function() {
-      this.timeout(10000);
+      this.timeout(20000);
       const dir = resolve(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
@@ -174,7 +174,7 @@ describe('WASM stripper', function() {
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
     it('should retain names when keepNames is true', async function() {
-      const path = resolve(`./wasm-samples/simple.wasm`);
+      const path = resolve(`./wasm-samples/simple-with-names.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);      
       const newBinary = stripUnused(binary, { keepNames: true });

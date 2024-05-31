@@ -76,11 +76,13 @@ export async function runCompiler(path, args, options) {
       try {
         const logPath = join(cwd, 'log');
         await writeFile(logPath, err.stderr);
-      } catch (_) {        
+        /* c8 ignore next 2 */
+      } catch (err) {        
       }
       message += `\n\n${err.stderr}`;
     }
     throw new Error(message);
+    /* c8 ignore next */
   } finally {
     onEnd?.();
   }
