@@ -45,14 +45,11 @@ async function loader(content, map, meta) {
       return fetchWASM(outputPath);
     }
   };
-  // give extra time for init() to be called before fulfilling with WASM data
-  const embedExtra = `\n  await new Promise(r => setTimeout(r, 0));`;
   const { code } = await transpile(path, {
     ...otherOptions,
     optimize,
     wasmLoader,
     embedWASM,
-    embedExtra,
   });
   return code;
 };

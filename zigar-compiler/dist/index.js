@@ -7901,7 +7901,6 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
 async function transpile(path, options) {
   const {
     embedWASM = true,
-    embedExtra = '',
     topLevelAwait = true,
     omitExports = false,
     stripWASM = (options.optimize && options.optimize !== 'Debug'),
@@ -7935,7 +7934,7 @@ async function transpile(path, options) {
       dv = stripUnused(dv, { keepNames });
     }
     if (embedWASM) {
-      binarySource = embed(srcPath, dv, embedExtra);
+      binarySource = embed(srcPath, dv);
     } else {
       binarySource = await wasmLoader(srcPath, dv);
     }
@@ -7949,15 +7948,16 @@ async function transpile(path, options) {
   });
 }
 
-function embed(path, dv, extra) {
+function embed(path, dv) {
   const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
-  return `(async () => {${extra}
+  return `(async () => {
   // ${basename(path)}
   const binaryString = atob(${JSON.stringify(base64)});
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
+  await new Promise(r => setTimeout(r, 0));
   return bytes.buffer;
 })()`;
 }
