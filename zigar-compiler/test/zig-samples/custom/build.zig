@@ -4,46 +4,29 @@ const cfg = @import("./build-cfg.zig");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const arch = if (@hasDecl(@TypeOf(target), "getCpuArch")) target.getCpuArch() else target.result.cpu.arch;
-    const is_wasm = switch (arch) {
-        .wasm32, .wasm64 => true,
-        else => false,
-    };
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
         .root_source_file = .{ .path = cfg.stub_path },
         .target = target,
         .optimize = optimize,
     });
-    const source_file = .{ .path = cfg.module_dir ++ "/modules/number.zig" };
-    const number = if (@hasDecl(std.Build, "CreateModuleOptions"))
-        b.createModule(.{ .source_file = source_file })
-    else
-        b.createModule(.{ .root_source_file = source_file });
+    const number = b.createModule(.{
+        .root_source_file = .{ .path = cfg.module_dir ++ "/modules/number.zig" },
+    });
     const imports = .{
         .{ .name = "number", .module = number },
     };
-    if (is_wasm) {
+    lib.root_module.addImport("module", b.createModule(.{
+        .root_source_file = .{ .path = cfg.module_path },
+        .imports = &imports,
+    }));
+    if (cfg.is_wasm) {
+        // WASM needs to be compiled as exe
+        lib.kind = .exe;
+        lib.linkage = .static;
+        lib.entry = .disabled;
         lib.rdynamic = true;
-    }
-    if (@hasDecl(std.Build.Step.Compile, "addModule")) {
-        // Zig 0.11.0
-        lib.addModule("module", b.createModule(.{
-            .source_file = .{ .path = cfg.module_path },
-            .dependencies = &imports,
-        }));
-    } else if (@hasField(std.Build.Step.Compile, "root_module")) {
-        // Zig 0.12.0
-        lib.root_module.addImport("module", b.createModule(.{
-            .root_source_file = .{ .path = cfg.module_path },
-            .imports = &imports,
-        }));
-        if (is_wasm) {
-            // WASM needs to be compiled as exe
-            lib.kind = .exe;
-            lib.linkage = .static;
-            lib.entry = .disabled;
-        }
+        lib.wasi_exec_model = .reactor;
     }
     if (cfg.use_libc) {
         lib.linkLibC();

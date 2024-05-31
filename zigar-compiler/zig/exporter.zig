@@ -8,11 +8,6 @@ fn assertCT(comptime value: bool) void {
 
 const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);
 
-// support both 0.11 and 0.12
-const enum_auto = if (@hasField(std.builtin.Type.ContainerLayout, "Auto")) .Auto else .auto;
-const enum_packed = if (@hasField(std.builtin.Type.ContainerLayout, "Packed")) .Packed else .@"packed";
-const enum_extern = if (@hasField(std.builtin.Type.ContainerLayout, "Extern")) .Extern else .@"extern";
-
 // error type
 pub const Error = error{
     unknown,
@@ -356,12 +351,12 @@ const TypeData = struct {
             .EnumLiteral,
             => .primitive,
             .Struct => |st| switch (st.layout) {
-                enum_extern => .extern_struct,
-                enum_packed => .packed_struct,
+                .@"extern" => .extern_struct,
+                .@"packed" => .packed_struct,
                 else => .@"struct",
             },
             .Union => |un| switch (un.layout) {
-                enum_extern => .extern_union,
+                .@"extern" => .extern_union,
                 else => if (un.tag_type) |_| .tagged_union else .bare_union,
             },
             .ErrorUnion => .error_union,
@@ -475,7 +470,7 @@ const TypeData = struct {
 
     fn getSelectorType(comptime self: @This()) ?type {
         return switch (@typeInfo(self.Type)) {
-            .Union => |un| un.tag_type orelse switch (runtime_safety and un.layout != enum_extern) {
+            .Union => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
                 true => IntType(un.fields.len),
                 false => null,
             },
@@ -559,8 +554,8 @@ const TypeData = struct {
 
     fn isPacked(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
-            .Struct => |st| st.layout == enum_packed,
-            .Union => |un| un.layout == enum_packed,
+            .Struct => |st| st.layout == .@"packed",
+            .Union => |un| un.layout == .@"packed",
             else => false,
         };
     }
@@ -1750,7 +1745,7 @@ fn ArgumentStruct(comptime T: type) type {
     };
     return @Type(.{
         .Struct = .{
-            .layout = enum_auto,
+            .layout = .auto,
             .decls = &.{},
             .fields = &fields,
             .is_tuple = false,
@@ -2023,7 +2018,7 @@ fn ComptimeFree(comptime T: type) type {
                     .type = FT,
                     .default_value = null,
                     .is_comptime = false,
-                    .alignment = if (st.layout != enum_packed) @alignOf(FT) else 0,
+                    .alignment = if (st.layout != .@"packed") @alignOf(FT) else 0,
                 };
             }
             break :derive @Type(.{

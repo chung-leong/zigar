@@ -11,29 +11,17 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const imports = .{};
-    if (@hasDecl(std.Build.Step.Compile, "addModule")) {
-        // Zig 0.11.0
-        lib.addModule("module", b.createModule(.{
-            .source_file = .{ .path = cfg.module_path },
-            .dependencies = &imports,
-        }));
-        lib.addIncludePath(.{ .path = cfg.module_dir });
-    } else if (@hasField(std.Build.Step.Compile, "root_module")) {
-        // Zig 0.12.0
-        const mod = b.createModule(.{
-            .root_source_file = .{ .path = cfg.module_path },
-            .imports = &imports,
-        });
-        mod.addIncludePath(.{ .path = cfg.module_dir });
-        lib.root_module.addImport("module", mod);
-        if (cfg.is_wasm) {
-            // WASM needs to be compiled as exe
-            lib.kind = .exe;
-            lib.linkage = .static;
-            lib.entry = .disabled;
-        }
-    }
+    const mod = b.createModule(.{
+        .root_source_file = .{ .path = cfg.module_path },
+        .imports = &imports,
+    });
+    mod.addIncludePath(.{ .path = cfg.module_dir });
+    lib.root_module.addImport("module", mod);
     if (cfg.is_wasm) {
+        // WASM needs to be compiled as exe
+        lib.kind = .exe;
+        lib.linkage = .static;
+        lib.entry = .disabled;
         lib.rdynamic = true;
         lib.wasi_exec_model = .reactor;
     }

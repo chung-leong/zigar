@@ -47,9 +47,6 @@ pub fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-// support both 0.11 and 0.12
-const enum_little = if (@hasField(std.builtin.Endian, "Little")) .Little else .little;
-
 pub const Result = enum(u32) { ok, failure };
 
 threadlocal var initial_context: ?Call = null;
@@ -362,7 +359,7 @@ pub fn createModule(comptime T: type) Module {
     return .{
         .version = 3,
         .attributes = .{
-            .little_endian = builtin.target.cpu.arch.endian() == enum_little,
+            .little_endian = builtin.target.cpu.arch.endian() == .little,
             .runtime_safety = switch (builtin.mode) {
                 .Debug, .ReleaseSafe => true,
                 else => false,
@@ -394,5 +391,5 @@ test "createModule" {
     };
     const module = createModule(Test);
     assert(module.version == 3);
-    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == enum_little));
+    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
 }
