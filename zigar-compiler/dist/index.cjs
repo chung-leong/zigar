@@ -4886,6 +4886,7 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   try {
     const pid = await loadFile(pidPath);
     if (pid) {
+      /* c8 ignore start */
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
@@ -4893,6 +4894,7 @@ async function checkPidFile(pidPath, staleTime = 60000 * 5) {
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
+      /* c8 ignore end */
     }
     const stats = await promises.stat(pidPath);
     const diff = new Date() - stats.mtime;
@@ -5092,11 +5094,13 @@ async function runCompiler(path$1, args, options) {
       try {
         const logPath = path.join(cwd, 'log');
         await promises.writeFile(logPath, err.stderr);
-      } catch (_) {        
+        /* c8 ignore next 2 */
+      } catch (err) {        
       }
       message += `\n\n${err.stderr}`;
     }
     throw new Error(message);
+    /* c8 ignore next */
   } finally {
     onEnd?.();
   }
