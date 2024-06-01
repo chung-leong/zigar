@@ -13,6 +13,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "node-zigar": "^0.11.2-alpha.2"
+    "node-zigar": "^0.12.0"
   }
 }
