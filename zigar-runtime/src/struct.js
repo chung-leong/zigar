@@ -22,11 +22,11 @@ export function defineStructShape(structure, env) {
     instance: { members },
     isTuple,
     hasPointer,
-  } = structure;  
+  } = structure;
   const memberDescriptors = {};
   const fieldMembers = members.filter(m => !!m.name);
   const backingIntMember = members.find(m => !m.name);
-  for (const member of fieldMembers) {    
+  for (const member of fieldMembers) {
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
@@ -59,7 +59,7 @@ export function defineStructShape(structure, env) {
       default:
         return backingInt.get.call(this);
     }
-  } 
+  }
   : null;
   const length = (isTuple && members.length > 0)
   ? parseInt(members[members.length - 1].name) + 1
@@ -80,7 +80,7 @@ export function defineStructShape(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
-    [WRITE_DISABLER]: { value: makeReadOnly },    
+    [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: { value: fieldMembers.map(m => m.name) },
   };
   const staticDescriptors = {
@@ -99,7 +99,7 @@ export function getStructEntries(options) {
   };
 }
 
-export function getStructIterator(options) { 
+export function getStructIterator(options) {
   const entries = getStructEntries.call(this, options);
   return entries[Symbol.iterator]();
 }
@@ -110,7 +110,7 @@ export function getStructEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < props.length) {
         const current = props[index++];
         value = [ current, handleError(() => self[current], options) ];
@@ -122,7 +122,7 @@ export function getStructEntriesIterator(options) {
     },
   };
 }
-  
+
 export function getChildVivificator(structure) {
   const { instance: { members } } = structure;
   const objectMembers = {};

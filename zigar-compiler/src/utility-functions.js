@@ -44,7 +44,7 @@ export async function isOlderThan(targetPath, srcPaths) {
       if (!path) {
         return false;
       }
-      /* c8 ignore next 3 */      
+      /* c8 ignore next 3 */
       if (checked.get(path)) {
         return false;
       }
@@ -196,7 +196,7 @@ export function getPlatform() {
           /* c8 ignore next 3 */
         } catch (err) {
           isGNU = false;
-        }  
+        }
       }
     }
     /* c8 ignore next 3 */

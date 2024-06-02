@@ -18,7 +18,7 @@ export function addMethods(s, env) {
           if (!descriptor) {
             descriptor = descriptors[propName] = { configurable: true, enumerable: true };
           }
-          descriptor[type] = f; 
+          descriptor[type] = f;
         }
       } else {
         descriptors[f.name] = { value: f, configurable: true, writable: true };
@@ -31,6 +31,6 @@ export function addMethods(s, env) {
 }
 
 function getArgumentCount(method, pushThis) {
-  const { argStruct: { instance: { members } } } = method;  
+  const { argStruct: { instance: { members } } } = method;
   return members.length - (pushThis ? 2 : 1);
 }

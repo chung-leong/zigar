@@ -75,7 +75,7 @@ export function defineErrorUnion(structure, env) {
         }
       }
     }
-  };  
+  };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {

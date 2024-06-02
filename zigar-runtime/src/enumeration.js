@@ -37,7 +37,7 @@ export function defineEnumerationShape(structure, env) {
         if (constructor[MORE] && typeof(arg) !== 'string') {
           // create the item on-the-fly when enum is non-exhaustive
           item = new constructor(undefined);
-          debugger;        
+          debugger;
           set.call(item, arg, 'number');
           appendEnumeration(constructor, `${arg}`, item);
         }
@@ -88,10 +88,10 @@ export function defineEnumerationShape(structure, env) {
 
 export function appendEnumeration(enumeration, name, item) {
   if (name !== undefined) {
-    // enum can have static variables 
+    // enum can have static variables
     if (item instanceof enumeration) {
       // attach name to item so tagged union code can quickly find it
-      defineProperties(item, { [NAME]: { value: name } });  
+      defineProperties(item, { [NAME]: { value: name } });
       // call toPrimitive directly since enum can be bigint or number
       const index = item[Symbol.toPrimitive]();
       defineProperties(enumeration, {

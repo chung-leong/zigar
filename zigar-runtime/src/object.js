@@ -10,7 +10,7 @@ import { MemberType } from './types.js';
 export function defineProperties(object, descriptors) {
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor) {
-      const { 
+      const {
         set,
         get,
         value,
@@ -18,8 +18,8 @@ export function defineProperties(object, descriptors) {
         configurable = true,
         writable = true,
       } = descriptor;
-      Object.defineProperty(object, name, (get) 
-        ? { get, set, configurable, enumerable } 
+      Object.defineProperty(object, name, (get)
+        ? { get, set, configurable, enumerable }
         : { value, configurable, enumerable, writable }
       );
     }
@@ -44,7 +44,7 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
     }
   }
   const { get, set } = instanceDescriptors.$;
-  defineProperties(constructor.prototype, { 
+  defineProperties(constructor.prototype, {
     [ALL_KEYS]: { value: Object.keys(propSetters) },
     [SETTER]: { value: set },
     [GETTER]: { value: get },
@@ -89,7 +89,7 @@ export function createConstructor(structure, handlers, env) {
     const comptimeMembers = members.filter(m => isReadOnly(m));
     if (comptimeMembers.length > 0) {
       comptimeFieldSlots = comptimeMembers.map(m => m.slot);
-    } 
+    }
   }
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
@@ -107,10 +107,10 @@ export function createConstructor(structure, handlers, env) {
         self[SLOTS] = {};
       }
       if (shapeDefiner) {
-        // provided by defineSlice(); the slice is different from other structures as it does not have 
+        // provided by defineSlice(); the slice is different from other structures as it does not have
         // a fixed size; memory is allocated by the slice initializer based on the argument given
         initializer.call(self, arg, fixed);
-        dv = self[MEMORY]; 
+        dv = self[MEMORY];
       } else {
         self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
       }
@@ -154,7 +154,7 @@ export function createConstructor(structure, handlers, env) {
     if (finalizer) {
       self = finalizer.call(self);
     }
-    return cache.save(dv, self); 
+    return cache.save(dv, self);
   };
   return constructor;
 }
@@ -167,7 +167,7 @@ export function copyPointer({ source }) {
 }
 
 export function createPropertyApplier(structure) {
-  const { instance: { template } } = structure;  
+  const { instance: { template } } = structure;
   return function(arg, fixed) {
     const argKeys = Object.keys(arg);
     const propSetters = this[PROP_SETTERS];

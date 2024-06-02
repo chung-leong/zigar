@@ -25,7 +25,7 @@ export async function transpile(path, options) {
     }
   }
   Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi', isWASM: true });
-  const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, { 
+  const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath } = await compile(srcPath, null, compileOptions);

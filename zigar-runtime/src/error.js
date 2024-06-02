@@ -3,7 +3,7 @@ import { StructureType, getPrimitiveType, getTypeName, isErrorJSON } from './typ
 export class NoInitializer extends TypeError {
   constructor(structure) {
     const { name } = structure;
-    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`); 
+    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
   }
 }
 

@@ -66,7 +66,7 @@ export class Environment {
     // obtain a data view of memory at given address
   }
   releaseFixedView(dv: DataView): void {
-    // release allocated memory stored in data view, doing nothing if data view 
+    // release allocated memory stored in data view, doing nothing if data view
     // does not contain fixed memory or if memory is static
   }
   inFixedMemory(object: object): boolean {
@@ -157,7 +157,7 @@ export class Environment {
         }
         const dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
         if (isOpaque) {
-          // opaque structure--need to save the alignment 
+          // opaque structure--need to save the alignment
           dv[ALIGN] = entry.targetAlign;
         }
         return dv;
@@ -178,9 +178,9 @@ export class Environment {
       const dv = new DataView(buffer, offset, len);
       this.viewMap.set(buffer, dv);
       return dv;
-    } 
+    }
     if (entry instanceof DataView) {
-      // only one view created thus far--see if that's the matching one 
+      // only one view created thus far--see if that's the matching one
       if (entry.byteOffset === offset && entry.byteLength === len) {
         return entry;
       } else {
@@ -227,7 +227,7 @@ export class Environment {
     return object;
   }
 
-  /* COMPTIME-ONLY */ 
+  /* COMPTIME-ONLY */
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -322,14 +322,14 @@ export class Environment {
       name: 'omitFunctions',
       bitOffset: 0,
       bitSize: 1,
-      byteSize: 1,      
+      byteSize: 1,
     });
     this.attachMember(options, {
       type: MemberType.Bool,
       name: 'omitVariables',
       bitOffset: 8,
       bitSize: 1,
-      byteSize: 1,      
+      byteSize: 1,
     });
     this.finalizeShape(options);
     const structure = this.beginStructure({
@@ -385,15 +385,15 @@ export class Environment {
   exportStructures() {
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian } = this;
-    return { 
-      structures, 
-      options: { runtimeSafety, littleEndian }, 
+    return {
+      structures,
+      options: { runtimeSafety, littleEndian },
       keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   }
 
   prepareObjectsForExport() {
-    const objects = findAllObjects(this.structures, SLOTS);    
+    const objects = findAllObjects(this.structures, SLOTS);
     const list = [];
     for (const object of objects) {
       if (object[MEMORY]) {
@@ -426,15 +426,15 @@ export class Environment {
               b.replaced = true;
             }
           }
-        }  
+        }
       }
     }
-  }  
+  }
 
   useStructures() {
     const module = this.getRootModule();
     // add fixed memory object to list so they can be unlinked
-    const objects = findAllObjects(this.structures, SLOTS);    
+    const objects = findAllObjects(this.structures, SLOTS);
     for (const object of objects) {
       if (object[MEMORY] && this.inFixedMemory(object)) {
         this.variables.push({ object });
@@ -517,7 +517,7 @@ export class Environment {
             // when the VM is up and running
             this.variables.push({ reloc, object });
           }
-          return object;    
+          return object;
         }
       } else {
         return structure;
@@ -538,8 +538,8 @@ export class Environment {
           if (placeholder.slots) {
             // defer creation of objects until shapes of structures are finalized
             const slots = template[SLOTS] = {};
-            objectPlaceholders.set(slots, placeholder.slots); 
-          }   
+            objectPlaceholders.set(slots, placeholder.slots);
+          }
         }
       }
       this.finalizeShape(structure);
@@ -593,7 +593,7 @@ export class Environment {
             if (childDV.buffer === dv.buffer) {
               const offset = childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
-              linkChildren(child); 
+              linkChildren(child);
             }
           }
         }
@@ -1046,6 +1046,6 @@ export function isInvalidAddress(address) {
 
 function isElectron() {
   return typeof(process) === 'object'
-      && typeof(process?.versions) === 'object' 
+      && typeof(process?.versions) === 'object'
       && !!process.versions?.electron;
 }

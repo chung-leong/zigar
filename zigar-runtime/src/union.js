@@ -32,7 +32,7 @@ export function defineUnionShape(structure, env) {
   const memberInitializers = {};
   const memberValueGetters = {};
   const valueMembers = (exclusion) ? members.slice(0, -1) : members;
-  const selectorMember = (exclusion) ? members[members.length - 1] : null;  
+  const selectorMember = (exclusion) ? members[members.length - 1] : null;
   const { get: getSelector, set: setSelector } = (exclusion) ? getDescriptor(selectorMember, env) : {};
   const getActiveField = (isTagged)
   ? function() {
@@ -63,7 +63,7 @@ export function defineUnionShape(structure, env) {
             // tagged union allows inactive member to be queried
             return null;
           } else {
-            // whereas bare union does not, since the condition is not detectable 
+            // whereas bare union does not, since the condition is not detectable
             // when runtime safety is off
             throw new InactiveUnionProperty(structure, name, currentName);
           }
@@ -72,7 +72,7 @@ export function defineUnionShape(structure, env) {
         return getValue.call(this);
       }
     : getValue;
-    const set = (exclusion && setValue) 
+    const set = (exclusion && setValue)
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
@@ -131,12 +131,12 @@ export function defineUnionShape(structure, env) {
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
   const fieldDescriptor = (isTagged)
-  ? { 
+  ? {
       // for tagged union,  only the active field
-      get() { return [ getActiveField.call(this) ] } 
+      get() { return [ getActiveField.call(this) ] }
     }
-  : { 
-      // for bare and extern union, all members are included 
+  : {
+      // for bare and extern union, all members are included
       value: valueMembers.map(m => m.name)
     };
   const isChildActive = (isTagged)
@@ -146,7 +146,7 @@ export function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
-  const toPrimitive = (isTagged) 
+  const toPrimitive = (isTagged)
   ? function(hint) {
     switch (hint) {
       case 'string':
@@ -178,11 +178,11 @@ export function defineUnionShape(structure, env) {
     [PROP_GETTERS]: { value: memberValueGetters },
     [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
-  };  
+  };
   const staticDescriptors = {
     tag: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },    
+    [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
@@ -202,7 +202,7 @@ export function getUnionEntries(options) {
   };
 }
 
-export function getUnionIterator(options) { 
+export function getUnionIterator(options) {
   const entries = getUnionEntries.call(this, options);
   return entries[Symbol.iterator]();
 }
@@ -214,7 +214,7 @@ export function getUnionEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < props.length) {
         const current = props[index++];
         // get value of prop with no check

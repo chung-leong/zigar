@@ -9,7 +9,7 @@ export const schema = {
   required: [],
   additionalProperties: false,
   properties: {
-    ...optionsForCompile, 
+    ...optionsForCompile,
     ...optionsForTranspile,
   },
 };

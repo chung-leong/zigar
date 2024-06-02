@@ -18,7 +18,7 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
-  // use a weak map to store the addresses of shared buffer so that Zig code can free the 
+  // use a weak map to store the addresses of shared buffer so that Zig code can free the
   // underlying memory without causing a crash; basically, we don't want to ask V8 to return
   // the buffer's backing store if there's a chance that the memory is no longer there
   addressMap = new WeakMap();
@@ -32,7 +32,7 @@ export class NodeEnvironment extends Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;    
+    const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {
@@ -59,7 +59,7 @@ export class NodeEnvironment extends Environment {
 
   freeHostMemory(address, len, align) {
     // no freeing actually occurs--memory will await garbage collection
-    this.unregisterMemory(address);   
+    this.unregisterMemory(address);
   }
 
   allocateShadowMemory(len, align) {
@@ -92,7 +92,7 @@ export class NodeEnvironment extends Environment {
     } else {
       const buffer = this.obtainExternBuffer(address, len);
       this.addressMap.set(buffer, address);
-      return this.obtainView(buffer, 0, len);  
+      return this.obtainView(buffer, 0, len);
     }
   }
 

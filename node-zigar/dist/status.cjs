@@ -47,14 +47,14 @@ function showStatus(message) {
       }
       /* c8 ignore end */
     };
-    update(); 
+    update();
     /* c8 ignore next 6 */
   } else {
     write(fd, message, () => {});
     statusClear = () => {
       write(fd, `\b \b`.repeat(message.length), () => {});
     };
-  }  
+  }
 }
 
 function hideStatus() {

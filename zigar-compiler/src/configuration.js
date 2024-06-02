@@ -95,13 +95,13 @@ export function extractOptions(searchParams, availableOptions) {
       options[key] = getCamelCase(string, [ 'Debug', 'ReleaseSafe', 'ReleaseFast', 'ReleaseSmall' ]);
     } else {
       switch (option.type) {
-        case 'boolean': 
+        case 'boolean':
           options[key] = !!parseInt(string);
           break;
-        case 'number': 
+        case 'number':
           options[key] = parseInt(string);
           break;
-        default: 
+        default:
           options[key] = string;
       }
     }

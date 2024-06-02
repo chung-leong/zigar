@@ -7,12 +7,12 @@ import { dirname, join, parse } from 'path';
 import { compile, findConfigFile, loadConfigFile, optionsForCompile } from 'zigar-compiler';
 import { hideStatus, showResult, showStatus } from '../dist/status.cjs';
 
-const possiblePlatforms = [ 
+const possiblePlatforms = [
   'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
 ];
 const possibleArchs = [
   'arm', 'arm64', 'ia32', 'loong64', 'mips', 'mipsel', 'ppc', 'ppc64', 'riscv64', 's390', 's390x',
-  'x64' 
+  'x64'
 ];
 
 async function buildModules() {
@@ -50,13 +50,13 @@ async function buildModules() {
     const modName = parse(modPath).name;
     for (const { platform, arch } of config.targets) {
       const { changed } = await compile(srcPath, modPath, {
-        ...config, 
-        platform, 
+        ...config,
+        platform,
         arch,
         onStart: () => showStatus(`Building module "${modName}" (${platform}/${arch})`),
         onEnd: () => hideStatus(),
         configPath,
-      }); 
+      });
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} module "${modName}" (${platform}/${arch})`);
     }
@@ -68,15 +68,15 @@ async function buildModules() {
   for (const parentDir of parentDirs) {
     const addonDir = join(parentDir, 'node-zigar-addon');
     for (const { platform, arch } of config.targets) {
-      const { changed } = await buildAddon(addonDir, { 
-        platform, 
+      const { changed } = await buildAddon(addonDir, {
+        platform,
         arch,
         onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),
         onEnd: () => hideStatus(),
       });
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} Node.js addon (${platform}/${arch})`);
-    } 
+    }
   }
 }
 
@@ -85,7 +85,7 @@ async function createConfig() {
   const config = {
     optimize: 'ReleaseSmall',
     sourceFiles: {},
-    targets: [ 
+    targets: [
       {
         platform: os.platform(),
         arch: os.arch(),
@@ -125,10 +125,10 @@ try {
     case undefined:
       printHelp();
       break;
-    default: 
+    default:
       throw new Error(`Unrecognized command: ${cmd}`);
   }
 } catch (err) {
   console.log(err.message);
   process.exit(1);
-} 
+}

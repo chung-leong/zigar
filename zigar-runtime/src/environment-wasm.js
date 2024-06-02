@@ -108,7 +108,7 @@ export class WebAssemblyEnvironment extends Environment {
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
-    return dv;  
+    return dv;
   }
 
   releaseFixedView(dv) {
@@ -266,8 +266,8 @@ export class WebAssemblyEnvironment extends Environment {
   async instantiateWebAssembly(source) {
     const res = await source;
     this.hasCodeSource = true;
-    const imports = { 
-      env: this.exportFunctions(), 
+    const imports = {
+      env: this.exportFunctions(),
       wasi_snapshot_preview1: this.getWASIImport(),
     };
     if (res[Symbol.toStringTag] === 'Response') {
@@ -378,15 +378,15 @@ export class WebAssemblyEnvironment extends Environment {
             if (unexpected) {
               this.handleError(unexpected);
             }
-            return args.retval;      
+            return args.retval;
           }, (err) => {
             this.handleError(err);
           })
         } else {
           throw unexpected;
-        }        
+        }
       }
-      return args.retval;      
+      return args.retval;
     } catch (err) {
       this.handleError(err);
     }
@@ -411,7 +411,7 @@ export class WebAssemblyEnvironment extends Environment {
       const ENOSYS = 38;
       const ENOBADF = 8;
       const noImpl = () => ENOSYS;
-      return { 
+      return {
         args_get: noImpl,
         args_sizes_get: noImpl,
         clock_res_get: noImpl,
@@ -440,18 +440,18 @@ export class WebAssemblyEnvironment extends Environment {
               if (buf_len > 0) {
                 const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
                 this.writeToConsole(buf);
-                written += buf_len; 
+                written += buf_len;
               }
             }
             dv.setUint32(written_ptr, written, true);
-            return 0;            
+            return 0;
           } else {
             return ENOSYS;
           }
         },
         fd_fdstat_get: noImpl,
         fd_fdstat_set_flags: noImpl,
-        fd_fdstat_set_rights: noImpl,        
+        fd_fdstat_set_rights: noImpl,
         fd_filestat_get: noImpl,
         fd_filestat_set_size: noImpl,
         fd_filestat_set_times: noImpl,
@@ -466,7 +466,7 @@ export class WebAssemblyEnvironment extends Environment {
         path_remove_directory: noImpl,
         path_rename: noImpl,
         path_symlink: noImpl,
-        path_unlink_file: noImpl,       
+        path_unlink_file: noImpl,
         poll_oneoff: noImpl,
         proc_exit: (code) => {
           throw new Exit(code);
@@ -482,8 +482,8 @@ export class WebAssemblyEnvironment extends Environment {
         sock_accept: noImpl,
         sock_recv: noImpl,
         sock_send: noImpl,
-        sock_shutdown: noImpl,        
-      };  
+        sock_shutdown: noImpl,
+      };
     }
   }
 }

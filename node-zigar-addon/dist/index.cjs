@@ -27,7 +27,7 @@ function getLibraryPath() {
 }
 
 async function buildAddon(addonDir, options) {
-  const { 
+  const {
     recompile = true,
     arch = getArch(),
     platform = getPlatform(),
@@ -99,7 +99,7 @@ function getPlatform() {
           isGNU = true;
         } catch (err) {
           isGNU = false;
-        }  
+        }
       }
     }
     if (!isGNU) {
@@ -129,7 +129,7 @@ async function runCompiler(path, args, options) {
       try {
         const logPath = join(cwd, 'log');
         await writeFile(logPath, err.stderr);
-      } catch (_) {        
+      } catch (_) {
       }
       message += `\n\n${err.stderr}`;
     }
@@ -147,7 +147,7 @@ async function isOlderThan(targetPath, srcPaths) {
       if (!path) {
         return false;
       }
-      /* c8 ignore next 3 */      
+      /* c8 ignore next 3 */
       if (checked.get(path)) {
         return false;
       }

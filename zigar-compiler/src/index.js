@@ -6,4 +6,3 @@ export {
 } from './configuration.js';
 export { transpile } from './transpiler.js';
 export { getArch, getPlatform, normalizePath } from './utility-functions.js';
-

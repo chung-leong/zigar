@@ -142,7 +142,7 @@ export function getDataView(structure, arg, env) {
           } else {
             throw new ArrayLengthMismatch(structure, null, arg);
           }
-        } 
+        }
       }
     }
   }
@@ -183,7 +183,7 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
     shapeDefiner.call(this, copy ? null : dv, len, fixed);
     if (copy) {
       this[COPIER](source);
-    }  
+    }
   } else {
     const byteLength = multiple ? byteSize * this.length : byteSize;
     if (dv.byteLength !== byteLength) {
@@ -191,7 +191,7 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
     }
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, this.length);
-    this[COPIER](source); 
+    this[COPIER](source);
   }
 }
 

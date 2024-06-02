@@ -11,7 +11,7 @@ import { definePrimitive } from './primitive.js';
 import { defineSlice } from './slice.js';
 import { defineStructShape } from './struct.js';
 import {
-    MemberType, StructureType, hasStandardFloatSize, hasStandardIntSize, isByteAligned
+  MemberType, StructureType, hasStandardFloatSize, hasStandardIntSize, isByteAligned
 } from './types.js';
 import { defineUnionShape } from './union.js';
 import { defineVector } from './vector.js';
@@ -185,7 +185,7 @@ export function findAllObjects(structures, SLOTS) {
     list.push(object);
     if (object[SLOTS]) {
       for (const child of Object.values(object[SLOTS])) {
-        find(child);         
+        find(child);
       }
     }
   };

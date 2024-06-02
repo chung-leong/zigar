@@ -24,7 +24,7 @@ export function defineErrorSet(structure, env) {
   if (!currentErrorClass) {
     currentErrorClass = class ZigError extends ZigErrorBase {};
     currentGlobalSet = defineErrorSet({ ...structure, name: 'anyerror' }, env);
-  } 
+  }
   if (currentGlobalSet && name === 'anyerror') {
     structure.constructor = currentGlobalSet;
     structure.typedArray = getTypedArrayClass(member);
@@ -40,7 +40,7 @@ export function defineErrorSet(structure, env) {
     } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
       if (propApplier.call(this, arg) === 0) {
         throw new InvalidInitializer(structure, expected, arg);
-      }  
+      }
     } else if (arg !== undefined) {
       set.call(this, arg);
     }
@@ -77,7 +77,7 @@ export function defineErrorSet(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [CLASS]: { value: errorClass },
-    // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
+    // the PROPS array is normally set in static.js; it needs to be set here for anyerror
     // so we can add names to it as error sets are defined
     [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
     [TYPE]: { value: structure.type },
@@ -86,8 +86,8 @@ export function defineErrorSet(structure, env) {
 };
 
 export function appendErrorSet(errorSet, name, es) {
-  // our Zig export code places error set instance into the static template, which we can't 
-  // use since all errors need to have the same parent class; here we get the error number 
+  // our Zig export code places error set instance into the static template, which we can't
+  // use since all errors need to have the same parent class; here we get the error number
   // and create the actual error object if hasn't been created already for an earlier set
   const number = es[GETTER]('number');
   let error = currentGlobalSet[number];
@@ -102,7 +102,7 @@ export function appendErrorSet(errorSet, name, es) {
     [name]: { value: error },
   };
   defineProperties(errorSet, descriptors);
-  defineProperties(currentGlobalSet, descriptors); 
+  defineProperties(currentGlobalSet, descriptors);
   // add name to prop list
   currentGlobalSet[PROPS].push(name);
 }

@@ -174,7 +174,7 @@ export function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
-export function transformEnumerationDescriptor(int, structure) {  
+export function transformEnumerationDescriptor(int, structure) {
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
@@ -185,7 +185,7 @@ export function transformEnumerationDescriptor(int, structure) {
     return item
   };
   return {
-    get: (int.get.length === 0) 
+    get: (int.get.length === 0)
     ? function getEnum(hint) {
         const value = int.get.call(this);
         if (hint === 'number') {
@@ -197,7 +197,7 @@ export function transformEnumerationDescriptor(int, structure) {
         const value = int.get.call(this, index);
         return findEnum(value);
       },
-    set: (int.set.length === 1) 
+    set: (int.set.length === 1)
     ? function setEnum(value, hint) {
         if (hint !== 'number') {
           const item = findEnum(value);
@@ -223,11 +223,11 @@ export function transformErrorSetDescriptor(int, structure) {
       } else {
         throw new ErrorExpected(structure, value);
       }
-    } 
+    }
     return item
   };
   return {
-    get: (int.get.length === 0) 
+    get: (int.get.length === 0)
     ? function getError(hint) {
         const value = int.get.call(this);
         if (hint === 'number') {
@@ -239,7 +239,7 @@ export function transformErrorSetDescriptor(int, structure) {
         const value = int.get.call(this, index);
         return findError(value, false);
       },
-    set: (int.set.length === 1) 
+    set: (int.set.length === 1)
     ? function setError(value, hint) {
         if (hint !== 'number') {
           const item = findError(value);
@@ -285,14 +285,14 @@ function setValue(slot, value) {
 
 function bindSlot(slot, { get, set }) {
   if (slot !== undefined) {
-    return { 
+    return {
       get: function() {
         return get.call(this, slot);
       },
-      set: (set) 
+      set: (set)
       ? function(arg) {
           return set.call(this, slot, arg);
-        } 
+        }
       : undefined,
     };
   } else {

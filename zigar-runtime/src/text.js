@@ -72,5 +72,5 @@ export function decodeBase64(str) {
   for (let i = 0; i < ta.byteLength; i++) {
     ta[i] = bstr.charCodeAt(i);
   }
-  return new DataView(ta.buffer);  
+  return new DataView(ta.buffer);
 }

@@ -20,7 +20,7 @@ export function defineVector(structure, env) {
     instance: { members: [ member ] },
   } = structure;
   /* DEV-TEST */
-  /* c8 ignore next 6 */  
+  /* c8 ignore next 6 */
   if (member.bitOffset !== undefined) {
     throw new Error(`bitOffset must be undefined for vector member`);
   }

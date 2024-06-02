@@ -61,15 +61,15 @@ export async function load(url, context, nextLoad) {
     });
     Object.assign(addonOptions, {
       onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),
-      onEnd: () => hideStatus(),  
+      onEnd: () => hideStatus(),
     });
   }
   const { outputPath: addonPath } = await buildAddon(addonDir, addonOptions);
-  // compile the module if srcPath isn't undefined; if it is, then compile() will simply return 
+  // compile the module if srcPath isn't undefined; if it is, then compile() will simply return
   // the path to the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
   // is absent, compilation does not occur
   const { outputPath } = await compile(srcPath, modPath, options);
-  const env = createEnvironment({ addonPath });  
+  const env = createEnvironment({ addonPath });
   env.loadModule(outputPath);
   env.acquireStructures(options);
   const definition = env.exportStructures();

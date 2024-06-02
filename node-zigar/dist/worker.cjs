@@ -1,4 +1,4 @@
-(async () => { 
+(async () => {
   const { buildAddon } = require('node-zigar-addon');
   const { dirname, extname, join, parse } = require('path');
   const { URL } = require('url');
@@ -8,7 +8,7 @@
   } = require('zigar-compiler/cjs');
   const { hideStatus, showStatus } = require('./status.cjs');
   const { workerData } = require('worker_threads');
-  
+
   const { url, buffers } = workerData;
   let status = 0, result = null;
   try {
@@ -27,7 +27,7 @@
       if (configPath) {
         // add options from config file
         Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
-      } 
+      }
     }
     // allow overriding of options using query variables
     Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
@@ -50,8 +50,8 @@
       });
     }
     const { outputPath: addonPath } = await buildAddon(addonDir, addonOptions);
-    // srcPath can be undefined, in which case compile() will simply return the path to 
-    // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json 
+    // srcPath can be undefined, in which case compile() will simply return the path to
+    // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
     // is absent, compilation does not occur
     const { outputPath: modulePath } = await compile(srcPath, modPath, options);
     result = { addonPath, modulePath };
@@ -65,7 +65,7 @@
   for (let i = 0; i < bytes.length; i++) {
       buffers.data[i] = bytes[i];
   }
-  buffers.length[0] = bytes.length; 
+  buffers.length[0] = bytes.length;
   buffers.status[0] = status;
   Atomics.notify(buffers.status, 0);
 })();

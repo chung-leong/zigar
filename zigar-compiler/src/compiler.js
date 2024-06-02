@@ -77,7 +77,7 @@ export async function runCompiler(path, args, options) {
         const logPath = join(cwd, 'log');
         await writeFile(logPath, err.stderr);
         /* c8 ignore next 2 */
-      } catch (err) {        
+      } catch (err) {
       }
       message += `\n\n${err.stderr}`;
     }
@@ -90,9 +90,9 @@ export async function runCompiler(path, args, options) {
 
 export function formatProjectConfig(config) {
   const lines = [];
-  const fields = [ 
+  const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
-  ];  
+  ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
       const snakeCase = name.replace(/[A-Z]+/g, m => '_' + m.toLowerCase());
@@ -155,7 +155,7 @@ export function createConfig(srcPath, modPath, options = {}) {
   const moduleDir = src.dir;
   const modulePrefix = basename(moduleName).slice(0, 16);
   const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
-  const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);   
+  const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {
       // save output in build folder
@@ -167,7 +167,7 @@ export function createConfig(srcPath, modPath, options = {}) {
       };
       const ext = extensions[platform] || 'so';
       return join(modPath, `${platform}.${arch}.${ext}`);
-    }  
+    }
   })();
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -202,7 +202,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     };
     const cpuArch = cpuArchs[arch] ?? arch;
     const osTag = osTags[platform] ?? platform;
-    zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);    
+    zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);

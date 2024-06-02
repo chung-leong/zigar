@@ -27,7 +27,7 @@ export function definePointer(structure, env) {
   const { structure: targetStructure } = member;
   const { type, sentinel, length } = targetStructure;
   // length for slice can be zero or undefined
-  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;  
+  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
@@ -54,7 +54,7 @@ export function definePointer(structure, env) {
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
       }
-    }    
+    }
   };
   const getTargetObject = function() {
     updateTarget.call(this);
@@ -94,7 +94,7 @@ export function definePointer(structure, env) {
         throw new NullPointer();
       }
       return object[SETTER](value);
-    } 
+    }
   : throwReadOnly;
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
@@ -173,7 +173,7 @@ export function definePointer(structure, env) {
   const fixedLength = (type != StructureType.Slice) ? 1 : length;
   const addressGetter = function() {
     const address = getAddress.call(this);
-    const length = (getLength) 
+    const length = (getLength)
     ? getLength.call(this)
     : (sentinel)
       ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
@@ -206,7 +206,7 @@ export function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function makePointerReadOnly() {  
+function makePointerReadOnly() {
   const pointer = this[POINTER];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
@@ -320,7 +320,7 @@ const constTargetHandlers = {
       const value = target[name];
       if (value?.[CONST_TARGET] === null) {
         return getConstProxy(value);
-      } 
+      }
       return value;
     }
   },

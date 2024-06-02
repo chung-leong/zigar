@@ -65,7 +65,7 @@ function normalizeObject(object, forJSON) {
           result = {};
           break;
         default:
-          result = handleError(() => value.$, { error }); 
+          result = handleError(() => value.$, { error });
       }
       result = process(result);
       resultMap.set(value, result);
@@ -145,7 +145,7 @@ export function getStringDescriptor(structure, handlers = {}) {
         }
       }
       const ta = encodeText(str, `utf-${charSize * 8}`);
-      const dv = new DataView(ta.buffer);   
+      const dv = new DataView(ta.buffer);
       setDataView.call(this, dv, structure, false, fixed, handlers);
     },
   });

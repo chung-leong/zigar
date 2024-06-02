@@ -101,7 +101,7 @@ export function defineArray(structure, env) {
 export function createArrayProxy() {
   const proxy = new Proxy(this, proxyHandlers);
   // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy }); 
+  Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
@@ -148,7 +148,7 @@ export function getArrayEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < length) {
         const current = index++;
         value = [ current, handleError(() => self.get(current), options) ];

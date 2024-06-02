@@ -30,7 +30,7 @@ Module._load = new Proxy(Module._load, {
 
 function startWorker(url) {
   const workerURL = pathToFileURL(join(__dirname, 'worker.cjs'));
-  const workerData = { url, 
+  const workerData = { url,
     buffers: {
       status: new Int32Array(new SharedArrayBuffer(4)),
       length: new Int32Array(new SharedArrayBuffer(4)),
@@ -53,7 +53,7 @@ function awaitWorker(worker) {
     while (status[0] === 0);
   }
   const bytes = Buffer.from(data.buffer, 0, length[0]);
-  const result = JSON.parse(bytes.toString()); 
+  const result = JSON.parse(bytes.toString());
   if (status[0] === 1) {
     return result;
   } else {

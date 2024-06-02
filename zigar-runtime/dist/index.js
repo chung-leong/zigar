@@ -106,7 +106,7 @@ function isErrorJSON(arg) {
 class NoInitializer extends TypeError {
   constructor(structure) {
     const { name } = structure;
-    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`); 
+    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
   }
 }
 
@@ -976,7 +976,7 @@ function getDataView(structure, arg, env) {
           } else {
             throw new ArrayLengthMismatch(structure, null, arg);
           }
-        } 
+        }
       }
     }
   }
@@ -1017,7 +1017,7 @@ function setDataView(dv, structure, copy, fixed, handlers) {
     shapeDefiner.call(this, copy ? null : dv, len, fixed);
     if (copy) {
       this[COPIER](source);
-    }  
+    }
   } else {
     const byteLength = multiple ? byteSize * this.length : byteSize;
     if (dv.byteLength !== byteLength) {
@@ -1025,7 +1025,7 @@ function setDataView(dv, structure, copy, fixed, handlers) {
     }
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, this.length);
-    this[COPIER](source); 
+    this[COPIER](source);
   }
 }
 
@@ -1690,7 +1690,7 @@ function getFloatDescriptor(member, env) {
   return getDescriptorUsing(member, env, getNumericAccessor)
 }
 
-function transformEnumerationDescriptor(int, structure) {  
+function transformEnumerationDescriptor(int, structure) {
   const findEnum = function(value) {
     const { constructor } = structure;
     // the enumeration constructor returns the object for the int value
@@ -1701,7 +1701,7 @@ function transformEnumerationDescriptor(int, structure) {
     return item
   };
   return {
-    get: (int.get.length === 0) 
+    get: (int.get.length === 0)
     ? function getEnum(hint) {
         const value = int.get.call(this);
         if (hint === 'number') {
@@ -1713,7 +1713,7 @@ function transformEnumerationDescriptor(int, structure) {
         const value = int.get.call(this, index);
         return findEnum(value);
       },
-    set: (int.set.length === 1) 
+    set: (int.set.length === 1)
     ? function setEnum(value, hint) {
         if (hint !== 'number') {
           const item = findEnum(value);
@@ -1739,11 +1739,11 @@ function transformErrorSetDescriptor(int, structure) {
       } else {
         throw new ErrorExpected(structure, value);
       }
-    } 
+    }
     return item
   };
   return {
-    get: (int.get.length === 0) 
+    get: (int.get.length === 0)
     ? function getError(hint) {
         const value = int.get.call(this);
         if (hint === 'number') {
@@ -1755,7 +1755,7 @@ function transformErrorSetDescriptor(int, structure) {
         const value = int.get.call(this, index);
         return findError(value);
       },
-    set: (int.set.length === 1) 
+    set: (int.set.length === 1)
     ? function setError(value, hint) {
         if (hint !== 'number') {
           const item = findError(value);
@@ -1801,14 +1801,14 @@ function setValue(slot, value) {
 
 function bindSlot(slot, { get, set }) {
   if (slot !== undefined) {
-    return { 
+    return {
       get: function() {
         return get.call(this, slot);
       },
-      set: (set) 
+      set: (set)
       ? function(arg) {
           return set.call(this, slot, arg);
-        } 
+        }
       : undefined,
     };
   } else {
@@ -1941,7 +1941,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
 function defineProperties(object, descriptors) {
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
     if (descriptor) {
-      const { 
+      const {
         set,
         get,
         value,
@@ -1949,8 +1949,8 @@ function defineProperties(object, descriptors) {
         configurable = true,
         writable = true,
       } = descriptor;
-      Object.defineProperty(object, name, (get) 
-        ? { get, set, configurable, enumerable } 
+      Object.defineProperty(object, name, (get)
+        ? { get, set, configurable, enumerable }
         : { value, configurable, enumerable, writable }
       );
     }
@@ -1975,7 +1975,7 @@ function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) 
     }
   }
   const { get, set } = instanceDescriptors.$;
-  defineProperties(constructor.prototype, { 
+  defineProperties(constructor.prototype, {
     [ALL_KEYS]: { value: Object.keys(propSetters) },
     [SETTER]: { value: set },
     [GETTER]: { value: get },
@@ -2020,7 +2020,7 @@ function createConstructor(structure, handlers, env) {
     const comptimeMembers = members.filter(m => isReadOnly(m));
     if (comptimeMembers.length > 0) {
       comptimeFieldSlots = comptimeMembers.map(m => m.slot);
-    } 
+    }
   }
   const cache = new ObjectCache();
   const constructor = function(arg, options = {}) {
@@ -2038,10 +2038,10 @@ function createConstructor(structure, handlers, env) {
         self[SLOTS] = {};
       }
       if (shapeDefiner) {
-        // provided by defineSlice(); the slice is different from other structures as it does not have 
+        // provided by defineSlice(); the slice is different from other structures as it does not have
         // a fixed size; memory is allocated by the slice initializer based on the argument given
         initializer.call(self, arg, fixed);
-        dv = self[MEMORY]; 
+        dv = self[MEMORY];
       } else {
         self[MEMORY] = dv = env.allocateMemory(byteSize, align, fixed);
       }
@@ -2085,7 +2085,7 @@ function createConstructor(structure, handlers, env) {
     if (finalizer) {
       self = finalizer.call(self);
     }
-    return cache.save(dv, self); 
+    return cache.save(dv, self);
   };
   return constructor;
 }
@@ -2098,7 +2098,7 @@ function copyPointer({ source }) {
 }
 
 function createPropertyApplier(structure) {
-  const { instance: { template } } = structure;  
+  const { instance: { template } } = structure;
   return function(arg, fixed) {
     const argKeys = Object.keys(arg);
     const propSetters = this[PROP_SETTERS];
@@ -2253,7 +2253,7 @@ function decodeBase64(str) {
   for (let i = 0; i < ta.byteLength; i++) {
     ta[i] = bstr.charCodeAt(i);
   }
-  return new DataView(ta.buffer);  
+  return new DataView(ta.buffer);
 }
 
 function getValueOf() {
@@ -2316,7 +2316,7 @@ function normalizeObject(object, forJSON) {
           result = {};
           break;
         default:
-          result = handleError(() => value.$, { error }); 
+          result = handleError(() => value.$, { error });
       }
       result = process(result);
       resultMap.set(value, result);
@@ -2396,7 +2396,7 @@ function getStringDescriptor(structure, handlers = {}) {
         }
       }
       const ta = encodeText(str, `utf-${charSize * 8}`);
-      const dv = new DataView(ta.buffer);   
+      const dv = new DataView(ta.buffer);
       setDataView.call(this, dv, structure, false, fixed, handlers);
     },
   });
@@ -2438,7 +2438,7 @@ function defineErrorSet(structure, env) {
   if (!currentErrorClass) {
     currentErrorClass = class ZigError extends ZigErrorBase {};
     currentGlobalSet = defineErrorSet({ ...structure, name: 'anyerror' }, env);
-  } 
+  }
   if (currentGlobalSet && name === 'anyerror') {
     structure.constructor = currentGlobalSet;
     structure.typedArray = getTypedArrayClass(member);
@@ -2454,7 +2454,7 @@ function defineErrorSet(structure, env) {
     } else if (arg && typeof(arg) === 'object' && !isErrorJSON(arg)) {
       if (propApplier.call(this, arg) === 0) {
         throw new InvalidInitializer(structure, expected, arg);
-      }  
+      }
     } else if (arg !== undefined) {
       set.call(this, arg);
     }
@@ -2490,7 +2490,7 @@ function defineErrorSet(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [CLASS]: { value: errorClass },
-    // the PROPS array is normally set in static.js; it needs to be set here for anyerror 
+    // the PROPS array is normally set in static.js; it needs to be set here for anyerror
     // so we can add names to it as error sets are defined
     [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
     [TYPE]: { value: structure.type },
@@ -2498,8 +2498,8 @@ function defineErrorSet(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 function appendErrorSet(errorSet, name, es) {
-  // our Zig export code places error set instance into the static template, which we can't 
-  // use since all errors need to have the same parent class; here we get the error number 
+  // our Zig export code places error set instance into the static template, which we can't
+  // use since all errors need to have the same parent class; here we get the error number
   // and create the actual error object if hasn't been created already for an earlier set
   const number = es[GETTER]('number');
   let error = currentGlobalSet[number];
@@ -2514,7 +2514,7 @@ function appendErrorSet(errorSet, name, es) {
     [name]: { value: error },
   };
   defineProperties(errorSet, descriptors);
-  defineProperties(currentGlobalSet, descriptors); 
+  defineProperties(currentGlobalSet, descriptors);
   // add name to prop list
   currentGlobalSet[PROPS].push(name);
 }
@@ -2563,7 +2563,7 @@ function addMethods(s, env) {
           if (!descriptor) {
             descriptor = descriptors[propName] = { configurable: true, enumerable: true };
           }
-          descriptor[type] = f; 
+          descriptor[type] = f;
         }
       } else {
         descriptors[f.name] = { value: f, configurable: true, writable: true };
@@ -2576,7 +2576,7 @@ function addMethods(s, env) {
 }
 
 function getArgumentCount(method, pushThis) {
-  const { argStruct: { instance: { members } } } = method;  
+  const { argStruct: { instance: { members } } } = method;
   return members.length - (pushThis ? 2 : 1);
 }
 
@@ -2607,7 +2607,7 @@ function defineEnumerationShape(structure, env) {
         if (constructor[MORE] && typeof(arg) !== 'string') {
           // create the item on-the-fly when enum is non-exhaustive
           item = new constructor(undefined);
-          debugger;        
+          debugger;
           set.call(item, arg, 'number');
           appendEnumeration(constructor, `${arg}`, item);
         }
@@ -2657,10 +2657,10 @@ function defineEnumerationShape(structure, env) {
 }
 function appendEnumeration(enumeration, name, item) {
   if (name !== undefined) {
-    // enum can have static variables 
+    // enum can have static variables
     if (item instanceof enumeration) {
       // attach name to item so tagged union code can quickly find it
-      defineProperties(item, { [NAME]: { value: name } });  
+      defineProperties(item, { [NAME]: { value: name } });
       // call toPrimitive directly since enum can be bigint or number
       const index = item[Symbol.toPrimitive]();
       defineProperties(enumeration, {
@@ -2687,7 +2687,7 @@ function definePointer(structure, env) {
   const { structure: targetStructure } = member;
   const { type, sentinel, length } = targetStructure;
   // length for slice can be zero or undefined
-  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;  
+  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;
   const addressSize = (hasLength) ? byteSize / 2 : byteSize;
   const { get: getAddress, set: setAddress } = getDescriptor({
     type: MemberType.Uint,
@@ -2714,7 +2714,7 @@ function definePointer(structure, env) {
         this[SLOTS][0] = target;
         this[FIXED_LOCATION] = location;
       }
-    }    
+    }
   };
   const getTargetObject = function() {
     updateTarget.call(this);
@@ -2754,7 +2754,7 @@ function definePointer(structure, env) {
         throw new NullPointer();
       }
       return object[SETTER](value);
-    } 
+    }
   : throwReadOnly;
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
@@ -2833,7 +2833,7 @@ function definePointer(structure, env) {
   const fixedLength = (type != StructureType.Slice) ? 1 : length;
   const addressGetter = function() {
     const address = getAddress.call(this);
-    const length = (getLength) 
+    const length = (getLength)
     ? getLength.call(this)
     : (sentinel)
       ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
@@ -2866,7 +2866,7 @@ function definePointer(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
 }
 
-function makePointerReadOnly() {  
+function makePointerReadOnly() {
   const pointer = this[POINTER];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
@@ -2977,7 +2977,7 @@ const constTargetHandlers = {
       const value = target[name];
       if (value?.[CONST_TARGET] === null) {
         return getConstProxy(value);
-      } 
+      }
       return value;
     }
   },
@@ -3117,11 +3117,11 @@ function defineStructShape(structure, env) {
     instance: { members },
     isTuple,
     hasPointer,
-  } = structure;  
+  } = structure;
   const memberDescriptors = {};
   const fieldMembers = members.filter(m => !!m.name);
   const backingIntMember = members.find(m => !m.name);
-  for (const member of fieldMembers) {    
+  for (const member of fieldMembers) {
     const { get, set } = getDescriptor(member, env);
     memberDescriptors[member.name] = { get, set, configurable: true, enumerable: true };
     if (member.isRequired && set) {
@@ -3154,7 +3154,7 @@ function defineStructShape(structure, env) {
       default:
         return backingInt.get.call(this);
     }
-  } 
+  }
   : null;
   const length = (isTuple && members.length > 0)
   ? parseInt(members[members.length - 1].name) + 1
@@ -3175,7 +3175,7 @@ function defineStructShape(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor$1(structure, always) },
-    [WRITE_DISABLER]: { value: makeReadOnly },    
+    [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: { value: fieldMembers.map(m => m.name) },
   };
   const staticDescriptors = {
@@ -3194,7 +3194,7 @@ function getStructEntries(options) {
   };
 }
 
-function getStructIterator(options) { 
+function getStructIterator(options) {
   const entries = getStructEntries.call(this, options);
   return entries[Symbol.iterator]();
 }
@@ -3205,7 +3205,7 @@ function getStructEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < props.length) {
         const current = props[index++];
         value = [ current, handleError(() => self[current], options) ];
@@ -3217,7 +3217,7 @@ function getStructEntriesIterator(options) {
     },
   };
 }
-  
+
 function getChildVivificator$1(structure) {
   const { instance: { members } } = structure;
   const objectMembers = {};
@@ -3441,7 +3441,7 @@ function defineArray(structure, env) {
 function createArrayProxy() {
   const proxy = new Proxy(this, proxyHandlers);
   // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy }); 
+  Object.defineProperty(this, PROXY, { value: proxy });
   return proxy;
 }
 
@@ -3488,7 +3488,7 @@ function getArrayEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < length) {
         const current = index++;
         value = [ current, handleError(() => self.get(current), options) ];
@@ -3724,7 +3724,7 @@ function defineErrorUnion(structure, env) {
         }
       }
     }
-  };  
+  };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
   const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
   const instanceDescriptors = {
@@ -3792,7 +3792,7 @@ function defineOptional(structure, env) {
   const { get: getValue, set: setValue } = getDescriptor(members[0], env);
   // NOTE: getPresent returns a uint now
   const { get: getPresent, set: setPresent } = getDescriptor(members[1], env);
-  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);  
+  const hasPresentFlag = !(members[0].bitSize > 0 && members[0].bitOffset === members[1].bitOffset);
   const get = function() {
     const present = getPresent.call(this);
     if (present) {
@@ -3814,18 +3814,18 @@ function defineOptional(structure, env) {
         if (isChildActive.call(arg)) {
           this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
         }
-      }      
+      }
     } else if (arg === null) {
       setPresent.call(this, 0);
       this[RESETTER]?.();
       // clear references so objects can be garbage-collected
       this[POINTER_VISITOR]?.(resetPointer);
-    } else if (arg !== undefined || isValueVoid) {      
+    } else if (arg !== undefined || isValueVoid) {
       // call setValue() first, in case it throws
       setValue.call(this, arg);
       if (hasPresentFlag || !env.inFixedMemory(this)) {
-        // since setValue() wouldn't write address into memory when the pointer is in 
-        // relocatable memory, we need to use setPresent() in order to write something 
+        // since setValue() wouldn't write address into memory when the pointer is in
+        // relocatable memory, we need to use setPresent() in order to write something
         // non-zero there so that we know the field is populated
         setPresent.call(this, 1);
       }
@@ -4073,7 +4073,7 @@ function defineUnionShape(structure, env) {
   const memberInitializers = {};
   const memberValueGetters = {};
   const valueMembers = (exclusion) ? members.slice(0, -1) : members;
-  const selectorMember = (exclusion) ? members[members.length - 1] : null;  
+  const selectorMember = (exclusion) ? members[members.length - 1] : null;
   const { get: getSelector, set: setSelector } = (exclusion) ? getDescriptor(selectorMember, env) : {};
   const getActiveField = (isTagged)
   ? function() {
@@ -4104,7 +4104,7 @@ function defineUnionShape(structure, env) {
             // tagged union allows inactive member to be queried
             return null;
           } else {
-            // whereas bare union does not, since the condition is not detectable 
+            // whereas bare union does not, since the condition is not detectable
             // when runtime safety is off
             throw new InactiveUnionProperty(structure, name, currentName);
           }
@@ -4113,7 +4113,7 @@ function defineUnionShape(structure, env) {
         return getValue.call(this);
       }
     : getValue;
-    const set = (exclusion && setValue) 
+    const set = (exclusion && setValue)
     ? function(value) {
         const currentName = getActiveField.call(this);
         if (name !== currentName) {
@@ -4172,12 +4172,12 @@ function defineUnionShape(structure, env) {
   : undefined;
   const constructor = structure.constructor = createConstructor(structure, { modifier, initializer }, env);
   const fieldDescriptor = (isTagged)
-  ? { 
+  ? {
       // for tagged union,  only the active field
-      get() { return [ getActiveField.call(this) ] } 
+      get() { return [ getActiveField.call(this) ] }
     }
-  : { 
-      // for bare and extern union, all members are included 
+  : {
+      // for bare and extern union, all members are included
       value: valueMembers.map(m => m.name)
     };
   const isChildActive = (isTagged)
@@ -4187,7 +4187,7 @@ function defineUnionShape(structure, env) {
       return child === active;
     }
   : never;
-  const toPrimitive = (isTagged) 
+  const toPrimitive = (isTagged)
   ? function(hint) {
     switch (hint) {
       case 'string':
@@ -4219,11 +4219,11 @@ function defineUnionShape(structure, env) {
     [PROP_GETTERS]: { value: memberValueGetters },
     [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: fieldDescriptor,
-  };  
+  };
   const staticDescriptors = {
     tag: isTagged && { get: getTagClass },
     [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },    
+    [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
   attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
@@ -4242,7 +4242,7 @@ function getUnionEntries(options) {
   };
 }
 
-function getUnionIterator(options) { 
+function getUnionIterator(options) {
   const entries = getUnionEntries.call(this, options);
   return entries[Symbol.iterator]();
 }
@@ -4254,7 +4254,7 @@ function getUnionEntriesIterator(options) {
   let index = 0;
   return {
     next() {
-      let value, done;      
+      let value, done;
       if (index < props.length) {
         const current = props[index++];
         // get value of prop with no check
@@ -4395,7 +4395,7 @@ class Environment {
     // obtain a data view of memory at given address
   }
   releaseFixedView(dv: DataView): void {
-    // release allocated memory stored in data view, doing nothing if data view 
+    // release allocated memory stored in data view, doing nothing if data view
     // does not contain fixed memory or if memory is static
   }
   inFixedMemory(object: object): boolean {
@@ -4486,7 +4486,7 @@ class Environment {
         }
         const dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
         if (isOpaque) {
-          // opaque structure--need to save the alignment 
+          // opaque structure--need to save the alignment
           dv[ALIGN] = entry.targetAlign;
         }
         return dv;
@@ -4507,9 +4507,9 @@ class Environment {
       const dv = new DataView(buffer, offset, len);
       this.viewMap.set(buffer, dv);
       return dv;
-    } 
+    }
     if (entry instanceof DataView) {
-      // only one view created thus far--see if that's the matching one 
+      // only one view created thus far--see if that's the matching one
       if (entry.byteOffset === offset && entry.byteLength === len) {
         return entry;
       } else {
@@ -4626,7 +4626,7 @@ class Environment {
             // when the VM is up and running
             this.variables.push({ reloc, object });
           }
-          return object;    
+          return object;
         }
       } else {
         return structure;
@@ -4647,8 +4647,8 @@ class Environment {
           if (placeholder.slots) {
             // defer creation of objects until shapes of structures are finalized
             const slots = template[SLOTS] = {};
-            objectPlaceholders.set(slots, placeholder.slots); 
-          }   
+            objectPlaceholders.set(slots, placeholder.slots);
+          }
         }
       }
       this.finalizeShape(structure);
@@ -4702,7 +4702,7 @@ class Environment {
             if (childDV.buffer === dv.buffer) {
               const offset = childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
-              linkChildren(child); 
+              linkChildren(child);
             }
           }
         }
@@ -5240,7 +5240,7 @@ class WebAssemblyEnvironment extends Environment {
     const { memory } = this;
     const dv = this.obtainView(memory.buffer, address, len);
     dv[MEMORY] = { memory, address, len };
-    return dv;  
+    return dv;
   }
 
   releaseFixedView(dv) {
@@ -5398,8 +5398,8 @@ class WebAssemblyEnvironment extends Environment {
   async instantiateWebAssembly(source) {
     const res = await source;
     this.hasCodeSource = true;
-    const imports = { 
-      env: this.exportFunctions(), 
+    const imports = {
+      env: this.exportFunctions(),
       wasi_snapshot_preview1: this.getWASIImport(),
     };
     if (res[Symbol.toStringTag] === 'Response') {
@@ -5501,15 +5501,15 @@ class WebAssemblyEnvironment extends Environment {
             if (unexpected) {
               this.handleError(unexpected);
             }
-            return args.retval;      
+            return args.retval;
           }, (err) => {
             this.handleError(err);
           })
         } else {
           throw unexpected;
-        }        
+        }
       }
-      return args.retval;      
+      return args.retval;
     } catch (err) {
       this.handleError(err);
     }
@@ -5534,7 +5534,7 @@ class WebAssemblyEnvironment extends Environment {
       const ENOSYS = 38;
       const ENOBADF = 8;
       const noImpl = () => ENOSYS;
-      return { 
+      return {
         args_get: noImpl,
         args_sizes_get: noImpl,
         clock_res_get: noImpl,
@@ -5563,18 +5563,18 @@ class WebAssemblyEnvironment extends Environment {
               if (buf_len > 0) {
                 const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
                 this.writeToConsole(buf);
-                written += buf_len; 
+                written += buf_len;
               }
             }
             dv.setUint32(written_ptr, written, true);
-            return 0;            
+            return 0;
           } else {
             return ENOSYS;
           }
         },
         fd_fdstat_get: noImpl,
         fd_fdstat_set_flags: noImpl,
-        fd_fdstat_set_rights: noImpl,        
+        fd_fdstat_set_rights: noImpl,
         fd_filestat_get: noImpl,
         fd_filestat_set_size: noImpl,
         fd_filestat_set_times: noImpl,
@@ -5589,7 +5589,7 @@ class WebAssemblyEnvironment extends Environment {
         path_remove_directory: noImpl,
         path_rename: noImpl,
         path_symlink: noImpl,
-        path_unlink_file: noImpl,       
+        path_unlink_file: noImpl,
         poll_oneoff: noImpl,
         proc_exit: (code) => {
           throw new Exit(code);
@@ -5605,8 +5605,8 @@ class WebAssemblyEnvironment extends Environment {
         sock_accept: noImpl,
         sock_recv: noImpl,
         sock_send: noImpl,
-        sock_shutdown: noImpl,        
-      };  
+        sock_shutdown: noImpl,
+      };
     }
   }
 }

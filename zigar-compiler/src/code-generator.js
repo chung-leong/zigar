@@ -29,7 +29,7 @@ export function generateCode(definition, params) {
   for (const feature of features) {
     add(`${feature}();`);
   }
-  // write out the structures as object literals 
+  // write out the structures as object literals
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
@@ -183,7 +183,7 @@ function addStructureDefinitions(lines, definition) {
     }
   };
   if (objects.length > 0) {
-    add('\n// define objects');    
+    add('\n// define objects');
     for (const object of objects) {
       const varname = objectNames.get(object);
       const structure = structureMap.get(object.constructor);
@@ -344,7 +344,7 @@ function manageIndentation(lines) {
       indent--;
     }
     const lastLine = lines[lines.length - 1];
-    if ((lastLine?.endsWith('[') && s.startsWith(']')) 
+    if ((lastLine?.endsWith('[') && s.startsWith(']'))
      || (lastLine?.endsWith('{') && s.startsWith('}'))) {
       lines[lines.length - 1] += s;
     } else {
