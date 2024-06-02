@@ -7,21 +7,22 @@
 * Added sizeOf(), alignOf(), and typeOf() to __zigar
 * Added ability to provide custom WASI handler
 * Added compilation indicator to node-zigar
-* Implemented casting from packed structs to number and initialization 
-* Implemented casting from tagged union to string 
-* Implemented redirection of libc io functions 
+* Implemented casting from packed structs to number and initialization
+* Implemented casting from tagged union to string
+* Implemented redirection of libc io functions
 * Made directory containing Zig file available as include directory for C
 * Fixed error reporting
+* Replaced zigCmd option with separate zigPath and zigArgs options
 * General code clean-up
 
 ## 0.11.1
 
-* Completely reworked pointer handling, improving performance and eliminating restrictions on 
+* Completely reworked pointer handling, improving performance and eliminating restrictions on
   pointer aliasing
 * One-to-One address to JavaSCript object mapping
 * Implemented handling of obscure Zig types such as enum literal
 * Added support for Windows (32-bit and 64-bit)
-* Added support for latest version of Node.js 
+* Added support for latest version of Node.js
 * Added support for Electron and NW.js, including cross-compilation handling
 * Added support for master branch version of Zig compiler
 * Added support for packages
