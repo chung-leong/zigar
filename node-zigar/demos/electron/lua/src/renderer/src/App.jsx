@@ -13,7 +13,7 @@ function App() {
       }
       setOutput(lines.join('\n') + '\n')
     })
-    return () => window.electron.ipcRenderer.removeAllListeners('log');
+    return () => window.electron.ipcRenderer.removeAllListeners('log')
   }, [])
   const onRunClick = useCallback(evt => window.electron.ipcRenderer.send('run', code), [ code ])
   const onCodeChange = useCallback(evt => setCode(evt.target.value), [])

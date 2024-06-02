@@ -200,6 +200,7 @@ const ServerStorage = struct {
         const key = try self.allocator.dupe(u8, uri);
         errdefer self.allocator.free(key);
         const value = try self.allocator.dupe(u8, text);
+        errdefer self.allocator.free(value);
         // prevent reading until operation finishes
         _ = self.writer_count.store(1, .release);
         while (true) {

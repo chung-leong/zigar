@@ -1,3 +1,3 @@
-import module from './noreturn-example-1.zig';
+import { exit } from './noreturn-example-1.zig';
 
-console.log(module.panic);
+exit(0);

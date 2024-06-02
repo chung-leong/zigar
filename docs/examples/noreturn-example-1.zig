@@ -1,3 +1,3 @@
-pub fn panic() noreturn {
-    @panic("Wife discovered porn collection");
-}
+const std = @import("std");
+
+pub const exit = std.process.exit;
