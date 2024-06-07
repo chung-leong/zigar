@@ -312,6 +312,17 @@ describe('Compilation', function() {
       expect(hasZigFile).to.be.true;
       expect(hasExporter).to.be.true;
     })
+    it('should include build and package manager config file in list of files involved in build', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/custom/custom.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      const { sourcePaths } = await compile(srcPath, modPath, options);
+      const hasBuildFile = !!sourcePaths.find(p => p.includes('build.zig'));
+      const hasPackageCfgFile = !!sourcePaths.find(p => p.includes('build.zig.zon'));
+      expect(hasBuildFile).to.be.true;
+      expect(hasPackageCfgFile).to.be.true;
+    })
   })
 })
 

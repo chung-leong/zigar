@@ -64,6 +64,10 @@ export async function compile(srcPath, modPath, options) {
     }
     const outputMTimeAfter = await getOutputMTime();
     changed = outputMTimeBefore != outputMTimeAfter;
+    sourcePaths.push(config.buildFilePath);
+    if (config.packageConfigPath) {
+      sourcePaths.push(config.packageConfigPath);
+    }
   }
   return { outputPath, changed, sourcePaths }
 }
