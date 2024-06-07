@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = lazyPath(b, cfg.stub_path),
+        .root_source_file = .{ .cwd_relative = cfg.stub_path },
         .target = target,
         .optimize = optimize,
     });
@@ -18,10 +18,10 @@ pub fn build(b: *std.Build) void {
         .{ .name = "ziglua", .module = ziglua.module("ziglua") },
     };
     const mod = b.createModule(.{
-        .root_source_file = lazyPath(b, cfg.module_path),
+        .root_source_file = .{ .cwd_relative = cfg.module_path },
         .imports = &imports,
     });
-    mod.addIncludePath(lazyPath(b, cfg.module_dir));
+    mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     lib.root_module.addImport("module", mod);
     if (cfg.is_wasm) {
         // WASM needs to be compiled as exe
@@ -38,14 +38,4 @@ pub fn build(b: *std.Build) void {
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
-}
-
-fn lazyPath(b: *std.Build, path: []const u8) std.Build.LazyPath {
-    if (@hasField(std.Build.LazyPath, "src_path")) {
-        // 0.13.0
-        return .{ .src_path = .{ .owner = b, .sub_path = path } };
-    } else {
-        // 0.12.0
-        return .{ .path = path };
-    }
 }

@@ -13,14 +13,14 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    lib.addIncludePath(lazyPath(b, "../node-api-headers/include"));
-    lib.addIncludePath(lazyPath(b, "./node_modules/node-api-headers/include"));
-    lib.addCSourceFile(.{ .file = lazyPath(b, "./src/addon-node.c"), .flags = &.{} });
-    lib.addCSourceFile(.{ .file = lazyPath(b, "./src/addon.c"), .flags = &.{} });
-    lib.addCSourceFile(.{ .file = lazyPath(b, "./src/redirect.c"), .flags = &.{} });
+    lib.addIncludePath(b.path("../node-api-headers/include"));
+    lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
+    lib.addCSourceFile(.{ .file = b.path("./src/addon-node.c"), .flags = &.{} });
+    lib.addCSourceFile(.{ .file = b.path("./src/addon.c"), .flags = &.{} });
+    lib.addCSourceFile(.{ .file = b.path("./src/redirect.c"), .flags = &.{} });
     switch (os) {
         .windows => {
-            lib.addCSourceFile(.{ .file = lazyPath(b, "./src/win32-shim.c"), .flags = &.{} });
+            lib.addCSourceFile(.{ .file = b.path("./src/win32-shim.c"), .flags = &.{} });
             lib.linkSystemLibrary("dbghelp");
         },
         .macos => {
@@ -33,12 +33,4 @@ pub fn build(b: *std.Build) !void {
     wf.addCopyFileToSource(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
-}
-
-fn lazyPath(b: *std.Build, path: []const u8) std.Build.LazyPath {
-    if (@hasField(std.Build.LazyPath, "src_path")) {
-        return .{ .src_path = .{ .owner = b, .sub_path = path } };
-    } else {
-        return .{ .path = path };
-    }
 }
