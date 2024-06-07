@@ -28,7 +28,7 @@ export async function transpile(path, options) {
   const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
-  const { outputPath } = await compile(srcPath, null, compileOptions);
+  const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);
@@ -48,13 +48,14 @@ export async function transpile(path, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  return generateCode(definition, {
+  const { code, exports, structures } = generateCode(definition, {
     declareFeatures: true,
     runtimeURL,
     binarySource,
     topLevelAwait,
     omitExports,
   });
+  return { code, exports, structures, sourcePaths };
 }
 
 function embed(path, dv) {

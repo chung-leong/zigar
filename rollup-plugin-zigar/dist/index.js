@@ -83,15 +83,22 @@ export default function createPlugin(options = {}) {
             }
           }
         };
-        const { code, exports, structures } = await transpile(id, {
+        const { code, exports, structures, sourcePaths } = await transpile(id, {
           ...otherOptions,
           optimize,
           wasmLoader,
           embedWASM,
         });
         const meta = {
-          zigar: { exports, structures },
+          zigar: { exports, structures, sourcePaths },
         };
+        if (sourcePaths) {
+          for (const sourcePath of sourcePaths) {
+            if (sourcePath != id) {
+              this.addWatchFile(sourcePath);
+            }
+          }
+        }
         return { code, meta };
       }
     }

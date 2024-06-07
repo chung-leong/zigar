@@ -4839,48 +4839,6 @@ async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-async function isOlderThan(targetPath, srcPaths) {
-  try {
-    const targetInfo = await promises.stat(targetPath);
-    const checked = new Map();
-    const check = async (path$1) => {
-      if (!path$1) {
-        return false;
-      }
-      /* c8 ignore next 3 */
-      if (checked.get(path$1)) {
-        return false;
-      }
-      checked.set(path$1, true);
-      const info = await promises.stat(path$1);
-      if (info.isFile()) {
-        if (targetInfo.mtime < info.mtime) {
-          return true;
-        }
-      } else if (info.isDirectory()) {
-        const list = await promises.readdir(path$1);
-        for (const name of list) {
-          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-            continue;
-          }
-          if (await check(path.join(path$1, name))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-    for (const srcPath of srcPaths) {
-      if (await check(srcPath)) {
-        return true;
-      }
-    }
-    return false;
-  } catch (err) {
-    return true;
-  }
-}
-
 async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
@@ -5037,46 +4995,52 @@ async function compile(srcPath, modPath, options) {
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
   let changed = false;
+  let sourcePaths;
   if (srcPath) {
-    // see if the (re-)compilation is necessary
-    const zigFolder = absolute('../zig');
-    changed = await isOlderThan(outputPath, [ moduleDir, zigFolder, options.configPath ]);
-    if (changed) {
-      // add custom build file
-      try {
-        const path$1 = path.join(moduleDir, 'build.zig');
-        await promises.stat(path$1);
-        config.buildFilePath = path$1;
-      } catch (err) {
-      }
-      try {
-        const path$1 = path.join(moduleDir, 'build.zig.zon');
-        await promises.stat(path$1);
-        config.packageConfigPath = path$1;
-      } catch (err) {
-      }
-      const { zigPath, zigArgs, moduleBuildDir } = config;
-      // only one process can compile a given file at a time
-      const pidPath = `${moduleBuildDir}.pid`;
-      await acquireLock(pidPath);
-      try {
-        const { onStart, onEnd } = options;
-        // create config file
-        await createProject(config, moduleBuildDir);
-        // then run the compiler
-        await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
-        // set atime/mtime to current time
-        const now = new Date();
-        await promises.utimes(outputPath, now, now);
-      } finally {
-        if (config.clean) {
-          await deleteDirectory(moduleBuildDir);
-        }
-        await releaseLock(pidPath);
-      }
+    // add custom build file
+    try {
+      const path$1 = path.join(moduleDir, 'build.zig');
+      await promises.stat(path$1);
+      config.buildFilePath = path$1;
+    } catch (err) {
     }
+    // add custom package manager manifest
+    try {
+      const path$1 = path.join(moduleDir, 'build.zig.zon');
+      await promises.stat(path$1);
+      config.packageConfigPath = path$1;
+    } catch (err) {
+    }
+    const { zigPath, zigArgs, moduleBuildDir } = config;
+    // only one process can compile a given file at a time
+    const pidPath = `${moduleBuildDir}.pid`;
+    await acquireLock(pidPath);
+    const getOutputMTime = async () => {
+      try {
+        const stats = await promises.stat(outputPath);
+        return stats.mtime.valueOf();
+      } catch (err) {
+      }
+    };
+    const outputMTimeBefore = await getOutputMTime();
+    try {
+      const { onStart, onEnd } = options;
+      // create config file
+      await createProject(config, moduleBuildDir);
+      // then run the compiler
+      await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
+      // get list of files involved in build
+      sourcePaths = await findSourcePaths(moduleBuildDir);
+    } finally {
+      if (config.clean) {
+        await deleteDirectory(moduleBuildDir);
+      }
+      await releaseLock(pidPath);
+    }
+    const outputMTimeAfter = await getOutputMTime();
+    changed = outputMTimeBefore != outputMTimeAfter;
   }
-  return { outputPath, changed }
+  return { outputPath, changed, sourcePaths }
 }
 
 async function runCompiler(path$1, args, options) {
@@ -5251,6 +5215,50 @@ function absolute(relpath) {
   } else {
     return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
   }
+}
+
+async function getManifestLists(buildPath) {
+  let dirPath;
+  let names;
+  try {
+    dirPath = path.join(buildPath, '.zig-cache', 'h');
+    names = await promises.readdir(dirPath);
+  } catch (err) {
+    try {
+      dirPath = path.join(buildPath, 'zig-cache', 'h');
+      names = await promises.readdir(dirPath);
+    } catch (err) {
+      names = [];
+    }
+  }
+  return names.filter(n => /\.txt$/.test(n)).map(n => path.join(dirPath, n));
+}
+
+async function findSourcePaths(buildPath) {
+  const manifestPaths = await getManifestLists(buildPath);
+  const involved = {};
+  for (const manifestPath of manifestPaths) {
+    try {
+      const data = await promises.readFile(manifestPath, 'utf-8');
+      if (data.length > 0) {
+        const lines = data.split(/\r?\n/);
+        // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
+        // size inode mtime bin_digest prefix sub_path
+        const re = /\d+ \d+ \d+ \w+ \d+ (.+)/;
+        for (const line of lines) {
+          const m = re.exec(line);
+          if (m) {
+            const srcPath = m[1];
+            if(path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+              involved[srcPath] = true;
+            }
+          }
+        }
+      }
+    } catch (err) {
+    }
+  }
+  return Object.keys(involved);
 }
 
 const optionsForCompile = {
@@ -7926,7 +7934,7 @@ async function transpile(path, options) {
   const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
-  const { outputPath } = await compile(srcPath, null, compileOptions);
+  const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await promises.readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);
@@ -7946,13 +7954,14 @@ async function transpile(path, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  return generateCode(definition, {
+  const { code, exports, structures } = generateCode(definition, {
     declareFeatures: true,
     runtimeURL,
     binarySource,
     topLevelAwait,
     omitExports,
   });
+  return { code, exports, structures, sourcePaths };
 }
 
 function embed(path$1, dv) {
