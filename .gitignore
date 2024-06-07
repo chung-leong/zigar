@@ -80,9 +80,9 @@ jspm_packages/
 .yarn/install-state.gz
 .pnp.*
 
-**/zig-cache
+**/.zig-cache
 **/zig-out
-**/zigar-cache
+**/.zigar-cache
 **/build/*
 *.so
 *.o

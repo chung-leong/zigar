@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .path = cfg.stub_path },
+        .root_source_file = lazyPath(b, cfg.stub_path),
         .target = target,
         .optimize = optimize,
     });
@@ -17,10 +17,12 @@ pub fn build(b: *std.Build) void {
     const imports = .{
         .{ .name = "ziglua", .module = ziglua.module("ziglua") },
     };
-    lib.root_module.addImport("module", b.createModule(.{
-        .root_source_file = .{ .path = cfg.module_path },
+    const mod = b.createModule(.{
+        .root_source_file = lazyPath(b, cfg.module_path),
         .imports = &imports,
-    }));
+    });
+    mod.addIncludePath(lazyPath(b, cfg.module_dir));
+    lib.root_module.addImport("module", mod);
     if (cfg.use_libc) {
         lib.linkLibC();
     }
@@ -28,4 +30,14 @@ pub fn build(b: *std.Build) void {
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
+}
+
+fn lazyPath(b: *std.Build, path: []const u8) std.Build.LazyPath {
+    if (@hasField(std.Build.LazyPath, "src_path")) {
+        // 0.13.0
+        return .{ .src_path = .{ .owner = b, .sub_path = path } };
+    } else {
+        // 0.12.0
+        return .{ .path = path };
+    }
 }
