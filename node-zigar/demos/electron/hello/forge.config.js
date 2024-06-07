@@ -7,7 +7,7 @@ module.exports = {
       unpack: '*.{dll,dylib,so}',
     },
     ignore: [
-      /\/zig(\/|$)/,
+      /\/(zig|\.zig-cache|\.zigar-cache)(\/|$)/,
       /\/node-zigar\.config\.json$/,
     ],
   },
