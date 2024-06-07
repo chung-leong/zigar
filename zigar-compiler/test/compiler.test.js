@@ -1,6 +1,6 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
-import { stat, utimes } from 'fs/promises';
+import { stat } from 'fs/promises';
 import os, { tmpdir } from 'os';
 
 use(chaiPromised);
@@ -177,22 +177,18 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/strlen-from-c/strlen.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {
-        const { outputPath } = await compile(srcPath, modPath, options);
-        const { size } = await stat(outputPath);
-        expect(size).to.be.at.least(1000);
-      });
+      const { outputPath } = await compile(srcPath, modPath, options);
+      const { size } = await stat(outputPath);
+      expect(size).to.be.at.least(1000);
     })
     it('should compile with C library enabled when C allocator is used', async function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/c-allocator/dupe.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {
-        const { outputPath } = await compile(srcPath, modPath, options);
-        const { size } = await stat(outputPath);
-        expect(size).to.be.at.least(1000);
-      });
+      const { outputPath } = await compile(srcPath, modPath, options);
+      const { size } = await stat(outputPath);
+      expect(size).to.be.at.least(1000);
     })
 
     it('should work correctly when the same file is compiled at the same time', async function() {
@@ -200,14 +196,12 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {
-        const promise1 = compile(srcPath, modPath, options);
-        const promise2 = compile(srcPath, modPath, options);
-        const result2 = await promise2;
-        const result1 = await promise1;
-        const { size } = await stat(result2.outputPath);
-        expect(size).to.be.at.least(1000);
-      });
+      const promise1 = compile(srcPath, modPath, options);
+      const promise2 = compile(srcPath, modPath, options);
+      const result2 = await promise2;
+      const result1 = await promise1;
+      const { size } = await stat(result2.outputPath);
+      expect(size).to.be.at.least(1000);
     })
     it('should handle directory reference', async function() {
       this.timeout(600000);
@@ -249,10 +243,8 @@ describe('Compilation', function() {
       const modPath = getModuleCachePath(srcPath, options);
       await compile(srcPath, modPath, options);
       await delay(1000);
-      await forceChange(srcPath, async () => {
-        const { changed } = await compile(srcPath, modPath, options);
-        expect(changed).to.be.true;
-      });
+      const { changed } = await compile(srcPath, modPath, options);
+      expect(changed).to.be.true;
     })
     it('should recompile when code exporter has changed', async function() {
       this.timeout(600000);
@@ -262,10 +254,8 @@ describe('Compilation', function() {
       await compile(srcPath, modPath, options);
       const exportPath = absolute('../zig/exporter.zig');
       await delay(1000);
-      await forceChange(exportPath, async () => {
-        const { changed } = await compile(srcPath, modPath, options);
-        expect(changed).to.be.true;
-      });
+      const { changed } = await compile(srcPath, modPath, options);
+      expect(changed).to.be.true;
     })
     it('should throw when code cannot be compiled', async function() {
       this.timeout(600000);
@@ -303,25 +293,27 @@ describe('Compilation', function() {
         onEnd,
       };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {
-        await compile(srcPath, modPath, options);
-        expect(onStartCalled).to.be.true;
-        expect(onEndCalled).to.be.true;
-      });
+      await compile(srcPath, modPath, options);
+      expect(onStartCalled).to.be.true;
+      expect(onEndCalled).to.be.true;
+    })
+    it('should return list of files involved in build', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/c-import/print.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      const { sourcePaths } = await compile(srcPath, modPath, options);
+      const hasMainFile = !!sourcePaths.find(p => p.includes('print.zig'));
+      const hasCFile = !!sourcePaths.find(p => p.includes('hello.c'));
+      const hasZigFile = !!sourcePaths.find(p => p.includes('hello.zig'));
+      const hasExporter = !!sourcePaths.find(p => p.includes('exporter.zig'));
+      expect(hasMainFile).to.be.true;
+      expect(hasCFile).to.be.true;
+      expect(hasZigFile).to.be.true;
+      expect(hasExporter).to.be.true;
     })
   })
 })
-
-async function forceChange(path, cb) {
-  const info = await stat(path);
-  const now = new Date();
-  await utimes(path, now, now);
-  try {
-    await cb();
-  } finally {
-    await utimes(path, info.atime, info.mtime);
-  }
-}
 
 function absolute(relpath) {
   return fileURLToPath(new URL(relpath, import.meta.url));

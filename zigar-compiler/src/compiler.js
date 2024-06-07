@@ -1,11 +1,12 @@
 import ChildProcess from 'child_process';
-import { stat, utimes, writeFile } from 'fs/promises';
+import { readFile, readdir, stat, writeFile } from 'fs/promises';
 import os from 'os';
-import { basename, join, parse, resolve } from 'path';
+import { basename, isAbsolute, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import {
-  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getPlatform, isOlderThan, md5,
+  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getPlatform,
+  md5,
   releaseLock
 } from './utility-functions.js';
 
@@ -19,46 +20,52 @@ export async function compile(srcPath, modPath, options) {
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
   let changed = false;
+  let sourcePaths;
   if (srcPath) {
-    // see if the (re-)compilation is necessary
-    const zigFolder = absolute('../zig');
-    changed = await isOlderThan(outputPath, [ moduleDir, zigFolder, options.configPath ]);
-    if (changed) {
-      // add custom build file
-      try {
-        const path = join(moduleDir, 'build.zig');
-        await stat(path);
-        config.buildFilePath = path;
-      } catch (err) {
-      }
-      try {
-        const path = join(moduleDir, 'build.zig.zon');
-        await stat(path);
-        config.packageConfigPath = path;
-      } catch (err) {
-      }
-      const { zigPath, zigArgs, moduleBuildDir } = config;
-      // only one process can compile a given file at a time
-      const pidPath = `${moduleBuildDir}.pid`;
-      await acquireLock(pidPath);
-      try {
-        const { onStart, onEnd } = options;
-        // create config file
-        await createProject(config, moduleBuildDir);
-        // then run the compiler
-        await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
-        // set atime/mtime to current time
-        const now = new Date();
-        await utimes(outputPath, now, now);
-      } finally {
-        if (config.clean) {
-          await deleteDirectory(moduleBuildDir);
-        }
-        await releaseLock(pidPath);
-      }
+    // add custom build file
+    try {
+      const path = join(moduleDir, 'build.zig');
+      await stat(path);
+      config.buildFilePath = path;
+    } catch (err) {
     }
+    // add custom package manager manifest
+    try {
+      const path = join(moduleDir, 'build.zig.zon');
+      await stat(path);
+      config.packageConfigPath = path;
+    } catch (err) {
+    }
+    const { zigPath, zigArgs, moduleBuildDir } = config;
+    // only one process can compile a given file at a time
+    const pidPath = `${moduleBuildDir}.pid`;
+    await acquireLock(pidPath);
+    const getOutputMTime = async () => {
+      try {
+        const stats = await stat(outputPath);
+        return stats.mtime.valueOf();
+      } catch (err) {
+      }
+    };
+    const outputMTimeBefore = await getOutputMTime();
+    try {
+      const { onStart, onEnd } = options;
+      // create config file
+      await createProject(config, moduleBuildDir);
+      // then run the compiler
+      await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
+      // get list of files involved in build
+      sourcePaths = await findSourcePaths(moduleBuildDir);
+    } finally {
+      if (config.clean) {
+        await deleteDirectory(moduleBuildDir);
+      }
+      await releaseLock(pidPath);
+    }
+    const outputMTimeAfter = await getOutputMTime();
+    changed = outputMTimeBefore != outputMTimeAfter;
   }
-  return { outputPath, changed }
+  return { outputPath, changed, sourcePaths }
 }
 
 export async function runCompiler(path, args, options) {
@@ -235,4 +242,48 @@ function absolute(relpath) {
   } else {
     return fileURLToPath(new URL(relpath, import.meta.url));
   }
+}
+
+async function getManifestLists(buildPath) {
+  let dirPath;
+  let names;
+  try {
+    dirPath = join(buildPath, '.zig-cache', 'h');
+    names = await readdir(dirPath);
+  } catch (err) {
+    try {
+      dirPath = join(buildPath, 'zig-cache', 'h');
+      names = await readdir(dirPath);
+    } catch (err) {
+      names = [];
+    }
+  }
+  return names.filter(n => /\.txt$/.test(n)).map(n => join(dirPath, n));
+}
+
+async function findSourcePaths(buildPath) {
+  const manifestPaths = await getManifestLists(buildPath);
+  const involved = {};
+  for (const manifestPath of manifestPaths) {
+    try {
+      const data = await readFile(manifestPath, 'utf-8');
+      if (data.length > 0) {
+        const lines = data.split(/\r?\n/);
+        // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
+        // size inode mtime bin_digest prefix sub_path
+        const re = /\d+ \d+ \d+ \w+ \d+ (.+)/;
+        for (const line of lines) {
+          const m = re.exec(line);
+          if (m) {
+            const srcPath = m[1];
+            if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+              involved[srcPath] = true;
+            }
+          }
+        }
+      }
+    } catch (err) {
+    }
+  }
+  return Object.keys(involved);
 }

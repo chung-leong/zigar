@@ -36,48 +36,6 @@ export async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-export async function isOlderThan(targetPath, srcPaths) {
-  try {
-    const targetInfo = await stat(targetPath);
-    const checked = new Map();
-    const check = async (path) => {
-      if (!path) {
-        return false;
-      }
-      /* c8 ignore next 3 */
-      if (checked.get(path)) {
-        return false;
-      }
-      checked.set(path, true);
-      const info = await stat(path);
-      if (info.isFile()) {
-        if (targetInfo.mtime < info.mtime) {
-          return true;
-        }
-      } else if (info.isDirectory()) {
-        const list = await readdir(path);
-        for (const name of list) {
-          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-            continue;
-          }
-          if (await check(join(path, name))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-    for (const srcPath of srcPaths) {
-      if (await check(srcPath)) {
-        return true;
-      }
-    }
-    return false;
-  } catch (err) {
-    return true;
-  }
-}
-
 async function checkPidFile(pidPath, staleTime = 60000 * 5) {
   let stale = false;
   try {
