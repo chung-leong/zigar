@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .cwd_relative = cfg.module_path },
         .imports = &imports,
     });
-    mod.addIncludePath({ .cwd_relative = cfg.module_dir });
+    mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     lib.root_module.addImport("module", mod);
     if (cfg.use_libc) {
         lib.linkLibC();
