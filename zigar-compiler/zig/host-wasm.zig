@@ -102,8 +102,6 @@ pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) vo
     call.allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
-var initial_context: ?Call = null;
-
 pub const Host = struct {
     context: Call,
     options: HostOptions,
@@ -111,17 +109,10 @@ pub const Host = struct {
     pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
         const context: Call = @ptrCast(@alignCast(call_ptr));
         const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
-        if (initial_context == null) {
-            initial_context = context;
-        }
         return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
     }
 
-    pub fn release(self: Host) void {
-        if (initial_context == self.context) {
-            initial_context = null;
-        }
-    }
+    pub fn release(_: Host) void {}
 
     pub fn allocateMemory(_: Host, size: usize, alignment: u16) !Memory {
         if (_allocateHostMemory(size, alignment)) |dv| {
@@ -253,7 +244,6 @@ pub const Host = struct {
 };
 
 pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
-    // note that std.debug.print() doesn't work here since the initial context is not set
     const fallback_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
     var stack_allocator = std.heap.stackFallback(1024 * 8, fallback_allocator);
     var call_ctx: CallContext = .{ .allocator = stack_allocator.get() };
