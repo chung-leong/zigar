@@ -33,7 +33,7 @@ describe('Compilation', function() {
       expect(endCount).to.equal(1);
       try {
         await runCompiler('zig', [], { cwd: tmpdir(), onStart, onEnd });
-      } catch (err) {        
+      } catch (err) {
       }
       expect(startCount).to.equal(2);
       expect(endCount).to.equal(2);
@@ -177,7 +177,7 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/strlen-from-c/strlen.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {     
+      await forceChange(srcPath, async () => {
         const { outputPath } = await compile(srcPath, modPath, options);
         const { size } = await stat(outputPath);
         expect(size).to.be.at.least(1000);
@@ -188,7 +188,7 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/c-allocator/dupe.zig');
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
       const modPath = getModuleCachePath(srcPath, options);
-      await forceChange(srcPath, async () => {     
+      await forceChange(srcPath, async () => {
         const { outputPath } = await compile(srcPath, modPath, options);
         const { size } = await stat(outputPath);
         expect(size).to.be.at.least(1000);
@@ -285,7 +285,7 @@ describe('Compilation', function() {
       let info;
       try {
         info = await stat(moduleBuildDir);
-      } catch (err) {        
+      } catch (err) {
       }
       expect(info).to.be.undefined;
     })
@@ -295,10 +295,10 @@ describe('Compilation', function() {
       let onStartCalled = false, onEndCalled = false;
       const onStart = () => onStartCalled = true;
       const onEnd = () => onEndCalled = true;
-      const options = { 
-        optimize: 'Debug', 
-        platform: os.platform(), 
-        arch: os.arch(), 
+      const options = {
+        optimize: 'Debug',
+        platform: os.platform(),
+        arch: os.arch(),
         onStart,
         onEnd,
       };

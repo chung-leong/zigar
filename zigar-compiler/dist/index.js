@@ -5134,7 +5134,7 @@ const cwd = process.cwd();
 
 function getCachePath(options) {
   const {
-    cacheDir = join(cwd, 'zigar-cache'),
+    cacheDir = join(cwd, '.zigar-cache'),
   } = options;
   return cacheDir;
 }

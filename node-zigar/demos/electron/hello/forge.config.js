@@ -6,10 +6,10 @@ module.exports = {
     asar: {
       unpack: '*.{dll,dylib,so}',
     },
-    ignore: [ 
-      /\/(zig|zig-cache|zigar-cache)(\/|$)/, 
+    ignore: [
+      /\/zig(\/|$)/,
       /\/node-zigar\.config\.json$/,
-    ],    
+    ],
   },
   rebuildConfig: {},
   makers: [
