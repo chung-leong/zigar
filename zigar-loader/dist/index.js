@@ -45,12 +45,19 @@ async function loader(content, map, meta) {
       return fetchWASM(outputPath);
     }
   };
-  const { code } = await transpile(path, {
+  const { code, sourcePaths } = await transpile(path, {
     ...otherOptions,
     optimize,
     wasmLoader,
     embedWASM,
   });
+  if (sourcePaths) {
+    for (const sourcePath of sourcePaths) {
+      if (sourcePath != path) {
+        this.addDependency(sourcePath);
+      }
+    }
+  }
   return code;
 };
 
