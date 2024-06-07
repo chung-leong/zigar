@@ -1,7 +1,7 @@
 ## 0.13.0
 
 * Added support for Zig 0.13.0
-* Fixed the inability of rollup-plugin-zigar and zigar-loader to detect changes in dependent files
+* Fixed inability of rollup-plugin-zigar and zigar-loader to detect changes in dependent files
 * Renamed zigar-cache to .zigar-cache
 
 ## 0.12.0
