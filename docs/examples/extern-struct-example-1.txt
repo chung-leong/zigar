@@ -1,6 +1,0 @@
-Extern:
-123
-4567890123n
-Regular (wrong):
-30923
-123n

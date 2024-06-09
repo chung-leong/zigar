@@ -1,4 +1,0 @@
-[ZigError: Access denied] { number: 28 }
-[ZigError: Access denied] { number: 28 }
-[ZigError: Access denied] { number: 28 }
-undefined

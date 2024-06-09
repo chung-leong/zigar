@@ -1,2 +1,0 @@
-Size: 16
-comptime-field-example-1.Header{ .size = 16, .id = 123, .flags = 255, .offset = 16777216 }

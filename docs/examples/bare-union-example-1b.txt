@@ -1,2 +1,0 @@
-1234567890n
-Accessing property integer when big_integer is active

@@ -1,2 +1,0 @@
-[ undefined, undefined, undefined, undefined ]
-Element can only be undefined

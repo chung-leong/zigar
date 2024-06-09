@@ -1,9 +1,0 @@
-<ref *1> {
-  type: 'red',
-  id: 0n,
-  parent: null,
-  children: [
-    { type: 'blue', id: 1n, parent: [Circular *1], children: null },
-    { type: 'blue', id: 2n, parent: [Circular *1], children: null }
-  ]
-}

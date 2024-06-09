@@ -1,4 +1,0 @@
-Do something with integer
-Do something with big integer
-Do something with decimal number
-Do something with complex number

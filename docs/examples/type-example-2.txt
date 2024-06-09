@@ -1,8 +1,0 @@
-1234
-{ x: 0.5, y: 0.699999988079071 }
-pine_apple
-anchovy
-baked_beans
-pierogi
-Error: Ate expired doritos
-Error: Thought cat was pillow

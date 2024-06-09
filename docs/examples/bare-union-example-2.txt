@@ -1,4 +1,0 @@
-1234
-Hello
-1234
-Pointers within an untagged union are not accessible

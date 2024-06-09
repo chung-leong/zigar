@@ -1,2 +1,0 @@
-{ pet: 'kangaroo', car: 'Toyota', computer: 'Dell' }
-size = 1

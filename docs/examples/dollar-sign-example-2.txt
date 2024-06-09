@@ -1,8 +1,0 @@
-i32 {
-  [Symbol(memory)]: DataView {
-    byteLength: 4,
-    byteOffset: 0,
-    buffer: ArrayBuffer { [Uint8Contents]: <d2 04 00 00>, byteLength: 4 }
-  }
-}
-1234

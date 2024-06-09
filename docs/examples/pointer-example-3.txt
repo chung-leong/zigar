@@ -1,8 +1,0 @@
-root/
-  README (11)
-  images/
-    cat.jpg (8000)
-    dog.jpg (16000)
-  src/
-    index.js (31)
-    empty/

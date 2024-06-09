@@ -1,6 +1,0 @@
-donut? true
-taco? true
-junk = enum-example-2.JunkFood.taco
-mystery food #100? false
-mystery food #101? true
-junk = enum-example-2.JunkFood(101)

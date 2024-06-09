@@ -1,3 +1,0 @@
-pet = dog
-pet = cat
-print(args[0]): Enum item of the type enum-example-1.Pet expected, received dingo

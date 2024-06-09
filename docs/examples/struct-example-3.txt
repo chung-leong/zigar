@@ -1,4 +1,0 @@
-type = normal
-size = 512
-code = 200
-bytes = [object [8]u8]

@@ -1,8 +1,0 @@
-Name: Bigus Dickus
-E-mail: madeupname12@rome.gov.it
-Age: 32
-Popularity: -1
-Street: 1 Colosseum Sq.
-City: Rome
-State: NY
-ZIP code: 10001

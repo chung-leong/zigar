@@ -1,1 +1,0 @@
-pub const Undefined = undefined;

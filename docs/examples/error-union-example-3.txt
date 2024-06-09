@@ -1,6 +1,0 @@
-{
-  "authentication": true,
-  "authorization": {
-    "error": "Permanently banned"
-  }
-}

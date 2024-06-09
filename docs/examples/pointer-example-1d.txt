@@ -1,1 +1,0 @@
-pointer-example-1.StructA{ .number1 = 123, .number2 = 456 }
