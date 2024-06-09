@@ -9,4 +9,8 @@ export default defineConfig({
     format: 'esm',
     plugins: () => [zigar({ topLevelAwait: false })],
   },
+  build: {
+    outDir: '../../../../docs/demos/vite/filter',
+    emptyOutDir: true,
+  },
 })
