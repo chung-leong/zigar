@@ -3,7 +3,7 @@
 ![Logo](./docs/images/logo.png)
 
 A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript
-project.
+projects.
 
 Consult the [project wiki](https://github.com/chung-leong/zigar/wiki) for installation instructions
 and tutorials.
