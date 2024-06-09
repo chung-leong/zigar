@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { fileURLToPath } from 'url';
 import { capture } from '../capture.js';
 
 export function addTests(importModule, options) {
@@ -19,8 +20,10 @@ export function addTests(importModule, options) {
     skip.if(target === 'wasm32').
     it('should link in zig-sqlite', async function() {
       this.timeout(300000);
-      const { run } = await importTest('use-zig-sqlite/zig-sqlite');
-      run();
+      const { open, close } = await importTest('use-zig-sqlite/zig-sqlite');
+      const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
+      const db = open(path, {});
+      close(db);
     })
   })
 }

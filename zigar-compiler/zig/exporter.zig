@@ -754,12 +754,15 @@ const TypeDataCollector = struct {
         }
         // add arg structs once we can determine which functions are callable
         inline for (self.functions.slice()) |FT| {
-            const index = self.append(ArgumentStruct(FT));
-            const td = self.at(index);
-            self.setAttributes(td);
-            self.setSlot(td);
-            td.attrs.is_arguments = true;
-            td.name = std.fmt.comptimePrint("Arg{d:0>4}", .{td.getSlot()});
+            const f = @typeInfo(FT).Fn;
+            if (!f.is_generic and !f.is_var_args) {
+                const index = self.append(ArgumentStruct(FT));
+                const td = self.at(index);
+                self.setAttributes(td);
+                self.setSlot(td);
+                td.attrs.is_arguments = true;
+                td.name = std.fmt.comptimePrint("Arg{d:0>4}", .{td.getSlot()});
+            }
         }
     }
 
@@ -784,14 +787,16 @@ const TypeDataCollector = struct {
                 self.add(eu.error_set);
             },
             .Fn => |f| {
-                inline for (f.params) |param| {
-                    if (param.type) |PT| {
-                        if (PT != std.mem.Allocator) {
-                            self.add(PT);
+                if (!f.is_generic and !f.is_var_args) {
+                    inline for (f.params) |param| {
+                        if (param.type) |PT| {
+                            if (PT != std.mem.Allocator) {
+                                self.add(PT);
+                            }
                         }
                     }
+                    if (f.return_type) |RT| self.add(RT);
                 }
-                if (f.return_type) |RT| self.add(RT);
             },
             inline .Array, .Vector, .Optional, .Pointer => |ar| self.add(ar.child),
             inline .Struct, .Union => |st, Tag| {
