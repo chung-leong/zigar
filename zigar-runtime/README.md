@@ -1,6 +1,6 @@
 # zigar-runtime
 
-![Logo](../docs/images/logo.png)
+![Logo](https://github.com/chung-leong/zigar/raw/development/docs/images/logo.png)
 
 Library for accessing Zig structures in JavaScript.
 
