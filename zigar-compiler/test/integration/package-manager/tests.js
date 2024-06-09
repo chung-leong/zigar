@@ -20,10 +20,16 @@ export function addTests(importModule, options) {
     skip.if(target === 'wasm32').
     it('should link in zig-sqlite', async function() {
       this.timeout(300000);
-      const { open, close } = await importTest('use-zig-sqlite/zig-sqlite');
+      const { Db } = await importTest('use-zig-sqlite/zig-sqlite');
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
-      const db = open(path, {});
-      close(db);
+      const db = Db.init({
+        mode: { File: path },
+        open_flags: {},
+        threading_mode: 'MultiThread',
+      });
+      const stmt = db.prepareDynamic(`SELECT * FROM albums`);
+      // we actually have no way of executing the statement
+      db.deinit();
     })
   })
 }
