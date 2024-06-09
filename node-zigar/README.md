@@ -1,6 +1,6 @@
 # node-zigar
 
-![Logo](../../raw/main/docs/images/logo.png)
+![Logo](/chung-leong/zigar/raw/main/docs/images/logo.png)
 
 Node.js addon that lets you use functions written in the [Zig language](https://ziglang.org/).
 
