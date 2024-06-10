@@ -254,6 +254,7 @@ result attach_method(call ctx,
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
+     && (!m->iterator_of || napi_set_named_property(env, args[1], "iteratorOf", m->iterator_of) == napi_ok)
      && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
      && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
@@ -657,7 +658,7 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
     module* mod = md->mod = (module*) symbol;
-    if (mod->version != 3) {
+    if (mod->version != 4) {
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 

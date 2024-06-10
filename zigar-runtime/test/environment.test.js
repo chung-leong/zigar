@@ -208,7 +208,7 @@ describe('Environment', function() {
       const dv3 = env.obtainView(buffer, 8, 16);
       expect(dv3).to.equal(dv2);
       const dv4 = env.obtainView(buffer, 4, 8);
-      expect(dv4).to.equal(dv1);      
+      expect(dv4).to.equal(dv1);
     })
   })
   describe('captureView', function() {
@@ -494,7 +494,7 @@ describe('Environment', function() {
       expect(options.omitFunctions).to.be.true;
     })
   })
-  describe('acquireStructures', function() {    
+  describe('acquireStructures', function() {
     it('should invoke the factory thunk', function() {
       const env = new Environment();
       env.getFactoryThunk = function() {
@@ -553,7 +553,7 @@ describe('Environment', function() {
       expect(presence).to.be.true;
     })
   })
-  describe('exportStructures', function() {    
+  describe('exportStructures', function() {
     it('should return list of structures and keys for accessing them', function() {
       const env = new Environment();
       const s1 = {
@@ -608,7 +608,7 @@ describe('Environment', function() {
       addressMap.set(templ1[MEMORY], 1002n);
       addressMap.set(templ2[MEMORY], 1000n);
       addressMap.set(object[MEMORY], 1016n);
-      env.prepareObjectsForExport();      
+      env.prepareObjectsForExport();
       expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
       expect(templ1[MEMORY].byteOffset).to.equal(2);
       expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
@@ -683,22 +683,22 @@ describe('Environment', function() {
     })
   })
   describe('finalizeStructure', function() {
-    
+
   })
   describe('createCaller', function() {
     it('should create a caller for a zig function', function() {
-      const env = new Environment();      
+      const env = new Environment();
       const method = {
-        name: 'hello', 
-        argStruct: { 
+        name: 'hello',
+        argStruct: {
           constructor: function(args) {
             this[MEMORY] = new DataView(new ArrayBuffer(8));
             this[MEMORY].setUint32(0, args[0], true);
             this[MEMORY].setUint32(4, args[1], true);
-          } 
-        }, 
+          }
+        },
         thunkId: 10
-      };      
+      };
       const f = env.createCaller(method, false);
       expect(f).to.be.a('function');
       expect(f.name).to.equal('hello');
@@ -713,19 +713,19 @@ describe('Environment', function() {
       expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);
     })
     it('should create a caller for a zig method', function() {
-      const env = new Environment();      
+      const env = new Environment();
       const method = {
-        name: 'hello', 
-        argStruct: { 
+        name: 'hello',
+        argStruct: {
           constructor: function(args) {
             this.self = args[0];
             this[MEMORY] = new DataView(new ArrayBuffer(8));
             this[MEMORY].setUint32(0, args[1], true);
             this[MEMORY].setUint32(4, args[2], true);
-          } 
-        }, 
+          }
+        },
         thunkId: 10
-      };      
+      };
       const f = env.createCaller(method, true);
       let thunkId, argStruct;
       env.invokeThunk = function(...args) {
@@ -736,8 +736,81 @@ describe('Environment', function() {
       object.method(123, 456);
       expect(thunkId).to.equal(10);
       expect(argStruct[MEMORY].getUint32(0, true)).to.equal(123);
-      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);      
+      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);
       expect(argStruct.self).to.equal(object);
+    })
+    it('should create a caller that return an iterator', function() {
+      const env = new Environment();
+      const method = {
+        name: 'hello',
+        argStruct: {
+          constructor: function(args) {
+            this[MEMORY] = new DataView(new ArrayBuffer(8));
+            this[MEMORY].setUint32(0, args[0], true);
+            this[MEMORY].setUint32(4, args[1], true);
+          }
+        },
+        thunkId: 11,
+        iteratorOf: {},
+      };
+      const f = env.createCaller(method, false);
+      let thunkId, argStruct;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+        let index = 1;
+        return {
+          next() {
+            return (index < 10) ? index++ : null;
+          },
+        }
+      };
+      const list = [];
+      for (const i of f(123, 456)) {
+        list.push(i);
+      }
+      expect(thunkId).to.equal(11);
+      expect(argStruct[MEMORY].getUint32(0, true)).to.equal(123);
+      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);
+      expect(list).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+    })
+    it('should create a method caller that return an iterator', function() {
+      const env = new Environment();
+      const method = {
+        name: 'hello',
+        argStruct: {
+          constructor: function(args) {
+            this.self = args[0];
+            this[MEMORY] = new DataView(new ArrayBuffer(8));
+            this[MEMORY].setUint32(0, args[1], true);
+            this[MEMORY].setUint32(4, args[2], true);
+          }
+        },
+        thunkId: 11,
+        iteratorOf: {},
+      };
+      const f = env.createCaller(method, true);
+      let thunkId, argStruct;
+      env.invokeThunk = function(...args) {
+        thunkId = args[0];
+        argStruct = args[1];
+        let index = 1;
+        return {
+          next() {
+            return (index < 10) ? index++ : null;
+          },
+        }
+      };
+      const object = { method: f };
+      const list = [];
+      for (const i of object.method(123, 456)) {
+        list.push(i);
+      }
+      expect(thunkId).to.equal(11);
+      expect(argStruct[MEMORY].getUint32(0, true)).to.equal(123);
+      expect(argStruct[MEMORY].getUint32(4, true)).to.equal(456);
+      expect(argStruct.self).to.equal(object);
+      expect(list).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
     })
   })
   describe('recreateStructures', function() {
@@ -906,7 +979,7 @@ describe('Environment', function() {
               0: {
                 memory: (() => {
                   const array = new Uint8Array(8);
-                  return { array };   
+                  return { array };
                 })(),
                 slots: {
                   0: {
@@ -914,7 +987,7 @@ describe('Environment', function() {
                       const array = new Uint8Array(4);
                       const dv = new DataView(array.buffer);
                       dv.setInt32(0, 707, true);
-                      return { array };          
+                      return { array };
                     })(),
                     structure: s1,
                     reloc: 0x2000n,
@@ -945,7 +1018,7 @@ describe('Environment', function() {
       expect(env.variables).to.have.lengthOf(2);
     })
   })
-  describe('linkVariables', function() {    
+  describe('linkVariables', function() {
     it('should link variables', function() {
       const env = new Environment();
       env.inFixedMemory = function() {
@@ -989,14 +1062,14 @@ describe('Environment', function() {
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
-        this[SLOTS] = { 
-          0: { 
+        this[SLOTS] = {
+          0: {
             [MEMORY]: new DataView(new ArrayBuffer(32)),
-          } 
+          }
         };
     };
       Test.prototype[COPIER] = getMemoryCopier(4);
-      Test.prototype[TARGET_GETTER] = function() { 
+      Test.prototype[TARGET_GETTER] = function() {
         return {
           [MEMORY]: new DataView(new ArrayBuffer(32)),
           length: 4,
@@ -1008,7 +1081,7 @@ describe('Environment', function() {
       expect(object[FIXED_LOCATION]).to.eql({ address: 0x4000, length: 4 });
     });
   })
-  describe('linkObject', function() {    
+  describe('linkObject', function() {
     it('should replace relocatable memory with fixed memory', function() {
       const env = new Environment();
       env.inFixedMemory = function() {
@@ -1100,7 +1173,7 @@ describe('Environment', function() {
       expect(object[SLOTS][0][MEMORY].buffer).to.equal(object[MEMORY].buffer);
     })
   })
-  describe('unlinkVariables', function() {    
+  describe('unlinkVariables', function() {
     it('should pass variables to unlinkObject', function() {
       const env = new Environment();
       env.allocateFixedMemory = (len, align) => {
@@ -1124,7 +1197,7 @@ describe('Environment', function() {
       expect(object2[MEMORY].buffer.align).to.be.undefined;
     })
   })
-  describe('unlinkObject', function() {    
+  describe('unlinkObject', function() {
     it('should replace buffer in fixed memory with ones in relocatable memory', function() {
       const env = new Environment();
       env.allocateFixedMemory = (len, align) => {
@@ -1151,7 +1224,7 @@ describe('Environment', function() {
       env.unlinkObject(object);
     })
   })
-  describe('releaseFunctions', function() {    
+  describe('releaseFunctions', function() {
     it('should make all imported functions throw', function() {
       const env = new Environment();
       env.imports = {
@@ -1165,7 +1238,7 @@ describe('Environment', function() {
       expect(() => env.runThunk()).to.throw();
     })
   })
-  describe('getSpecialExports', function() {    
+  describe('getSpecialExports', function() {
     it('should return object for controlling module', async function() {
       const env = new Environment();
       env.init = async () => {};
@@ -1182,7 +1255,7 @@ describe('Environment', function() {
       object.abandon();
       expect(env.abandoned).to.be.true;
       expect(object.released()).to.be.false;
-    })    
+    })
     it('should allow redirection of console output', async function() {
       const env = new Environment();
       const dv = new DataView(new ArrayBuffer(2));
@@ -1192,7 +1265,7 @@ describe('Environment', function() {
       expect(before).to.equal('?');
       const object = env.getSpecialExports();
       let content;
-      object.connect({ 
+      object.connect({
         log(s) {
           content = s;
         }
@@ -1246,7 +1319,7 @@ describe('Environment', function() {
       expect(sizeOf(Packed)).to.equal(4);
       expect(alignOf(Packed)).to.equal(2);
       expect(typeOf(Packed)).to.equal('packed struct');
-    })    
+    })
   })
   describe('abandon', function() {
     it('should release imported functions and variables', function() {
@@ -1312,7 +1385,7 @@ describe('Environment', function() {
       expect(lines).to.eql([ 'Hello world!' ]);
     })
   })
-  describe('updatePointerAddresses', function() {    
+  describe('updatePointerAddresses', function() {
     it('should update pointer addresses', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
@@ -1401,7 +1474,7 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: ArgStruct } = structure;    
+      const { constructor: ArgStruct } = structure;
       const object1 = new Int32(123);
       const object2 = new Int32(123);
       const args = new ArgStruct([ object1, object2, object1, object1 ]);
@@ -1510,10 +1583,10 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Hello } = structure;    
+      const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
-      const object3 = new Hello({ sibling: object2 });      
+      const object3 = new Hello({ sibling: object2 });
       object1.sibling = object3;
       expect(object3.sibling['*']).to.equal(object2);
       expect(object3.sibling['*'].sibling['*']).to.equal(object1);
@@ -1723,7 +1796,7 @@ describe('Environment', function() {
       expect(called).to.be.false;
     })
   })
-  describe('findTargetClusters', function() {    
+  describe('findTargetClusters', function() {
     it('should find overlapping objects', function() {
       const env = new Environment();
       const Test = function(dv) {
@@ -1778,7 +1851,7 @@ describe('Environment', function() {
         targets: [ object1, object2 ],
         start: 0,
         end: 12,
-        address: undefined,        
+        address: undefined,
       };
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
@@ -1902,7 +1975,7 @@ describe('Environment', function() {
       expect(() => env.createClusterShadow(cluster)).to.throw(TypeError);
     })
   })
-  describe('addShadow', function() {    
+  describe('addShadow', function() {
     it('should add a shadow', function() {
       const env = new Environment();
       const object = {
@@ -1920,7 +1993,7 @@ describe('Environment', function() {
       expect(env.context.shadowMap.size).to.equal(1);
     })
   })
-  describe('removeShadow', function() {   
+  describe('removeShadow', function() {
     it('should remove a previously added shadow', function() {
       const env = new Environment();
       const object = {
@@ -1936,9 +2009,9 @@ describe('Environment', function() {
       env.addShadow(shadow, object);
       env.removeShadow(shadow[MEMORY]);
       expect(env.context.shadowMap.size).to.equal(0);
-    }) 
+    })
   })
-  describe('updateShadows', function() {    
+  describe('updateShadows', function() {
     it('should do nothing where there are no shadows', function() {
       const env = new Environment();
       env.startContext();
@@ -1988,7 +2061,7 @@ describe('Environment', function() {
       expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
     })
   })
-  describe('releaseShadows', function() {    
+  describe('releaseShadows', function() {
     it('should do nothing where there are no shadows', function() {
       const env = new Environment();
       env.startContext();
@@ -2085,14 +2158,14 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Hello } = structure;    
+      const { constructor: Hello } = structure;
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
       env.acquirePointerTargets(object);
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
-    })    
+    })
     it('should ignore const pointers', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
@@ -2153,12 +2226,12 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Hello } = structure;    
+      const { constructor: Hello } = structure;
       const object = new Hello([ new Int32(123) ]);
       expect(object[0]['*']).to.equal(123);
       env.acquirePointerTargets(object);
       expect(object[0]['*']).to.equal(123);
-    })    
+    })
     it('should clear slot when pointer has invalid address', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
@@ -2208,7 +2281,7 @@ describe('Environment', function() {
       env.acquirePointerTargets(ptr);
       expect(() => ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('Null')
-    })    
+    })
     it('should be able to handle self-referencing structures', function() {
       const env = new Environment();
       const structure = env.beginStructure({
@@ -2293,7 +2366,7 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Hello } = structure;    
+      const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
       const object3 = new Hello({ sibling: object2 });
@@ -2309,7 +2382,7 @@ describe('Environment', function() {
         [ 0x3000n, object3[MEMORY] ],
         [ 0x4000n, object4[MEMORY] ],
         [ 0x5000n, object5[MEMORY] ],
-      ]);      
+      ]);
       env.obtainFixedView = function(address, len) {
         return map.get(address);
       };
@@ -2407,7 +2480,7 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Hello } = structure;    
+      const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: null });
       const object3 = new Hello({ sibling: null });
@@ -2415,7 +2488,7 @@ describe('Environment', function() {
         [ 0x1000n, object1[MEMORY] ],
         [ 0x2000n, object2[MEMORY] ],
         [ 0x3000n, object3[MEMORY] ],
-      ]);      
+      ]);
       env.obtainFixedView = function(address, len) {
         return map.get(address);
       };
@@ -2425,7 +2498,7 @@ describe('Environment', function() {
       env.acquirePointerTargets(object3);
       expect(object3.sibling['*']).to.equal(object2);
       expect(object2.sibling['*']).to.equal(object1);
-      expect(object1.sibling['*']).to.equal(object3);     
+      expect(object1.sibling['*']).to.equal(object3);
     })
     it('should acquire missing opaque structures', function() {
       const env = new Environment();
@@ -2455,12 +2528,12 @@ describe('Environment', function() {
       env.inFixedMemory = function() {
         return false;
       };
-      const { constructor: Ptr } = ptrStructure;    
+      const { constructor: Ptr } = ptrStructure;
       const pointer = new Ptr(undefined);
       const dv = new DataView(new ArrayBuffer(16))
       const map = new Map([
         [ 0x1000n, dv ],
-      ]);      
+      ]);
       env.obtainFixedView = function(address, len) {
         return map.get(address);
       };
@@ -2546,9 +2619,9 @@ describe('Environment', function() {
         return dv;
       };
       env.acquireDefaultPointers(structure);
-      expect(requests).to.eql([ 
-        { address: 0x1000n, len: 4 }, 
-        { address: 0x2000n, len: 4 } 
+      expect(requests).to.eql([
+        { address: 0x1000n, len: 4 },
+        { address: 0x2000n, len: 4 }
       ]);
       expect(template[SLOTS][0]).to.be.instanceOf(Int32Ptr);
       expect(template[SLOTS][0][SLOTS][0]).to.be.instanceOf(Int32);

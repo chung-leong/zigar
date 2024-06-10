@@ -12,7 +12,6 @@ export function defineArgStruct(structure, env) {
     align,
     instance: { members },
     hasPointer,
-    name,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const argKeys = members.slice(0, -1).map(m => m.name);

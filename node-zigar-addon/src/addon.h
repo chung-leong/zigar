@@ -20,7 +20,7 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#if UINTPTR_MAX == UINT64_MAX 
+#if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
 #else
     #define UINTPTR_JS_TYPE             "number"
@@ -29,7 +29,7 @@
 inline napi_status napi_create_uintptr(napi_env env,
                                        uintptr_t value,
                                        napi_value* result) {
-#if UINTPTR_MAX == UINT64_MAX 
+#if UINTPTR_MAX == UINT64_MAX
     return napi_create_bigint_uint64(env, value, result);
 #else
     return napi_create_uint32(env, value, result);
@@ -39,7 +39,7 @@ inline napi_status napi_create_uintptr(napi_env env,
 inline napi_status napi_get_value_uintptr(napi_env env,
                                           napi_value value,
                                           uintptr_t* result) {
-#if UINTPTR_MAX == UINT64_MAX 
+#if UINTPTR_MAX == UINT64_MAX
     bool lossless;
     return napi_get_value_bigint_uint64(env, value, (uint64_t*) result, &lossless);
 #else
@@ -105,6 +105,7 @@ typedef struct {
     const char* name;
     size_t thunk_id;
     napi_value structure;
+    napi_value iterator_of;
 } method;
 
 typedef struct {

@@ -106,6 +106,7 @@ pub const Method = struct {
     name: ?[]const u8 = null,
     thunk_id: usize,
     structure: Value,
+    iterator_of: ?Value,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -1151,7 +1152,7 @@ test "TypeDataCollector.setAttributes" {
     assertCT(tdc.get(Test.UnionA).isSupported() == true);
     assertCT(tdc.get(@TypeOf(null)).isSupported() == true);
     assertCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
-    assertCT(tdc.get(noreturn).isSupported() == false);
+    assertCT(tdc.get(noreturn).isSupported() == true);
     assertCT(tdc.get(u17).isSupported() == true);
     assertCT(tdc.get(i18).isSupported() == true);
     // pointer should include this
@@ -1700,6 +1701,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 .name = @ptrCast(decl.name),
                                 .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
                                 .structure = arg_structure,
+                                .iterator_of = try getIteratorStructure(ctx, DT),
                             }, is_static_only);
                         }
                     },
@@ -1709,6 +1711,85 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         },
         else => {},
     };
+}
+
+fn getIteratorStructure(ctx: anytype, comptime FT: type) !?Value {
+    const f = @typeInfo(FT).Fn;
+    if (f.return_type) |RT| {
+        switch (@typeInfo(RT)) {
+            .Struct, .Union, .Opaque, .Enum => if (@hasDecl(RT, "next")) {
+                const next = @field(RT, "next");
+                if (NextMethodReturnType(@TypeOf(next), RT)) |PT| {
+                    return getStructure(ctx, PT);
+                }
+            },
+            else => {},
+        }
+    }
+    return null;
+}
+
+fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
+    const f = @typeInfo(FT).Fn;
+    if (f.return_type) |RT| {
+        if (f.params.len == 1 and f.params[0].type == *T) {
+            if (PayloadType(RT)) |PT| {
+                return PT;
+            }
+        }
+    }
+    return null;
+}
+
+test "NextMethodReturnType" {
+    const S = struct {
+        pub fn next1(_: *@This()) ?i32 {
+            return null;
+        }
+
+        pub fn next2(_: *@This()) !?i32 {
+            return null;
+        }
+
+        pub fn next3(_: *@This(), _: i32) !?i32 {
+            return null;
+        }
+
+        pub fn next4(_: i32) !?i32 {
+            return null;
+        }
+
+        pub fn next5(_: *@This()) i32 {
+            return 0;
+        }
+    };
+    const T1 = NextMethodReturnType(@TypeOf(S.next1), S) orelse unreachable;
+    assert(T1 == i32);
+    const T2 = NextMethodReturnType(@TypeOf(S.next2), S) orelse unreachable;
+    assert(T2 == i32);
+    const T3 = NextMethodReturnType(@TypeOf(S.next3), S);
+    assert(T3 == null);
+    const T4 = NextMethodReturnType(@TypeOf(S.next4), S);
+    assert(T4 == null);
+    const T5 = NextMethodReturnType(@TypeOf(S.next5), S);
+    assert(T5 == null);
+}
+
+fn PayloadType(comptime T: type) ?type {
+    return switch (@typeInfo(T)) {
+        .Optional => |op| op.child,
+        .ErrorUnion => |eu| PayloadType(eu.payload),
+        else => null,
+    };
+}
+
+test "PayloadType" {
+    const T1 = PayloadType(?i32) orelse unreachable;
+    assert(T1 == i32);
+    const T2 = PayloadType(anyerror!?i32) orelse unreachable;
+    assert(T2 == i32);
+    const T3 = PayloadType(i32);
+    assert(T3 == null);
 }
 
 fn ArgumentStruct(comptime T: type) type {

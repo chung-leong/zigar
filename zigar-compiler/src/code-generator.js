@@ -236,6 +236,7 @@ function addStructureDefinitions(lines, definition) {
       for (const [ name, value ] of Object.entries(method)) {
         switch (name) {
           case 'argStruct':
+          case 'iteratorOf':
             add(`${name}: ${structureNames.get(value)},`);
             break;
           default:

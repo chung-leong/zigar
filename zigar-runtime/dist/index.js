@@ -475,9 +475,7 @@ function deanimalizeErrorName(name) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
         if (m2) {
-          const acronym = m1.substring(0, m1.length - 1);
-          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-          return ` ${acronym} ${letter}${m2}`;
+          return m0;
         } else {
           return ` ${m1}`;
         }
@@ -3323,7 +3321,6 @@ function defineArgStruct(structure, env) {
     align,
     instance: { members },
     hasPointer,
-    name,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const argKeys = members.slice(0, -1).map(m => m.name);
@@ -4578,7 +4575,7 @@ class Environment {
   }
 
   createCaller(method, useThis) {
-    const { name, argStruct, thunkId } = method;
+    const { name, argStruct, thunkId, iteratorOf } = method;
     const { constructor } = argStruct;
     const self = this;
     let f;
@@ -4589,6 +4586,16 @@ class Environment {
     } else {
       f = function(...args) {
         return self.invokeThunk(thunkId, new constructor(args, name, 0));
+      };
+    }
+    if (iteratorOf) {
+      const init = f;
+      f = function*(...args) {
+        const it = init.call(this, ...args);
+        let value;
+        while ((value = it.next()) !== null) {
+          yield value;
+        }
       };
     }
     Object.defineProperty(f, 'name', { value: name });
