@@ -648,6 +648,11 @@ describe('Error functions', function() {
       const result = deanimalizeErrorName(name);
       expect(result).to.equal('Unable to retrieve memory location');
     })
+    it('should decamelize error names containing acronyms correctly', function() {
+      const name = 'SQLiteCantOpenFullPath';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('SQLite cant open full path');
+    })
     it('should keep acronyms in uppercase', function() {
       const name1 = 'InvalidHTMLEncountered';
       const result1 = deanimalizeErrorName(name1);

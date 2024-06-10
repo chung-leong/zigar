@@ -386,9 +386,7 @@ export function deanimalizeErrorName(name) {
         return ` ${m1.toLocaleLowerCase()}${m2}`;
       } else {
         if (m2) {
-          const acronym = m1.substring(0, m1.length - 1);
-          const letter = m1.charAt(m1.length - 1).toLocaleLowerCase();
-          return ` ${acronym} ${letter}${m2}`;
+          return m0;
         } else {
           return ` ${m1}`;
         }
