@@ -57,6 +57,8 @@ pub const StructureType = enum(u32) {
     optional,
     pointer,
     slice,
+    unbound_slice,
+    unbound_slice_c,
     vector,
     @"opaque",
     function,
@@ -141,18 +143,25 @@ pub const Memory = struct {
                 },
             };
         }
-        const len = switch (pt.size) {
+        const len: usize = switch (pt.size) {
             .One => @sizeOf(pt.child),
             .Slice => @sizeOf(pt.child) * ptr.len,
-            .Many => if (pt.sentinel) |opaque_ptr| find: {
-                const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
-                var len: usize = 0;
-                while (ptr[len] != sentinel_ptr.*) {
-                    len += 1;
+            .Many, .C => get: {
+                if (address != 0) {
+                    if (pt.sentinel) |opaque_ptr| {
+                        const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
+                        var len: usize = 0;
+                        while (ptr[len] != sentinel_ptr.*) {
+                            len += 1;
+                        }
+                        break :get (len + 1) * @sizeOf(pt.child);
+                    } else {
+                        break :get 1;
+                    }
+                } else {
+                    break :get 0;
                 }
-                break :find (len + 1) * @sizeOf(pt.child);
-            } else 0,
-            .C => 0,
+            },
         };
         return .{
             .bytes = @ptrFromInt(address),
@@ -199,9 +208,9 @@ test "Memory.from" {
     assert(memA.attributes.is_const == false);
     assert(memB.len == 5);
     assert(memB.attributes.is_const == true);
-    assert(memC.len == 0);
+    assert(memC.len == 1);
     assert(memC.attributes.is_comptime == true);
-    assert(memD.len == 0);
+    assert(memD.len == 1);
     assert(memD.attributes.is_const == true);
     assert(memE.len == @sizeOf(@TypeOf(b)));
     assert(memF.len == 6);
@@ -431,24 +440,11 @@ const TypeData = struct {
         };
     }
 
-    fn getSliceLength(comptime self: @This()) ?usize {
-        const pt = @typeInfo(self.Type).Pointer;
-        return if (pt.size == .Slice or pt.sentinel != null) null else 0;
-    }
-
     fn getSliceName(comptime self: @This()) [:0]const u8 {
         const pt = @typeInfo(self.Type).Pointer;
         const name = @typeName(self.Type);
-        const needle = switch (pt.size) {
-            .Slice => "[",
-            .C => "[*c",
-            .Many => "[*",
-            else => @compileError("Unexpected pointer type: " ++ name),
-        };
-        const replacement = if (pt.size == .Slice or pt.sentinel != null)
-            "[_"
-        else
-            "[0";
+        const needle = if (pt.size == .Slice) "[" else "*";
+        const replacement = if (pt.size == .Slice) "[_" else "?";
         if (comptime std.mem.indexOf(u8, name, needle)) |index| {
             return std.fmt.comptimePrint("{s}{s}{s}", .{
                 name[0..index],
@@ -458,6 +454,17 @@ const TypeData = struct {
         } else {
             @compileError("Unexpected pointer type: " ++ name);
         }
+    }
+
+    fn getSliceType(comptime self: @This()) StructureType {
+        const pt = @typeInfo(self.Type).Pointer;
+        const name = @typeName(self.Type);
+        return switch (pt.size) {
+            .Slice => .slice,
+            .Many => .unbound_slice,
+            .C => .unbound_slice_c,
+            else => @compileError("Unexpected pointer type: " ++ name),
+        };
     }
 
     fn getSentinel(comptime self: @This()) ?@typeInfo(self.Type).Pointer.child {
@@ -670,12 +677,6 @@ test "TypeData.isBitVector" {
     assertCT(TypeData.isBitVector(.{ .Type = B }) == false);
 }
 
-test "TypeData.getSliceLength" {
-    assertCT(TypeData.getSliceLength(.{ .Type = []const u8 }) == null);
-    assertCT(TypeData.getSliceLength(.{ .Type = [*:0]const u8 }) == null);
-    assertCT(TypeData.getSliceLength(.{ .Type = [*]const u8 }).? == 0);
-}
-
 test "TypeData.getSliceName" {
     const name1 = comptime TypeData.getSliceName(.{ .Type = []const u8 });
     assertCT(std.mem.eql(u8, name1[0..3], "[_]"));
@@ -684,11 +685,11 @@ test "TypeData.getSliceName" {
     const name3 = comptime TypeData.getSliceName(.{ .Type = [][4]u8 });
     assertCT(std.mem.eql(u8, name3[0..6], "[_][4]"));
     const name4 = comptime TypeData.getSliceName(.{ .Type = [*:0]const u8 });
-    assertCT(std.mem.eql(u8, name4[0..5], "[_:0]"));
+    assertCT(std.mem.eql(u8, name4[0..5], "[?:0]"));
     const name5 = comptime TypeData.getSliceName(.{ .Type = [*]const u8 });
-    assertCT(std.mem.eql(u8, name5[0..3], "[0]"));
+    assertCT(std.mem.eql(u8, name5[0..3], "[?]"));
     const name6 = comptime TypeData.getSliceName(.{ .Type = [*c]const u8 });
-    assertCT(std.mem.eql(u8, name6[0..3], "[0]"));
+    assertCT(std.mem.eql(u8, name6[0..4], "[?c]"));
 }
 
 test "TypeData.getSentinel" {
@@ -1346,8 +1347,8 @@ fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void
     const target_structure = if (comptime !td.isSlice()) child_structure else define_slice: {
         const slice_def: Structure = .{
             .name = td.getSliceName(),
-            .structure_type = .slice,
-            .length = td.getSliceLength(),
+            .structure_type = td.getSliceType(),
+            .length = null,
             .byte_size = child_td.getByteSize(),
             .alignment = child_td.getAlignment(),
             .has_pointer = child_td.hasPointer(),

@@ -29,9 +29,11 @@ export const StructureType = {
   Optional: 12,
   Pointer: 13,
   Slice: 14,
-  Vector: 15,
-  Opaque: 16,
-  Function: 17,
+  UnboundSlice: 15,
+  UnboundSliceC: 16,
+  Vector: 17,
+  Opaque: 18,
+  Function: 19,
 };
 
 export function getTypeName(member) {
@@ -108,6 +110,18 @@ export function isExtendedType(member) {
     return false;
   }
 }
+
+export function isSlice(type) {
+  switch (type) {
+    case StructureType.Slice:
+    case StructureType.UnboundSlice:
+    case StructureType.UnboundSliceC:
+      return true;
+    default:
+      return false;
+  }
+}
+
 
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;

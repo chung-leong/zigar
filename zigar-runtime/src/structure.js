@@ -81,6 +81,14 @@ export function useSlice() {
   factories[StructureType.Slice] = defineSlice;
 }
 
+export function useUnboundSlice() {
+  factories[StructureType.UnboundSlice] = defineSlice;
+}
+
+export function useUnboundSliceC() {
+  factories[StructureType.UnboundSliceC] = defineSlice;
+}
+
 export function useVector() {
   factories[StructureType.Vector] = defineVector;
 }
@@ -212,6 +220,8 @@ export function useAllStructureTypes() {
   useOptional();
   usePointer();
   useSlice();
+  useUnboundSlice();
+  useUnboundSliceC();
   useVector();
   useOpaque();
 }

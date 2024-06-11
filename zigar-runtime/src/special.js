@@ -48,6 +48,8 @@ function normalizeObject(object, forJSON) {
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
+        case StructureType.UnboundSlice:
+        case StructureType.UnboundSliceC:
           entries = value[ENTRIES_GETTER]?.({ error });
           result = [];
           break;

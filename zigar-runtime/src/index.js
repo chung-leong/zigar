@@ -24,6 +24,6 @@ export {
 export {
     useArgStruct, useArray, useBareUnion, useEnum, useErrorSet, useErrorUnion,
     useExternStruct, useExternUnion, useOpaque, useOptional, usePackedStruct, usePointer,
-    usePrimitive, useSlice, useStruct, useTaggedUnion, useVector
+    usePrimitive, useSlice, useStruct, useTaggedUnion, useUnboundSlice, useUnboundSliceC, useVector
 } from './structure.js';
 /* RUNTIME-ONLY-END */
