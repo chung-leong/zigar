@@ -185,7 +185,6 @@ pub const Host = struct {
             .Int => _insertInteger(container, key_str, @intCast(value)),
             .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
             .Bool => _insertBoolean(container, key_str, value),
-            .Optional => _insertObject(container, key_str, null),
             else => @compileError("No support for value type: " ++ @typeName(T)),
         }
     }
@@ -224,6 +223,7 @@ pub const Host = struct {
     pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "argStruct", method.structure);
+        try insertProperty(def, "iteratorOf", method.iterator_of);
         try insertProperty(def, "thunkId", method.thunk_id);
         try insertProperty(def, "name", method.name);
         _attachMethod(structure, def, is_static_only);
