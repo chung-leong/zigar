@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { fileURLToPath } from 'url';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -16,6 +17,25 @@ export function addTests(importModule, options) {
         list.push(token.string);
       }
       expect(list).to.eql([ 'hello', 'world', '123', 'chicken' ]);
+    })
+    it('should get iterator from std.zip.Iterator.init', async function() {
+      this.timeout(300000);
+      const { scanZip } = await importTest('zip-iterator');
+      const path = fileURLToPath(new URL('./test-data/test.zip', import.meta.url));
+      const list = [];
+      for (const entry of scanZip(path)) {
+        list.push(entry.valueOf());
+      }
+    })
+    it('should get iterator from std.fs.path.ComponentIterator', async function() {
+      this.timeout(300000);
+      const { parsePath } = await importTest('path-iterator');
+      const path = '/home/chicken/porn/naked-chicks.png';
+      const list = [];
+      for (const part of parsePath(path)) {
+        list.push(part.name.string);
+      }
+      expect(list).to.eql([ 'home', 'chicken', 'porn', 'naked-chicks.png' ]);
     })
   })
 }

@@ -1701,7 +1701,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 .name = @ptrCast(decl.name),
                                 .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
                                 .structure = arg_structure,
-                                .iterator_of = try getIteratorStructure(ctx, DT),
+                                .iterator_of = if (IteratorType(DT)) |PT| try getStructure(ctx, PT) else null,
                             }, is_static_only);
                         }
                     },
@@ -1713,20 +1713,36 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     };
 }
 
-fn getIteratorStructure(ctx: anytype, comptime FT: type) !?Value {
+fn IteratorType(comptime FT: type) ?type {
     const f = @typeInfo(FT).Fn;
-    if (f.return_type) |RT| {
-        switch (@typeInfo(RT)) {
-            .Struct, .Union, .Opaque, .Enum => if (@hasDecl(RT, "next")) {
-                const next = @field(RT, "next");
-                if (NextMethodReturnType(@TypeOf(next), RT)) |PT| {
-                    return getStructure(ctx, PT);
+    if (f.return_type) |RT1| {
+        const RT2 = switch (@typeInfo(RT1)) {
+            .ErrorUnion => |eu| eu.payload,
+            else => RT1,
+        };
+        switch (@typeInfo(RT2)) {
+            .Struct, .Union, .Opaque, .Enum => if (@hasDecl(RT2, "next")) {
+                const next = @field(RT2, "next");
+                if (NextMethodReturnType(@TypeOf(next), RT2)) |PT| {
+                    return PT;
                 }
             },
             else => {},
         }
     }
     return null;
+}
+
+test "IteratorType" {
+    const S = struct {
+        pub fn split(text: []const u8, delimiter: []const u8) std.mem.SplitIterator(u8, .sequence) {
+            return std.mem.splitSequence(u8, text, delimiter);
+        }
+    };
+    const T1 = IteratorType(@TypeOf(S.split));
+    assert(T1 != null);
+    const T2 = IteratorType(@TypeOf(std.fs.path.ComponentIterator(.posix, u8).init));
+    assert(T2 != null);
 }
 
 fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
