@@ -7,8 +7,8 @@ import { defineProperties } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, LOCATION_GETTER,
-  LOCATION_SETTER, MEMORY, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TYPE, WRITE_DISABLER
+  ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, LENGTH_SETTER, MEMORY,
+  POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
 import { MemberType, StructureType, getStructureName } from './types.js';
@@ -219,7 +219,7 @@ export class Environment {
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
-      this.acquirePointerTargets(object);
+      this.updatePointerTargets(object);
     }
     if (copy) {
       object[WRITE_DISABLER]();
@@ -577,8 +577,8 @@ export class Environment {
     for (const pointer of pointers) {
       const target = pointer[TARGET_GETTER]();
       const address = this.getViewAddress(target[MEMORY]);
-      const { length = 1 } = target;
-      pointer[FIXED_LOCATION] = { address, length };
+      pointer[ADDRESS_SETTER](address);
+      pointer[LENGTH_SETTER]?.(target.length);
     }
   }
 
@@ -707,34 +707,33 @@ export class Environment {
     const potentialClusters = [];
     const env = this;
     const callback = function({ isActive }) {
-      if (!isActive(this)) {
-        return;
-      }
-      // bypass proxy
-      const pointer = this[POINTER];
-      if (pointerMap.get(pointer)) {
-        return;
-      }
-      const target = pointer[SLOTS][0];
-      if (target) {
-        pointerMap.set(pointer, target);
-        if (!env.inFixedMemory(target)) {
-          // see if the buffer is shared with other objects
-          const dv = target[MEMORY];
-          const other = bufferMap.get(dv.buffer);
-          if (other) {
-            const array = Array.isArray(other) ? other : [ other ];
-            const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
-            array.splice(index, 0, target);
-            if (!Array.isArray(other)) {
-              bufferMap.set(dv.buffer, array);
-              potentialClusters.push(array);
+      if (isActive(this)) {
+        // bypass proxy
+        const pointer = this[POINTER];
+        if (!pointerMap.get(pointer)) {
+          const target = pointer[SLOTS][0];
+          if (target) {
+            pointerMap.set(pointer, target);
+            // only relocatable targets need updating
+            if (!env.inFixedMemory(target)) {
+              // see if the buffer is shared with other objects
+              const dv = target[MEMORY];
+              const other = bufferMap.get(dv.buffer);
+              if (other) {
+                const array = Array.isArray(other) ? other : [ other ];
+                const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
+                array.splice(index, 0, target);
+                if (!Array.isArray(other)) {
+                  bufferMap.set(dv.buffer, array);
+                  potentialClusters.push(array);
+                }
+              } else {
+                bufferMap.set(dv.buffer, target);
+              }
+              // scan pointers in target
+              target[POINTER_VISITOR]?.(callback);
             }
-          } else {
-            bufferMap.set(dv.buffer, target);
           }
-          // scan pointers in target
-          target[POINTER_VISITOR]?.(callback);
         }
       }
     };
@@ -750,14 +749,10 @@ export class Environment {
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
       const cluster = clusterMap.get(target);
-      const { length = 1 } = target;
-      let address = this.getTargetAddress(target, cluster);
-      if (address === false) {
-        // need to shadow the object
-        address = this.getShadowAddress(target, cluster);
-      }
+      const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
       // update the pointer
-      pointer[LOCATION_SETTER]({ address, length });
+      pointer[ADDRESS_SETTER](address);
+      pointer[LENGTH_SETTER]?.(target.length);
     }
   }
 
@@ -937,38 +932,21 @@ export class Environment {
     }
   }
 
-  acquirePointerTargets(args) {
-    const env = this;
+  updatePointerTargets(args) {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
+      // bypass proxy
       const pointer = this[POINTER];
-      if (pointerMap.get(pointer)) {
-        return;
-      } else {
+      if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
-      }
-      const writable = !pointer.constructor.const;
-      const currentTarget = pointer[SLOTS][0];
-      let newTarget, location;
-      if (isActive(this)) {
-        const Target = pointer.constructor.child;
-        if (!currentTarget || isMutable(this)) {
-          // obtain address and length from memory
-          location = pointer[LOCATION_GETTER]();
-          // get view of memory that pointer points to
-          const dv = env.findMemory(location.address, location.length, Target[SIZE]);
-          newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
-        } else {
-          newTarget = currentTarget;
-        }
-      }
-      // acquire objects pointed to by pointers in target
-      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
-      if (newTarget !== currentTarget) {
-        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
-        pointer[SLOTS][0] = newTarget;
-        if (env.inFixedMemory(pointer)) {
-          pointer[FIXED_LOCATION] = location;
+        const writable = !pointer.constructor.const;
+        const currentTarget = pointer[SLOTS][0];
+        const newTarget = isMutable(this) ? pointer[TARGET_UPDATER](true, isActive(this)) : null;
+        // update targets of pointers in original target (which could have been altered)
+        currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        if (newTarget !== currentTarget) {
+          // acquire targets of pointers in new target
+          newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         }
       }
     }
@@ -983,7 +961,7 @@ export class Environment {
       const placeholder = Object.create(constructor.prototype);
       placeholder[MEMORY] = template[MEMORY];
       placeholder[SLOTS] = template[SLOTS];
-      this.acquirePointerTargets(placeholder);
+      this.updatePointerTargets(placeholder);
     }
   }
   /* COMPTIME-ONLY-END */

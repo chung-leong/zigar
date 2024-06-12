@@ -13,8 +13,8 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
-  ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED_LOCATION, MEMORY, POINTER_VISITOR, SLOTS,
-  TARGET_GETTER, WRITE_DISABLER
+  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, LAST_ADDRESS, LAST_LENGTH,
+  LENGTH_SETTER, MEMORY, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
@@ -1075,10 +1075,17 @@ describe('Environment', function() {
           length: 4,
         };
       };
+      Test.prototype[ADDRESS_SETTER] = function(address) {
+        object[LAST_ADDRESS] = address;
+      };
+      Test.prototype[LENGTH_SETTER] = function(length) {
+        object[LAST_LENGTH] = length;
+      };
       const object = new Test(new DataView(new ArrayBuffer(4)));
       env.variables.push({ object, reloc: 128 });
       env.linkVariables(false);
-      expect(object[FIXED_LOCATION]).to.eql({ address: 0x4000, length: 4 });
+      expect(object[LAST_ADDRESS]).to.equal(0x4000);
+      expect(object[LAST_LENGTH]).to.equal(4);
     });
   })
   describe('linkObject', function() {
@@ -1481,7 +1488,7 @@ describe('Environment', function() {
       env.getTargetAddress = function(target, cluster) {
         // flag object1 as misaligned
         if (cluster) {
-          return false;
+          return;
         } else {
           return 0x1000n;
         }
@@ -2097,7 +2104,7 @@ describe('Environment', function() {
       expect(align).to.equal(1);
     })
   })
-  describe('acquirePointerTargets', function() {
+  describe('updatePointerTargets', function() {
     it('should set pointer slot to undefined when pointer is inactive', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
@@ -2162,7 +2169,8 @@ describe('Environment', function() {
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
-      env.acquirePointerTargets(object);
+      debugger;
+      env.updatePointerTargets(object);
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
     })
@@ -2229,7 +2237,7 @@ describe('Environment', function() {
       const { constructor: Hello } = structure;
       const object = new Hello([ new Int32(123) ]);
       expect(object[0]['*']).to.equal(123);
-      env.acquirePointerTargets(object);
+      env.updatePointerTargets(object);
       expect(object[0]['*']).to.equal(123);
     })
     it('should clear slot when pointer has invalid address', function() {
@@ -2278,7 +2286,7 @@ describe('Environment', function() {
       const ptr = new Int32Ptr(new Int32(123));
       expect(ptr['*']).to.equal(123);
       ptr[MEMORY].setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-      env.acquirePointerTargets(ptr);
+      env.updatePointerTargets(ptr);
       expect(() => ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('Null')
     })
@@ -2390,7 +2398,7 @@ describe('Environment', function() {
       object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
       object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
       object5[MEMORY].setBigUint64(0, 0x4000n, true); // obj5 -> obj4
-      env.acquirePointerTargets(object3);
+      env.updatePointerTargets(object3);
       expect(object3.sibling).to.be.null;
       expect(object2.sibling['*']).to.equal(object1);
       expect(object1.sibling['*']).to.equal(object5);
@@ -2495,7 +2503,7 @@ describe('Environment', function() {
       object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
       object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
       object3[MEMORY].setBigUint64(0, 0x2000n, true); // obj3 -> obj2
-      env.acquirePointerTargets(object3);
+      env.updatePointerTargets(object3);
       expect(object3.sibling['*']).to.equal(object2);
       expect(object2.sibling['*']).to.equal(object1);
       expect(object1.sibling['*']).to.equal(object3);
@@ -2538,7 +2546,7 @@ describe('Environment', function() {
         return map.get(address);
       };
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      env.acquirePointerTargets(pointer);
+      env.updatePointerTargets(pointer);
       expect(pointer.dataView).to.equal(dv);
     })
   })

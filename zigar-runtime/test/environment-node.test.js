@@ -64,7 +64,7 @@ describe('NodeEnvironment', function() {
       expect(bad).to.be.null;
     })
   })
-  describe('allocateShadowMemory', function() {    
+  describe('allocateShadowMemory', function() {
     it('should allocate memory for dealing with misalignment', function() {
       const env = new NodeEnvironment();
       const dv = env.allocateShadowMemory(16, 4);
@@ -72,13 +72,13 @@ describe('NodeEnvironment', function() {
       expect(dv.byteLength).to.equal(16);
     })
   })
-  describe('freeShadowMemory', function() {    
+  describe('freeShadowMemory', function() {
     it('should do nothing', function() {
       const env = new NodeEnvironment();
       env.freeShadowMemory(0x1000n, 16, 4);
     })
   })
-  describe('allocateFixedMemory', function() {    
+  describe('allocateFixedMemory', function() {
     it('should try to allocate fixed memory from zig', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
@@ -121,7 +121,7 @@ describe('NodeEnvironment', function() {
       env.freeFixedMemory(0x1000n, 0, 0);
     })
   })
-  describe('obtainFixedView', function() {    
+  describe('obtainFixedView', function() {
     it('should return a data view covering fixed memory at given address', function() {
       const env = new NodeEnvironment();
       env.obtainExternBuffer = function(address, len) {
@@ -147,13 +147,13 @@ describe('NodeEnvironment', function() {
       expect(dv.buffer).to.equal(env.nullBuffer);
     })
   })
-  describe('releaseFixedView', function() {    
+  describe('releaseFixedView', function() {
     it('should free a data view that was allocated using allocateFixedMemory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
         return 0x1000n;
       };
-      env.obtainExternBuffer = function(address, len) {  
+      env.obtainExternBuffer = function(address, len) {
         return new ArrayBuffer(len);
       };
       let args;
@@ -169,9 +169,9 @@ describe('NodeEnvironment', function() {
     it('should return true when memory is obtained from allocateFixedMemory', function() {
       const env = new NodeEnvironment();
       env.allocateExternMemory = function(len, align) {
-        return 0x1000n 
+        return 0x1000n
       };
-      env.obtainExternBuffer = function(address, len) { 
+      env.obtainExternBuffer = function(address, len) {
         return new ArrayBuffer(len);
       };
       const object = {
@@ -207,7 +207,7 @@ describe('NodeEnvironment', function() {
       const address = env.getTargetAddress(object);
       expect(address).to.equal(0x1000n);
     })
-    it('should return false when address is misaligned', function() {
+    it('should return undefined when address is misaligned', function() {
       const env = new NodeEnvironment();
       env.extractBufferAddress = function(buffer) {
         return 0x1004;
@@ -218,7 +218,7 @@ describe('NodeEnvironment', function() {
       const object = new Type();
       object[MEMORY] = new DataView(new ArrayBuffer(64));
       const address = env.getTargetAddress(object);
-      expect(address).to.be.false;
+      expect(address).to.be.undefined;
     })
     it('should return address when cluster is correctly aligned', function() {
       const env = new NodeEnvironment();
@@ -267,10 +267,10 @@ describe('NodeEnvironment', function() {
         misaligned: undefined,
       };
       const address1 = env.getTargetAddress(object1, cluster);
-      expect(address1).to.be.false;
+      expect(address1).to.be.undefined;
       expect(cluster.misaligned).to.be.true;
       const address2 = env.getTargetAddress(object2, cluster);
-      expect(address2).to.be.false;
+      expect(address2).to.be.undefined;
     })
   })
   describe('allocateRelocMemory', function() {

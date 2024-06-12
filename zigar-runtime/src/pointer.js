@@ -8,9 +8,9 @@ import { getMemoryCopier, restoreMemory } from './memory.js';
 import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import {
-  ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED_LOCATION, GETTER, LOCATION_GETTER,
-  LOCATION_SETTER, MEMORY, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
-  TARGET_GETTER, TARGET_SETTER, TYPE, WRITE_DISABLER
+  ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, GETTER, LAST_ADDRESS,
+  LAST_LENGTH, LENGTH_SETTER, MEMORY, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
+  TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -25,60 +25,79 @@ export function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type, sentinel, length } = targetStructure;
+  const { type, sentinel } = targetStructure;
   // length for slice can be zero or undefined
-  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;
-  const addressSize = (hasLength) ? byteSize / 2 : byteSize;
-  const { get: getAddress, set: setAddress } = getDescriptor({
+  const hasLengthInMemory = type === StructureType.Slice;
+  const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
+  const { get: getAddressInMemory, set: setAddressInMemory } = getDescriptor({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
   }, env);
-  const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
+  const { get: getLengthInMemory, set: setLengthInMemory } = (hasLengthInMemory) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const updateTarget = function() {
-    const prevLocation = this[FIXED_LOCATION];
-    if (prevLocation) {
-      const location = this[LOCATION_GETTER]();
-      if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
-        const { constructor: Target } = targetStructure;
-        const dv = env.findMemory(location.address, location.length, Target[SIZE]);
-        const target = Target.call(ENVIRONMENT, dv);
-        this[SLOTS][0] = target;
-        this[FIXED_LOCATION] = location;
+  const updateTarget = function(always = true, active = true) {
+    if (always || env.inFixedMemory(this)) {
+      if (active) {
+        const address = getAddressInMemory.call(this);
+        const length = (hasLengthInMemory)
+        ? getLengthInMemory.call(this)
+        : (sentinel)
+          ? env.findSentinel(address, sentinel.bytes) + 1
+          : 1;
+        if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
+          const Target = targetStructure.constructor;
+          const dv = env.findMemory(address, length, Target[SIZE]);
+          const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
+          this[SLOTS][0] = newTarget;
+          this[LAST_ADDRESS] = address;
+          this[LAST_LENGTH] = length;
+          return newTarget;
+        }
+      } else {
+        return this[SLOTS][0] = undefined;
       }
     }
+    return this[SLOTS][0];
   };
+  const setAddress = function(address) {
+    setAddressInMemory.call(this, address);
+    this[LAST_ADDRESS] = address;
+  };
+  const setLength = (hasLengthInMemory || sentinel)
+  ? function(length) {
+      setLengthInMemory?.call?.(this, length);
+      this[LAST_LENGTH] = length;
+    }
+  : null;
   const getTargetObject = function() {
-    updateTarget.call(this);
-    const target = this[SLOTS][0];
+    const pointer = this[POINTER] ?? this;
+    const target = updateTarget.call(pointer, false);
     if (!target) {
       throw new NullPointer();
     }
     return (isConst) ? getConstProxy(target) : target;
   };
   const setTargetObject = function(arg) {
-    if (env.inFixedMemory(this)) {
+    const pointer = this[POINTER] ?? this;
+    if (env.inFixedMemory(pointer)) {
       // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
-        const loc = {
-          address: env.getViewAddress(arg[MEMORY]),
-          length: (hasLength) ? arg.length : fixedLength
-        };
-        addressSetter.call(this, loc);
-        this[FIXED_LOCATION] = loc;
+        const address = env.getViewAddress(arg[MEMORY]);
+        setAddress.call(this, address);
+        setLength?.call?.(this, arg.length);
       } else {
         throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
-    this[SLOTS][0] = arg;
+    pointer[SLOTS][0] = arg;
   };
   const getTarget = isValueExpected(targetStructure)
   ? function() {
@@ -88,11 +107,7 @@ export function definePointer(structure, env) {
   : getTargetObject;
   const setTarget = !isConst
   ? function(value) {
-      updateTarget.call(this);
-      const object = this[SLOTS][0];
-      if (!object) {
-        throw new NullPointer();
-      }
+      const object = getTargetObject.call(this);
       return object[SETTER](value);
     }
   : throwReadOnly;
@@ -166,20 +181,6 @@ export function definePointer(structure, env) {
     this[TARGET_SETTER](arg);
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
-  const addressSetter = function({ address, length }) {
-    setAddress.call(this, address);
-    setLength?.call(this, length);
-  };
-  const fixedLength = (type != StructureType.Slice) ? 1 : length;
-  const addressGetter = function() {
-    const address = getAddress.call(this);
-    const length = (getLength)
-    ? getLength.call(this)
-    : (sentinel)
-      ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
-      : fixedLength;
-    return { address, length };
-  };
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
     '$': { get: getProxy, set: initializer },
@@ -189,12 +190,14 @@ export function definePointer(structure, env) {
     [Symbol.toPrimitive]: (type === StructureType.Primitive) && { value: getPointerPrimitve },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
-    [LOCATION_GETTER]: { value: addressGetter },
-    [LOCATION_SETTER]: { value: addressSetter },
+    [TARGET_UPDATER]: { value: updateTarget },
+    [ADDRESS_SETTER]: { value: setAddress },
+    [LENGTH_SETTER]: setLength && { value: setLength },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
+    [LAST_ADDRESS]: { value: undefined, writable: true },
+    [LAST_LENGTH]: setLength && { value: undefined, writable: true },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },

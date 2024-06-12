@@ -168,13 +168,11 @@ export class WebAssemblyEnvironment extends Environment {
   getTargetAddress(target, cluster) {
     if (this.inFixedMemory(target)) {
       return this.getViewAddress(target[MEMORY]);
-    }
-    if (target[MEMORY].byteLength === 0) {
+    } else if (target[MEMORY].byteLength === 0) {
       // it's a null pointer/empty slice
       return 0;
     }
     // relocatable buffers always need shadowing
-    return false;
   }
 
   clearExchangeTable() {
@@ -341,7 +339,7 @@ export class WebAssemblyEnvironment extends Environment {
   endCall(call, args) {
     this.updateShadowTargets();
     if (args[POINTER_VISITOR]) {
-      this.acquirePointerTargets(args);
+      this.updatePointerTargets(args);
     }
     this.releaseShadows();
     // restore the previous context if there's one

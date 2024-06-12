@@ -29,9 +29,11 @@ const StructureType = {
   Optional: 12,
   Pointer: 13,
   Slice: 14,
-  Vector: 15,
-  Opaque: 16,
-  Function: 17,
+  UnboundSlice: 15,
+  UnboundSliceC: 16,
+  Vector: 17,
+  Opaque: 18,
+  Function: 19,
 };
 
 function getTypeName(member) {
@@ -94,6 +96,7 @@ function getPrimitiveType(member) {
     return typeof(Primitive(0));
   }
 }
+
 
 function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
@@ -528,12 +531,13 @@ const GETTER = Symbol('getter');
 const SETTER = Symbol('setter');
 const ELEMENT_GETTER = Symbol('elementGetter');
 const ELEMENT_SETTER = Symbol('elementSetter');
-const LOCATION_GETTER = Symbol('addressGetter');
-const LOCATION_SETTER = Symbol('addressSetter');
 const TARGET_GETTER = Symbol('targetGetter');
 const TARGET_SETTER = Symbol('targetSetter');
 const ENTRIES_GETTER = Symbol('entriesGetter');
-const FIXED_LOCATION = Symbol('fixedLocation');
+const ADDRESS_SETTER$1 = Symbol('addressSetter');
+const LENGTH_SETTER = Symbol('lengthSetter');
+const TARGET_UPDATER = Symbol('targetUpdater');
+const LAST_ADDRESS = Symbol('lastAddress');
 const PROP_GETTERS = Symbol('propGetters');
 const PROP_SETTERS = Symbol('propSetters');
 const WRITE_DISABLER = Symbol('writeDisabler');
@@ -544,7 +548,7 @@ const COMPAT = Symbol('compat');
 const SIZE = Symbol('size');
 const ALIGN = Symbol('align');
 const ARRAY = Symbol('array');
-const POINTER = Symbol('pointer');
+const POINTER$1 = Symbol('pointer');
 const CONST_TARGET = Symbol('constTarget');
 const CONST_PROXY = Symbol('constProxy');
 const COPIER = Symbol('copier');
@@ -2297,6 +2301,8 @@ function normalizeObject(object, forJSON) {
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
+        case StructureType.UnboundSlice:
+        case StructureType.UnboundSliceC:
           entries = value[ENTRIES_GETTER]?.({ error });
           result = [];
           break;
@@ -2683,60 +2689,75 @@ function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type, sentinel, length } = targetStructure;
+  const { type, sentinel } = targetStructure;
   // length for slice can be zero or undefined
-  const hasLength = (type === StructureType.Slice) && targetStructure.length === undefined && !sentinel;
-  const addressSize = (hasLength) ? byteSize / 2 : byteSize;
-  const { get: getAddress, set: setAddress } = getDescriptor({
+  const hasLengthInMemory = type === StructureType.Slice;
+  const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
+  const { get: getAddressInMemory, set: setAddressInMemory } = getDescriptor({
     type: MemberType.Uint,
     bitOffset: 0,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { byteSize: addressSize },
   }, env);
-  const { get: getLength, set: setLength } = (hasLength) ? getDescriptor({
+  const { get: getLengthInMemory, set: setLengthInMemory } = (hasLengthInMemory) ? getDescriptor({
     type: MemberType.Uint,
     bitOffset: addressSize * 8,
     bitSize: addressSize * 8,
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const updateTarget = function() {
-    const prevLocation = this[FIXED_LOCATION];
-    if (prevLocation) {
-      const location = this[LOCATION_GETTER]();
-      if (location.address !== prevLocation.address || location.length !== prevLocation.length) {
-        const { constructor: Target } = targetStructure;
-        const dv = env.findMemory(location.address, location.length, Target[SIZE]);
-        const target = Target.call(ENVIRONMENT, dv);
-        this[SLOTS][0] = target;
-        this[FIXED_LOCATION] = location;
+  const updateTarget = function(always = true) {
+    if (always || env.inFixedMemory(this)) {
+      const address = getAddressInMemory.call(this);
+      const length = (hasLengthInMemory)
+      ? getLengthInMemory.call(this)
+      : (sentinel)
+        ? env.findSentinel(address, sentinel.bytes) + 1
+        : 1;
+      if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
+        const Target = targetStructure.constructor;
+        const dv = env.findMemory(address, length, Target[SIZE]);
+        const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
+        this[SLOT][0] = newTarget;
+        this[LAST_ADDRESS] = address;
+        this[LAST_LENGTH] = length;
+        return newTarget;
       }
     }
+    return this[SLOT][0];
   };
+  const setAddress = function(address) {
+    setAddressInMemory.call(this, address);
+    this[LAST_ADDRESS] = address;
+  };
+  const setLength = (hasLengthInMemory || sentinel)
+  ? function(length) {
+      setLengthInMemory?.call?.(this, length);
+      this[LAST_LENGTH] = length;
+    }
+  : null;
   const getTargetObject = function() {
-    updateTarget.call(this);
-    const target = this[SLOTS][0];
+    const pointer = this[POINTER$1] ?? this;
+    const target = updateTarget.call(pointer, false);
     if (!target) {
       throw new NullPointer();
     }
     return (isConst) ? getConstProxy(target) : target;
   };
   const setTargetObject = function(arg) {
-    if (env.inFixedMemory(this)) {
+    const pointer = this[POINTER$1] ?? this;
+    if (env.inFixedMemory(ptr)) {
       // the pointer sits in fixed memory--apply the change immediately
       if (env.inFixedMemory(arg)) {
-        const loc = {
-          address: env.getViewAddress(arg[MEMORY]),
-          length: (hasLength) ? arg.length : fixedLength
-        };
-        addressSetter.call(this, loc);
-        this[FIXED_LOCATION] = loc;
+        const address = env.getViewAddress(arg[MEMORY]);
+        setAddress.call(this, address);
+        setLength?.call?.(this, arg.length);
       } else {
         throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
-    this[SLOTS][0] = arg;
+    pointer[SLOTS][0] = arg;
   };
   const getTarget = isValueExpected(targetStructure)
   ? function() {
@@ -2746,11 +2767,7 @@ function definePointer(structure, env) {
   : getTargetObject;
   const setTarget = !isConst
   ? function(value) {
-      updateTarget.call(this);
-      const object = this[SLOTS][0];
-      if (!object) {
-        throw new NullPointer();
-      }
+      const object = getTargetObject.call(this);
       return object[SETTER](value);
     }
   : throwReadOnly;
@@ -2824,20 +2841,6 @@ function definePointer(structure, env) {
     this[TARGET_SETTER](arg);
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
-  const addressSetter = function({ address, length }) {
-    setAddress.call(this, address);
-    setLength?.call(this, length);
-  };
-  const fixedLength = (type != StructureType.Slice) ? 1 : length;
-  const addressGetter = function() {
-    const address = getAddress.call(this);
-    const length = (getLength)
-    ? getLength.call(this)
-    : (sentinel)
-      ? (address) ? env.findSentinel(address, sentinel.bytes) + 1 : 0
-      : fixedLength;
-    return { address, length };
-  };
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
     '$': { get: getProxy, set: initializer },
@@ -2847,12 +2850,14 @@ function definePointer(structure, env) {
     [Symbol.toPrimitive]: (type === StructureType.Primitive) && { value: getPointerPrimitve },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
-    [LOCATION_GETTER]: { value: addressGetter },
-    [LOCATION_SETTER]: { value: addressSetter },
+    [TARGET_UPDATER]: { value: updateTarget },
+    [ADDRESS_SETTER]: { value: setAddress },
+    [LENGTH_SETTER]: setLength && { value: setLength },
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [FIXED_LOCATION]: { value: undefined, writable: true },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
+    [LAST_ADDRESS]: { value: undefined, writable: true },
+    [LAST_LENGTH]: setLength && { value: undefined, writable: true },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -2865,7 +2870,7 @@ function definePointer(structure, env) {
 }
 
 function makePointerReadOnly() {
-  const pointer = this[POINTER];
+  const pointer = this[POINTER$1];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
@@ -2896,7 +2901,7 @@ function disablePointer() {
   const throwError = () => { throw new InaccessiblePointer() };
   const disabledProp = { get: throwError, set: throwError };
   const disabledFunc = { value: throwError };
-  defineProperties(this[POINTER], {
+  defineProperties(this[POINTER$1], {
     '*': disabledProp,
     '$': disabledProp,
     [GETTER]: disabledFunc,
@@ -2930,7 +2935,7 @@ function getConstProxy(target) {
 
 const proxyHandlers$1 = {
   get(pointer, name) {
-    if (name === POINTER) {
+    if (name === POINTER$1) {
       return pointer;
     } else if (name in pointer) {
       return pointer[name];
@@ -2980,7 +2985,7 @@ const constTargetHandlers = {
     }
   },
   set(target, name, value) {
-    const ptr = target[POINTER];
+    const ptr = target[POINTER$1];
     if (ptr && !(name in ptr)) {
       target[name] = value;
       return true;
@@ -4330,6 +4335,14 @@ function useSlice() {
   factories[StructureType.Slice] = defineSlice;
 }
 
+function useUnboundSlice() {
+  factories[StructureType.UnboundSlice] = defineSlice;
+}
+
+function useUnboundSliceC() {
+  factories[StructureType.UnboundSliceC] = defineSlice;
+}
+
 function useVector() {
   factories[StructureType.Vector] = defineVector;
 }
@@ -4545,7 +4558,7 @@ class Environment {
     const object = constructor.call(ENVIRONMENT, dv);
     if (hasPointer) {
       // acquire targets of pointers
-      this.acquirePointerTargets(object);
+      this.updatePointerTargets(object);
     }
     if (copy) {
       object[WRITE_DISABLER]();
@@ -4683,8 +4696,8 @@ class Environment {
     for (const pointer of pointers) {
       const target = pointer[TARGET_GETTER]();
       const address = this.getViewAddress(target[MEMORY]);
-      const { length = 1 } = target;
-      pointer[FIXED_LOCATION] = { address, length };
+      pointer[ADDRESS_SETTER$1](address);
+      pointer[LENGTH_SETTER]?.(target.length);
     }
   }
 
@@ -4813,34 +4826,33 @@ class Environment {
     const potentialClusters = [];
     const env = this;
     const callback = function({ isActive }) {
-      if (!isActive(this)) {
-        return;
-      }
-      // bypass proxy
-      const pointer = this[POINTER];
-      if (pointerMap.get(pointer)) {
-        return;
-      }
-      const target = pointer[SLOTS][0];
-      if (target) {
-        pointerMap.set(pointer, target);
-        if (!env.inFixedMemory(target)) {
-          // see if the buffer is shared with other objects
-          const dv = target[MEMORY];
-          const other = bufferMap.get(dv.buffer);
-          if (other) {
-            const array = Array.isArray(other) ? other : [ other ];
-            const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
-            array.splice(index, 0, target);
-            if (!Array.isArray(other)) {
-              bufferMap.set(dv.buffer, array);
-              potentialClusters.push(array);
+      if (isActive(this)) {
+        // bypass proxy
+        const pointer = this[POINTER];
+        if (!pointerMap.get(pointer)) {
+          pointerMap.set(pointer, target);
+          const target = pointer[SLOTS][0];
+          if (target) {
+            // only relocatable targets need updating
+            if (!env.inFixedMemory(target)) {
+              // see if the buffer is shared with other objects
+              const dv = target[MEMORY];
+              const other = bufferMap.get(dv.buffer);
+              if (other) {
+                const array = Array.isArray(other) ? other : [ other ];
+                const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
+                array.splice(index, 0, target);
+                if (!Array.isArray(other)) {
+                  bufferMap.set(dv.buffer, array);
+                  potentialClusters.push(array);
+                }
+              } else {
+                bufferMap.set(dv.buffer, target);
+              }
+              // scan pointers in target
+              target[POINTER_VISITOR]?.(callback);
             }
-          } else {
-            bufferMap.set(dv.buffer, target);
           }
-          // scan pointers in target
-          target[POINTER_VISITOR]?.(callback);
         }
       }
     };
@@ -4856,14 +4868,10 @@ class Environment {
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
       const cluster = clusterMap.get(target);
-      const { length = 1 } = target;
-      let address = this.getTargetAddress(target, cluster);
-      if (address === false) {
-        // need to shadow the object
-        address = this.getShadowAddress(target, cluster);
-      }
+      const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
       // update the pointer
-      pointer[LOCATION_SETTER]({ address, length });
+      pointer[ADDRESS_SETTER$1](address);
+      pointer[LENGTH_SETTER]?.(target.length);
     }
   }
 
@@ -5043,38 +5051,21 @@ class Environment {
     }
   }
 
-  acquirePointerTargets(args) {
-    const env = this;
+  updatePointerTargets(args) {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
+      // bypass proxy
       const pointer = this[POINTER];
-      if (pointerMap.get(pointer)) {
-        return;
-      } else {
+      if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
-      }
-      const writable = !pointer.constructor.const;
-      const currentTarget = pointer[SLOTS][0];
-      let newTarget, location;
-      if (isActive(this)) {
-        const Target = pointer.constructor.child;
-        if (!currentTarget || isMutable(this)) {
-          // obtain address and length from memory
-          location = pointer[LOCATION_GETTER]();
-          // get view of memory that pointer points to
-          const dv = env.findMemory(location.address, location.length, Target[SIZE]);
-          newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
-        } else {
-          newTarget = currentTarget;
-        }
-      }
-      // acquire objects pointed to by pointers in target
-      currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
-      if (newTarget !== currentTarget) {
-        newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
-        pointer[SLOTS][0] = newTarget;
-        if (env.inFixedMemory(pointer)) {
-          pointer[FIXED_LOCATION] = location;
+        const writable = !pointer.constructor.const;
+        const currentTarget = pointer[SLOTS][0];
+        const newTarget = isMutable(this) ? pointer[TARGET_UPDATER](isActive(this)) : null;
+        // update targets of pointers in original target (which could have been altered)
+        currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        if (newTarget !== currentTarget) {
+          // acquire targets of pointers in new target
+          newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         }
       }
     };
@@ -5307,13 +5298,11 @@ class WebAssemblyEnvironment extends Environment {
   getTargetAddress(target, cluster) {
     if (this.inFixedMemory(target)) {
       return this.getViewAddress(target[MEMORY]);
-    }
-    if (target[MEMORY].byteLength === 0) {
+    } else if (target[MEMORY].byteLength === 0) {
       // it's a null pointer/empty slice
       return 0;
     }
     // relocatable buffers always need shadowing
-    return false;
   }
 
   clearExchangeTable() {
@@ -5471,7 +5460,7 @@ class WebAssemblyEnvironment extends Environment {
   endCall(call, args) {
     this.updateShadowTargets();
     if (args[POINTER_VISITOR]) {
-      this.acquirePointerTargets(args);
+      this.updatePointerTargets(args);
     }
     this.releaseShadows();
     // restore the previous context if there's one
@@ -5623,4 +5612,4 @@ function createEnvironment(source) {
 }
 /* RUNTIME-ONLY-END */
 
-export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useComptime, useEnum, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternStruct, useExternUnion, useFloat, useInt, useLiteral, useNull, useObject, useOpaque, useOptional, usePackedStruct, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUndefined, useVector, useVoid };
+export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useComptime, useEnum, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternStruct, useExternUnion, useFloat, useInt, useLiteral, useNull, useObject, useOpaque, useOptional, usePackedStruct, usePointer, usePrimitive, useSlice, useStatic, useStruct, useTaggedUnion, useType, useUint, useUnboundSlice, useUnboundSliceC, useUndefined, useVector, useVoid };

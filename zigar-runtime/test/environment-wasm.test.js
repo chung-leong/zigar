@@ -163,7 +163,7 @@ describe('WebAssemblyEnvironment', function() {
   describe('obtainFixedView', function() {
     it('should return a view to WASM memory', function() {
       const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = env.obtainFixedView(128, 16);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(16);
@@ -172,7 +172,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should handle reference to zero-length slice', function() {
       const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = env.obtainFixedView(0, 0);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(0);
@@ -181,7 +181,7 @@ describe('WebAssemblyEnvironment', function() {
     })
     it('should correctly handle negative address', function() {
       const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 }); 
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = env.obtainFixedView(-5000, 0);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(0);
@@ -271,15 +271,15 @@ describe('WebAssemblyEnvironment', function() {
   describe('getTargetAddress', function() {
     it('should return false when object is located in relocatable memory', function() {
       const env = new WebAssemblyEnvironment();
-      const object = { 
+      const object = {
         [MEMORY]: env.allocateMemory(16, 8, false)
       };
       const address = env.getTargetAddress(object);
-      expect(address).to.be.false;
+      expect(address).to.be.undefined;
     })
     it('should return zero when object has no bytes', function() {
       const env = new WebAssemblyEnvironment();
-      const object = { 
+      const object = {
         [MEMORY]: env.allocateMemory(0, 0, false)
       };
       const address = env.getTargetAddress(object);
@@ -292,7 +292,7 @@ describe('WebAssemblyEnvironment', function() {
         return 256;
       };
       env.startContext();
-      const object = { 
+      const object = {
         [MEMORY]: env.allocateMemory(64, 16, true)
       };
       const address = env.getTargetAddress(object);
@@ -624,6 +624,7 @@ describe('WebAssemblyEnvironment', function() {
   describe('endCall', function() {
     it('should invoke pointer visitor', function() {
       const env = new WebAssemblyEnvironment();
+      env.flushStdout = function() {};
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       let allocCount = 0;
       env.allocateShadowMemory = function(len, align) {

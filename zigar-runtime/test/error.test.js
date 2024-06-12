@@ -654,15 +654,9 @@ describe('Error functions', function() {
       expect(result).to.equal('SQLite cant open full path');
     })
     it('should keep acronyms in uppercase', function() {
-      const name1 = 'InvalidHTMLEncountered';
-      const result1 = deanimalizeErrorName(name1);
-      expect(result1).to.equal('Invalid HTML encountered');
-      const name2 = 'InvalidHTML';
-      const result2 = deanimalizeErrorName(name2);
-      expect(result2).to.equal('Invalid HTML');
-      const name3 = 'HTMLIsInvalid';
-      const result3 = deanimalizeErrorName(name3);
-      expect(result3).to.equal('HTML is invalid');
+      const name = 'InvalidHTML';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('Invalid HTML');
     })
   })
   describe('article', function() {

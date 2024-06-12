@@ -477,18 +477,28 @@ napi_value find_sentinel(napi_env env,
     } else if (napi_get_dataview_info(env, args[1], &sentinel_len, &sentinel_data, NULL, NULL) != napi_ok) {
         return throw_error(env, "Sentinel value must be DataView");
     }
-    uint8_t* sentinel_bytes = (uint8_t*) sentinel_data;
-    uint8_t* src_bytes = (uint8_t*) address;
+    if (address == 0) {
+        return 0;
+    }
     if (sentinel_len > 0) {
-      for (int i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
-        if (memcmp(src_bytes + i, sentinel_bytes, sentinel_len) == 0) {
-            napi_value offset;
-            if (napi_create_uint32(env, j, &offset) != napi_ok) {
+        if (address) {
+            uint8_t* sentinel_bytes = (uint8_t*) sentinel_data;
+            uint8_t* src_bytes = (uint8_t*) address;
+            for (int i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
+                if (memcmp(src_bytes + i, sentinel_bytes, sentinel_len) == 0) {
+                    napi_value offset;
+                    if (napi_create_uint32(env, j, &offset) != napi_ok) {
+                        return throw_last_error(env);
+                    }
+                }
+            }
+        } else {
+            napi_value negative_one;
+            if (napi_create_int32(env, -1, &negative_one) != napi_ok) {
                 return throw_last_error(env);
             }
-            return offset;
+            return negative_one;
         }
-      }
     }
     return NULL;
 }

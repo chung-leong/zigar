@@ -4,7 +4,7 @@ import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, LOCATION_GETTER, LOCATION_SETTER, MEMORY, POINTER, WRITE_DISABLER } from '../src/symbol.js';
+import { ADDRESS_SETTER, ENVIRONMENT, LAST_ADDRESS, LAST_LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Pointer functions', function() {
@@ -557,7 +557,7 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(constStructure);
       env.finalizeStructure(constStructure);
-      const { constructor: HelloConstPtr } = constStructure;     
+      const { constructor: HelloConstPtr } = constStructure;
       const constPointer = new HelloConstPtr({ cat: 123, dog: 456 });
       const constTarget = constPointer['*'];
       expect(() => new HelloPtr(constTarget)).to.throw(TypeError)
@@ -2003,6 +2003,9 @@ describe('Pointer functions', function() {
     })
     it('should get address of pointer from memory', function() {
       const env = new NodeEnvironment();
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -2037,9 +2040,9 @@ describe('Pointer functions', function() {
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      const { address, length } = pointer[LOCATION_GETTER]();
+      pointer[TARGET_UPDATER]();
+      const address = pointer[LAST_ADDRESS];
       expect(address).to.equal(0x1000n);
-      expect(length).to.equal(1);
     })
     it('should write address of pointer into memory', function() {
       const env = new NodeEnvironment();
@@ -2076,11 +2079,14 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
-      pointer[LOCATION_SETTER]({ address: 0x1000n, length: undefined });
+      pointer[ADDRESS_SETTER](0x1000n);
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
     })
     it('should get address and length of slice pointer from memory', function() {
       const env = new NodeEnvironment();
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -2129,9 +2135,9 @@ describe('Pointer functions', function() {
       const pointer = new Int32SlicePtr(ta);
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[MEMORY].setBigUint64(8, 4n, true);
-      const { address, length } = pointer[LOCATION_GETTER]();
+      pointer[TARGET_UPDATER]();
+      const address = pointer[LAST_ADDRESS];
       expect(address).to.equal(0x1000n);
-      expect(length).to.equal(4);
     })
     it('should write address and length of slice pointer into memory', function() {
       const env = new NodeEnvironment();
@@ -2182,7 +2188,8 @@ describe('Pointer functions', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
-      pointer[LOCATION_SETTER]({ address: 0x1000n, length: 4 });
+      pointer[ADDRESS_SETTER](0x1000n);
+      pointer[LENGTH_SETTER](4);
       expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(4n);
     })
@@ -2202,7 +2209,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
-        type: StructureType.Slice,
+        type: StructureType.UnboundSlice,
         name: '[_]Int32',
         byteSize: 4,
         hasPointer: false,
@@ -2244,17 +2251,22 @@ describe('Pointer functions', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4, 0 ]);
       const pointer = new Int32SlicePtr(ta);
+      pointer[LAST_ADDRESS] = 0x1000n;
+      pointer[LAST_LENGTH] = 5;
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      env.findSentinel = function() {
-        return 4;
+      let findSentinelCalled = false;
+      env.findSentinel = function(address) {
+        findSentinelCalled = true;
+        return (address) ? 4 : -1;
       }
-      const { address, length } = pointer[LOCATION_GETTER]();
-      expect(address).to.equal(0x1000n);
-      expect(length).to.equal(5);
+      pointer[TARGET_UPDATER]();
+      expect(findSentinelCalled).to.be.true;
       pointer[MEMORY].setBigUint64(0, 0n, true);
-      const { address: address2, length: length2 } = pointer[LOCATION_GETTER]();
-      expect(address2).to.equal(0n);
-      expect(length2).to.equal(0);
+      pointer[TARGET_UPDATER]();
+      const address = pointer[LAST_ADDRESS];
+      const length = pointer[LAST_LENGTH];
+      expect(address).to.equal(0n);
+      expect(length).to.equal(0);
     })
     it('should update target of fixed-memory pointer on dereferencing', function() {
       const env = new NodeEnvironment();
@@ -2332,10 +2344,16 @@ describe('Pointer functions', function() {
       }
       const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { fixed: true });
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
-      const loc = pointer[LOCATION_GETTER]();
-      pointer[LOCATION_SETTER]({ ...loc, address: 0x30000n });
+      pointer[MEMORY].setBigUint64(0, 0x30000n, true);
+      pointer[MEMORY].setBigUint64(8, 4n, true);
+      pointer['*'];
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
-      pointer[LOCATION_SETTER]({ ...loc, length: 3 });
+      pointer[MEMORY].setBigUint64(0, 0x2000n, true);
+      pointer[MEMORY].setBigUint64(8, 4n, true);
+      pointer['*'];
+      expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
+      pointer[MEMORY].setBigUint64(8, 3n, true);
+      pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
     })
   })

@@ -131,16 +131,18 @@ export class NodeEnvironment extends Environment {
           cluster.address = address;
         }
       }
-      return (cluster.misaligned) ? false : add(cluster.address, dv.byteOffset);
+      if (!cluster.misaligned) {
+        return add(cluster.address, dv.byteOffset);
+      }
     } else {
       const align = target.constructor[ALIGN];
       const address = this.getViewAddress(dv);
-      if (isMisaligned(address, align)) {
-        return false;
+      if (!isMisaligned(address, align)) {
+        this.registerMemory(dv);
+        return address;
       }
-      this.registerMemory(dv);
-      return address;
     }
+    // need shadowing
   }
 
   invokeThunk(thunkId, args) {
@@ -154,7 +156,7 @@ export class NodeEnvironment extends Environment {
       err = this.runThunk(thunkId, args[MEMORY]);
       // create objects that pointers point to
       this.updateShadowTargets();
-      this.acquirePointerTargets(args);
+      this.updatePointerTargets(args);
       this.releaseShadows();
     } else {
       // don't need to do any of that if there're no pointers
