@@ -43,7 +43,7 @@ export function defineArgStruct(structure, env) {
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
   });
   defineProperties(constructor, {

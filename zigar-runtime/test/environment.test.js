@@ -13,7 +13,7 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
-  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, LAST_ADDRESS, LAST_LENGTH,
+  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED, LAST_ADDRESS, LAST_LENGTH,
   LENGTH_SETTER, MEMORY, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
@@ -79,6 +79,116 @@ describe('Environment', function() {
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
       expect(dv.buffer.align).to.equal(4);
+    })
+  })
+  describe('allocateFixedMemory', function() {
+    it('should try to allocate fixed memory from zig', function() {
+      const env = new Environment();
+      env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        return this.obtainView(buffer, 0, len);
+      };
+      const dv = env.allocateFixedMemory(400, 4);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(400);
+      expect(dv[FIXED]).to.be.an('object');
+    })
+    it('should return empty data view when len is 0', function() {
+      const env = new Environment();
+      env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        const dv = this.obtainView(buffer, 0, len);
+        return dv;
+      };
+      const dv1 = env.allocateFixedMemory(0, 4);
+      const dv2 = env.allocateFixedMemory(0, 1);
+      expect(dv1.byteLength).to.equal(0);
+      expect(dv2.byteLength).to.equal(0);
+      expect(dv1[FIXED]).to.be.an('object')
+    })
+  })
+  describe('freeFixedMemory', function() {
+    it('should try to free fixed memory through Zig', function() {
+      const env = new Environment();
+      let args;
+      env.freeExternMemory = function(address, len, align) {
+        args = { address, len, align };
+      };
+      env.freeFixedMemory(0x1000n, 10, 2);
+      expect(args).to.eql({ address: 0x1000n, len: 10, align: 2 });
+    })
+    it('should do nothing when len is 0', function() {
+      const env = new Environment();
+      let called = false;
+      env.freeExternMemory = function(address, len, align) {
+        called = true;
+      };
+      env.freeFixedMemory(0x1000n, 0, 0);
+      expect(called).to.equal(false);
+    })
+  })
+  describe('obtainFixedView', function() {
+    it('should return a data view covering fixed memory at given address', function() {
+      const env = new Environment();
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        const dv = this.obtainView(buffer, 0, len);
+        return dv;
+      };
+      const dv = env.obtainFixedView(0x1000n, 16);
+      expect(dv.byteLength).to.equal(16);
+      expect(dv[FIXED]).to.be.an('object')
+    })
+    it('should return empty data view when len is 0', function() {
+      const env = new Environment();
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        const dv = this.obtainView(buffer, 0, len);
+        return dv;
+      };
+      const dv1 = env.obtainFixedView(0x1000n, 0);
+      const dv2 = env.obtainFixedView(0x2000n, 0);
+      expect(dv1.byteLength).to.equal(0);
+      expect(dv2.byteLength).to.equal(0);
+      expect(dv1).to.not.equal(dv2);
+      expect(dv1[FIXED]).to.be.an('object')
+      expect(dv2[FIXED]).to.be.an('object')
+    })
+    it('should return a view to the null array when len is zero and address is 0', function() {
+      const env = new Environment();
+      const dv = env.obtainFixedView(0n, 0);
+      expect(dv.buffer).to.equal(env.nullBuffer);
+    })
+  })
+  describe('releaseFixedView', function() {
+    it('should free a data view that was allocated using allocateFixedMemory', function() {
+      const env = new Environment();
+      env.allocateExternMemory = function(len, align) {
+        return 0x1000n;
+      };
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        const dv = this.obtainView(buffer, 0, len);
+        return dv;
+      };
+      let args;
+      env.freeExternMemory = function(address, len, align) {
+        args = { address, len, align };
+      };
+      const dv = env.allocateFixedMemory(400, 4);
+      env.releaseFixedView(dv);
+      expect(args).to.eql({ address: 0x1000n, len: 400, align: 4 });
     })
   })
   describe('registerMemory', function() {
@@ -578,19 +688,22 @@ describe('Environment', function() {
   describe('prepareObjectsForExport', function() {
     it('should combine data views that overlaps the same memory region', function() {
       const env = new Environment();
-      env.inFixedMemory = (object) => true;
-      const addressMap = new Map();
-      env.getViewAddress = (dv) => addressMap.get(dv);
+      env.getViewAddress = (dv) => dv[FIXED].address;
       env.getMemoryOffset = (address) => Number(address);
       env.copyBytes = (dv, address, len) => {};
+      const fixed = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[FIXED] = { address, len }
+        return dv;
+      };
       const templ1 = {
-        [MEMORY]: new DataView(new ArrayBuffer(8))
+        [MEMORY]: fixed(1002n, 8),
       };
       const object = {
-        [MEMORY]: new DataView(new ArrayBuffer(8))
+        [MEMORY]: fixed(1016n, 8),
       };
       const templ2 = {
-        [MEMORY]: new DataView(new ArrayBuffer(32)),
+        [MEMORY]: fixed(1000n, 32),
         [SLOTS]: {
           0: object,
         },
@@ -605,9 +718,7 @@ describe('Environment', function() {
           static: { template: templ2 },
         },
       ];
-      addressMap.set(templ1[MEMORY], 1002n);
-      addressMap.set(templ2[MEMORY], 1000n);
-      addressMap.set(object[MEMORY], 1016n);
+      debugger;
       env.prepareObjectsForExport();
       expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
       expect(templ1[MEMORY].byteOffset).to.equal(2);
@@ -618,7 +729,6 @@ describe('Environment', function() {
   describe('useStructures', function() {
     it('should remove comptime structures and return constructor of root module', function() {
       const env = new Environment();
-      env.inFixedMemory = (object) => true;
       const addressMap = new Map();
       env.getViewAddress = (dv) => addressMap.get(dv);
       env.getMemoryOffset = (address) => Number(address);
@@ -1021,9 +1131,6 @@ describe('Environment', function() {
   describe('linkVariables', function() {
     it('should link variables', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
@@ -1046,9 +1153,6 @@ describe('Environment', function() {
     });
     it('should add target location to pointer', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
@@ -1091,9 +1195,6 @@ describe('Environment', function() {
   describe('linkObject', function() {
     it('should replace relocatable memory with fixed memory', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
@@ -1115,9 +1216,6 @@ describe('Environment', function() {
     })
     it('should omit copying when writeBack is false', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
@@ -1139,23 +1237,22 @@ describe('Environment', function() {
     })
     it('should ignore object already with fixed memory', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return true;
-      };
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
+      const fixed = function(address, len) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[FIXED] = { address, len }
+        return dv;
+      }
       Test.prototype[COPIER] = getMemoryCopier(4);
-      const object = new Test(new DataView(new ArrayBuffer(4)));
+      const object = new Test(fixed(0x1000, 4));
       const dv = object[MEMORY];
       env.linkObject(object, 0x1000, true);
       expect(object[MEMORY]).to.equal(dv);
     })
     it('should link child objects', function() {
       const env = new Environment();
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
@@ -1183,13 +1280,16 @@ describe('Environment', function() {
   describe('unlinkVariables', function() {
     it('should pass variables to unlinkObject', function() {
       const env = new Environment();
-      env.allocateFixedMemory = (len, align) => {
-        const buffer = new ArrayBuffer(len);
-        buffer.align = align;
-        return new DataView(buffer);
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(len, align) {
+        const address = nextAddress
+        nextAddress += BigInt(len * 0x0F);
+        return address;
       };
-      env.inFixedMemory = (object) => {
-        return object[MEMORY].buffer.align !== undefined;
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        return this.obtainView(buffer, 0, len);
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -1200,20 +1300,23 @@ describe('Environment', function() {
       env.variables.push({ name: 'a', object: object1 });
       env.variables.push({ name: 'b', object: object2 });
       env.unlinkVariables();
-      expect(object1[MEMORY].buffer.align).to.be.undefined;
-      expect(object2[MEMORY].buffer.align).to.be.undefined;
+      expect(object1[MEMORY][FIXED]).to.be.undefined;
+      expect(object2[MEMORY][FIXED]).to.be.undefined;
     })
   })
   describe('unlinkObject', function() {
     it('should replace buffer in fixed memory with ones in relocatable memory', function() {
       const env = new Environment();
-      env.allocateFixedMemory = (len, align) => {
-        const buffer = new ArrayBuffer(len);
-        buffer.align = align;
-        return new DataView(buffer);
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(len, align) {
+        const address = nextAddress
+        nextAddress += BigInt(len * 0x0F);
+        return address;
       };
-      env.inFixedMemory = (object) => {
-        return object[MEMORY].buffer.align !== undefined;
+      env.obtainExternView = function(address, len) {
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        return this.obtainView(buffer, 0, len);
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -1221,12 +1324,12 @@ describe('Environment', function() {
       Test.prototype[COPIER] = getMemoryCopier(16);
       const object = new Test(env.allocateMemory(16, 8, true));
       const dv = object[MEMORY];
-      expect(dv.buffer.align).to.equal(8);
+      expect(dv[FIXED]).to.be.an('object');
       dv.setUint32(12, 1234, true);
       env.unlinkObject(object);
       expect(object[MEMORY]).to.not.equal(dv);
       expect(dv.getUint32(12, true)).to.equal(1234);
-      expect(object[MEMORY].buffer.align).to.be.undefined;
+      expect(object[MEMORY][FIXED]).to.be.undefined;
       // should do nothing
       env.unlinkObject(object);
     })
@@ -1478,9 +1581,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: ArgStruct } = structure;
       const object1 = new Int32(123);
       const object2 = new Int32(123);
@@ -1587,9 +1687,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
@@ -1669,9 +1766,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       env.getTargetAddress = function(target, cluster) {
         return 0x1000n;
       };
@@ -2162,9 +2256,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Hello } = structure;
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
@@ -2231,9 +2322,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Hello } = structure;
       const object = new Hello([ new Int32(123) ]);
       expect(object[0]['*']).to.equal(123);
@@ -2274,15 +2362,6 @@ describe('Environment', function() {
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
-      env.inFixedMemory = function() {
-        return false;
-      };
-      env.obtainFixedView = function(address, len) {
-        if (isInvalidAddress(address)) {
-          return null;
-        }
-        throw new Error('Unexpected input');
-      };
       const ptr = new Int32Ptr(new Int32(123));
       expect(ptr['*']).to.equal(123);
       ptr[MEMORY].setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
@@ -2371,9 +2450,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
@@ -2485,9 +2561,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Hello } = structure;
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: null });
@@ -2533,9 +2606,6 @@ describe('Environment', function() {
       });
       env.finalizeShape(ptrStructure);
       env.finalizeStructure(ptrStructure);
-      env.inFixedMemory = function() {
-        return false;
-      };
       const { constructor: Ptr } = ptrStructure;
       const pointer = new Ptr(undefined);
       const dv = new DataView(new ArrayBuffer(16))
@@ -2616,13 +2686,12 @@ describe('Environment', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       // function mocks
-      env.inFixedMemory = function() {
-        return true;
-      };
       const requests = [];
-      env.obtainFixedView = function(address, len) {
+      env.obtainExternView = function(address, len) {
         requests.push({ address, len });
-        const dv = new DataView(new ArrayBuffer(len));
+        const buffer = new ArrayBuffer(len);
+        buffer[FIXED] = { address, len };
+        const dv = this.obtainView(buffer, 0, len);
         dv.setUint32(0, Number(address), true);
         return dv;
       };

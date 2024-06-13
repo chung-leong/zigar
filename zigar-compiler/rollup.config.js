@@ -5,6 +5,10 @@ const input = './src/index.js';
 const plugins = [
   NodeResolve({}),
   StripCode({
+    start_comment: 'OVERRIDDEN',
+    end_comment: 'OVERRIDDEN-END'
+  }),
+  StripCode({
     start_comment: 'DEV-TEST',
     end_comment: 'DEV-TEST-END'
   }),

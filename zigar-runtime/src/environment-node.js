@@ -1,6 +1,10 @@
 import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
 import { ZigError } from './error.js';
-import { ALIGN, MEMORY, POINTER_VISITOR } from './symbol.js';
+import { ALIGN, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
+
+/* c8 ignore next 2 */
+const PointerType = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? BigInt : Number;
+const defaultAlignment = (PointerType == BigInt) ? 16 : 8;
 
 export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
@@ -23,8 +27,13 @@ export class NodeEnvironment extends Environment {
   // the buffer's backing store if there's a chance that the memory is no longer there
   addressMap = new WeakMap();
   /* c8 ignore next */
-  defaultAlignment = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : 8;
-  nullBuffer = new ArrayBuffer(0);
+
+  constructor() {
+    super();
+    if (PointerType === BigInt) {
+      this.nullBuffer[FIXED].address = 0n;
+    }
+  }
 
   async init() {
     return;
@@ -32,7 +41,7 @@ export class NodeEnvironment extends Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > this.defaultAlignment && this.extractBufferAddress) ? align : 0;
+    const extra = (align > defaultAlignment && this.extractBufferAddress) ? align : 0;
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {
@@ -71,43 +80,11 @@ export class NodeEnvironment extends Environment {
     // nothing needs to happen
   }
 
-  allocateFixedMemory(len, align) {
-    const address = this.allocateExternMemory(len, align);
-    const dv = this.obtainFixedView(address, len);
-    dv[ALIGN] = align;
-    return dv;
-  }
-
-  freeFixedMemory(address, len, align) {
-    if (len === 0) {
-      return;
-    }
-    this.freeExternMemory(address, len, align);
-  }
-
-  obtainFixedView(address, len) {
-    if (!address && !len) {
-      // handle zero length slice
-      return this.obtainView(this.nullBuffer);
-    } else {
-      const buffer = this.obtainExternBuffer(address, len);
-      this.addressMap.set(buffer, address);
-      return this.obtainView(buffer, 0, len);
-    }
-  }
-
-  releaseFixedView(dv) {
-    const address = this.addressMap.get(dv.buffer);
-    const len = dv.byteLength;
-    const align = dv[ALIGN];
-    if (address !== undefined && align !== undefined) {
-      this.freeFixedMemory(address, len, align);
-      this.addressMap.delete(dv.buffer);
-    }
-  }
-
-  inFixedMemory(object) {
-    return this.addressMap.has(object[MEMORY].buffer);
+  obtainExternView(address, len) {
+    const buffer = this.obtainExternBuffer(address, len);
+    buffer[FIXED] = { address, len };
+    this.addressMap.set(buffer, address);
+    return this.obtainView(buffer, 0, len);
   }
 
   getTargetAddress(target, cluster) {

@@ -1,7 +1,6 @@
 import {
   canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
-  getPointerVisitor, makeArrayReadOnly,
-  transformIterable
+  getPointerVisitor, makeArrayReadOnly, transformIterable
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
@@ -122,7 +121,7 @@ export function defineSlice(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };

@@ -87,7 +87,7 @@ export function defineErrorUnion(structure, env) {
     delete: { value: getDestructor(env) },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };

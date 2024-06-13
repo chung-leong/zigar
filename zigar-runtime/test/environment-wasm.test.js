@@ -10,7 +10,7 @@ import { Exit } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, COPIER, MEMORY, POINTER_VISITOR } from '../src/symbol.js';
+import { COPIER, MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -102,123 +102,29 @@ describe('WebAssemblyEnvironment', function() {
       expect(() => env.getBufferAddress(buffer)).to.throw();
     })
   })
-  describe('allocateFixedMemory', function() {
-    it('should call allocateExternMemory to obtain address to allocated block', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateExternMemory = function(len, align) {
-        return 128;
-      };
-      env.startContext();
-      const dv = env.allocateFixedMemory(64, 32);
-      expect(dv.byteLength).to.equal(64);
-      expect(dv.buffer).to.equal(memory.buffer);
-      expect(dv[ALIGN]).to.equal(32);
-    })
-    it('should return empty buffer when len is zero', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.startContext();
-      const dv = env.allocateFixedMemory(0, 0);
-      expect(dv.byteLength).to.equal(0);
-      expect(dv.buffer).to.equal(memory.buffer);
-    })
-  })
-  describe('freeFixedMemory', function() {
-    it('shoud call freeExternMemory to free allocated block', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateExternMemory = function(len, align) {
-        return 128;
-      };
-      let address, align, len;
-      env.freeExternMemory = function(...args) {
-        address = args[0];
-        len = args[1];
-        align = args[2];
-      };
-      env.startContext();
-      const dv = env.allocateFixedMemory(64, 32);
-      env.freeFixedMemory(128, 64, 32);
-      expect(address).to.equal(128);
-      expect(len).to.equal(64);
-      expect(align).to.equal(32);
-    })
-    it('shoud do nothing when len is zero', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateExternMemory = function(len, align) {
-        return 128;
-      };
-      let called = false;
-      env.freeExternMemory = function(address, len, align) {
-        called = true;
-      };
-      env.startContext();
-      const dv = env.allocateFixedMemory(0, 0);
-      env.freeFixedMemory(128, 0, 0);
-      expect(called).to.equal(false);
-    })
-  })
-  describe('obtainFixedView', function() {
+  describe('obtainExternView', function() {
     it('should return a view to WASM memory', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = env.obtainFixedView(128, 16);
+      const dv = env.obtainExternView(128, 16);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(16);
       expect(dv.byteOffset).to.equal(128);
-      expect(dv[ALIGN]).to.be.undefined;
     })
     it('should handle reference to zero-length slice', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = env.obtainFixedView(0, 0);
+      const dv = env.obtainExternView(0, 0);
       expect(dv.buffer).to.equal(memory.buffer);
       expect(dv.byteLength).to.equal(0);
       expect(dv.byteOffset).to.equal(0);
-      expect(dv[ALIGN]).to.be.undefined;
     })
     it('should correctly handle negative address', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = env.obtainFixedView(-5000, 0);
-      expect(dv.buffer).to.equal(memory.buffer);
+      const dv = env.obtainExternView(-5000, 0);
       expect(dv.byteLength).to.equal(0);
       expect(dv.byteOffset).to.equal(0);
-      expect(dv[ALIGN]).to.be.undefined;
-    })
-  })
-  describe('releaseFixedView', function() {
-    it('should free memory from allocatedFixedMemory', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateExternMemory = function(len, align) {
-        return 128;
-      };
-      let address, align, len;
-      env.freeExternMemory = function(...args) {
-        address = args[0];
-        len = args[1];
-        align = args[2];
-      };
-      env.startContext();
-      const dv = env.allocateFixedMemory(64, 32);
-      env.releaseFixedView(dv);
-      expect(address).to.equal(128);
-      expect(len).to.equal(64);
-      expect(align).to.equal(32);
-    })
-  })
-  describe('inFixedMemory', function() {
-    it('should return true when view points to a WebAssembly memory', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const object = {
-        [MEMORY]: new DataView(memory.buffer, 0, 8),
-      };
-      const result = env.inFixedMemory(object);
-      expect(result).to.be.true;
     })
   })
   describe('copyBytes', function() {

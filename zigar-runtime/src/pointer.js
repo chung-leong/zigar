@@ -8,7 +8,7 @@ import { getMemoryCopier, restoreMemory } from './memory.js';
 import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import {
-  ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, GETTER, LAST_ADDRESS,
+  ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER, LAST_ADDRESS,
   LAST_LENGTH, LENGTH_SETTER, MEMORY, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
   TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
@@ -44,7 +44,7 @@ export function definePointer(structure, env) {
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
   const updateTarget = function(always = true, active = true) {
-    if (always || env.inFixedMemory(this)) {
+    if (always || this[MEMORY][FIXED]) {
       if (active) {
         const address = getAddressInMemory.call(this);
         const length = (hasLengthInMemory)
@@ -87,9 +87,9 @@ export function definePointer(structure, env) {
   };
   const setTargetObject = function(arg) {
     const pointer = this[POINTER] ?? this;
-    if (env.inFixedMemory(pointer)) {
+    if (pointer[MEMORY][FIXED]) {
       // the pointer sits in fixed memory--apply the change immediately
-      if (env.inFixedMemory(arg)) {
+      if (arg[MEMORY][FIXED]) {
         const address = env.getViewAddress(arg[MEMORY]);
         setAddress.call(this, address);
         setLength?.call?.(this, arg.length);
@@ -161,8 +161,7 @@ export function definePointer(structure, env) {
       arg = Target(dv);
     } else if (arg !== undefined && !arg[MEMORY]) {
       // autovivificate target object
-      const fixed = env.inFixedMemory(this);
-      const autoObj = new Target(arg, { fixed });
+      const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
       if (runtimeSafety) {
         // creation of a new slice using a typed array is probably
         // not what the user wants; it's more likely that the intention

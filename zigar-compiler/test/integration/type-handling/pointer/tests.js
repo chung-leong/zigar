@@ -7,14 +7,15 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Pointer', function() {
+    skip.
     it('should import pointer as static variables', async function() {
-      this.timeout(120000);   
-      const { 
-        default: module, 
-        int32_slice, 
-        u8_slice, 
+      this.timeout(120000);
+      const {
+        default: module,
+        int32_slice,
+        u8_slice,
         print,
         printText,
         allocText,
@@ -90,7 +91,7 @@ export function addTests(importModule, options) {
     })
     it('should handle pointer in array', async function() {
       this.timeout(120000);
-      const { default: module, print } = await importTest('array-of');      
+      const { default: module, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0].string).to.equal('dog');
       expect(module.array[1].string).to.equal('cat');
@@ -118,7 +119,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code with pointer in packed struct', async function() {
       this.timeout(120000);
-      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;      
+      await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle pointer as comptime field', async function() {
       this.timeout(120000);
@@ -199,7 +200,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing pointer vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

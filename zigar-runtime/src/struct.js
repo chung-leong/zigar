@@ -78,7 +78,7 @@ export function defineStructShape(structure, env) {
     [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, true) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
     [WRITE_DISABLER]: { value: makeReadOnly },
     [PROPS]: { value: fieldMembers.map(m => m.name) },
@@ -123,7 +123,7 @@ export function getStructEntriesIterator(options) {
   };
 }
 
-export function getChildVivificator(structure) {
+export function getChildVivificator(structure, env) {
   const { instance: { members } } = structure;
   const objectMembers = {};
   for (const member of members.filter(m => m.type === MemberType.Object)) {
@@ -142,7 +142,7 @@ export function getChildVivificator(structure) {
       }
       len = member.bitSize >> 3;
     }
-    const childDV = new DataView(dv.buffer, offset, len);
+    const childDV = env.obtainView(dv.buffer, offset, len);
     const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
     return object;
   }

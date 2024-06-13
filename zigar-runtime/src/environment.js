@@ -1,5 +1,5 @@
 import { resetGlobalErrorSet } from './error-set.js';
-import { AlignmentConflict } from './error.js';
+import { AlignmentConflict, MustBeOverridden } from './error.js';
 import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
@@ -7,7 +7,7 @@ import { defineProperties } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, LENGTH_SETTER, MEMORY,
+  ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
   POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
@@ -19,6 +19,7 @@ export class Environment {
   consolePending = [];
   consoleTimeout = 0;
   viewMap = new WeakMap();
+  nullBuffer = new ArrayBuffer(0);
   abandoned = false;
   released = false;
   littleEndian = true;
@@ -34,61 +35,73 @@ export class Environment {
   imports;
   console = globalThis.console;
 
-  /*
-  Functions to be defined in subclass:
+  constructor() {
+    this.nullBuffer[FIXED] = { address: 0, len: 0 };
+  }
 
-  init(...): Promise {
+  /* OVERRIDDEN */
+  /* c8 ignore start */
+  init() {
     // a mean to provide initialization parameters
+    throw new MustBeOverridden();
   }
 
-  getBufferAddress(buffer: ArrayBuffer): bigint|number {
+  getBufferAddress(buffer) {
     // return a buffer's address
-  }
-  allocateHostMemory(len: number, align: number): DataView {
-    // allocate memory and remember its address
-  }
-  allocateShadowMemory(len: number, align: number): DataView {
-    // allocate memory for shadowing objects
-  }
-  freeHostMemory(address: bigint|number, len: number, align: number): void {
-    // free previously allocated memory
-  }
-  freeShadowMemory(address: bigint|number, len: number, align: number): void {
-    // free memory allocated for shadow
-  }
-  allocateFixedMemory(len: number, align: number): DataView {
-    // allocate fixed memory and keep a reference to it
-  }
-  freeFixedMemory(address: bigint|number, len: number, align: number): void {
-    // free previously allocated fixed memory return the reference
-  }
-  obtainFixedView(address: bigint|number, len: number): DataView {
-    // obtain a data view of memory at given address
-  }
-  releaseFixedView(dv: DataView): void {
-    // release allocated memory stored in data view, doing nothing if data view
-    // does not contain fixed memory or if memory is static
-  }
-  inFixedMemory(object: object): boolean {
-    // return true/false depending on whether object is in fixed memory
-  }
-  copyBytes(dst: DataView, address: bigint|number, len: number): void {
-    // copy memory at given address into destination view
-  }
-  findSentinel(address: bigint|number, bytes: DataView): number {
-    // return offset where sentinel value is found
-  }
-  getMemoryOffset(address: bigint|number) number {
-    // return offset of address relative to start of module memory
-  }
-  recreateAddress(reloc: number) number {
-    // recreate address of memory belonging to module
+    throw new MustBeOverridden();
   }
 
-  getTargetAddress(target: object, cluster: object|undefined) {
-    // return the address of target's buffer if correctly aligned
+  allocateHostMemory(len, align) {
+    // allocate memory and remember its address
+    throw new MustBeOverridden();
   }
-  */
+
+  allocateShadowMemory(len, align) {
+    // allocate memory for shadowing objects
+    throw new MustBeOverridden();
+  }
+
+  freeHostMemory(address, len, align) {
+    // free previously allocated memory
+    throw new MustBeOverridden();
+  }
+
+  freeShadowMemory(address, len, align) {
+    // free memory allocated for shadow
+    throw new MustBeOverridden();
+  }
+
+  obtainExternView(address, len) {
+    // obtain view of memory at specified address
+    throw new MustBeOverridden();
+  }
+
+  copyBytes(dst, address, len) {
+    // copy memory at given address into destination view
+    throw new MustBeOverridden();
+  }
+
+  findSentinel(address, bytes) {
+    // return offset where sentinel value is found
+    throw new MustBeOverridden();
+  }
+
+  getMemoryOffset(address) {
+    // return offset of address relative to start of module memory
+    throw new MustBeOverridden();
+  }
+
+  recreateAddress(reloc) {
+    // recreate address of memory belonging to module
+    throw new MustBeOverridden();
+  }
+
+  getTargetAddress(target, cluster) {
+    // return the address of target's buffer if correctly aligned
+    throw new MustBeOverridden();
+  }
+  /* c8 ignore end ??? */
+  /* OVERRIDDEN-END */
 
   startContext() {
     if (this.context) {
@@ -106,6 +119,34 @@ export class Environment {
       return this.allocateFixedMemory(len, align);
     } else {
       return this.allocateRelocMemory(len, align);
+    }
+  }
+
+  allocateFixedMemory(len, align) {
+    const address = (len) ? this.allocateExternMemory(len, align) : 0;
+    const dv = this.obtainFixedView(address, len);
+    dv[FIXED].align = align;
+    return dv;
+  }
+
+  freeFixedMemory(address, len, align) {
+    if (len) {
+      this.freeExternMemory(address, len, align);
+    }
+  }
+
+  obtainFixedView(address, len) {
+    return (!address && !len)
+    ? this.obtainView(this.nullBuffer, 0, 0)
+    : this.obtainExternView(address, len);
+  }
+
+  releaseFixedView(dv) {
+    const { address, len, align } = dv[FIXED];
+    // only allocated memory would have align attached
+    if (align !== undefined) {
+      this.freeFixedMemory(address, len, align);
+      dv[FIXED] = null;
     }
   }
 
@@ -174,27 +215,34 @@ export class Environment {
 
   obtainView(buffer, offset, len) {
     let entry = this.viewMap.get(buffer);
-    if (!entry) {
-      const dv = new DataView(buffer, offset, len);
-      this.viewMap.set(buffer, dv);
-      return dv;
-    }
-    if (entry instanceof DataView) {
-      // only one view created thus far--see if that's the matching one
-      if (entry.byteOffset === offset && entry.byteLength === len) {
-        return entry;
-      } else {
-        // no, need to replace the entry with a hash keyed by `offset:len`
-        const dv = entry;
-        const key = `${dv.byteOffset}:${dv.byteLength}`;
-        entry = { [key]: dv };
-        this.viewMap.set(buffer, entry);
+    let dv;
+    if (entry) {
+      if (entry instanceof DataView) {
+        // only one view created thus far--see if that's the matching one
+        if (entry.byteOffset === offset && entry.byteLength === len) {
+          return entry;
+        } else {
+          // no, need to replace the entry with a hash keyed by `offset:len`
+          const prev = entry;
+          const key = `${prev.byteOffset}:${prev.byteLength}`;
+          entry = { [key]: prev };
+          this.viewMap.set(buffer, entry);
+        }
       }
-    }
-    const key = `${offset}:${len}`;
-    let dv = entry[key];
-    if (!dv) {
+      const key = `${offset}:${len}`;
+      dv = entry[key];
+      if (dv) {
+        return dv;
+      }
       dv = entry[key] = new DataView(buffer, offset, len);
+    } else {
+      dv = new DataView(buffer, offset, len);
+      this.viewMap.set(buffer, dv);
+    }
+    const fixed = buffer[FIXED];
+    if (fixed) {
+      const { address } = fixed;
+      dv[FIXED] = { address: add(address, offset), len };
     }
     return dv;
   }
@@ -396,18 +444,16 @@ export class Environment {
     const objects = findAllObjects(this.structures, SLOTS);
     const list = [];
     for (const object of objects) {
-      if (object[MEMORY]) {
-        if (this.inFixedMemory(object)) {
-          // replace fixed memory
-          const dv = object[MEMORY];
-          const address = this.getViewAddress(dv);
-          const offset = this.getMemoryOffset(address);
-          const len = dv.byteLength;
-          const relocDV = this.captureView(address, len, true);
-          relocDV.reloc = offset;
-          object[MEMORY] = relocDV;
-          list.push({ offset, len, owner: object, replaced: false });
-        }
+      if (object[MEMORY]?.[FIXED]) {
+        // replace fixed memory
+        const dv = object[MEMORY];
+        const address = this.getViewAddress(dv);
+        const offset = this.getMemoryOffset(address);
+        const len = dv.byteLength;
+        const relocDV = this.captureView(address, len, true);
+        relocDV.reloc = offset;
+        object[MEMORY] = relocDV;
+        list.push({ offset, len, owner: object, replaced: false });
       }
     }
     // larger memory blocks come first
@@ -436,7 +482,7 @@ export class Environment {
     // add fixed memory object to list so they can be unlinked
     const objects = findAllObjects(this.structures, SLOTS);
     for (const object of objects) {
-      if (object[MEMORY] && this.inFixedMemory(object)) {
+      if (object[MEMORY]?.[FIXED]) {
         this.variables.push({ object });
       }
     }
@@ -583,7 +629,7 @@ export class Environment {
   }
 
   linkObject(object, reloc, writeBack) {
-    if (this.inFixedMemory(object)) {
+    if (object[MEMORY][FIXED]) {
       return;
     }
     const dv = object[MEMORY];
@@ -619,7 +665,7 @@ export class Environment {
   }
 
   unlinkObject(object) {
-    if (!this.inFixedMemory(object)) {
+    if (!object[MEMORY][FIXED]) {
       return;
     }
     const dv = object[MEMORY];
@@ -715,9 +761,9 @@ export class Environment {
           if (target) {
             pointerMap.set(pointer, target);
             // only relocatable targets need updating
-            if (!env.inFixedMemory(target)) {
+            const dv = target[MEMORY];
+            if (!dv[FIXED]) {
               // see if the buffer is shared with other objects
-              const dv = target[MEMORY];
               const other = bufferMap.get(dv.buffer);
               if (other) {
                 const array = Array.isArray(other) ? other : [ other ];

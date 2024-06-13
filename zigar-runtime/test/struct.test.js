@@ -1211,8 +1211,11 @@ describe('Struct functions', function() {
     })
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
+      let nextAddress = 0x1000n;
       env.allocateExternMemory = function(len, align) {
-        return 0x1000n;
+        const address = nextAddress;
+        nextAddress += BigInt(len * 0x0F);
+        return address;
       };
       env.obtainExternBuffer = function(address, len) {
         return new ArrayBuffer(len);
@@ -1282,7 +1285,7 @@ describe('Struct functions', function() {
       const object2 = new Hello(undefined, { fixed: true });
       expect(() => object2.$ = object1).to.throw(TypeError)
         .with.property('message').that.contains('cannot point to garbage-collected');
-    })  
+    })
   })
 })
 

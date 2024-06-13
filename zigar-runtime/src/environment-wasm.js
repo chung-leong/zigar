@@ -1,7 +1,7 @@
 import { Environment } from './environment.js';
 import { Exit, ZigError } from './error.js';
-import { getCopyFunction, getMemoryCopier, restoreMemory } from './memory.js';
-import { ALIGN, ATTRIBUTES, COPIER, MEMORY, POINTER_VISITOR } from './symbol.js';
+import { getCopyFunction, getMemoryCopier } from './memory.js';
+import { ALIGN, ATTRIBUTES, COPIER, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
 
 export class WebAssemblyEnvironment extends Environment {
@@ -87,48 +87,16 @@ export class WebAssemblyEnvironment extends Environment {
     return 0;
   }
 
-  allocateFixedMemory(len, align) {
-    const address = (len) ? this.allocateExternMemory(len, align) : 0;
-    const dv = this.obtainFixedView(address, len);
-    dv[ALIGN] = align;
-    return dv;
-  }
-
-  freeFixedMemory(address, len, align) {
-    if (len) {
-      this.freeExternMemory(address, len, align);
-    }
-  }
-
-  obtainFixedView(address, len) {
+  obtainExternView(address, len) {
     if (address < 0) {
       // not sure why address is sometimes negative--I think it's an undefined pointer
-      address = 0;
+      return this.obtainView(this.nullBuffer);
     }
-    const { memory } = this;
-    const dv = this.obtainView(memory.buffer, address, len);
-    dv[MEMORY] = { memory, address, len };
-    return dv;
-  }
-
-  releaseFixedView(dv) {
-    const buffer = dv.buffer;
-    const address = dv.byteOffset;
-    const len = dv.byteLength;
-    // only allocated memory would have align attached
-    const align = dv[ALIGN];
-    if (align !== undefined) {
-      this.freeFixedMemory(address, len, align);
+    const { buffer } = this.memory;
+    if (!buffer[FIXED]) {
+      buffer[FIXED] = { address: 0, len: buffer.byteLength };
     }
-  }
-
-  inFixedMemory(object) {
-    // reconnect any detached buffer before checking
-    if (!this.memory) {
-      return false;
-    }
-    restoreMemory.call(object);
-    return object[MEMORY].buffer === this.memory.buffer;
+    return this.obtainView(this.memory.buffer, address, len);
   }
 
   copyBytes(dst, address, len) {
@@ -166,9 +134,10 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   getTargetAddress(target, cluster) {
-    if (this.inFixedMemory(target)) {
-      return this.getViewAddress(target[MEMORY]);
-    } else if (target[MEMORY].byteLength === 0) {
+    const dv = target[MEMORY];
+    if (dv[FIXED]) {
+      return this.getViewAddress(dv);
+    } else if (dv.byteLength === 0) {
       // it's a null pointer/empty slice
       return 0;
     }

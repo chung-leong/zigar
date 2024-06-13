@@ -173,7 +173,7 @@ export function defineUnionShape(structure, env) {
     [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [TAG]: isTagged && { get: getSelector, configurable: true },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [PROP_GETTERS]: { value: memberValueGetters },
     [WRITE_DISABLER]: { value: makeReadOnly },

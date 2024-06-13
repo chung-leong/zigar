@@ -9,7 +9,7 @@ import {
   restoreMemory,
   showBits,
 } from '../src/memory.js';
-import { MEMORY, SLOTS } from '../src/symbol.js';
+import { FIXED, MEMORY, SLOTS } from '../src/symbol.js';
 
 describe('Memory functions', function() {
   describe('getDestructor', function() {
@@ -21,11 +21,12 @@ describe('Memory functions', function() {
         }
       };
       const dv = new DataView(new ArrayBuffer(4));
+      dv[FIXED] = { address: 1000n, len: 4 };
       const slots = {};
-      const object = { 
+      const object = {
         [MEMORY]: dv,
         [SLOTS]: slots,
-        delete: getDestructor(env),        
+        delete: getDestructor(env),
       };
       object.delete();
       expect(released).to.equal(dv);
@@ -206,7 +207,7 @@ describe('Memory functions', function() {
         expect(output).to.eql({ number1: '00011111', number2: '11110000' });
       } finally {
         console.log = logFn;
-      }   
+      }
     })
   })
 })

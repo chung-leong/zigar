@@ -84,7 +84,7 @@ export function defineArray(structure, env) {
     [Symbol.iterator]: { value: getArrayIterator },
     [ENTRIES_GETTER]: { value: getArrayEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
   };
@@ -168,7 +168,7 @@ export function getArrayEntries(options) {
   };
 }
 
-export function getChildVivificator(structure) {
+export function getChildVivificator(structure, env) {
   const { instance: { members: [ member ]} } = structure;
   const { byteSize, structure: elementStructure } = member;
   return function getChild(index) {
@@ -176,7 +176,7 @@ export function getChildVivificator(structure) {
     const dv = this[MEMORY];
     const parentOffset = dv.byteOffset;
     const offset = parentOffset + byteSize * index;
-    const childDV = new DataView(dv.buffer, offset, byteSize);
+    const childDV = env.obtainView(dv.buffer, offset, byteSize);
     const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
     return object;
   };

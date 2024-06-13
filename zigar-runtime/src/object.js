@@ -7,28 +7,30 @@ import {
 } from './symbol.js';
 import { MemberType } from './types.js';
 
+export function defineProperty(object, name, descriptor) {
+  if (descriptor) {
+    const {
+      set,
+      get,
+      value,
+      enumerable,
+      configurable = true,
+      writable = true,
+    } = descriptor;
+    Object.defineProperty(object, name, (get)
+      ? { get, set, configurable, enumerable }
+      : { value, configurable, enumerable, writable }
+    );
+  }
+}
+
 export function defineProperties(object, descriptors) {
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor) {
-      const {
-        set,
-        get,
-        value,
-        enumerable,
-        configurable = true,
-        writable = true,
-      } = descriptor;
-      Object.defineProperty(object, name, (get)
-        ? { get, set, configurable, enumerable }
-        : { value, configurable, enumerable, writable }
-      );
-    }
+    defineProperty(object, name, descriptor);
   }
   for (const symbol of Object.getOwnPropertySymbols(descriptors)) {
     const descriptor = descriptors[symbol];
-    if (descriptor) {
-      Object.defineProperty(object, symbol, descriptor);
-    }
+    defineProperty(object, symbol, descriptor);
   }
 }
 

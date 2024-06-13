@@ -7,7 +7,7 @@ import {
 } from './special.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import {
-  ALIGN, COPIER, POINTER_VISITOR, RESETTER, SIZE, TYPE, VIVIFICATOR, WRITE_DISABLER
+  ALIGN, COPIER, FIXED, MEMORY, POINTER_VISITOR, RESETTER, SIZE, TYPE, VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -52,7 +52,7 @@ export function defineOptional(structure, env) {
     } else if (arg !== undefined || isValueVoid) {
       // call setValue() first, in case it throws
       setValue.call(this, arg);
-      if (hasPresentFlag || !env.inFixedMemory(this)) {
+      if (hasPresentFlag || !this[MEMORY][FIXED]) {
         // since setValue() wouldn't write address into memory when the pointer is in
         // relocatable memory, we need to use setPresent() in order to write something
         // non-zero there so that we know the field is populated
@@ -73,7 +73,7 @@ export function defineOptional(structure, env) {
     [COPIER]: { value: getMemoryCopier(byteSize) },
     // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
     [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
-    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     [WRITE_DISABLER]: { value: makeReadOnly },
   };
