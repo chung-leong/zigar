@@ -4,12 +4,12 @@ import {
   NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation
 } from './error.js';
 import { getDescriptor, isValueExpected } from './member.js';
-import { getMemoryCopier, restoreMemory } from './memory.js';
+import { getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import {
   ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER, LAST_ADDRESS,
-  LAST_LENGTH, LENGTH_SETTER, MEMORY, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
+  LAST_LENGTH, LENGTH_SETTER, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
   TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
@@ -145,7 +145,7 @@ export function definePointer(structure, env) {
     }
     if (arg instanceof Target) {
       /* wasm-only */
-      restoreMemory.call(arg);
+      arg[MEMORY_RESTORER]();
       /* wasm-only-end */
       const constTarget = arg[CONST_TARGET];
       if (constTarget) {

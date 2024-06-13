@@ -1,4 +1,4 @@
-import { FIXED, MEMORY, SLOTS } from './symbol.js';
+import { FIXED, MEMORY, MEMORY_RESTORER, SLOTS } from './symbol.js';
 
 export function getDestructor(env) {
   return function() {
@@ -97,8 +97,8 @@ export function getMemoryCopier(size, multiple = false) {
   const copy = getCopyFunction(size, multiple);
   return function(target) {
     /* WASM-ONLY */
-    restoreMemory.call(this);
-    restoreMemory.call(target);
+    this[MEMORY_RESTORER]?.();
+    target[MEMORY_RESTORER]?.();
     /* WASM-ONLY-END */
     const src = target[MEMORY];
     const dest = this[MEMORY];
@@ -192,7 +192,7 @@ export function getMemoryResetter(offset, size) {
   const reset = getResetFunction(size);
   return function() {
     /* WASM-ONLY */
-    restoreMemory.call(this);
+    this[MEMORY_RESTORER]?.();
     /* WASM-ONLY-END */
     const dest = this[MEMORY];
     reset(dest, offset, size);
@@ -277,19 +277,6 @@ function reset32(dest, offset) {
   dest.setInt32(offset + 20, 0, true);
   dest.setInt32(offset + 24, 0, true);
   dest.setInt32(offset + 28, 0, true);
-}
-
-export function restoreMemory() {
-  const dv = this[MEMORY];
-  const source = dv[MEMORY];
-  if (!source || dv.buffer.byteLength !== 0) {
-    return false;
-  }
-  const { memory, address, len } = source;
-  const newDV = new DataView(memory.buffer, address, len);
-  newDV[MEMORY] = source;
-  this[MEMORY] = newDV;
-  return true;
 }
 
 export function showBits(object) {

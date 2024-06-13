@@ -6,10 +6,9 @@ import {
   getDestructor,
   getMemoryResetter,
   getResetFunction,
-  restoreMemory,
   showBits,
 } from '../src/memory.js';
-import { FIXED, MEMORY, SLOTS } from '../src/symbol.js';
+import { FIXED, MEMORY, MEMORY_RESTORER, SLOTS } from '../src/symbol.js';
 
 describe('Memory functions', function() {
   describe('getDestructor', function() {
@@ -26,6 +25,7 @@ describe('Memory functions', function() {
       const object = {
         [MEMORY]: dv,
         [SLOTS]: slots,
+        [MEMORY_RESTORER]: { value: function() {} },
         delete: getDestructor(env),
       };
       object.delete();
@@ -96,7 +96,10 @@ describe('Memory functions', function() {
       for (let i = 0; i < 32; i++) {
         dest.setInt8(i, i);
       }
-      const object = { [MEMORY]: dest };
+      const object = {
+        [MEMORY]: dest,
+        [MEMORY_RESTORER]: function() {},
+      };
       const f = getMemoryResetter(16, 16);
       f.call(object);
       for (let i = 0; i < 32; i++) {
@@ -180,21 +183,6 @@ describe('Memory functions', function() {
       expect(misaligned.getUint8(2)).to.equal(0x10);
       expect(misaligned.getUint8(3)).to.equal(0xE0);
       expect(misaligned.getUint8(4)).to.equal(0xFF);
-    })
-  })
-  describe('restoreMemory', function() {
-    it('should restore WASM memory buffer that has become detached', function() {
-      const memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = new DataView(memory.buffer, 0, 8);
-      dv[MEMORY] = { memory, address: 0, len: 8 };
-      const object = {
-        [MEMORY]: dv,
-      };
-      memory.grow(1);
-      expect(() => dv.getInt8(0)).to.throw(TypeError);
-      restoreMemory.call(object);
-      expect(object[MEMORY]).to.not.equal(dv);
-      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
     })
   })
   describe('showBits', function() {

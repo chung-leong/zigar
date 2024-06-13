@@ -1,13 +1,15 @@
 import { expect } from 'chai';
 
+import { WebAssemblyEnvironment } from '../src/environment-wasm.js';
 import { Environment } from '../src/environment.js';
 import {
   ObjectCache,
   defineProperties,
+  getMemoryRestorer,
   getSelf,
   needSlots,
 } from '../src/object.js';
-import { MEMORY } from '../src/symbol.js';
+import { FIXED, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Object functions', function() {
@@ -76,6 +78,25 @@ describe('Object functions', function() {
         const dv2 = new DataView(new ArrayBuffer(8));
         expect(cache.find(dv2)).to.be.undefined;
       })
+    })
+  })
+  describe('getMemoryRestorer', function() {
+    it('should restore WASM memory buffer that has become detached', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const cache = new ObjectCache();
+      const dv = new DataView(memory.buffer, 0, 8);
+      dv[FIXED] = { address: 0, len: 8 };
+      const object = {
+        [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
+      };
+      memory.grow(1);
+      expect(() => dv.getInt8(0)).to.throw(TypeError);
+      object[MEMORY_RESTORER]();
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+      expect(cache.find(object[MEMORY])).to.equal(object);
     })
   })
 })

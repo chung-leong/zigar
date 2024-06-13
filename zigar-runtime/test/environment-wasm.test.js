@@ -9,8 +9,9 @@ import {
 import { Exit } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
+import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { COPIER, MEMORY, POINTER_VISITOR } from '../src/symbol.js';
+import { COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -427,8 +428,10 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       env.initPromise = Promise.resolve();
+      const cache = new ObjectCache();
       const Type = function() {};
       Type.prototype[COPIER] = getMemoryCopier(4);
+      Type.prototype[MEMORY_RESTORER] = getMemoryRestorer(cache, env);
       const object = new Type();
       const dv = object[MEMORY] = new DataView(new ArrayBuffer(4));
       dv.setUint32(0, 1234, true);

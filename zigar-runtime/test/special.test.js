@@ -1,15 +1,17 @@
 import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
+import { WebAssemblyEnvironment } from '../src/environment-wasm.js';
 import { Environment } from '../src/environment.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
+import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import {
   getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
   getTypedArrayDescriptor
 } from '../src/special.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { COPIER, MEMORY } from '../src/symbol.js';
+import { COPIER, FIXED, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Special property functions', function() {
@@ -32,6 +34,7 @@ describe('Special property functions', function() {
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4),
       };
       expect(get.call(object)).to.equal(dv);
@@ -47,11 +50,14 @@ describe('Special property functions', function() {
         byteSize: 4,
       };
       const { get, set } = getDataViewDescriptor(structure);
-      const memory = new WebAssembly.Memory({ initial: 1 });
+      const env = new WebAssemblyEnvironment()
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 4);
-      dv[MEMORY] = { memory, address: 0, len: 4 };
+      dv[FIXED] = { address: 0, len: 4 };
+      const cache = new ObjectCache();
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
         [COPIER]: getMemoryCopier(4),
       };
       memory.grow(1);
@@ -62,6 +68,7 @@ describe('Special property functions', function() {
       set.call(object, dv2);
       memory.grow(1);
       expect(get.call(object).getInt32(0, true)).to.equal(1234);
+      expect(cache.find(object[MEMORY])).to.equal(object);
     })
     it('should throw when source data view has a different length', function() {
       const structure = {
@@ -73,6 +80,7 @@ describe('Special property functions', function() {
       const dv = new DataView(new ArrayBuffer(4));
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4),
       };
       const dv2 = new DataView(new ArrayBuffer(5));
@@ -83,7 +91,7 @@ describe('Special property functions', function() {
   })
   describe('getBase64Descriptor', function() {
     it('should return getter and setter for base64 encoded binary', function() {
-      const structure = { 
+      const structure = {
         name: 'int',
         byteSize: 4,
       };
@@ -95,6 +103,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, false),
       };
       const base64 = get.call(object);
@@ -103,6 +112,7 @@ describe('Special property functions', function() {
       const object2 = {
         dataView: dv2,
         [MEMORY]: dv2,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, false),
       };
       set.call(object2, base64);
@@ -133,6 +143,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
@@ -168,7 +179,8 @@ describe('Special property functions', function() {
         dataView: dv,
         length: 4,
         [MEMORY]: dv,
-        [COPIER]: getMemoryCopier(4, true),        
+        [MEMORY_RESTORER]: function() {},
+        [COPIER]: getMemoryCopier(4, true),
       };
       dv.setUint16(0, 'A'.charCodeAt(0), true);
       dv.setUint16(2, 'B'.charCodeAt(0), true);
@@ -207,6 +219,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, false),
       };
       dv.setUint8(0, 'A'.charCodeAt(0));
@@ -243,6 +256,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, false),
       };
       expect(() => set.call(object, 1234)).to.throw(TypeError);
@@ -250,10 +264,10 @@ describe('Special property functions', function() {
   })
   describe('getTypedArrayDescriptor', function() {
     it('should return getter and setter for typed array', function() {
-      const structure = { 
+      const structure = {
         name: '[4]i32',
         byteSize: 16,
-        typedArray: Int32Array 
+        typedArray: Int32Array
       };
       const { get, set } = getTypedArrayDescriptor(structure);
       expect(get).to.be.a('function');
@@ -262,6 +276,7 @@ describe('Special property functions', function() {
       const object = {
         dataView: dv,
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: function() {},
         [COPIER]: getMemoryCopier(4, true),
       };
       for (let i = 0; i < 4; i++) {

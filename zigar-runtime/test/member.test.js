@@ -1,13 +1,15 @@
 import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
+import { WebAssemblyEnvironment } from '../src/environment-wasm.js';
 import {
-    getDescriptor,
-    isReadOnly,
-    useAllMemberTypes,
+  getDescriptor,
+  isReadOnly,
+  useAllMemberTypes,
 } from '../src/member.js';
+import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
+import { FIXED, GETTER, MEMORY, MEMORY_RESTORER, SETTER, SLOTS, VIVIFICATOR } from '../src/symbol.js';
 import { MemberType, StructureType, isByteAligned } from '../src/types.js';
 
 describe('Member functions', function() {
@@ -345,9 +347,9 @@ describe('Member functions', function() {
       const DummyEnum = function(v) {
         switch (v) {
           case 1:
-          case DummyValue1: return DummyValue1; 
+          case DummyValue1: return DummyValue1;
           case 2:
-          case DummyValue2: return DummyValue2; 
+          case DummyValue2: return DummyValue2;
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -386,9 +388,9 @@ describe('Member functions', function() {
       const DummyEnum = function(v) {
         switch (v) {
           case 1:
-          case DummyValue1: return DummyValue1; 
+          case DummyValue1: return DummyValue1;
           case 2:
-          case DummyValue2: return DummyValue2; 
+          case DummyValue2: return DummyValue2;
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -428,9 +430,9 @@ describe('Member functions', function() {
       const DummyEnum = function(v) {
         switch (v) {
           case 1:
-          case DummyValue1: return DummyValue1; 
+          case DummyValue1: return DummyValue1;
           case 2:
-          case DummyValue2: return DummyValue2; 
+          case DummyValue2: return DummyValue2;
         }
       };
       Object.setPrototypeOf(DummyValue1, DummyEnum.prototype);
@@ -442,8 +444,8 @@ describe('Member functions', function() {
         type: MemberType.Uint,
         bitSize: 4,
         bitOffset: 32,
-        structure: { 
-          type: StructureType.Enum, 
+        structure: {
+          type: StructureType.Enum,
           constructor: DummyEnum,
         },
       };
@@ -533,8 +535,8 @@ describe('Member functions', function() {
             return this.value;
           }
         },
-        [SETTER](value) { 
-          this.value = value 
+        [SETTER](value) {
+          this.value = value
         },
       });
       const dummyObject = new DummyClass(123);
@@ -622,7 +624,7 @@ describe('Member functions', function() {
             this.value = arg.value
           } else {
             this.value = arg;
-          } 
+          }
         },
       });
       const dummyObject1 = new DummyClass(123);
@@ -740,11 +742,14 @@ describe('Member functions', function() {
       expect(get.call(object, 2, false)).to.equal(-2);
     })
     it('should return descriptor for accessing WASM memory', function() {
-      const memory = new WebAssembly.Memory({ initial: 1 });
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[MEMORY] = { memory, address: 0, len: 8 };
+      const cache = new ObjectCache();
+      dv[FIXED] = { address: 0, len: 8 };
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
       };
       const member = {
         type: MemberType.Int,
@@ -764,11 +769,14 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should return array descriptor for accessing WASM memory', function() {
-      const memory = new WebAssembly.Memory({ initial: 1 });
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[MEMORY] = { memory, address: 0, len: 8 };
+      dv[FIXED] = { address: 0, len: 8 };
+      const cache = new ObjectCache();
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
       };
       const member = {
         type: MemberType.Int,
@@ -788,11 +796,14 @@ describe('Member functions', function() {
       expect(dv3).to.not.equal(dv2);
     })
     it('should not trap errors unrelated to WASM buffer detachment', function() {
+      const env = new WebAssemblyEnvironment();
       const memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[MEMORY] = { memory, address: 0, len: 8 };
+      dv[FIXED] = { address: 0, len: 8 };
+      const cache = new ObjectCache();
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
       };
       const member = {
         type: MemberType.Uint,
@@ -812,11 +823,14 @@ describe('Member functions', function() {
       expect(() => set.call(object, 123)).to.throw();
     })
     it('should throw range error when indexing beyond an array after WASM memory detachment', function() {
-      const memory = new WebAssembly.Memory({ initial: 1 });
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const dv = new DataView(memory.buffer, 0, 8);
-      dv[MEMORY] = { memory, address: 0, len: 8 };
+      dv[FIXED] = { address: 0, len: 8 };
+      const cache = new ObjectCache();
       const object = {
         [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
       };
       const member = {
         type: MemberType.Int,
@@ -879,7 +893,7 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return comptime value descriptor', function() {
-      const comptime = { 
+      const comptime = {
         [GETTER]() { return 1234  },
       };
       const member = {
@@ -913,7 +927,7 @@ describe('Member functions', function() {
       expect(set).to.be.undefined;
     })
     it('should return static value descriptor', function() {
-      const staticObj = { 
+      const staticObj = {
         value: 1234,
         [GETTER]() { return this.value },
         [SETTER](arg) { this.value = arg },
@@ -934,7 +948,7 @@ describe('Member functions', function() {
       expect(staticObj.value).to.equal(4567);
     })
     it('should return static object descriptor', function() {
-      const staticObj = { 
+      const staticObj = {
         [GETTER]() { return this },
         [SETTER](arg) { Object.assign(this, arg) },
       };

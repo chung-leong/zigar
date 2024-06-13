@@ -23,6 +23,7 @@ export const LAST_ADDRESS = Symbol('lastAddress');
 export const LAST_LENGTH = Symbol('lastLength');
 export const PROP_GETTERS = Symbol('propGetters');
 export const PROP_SETTERS = Symbol('propSetters');
+export const MEMORY_RESTORER = Symbol('memoryRestorer');
 export const WRITE_DISABLER = Symbol('writeDisabler');
 export const ALL_KEYS = Symbol('allKeys');
 export const LENGTH = Symbol('length');

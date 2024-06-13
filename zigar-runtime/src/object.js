@@ -2,8 +2,8 @@ import { requireDataView, setDataView } from './data-view.js';
 import { MissingInitializers, NoInitializer, NoProperty, throwReadOnly } from './error.js';
 import { isReadOnly } from './member.js';
 import {
-  ALL_KEYS, CONST_TARGET, COPIER, GETTER, MEMORY, POINTER_VISITOR, PROP_SETTERS, SETTER, SLOTS,
-  TARGET_SETTER
+  ALL_KEYS, CONST_TARGET, COPIER, FIXED, GETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR,
+  PROP_SETTERS, SETTER, SLOTS, TARGET_SETTER
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -158,7 +158,30 @@ export function createConstructor(structure, handlers, env) {
     }
     return cache.save(dv, self);
   };
+  /* WASM-ONLY */
+  defineProperties(constructor.prototype, {
+    [MEMORY_RESTORER]: { value: getMemoryRestorer(cache, env) },
+  });
+  /* WASM-ONLY-END */
   return constructor;
+}
+
+export function getMemoryRestorer(cache, env) {
+  return function() {
+    const dv = this[MEMORY];
+    const fixed = dv[FIXED];
+    if (fixed && dv.buffer.byteLength === 0) {
+      const newDV = env.obtainFixedView(fixed.address, fixed.len);
+      if (fixed.align) {
+        newDV[FIXED].align = fixed.align;
+      }
+      this[MEMORY] = newDV;
+      cache.save(newDV, this);
+      return true;
+    } else {
+      return false;
+    }
+  };
 }
 
 export function copyPointer({ source }) {

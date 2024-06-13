@@ -2,8 +2,7 @@ import { getBoolAccessor, getNumericAccessor, useExtendedBool, useExtendedFloat,
 import {
   EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, OutOfBound, Overflow, adjustRangeError
 } from './error.js';
-import { restoreMemory } from './memory.js';
-import { GETTER, MEMORY, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
+import { GETTER, MEMORY, MEMORY_RESTORER, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
 import { MemberType, StructureType, getIntRange } from './types.js';
 
 export function isReadOnly({ type }) {
@@ -368,7 +367,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
           return getter.call(this[MEMORY], offset, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
+          if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
             return getter.call(this[MEMORY], offset, littleEndian);
           } else {
             throw err;
@@ -383,7 +382,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
         return setter.call(this[MEMORY], offset, value, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
+          if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
             return setter.call(this[MEMORY], offset, value, littleEndian);
           } else {
             throw err;
@@ -399,7 +398,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
           return getter.call(this[MEMORY], index * byteSize, littleEndian);
         } catch (err) {
           /* WASM-ONLY */
-          if (err instanceof TypeError && restoreMemory.call(this)) {
+          if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
             return getter.call(this[MEMORY], index * byteSize, littleEndian);
           } else {
           /* WASM-ONLY-END */
@@ -416,7 +415,7 @@ function getDescriptorUsing(member, env, getDataViewAccessor) {
           return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
         /* WASM-ONLY */
         } catch (err) {
-          if (err instanceof TypeError && restoreMemory.call(this)) {
+          if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
             return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
           } else {
             throw adjustRangeError(member, index, err);

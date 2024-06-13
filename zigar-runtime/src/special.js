@@ -1,7 +1,6 @@
 import { checkDataView, isTypedArray, setDataView } from './data-view.js';
 import { TypeMismatch } from './error.js';
-import { restoreMemory } from './memory.js';
-import { ENTRIES_GETTER, MEMORY, TUPLE, TYPE } from './symbol.js';
+import { ENTRIES_GETTER, MEMORY, MEMORY_RESTORER, TUPLE, TYPE } from './symbol.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from './text.js';
 import { StructureType } from './types.js';
 
@@ -100,7 +99,7 @@ export function getDataViewDescriptor(structure, handlers = {}) {
   return markAsSpecial({
     get() {
       /* WASM-ONLY */
-      restoreMemory.call(this);
+      this[MEMORY_RESTORER]();
       /* WASM-ONLY-END */
       return this[MEMORY];
     },
