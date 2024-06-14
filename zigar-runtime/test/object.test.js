@@ -85,8 +85,8 @@ describe('Object functions', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const cache = new ObjectCache();
-      const dv = new DataView(memory.buffer, 0, 8);
-      dv[FIXED] = { address: 0, len: 8 };
+      const dv = new DataView(memory.buffer, 1000, 8);
+      dv[FIXED] = { address: 1000, len: 8 };
       const object = {
         [MEMORY]: dv,
         [MEMORY_RESTORER]: getMemoryRestorer(cache, env),

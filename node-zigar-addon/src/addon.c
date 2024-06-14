@@ -338,7 +338,7 @@ napi_value throw_last_error(napi_env env) {
     return throw_error(env, error_info->error_message);
 }
 
-napi_value extract_buffer_address(napi_env env,
+napi_value get_buffer_address(napi_env env,
                                   napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
@@ -618,7 +618,7 @@ bool export_module_functions(napi_env env,
                              module_data* md) {
     napi_value js_env;
     return napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
-        && export_function(env, js_env, "extractBufferAddress", extract_buffer_address, md)
+        && export_function(env, js_env, "getBufferAddress", get_buffer_address, md)
         && export_function(env, js_env, "allocateExternMemory", allocate_external_memory, md)
         && export_function(env, js_env, "freeExternMemory", free_external_memory, md)
         && export_function(env, js_env, "obtainExternBuffer", obtain_external_buffer, md)

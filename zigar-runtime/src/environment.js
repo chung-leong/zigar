@@ -136,9 +136,23 @@ export class Environment {
   }
 
   obtainFixedView(address, len) {
-    return (!address && !len)
-    ? this.obtainView(this.nullBuffer, 0, 0)
-    : this.obtainExternView(address, len);
+    let dv;
+    if (address && len) {
+      dv = this.obtainExternView(address, len);
+    } else {
+      // pointer to nothing
+      let entry = this.viewMap.get(this.nullBuffer);
+      if (!entry) {
+        this.viewMap.set(this.nullBuffer, entry = {});
+      }
+      const key = `${address}:0`;
+      dv = entry[key];
+      if (!dv) {
+        dv = entry[key] = new DataView(this.nullBuffer);
+        dv[FIXED] = { address, len: 0 };
+      }
+    }
+    return dv;
   }
 
   releaseFixedView(dv) {
@@ -209,8 +223,13 @@ export class Environment {
   }
 
   getViewAddress(dv) {
-    const address = this.getBufferAddress(dv.buffer);
-    return add(address, dv.byteOffset);
+    const fixed = dv[FIXED];
+    if (fixed) {
+      return fixed.address;
+    } else {
+      const address = this.getBufferAddress(dv.buffer);
+      return add(address, dv.byteOffset);
+    }
   }
 
   obtainView(buffer, offset, len) {
@@ -231,18 +250,18 @@ export class Environment {
       }
       const key = `${offset}:${len}`;
       dv = entry[key];
-      if (dv) {
-        return dv;
+      if (!dv) {
+        dv = entry[key] = new DataView(buffer, offset, len);
       }
-      dv = entry[key] = new DataView(buffer, offset, len);
     } else {
-      dv = new DataView(buffer, offset, len);
-      this.viewMap.set(buffer, dv);
+      // just one view of this buffer for now
+      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
     const fixed = buffer[FIXED];
+    debugger;
     if (fixed) {
-      const { address } = fixed;
-      dv[FIXED] = { address: add(address, offset), len };
+      // attach address to view of fixed buffer
+      dv[FIXED] = { address: add(fixed.address, offset), len };
     }
     return dv;
   }

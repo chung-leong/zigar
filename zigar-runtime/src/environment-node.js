@@ -10,7 +10,7 @@ export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
   imports = {
     loadModule: null,
-    extractBufferAddress: null,
+    getBufferAddress: null,
     allocateExternMemory: null,
     freeExternMemory: null,
     obtainExternBuffer: null,
@@ -22,10 +22,6 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
-  // use a weak map to store the addresses of shared buffer so that Zig code can free the
-  // underlying memory without causing a crash; basically, we don't want to ask V8 to return
-  // the buffer's backing store if there's a chance that the memory is no longer there
-  addressMap = new WeakMap();
   /* c8 ignore next */
 
   constructor() {
@@ -41,7 +37,7 @@ export class NodeEnvironment extends Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > defaultAlignment && this.extractBufferAddress) ? align : 0;
+    const extra = (align > defaultAlignment && this.getBufferAddress) ? align : 0;
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {
@@ -50,14 +46,6 @@ export class NodeEnvironment extends Environment {
       offset = aligned - address;
     }
     return this.obtainView(buffer, Number(offset), len);
-  }
-
-  getBufferAddress(buffer) {
-    let address = this.addressMap.get(buffer);
-    if (address === undefined) {
-      address = this.extractBufferAddress(buffer);
-    }
-    return address;
   }
 
   allocateHostMemory(len, align) {
@@ -83,7 +71,6 @@ export class NodeEnvironment extends Environment {
   obtainExternView(address, len) {
     const buffer = this.obtainExternBuffer(address, len);
     buffer[FIXED] = { address, len };
-    this.addressMap.set(buffer, address);
     return this.obtainView(buffer, 0, len);
   }
 

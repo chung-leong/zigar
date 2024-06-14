@@ -18,23 +18,6 @@ describe('NodeEnvironment', function() {
       await env.init();
     })
   })
-  describe('getBufferAddress', function() {
-    it('should obtain address of memory in an ArrayBuffer with the help of Node API', function() {
-      const env = new NodeEnvironment();
-      env.extractBufferAddress = function() { return 0x1000n };
-      const buffer = new ArrayBuffer(1024);
-      const address = env.getBufferAddress(buffer);
-      expect(address).to.equal(0x1000n);
-    })
-    it('should return cached address when available', function() {
-      const env = new NodeEnvironment();
-      let calls = 0;
-      const buffer = new ArrayBuffer(1024);
-      env.addressMap.set(buffer, 0x1000n);
-      const address = env.getBufferAddress(buffer);
-      expect(address).to.equal(0x1000n);
-    })
-  })
   describe('allocateHostMemory', function() {
     it('should create a buffer that can be discovered later', function() {
     const env = new NodeEnvironment();
@@ -52,7 +35,7 @@ describe('NodeEnvironment', function() {
     it('should remove buffer at indicated address', function() {
       const env = new NodeEnvironment();
       env.obtainFixedView = () => null;
-      env.extractBufferAddress = () => 0x10010;
+      env.getBufferAddress = () => 0x10010;
       env.startContext();
       const dv = env.allocateHostMemory(32, 32);
       expect(dv).to.be.instanceOf(DataView);
@@ -81,7 +64,7 @@ describe('NodeEnvironment', function() {
   describe('getTargetAddress', function() {
     it('should return address when address is correctly aligned', function() {
       const env = new NodeEnvironment();
-      env.extractBufferAddress = function(buffer) {
+      env.getBufferAddress = function(buffer) {
         return 0x1000n;
       };
       env.startContext();
@@ -94,7 +77,7 @@ describe('NodeEnvironment', function() {
     })
     it('should return undefined when address is misaligned', function() {
       const env = new NodeEnvironment();
-      env.extractBufferAddress = function(buffer) {
+      env.getBufferAddress = function(buffer) {
         return 0x1004;
       };
       env.startContext();
@@ -107,7 +90,7 @@ describe('NodeEnvironment', function() {
     })
     it('should return address when cluster is correctly aligned', function() {
       const env = new NodeEnvironment();
-      env.extractBufferAddress = function(buffer) {
+      env.getBufferAddress = function(buffer) {
         return 0x1006n;
       };
       env.startContext();
@@ -133,7 +116,7 @@ describe('NodeEnvironment', function() {
     })
     it('should return false when cluster is misaligned', function() {
       const env = new NodeEnvironment();
-      env.extractBufferAddress = function(buffer) {
+      env.getBufferAddress = function(buffer) {
         return 0x1000n;
       };
       env.startContext();
@@ -161,7 +144,7 @@ describe('NodeEnvironment', function() {
   describe('allocateRelocMemory', function() {
     it('should allocate extra bytes to account for alignment', function() {
       const env = new NodeEnvironment();
-      env.extractBufferAddress = function(buffer) {
+      env.getBufferAddress = function(buffer) {
         return 0x1000n;
       };
       const dv = env.allocateRelocMemory(64, 32);

@@ -100,6 +100,12 @@ export function defineSlice(structure, env) {
       throw new InvalidArrayInitializer(structure, arg);
     }
   };
+  const getLength = function() {
+    return this[LENGTH];
+  };
+  const setLength = function(len) {
+
+  };
   const finalizer = createArrayProxy;
   const constructor = structure.constructor = createConstructor(structure, { initializer, shapeDefiner, finalizer }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
@@ -107,7 +113,7 @@ export function defineSlice(structure, env) {
   const shapeHandlers = { shapeDefiner };
   const instanceDescriptors = {
     $: { get: getProxy, set: initializer },
-    length: { get: getLength },
+    length: { get: getLength, set: setLength },
     dataView: getDataViewDescriptor(structure, shapeHandlers),
     base64: getBase64Descriptor(structure, shapeHandlers),
     string: hasStringProp && getStringDescriptor(structure, shapeHandlers),
@@ -133,10 +139,6 @@ export function defineSlice(structure, env) {
     [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
-}
-
-function getLength() {
-  return this[LENGTH];
 }
 
 export function getSentinel(structure, env) {

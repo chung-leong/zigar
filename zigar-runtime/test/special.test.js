@@ -52,8 +52,8 @@ describe('Special property functions', function() {
       const { get, set } = getDataViewDescriptor(structure);
       const env = new WebAssemblyEnvironment()
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = new DataView(memory.buffer, 0, 4);
-      dv[FIXED] = { address: 0, len: 4 };
+      const dv = new DataView(memory.buffer, 1000, 4);
+      dv[FIXED] = { address: 1000, len: 4 };
       const cache = new ObjectCache();
       const object = {
         [MEMORY]: dv,

@@ -144,9 +144,9 @@ export function definePointer(structure, env) {
       arg = arg[SLOTS][0];
     }
     if (arg instanceof Target) {
-      /* wasm-only */
+      /* WASM-ONLY */
       arg[MEMORY_RESTORER]();
-      /* wasm-only-end */
+      /* WASM-ONLY-END */
       const constTarget = arg[CONST_TARGET];
       if (constTarget) {
         if (isConst) {
