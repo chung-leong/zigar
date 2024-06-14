@@ -88,15 +88,11 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   obtainExternView(address, len) {
-    if (address < 0) {
-      // not sure why address is sometimes negative--I think it's an undefined pointer
-      return this.obtainFixedView(0, 0);
-    }
     const { buffer } = this.memory;
     if (!buffer[FIXED]) {
       buffer[FIXED] = { address: 0, len: buffer.byteLength };
     }
-    return this.obtainView(this.memory.buffer, address, len);
+    return this.obtainView(buffer, address, len);
   }
 
   copyBytes(dst, address, len) {

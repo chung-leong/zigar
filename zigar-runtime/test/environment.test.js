@@ -13,7 +13,9 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
-  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED, LAST_ADDRESS, LAST_LENGTH,
+  ADDRESS,
+  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED,
+  LENGTH,
   LENGTH_SETTER, MEMORY, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
@@ -164,10 +166,10 @@ describe('Environment', function() {
       expect(dv1[FIXED]).to.be.an('object')
       expect(dv2[FIXED]).to.be.an('object')
     })
-    it('should return a view to the null array when len is zero and address is 0', function() {
+    it('should return a view to the empty buffer when len is zero and address is 0', function() {
       const env = new Environment();
       const dv = env.obtainFixedView(0n, 0);
-      expect(dv.buffer).to.equal(env.nullBuffer);
+      expect(dv.buffer).to.equal(env.emptyBuffer);
     })
   })
   describe('releaseFixedView', function() {
@@ -1180,16 +1182,16 @@ describe('Environment', function() {
         };
       };
       Test.prototype[ADDRESS_SETTER] = function(address) {
-        object[LAST_ADDRESS] = address;
+        object[ADDRESS] = address;
       };
       Test.prototype[LENGTH_SETTER] = function(length) {
-        object[LAST_LENGTH] = length;
+        object[LENGTH] = length;
       };
       const object = new Test(new DataView(new ArrayBuffer(4)));
       env.variables.push({ object, reloc: 128 });
       env.linkVariables(false);
-      expect(object[LAST_ADDRESS]).to.equal(0x4000);
-      expect(object[LAST_LENGTH]).to.equal(4);
+      expect(object[ADDRESS]).to.equal(0x4000);
+      expect(object[LENGTH]).to.equal(4);
     });
   })
   describe('linkObject', function() {

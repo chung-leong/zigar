@@ -24,13 +24,6 @@ export class NodeEnvironment extends Environment {
   };
   /* c8 ignore next */
 
-  constructor() {
-    super();
-    if (PointerType === BigInt) {
-      this.nullBuffer[FIXED].address = 0n;
-    }
-  }
-
   async init() {
     return;
   }

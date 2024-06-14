@@ -120,13 +120,13 @@ describe('WebAssemblyEnvironment', function() {
       expect(dv.byteLength).to.equal(0);
       expect(dv.byteOffset).to.equal(0);
     })
-    it('should correctly handle negative address', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const dv = env.obtainExternView(-5000, 0);
-      expect(dv.byteLength).to.equal(0);
-      expect(dv.byteOffset).to.equal(0);
-    })
+    // it('should correctly handle negative address', function() {
+    //   const env = new WebAssemblyEnvironment();
+    //   const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    //   const dv = env.obtainExternView(-5000, 0);
+    //   expect(dv.byteLength).to.equal(0);
+    //   expect(dv.byteOffset).to.equal(0);
+    // })
   })
   describe('copyBytes', function() {
     it('should copy bytes from specified address', function() {

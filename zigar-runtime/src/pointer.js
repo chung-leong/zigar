@@ -1,16 +1,17 @@
 import { getDataView, isCompatible } from './data-view.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
-  NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation
+  InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
+  warnImplicitArrayCreation
 } from './error.js';
 import { getDescriptor, isValueExpected } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor, defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import {
-  ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER, LAST_ADDRESS,
-  LAST_LENGTH, LENGTH_SETTER, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR, PROXY, SETTER, SIZE, SLOTS,
-  TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
+  ADDRESS, ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER,
+  LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
+  PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -25,7 +26,7 @@ export function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type, sentinel } = targetStructure;
+  const { type, sentinel, byteSize: elementSize } = targetStructure;
   // length for slice can be zero or undefined
   const hasLengthInMemory = type === StructureType.Slice;
   const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
@@ -52,13 +53,16 @@ export function definePointer(structure, env) {
         : (sentinel)
           ? env.findSentinel(address, sentinel.bytes) + 1
           : 1;
-        if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
+        if (address !== this[ADDRESS] || length !== this[LENGTH]) {
           const Target = targetStructure.constructor;
           const dv = env.findMemory(address, length, Target[SIZE]);
           const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
           this[SLOTS][0] = newTarget;
-          this[LAST_ADDRESS] = address;
-          this[LAST_LENGTH] = length;
+          this[ADDRESS] = address;
+          this[LENGTH] = length;
+          if (type === StructureType.Slice) {
+            this[MAX_LENGTH] = length;
+          }
           return newTarget;
         }
       } else {
@@ -69,12 +73,12 @@ export function definePointer(structure, env) {
   };
   const setAddress = function(address) {
     setAddressInMemory.call(this, address);
-    this[LAST_ADDRESS] = address;
+    this[ADDRESS] = address;
   };
   const setLength = (hasLengthInMemory || sentinel)
   ? function(length) {
       setLengthInMemory?.call?.(this, length);
-      this[LAST_LENGTH] = length;
+      this[LENGTH] = length;
     }
   : null;
   const getTargetObject = function() {
@@ -92,12 +96,17 @@ export function definePointer(structure, env) {
       if (arg[MEMORY][FIXED]) {
         const address = env.getViewAddress(arg[MEMORY]);
         setAddress.call(this, address);
-        setLength?.call?.(this, arg.length);
+        if (type === StructureType.Slice) {
+          setLength.call(this, arg.length);
+        }
       } else {
         throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
     pointer[SLOTS][0] = arg;
+    if (type === StructureType.Slice) {
+      this[MAX_LENGTH] = arg.length;
+    }
   };
   const getTarget = isValueExpected(targetStructure)
   ? function() {
@@ -107,10 +116,44 @@ export function definePointer(structure, env) {
   : getTargetObject;
   const setTarget = !isConst
   ? function(value) {
-      const object = getTargetObject.call(this);
-      return object[SETTER](value);
+      const target = getTargetObject.call(this);
+      return target[SETTER](value);
     }
   : throwReadOnly;
+  const getTargetLength = function() {
+    const target = getTargetObject.call(this);
+    return target.length;
+  }
+  const setTargetLength = function(len) {
+    len = len | 0;
+    const target = getTargetObject.call(this);
+    const dv = target[MEMORY];
+    const fixed = dv[FIXED];
+    const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
+    // determine the maximum length
+    let max;
+    if (!fixed) {
+      if (type === StructureType.Slice) {
+        max = this[MAX_LENGTH];
+      } else {
+        max = (bytesAvailable / elementSize) | 0;
+      }
+    }
+    if (len < 0 || len > max) {
+      throw new InvalidSliceLength(len, max);
+    }
+    const byteLength = len * elementSize;
+    const newDV = (byteLength <= bytesAvailable)
+    // can use the same buffer
+    ? env.obtainView(dv.buffer, dv.byteOffset, byteLength)
+    // need to ask V8 for a larger external buffer
+    : env.obtainFixedView(fixed.address, byteLength);
+    const Target = targetStructure.constructor;
+    this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
+    if (type === StructureType.Slice) {
+      setLength?.call(this, len);
+    }
+  };
   const alternateCaster = function(arg, options) {
     const Target = targetStructure.constructor;
     if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
@@ -183,6 +226,7 @@ export function definePointer(structure, env) {
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
     '$': { get: getProxy, set: initializer },
+    length: { get: getTargetLength, set: setTargetLength },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: deleteTarget },
@@ -195,8 +239,8 @@ export function definePointer(structure, env) {
     [POINTER_VISITOR]: { value: visitPointer },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [WRITE_DISABLER]: { value: makePointerReadOnly },
-    [LAST_ADDRESS]: { value: undefined, writable: true },
-    [LAST_LENGTH]: setLength && { value: undefined, writable: true },
+    [ADDRESS]: { value: undefined, writable: true },
+    [LENGTH]: setLength && { value: undefined, writable: true },
   };
   const staticDescriptors = {
     child: { get: () => targetStructure.constructor },
@@ -291,13 +335,7 @@ const proxyHandlers = {
       pointer[name] = value;
     } else {
       const target = pointer[TARGET_GETTER]();
-      if (name === 'length') {
-        const len = value | 0;
-        target[LENGTH_SETTER](len);
-        pointer[LENGTH_SETTER](len);
-      } else {
-        target[name] = value;
-      }
+      target[name] = value;
     }
     return true;
   },
@@ -336,10 +374,6 @@ const constTargetHandlers = {
     const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
       target[name] = value;
-    } else if (name === 'length') {
-      const len = value | 0;
-      target[LENGTH_SETTER](len);
-      pointer[LENGTH_SETTER](len);
     } else {
       throwReadOnly();
     }

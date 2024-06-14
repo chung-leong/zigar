@@ -4,8 +4,7 @@ import {
 } from './array.js';
 import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
 import {
-  ArrayLengthMismatch, InvalidArrayInitializer, InvalidSliceLength, MisplacedSentinel,
-  MissingSentinel
+  ArrayLengthMismatch, InvalidArrayInitializer, MisplacedSentinel, MissingSentinel
 } from './error.js';
 import { getDescriptor } from './member.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
@@ -16,8 +15,8 @@ import {
   getTypedArrayDescriptor, getValueOf
 } from './special.js';
 import {
-  ALIGN, CACHE, COMPAT, COPIER, ENTRIES_GETTER, FIXED, LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY,
-  POINTER_VISITOR, SIZE, TYPE, VIVIFICATOR, WRITE_DISABLER
+  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, LENGTH, MAX_LENGTH, MEMORY, POINTER_VISITOR, SIZE, TYPE,
+  VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType } from './types.js';
 
@@ -105,40 +104,6 @@ export function defineSlice(structure, env) {
       throw new InvalidArrayInitializer(structure, arg);
     }
   };
-  const getLength = function() {
-    return this[LENGTH];
-  };
-  const setLength = function(len) {
-    const dv = this[MEMORY];
-    const fixed = dv[FIXED];
-    const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
-    // determine the maximum length
-    let max;
-    if (!fixed) {
-      if (type === StructureType.Slice) {
-        max = this[MAX_LENGTH];
-      } else {
-        max = (bytesAvailable / elementSize) | 0;
-      }
-    }
-    if (len < 0 || len > max) {
-      throw new InvalidSliceLength(len, max);
-    }
-    const byteLength = len * elementSize;
-    let newDV;
-    if (byteLength <= bytesAvailable) {
-      // can use the same buffer
-      newDV = env.obtainView(dv.buffer, dv.byteOffset, byteLength);
-    } else if (fixed) {
-      // need to ask V8 for a larger external buffer
-      newDV = env.obtainFixedView(fixed.address, byteLength);
-    }
-    this[MEMORY] = newDV;
-    this[LENGTH] = len;
-    // update cache
-    const cache = constructor[CACHE];
-    cache.save(newDV, this);
-  };
   const finalizer = createArrayProxy;
   const constructor = structure.constructor = createConstructor(structure, { initializer, shapeDefiner, finalizer }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
@@ -159,7 +124,6 @@ export function defineSlice(structure, env) {
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [ENTRIES_GETTER]: { value: getArrayEntries },
-    [LENGTH_SETTER]: { value: setLength },
     [COPIER]: { value: getMemoryCopier(elementSize, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
@@ -174,6 +138,11 @@ export function defineSlice(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
+
+function getLength() {
+  return this[LENGTH];
+};
+
 
 export function getSentinel(structure, env) {
   const {

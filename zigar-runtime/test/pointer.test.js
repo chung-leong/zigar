@@ -5,7 +5,7 @@ import { NodeEnvironment } from '../src/environment-node.js';
 import { InvalidSliceLength } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ADDRESS_SETTER, ENVIRONMENT, LAST_ADDRESS, LAST_LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
+import { ADDRESS, ADDRESS_SETTER, ENVIRONMENT, LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Pointer functions', function() {
@@ -2042,7 +2042,7 @@ describe('Pointer functions', function() {
       const pointer = new Int32Ptr(new Int32(4));
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[TARGET_UPDATER]();
-      const address = pointer[LAST_ADDRESS];
+      const address = pointer[ADDRESS];
       expect(address).to.equal(0x1000n);
     })
     it('should write address of pointer into memory', function() {
@@ -2137,7 +2137,7 @@ describe('Pointer functions', function() {
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[MEMORY].setBigUint64(8, 4n, true);
       pointer[TARGET_UPDATER]();
-      const address = pointer[LAST_ADDRESS];
+      const address = pointer[ADDRESS];
       expect(address).to.equal(0x1000n);
     })
     it('should write address and length of slice pointer into memory', function() {
@@ -2252,8 +2252,8 @@ describe('Pointer functions', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4, 0 ]);
       const pointer = new Int32SlicePtr(ta);
-      pointer[LAST_ADDRESS] = 0x1000n;
-      pointer[LAST_LENGTH] = 5;
+      pointer[ADDRESS] = 0x1000n;
+      pointer[LENGTH] = 5;
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       let findSentinelCalled = false;
       env.findSentinel = function(address) {
@@ -2264,8 +2264,8 @@ describe('Pointer functions', function() {
       expect(findSentinelCalled).to.be.true;
       pointer[MEMORY].setBigUint64(0, 0n, true);
       pointer[TARGET_UPDATER]();
-      const address = pointer[LAST_ADDRESS];
-      const length = pointer[LAST_LENGTH];
+      const address = pointer[ADDRESS];
+      const length = pointer[LENGTH];
       expect(address).to.equal(0n);
       expect(length).to.equal(0);
     })
@@ -2383,7 +2383,7 @@ describe('Pointer functions', function() {
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        byteSize: 16,
+        byteSize: 8,
         hasPointer: false,
       });
       env.attachMember(sliceStructure, {
@@ -2412,18 +2412,99 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
-      const slice = pointer['*'];
-      expect(slice.length).to.equal(3);
-      expect(() => slice.length = 1).to.throw(TypeError);
+      const slice1 = pointer['*'];
+      expect(slice1.length).to.equal(3);
+      expect(() => slice1.length = 1).to.throw(TypeError);
+      pointer.length = 2;
       expect(() => pointer.length = 2).to.not.throw();
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(2n);
-      expect(slice.length).to.equal(2);
-      expect(slice.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 } ]);
+      expect(slice1.length).to.equal(3);
+      const slice2 = pointer['*'];
+      expect(slice2.length).to.equal(2);
+      expect(slice2.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 } ]);
       expect(() => pointer.length = 4).to.throw(InvalidSliceLength);
+      expect(() => pointer.length = -1).to.throw(InvalidSliceLength);
       expect(() => pointer.length = 0).to.not.throw();
-      expect(slice.valueOf()).to.eql([]);
+      const slice3 = pointer['*'];
+      expect(slice3.valueOf()).to.eql([]);
       expect(() => pointer.length = 3).to.not.throw();
-      expect(slice.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      const slice4 = pointer['*'];
+      expect(slice4.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      expect(slice4).to.equal(slice1);
+    })
+    it('should allow modification the length of an unbound slice', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.UnboundSlice,
+        name: '[?]Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '[*]Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      const slice1 = pointer['*'];
+      expect(slice1.length).to.equal(3);
+      expect(() => slice1.length = 1).to.throw(TypeError);
+      pointer.length = 2;
+      expect(() => pointer.length = 2).to.not.throw();
+      expect(slice1.length).to.equal(3);
+      const slice2 = pointer['*'];
+      expect(slice2.length).to.equal(2);
+      expect(slice2.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 } ]);
+      expect(() => pointer.length = 4).to.throw(InvalidSliceLength);
+      expect(() => pointer.length = -1).to.throw(InvalidSliceLength);
+      expect(() => pointer.length = 0).to.not.throw();
+      const slice3 = pointer['*'];
+      expect(slice3.valueOf()).to.eql([]);
+      expect(() => pointer.length = 3).to.not.throw();
+      const slice4 = pointer['*'];
+      expect(slice4.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      expect(slice4).to.equal(slice1);
     })
   })
   describe('makePointerReadOnly', function() {

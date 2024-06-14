@@ -19,7 +19,7 @@ export class Environment {
   consolePending = [];
   consoleTimeout = 0;
   viewMap = new WeakMap();
-  nullBuffer = new ArrayBuffer(0);
+  emptyBuffer = new ArrayBuffer(0);
   abandoned = false;
   released = false;
   littleEndian = true;
@@ -34,10 +34,6 @@ export class Environment {
   /* RUNTIME-ONLY-END */
   imports;
   console = globalThis.console;
-
-  constructor() {
-    this.nullBuffer[FIXED] = { address: 0, len: 0 };
-  }
 
   /* OVERRIDDEN */
   /* c8 ignore start */
@@ -141,14 +137,14 @@ export class Environment {
       dv = this.obtainExternView(address, len);
     } else {
       // pointer to nothing
-      let entry = this.viewMap.get(this.nullBuffer);
+      let entry = this.viewMap.get(this.emptyBuffer);
       if (!entry) {
-        this.viewMap.set(this.nullBuffer, entry = {});
+        this.viewMap.set(this.emptyBuffer, entry = {});
       }
       const key = `${address}:0`;
       dv = entry[key];
       if (!dv) {
-        dv = entry[key] = new DataView(this.nullBuffer);
+        dv = entry[key] = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
       }
     }
