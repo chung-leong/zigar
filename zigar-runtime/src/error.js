@@ -175,6 +175,16 @@ export class ArrayLengthMismatch extends TypeError {
   }
 }
 
+export class InvalidSliceLength extends TypeError {
+  constructor(length, max) {
+    if (length < 0) {
+      super(`Length of slice cannot be negative`);
+    } else {
+      super(`Length of slice must be less than ${max}, received ${length}`);
+    }
+  }
+}
+
 export class MissingInitializers extends TypeError {
   constructor(structure, missing) {
     const { name } = structure;

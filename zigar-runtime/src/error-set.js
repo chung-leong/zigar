@@ -82,7 +82,7 @@ export function defineErrorSet(structure, env) {
     [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
     [TYPE]: { value: structure.type },
   };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 };
 
 export function appendErrorSet(errorSet, name, es) {

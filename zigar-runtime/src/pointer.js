@@ -205,7 +205,7 @@ export function definePointer(structure, env) {
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
 
 function makePointerReadOnly() {
@@ -291,7 +291,13 @@ const proxyHandlers = {
       pointer[name] = value;
     } else {
       const target = pointer[TARGET_GETTER]();
-      target[name] = value;
+      if (name === 'length') {
+        const len = value | 0;
+        target[LENGTH_SETTER](len);
+        pointer[LENGTH_SETTER](len);
+      } else {
+        target[name] = value;
+      }
     }
     return true;
   },
@@ -330,9 +336,14 @@ const constTargetHandlers = {
     const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
       target[name] = value;
-      return true;
+    } else if (name === 'length') {
+      const len = value | 0;
+      target[LENGTH_SETTER](len);
+      pointer[LENGTH_SETTER](len);
+    } else {
+      throwReadOnly();
     }
-    throwReadOnly();
+    return true;
   }
 };
 

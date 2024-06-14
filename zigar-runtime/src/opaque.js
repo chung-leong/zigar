@@ -36,5 +36,5 @@ export function defineOpaque(structure, env) {
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 };

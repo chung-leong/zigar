@@ -89,7 +89,7 @@ export function defineStructShape(structure, env) {
     [TYPE]: { value: structure.type },
     [TUPLE]: { value: isTuple },
   };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
 
 export function getStructEntries(options) {

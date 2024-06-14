@@ -76,6 +76,25 @@ describe('Slice functions', function() {
       const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
+    it('should throw when the slice length is changed', function() {
+      const structure = env.beginStructure({
+        type: StructureType.Slice,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      const constructor = function() {};
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: { constructor, typedArray: Uint32Array }
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: Hello } = structure;
+      const object = Hello(new ArrayBuffer(32));
+      expect(() => object.length = 0).to.throw(TypeError);
+    })
     it('should define slice that is iterable', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
@@ -276,7 +295,7 @@ describe('Slice functions', function() {
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
       }
-    })   
+    })
     it('should allow reinitialization of []u16 using a string', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
@@ -964,7 +983,7 @@ describe('Slice functions', function() {
       });
       env.finalizeShape(arrayStructure);
       env.finalizeStructure(arrayStructure);
-      const { constructor: Uint64Array } = arrayStructure;     
+      const { constructor: Uint64Array } = arrayStructure;
       const array = new Uint64Array([ 100n, 200n, 300n, 400n ]);
       expect(() => Int64Slice(array)).to.throw(TypeError)
         .with.property('message').that.contains(`that can accommodate items 8 bytes in length`);

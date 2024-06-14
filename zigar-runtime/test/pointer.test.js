@@ -2,6 +2,7 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import { NodeEnvironment } from '../src/environment-node.js';
+import { InvalidSliceLength } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import { ADDRESS_SETTER, ENVIRONMENT, LAST_ADDRESS, LAST_LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
@@ -2355,6 +2356,74 @@ describe('Pointer functions', function() {
       pointer[MEMORY].setBigUint64(8, 3n, true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
+    })
+    it('should allow modification of slice length', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        byteSize: 16,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        name: '[]Hello',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      const slice = pointer['*'];
+      expect(slice.length).to.equal(3);
+      expect(() => slice.length = 1).to.throw(TypeError);
+      expect(() => pointer.length = 2).to.not.throw();
+      expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(2n);
+      expect(slice.length).to.equal(2);
+      expect(slice.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 } ]);
+      expect(() => pointer.length = 4).to.throw(InvalidSliceLength);
+      expect(() => pointer.length = 0).to.not.throw();
+      expect(slice.valueOf()).to.eql([]);
+      expect(() => pointer.length = 3).to.not.throw();
+      expect(slice.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
     })
   })
   describe('makePointerReadOnly', function() {

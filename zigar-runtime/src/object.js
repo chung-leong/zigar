@@ -2,7 +2,7 @@ import { requireDataView, setDataView } from './data-view.js';
 import { MissingInitializers, NoInitializer, NoProperty, throwReadOnly } from './error.js';
 import { isReadOnly } from './member.js';
 import {
-  ALL_KEYS, CONST_TARGET, COPIER, FIXED, GETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR,
+  ALL_KEYS, CACHE, CONST_TARGET, COPIER, FIXED, GETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR,
   PROP_SETTERS, SETTER, SLOTS, TARGET_SETTER
 } from './symbol.js';
 import { MemberType } from './types.js';
@@ -34,7 +34,7 @@ export function defineProperties(object, descriptors) {
   }
 }
 
-export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
+export function attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env) {
   // create prototype for read-only objects
   const propSetters = {};
   for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
@@ -52,6 +52,9 @@ export function attachDescriptors(constructor, instanceDescriptors, staticDescri
     [GETTER]: { value: get },
     [PROP_SETTERS]: { value: propSetters },
     [CONST_TARGET]: { value: null },
+    /* WASM-ONLY */
+    [MEMORY_RESTORER]: { value: getMemoryRestorer(constructor[CACHE], env) },
+    /* WASM-ONLY-END */
     ...instanceDescriptors,
   });
   defineProperties(constructor, staticDescriptors);
@@ -158,11 +161,7 @@ export function createConstructor(structure, handlers, env) {
     }
     return cache.save(dv, self);
   };
-  /* WASM-ONLY */
-  defineProperties(constructor.prototype, {
-    [MEMORY_RESTORER]: { value: getMemoryRestorer(cache, env) },
-  });
-  /* WASM-ONLY-END */
+  defineProperty(constructor, CACHE, { value: cache });
   return constructor;
 }
 
