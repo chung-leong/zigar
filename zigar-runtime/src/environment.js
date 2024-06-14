@@ -228,27 +228,35 @@ export class Environment {
     }
   }
 
-  obtainView(buffer, offset, len) {
+  findViewAt(buffer, offset, len) {
     let entry = this.viewMap.get(buffer);
-    let dv;
+    let existing;
     if (entry) {
       if (entry instanceof DataView) {
         // only one view created thus far--see if that's the matching one
         if (entry.byteOffset === offset && entry.byteLength === len) {
-          return entry;
+          existing = entry;
         } else {
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
-          const key = `${prev.byteOffset}:${prev.byteLength}`;
-          entry = { [key]: prev };
+          const prevKey = `${prev.byteOffset}:${prev.byteLength}`;
+          entry = { [prevKey]: prev };
           this.viewMap.set(buffer, entry);
         }
+      } else {
+        existing = entry[`${offset}:${len}`];
       }
-      const key = `${offset}:${len}`;
-      dv = entry[key];
-      if (!dv) {
-        dv = entry[key] = new DataView(buffer, offset, len);
-      }
+    }
+    return { existing, entry };
+  }
+
+  obtainView(buffer, offset, len) {
+    const { existing, entry } = this.findViewAt(buffer, offset, len);
+    let dv;
+    if (existing) {
+      return existing;
+    } else if (entry) {
+      dv = entry[`${offset}:${len}`] = new DataView(buffer, offset, len);
     } else {
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
@@ -257,6 +265,20 @@ export class Environment {
     if (fixed) {
       // attach address to view of fixed buffer
       dv[FIXED] = { address: add(fixed.address, offset), len };
+    }
+    return dv;
+  }
+
+  registerView(dv) {
+    const { buffer, byteOffset, byteLength } = dv;
+    const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
+    if (existing) {
+      // return existing view instead of this one
+      return existing;
+    } else if (entry) {
+      entry[`${byteOffset}:${byteLength}`] = dv;
+    } else {
+      this.viewMap.set(buffer, dv);
     }
     return dv;
   }

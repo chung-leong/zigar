@@ -120,7 +120,8 @@ export function getDataView(structure, arg, env) {
   // not using instanceof just in case we're getting objects created in other contexts
   const tag = arg?.[Symbol.toStringTag];
   if (tag === 'DataView') {
-    dv = arg;
+    // capture relationship between the view and its buffer
+    dv = env.registerView(arg);
   } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
     dv = env.obtainView(arg, 0, arg.byteLength);
   } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
