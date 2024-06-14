@@ -72,21 +72,28 @@ export function useOptional() {
   factories[StructureType.Optional] = defineOptional;
 }
 
-export function usePointer() {
-  factories[StructureType.Pointer] = definePointer;
+export function useSinglePointer() {
+  factories[StructureType.SinglePointer] = definePointer;
+  useUint();
+}
+
+export function useSlicePointer() {
+  factories[StructureType.SlicePointer] = definePointer;
+  useUint();
+}
+
+export function useMultiPointer() {
+  factories[StructureType.MultiPointer] = definePointer;
+  useUint();
+}
+
+export function useCPointer() {
+  factories[StructureType.CPointer] = definePointer;
   useUint();
 }
 
 export function useSlice() {
   factories[StructureType.Slice] = defineSlice;
-}
-
-export function useUnboundSlice() {
-  factories[StructureType.UnboundSlice] = defineSlice;
-}
-
-export function useUnboundSliceC() {
-  factories[StructureType.UnboundSliceC] = defineSlice;
 }
 
 export function useVector() {
@@ -218,10 +225,11 @@ export function useAllStructureTypes() {
   useErrorSet();
   useEnum();
   useOptional();
-  usePointer();
+  useSinglePointer();
+  useSlicePointer();
+  useMultiPointer();
+  useCPointer();
   useSlice();
-  useUnboundSlice();
-  useUnboundSliceC();
   useVector();
   useOpaque();
 }

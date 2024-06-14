@@ -22,8 +22,8 @@ export {
     useUint, useUndefined, useVoid
 } from './member.js';
 export {
-    useArgStruct, useArray, useBareUnion, useEnum, useErrorSet, useErrorUnion,
-    useExternStruct, useExternUnion, useOpaque, useOptional, usePackedStruct, usePointer,
-    usePrimitive, useSlice, useStruct, useTaggedUnion, useUnboundSlice, useUnboundSliceC, useVector
+    useArgStruct, useArray, useBareUnion, useCPointer, useEnum, useErrorSet, useErrorUnion,
+    useExternStruct, useExternUnion, useMultiPointer, useOpaque, useOptional, usePackedStruct,
+    usePrimitive, useSinglePointer, useSlice, useSlicePointer, useStruct, useTaggedUnion, useVector
 } from './structure.js';
 /* RUNTIME-ONLY-END */

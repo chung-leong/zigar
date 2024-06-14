@@ -141,7 +141,6 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       dv.setUint16(0, 1, true);
       expect(get.call(object)).to.equal(error1);
-      debugger;
       set.call(object, error2);
       expect(dv.getUint16(0, true)).to.equal(2);
       expect(get.call(object)).to.equal(error2);

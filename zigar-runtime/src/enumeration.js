@@ -37,7 +37,6 @@ export function defineEnumerationShape(structure, env) {
         if (constructor[MORE] && typeof(arg) !== 'string') {
           // create the item on-the-fly when enum is non-exhaustive
           item = new constructor(undefined);
-          debugger;
           set.call(item, arg, 'number');
           appendEnumeration(constructor, `${arg}`, item);
         }

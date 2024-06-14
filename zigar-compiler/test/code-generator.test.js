@@ -280,7 +280,7 @@ describe('Code generation', function() {
         byteSize: 2,
         hasPointer: false,
         instance: {
-          members: [ 
+          members: [
             {
               type: MemberType.Int,
               bitOffset: 0,
@@ -437,7 +437,7 @@ describe('Code generation', function() {
     it('should generate code for exporting a constant', function() {
       const ptrStructure = {
         constructor: null,
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: "*int32",
         byteSize: 0,
         isConst: true,
@@ -498,7 +498,7 @@ describe('Code generation', function() {
     it('should generate code for exporting a function', function() {
       const argStructure = {
         constructor: null,
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: "hello",
         byteSize: 0,
         hasPointer: true,
@@ -619,7 +619,7 @@ describe('Code generation', function() {
     })
     it('should generate code for exporting a struct with static variable', function() {
       const i32 = {
-        [MEMORY]: (() => { 
+        [MEMORY]: (() => {
           const dv = new DataView(new ArrayBuffer(4));
           dv.reloc = 0x0100_0000;
           return dv;
@@ -802,5 +802,5 @@ describe('Code generation', function() {
       expect(code).to.contain('addonPath');
       expect(code).to.contain('/tmp/somewhere');
     })
-  })  
+  })
 })

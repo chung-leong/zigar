@@ -244,7 +244,7 @@ describe('Optional functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
@@ -306,7 +306,7 @@ describe('Optional functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Uint8',
         byteSize: 16,
         hasPointer: true,
@@ -352,7 +352,6 @@ describe('Optional functions', function() {
       const object = new Hello(array);
       expect(object.$.string).to.equal('This is a test');
       expect(object.$.typedArray).to.eql(array);
-      debugger;
       object.valueOf();
       expect(JSON.stringify(object)).to.eql(JSON.stringify([ ...array ]));
       const object2 = new Hello(null);
@@ -373,7 +372,7 @@ describe('Optional functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Uint8',
         byteSize: 16,
         hasPointer: true,
@@ -437,7 +436,7 @@ describe('Optional functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true
@@ -546,7 +545,7 @@ describe('Optional functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true
@@ -654,7 +653,7 @@ describe('Optional functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,

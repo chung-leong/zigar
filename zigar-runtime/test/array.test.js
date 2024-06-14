@@ -717,7 +717,7 @@ describe('Array functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -847,7 +847,7 @@ describe('Array functions', function() {
       env.finalizeShape(intStructure)
       env.finalizeStructure(intStructure)
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
@@ -917,7 +917,7 @@ describe('Array functions', function() {
       env.finalizeStructure(intStructure)
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
@@ -971,7 +971,7 @@ describe('Array functions', function() {
       env.finalizeStructure(intStructure)
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,

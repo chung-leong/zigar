@@ -2,7 +2,7 @@ import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch, TypeMismatch }
 import { getBitAlignFunction } from './memory.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
 import {
-  MemberType, getPrimitiveClass, getTypeName, isArrayLike, isByteAligned, isSlice,
+  MemberType, StructureType, getPrimitiveClass, getTypeName, isArrayLike, isByteAligned,
 } from './types.js';
 
 export function getBoolAccessor(access, member) {
@@ -141,7 +141,7 @@ export function getDataView(structure, arg, env) {
           const { byteSize: elementSize, structure: { constructor: Child } } = member;
           const number = findElements(arg, Child);
           if (number !== undefined) {
-            if (isSlice(type) || number * elementSize === byteSize) {
+            if (type === StructureType.Slice || number * elementSize === byteSize) {
               return memory;
             } else {
               throw new ArrayLengthMismatch(structure, null, arg);
@@ -166,7 +166,7 @@ export function checkDataView(dv) {
 
 export function checkDataViewSize(dv, structure) {
   const { byteSize, type } = structure;
-  const isSizeMatching = isSlice(type)
+  const isSizeMatching = type === StructureType.Slice
   ? dv.byteLength % byteSize === 0
   : dv.byteLength === byteSize;
   if (!isSizeMatching) {
@@ -191,7 +191,7 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
       this[COPIER](source);
     }
   } else {
-    const byteLength = isSlice(type) ? byteSize * this.length : byteSize;
+    const byteLength = (type === StructureType.Slice) ? byteSize * this.length : byteSize;
     if (dv.byteLength !== byteLength) {
       throw new BufferSizeMismatch(structure, dv, this);
     }

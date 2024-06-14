@@ -914,7 +914,7 @@ describe('Struct functions', function() {
     it('should define a struct that contains pointers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -927,8 +927,8 @@ describe('Struct functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true
       });
@@ -997,7 +997,7 @@ describe('Struct functions', function() {
     it('should not when default values are not available for all pointers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1010,8 +1010,8 @@ describe('Struct functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true
       });
@@ -1222,7 +1222,7 @@ describe('Struct functions', function() {
       };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1235,8 +1235,8 @@ describe('Struct functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true
       });

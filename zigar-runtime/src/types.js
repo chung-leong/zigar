@@ -27,13 +27,14 @@ export const StructureType = {
   ErrorSet: 10,
   Enum: 11,
   Optional: 12,
-  Pointer: 13,
-  Slice: 14,
-  UnboundSlice: 15,
-  UnboundSliceC: 16,
-  Vector: 17,
-  Opaque: 18,
-  Function: 19,
+  SinglePointer: 13,
+  SlicePointer: 14,
+  MultiPointer: 15,
+  CPointer: 16,
+  Slice: 17,
+  Vector: 18,
+  Opaque: 19,
+  Function: 20,
 };
 
 export function getTypeName(member) {
@@ -111,11 +112,12 @@ export function isExtendedType(member) {
   }
 }
 
-export function isSlice(type) {
+export function isPointer(type) {
   switch (type) {
-    case StructureType.Slice:
-    case StructureType.UnboundSlice:
-    case StructureType.UnboundSliceC:
+    case StructureType.SinglePointer:
+    case StructureType.SlicePointer:
+    case StructureType.MultiPointer:
+    case StructureType.CPointer:
       return true;
     default:
       return false;
@@ -123,7 +125,7 @@ export function isSlice(type) {
 }
 
 export function isArrayLike(type) {
-  return type === StructureType.Array || type === StructureType.Vector || isSlice(type);
+  return type === StructureType.Array || type === StructureType.Vector || type === StructureType.Slice;
 }
 
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {

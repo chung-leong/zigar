@@ -19,7 +19,7 @@ describe('Pointer functions', function() {
     it('should define a pointer for pointing to integers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -32,8 +32,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -61,7 +61,7 @@ describe('Pointer functions', function() {
     it('should cast the same buffer to the same object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -73,8 +73,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -97,7 +97,7 @@ describe('Pointer functions', function() {
     it('should copy target when casting from writable to read-only', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -109,8 +109,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -134,7 +134,7 @@ describe('Pointer functions', function() {
     it('should throw when no initializer is provided', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -146,8 +146,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -167,7 +167,7 @@ describe('Pointer functions', function() {
     it('should throw when a null pointer is dereferenced', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -180,8 +180,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -204,7 +204,7 @@ describe('Pointer functions', function() {
     it('should throw when element of array of null pointers is dereferenced', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -216,8 +216,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -274,7 +274,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -326,7 +326,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -374,7 +374,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -422,7 +422,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -471,7 +471,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*const Hello',
         byteSize: 4,
         isConst: true,
@@ -524,7 +524,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 4,
         isConst: false,
@@ -542,7 +542,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
       const constStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 4,
         isConst: true,
@@ -594,7 +594,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -611,7 +611,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(ptrStructure);
       const { constructor: HelloPtr } = ptrStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '**Hello',
         byteSize: 8,
         hasPointer: true,
@@ -637,7 +637,7 @@ describe('Pointer functions', function() {
     it('should have no setter when pointer is const', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -650,8 +650,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
@@ -675,7 +675,7 @@ describe('Pointer functions', function() {
     it('should auto-vivificate target', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -688,8 +688,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -728,7 +728,7 @@ describe('Pointer functions', function() {
       const { constructor: Bool } = boolStructure;
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -741,8 +741,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -767,7 +767,7 @@ describe('Pointer functions', function() {
     it('should throw when attempting to cast a buffer to a pointer type', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -779,8 +779,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -837,7 +837,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Hello',
         byteSize: 16,
         hasPointer: true,
@@ -862,7 +862,7 @@ describe('Pointer functions', function() {
     it('should automatically cast to slice from typed array', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -875,7 +875,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 16,
         hasPointer: false,
       });
@@ -889,8 +889,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -914,7 +914,7 @@ describe('Pointer functions', function() {
     it('should show a warning when given a typed array is of the incorrect type', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -927,7 +927,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 16,
         hasPointer: false,
       });
@@ -940,8 +940,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -972,7 +972,7 @@ describe('Pointer functions', function() {
       env.runtimeSafety = false;
       const intStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -985,7 +985,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 8,
         hasPointer: false,
       });
@@ -998,8 +998,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 8,
         hasPointer: true,
       }, { runtimeSafety: false });
@@ -1045,7 +1045,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(boolStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Bool',
+        name: '[_]bool',
         byteSize: 1,
         hasPointer: false,
       });
@@ -1058,8 +1058,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Bool',
+        type: StructureType.SlicePointer,
+        name: '[]bool',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1088,7 +1088,7 @@ describe('Pointer functions', function() {
     it('should automatically cast to slice from an array', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -1101,7 +1101,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 8,
         hasPointer: false,
       });
@@ -1116,7 +1116,7 @@ describe('Pointer functions', function() {
       const { constructor: Int32Slice } = sliceStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]Int32',
+        name: '[8]i32',
         length: 8,
         byteSize: 8 * 4,
         hasPointer: false,
@@ -1131,8 +1131,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(arrayStructure);
       const { constructor: Int32Array } = arrayStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Hello',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1184,7 +1184,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]u8',
         byteSize: 8,
         hasPointer: true,
@@ -1240,7 +1240,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: I8Slice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]i8',
         byteSize: 8,
         hasPointer: true,
@@ -1304,7 +1304,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Hello',
         byteSize: 8,
         hasPointer: true,
@@ -1369,7 +1369,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]const u8',
         byteSize: 8,
         isConst: true,
@@ -1387,7 +1387,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(constStructure);
       const { constructor: ConstU8SlicePtr } = constStructure;
       const nonConstStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]u8',
         byteSize: 8,
         isConst: false,
@@ -1451,7 +1451,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const constStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]const u8',
         byteSize: 8,
         isConst: true,
@@ -1469,7 +1469,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(constStructure);
       const { constructor: ConstU8SlicePtr } = constStructure;
       const nonConstStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]u8',
         byteSize: 8,
         isConst: false,
@@ -1528,7 +1528,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const constStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]const Target',
         byteSize: 8,
         isConst: true,
@@ -1567,7 +1567,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Target',
         byteSize: 8,
         isConst: false,
@@ -1585,7 +1585,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(ptrStructure);
       const { constructor: TargetPtr } = ptrStructure;
       const constStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*const *Target',
         byteSize: 8,
         isConst: true,
@@ -1639,7 +1639,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -1669,7 +1669,7 @@ describe('Pointer functions', function() {
     it('should permit assignment to a const pointer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1682,8 +1682,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
@@ -1707,7 +1707,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1720,8 +1720,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
@@ -1753,7 +1753,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1766,8 +1766,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
@@ -1800,7 +1800,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1813,8 +1813,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         isConst: true,
         hasPointer: true,
@@ -1884,7 +1884,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Hello',
         byteSize: 16,
         hasPointer: true,
@@ -1930,7 +1930,7 @@ describe('Pointer functions', function() {
     it('should yield underlying pointer object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1943,8 +1943,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1968,7 +1968,7 @@ describe('Pointer functions', function() {
     it('should detect property of pointer object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1981,8 +1981,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -2009,7 +2009,7 @@ describe('Pointer functions', function() {
       };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2023,8 +2023,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -2049,7 +2049,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2063,8 +2063,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -2090,7 +2090,7 @@ describe('Pointer functions', function() {
       };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2103,7 +2103,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2116,8 +2116,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -2144,7 +2144,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2158,7 +2158,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2171,8 +2171,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -2198,7 +2198,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2210,8 +2210,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
-        type: StructureType.UnboundSlice,
-        name: '[_]Int32',
+        type: StructureType.Slice,
+        name: '[_:0]Int32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2234,8 +2234,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.MultiPointer,
+        name: '[*:0]Int32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -2273,7 +2273,7 @@ describe('Pointer functions', function() {
       const env = new NodeEnvironment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2286,7 +2286,7 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Int32',
+        name: '[_]i32',
         byteSize: 4,
         hasPointer: false,
       });
@@ -2299,8 +2299,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '[]Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 16,
         hasPointer: true,
       });
@@ -2357,7 +2357,7 @@ describe('Pointer functions', function() {
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
     })
-    it('should allow modification of slice length', function() {
+    it('should allow modification of the length of a slice pointer', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -2395,7 +2395,7 @@ describe('Pointer functions', function() {
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         name: '[]Hello',
         byteSize: 16,
         hasPointer: true,
@@ -2415,7 +2415,6 @@ describe('Pointer functions', function() {
       const slice1 = pointer['*'];
       expect(slice1.length).to.equal(3);
       expect(() => slice1.length = 1).to.throw(TypeError);
-      pointer.length = 2;
       expect(() => pointer.length = 2).to.not.throw();
       expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(2n);
       expect(slice1.length).to.equal(3);
@@ -2432,7 +2431,7 @@ describe('Pointer functions', function() {
       expect(slice4.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       expect(slice4).to.equal(slice1);
     })
-    it('should allow modification the length of an unbound slice', function() {
+    it('should allow modification of the length of a multi pointer', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Hello',
@@ -2456,8 +2455,8 @@ describe('Pointer functions', function() {
       env.finalizeShape(structStructure);
       env.finalizeStructure(structStructure);
       const sliceStructure = env.beginStructure({
-        type: StructureType.UnboundSlice,
-        name: '[?]Hello',
+        type: StructureType.Slice,
+        name: '[_]Hello',
         byteSize: 8,
         hasPointer: false,
       });
@@ -2469,8 +2468,9 @@ describe('Pointer functions', function() {
       });
       env.finalizeShape(sliceStructure);
       env.finalizeStructure(sliceStructure);
+      const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.MultiPointer,
         name: '[*]Hello',
         byteSize: 8,
         hasPointer: true,
@@ -2486,32 +2486,44 @@ describe('Pointer functions', function() {
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
       const { constructor: HelloPtr } = structure;
-      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
+      const buffer = new ArrayBuffer(8 * 5);
+      const dv1 = new DataView(buffer);
+      for (let i = 1, j = 0; i <= 5; i++, j += 8) {
+        dv1.setUint32(j, i, true);
+        dv1.setUint32(j + 4, i * 10, true);
+      }
+      const dv2 = new DataView(buffer, 0, 8 * 3);
+      const pointer = new HelloPtr(HelloSlice(dv2));
       const slice1 = pointer['*'];
       expect(slice1.length).to.equal(3);
+      expect(slice1.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 } ]);
       expect(() => slice1.length = 1).to.throw(TypeError);
       pointer.length = 2;
       expect(() => pointer.length = 2).to.not.throw();
       expect(slice1.length).to.equal(3);
       const slice2 = pointer['*'];
       expect(slice2.length).to.equal(2);
-      expect(slice2.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 } ]);
-      expect(() => pointer.length = 4).to.throw(InvalidSliceLength);
+      expect(slice2.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 } ]);
+      expect(() => pointer.length = 4).to.not.throw();
+      const slice3 = pointer['*'];
+      expect(slice3.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 }, { cat: 4, dog: 40 } ]);
+      expect(() => pointer.length = 6).to.throw(InvalidSliceLength);
       expect(() => pointer.length = -1).to.throw(InvalidSliceLength);
       expect(() => pointer.length = 0).to.not.throw();
-      const slice3 = pointer['*'];
-      expect(slice3.valueOf()).to.eql([]);
-      expect(() => pointer.length = 3).to.not.throw();
       const slice4 = pointer['*'];
-      expect(slice4.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
-      expect(slice4).to.equal(slice1);
+      expect(slice4.valueOf()).to.eql([]);
+      pointer.length = 3;
+      expect(() => pointer.length = 3).to.not.throw();
+      const slice5 = pointer['*'];
+      expect(slice5.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 } ]);
+      expect(slice5).to.equal(slice1);
     })
   })
   describe('makePointerReadOnly', function() {
     it('should make pointer read-only', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -2524,8 +2536,8 @@ describe('Pointer functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });

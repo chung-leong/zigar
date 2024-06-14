@@ -720,7 +720,6 @@ describe('Environment', function() {
           static: { template: templ2 },
         },
       ];
-      debugger;
       env.prepareObjectsForExport();
       expect(templ1[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
       expect(templ1[MEMORY].byteOffset).to.equal(2);
@@ -978,7 +977,7 @@ describe('Environment', function() {
         },
       };
       const s3 = {
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -1516,7 +1515,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -1617,7 +1616,7 @@ describe('Environment', function() {
         hasPointer: true,
       });
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -1728,7 +1727,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -1798,7 +1797,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true,
@@ -2218,7 +2217,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -2262,7 +2261,6 @@ describe('Environment', function() {
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
-      debugger;
       env.updatePointerTargets(object);
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
@@ -2284,7 +2282,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -2347,7 +2345,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -2380,7 +2378,7 @@ describe('Environment', function() {
         hasPointer: true,
       });
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -2491,7 +2489,7 @@ describe('Environment', function() {
         hasPointer: true,
       });
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -2593,7 +2591,7 @@ describe('Environment', function() {
       env.finalizeShape(opaqueStructure);
       env.finalizeStructure(opaqueStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -2640,7 +2638,7 @@ describe('Environment', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*Int32',
         byteSize: 8,
         hasPointer: true

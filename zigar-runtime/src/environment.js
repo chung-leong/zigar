@@ -254,7 +254,6 @@ export class Environment {
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
     const fixed = buffer[FIXED];
-    debugger;
     if (fixed) {
       // attach address to view of fixed buffer
       dv[FIXED] = { address: add(fixed.address, offset), len };

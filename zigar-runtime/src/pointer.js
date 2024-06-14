@@ -13,10 +13,11 @@ import {
   LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
   PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
-import { MemberType, StructureType } from './types.js';
+import { MemberType, StructureType, isPointer } from './types.js';
 
 export function definePointer(structure, env) {
   const {
+    type,
     byteSize,
     align,
     instance: { members: [ member ] },
@@ -26,9 +27,9 @@ export function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type, sentinel, byteSize: elementSize } = targetStructure;
+  const { type: targetType, sentinel, byteSize: elementSize } = targetStructure;
   // length for slice can be zero or undefined
-  const hasLengthInMemory = type === StructureType.Slice;
+  const hasLengthInMemory = type === StructureType.SlicePointer;
   const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
   const { get: getAddressInMemory, set: setAddressInMemory } = getDescriptor({
     type: MemberType.Uint,
@@ -60,7 +61,7 @@ export function definePointer(structure, env) {
           this[SLOTS][0] = newTarget;
           this[ADDRESS] = address;
           this[LENGTH] = length;
-          if (type === StructureType.Slice) {
+          if (hasLengthInMemory) {
             this[MAX_LENGTH] = length;
           }
           return newTarget;
@@ -96,7 +97,7 @@ export function definePointer(structure, env) {
       if (arg[MEMORY][FIXED]) {
         const address = env.getViewAddress(arg[MEMORY]);
         setAddress.call(this, address);
-        if (type === StructureType.Slice) {
+        if (hasLengthInMemory) {
           setLength.call(this, arg.length);
         }
       } else {
@@ -104,7 +105,7 @@ export function definePointer(structure, env) {
       }
     }
     pointer[SLOTS][0] = arg;
-    if (type === StructureType.Slice) {
+    if (hasLengthInMemory) {
       this[MAX_LENGTH] = arg.length;
     }
   };
@@ -133,7 +134,7 @@ export function definePointer(structure, env) {
     // determine the maximum length
     let max;
     if (!fixed) {
-      if (type === StructureType.Slice) {
+      if (hasLengthInMemory) {
         max = this[MAX_LENGTH];
       } else {
         max = (bytesAvailable / elementSize) | 0;
@@ -150,7 +151,7 @@ export function definePointer(structure, env) {
     : env.obtainFixedView(fixed.address, byteLength);
     const Target = targetStructure.constructor;
     this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
-    if (type === StructureType.Slice) {
+    if (hasLengthInMemory) {
       setLength?.call(this, len);
     }
   };
@@ -163,7 +164,7 @@ export function definePointer(structure, env) {
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*']), options);
-    } else if (type === StructureType.Slice) {
+    } else if (targetType === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
     } else {
@@ -171,7 +172,7 @@ export function definePointer(structure, env) {
     }
   };
   const finalizer = function() {
-    const handlers = (type === StructureType.Pointer) ? {} : proxyHandlers;
+    const handlers = isPointer(targetType) ? {} : proxyHandlers;
     const proxy = new Proxy(this, handlers);
     // hide the proxy so console wouldn't display a recursive structure
     Object.defineProperty(this, PROXY, { value: proxy });
@@ -230,7 +231,7 @@ export function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: deleteTarget },
-    [Symbol.toPrimitive]: (type === StructureType.Primitive) && { value: getPointerPrimitve },
+    [Symbol.toPrimitive]: (targetType === StructureType.Primitive) && { value: getTargetPrimitive },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
     [TARGET_UPDATER]: { value: updateTarget },
@@ -261,12 +262,12 @@ function makePointerReadOnly() {
 }
 
 function deleteTarget() {
-  const target = this[SLOTS][0];
+  const target = this[TARGET_GETTER]();
   target?.delete();
 }
 
-function getPointerPrimitve(hint) {
-  const target = this[SLOTS][0];
+function getTargetPrimitive(hint) {
+  const target = this[TARGET_GETTER]();
   return target[Symbol.toPrimitive](hint);
 }
 

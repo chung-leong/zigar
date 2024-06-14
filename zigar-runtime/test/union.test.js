@@ -465,7 +465,7 @@ describe('Union functions', function() {
     it('should disable pointers in a bare union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -478,8 +478,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -765,7 +765,7 @@ describe('Union functions', function() {
     it('should define a tagged union containing a pointer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -779,8 +779,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -869,7 +869,7 @@ describe('Union functions', function() {
     it('should correctly copy a tagged union containing a pointer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -883,8 +883,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -974,7 +974,7 @@ describe('Union functions', function() {
     it('should release pointer when a different property is activated', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -987,8 +987,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1079,7 +1079,7 @@ describe('Union functions', function() {
     it('should release pointer when a different property is activated externally', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1092,8 +1092,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1187,7 +1187,7 @@ describe('Union functions', function() {
     it('should reapply pointer when initialized with no initializer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1200,8 +1200,8 @@ describe('Union functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SinglePointer,
+        name: '*i32',
         byteSize: 8,
         hasPointer: true,
       });

@@ -1084,7 +1084,7 @@ describe('Slice functions', function() {
     it('should correctly copy a slice holding pointers', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
+        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1097,8 +1097,8 @@ describe('Slice functions', function() {
       env.finalizeStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        name: '*Int32',
+        type: StructureType.SlicePointer,
+        name: '[]i32',
         byteSize: 8,
         hasPointer: true,
       });
@@ -1114,7 +1114,7 @@ describe('Slice functions', function() {
       env.finalizeStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: '[_]i32',
         byteSize: 8,
         hasPointer: true,
       });

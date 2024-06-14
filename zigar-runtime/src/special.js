@@ -47,12 +47,13 @@ function normalizeObject(object, forJSON) {
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
-        case StructureType.UnboundSlice:
-        case StructureType.UnboundSliceC:
           entries = value[ENTRIES_GETTER]?.({ error });
           result = [];
           break;
-        case StructureType.Pointer:
+        case StructureType.SinglePointer:
+        case StructureType.SlicePointer:
+        case StructureType.MultiPointer:
+        case StructureType.CPointer:
           try {
             result = value['*'];
           } catch (err) {
@@ -86,7 +87,6 @@ export function handleError(cb, options = {}) {
   try {
     return cb();
   } catch (err) {
-    debugger;
     if (error === 'return') {
       return err;
     } else {

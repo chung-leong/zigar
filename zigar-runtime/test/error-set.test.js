@@ -20,7 +20,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -83,7 +83,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'ErrorSet1',
         byteSize: 2,
-      });      
+      });
       env.attachMember(errorStructure1, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -117,7 +117,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'anyerror',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -132,7 +132,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'ErrorSet1',
         byteSize: 2,
-      });      
+      });
       env.attachMember(errorStructure2, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -182,7 +182,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -219,7 +219,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -258,7 +258,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -297,7 +297,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -335,7 +335,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -378,7 +378,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -539,7 +539,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -569,13 +569,13 @@ describe('Error set functions', function() {
       }, true);
       env.finalizeStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
-    }) 
+    })
     it('should throw when initializer is not one of the expected types', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -605,13 +605,13 @@ describe('Error set functions', function() {
       }, true);
       env.finalizeStructure(structure);
       expect(() => Hello(false)).to.throw(TypeError);
-    }) 
+    })
     it('should accept special properties', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -640,16 +640,15 @@ describe('Error set functions', function() {
         }
       }, true);
       env.finalizeStructure(structure);
-      debugger;
       const object = new Hello({ typedArray: new Uint16Array([ 8 ])});
       expect(object.$).to.equal(Hello.UnableToCreateObject);
-    }) 
+    })
     it('should throw when no special properties are found', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,
@@ -685,7 +684,7 @@ describe('Error set functions', function() {
         type: StructureType.ErrorSet,
         name: 'Hello',
         byteSize: 2,
-      });      
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 16,

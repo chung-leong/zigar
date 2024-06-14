@@ -108,7 +108,7 @@ describe('ArgStruct functions', function() {
       object.pet.valueOf();
       expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
-    it('should define an argument struct with pointer as return value', function() {      
+    it('should define an argument struct with pointer as return value', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'i32',
@@ -123,7 +123,7 @@ describe('ArgStruct functions', function() {
       env.finalizeShape(intStructure);
       env.finalizeStructure(intStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,

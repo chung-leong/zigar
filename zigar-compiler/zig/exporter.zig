@@ -55,10 +55,11 @@ pub const StructureType = enum(u32) {
     error_set,
     @"enum",
     optional,
-    pointer,
+    single_pointer,
+    slice_pointer,
+    multi_pointer,
+    c_pointer,
     slice,
-    unbound_slice,
-    unbound_slice_c,
     vector,
     @"opaque",
     function,
@@ -374,7 +375,12 @@ const TypeData = struct {
             .Optional => .optional,
             .Enum => .@"enum",
             .Array => .array,
-            .Pointer => .pointer,
+            .Pointer => |pt| => switch (un.size) {
+                .One => .single_pointer,
+                .Many => .multi_pointer,
+                .Slice => .slice_pointer,
+                .C => .c_pointer,
+            },
             .Vector => .vector,
             .Opaque => .@"opaque",
             else => @compileError("Unsupported type: " ++ @typeName(self.Type)),
@@ -444,7 +450,7 @@ const TypeData = struct {
         const pt = @typeInfo(self.Type).Pointer;
         const name = @typeName(self.Type);
         const needle = if (pt.size == .Slice) "[" else "*";
-        const replacement = if (pt.size == .Slice) "[_" else "?";
+        const replacement = if (pt.size == .Slice) "[_" else "_";
         if (comptime std.mem.indexOf(u8, name, needle)) |index| {
             return std.fmt.comptimePrint("{s}{s}{s}", .{
                 name[0..index],
@@ -454,17 +460,6 @@ const TypeData = struct {
         } else {
             @compileError("Unexpected pointer type: " ++ name);
         }
-    }
-
-    fn getSliceType(comptime self: @This()) StructureType {
-        const pt = @typeInfo(self.Type).Pointer;
-        const name = @typeName(self.Type);
-        return switch (pt.size) {
-            .Slice => .slice,
-            .Many => .unbound_slice,
-            .C => .unbound_slice_c,
-            else => @compileError("Unexpected pointer type: " ++ name),
-        };
     }
 
     fn getSentinel(comptime self: @This()) ?@typeInfo(self.Type).Pointer.child {
@@ -1296,9 +1291,12 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         .bare_union,
         .tagged_union,
         => try addUnionMembers(ctx, structure, td),
+        .single_pointer,
+        .multi_ponter,
+        .slice_pointer,
+        .c_pointer => try addPointerMember(ctx, structure, td),
         .error_union => try addErrorUnionMembers(ctx, structure, td),
         .optional => try addOptionalMembers(ctx, structure, td),
-        .pointer => try addPointerMember(ctx, structure, td),
         .vector => try addVectorMember(ctx, structure, td),
         else => {},
     }
@@ -1347,7 +1345,7 @@ fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void
     const target_structure = if (comptime !td.isSlice()) child_structure else define_slice: {
         const slice_def: Structure = .{
             .name = td.getSliceName(),
-            .structure_type = td.getSliceType(),
+            .structure_type = .slice,
             .length = null,
             .byte_size = child_td.getByteSize(),
             .alignment = child_td.getAlignment(),

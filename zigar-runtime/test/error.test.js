@@ -412,7 +412,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         byteSize: 8,
         instance: {
           members: [],
@@ -427,7 +427,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '[]const u8',
-        type: StructureType.Pointer,
+        type: StructureType.SlicePointer,
         byteSize: 1,
         instance: {
           members: [],
@@ -504,7 +504,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         byteSize: 8,
         instance: {
           members: [],
@@ -529,7 +529,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
-        type: StructureType.Pointer,
+        type: StructureType.SinglePointer,
         byteSize: 8,
         instance: {
           members: [],
