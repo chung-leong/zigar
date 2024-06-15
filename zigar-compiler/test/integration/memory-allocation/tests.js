@@ -5,7 +5,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Memory allocation', function() {
     it('should provide allocator to function returning string', async function() {
       this.timeout(120000);

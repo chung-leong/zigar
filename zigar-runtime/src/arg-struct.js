@@ -37,9 +37,13 @@ export function defineArgStruct(structure, env) {
   for (const member of members) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
-  const isChildMutable = function(object) {
-      return (object === this.retval);
-  };
+  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const isChildMutable = (retvalType === MemberType.Object)
+  ? function(object) {
+      const child = this[VIVIFICATOR](retvalSlot);
+      return object === child;
+    }
+  : function() { return false };
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [COPIER]: { value: getMemoryCopier(byteSize) },

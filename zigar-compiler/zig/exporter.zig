@@ -375,7 +375,7 @@ const TypeData = struct {
             .Optional => .optional,
             .Enum => .@"enum",
             .Array => .array,
-            .Pointer => |pt| => switch (un.size) {
+            .Pointer => |pt| switch (pt.size) {
                 .One => .single_pointer,
                 .Many => .multi_pointer,
                 .Slice => .slice_pointer,
@@ -1292,9 +1292,10 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         .tagged_union,
         => try addUnionMembers(ctx, structure, td),
         .single_pointer,
-        .multi_ponter,
+        .multi_pointer,
         .slice_pointer,
-        .c_pointer => try addPointerMember(ctx, structure, td),
+        .c_pointer,
+        => try addPointerMember(ctx, structure, td),
         .error_union => try addErrorUnionMembers(ctx, structure, td),
         .optional => try addOptionalMembers(ctx, structure, td),
         .vector => try addVectorMember(ctx, structure, td),

@@ -45,8 +45,8 @@ export function definePointer(structure, env) {
     byteSize: addressSize,
     structure: { name: 'usize', byteSize: addressSize },
   }, env) : {};
-  const updateTarget = function(always = true, active = true) {
-    if (always || this[MEMORY][FIXED]) {
+  const updateTarget = function(all = true, active = true) {
+    if (all || this[MEMORY][FIXED]) {
       if (active) {
         const address = getAddressInMemory.call(this);
         const length = (hasLengthInMemory)
@@ -106,7 +106,7 @@ export function definePointer(structure, env) {
     }
     pointer[SLOTS][0] = arg;
     if (hasLengthInMemory) {
-      this[MAX_LENGTH] = arg.length;
+      pointer[MAX_LENGTH] = arg.length;
     }
   };
   const getTarget = isValueExpected(targetStructure)

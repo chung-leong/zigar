@@ -1023,7 +1023,7 @@ export class Environment {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;
         const currentTarget = pointer[SLOTS][0];
-        const newTarget = isMutable(this) ? pointer[TARGET_UPDATER](true, isActive(this)) : null;
+        const newTarget = isMutable(this) ? pointer[TARGET_UPDATER](true, isActive(this)) : currentTarget;
         // update targets of pointers in original target (which could have been altered)
         currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         if (newTarget !== currentTarget) {
