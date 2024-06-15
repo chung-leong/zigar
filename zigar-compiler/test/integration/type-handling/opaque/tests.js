@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Opaque', function() {
     it('should import opaque pointer as static variables', async function() {
       this.timeout(120000);
@@ -37,10 +37,10 @@ export function addTests(importModule, options) {
       const s = create(123, 456);
       const [ line ] = await capture(() => print(s));
       expect(line).to.equal('as-return-value.Struct{ .number1 = 123, .number2 = 456 }');
-    })   
+    })
     it('should handle opaque pointer in array', async function() {
       this.timeout(120000);
-      const { default: module, AnyOpaque, print } = await importTest('array-of');      
+      const { default: module, AnyOpaque, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0]['*']).to.be.instanceOf(AnyOpaque);
       expect(module.array[1]['*']).to.be.instanceOf(AnyOpaque);
@@ -152,7 +152,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing opaque pointer vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

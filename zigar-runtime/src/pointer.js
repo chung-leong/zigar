@@ -106,7 +106,7 @@ export function definePointer(structure, env) {
     }
     pointer[SLOTS][0] = arg;
     if (hasLengthInMemory) {
-      pointer[MAX_LENGTH] = arg.length;
+      this[MAX_LENGTH] = arg.length;
     }
   };
   const getTarget = isValueExpected(targetStructure)

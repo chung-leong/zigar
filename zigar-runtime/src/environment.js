@@ -270,15 +270,17 @@ export class Environment {
   }
 
   registerView(dv) {
-    const { buffer, byteOffset, byteLength } = dv;
-    const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
-    if (existing) {
-      // return existing view instead of this one
-      return existing;
-    } else if (entry) {
-      entry[`${byteOffset}:${byteLength}`] = dv;
-    } else {
-      this.viewMap.set(buffer, dv);
+    if (!dv[FIXED]) {
+      const { buffer, byteOffset, byteLength } = dv;
+      const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
+      if (existing) {
+        // return existing view instead of this one
+        return existing;
+      } else if (entry) {
+        entry[`${byteOffset}:${byteLength}`] = dv;
+      } else {
+        this.viewMap.set(buffer, dv);
+      }
     }
     return dv;
   }
@@ -656,6 +658,7 @@ export class Environment {
       }
     }
     // save locations of pointer targets
+    const target0 = pointers[0][TARGET_GETTER]();
     for (const pointer of pointers) {
       const target = pointer[TARGET_GETTER]();
       const address = this.getViewAddress(target[MEMORY]);
