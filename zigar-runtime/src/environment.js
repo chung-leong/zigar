@@ -658,7 +658,6 @@ export class Environment {
       }
     }
     // save locations of pointer targets
-    const target0 = pointers[0][TARGET_GETTER]();
     for (const pointer of pointers) {
       const target = pointer[TARGET_GETTER]();
       const address = this.getViewAddress(target[MEMORY]);
