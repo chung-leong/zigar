@@ -21,6 +21,7 @@ export function defineStructShape(structure, env) {
     align,
     instance: { members },
     isTuple,
+    isIterator,
     hasPointer,
   } = structure;
   const memberDescriptors = {};
@@ -64,6 +65,11 @@ export function defineStructShape(structure, env) {
   const length = (isTuple && members.length > 0)
   ? parseInt(members[members.length - 1].name) + 1
   : 0;
+  const getIterator = (isIterator)
+  ? getIteratorIterator
+  : (isTuple)
+    ? getVectorIterator
+    : getStructIterator;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -74,7 +80,7 @@ export function defineStructShape(structure, env) {
     delete: { value: getDestructor(env) },
     entries: isTuple && { value: getVectorEntries },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: (isTuple) ? getVectorIterator : getStructIterator },
+    [Symbol.iterator]: { value: getIterator },
     [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },
@@ -96,6 +102,18 @@ export function getStructEntries(options) {
   return {
     [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
     length: this[PROPS].length,
+  };
+}
+
+export function getIteratorIterator() {
+  const self = this;
+  return {
+    next() {
+      debugger;
+      const value = self.next();
+      const done = value === null;
+      return { value, done };
+    },
   };
 }
 

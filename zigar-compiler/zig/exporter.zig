@@ -91,6 +91,7 @@ pub const Structure = struct {
     alignment: ?u16,
     is_const: bool = false,
     is_tuple: bool = false,
+    is_iterator: bool = false,
     has_pointer: bool,
 };
 
@@ -109,7 +110,6 @@ pub const Method = struct {
     name: ?[]const u8 = null,
     thunk_id: usize,
     structure: Value,
-    iterator_of: ?Value,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -680,11 +680,11 @@ test "TypeData.getSliceName" {
     const name3 = comptime TypeData.getSliceName(.{ .Type = [][4]u8 });
     assertCT(std.mem.eql(u8, name3[0..6], "[_][4]"));
     const name4 = comptime TypeData.getSliceName(.{ .Type = [*:0]const u8 });
-    assertCT(std.mem.eql(u8, name4[0..5], "[?:0]"));
+    assertCT(std.mem.eql(u8, name4[0..5], "[_:0]"));
     const name5 = comptime TypeData.getSliceName(.{ .Type = [*]const u8 });
-    assertCT(std.mem.eql(u8, name5[0..3], "[?]"));
+    assertCT(std.mem.eql(u8, name5[0..3], "[_]"));
     const name6 = comptime TypeData.getSliceName(.{ .Type = [*c]const u8 });
-    assertCT(std.mem.eql(u8, name6[0..4], "[?c]"));
+    assertCT(std.mem.eql(u8, name6[0..4], "[_c]"));
 }
 
 test "TypeData.getSentinel" {
@@ -1258,6 +1258,7 @@ fn getStructure(ctx: anytype, comptime T: type) Error!Value {
             .alignment = td.getAlignment(),
             .is_const = td.isConst(),
             .is_tuple = td.isTuple(),
+            .is_iterator = isIterator(T),
             .has_pointer = td.hasPointer(),
         };
         // create the structure and place it in the slot immediately
@@ -1701,7 +1702,6 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 .name = @ptrCast(decl.name),
                                 .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
                                 .structure = arg_structure,
-                                .iterator_of = if (IteratorType(DT)) |PT| try getStructure(ctx, PT) else null,
                             }, is_static_only);
                         }
                     },
@@ -1713,36 +1713,23 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     };
 }
 
-fn IteratorType(comptime FT: type) ?type {
-    const f = @typeInfo(FT).Fn;
-    if (f.return_type) |RT1| {
-        const RT2 = switch (@typeInfo(RT1)) {
-            .ErrorUnion => |eu| eu.payload,
-            else => RT1,
-        };
-        switch (@typeInfo(RT2)) {
-            .Struct, .Union, .Opaque, .Enum => if (@hasDecl(RT2, "next")) {
-                const next = @field(RT2, "next");
-                if (NextMethodReturnType(@TypeOf(next), RT2)) |PT| {
-                    return PT;
-                }
-            },
-            else => {},
-        }
+fn isIterator(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .Struct, .Union, .Opaque => if (@hasDecl(T, "next")) {
+            const next = @field(T, "next");
+            if (NextMethodReturnType(@TypeOf(next), T)) |_| {
+                return true;
+            }
+        },
+        else => {},
     }
-    return null;
+    return false;
 }
 
-test "IteratorType" {
-    const S = struct {
-        pub fn split(text: []const u8, delimiter: []const u8) std.mem.SplitIterator(u8, .sequence) {
-            return std.mem.splitSequence(u8, text, delimiter);
-        }
-    };
-    const T1 = IteratorType(@TypeOf(S.split));
-    assert(T1 != null);
-    const T2 = IteratorType(@TypeOf(std.fs.path.ComponentIterator(.posix, u8).init));
-    assert(T2 != null);
+test "isIterator" {
+    assert(isIterator(std.mem.SplitIterator(u8, .sequence)));
+    assert(isIterator(std.fs.path.ComponentIterator(.posix, u8)));
+    assert(isIterator(std.fs.path) == false);
 }
 
 fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {

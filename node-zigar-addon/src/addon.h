@@ -66,6 +66,7 @@ typedef struct {
     uint16_t align;
     bool is_const;
     bool is_tuple;
+    bool is_iterator;
     bool has_pointer;
 } structure;
 
@@ -105,7 +106,6 @@ typedef struct {
     const char* name;
     size_t thunk_id;
     napi_value structure;
-    napi_value iterator_of;
 } method;
 
 typedef struct {

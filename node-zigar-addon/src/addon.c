@@ -186,7 +186,7 @@ result begin_structure(call ctx,
                        napi_value* dest) {
     napi_env env = ctx->env;
     napi_value args[1];
-    napi_value type, length, byte_size, align, is_const, is_tuple, has_pointer, name;
+    napi_value type, length, byte_size, align, is_const, is_tuple, is_iterator, has_pointer, name;
     if (napi_create_object(env, &args[0]) == napi_ok
      && napi_create_uint32(env, s->type, &type) == napi_ok
      && napi_set_named_property(env, args[0], "type", type) == napi_ok
@@ -200,6 +200,8 @@ result begin_structure(call ctx,
      && napi_set_named_property(env, args[0], "isConst", is_const) == napi_ok
      && napi_get_boolean(env, s->is_tuple, &is_tuple) == napi_ok
      && napi_set_named_property(env, args[0], "isTuple", is_tuple) == napi_ok
+     && napi_get_boolean(env, s->is_iterator, &is_iterator) == napi_ok
+     && napi_set_named_property(env, args[0], "isIterator", is_iterator) == napi_ok
      && napi_get_boolean(env, s->has_pointer, &has_pointer) == napi_ok
      && napi_set_named_property(env, args[0], "hasPointer", has_pointer) == napi_ok
      && (napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
@@ -254,7 +256,6 @@ result attach_method(call ctx,
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
-     && (!m->iterator_of || napi_set_named_property(env, args[1], "iteratorOf", m->iterator_of) == napi_ok)
      && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
      && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)

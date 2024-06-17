@@ -3,12 +3,14 @@ import { AccessingOpaque, CreatingOpaque } from './error.js';
 import { getDestructor, getMemoryCopier } from './memory.js';
 import { attachDescriptors, createConstructor } from './object.js';
 import { convertToJSON, getDataViewDescriptor, getValueOf } from './special.js';
+import { getIteratorIterator } from './struct.js';
 import { ALIGN, COMPAT, COPIER, SIZE, TYPE } from './symbol.js';
 
 export function defineOpaque(structure, env) {
   const {
     byteSize,
     align,
+    isIterator,
   } = structure;
   const initializer = function() {
     throw new CreatingOpaque(structure);
@@ -21,12 +23,14 @@ export function defineOpaque(structure, env) {
     return `[opaque ${name}]`;
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
+  const getIterator = (isIterator) ? getIteratorIterator : null;
   const instanceDescriptors = {
     $: { get: valueAccessor, set: valueAccessor },
     dataView: getDataViewDescriptor(structure),
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
+    [Symbol.iterator]: getIterator && { value: getIterator },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
   };

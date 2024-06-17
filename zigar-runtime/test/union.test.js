@@ -1526,6 +1526,115 @@ describe('Union functions', function() {
       object.$ = { cat: 4567 };
       expect(object.cat).to.equal(4567);
     })
+    it('should define an interator union', function() {
+      const env = new NodeEnvironment();
+      const structure = env.beginStructure({
+        type: StructureType.ExternUnion,
+        name: 'Hello',
+        byteSize: 4,
+        isIterator: true,
+      });
+      env.attachMember(structure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.finalizeShape(structure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure,
+        slot: 0,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const optStructure = env.beginStructure({
+        type: StructureType.Optional,
+        name: '?i32',
+        byteSize: 5,
+      });
+      env.attachMember(optStructure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(optStructure, {
+        name: 'present',
+        type: MemberType.Bool,
+        bitSize: 8,
+        bitOffset: 32,
+        byteSize: 1,
+        structure: {},
+      });
+      env.finalizeShape(optStructure);
+      env.finalizeStructure(optStructure);
+      const argStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Argument',
+        byteSize: 13,
+        hasPointer: true,
+      });
+      env.attachMember(argStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: ptrStructure,
+        slot: 0,
+      });
+      env.attachMember(argStruct, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 5,
+        structure: optStructure,
+      });
+      env.finalizeShape(argStruct);
+      env.finalizeStructure(argStruct);
+      env.attachMethod(structure, {
+        name: 'next',
+        argStruct,
+        isStaticOnly: false,
+        thunkId: 1234,
+      });
+      env.finalizeStructure(structure);
+      let i = 0;
+      env.runThunk = function(thunkId, argDV) {
+        if (i++ < 5) {
+          argDV.setInt32(8, i, true);
+          argDV.setInt8(12, 1);
+        } else {
+          argDV.setInt32(8, 0, true);
+          argDV.setInt8(12, 0);
+        }
+      };
+      env.getBufferAddress = function(buffer) {
+        return 0x1000n;
+      }
+      const { constructor: Hello } = structure;
+      const object = new Hello({ index: 0 });
+      const results = [];
+      for (const value of object) {
+        results.push(value);
+      }
+      expect(results).to.eql([ 1, 2, 3, 4, 5 ]);
+    })
   })
 })
 

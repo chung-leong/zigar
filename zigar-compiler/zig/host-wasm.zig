@@ -198,6 +198,7 @@ pub const Host = struct {
         try insertProperty(structure, "align", def.alignment);
         try insertProperty(structure, "isConst", def.is_const);
         try insertProperty(structure, "isTuple", def.is_tuple);
+        try insertProperty(structure, "isIterator", def.is_iterator);
         try insertProperty(structure, "hasPointer", def.has_pointer);
         return _beginStructure(structure) orelse
             Error.unable_to_start_structure_definition;
@@ -223,7 +224,6 @@ pub const Host = struct {
     pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "argStruct", method.structure);
-        try insertProperty(def, "iteratorOf", method.iterator_of);
         try insertProperty(def, "thunkId", method.thunk_id);
         try insertProperty(def, "name", method.name);
         _attachMethod(structure, def, is_static_only);

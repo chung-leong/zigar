@@ -10,7 +10,7 @@ import { copyPointer, disablePointer, never, resetPointer } from './pointer.js';
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
 } from './special.js';
-import { getChildVivificator, getPointerVisitor } from './struct.js';
+import { getChildVivificator, getIteratorIterator, getPointerVisitor } from './struct.js';
 import {
   ALIGN, COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE,
   TAG, TYPE, VIVIFICATOR, WRITE_DISABLER
@@ -23,6 +23,7 @@ export function defineUnionShape(structure, env) {
     byteSize,
     align,
     instance: { members, template },
+    isIterator,
     hasPointer,
   } = structure;
   const { runtimeSafety } = env;
@@ -158,6 +159,7 @@ export function defineUnionShape(structure, env) {
   }
   : null;
   const getTagClass = function() { return selectorMember.structure.constructor };
+  const getIterator = (isIterator) ? getIteratorIterator : getUnionIterator;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
   const instanceDescriptors = {
@@ -168,7 +170,7 @@ export function defineUnionShape(structure, env) {
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     ...memberDescriptors,
-    [Symbol.iterator]: { value: getUnionIterator },
+    [Symbol.iterator]: { value: getIterator },
     [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
     [ENTRIES_GETTER]: { value: getUnionEntries },
     [COPIER]: { value: getMemoryCopier(byteSize) },

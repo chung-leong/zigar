@@ -23,8 +23,9 @@ const StructureC = extern struct {
     length: usize,
     byte_size: usize,
     alignment: u16,
-    is_const: bool = false,
-    is_tuple: bool = false,
+    is_const: bool,
+    is_tuple: bool,
+    is_iterator: bool,
     has_pointer: bool,
 };
 const MemberC = extern struct {
@@ -41,7 +42,6 @@ const MethodC = extern struct {
     name: ?[*:0]const u8,
     thunk_id: usize,
     structure: Value,
-    iterator_of: ?Value,
 };
 
 pub fn missing(comptime T: type) comptime_int {
@@ -141,6 +141,7 @@ pub const Host = struct {
             .alignment = def.alignment orelse missing(u16),
             .is_const = def.is_const,
             .is_tuple = def.is_tuple,
+            .is_iterator = def.is_iterator,
             .has_pointer = def.has_pointer,
         };
         var structure: Value = undefined;
@@ -175,7 +176,6 @@ pub const Host = struct {
             .name = if (method.name) |p| @ptrCast(p) else null,
             .thunk_id = method.thunk_id,
             .structure = method.structure,
-            .iterator_of = method.iterator_of,
         };
         if (imports.attach_method(self.context, structure, &method_c, is_static_only) != .ok) {
             return Error.unable_to_add_method;

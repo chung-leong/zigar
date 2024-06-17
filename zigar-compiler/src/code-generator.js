@@ -77,6 +77,7 @@ function addStructureDefinitions(lines, definition) {
     align: 0,
     isConst: false,
     isTuple: false,
+    isIterator: false,
     hasPointer: false,
     instance: {
       members: [],

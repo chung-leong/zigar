@@ -342,6 +342,7 @@ export class Environment {
       align,
       isConst,
       isTuple,
+      isIterator,
       hasPointer,
     } = def;
     return {
@@ -354,6 +355,7 @@ export class Environment {
       align,
       isConst,
       isTuple,
+      isIterator,
       hasPointer,
       instance: {
         members: [],
@@ -553,7 +555,7 @@ export class Environment {
   }
 
   createCaller(method, useThis) {
-    const { name, argStruct, thunkId, iteratorOf } = method;
+    const { name, argStruct, thunkId } = method;
     const { constructor } = argStruct;
     const self = this;
     let f;
@@ -565,16 +567,6 @@ export class Environment {
       f = function(...args) {
         return self.invokeThunk(thunkId, new constructor(args, name, 0));
       }
-    }
-    if (iteratorOf) {
-      const init = f;
-      f = function*(...args) {
-        const it = init.call(this, ...args);
-        let value;
-        while ((value = it.next()) !== null) {
-          yield value;
-        }
-      };
     }
     Object.defineProperty(f, 'name', { value: name });
     return f;

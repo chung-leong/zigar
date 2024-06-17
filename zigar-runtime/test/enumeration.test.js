@@ -643,10 +643,10 @@ describe('Enum functions', function() {
       expect(object.$).to.equal(Hello.Cat);
       expect(() => object.$ = 4567).to.throw(TypeError)
         .with.property('message').that.contains('4567');
-      object.$ = 456;      
+      object.$ = 456;
       expect(object.$).to.equal(Hello.Dog);
     })
-  }) 
+  })
 })
 
 function instanceOf(structure, ta) {
