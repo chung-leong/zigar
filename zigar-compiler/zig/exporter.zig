@@ -2200,13 +2200,13 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
 }
 
 pub fn createRootFactory(comptime HostT: type, comptime T: type) Thunk {
-    @setEvalBranchQuota(200000);
+    @setEvalBranchQuota(2000000);
     comptime var tdc = TypeDataCollector.init(256);
     comptime tdc.scan(T);
     const tdb = comptime tdc.createDatabase();
     const RootFactory = struct {
         fn exportStructure(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
-            @setEvalBranchQuota(200000);
+            @setEvalBranchQuota(2000000);
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             const ctx = .{ .host = host, .tdb = tdb };
