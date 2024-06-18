@@ -322,8 +322,8 @@ const TypeAttributes = packed struct {
     is_supported: bool = false,
     is_comptime_only: bool = false,
     is_arguments: bool = false,
+    is_slice: bool = false,
     has_pointer: bool = false,
-    has_associate: bool = false,
     known: bool = false,
 };
 
@@ -341,15 +341,12 @@ const TypeData = struct {
         return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
     }
 
-    fn getAssociateSlot(comptime self: @This()) usize {
-        if (!self.attrs.has_associate) {
-            @compileError("Type does not have associate slot: " ++ @typeName(self.Type));
-        }
-        return self.getSlot() + 1;
-    }
-
     fn getStructureType(comptime self: @This()) StructureType {
-        return if (self.attrs.is_arguments) .arg_struct else switch (@typeInfo(self.Type)) {
+        return if (self.attrs.is_arguments)
+            .arg_struct
+        else if (self.attrs.is_slice)
+            .slice
+        else switch (@typeInfo(self.Type)) {
             .Bool,
             .Int,
             .ComptimeInt,
@@ -411,6 +408,15 @@ const TypeData = struct {
         };
     }
 
+    fn getElementType(comptime self: @This()) type {
+        return if (self.attrs.is_slice)
+            @field(self.Type, "Type")
+        else switch (@typeInfo(self.Type)) {
+            inline .Array, .Vector, .Pointer => |ar| ar.child,
+            else => @compileError("Not an array, vector, or slice"),
+        };
+    }
+
     fn getByteSize(comptime self: @This()) ?usize {
         return switch (@typeInfo(self.Type)) {
             .Null, .Undefined => 0,
@@ -446,29 +452,17 @@ const TypeData = struct {
         };
     }
 
-    fn getSliceName(comptime self: @This()) [:0]const u8 {
-        const pt = @typeInfo(self.Type).Pointer;
-        const name = @typeName(self.Type);
-        const needle = if (pt.size == .Slice) "[" else "*";
-        const replacement = if (pt.size == .Slice) "[_" else "_";
-        if (comptime std.mem.indexOf(u8, name, needle)) |index| {
-            return std.fmt.comptimePrint("{s}{s}{s}", .{
-                name[0..index],
-                replacement,
-                name[index + needle.len .. name.len],
-            });
-        } else {
-            @compileError("Unexpected pointer type: " ++ name);
-        }
-    }
-
-    fn getSentinel(comptime self: @This()) ?@typeInfo(self.Type).Pointer.child {
-        if (@typeInfo(self.Type).Pointer.sentinel) |ptr| {
-            const sentinel_ptr: *const @typeInfo(self.Type).Pointer.child = @alignCast(@ptrCast(ptr));
-            return sentinel_ptr.*;
-        } else {
-            return null;
-        }
+    fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
+        return if (self.attrs.is_slice)
+            @field(self.Type, "sentinel")
+        else switch (@typeInfo(self.Type)) {
+            .Pointer => |pt| if (pt.sentinel) |ptr| deref: {
+                const ST = Sentinel(self.getElementType());
+                const sentinel_ptr: *const ST = @alignCast(@ptrCast(ptr));
+                break :deref sentinel_ptr.*;
+            } else null,
+            else => @compileError("Not applicable"),
+        };
     }
 
     fn getSelectorType(comptime self: @This()) ?type {
@@ -541,9 +535,9 @@ const TypeData = struct {
         };
     }
 
-    fn isSlice(comptime self: @This()) bool {
+    fn isSingle(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
-            .Pointer => |pt| pt.size != .One,
+            .Pointer => |pt| pt.size == .One,
             else => false,
         };
     }
@@ -603,6 +597,11 @@ test "TypeData.getStructureType" {
     assertCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
 }
 
+test "TypeData.getElementType" {
+    assertCT(TypeData.getElementType(.{ .Type = []i32 }) == i32);
+    assertCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+}
+
 test "TypeData.getMemberType" {
     assertCT(TypeData.getMemberType(.{ .Type = i32 }) == .int);
     assertCT(TypeData.getMemberType(.{ .Type = u32 }) == .uint);
@@ -640,11 +639,11 @@ test "TypeData.isConst" {
     assertCT(TypeData.isConst(.{ .Type = *const i32 }) == true);
 }
 
-test "TypeData.isSlice" {
-    assertCT(TypeData.isSlice(.{ .Type = i32 }) == false);
-    assertCT(TypeData.isSlice(.{ .Type = *i32 }) == false);
-    assertCT(TypeData.isSlice(.{ .Type = []i32 }) == true);
-    assertCT(TypeData.isSlice(.{ .Type = [*]i32 }) == true);
+test "TypeData.isSingle" {
+    assertCT(TypeData.isSingle(.{ .Type = i32 }) == false);
+    assertCT(TypeData.isSingle(.{ .Type = *i32 }) == true);
+    assertCT(TypeData.isSingle(.{ .Type = []i32 }) == false);
+    assertCT(TypeData.isSingle(.{ .Type = [*]i32 }) == false);
 }
 
 test "TypeData.isTuple" {
@@ -672,24 +671,11 @@ test "TypeData.isBitVector" {
     assertCT(TypeData.isBitVector(.{ .Type = B }) == false);
 }
 
-test "TypeData.getSliceName" {
-    const name1 = comptime TypeData.getSliceName(.{ .Type = []const u8 });
-    assertCT(std.mem.eql(u8, name1[0..3], "[_]"));
-    const name2 = comptime TypeData.getSliceName(.{ .Type = [:0]const u8 });
-    assertCT(std.mem.eql(u8, name2[0..5], "[_:0]"));
-    const name3 = comptime TypeData.getSliceName(.{ .Type = [][4]u8 });
-    assertCT(std.mem.eql(u8, name3[0..6], "[_][4]"));
-    const name4 = comptime TypeData.getSliceName(.{ .Type = [*:0]const u8 });
-    assertCT(std.mem.eql(u8, name4[0..5], "[_:0]"));
-    const name5 = comptime TypeData.getSliceName(.{ .Type = [*]const u8 });
-    assertCT(std.mem.eql(u8, name5[0..3], "[_]"));
-    const name6 = comptime TypeData.getSliceName(.{ .Type = [*c]const u8 });
-    assertCT(std.mem.eql(u8, name6[0..4], "[_c]"));
-}
-
 test "TypeData.getSentinel" {
-    assertCT(TypeData.getSentinel(.{ .Type = [*:0]const u8 }) == 0);
-    assertCT(TypeData.getSentinel(.{ .Type = [*:7]const i32 }) == 7);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(u8, 0), .attrs = .{ .is_slice = true } }) orelse -1 == 0);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, 7), .attrs = .{ .is_slice = true } }) orelse -1 == 7);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, -2), .attrs = .{ .is_slice = true } }) orelse -1 == -2);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
 }
 
 test "TypeData.getSelectorType" {
@@ -825,7 +811,20 @@ const TypeDataCollector = struct {
         // add other implicit types
         switch (@typeInfo(T)) {
             .NoReturn => self.add(void),
-            .Pointer => self.add(usize),
+            .Pointer => |pt| {
+                self.add(usize);
+                if (pt.size != .One) {
+                    const td = self.at(index);
+                    const sentinel = td.getSentinel();
+                    const slice_index = self.append(Slice(pt.child, sentinel));
+                    const slice_td = self.at(slice_index);
+                    slice_td.attrs.is_slice = true;
+                    slice_td.name = if (sentinel) |s|
+                        std.fmt.comptimePrint("[_:{d}]{s}", .{ s, @typeName(pt.child) })
+                    else
+                        std.fmt.comptimePrint("[_]{s}", .{@typeName(pt.child)});
+                }
+            },
             .ErrorSet => self.add(ErrorIntType()),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
@@ -901,10 +900,6 @@ const TypeDataCollector = struct {
         }
         td.slot = self.next_slot;
         self.next_slot += 1;
-        if (td.attrs.has_associate) {
-            // additional slot for type associate
-            self.next_slot += 1;
-        }
     }
 
     fn getAttributes(comptime self: *@This(), comptime T: type) TypeAttributes {
@@ -951,7 +946,6 @@ const TypeDataCollector = struct {
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
-                td.attrs.has_associate = pt.size != .One; // associated slice class
             },
             inline .Array, .Optional => |ar| {
                 const child_attrs = self.getAttributes(ar.child);
@@ -1282,7 +1276,6 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         .error_set,
         .@"enum",
         => try addPrimitiveMember(ctx, structure, td),
-        .array => try addArrayMember(ctx, structure, td),
         .@"struct",
         .extern_struct,
         .packed_struct,
@@ -1297,6 +1290,8 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         .slice_pointer,
         .c_pointer,
         => try addPointerMember(ctx, structure, td),
+        .array => try addArrayMember(ctx, structure, td),
+        .slice => try addSliceMember(ctx, structure, td),
         .error_union => try addErrorUnionMembers(ctx, structure, td),
         .optional => try addOptionalMembers(ctx, structure, td),
         .vector => try addVectorMember(ctx, structure, td),
@@ -1321,7 +1316,7 @@ fn addPrimitiveMember(ctx: anytype, structure: Value, comptime td: TypeData) !vo
 }
 
 fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.get(@typeInfo(td.Type).Array.child);
+    const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(),
         .bit_size = child_td.getBitSize(),
@@ -1330,8 +1325,32 @@ fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     }, false);
 }
 
+fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
+    const child_td = ctx.tdb.get(td.getElementType());
+    try ctx.host.attachMember(structure, .{
+        .member_type = child_td.getMemberType(),
+        .bit_size = child_td.getBitSize(),
+        .byte_size = child_td.getByteSize(),
+        .structure = try getStructure(ctx, child_td.Type),
+    }, false);
+    if (td.getSentinel()) |sentinel| {
+        try ctx.host.attachMember(structure, .{
+            .name = "sentinel",
+            .member_type = child_td.getMemberType(),
+            .bit_offset = 0,
+            .bit_size = child_td.getBitSize(),
+            .byte_size = child_td.getByteSize(),
+            .structure = try getStructure(ctx, child_td.Type),
+        }, false);
+        const memory = Memory.from(&sentinel, true);
+        const dv = try ctx.host.captureView(memory);
+        const template = try ctx.host.createTemplate(dv);
+        try ctx.host.attachTemplate(structure, template, false);
+    }
+}
+
 fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.get(@typeInfo(td.Type).Vector.child);
+    const child_td = ctx.tdb.get(td.getElementType());
     const child_byte_size = if (td.isBitVector()) null else child_td.getByteSize();
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(),
@@ -1343,53 +1362,14 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
 
 fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(@typeInfo(td.Type).Pointer.child);
-    const child_structure = try getStructure(ctx, child_td.Type);
-    const target_structure = if (comptime !td.isSlice()) child_structure else define_slice: {
-        const slice_def: Structure = .{
-            .name = td.getSliceName(),
-            .structure_type = .slice,
-            .length = null,
-            .byte_size = child_td.getByteSize(),
-            .alignment = child_td.getAlignment(),
-            .has_pointer = child_td.hasPointer(),
-        };
-        const slice_structure = try ctx.host.beginStructure(slice_def);
-        const slice_slot = td.getAssociateSlot();
-        try ctx.host.writeSlot(null, slice_slot, slice_structure);
-        try ctx.host.attachMember(slice_structure, .{
-            .member_type = child_td.getMemberType(),
-            .bit_size = child_td.getBitSize(),
-            .byte_size = child_td.getByteSize(),
-            .structure = child_structure,
-        }, false);
-        if (comptime @typeInfo(child_td.Type) != .Opaque) {
-            // need the check for opaque child, since we cannot define an optional opaque
-            // which getSentinel() would return
-            if (td.getSentinel()) |sentinel| {
-                try ctx.host.attachMember(slice_structure, .{
-                    .name = "sentinel",
-                    .member_type = child_td.getMemberType(),
-                    .bit_offset = 0,
-                    .bit_size = child_td.getBitSize(),
-                    .byte_size = child_td.getByteSize(),
-                    .structure = child_structure,
-                }, false);
-                const memory = Memory.from(&sentinel, true);
-                const dv = try ctx.host.captureView(memory);
-                const template = try ctx.host.createTemplate(dv);
-                try ctx.host.attachTemplate(slice_structure, template, false);
-            }
-        }
-        try ctx.host.finalizeShape(slice_structure);
-        try ctx.host.endStructure(slice_structure);
-        break :define_slice slice_structure;
-    };
+    const sentinel = comptime td.getSentinel();
+    const TT = if (comptime td.isSingle()) child_td.Type else Slice(child_td.Type, sentinel);
     try ctx.host.attachMember(structure, .{
         .member_type = td.getMemberType(),
         .bit_size = td.getBitSize(),
         .byte_size = td.getByteSize(),
         .slot = 0,
-        .structure = target_structure,
+        .structure = try getStructure(ctx, TT),
     }, false);
 }
 
@@ -1871,6 +1851,42 @@ test "ArgumentStruct" {
     const ArgC = ArgumentStruct(@TypeOf(Test.C));
     const fieldsC = std.meta.fields(ArgC);
     assert(fieldsC.len == 3);
+}
+
+fn Sentinel(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        // optional opaque is illegal
+        .Opaque => void,
+        else => T,
+    };
+}
+
+test "Sentinel" {
+    const A = Sentinel(u8);
+    assert(A == u8);
+    const B = Sentinel(opaque {});
+    assert(B == void);
+}
+
+fn Slice(comptime T: type, s: ?Sentinel(T)) type {
+    const ET = switch (@typeInfo(T)) {
+        .Opaque => u8,
+        else => T,
+    };
+    return struct {
+        const Type = T;
+        const sentinel = s;
+
+        element: ET,
+    };
+}
+
+test "Slice" {
+    const A = Slice(u8, null);
+    const B = Slice(u8, null);
+    const C = Slice(u8, 0);
+    assert(A == B);
+    assert(C != B);
 }
 
 fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {
