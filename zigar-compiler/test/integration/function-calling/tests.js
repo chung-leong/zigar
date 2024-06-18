@@ -455,9 +455,76 @@ export function addTests(importModule, options) {
       const { getRoot } = await importTest('handle-recursive-structure');
       const root = getRoot();
       const parent = root.valueOf();
-      // const [ child1, child2 ]= parent.children;
-      // expect(child1.parent).to.equal(parent);
-      // expect(child2.parent).to.equal(parent);
+      const [ child1, child2 ]= parent.children;
+      expect(child1.parent).to.equal(parent);
+      expect(child2.parent).to.equal(parent);
+    });
+    it('should accept a multi-pointer', async function() {
+      this.timeout(120000);
+      const { print } = await importTest('accept-multi-pointer');
+      const list = [
+        { a: 1, b: 2 },
+        { a: 3, b: 4 },
+        { a: 5, b: 6 },
+        { a: 7, b: 8 },
+      ];
+      const lines = await capture(() => print(list, list.length));
+      expect(lines).to.eql([
+        'accept-multi-pointer.Object{ .a = 1, .b = 2 }',
+        'accept-multi-pointer.Object{ .a = 3, .b = 4 }',
+        'accept-multi-pointer.Object{ .a = 5, .b = 6 }',
+        'accept-multi-pointer.Object{ .a = 7, .b = 8 }'
+      ]);
+    });
+    it('should accept a C pointer', async function() {
+      this.timeout(120000);
+      const { print, Object } = await importTest('accept-c-pointer');
+      const list = [
+        { a: 1, b: 2 },
+        { a: 3, b: 4 },
+        { a: 5, b: 6 },
+        { a: 7, b: 8 },
+      ];
+      const lines1 = await capture(() => print(list, list.length));
+      expect(lines1).to.eql([
+        'accept-c-pointer.Object{ .a = 1, .b = 2 }',
+        'accept-c-pointer.Object{ .a = 3, .b = 4 }',
+        'accept-c-pointer.Object{ .a = 5, .b = 6 }',
+        'accept-c-pointer.Object{ .a = 7, .b = 8 }'
+      ]);
+      const lines2 = await capture(() => print(list[2], 1));
+      expect(lines2).to.eql([
+        'accept-c-pointer.Object{ .a = 5, .b = 6 }',
+      ]);
+      const object = new Object({ a: 9, b: 10 });
+      const lines3 = await capture(() => print(object, 1));
+      expect(lines3).to.eql([
+        'accept-c-pointer.Object{ .a = 9, .b = 10 }',
+      ]);
+    });
+    it('should return a multi-pointer', async function() {
+      this.timeout(120000);
+      const { getPointer } = await importTest('return-multi-pointer');
+      const pointer = getPointer();
+      expect(pointer.length).to.equal(1);
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 } ]);
+      expect(() => pointer.length = 5).to.not.throw();
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 }, { a: 6, b: 7 }, { a: 8, b: 9 } ]);
+      expect(() => pointer.length = 6).to.throw(TypeError);
+      expect(() => pointer.length = 3).to.not.throw();
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
+    });
+    it('should return a C pointer', async function() {
+      this.timeout(120000);
+      const { getPointer } = await importTest('return-c-pointer');
+      const pointer = getPointer();
+      expect(pointer.length).to.equal(1);
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 } ]);
+      expect(() => pointer.length = 5).to.not.throw();
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 }, { a: 6, b: 7 }, { a: 8, b: 9 } ]);
+      expect(() => pointer.length = 6).to.throw(TypeError);
+      expect(() => pointer.length = 3).to.not.throw();
+      expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
     });
   })
 }

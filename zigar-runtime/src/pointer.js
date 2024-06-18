@@ -11,7 +11,8 @@ import { convertToJSON, getValueOf } from './special.js';
 import {
   ADDRESS, ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER,
   LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
-  PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
+  PROP_SETTERS, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE,
+  WRITE_DISABLER
 } from './symbol.js';
 import { MemberType, StructureType, isPointer } from './types.js';
 
@@ -199,11 +200,30 @@ export function definePointer(structure, env) {
           throw new ReadOnlyTarget(structure);
         }
       }
+    } else if (type === StructureType.CPointer && arg instanceof Target.child) {
+      arg = Target(arg[MEMORY]);
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv);
     } else if (arg !== undefined && !arg[MEMORY]) {
+      if (type === StructureType.CPointer) {
+        if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
+          let single = true;
+          // make sure the object doesn't contain special props for the slice
+          const propSetters = Target.prototype[PROP_SETTERS];
+          for (const key of Object.keys(arg)) {
+            const set = propSetters[key];
+            if (set?.special) {
+              single = false;
+              break;
+            }
+          }
+          if (single) {
+            arg = [ arg ];
+          }
+        }
+      }
       // autovivificate target object
       const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
       if (runtimeSafety) {

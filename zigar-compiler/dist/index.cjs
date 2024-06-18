@@ -2694,11 +2694,30 @@ function definePointer(structure, env) {
           throw new ReadOnlyTarget(structure);
         }
       }
+    } else if (type === StructureType.CPointer && arg instanceof Target.child) {
+      arg = Target(arg[MEMORY]);
     } else if (isCompatible(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv);
     } else if (arg !== undefined && !arg[MEMORY]) {
+      if (type === StructureType.CPointer) {
+        if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
+          let single = true;
+          // make sure the object doesn't contain special props for the slice
+          const propSetters = Target.prototype[PROP_SETTERS];
+          for (const key of Object.keys(arg)) {
+            const set = propSetters[key];
+            if (set?.special) {
+              single = false;
+              break;
+            }
+          }
+          if (single) {
+            arg = [ arg ];
+          }
+        }
+      }
       // autovivificate target object
       const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
       if (runtimeSafety) {
@@ -3043,12 +3062,11 @@ function defineStructShape(structure, env) {
   const length = (isTuple && members.length > 0)
   ? parseInt(members[members.length - 1].name) + 1
   : 0;
-  console.log({ isIterator });
   const getIterator = (isIterator)
   ? getIteratorIterator
   : (isTuple)
-    ? getStructIterator
-    : getVectorIterator;
+    ? getVectorIterator
+    : getStructIterator;
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer },
     dataView: getDataViewDescriptor(structure),
@@ -3088,9 +3106,9 @@ function getIteratorIterator() {
   const self = this;
   return {
     next() {
+      debugger;
       const value = self.next();
       const done = value === null;
-      console.log({ value, done });
       return { value, done };
     },
   };
@@ -3546,7 +3564,6 @@ function defineEnumerationShape(structure, env) {
     instance: {
       members: [ member ],
     },
-    isIterator,
   } = structure;
   const { get, set } = getDescriptor(member, env);
   const expected = [ 'string', 'number', 'tagged union' ];
@@ -3594,7 +3611,6 @@ function defineEnumerationShape(structure, env) {
         return get.call(this, 'number');
     }
   };
-  const getIterator = (isIterator) ? getIteratorIterator : null;
   const instanceDescriptors = {
     $: { get, set },
     dataView: getDataViewDescriptor(structure),
@@ -3604,7 +3620,6 @@ function defineEnumerationShape(structure, env) {
     toString: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
-    [Symbol.iterator]: getIterator && { value: getIterator },
     [Symbol.toPrimitive]: { value: toPrimitive },
     [COPIER]: { value: getMemoryCopier(byteSize) },
     [WRITE_DISABLER]: { value: makeReadOnly },
@@ -3844,6 +3859,7 @@ function defineOpaque(structure, env) {
   const {
     byteSize,
     align,
+    isIterator,
   } = structure;
   const initializer = function() {
     throw new CreatingOpaque(structure);
@@ -4610,7 +4626,6 @@ function generateCode(definition, params) {
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
-  add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
@@ -4621,21 +4636,30 @@ function generateCode(definition, params) {
     add(`env.linkVariables(${!topLevelAwait});`);
   }
   add(`\n// export root namespace and its methods and constants`);
-  add(`const { constructor } = root;`);
-  if (!omitExports) {
-    add(`export { constructor as default, __zigar }`);
+  if (omitExports) {
+    add(`const { constructor } = root;`);
+    add(`const __zigar = env.getSpecialExports();`);
+  } else {
     // the first two exports are default and __zigar
-    const exportables = exports.slice(2);
-    if (exportables.length > 0) {
-      add(`export const {`);
-      for (const name of exportables) {
-        add(`${name},`);
+    add(`const { constructor: v0 } = root;`);
+    add(`const v1 = env.getSpecialExports();`);
+    if (exports.length > 2) {
+      add(`const {`);
+      for (const [ index, name ] of exports.entries()) {
+        if (index >= 2) {
+          add(`${name}: v${index},`);
+        }
       }
-      add(`} = constructor;`);
+      add(`} = v0;`);
     }
+    add(`export {`);
+    for (const [ index, name ] of exports.entries()) {
+      add(`v${index} as ${name},`);
+    }
+    add(`};`);
   }
   if (topLevelAwait && binarySource) {
-    add(`await __zigar.init();`);
+    add(`await v1.init();`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };
