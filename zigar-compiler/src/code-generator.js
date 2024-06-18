@@ -33,7 +33,6 @@ export function generateCode(definition, params) {
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
-  add(`const __zigar = env.getSpecialExports();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
@@ -44,21 +43,30 @@ export function generateCode(definition, params) {
     add(`env.linkVariables(${!topLevelAwait});`);
   }
   add(`\n// export root namespace and its methods and constants`);
-  add(`const { constructor } = root;`);
-  if (!omitExports) {
-    add(`export { constructor as default, __zigar }`);
+  if (omitExports) {
+    add(`const { constructor } = root;`);
+    add(`const __zigar = env.getSpecialExports();`);
+  } else {
     // the first two exports are default and __zigar
-    const exportables = exports.slice(2);
-    if (exportables.length > 0) {
-      add(`export const {`)
-      for (const name of exportables) {
-        add(`${name},`);
+    add(`const { constructor: v0 } = root;`);
+    add(`const v1 = env.getSpecialExports();`);
+    if (exports.length > 2) {
+      add(`const {`)
+      for (const [ index, name ] of exports.entries()) {
+        if (index >= 2) {
+          add(`${name}: v${index},`);
+        }
       }
-      add(`} = constructor;`);
+      add(`} = v0;`);
     }
+    add(`export {`);
+    for (const [ index, name ] of exports.entries()) {
+      add(`v${index} as ${name},`);
+    }
+    add(`};`)
   }
   if (topLevelAwait && binarySource) {
-    add(`await __zigar.init();`);
+    add(`await v1.init();`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };
