@@ -824,7 +824,7 @@ describe('Pointer functions', function() {
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
-        byteSize: 16,
+        byteSize: 8,
         hasPointer: false,
       });
       env.attachMember(sliceStructure, {
@@ -858,6 +858,18 @@ describe('Pointer functions', function() {
       expect(pointer[0].valueOf()).to.eql({ cat: 123, dog: 456 });
       expect(pointer[1].valueOf()).to.eql({ cat: 1230, dog: 4560 });
       expect(pointer[2].valueOf()).to.eql({ cat: 12300, dog: 45600 });
+      const pointer2 = pointer.subarray();
+      expect(pointer2).to.not.equal(pointer);
+      expect(pointer2['*']).to.equal(pointer['*']);
+      const pointer3 = pointer.subarray(1, -1);
+      expect(pointer3.length).to.equal(1);
+      expect(pointer3.valueOf()).to.eql([ { cat: 1230, dog: 4560 } ]);
+      pointer3[0] = { cat: 777, dog: 888 };
+      expect(pointer[1].valueOf()).to.eql({ cat: 777, dog: 888 });
+      const pointer4 = pointer.slice();
+      pointer4[0] = { cat: 1, dog: 2 };
+      expect(pointer4.valueOf()).to.eql([ { cat: 1, dog: 2 }, { cat: 777, dog: 888 }, { cat: 12300, dog: 45600 } ])
+      expect(pointer.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 777, dog: 888 }, { cat: 12300, dog: 45600 } ])
     })
     it('should automatically cast to slice from typed array', function() {
       const intStructure = env.beginStructure({
