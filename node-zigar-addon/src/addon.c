@@ -478,10 +478,7 @@ napi_value find_sentinel(napi_env env,
     } else if (napi_get_dataview_info(env, args[1], &sentinel_len, &sentinel_data, NULL, NULL) != napi_ok) {
         return throw_error(env, "Sentinel value must be DataView");
     }
-    if (address == 0) {
-        return 0;
-    }
-    if (sentinel_len > 0) {
+    if (address && sentinel_len > 0) {
         if (address) {
             uint8_t* sentinel_bytes = (uint8_t*) sentinel_data;
             uint8_t* src_bytes = (uint8_t*) address;
@@ -491,6 +488,7 @@ napi_value find_sentinel(napi_env env,
                     if (napi_create_uint32(env, j, &offset) != napi_ok) {
                         return throw_last_error(env);
                     }
+                    return offset;
                 }
             }
         } else {

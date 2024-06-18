@@ -9,7 +9,6 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Pointer', function() {
-    skip.
     it('should import pointer as static variables', async function() {
       this.timeout(120000);
       const {
