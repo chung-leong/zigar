@@ -104,7 +104,45 @@ export function defineSlice(structure, env) {
       throw new InvalidArrayInitializer(structure, arg);
     }
   };
+  const getLength = function() {
+    return this[LENGTH];
+  };
+  const adjustIndex = function(index, len) {
+    index = index | 0;
+    if (index < 0) {
+      index = len + index;
+      if (index < 0) {
+        index = 0;
+      }
+    } else {
+      if (index > len) {
+        index = len;
+      }
+    }
+    return index;
+  };
+  function getSubArrayView(begin, end) {
+    begin = (begin === undefined) ? 0 : adjustIndex(begin, this.length);
+    end = (end === undefined) ? this.length : adjustIndex(end, this.length);
+    const offset = begin * elementSize;
+    const len = (end * elementSize) - offset;
+    return env.obtainView(this[MEMORY].buffer, offset, len);
+  }
+  function getSubarrayOf(begin, end) {
+    const dv = getSubArrayView.call(this, begin, end);
+    return constructor(dv);
+  };
+  const getSliceOf = function(begin, end, options = {}) {
+    const {
+      fixed = false
+    } = options;
+    const source = { [MEMORY]: getSubArrayView.call(this, begin, end) };
+    const dest = constructor(env.allocateMemory(source[MEMORY].byteLength, align, fixed));
+    copier.call(dest, source);
+    return dest;
+  };
   const finalizer = createArrayProxy;
+  const copier = getMemoryCopier(elementSize, true);
   const constructor = structure.constructor = createConstructor(structure, { initializer, shapeDefiner, finalizer }, env);
   const typedArray = structure.typedArray = getTypedArrayClass(member);
   const hasObject = member.type === MemberType.Object;
@@ -119,12 +157,14 @@ export function defineSlice(structure, env) {
     get: { value: get },
     set: { value: set },
     entries: { value: getArrayEntries },
+    slice: { value: getSliceOf },
+    subarray: { value: getSubarrayOf },
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: getDestructor(env) },
     [Symbol.iterator]: { value: getArrayIterator },
     [ENTRIES_GETTER]: { value: getArrayEntries },
-    [COPIER]: { value: getMemoryCopier(elementSize, true) },
+    [COPIER]: { value: copier },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env, true) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
     [WRITE_DISABLER]: { value: makeArrayReadOnly },
@@ -138,11 +178,6 @@ export function defineSlice(structure, env) {
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
-
-function getLength() {
-  return this[LENGTH];
-};
-
 
 export function getSentinel(structure, env) {
   const {

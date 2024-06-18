@@ -243,6 +243,26 @@ export function definePointer(structure, env) {
     }
     this[TARGET_SETTER](arg);
   };
+  const getTargetPrimitive = (targetType === StructureType.Primitive)
+  ? function(hint) {
+      const target = this[TARGET_GETTER]();
+      return target[Symbol.toPrimitive](hint);
+    }
+  : null;
+  const getSliceOf = (targetType === StructureType.Slice)
+  ? function(begin, end) {
+      const target = this[TARGET_GETTER]();
+      const newTarget = target.slice(begin, end);
+      return new constructor(newTarget);
+    }
+  : null;
+  const getSubarrayOf = (targetType === StructureType.Slice)
+  ? function(begin, end, options) {
+      const target = this[TARGET_GETTER]();
+      const newTarget = target.subarray(begin, end, options);
+      return new constructor(newTarget);
+    }
+  : null;
   const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
   const instanceDescriptors = {
     '*': { get: getTarget, set: setTarget },
@@ -251,7 +271,9 @@ export function definePointer(structure, env) {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
     delete: { value: deleteTarget },
-    [Symbol.toPrimitive]: (targetType === StructureType.Primitive) && { value: getTargetPrimitive },
+    slice: getSliceOf && { value: getSliceOf },
+    subarray: getSubarrayOf && { value: getSubarrayOf },
+    [Symbol.toPrimitive]: getTargetPrimitive && { value: getTargetPrimitive },
     [TARGET_GETTER]: { value: getTargetObject },
     [TARGET_SETTER]: { value: setTargetObject },
     [TARGET_UPDATER]: { value: updateTarget },
@@ -284,11 +306,6 @@ function makePointerReadOnly() {
 function deleteTarget() {
   const target = this[TARGET_GETTER]();
   target?.delete();
-}
-
-function getTargetPrimitive(hint) {
-  const target = this[TARGET_GETTER]();
-  return target[Symbol.toPrimitive](hint);
 }
 
 export function getProxy() {

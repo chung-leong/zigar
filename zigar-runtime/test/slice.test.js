@@ -36,6 +36,24 @@ describe('Slice functions', function() {
       object.set(1, 321);
       expect(object.get(1)).to.equal(321);
       expect(object.length).to.equal(8);
+      const subarray1 = object.subarray();
+      expect(subarray1).to.equal(object);
+      const subarray2 = object.subarray(1, -1);
+      expect(subarray2).to.not.equal(object);
+      expect(subarray2.length).to.equal(6);
+      subarray2[0] = 1234;
+      expect(subarray2[0]).to.equal(1234);
+      expect(subarray1[1]).to.equal(1234);
+      const subarray3 = object.subarray(-1000, 1000);
+      expect(subarray3).to.equal(object);
+      const subarray4 = object.subarray(-1000, -1000);
+      expect(subarray4.length).to.equal(0);
+      const slice1 = object.slice();
+      expect(slice1.length).to.equal(8);
+      expect(slice1[1]).to.equal(1234);
+      slice1[1] = 4567;
+      expect(slice1[1]).to.equal(4567);
+      expect(subarray2[0]).to.equal(1234);
     })
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
