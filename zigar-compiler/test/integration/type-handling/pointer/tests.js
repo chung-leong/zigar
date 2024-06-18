@@ -21,6 +21,8 @@ export function addTests(importModule, options) {
         freeText,
         u8_slice_w_sentinel,
         i64_slice_w_sentinel,
+        u8_multi_pointer,
+        u8_c_pointer
       } = await importTest('as-static-variables');
       expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
       expect([ ...int32_slice ]).to.eql([ 123, 456, 789 ]);
@@ -73,6 +75,20 @@ export function addTests(importModule, options) {
       expect([ ...i64_slice_w_sentinel ]).to.eql([ 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n ]);
       expect(int32_slice.valueOf()).to.eql([ 123, 456, 789 ]);
       expect(JSON.stringify(int32_slice)).to.equal('[123,456,789]');
+      expect(u8_multi_pointer.length).to.equal(1);
+      expect(u8_multi_pointer.string).to.equal('H');
+      expect(() => u8_multi_pointer.length = 11).to.not.throw();
+      expect(u8_multi_pointer.length).to.equal(11);
+      expect(u8_multi_pointer.string).to.equal('Hello world');
+      expect(u8_c_pointer.length).to.equal(1);
+      expect(u8_c_pointer.string).to.equal('H');
+      expect(() => u8_c_pointer.length = 11).to.not.throw();
+      expect(u8_c_pointer.length).to.equal(11);
+      expect(u8_c_pointer.string).to.equal('Hello world');
+      const subarray = u8_c_pointer.subarray(0, 5);
+      const subslice = u8_c_pointer.subarray(0, 5);
+      expect(subarray.string).to.equal('Hello');
+      expect(subslice.string).to.equal('Hello');
     })
     it('should print pointer arguments', async function() {
       this.timeout(120000);

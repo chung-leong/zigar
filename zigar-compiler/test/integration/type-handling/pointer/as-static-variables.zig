@@ -35,3 +35,6 @@ pub fn freeText(dest: []const u8) void {
 pub const u8_slice_w_sentinel: [*:0]const u8 = "Hello world";
 const i64_array: [10]i64 = .{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 pub const i64_slice_w_sentinel: [*:7]const i64 = @ptrCast(&i64_array);
+
+pub const u8_multi_pointer: [*]const u8 = @ptrCast(u8_slice_w_sentinel);
+pub const u8_c_pointer: [*]const u8 = @ptrCast(u8_slice_w_sentinel);
