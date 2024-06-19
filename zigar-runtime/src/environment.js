@@ -390,9 +390,6 @@ export class Environment {
   endStructure(structure) {
     this.structures.push(structure);
     this.finalizeStructure(structure);
-    for (const structure of this.structures) {
-      this.acquireDefaultPointers(structure);
-    }
   }
 
   defineFactoryArgStruct() {
@@ -471,6 +468,7 @@ export class Environment {
   }
 
   exportStructures() {
+    this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian } = this;
     return {
@@ -1032,14 +1030,16 @@ export class Environment {
   }
 
   /* COMPTIME-ONLY */
-  acquireDefaultPointers(structure) {
-    const { constructor, hasPointer, instance: { template } } = structure;
-    if (hasPointer && template && template[MEMORY]) {
-      // create a placeholder for retrieving default pointers
-      const placeholder = Object.create(constructor.prototype);
-      placeholder[MEMORY] = template[MEMORY];
-      placeholder[SLOTS] = template[SLOTS];
-      this.updatePointerTargets(placeholder);
+  acquireDefaultPointers() {
+    for (const structure of this.structures) {
+      const { constructor, hasPointer, instance: { template } } = structure;
+      if (hasPointer && template && template[MEMORY]) {
+        // create a placeholder for retrieving default pointers
+        const placeholder = Object.create(constructor.prototype);
+        placeholder[MEMORY] = template[MEMORY];
+        placeholder[SLOTS] = template[SLOTS];
+        this.updatePointerTargets(placeholder);
+      }
     }
   }
   /* COMPTIME-ONLY-END */

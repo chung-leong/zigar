@@ -11,6 +11,7 @@ export const MemberType = {
   Literal: 9,
   Null: 10,
   Undefined: 11,
+  Unsupported: 12,
 };
 
 export const StructureType = {

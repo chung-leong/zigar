@@ -78,6 +78,7 @@ pub const MemberType = enum(u32) {
     literal,
     null,
     undefined,
+    unsupported,
 };
 
 pub const Value = *opaque {};
@@ -385,11 +386,11 @@ const TypeData = struct {
     }
 
     fn getMemberType(comptime self: @This()) MemberType {
-        return switch (@typeInfo(self.Type)) {
+        return if (self.isSupported()) switch (@typeInfo(self.Type)) {
             .Bool => .bool,
             .Int => |int| if (int.signedness == .signed) .int else .uint,
             .Float => .float,
-            .Enum => |en| getMemberType(.{ .Type = en.tag_type }),
+            .Enum => |en| if (@typeInfo(en.tag_type).Int.signedness == .signed) .int else .uint,
             .ErrorSet => .uint,
             .Struct,
             .Union,
@@ -405,7 +406,7 @@ const TypeData = struct {
             .Void => .void,
             .Null => .null,
             else => .undefined,
-        };
+        } else .unsupported;
     }
 
     fn getElementType(comptime self: @This()) type {
@@ -993,9 +994,6 @@ const TypeDataCollector = struct {
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
                         const field_attrs = self.getAttributes(field.type);
-                        if (!field_attrs.is_supported) {
-                            td.attrs.is_supported = false;
-                        }
                         if (field_attrs.is_comptime_only) {
                             td.attrs.is_comptime_only = true;
                         }
@@ -1009,9 +1007,6 @@ const TypeDataCollector = struct {
                 td.attrs.is_supported = true;
                 inline for (un.fields) |field| {
                     const field_attrs = self.getAttributes(field.type);
-                    if (!field_attrs.is_supported) {
-                        td.attrs.is_supported = false;
-                    }
                     if (field_attrs.is_comptime_only) {
                         td.attrs.is_comptime_only = true;
                     }
@@ -1410,21 +1405,19 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
     const st = @typeInfo(td.Type).Struct;
     inline for (st.fields, 0..) |field, index| {
         const field_td = ctx.tdb.get(field.type);
-        if (comptime field_td.isSupported()) {
-            // comptime fields are not actually stored in the struct
-            // fields of comptime types in comptime structs are handled in the same manner
-            const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
-            try ctx.host.attachMember(structure, .{
-                .name = field.name,
-                .member_type = if (field.is_comptime) .@"comptime" else field_td.getMemberType(),
-                .is_required = field.default_value == null,
-                .bit_offset = if (is_actual) @bitOffsetOf(td.Type, field.name) else null,
-                .bit_size = if (is_actual) field_td.getBitSize() else null,
-                .byte_size = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
-                .slot = index,
-                .structure = try getStructure(ctx, field.type),
-            }, false);
-        }
+        // comptime fields are not actually stored in the struct
+        // fields of comptime types in comptime structs are handled in the same manner
+        const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
+        try ctx.host.attachMember(structure, .{
+            .name = field.name,
+            .member_type = if (field.is_comptime) .@"comptime" else field_td.getMemberType(),
+            .is_required = field.default_value == null,
+            .bit_offset = if (is_actual) @bitOffsetOf(td.Type, field.name) else null,
+            .bit_size = if (is_actual) field_td.getBitSize() else null,
+            .byte_size = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
+            .slot = index,
+            .structure = if (field_td.isSupported()) try getStructure(ctx, field.type) else null,
+        }, false);
     }
     if (st.backing_integer) |IT| {
         // add member for backing int

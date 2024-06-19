@@ -528,13 +528,16 @@ export function addTests(importModule, options) {
     })
     it('should call C functions', async function() {
       this.timeout(120000);
-      const { fwrite, puts, print } = await importTest('call-c-functions');
+      const { fwrite, puts, stream } = await importTest('call-c-functions');
       const buffer1 = Buffer.from('Hello world');
       const lines1 = await capture(() => puts(buffer1));
       expect(lines1).to.eql([ 'Hello world' ]);
+      const stdout = stream(1);
       const buffer2 = Buffer.from('Hello world!\n');
-      const lines2 = await capture(() => print(buffer2, buffer2.byteLength));
+      const lines2 = await capture(() => fwrite(buffer2, 1, buffer2.byteLength, stdout));
       expect(lines2).to.eql([ 'Hello world!' ]);
+      const lines3 = await capture(() => fwrite('Hello?', 1, 6, stdout));
+      expect(lines3).to.eql([ 'Hello?' ]);
     })
   })
 }
