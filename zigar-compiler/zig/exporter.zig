@@ -412,8 +412,25 @@ const TypeData = struct {
         return if (self.attrs.is_slice)
             @field(self.Type, "Type")
         else switch (@typeInfo(self.Type)) {
-            inline .Array, .Vector, .Pointer => |ar| ar.child,
+            inline .Array, .Vector => |ar| ar.child,
             else => @compileError("Not an array, vector, or slice"),
+        };
+    }
+
+    fn getTargetType(comptime self: @This()) type {
+        return switch (@typeInfo(self.Type)) {
+            .Pointer => |pt| switch (pt.size) {
+                .One => if (pt.child == anyopaque) Slice(u8, null) else pt.child,
+                else => define: {
+                    const ST = Sentinel(pt.child);
+                    const sentinel = if (pt.sentinel) |ptr| deref: {
+                        const sentinel_ptr: *const ST = @alignCast(@ptrCast(ptr));
+                        break :deref sentinel_ptr.*;
+                    } else null;
+                    break :define Slice(pt.child, sentinel);
+                },
+            },
+            else => @compileError("Not a pointer"),
         };
     }
 
@@ -453,15 +470,9 @@ const TypeData = struct {
     }
 
     fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
-        return if (self.attrs.is_slice)
-            @field(self.Type, "sentinel")
-        else switch (@typeInfo(self.Type)) {
-            .Pointer => |pt| if (pt.sentinel) |ptr| deref: {
-                const ST = Sentinel(self.getElementType());
-                const sentinel_ptr: *const ST = @alignCast(@ptrCast(ptr));
-                break :deref sentinel_ptr.*;
-            } else null,
-            else => @compileError("Not applicable"),
+        return switch (self.attrs.is_slice) {
+            true => @field(self.Type, "sentinel"),
+            else => @compileError("Not a slice"),
         };
     }
 
@@ -564,6 +575,19 @@ const TypeData = struct {
         };
     }
 
+    fn isIterator(comptime self: @This()) bool {
+        switch (@typeInfo(self.Type)) {
+            .Struct, .Union, .Opaque => if (@hasDecl(self.Type, "next")) {
+                const next = @field(self.Type, "next");
+                if (NextMethodReturnType(@TypeOf(next), self.Type)) |_| {
+                    return true;
+                }
+            },
+            else => {},
+        }
+        return false;
+    }
+
     fn isSupported(comptime self: @This()) bool {
         return self.attrs.is_supported;
     }
@@ -598,8 +622,13 @@ test "TypeData.getStructureType" {
 }
 
 test "TypeData.getElementType" {
-    assertCT(TypeData.getElementType(.{ .Type = []i32 }) == i32);
     assertCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+}
+
+test "TypeData.getTargetType" {
+    assertCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
+    assertCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(u8, null));
+    assertCT(TypeData.getTargetType(.{ .Type = *i32 }) == i32);
 }
 
 test "TypeData.getMemberType" {
@@ -669,6 +698,12 @@ test "TypeData.isBitVector" {
     const B = @Vector(4, f32);
     assertCT(TypeData.isBitVector(.{ .Type = A }) == true);
     assertCT(TypeData.isBitVector(.{ .Type = B }) == false);
+}
+
+test "TypeData.isIterator" {
+    assert(TypeData.isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
+    assert(TypeData.isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
+    assert(TypeData.isIterator(.{ .Type = std.fs.path }) == false);
 }
 
 test "TypeData.getSentinel" {
@@ -812,18 +847,18 @@ const TypeDataCollector = struct {
         switch (@typeInfo(T)) {
             .NoReturn => self.add(void),
             .Pointer => |pt| {
-                self.add(usize);
-                if (pt.size != .One) {
-                    const td = self.at(index);
-                    const sentinel = td.getSentinel();
-                    const slice_index = self.append(Slice(pt.child, sentinel));
+                const td = self.at(index);
+                const TT = td.getTargetType();
+                if (TT != pt.child) {
+                    const slice_index = self.append(TT);
                     const slice_td = self.at(slice_index);
                     slice_td.attrs.is_slice = true;
-                    slice_td.name = if (sentinel) |s|
+                    slice_td.name = if (slice_td.getSentinel()) |s|
                         std.fmt.comptimePrint("[_:{d}]{s}", .{ s, @typeName(pt.child) })
                     else
                         std.fmt.comptimePrint("[_]{s}", .{@typeName(pt.child)});
                 }
+                self.add(usize);
             },
             .ErrorSet => self.add(ErrorIntType()),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
@@ -1252,7 +1287,7 @@ fn getStructure(ctx: anytype, comptime T: type) Error!Value {
             .alignment = td.getAlignment(),
             .is_const = td.isConst(),
             .is_tuple = td.isTuple(),
-            .is_iterator = isIterator(T),
+            .is_iterator = td.isIterator(),
             .has_pointer = td.hasPointer(),
         };
         // create the structure and place it in the slot immediately
@@ -1361,9 +1396,7 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
 }
 
 fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const child_td = ctx.tdb.get(@typeInfo(td.Type).Pointer.child);
-    const sentinel = comptime td.getSentinel();
-    const TT = if (comptime td.isSingle()) child_td.Type else Slice(child_td.Type, sentinel);
+    const TT = td.getTargetType();
     try ctx.host.attachMember(structure, .{
         .member_type = td.getMemberType(),
         .bit_size = td.getBitSize(),
@@ -1691,25 +1724,6 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         },
         else => {},
     };
-}
-
-fn isIterator(comptime T: type) bool {
-    switch (@typeInfo(T)) {
-        .Struct, .Union, .Opaque => if (@hasDecl(T, "next")) {
-            const next = @field(T, "next");
-            if (NextMethodReturnType(@TypeOf(next), T)) |_| {
-                return true;
-            }
-        },
-        else => {},
-    }
-    return false;
-}
-
-test "isIterator" {
-    assert(isIterator(std.mem.SplitIterator(u8, .sequence)));
-    assert(isIterator(std.fs.path.ComponentIterator(.posix, u8)));
-    assert(isIterator(std.fs.path) == false);
 }
 
 fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {

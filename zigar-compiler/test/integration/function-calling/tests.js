@@ -374,7 +374,7 @@ export function addTests(importModule, options) {
       const ptr = echo(object1);
       const object2 = ptr['*'];
       expect(object2).to.equal(object1);
-    });
+    })
     it('should allow method calls', async function() {
       this.timeout(120000);
       const { Struct } = await importTest('allow-method-calls');
@@ -400,7 +400,7 @@ export function addTests(importModule, options) {
       expect(a.number).to.equal(130);
       b.add(4);
       expect(b.number).to.equal(460);
-    });
+    })
     it('should change pointer target', async function() {
       this.timeout(120000);
       const { default: module, change, print } = await importTest('change-pointer-target');
@@ -415,7 +415,7 @@ export function addTests(importModule, options) {
       module.number_ptr['*'] = 888;
       const [ line3 ] = await capture(() => print());
       expect(line3).to.equal('odd = 777, even = 888');
-    });
+    })
     it('should be able to call a function marked inline', async function() {
       this.timeout(120000);
       const { returnNumber } = await importTest('inline-function');
@@ -440,7 +440,7 @@ export function addTests(importModule, options) {
         user.print3();
       });
       expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
-    });
+    })
     it('should correctly return const pointer', async function() {
       this.timeout(120000);
       const { getUser } = await importTest('return-const-pointer');
@@ -449,7 +449,7 @@ export function addTests(importModule, options) {
       expect(() => user.name = "Jesus Christ").to.throw(TypeError);
       expect(() => user.address.street = "Nowhere").to.throw(TypeError);
       expect(() => user.address.zip = 33333).to.throw(TypeError);
-    });
+    })
     it('should correctly handle recursive structure', async function() {
       this.timeout(120000);
       const { getRoot } = await importTest('handle-recursive-structure');
@@ -458,7 +458,7 @@ export function addTests(importModule, options) {
       const [ child1, child2 ]= parent.children;
       expect(child1.parent).to.equal(parent);
       expect(child2.parent).to.equal(parent);
-    });
+    })
     it('should accept a multi-pointer', async function() {
       this.timeout(120000);
       const { print } = await importTest('accept-multi-pointer');
@@ -475,7 +475,7 @@ export function addTests(importModule, options) {
         'accept-multi-pointer.Object{ .a = 5, .b = 6 }',
         'accept-multi-pointer.Object{ .a = 7, .b = 8 }'
       ]);
-    });
+    })
     it('should accept a C pointer', async function() {
       this.timeout(120000);
       const { print, Object } = await importTest('accept-c-pointer');
@@ -501,7 +501,7 @@ export function addTests(importModule, options) {
       expect(lines3).to.eql([
         'accept-c-pointer.Object{ .a = 9, .b = 10 }',
       ]);
-    });
+    })
     it('should return a multi-pointer', async function() {
       this.timeout(120000);
       const { getPointer } = await importTest('return-multi-pointer');
@@ -525,6 +525,16 @@ export function addTests(importModule, options) {
       expect(() => pointer.length = 6).to.throw(TypeError);
       expect(() => pointer.length = 3).to.not.throw();
       expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
-    });
+    })
+    it('should call C functions', async function() {
+      this.timeout(120000);
+      const { fwrite, puts, print } = await importTest('call-c-functions');
+      const buffer1 = Buffer.from('Hello world');
+      const lines1 = await capture(() => puts(buffer1));
+      expect(lines1).to.eql([ 'Hello world' ]);
+      const buffer2 = Buffer.from('Hello world!\n');
+      const lines2 = await capture(() => print(buffer2, buffer2.byteLength));
+      expect(lines2).to.eql([ 'Hello world!' ]);
+    })
   })
 }
