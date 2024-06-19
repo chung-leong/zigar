@@ -325,6 +325,7 @@ const TypeAttributes = packed struct {
     is_arguments: bool = false,
     is_slice: bool = false,
     has_pointer: bool = false,
+    has_unsupported: bool = false,
     known: bool = false,
 };
 
@@ -600,6 +601,10 @@ const TypeData = struct {
     fn hasPointer(comptime self: @This()) bool {
         return self.attrs.has_pointer;
     }
+
+    fn hasUnsupported(comptime self: @This()) bool {
+        return if (self.attrs.is_supported) self.attrs.has_unsupported else true;
+    }
 };
 
 test "TypeData.getName" {
@@ -633,10 +638,10 @@ test "TypeData.getTargetType" {
 }
 
 test "TypeData.getMemberType" {
-    assertCT(TypeData.getMemberType(.{ .Type = i32 }) == .int);
-    assertCT(TypeData.getMemberType(.{ .Type = u32 }) == .uint);
-    assertCT(TypeData.getMemberType(.{ .Type = *u32 }) == .object);
-    assertCT(TypeData.getMemberType(.{ .Type = type }) == .type);
+    assertCT(TypeData.getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }) == .int);
+    assertCT(TypeData.getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }) == .uint);
+    assertCT(TypeData.getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }) == .object);
+    assertCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }) == .type);
 }
 
 test "TypeData.getByteSize" {
@@ -994,6 +999,9 @@ const TypeDataCollector = struct {
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
                         const field_attrs = self.getAttributes(field.type);
+                        if (!field_attrs.is_supported or field_attrs.has_unsupported) {
+                            td.attrs.has_unsupported = true;
+                        }
                         if (field_attrs.is_comptime_only) {
                             td.attrs.is_comptime_only = true;
                         }
@@ -1163,12 +1171,12 @@ test "TypeDataCollector.setAttributes" {
     comptime tdc.scan(Test);
     // is_supported
     assertCT(tdc.get(Test.StructA).isSupported() == true);
-    assertCT(tdc.get(Test.StructB).isSupported() == false);
+    assertCT(tdc.get(Test.StructB).isSupported() == true);
     assertCT(tdc.get(Thunk).isSupported() == false);
     assertCT(tdc.get(*Test.StructA).isSupported() == true);
-    assertCT(tdc.get(*Test.StructB).isSupported() == false);
+    assertCT(tdc.get(*Test.StructB).isSupported() == true);
     assertCT(tdc.get(Test.StructC).isSupported() == true);
-    assertCT(tdc.get(Test.StructD).isSupported() == false);
+    assertCT(tdc.get(Test.StructD).isSupported() == true);
     assertCT(tdc.get(Test.UnionA).isSupported() == true);
     assertCT(tdc.get(@TypeOf(null)).isSupported() == true);
     assertCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
@@ -1259,12 +1267,12 @@ test "TypeDatabase.get" {
     comptime tdc.scan(Test);
     const tdb = comptime tdc.createDatabase();
     assertCT(tdb.get(Test.StructA).isSupported() == true);
-    assertCT(tdb.get(Test.StructB).isSupported() == false);
+    assertCT(tdb.get(Test.StructB).isSupported() == true);
     assertCT(tdb.get(Thunk).isSupported() == false);
     assertCT(tdb.get(*Test.StructA).isSupported() == true);
     assertCT(tdb.get(*const Test.StructA).isSupported() == true);
     assertCT(tdb.get(Test.StructC).isSupported() == true);
-    assertCT(tdb.get(Test.StructD).isSupported() == false);
+    assertCT(tdb.get(Test.StructD).isSupported() == true);
     assertCT(tdb.get(Test.UnionA).isSupported() == true);
 }
 
@@ -1408,6 +1416,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         // comptime fields are not actually stored in the struct
         // fields of comptime types in comptime structs are handled in the same manner
         const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
+        const supported = comptime field_td.isSupported();
         try ctx.host.attachMember(structure, .{
             .name = field.name,
             .member_type = if (field.is_comptime) .@"comptime" else field_td.getMemberType(),
@@ -1416,7 +1425,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
             .bit_size = if (is_actual) field_td.getBitSize() else null,
             .byte_size = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
             .slot = index,
-            .structure = if (field_td.isSupported()) try getStructure(ctx, field.type) else null,
+            .structure = if (supported) try getStructure(ctx, field.type) else null,
         }, false);
     }
     if (st.backing_integer) |IT| {
@@ -1487,6 +1496,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
     const fields = @typeInfo(td.Type).Union.fields;
     inline for (fields, 0..) |field, index| {
         const field_td = ctx.tdb.get(field.type);
+        const supported = comptime field_td.isSupported();
         try ctx.host.attachMember(structure, .{
             .name = field.name,
             .member_type = field_td.getMemberType(),
@@ -1494,7 +1504,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
             .bit_size = field_td.getBitSize(),
             .byte_size = field_td.getByteSize(),
             .slot = index,
-            .structure = try getStructure(ctx, field_td.Type),
+            .structure = if (supported) try getStructure(ctx, field_td.Type) else null,
         }, false);
     }
     if (td.getSelectorType()) |TT| {
@@ -1669,7 +1679,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 if (param.type) |PT| {
                                     if (PT != std.mem.Allocator) {
                                         const param_td = ctx.tdb.get(PT);
-                                        if (!param_td.isSupported() or param_td.isComptimeOnly()) {
+                                        if (param_td.hasUnsupported() or param_td.isComptimeOnly()) {
                                             break :check false;
                                         }
                                     }
@@ -1680,7 +1690,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                             } else {
                                 if (f.return_type) |RT| {
                                     const reval_td = ctx.tdb.get(RT);
-                                    if (!reval_td.isSupported() or reval_td.isComptimeOnly()) {
+                                    if (reval_td.hasUnsupported() or reval_td.isComptimeOnly()) {
                                         break :check false;
                                     }
                                 } else {
