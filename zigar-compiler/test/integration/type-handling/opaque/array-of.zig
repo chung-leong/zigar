@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const AnyOpaque = anyopaque;
+pub const Opaque = opaque {};
 
 var number1: i32 = 123;
 var number2: i32 = 345;
@@ -8,13 +8,13 @@ var number3: i32 = 567;
 var number4: i32 = 789;
 var number5: i32 = 5555;
 
-pub var array = [_]*anyopaque{
+pub var array = [_]*Opaque{
     @ptrCast(&number1),
     @ptrCast(&number2),
     @ptrCast(&number3),
     @ptrCast(&number4),
 };
-pub var alt_ptr: *anyopaque = @ptrCast(&number5);
+pub var alt_ptr: *Opaque = @ptrCast(&number5);
 
 pub fn print() void {
     var numbers: [4]i32 = undefined;

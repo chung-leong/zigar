@@ -5,13 +5,13 @@ pub const TagType = enum { ptr, number };
 var number1: i32 = 1234;
 var number2: i32 = 4567;
 
-pub const AnyOpaque = anyopaque;
+pub const Opaque = opaque {};
 
 pub const UnionA = union(TagType) {
-    ptr: *anyopaque,
+    ptr: *Opaque,
     number: i32,
 };
-pub var alt_ptr: *anyopaque = &number2;
+pub var alt_ptr: *Opaque = @ptrCast(&number2);
 
 pub var union_a: UnionA = .{ .ptr = @ptrCast(&number1) };
 

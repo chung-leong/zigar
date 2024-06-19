@@ -1,12 +1,12 @@
 const std = @import("std");
 
-pub const AnyOpaque = anyopaque;
+pub const Opaque = opaque {};
 
 var number1: i32 = 1234;
 var number2: i32 = 4567;
 
-pub var optional: ?*anyopaque = &number1;
-pub var alt_ptr: *anyopaque = &number2;
+pub var optional: ?*Opaque = @ptrCast(&number1);
+pub var alt_ptr: *Opaque = @ptrCast(&number2);
 
 pub fn print() void {
     if (optional) |ptr| {

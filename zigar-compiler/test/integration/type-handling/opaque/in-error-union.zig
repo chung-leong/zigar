@@ -1,13 +1,13 @@
 const std = @import("std");
 
-pub const AnyOpaque = anyopaque;
+pub const Opaque = opaque {};
 pub const Error = error{ goldfish_died, no_money };
 
 var number1: i32 = 1234;
 var number2: i32 = 4567;
 
-pub var error_union: Error!*anyopaque = @ptrCast(&number1);
-pub var alt_ptr: *anyopaque = @ptrCast(&number2);
+pub var error_union: Error!*Opaque = @ptrCast(&number1);
+pub var alt_ptr: *Opaque = @ptrCast(&number2);
 
 pub fn print() void {
     if (error_union) |ptr| {

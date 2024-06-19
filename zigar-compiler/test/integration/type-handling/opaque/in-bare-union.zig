@@ -1,7 +1,9 @@
 var number: i32 = 1234;
 
+pub const Opaque = opaque {};
+
 pub const UnionA = union {
-    ptr: *anyopaque,
+    ptr: *Opaque,
     number: i32,
 };
 
