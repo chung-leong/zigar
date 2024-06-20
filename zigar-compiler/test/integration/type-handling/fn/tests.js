@@ -8,7 +8,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Function', function() {
     it('should handle function as static variables', async function() {
       this.timeout(120000);
@@ -38,37 +38,46 @@ export function addTests(importModule, options) {
     })
     it('should ignore function in array', async function() {
       this.timeout(120000);
-      const { default: module, Fn } = await importTest('array-of');      
+      const { default: module, Fn } = await importTest('array-of');
       expect(module.array).to.be.undefined;
       expect(module.Fn).to.be.undefined;
     })
-    it('should ignore function in struct', async function() {
+    it('should export struct containing function pointers', async function() {
       this.timeout(120000);
-      const { default: module } = await importTest('in-struct');
-      expect(module).to.not.have.property('struct_a');
+      const { StructA, default: module } = await importTest('in-struct');
+      expect(module).to.have.property('struct_a');
+      expect(module.struct_a).to.be.instanceOf(StructA);
+      expect(module.struct_a.number).to.equal(1234);
+      expect(() => module.struct_a.function1).to.throw(TypeError);
     })
     it('should not compile code with function in packed struct', async function() {
       this.timeout(120000);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
-    it('should ignore function as comptime field', async function() {
+    it('should handle function pointer as comptime field', async function() {
       this.timeout(120000);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
-      expect(module.struct_a).to.not.have.property('function');
+      expect(() => module.struct_a.function).to.throw(TypeError);
       const b = new StructA({ number: 500 });
-      expect(b).to.not.have.property('function');
+      expect(() => b.function).to.throw(TypeError);
       const [ line ] = await capture(() => print(b));
       expect(line).to.match(/as\-comptime\-field\.StructA{ \.number = 500, \.function = fn\s*\(\) void@/);
     })
-    it('should ignore function in bare union', async function() {
+    it('should export bare union containing function pointers', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('in-bare-union');
-      expect(module).to.not.have.property('union_a');
+      expect(module).to.have.property('union_a');
+      expect(module).to.have.property('union_b');
+      expect(module.union_b.number).to.equal(123);
+      expect(() => module.union_a.function).to.throw(TypeError);
     })
-    it('should ignore function in tagged union', async function() {
+    it('should export tagged union containing function pointers', async function() {
       this.timeout(120000);
       const { default: module } = await importTest('in-tagged-union');
-      expect(module).to.not.have.property('union_a');
+      expect(module).to.have.property('union_a');
+      expect(module).to.have.property('union_b');
+      expect(module.union_b.number).to.equal(123);
+      expect(() => module.union_a.function).to.throw(TypeError);
     })
     it('should ignore function in optional', async function() {
       this.timeout(120000);
@@ -86,7 +95,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing function vector', async function() {
       this.timeout(120000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

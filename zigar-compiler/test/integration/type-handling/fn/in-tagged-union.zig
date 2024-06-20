@@ -10,3 +10,4 @@ pub const UnionA = union(TagType) {
 };
 
 pub var union_a: UnionA = .{ .function = hello };
+pub var union_b: UnionA = .{ .number = 123 };

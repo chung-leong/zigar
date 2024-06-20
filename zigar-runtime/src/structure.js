@@ -167,6 +167,9 @@ function flagMemberUsage(member, features) {
     case MemberType.Literal:
       features.useLiteral = true;
       break;
+    case MemberType.Unsupported:
+      features.useUnsupported = true;
+      break;
   }
 }
 

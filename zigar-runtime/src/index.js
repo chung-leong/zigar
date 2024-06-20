@@ -19,7 +19,7 @@ export {
 } from './data-view.js';
 export {
     useBool, useComptime, useFloat, useInt, useLiteral, useNull, useObject, useStatic, useType,
-    useUint, useUndefined, useVoid
+    useUint, useUndefined, useUnsupported, useVoid
 } from './member.js';
 export {
     useArgStruct, useArray, useBareUnion, useCPointer, useEnum, useErrorSet, useErrorUnion,

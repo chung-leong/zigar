@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { fileURLToPath } from 'url';
 import { capture, captureWarning } from '../capture.js';
 
 export function addTests(importModule, options) {
@@ -459,7 +460,7 @@ export function addTests(importModule, options) {
       expect(child1.parent).to.equal(parent);
       expect(child2.parent).to.equal(parent);
     })
-    it('should accept a multi-pointer', async function() {
+    it('should accept multi-pointers', async function() {
       this.timeout(120000);
       const { print } = await importTest('accept-multi-pointer');
       const list = [
@@ -476,7 +477,7 @@ export function addTests(importModule, options) {
         'accept-multi-pointer.Object{ .a = 7, .b = 8 }'
       ]);
     })
-    it('should accept a C pointer', async function() {
+    it('should accept C pointers', async function() {
       this.timeout(120000);
       const { print, Object } = await importTest('accept-c-pointer');
       const list = [
@@ -502,7 +503,7 @@ export function addTests(importModule, options) {
         'accept-c-pointer.Object{ .a = 9, .b = 10 }',
       ]);
     })
-    it('should return a multi-pointer', async function() {
+    it('should return multi-pointers', async function() {
       this.timeout(120000);
       const { getPointer } = await importTest('return-multi-pointer');
       const pointer = getPointer();
@@ -514,9 +515,9 @@ export function addTests(importModule, options) {
       expect(() => pointer.length = 3).to.not.throw();
       expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
     });
-    it('should return a C pointer', async function() {
+    it('should return C pointers', async function() {
       this.timeout(120000);
-      const { getPointer } = await importTest('return-c-pointer');
+      const { getPointer, getString } = await importTest('return-c-pointer');
       const pointer = getPointer();
       expect(pointer.length).to.equal(1);
       expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 } ]);
@@ -525,10 +526,14 @@ export function addTests(importModule, options) {
       expect(() => pointer.length = 6).to.throw(TypeError);
       expect(() => pointer.length = 3).to.not.throw();
       expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
+      const string = getString();
+      string.length = 11;
+      expect(string.string).to.equal('Hello world');
     })
     it('should call C functions', async function() {
       this.timeout(120000);
-      const { fwrite, puts, stream } = await importTest('call-c-functions');
+      const { fopen, fwrite, fclose, fprintf, puts, stream } = await importTest('call-c-functions');
+      expect(fprintf).to.be.undefined;
       const buffer1 = Buffer.from('Hello world');
       const lines1 = await capture(() => puts(buffer1));
       expect(lines1).to.eql([ 'Hello world' ]);
@@ -538,6 +543,13 @@ export function addTests(importModule, options) {
       expect(lines2).to.eql([ 'Hello world!' ]);
       const lines3 = await capture(() => fwrite('Hello?', 1, 6, stdout));
       expect(lines3).to.eql([ 'Hello?' ]);
+      const path = fileURLToPath(new URL('./results/hello.txt', import.meta.url));
+      const f = fopen(path, 'w');
+      const count1 = fwrite(buffer2, 1, buffer2.byteLength, f);
+      const count2 = fwrite(buffer2, 1, buffer2.byteLength, f);
+      fclose(f);
+      expect(count1).to.equal(BigInt(buffer2.byteLength));
+      expect(count2).to.equal(BigInt(buffer2.byteLength));
     })
   })
 }

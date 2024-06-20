@@ -1,6 +1,10 @@
-import { getBoolAccessor, getNumericAccessor, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint } from './data-view.js';
 import {
-  EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, OutOfBound, Overflow, adjustRangeError
+  getBoolAccessor, getNumericAccessor, useExtendedBool, useExtendedFloat, useExtendedInt,
+  useExtendedUint
+} from './data-view.js';
+import {
+  EnumExpected, ErrorExpected, NotInErrorSet, NotUndefined, OutOfBound, Overflow, Unsupported,
+  adjustRangeError
 } from './error.js';
 import { GETTER, MEMORY, MEMORY_RESTORER, SETTER, SLOTS, VIVIFICATOR } from './symbol.js';
 import { MemberType, StructureType, getIntRange } from './types.js';
@@ -64,6 +68,10 @@ export function useNull() {
 
 export function useUndefined() {
   factories[MemberType.Undefined] = getUndefinedDescriptor;
+}
+
+export function useUnsupported() {
+  factories[MemberType.Unsupported] = getUnsupportedDescriptor;
 }
 
 const transformers = {};
@@ -133,6 +141,14 @@ export function getUndefinedDescriptor(member, env) {
     },
   };
 }
+
+export function getUnsupportedDescriptor(member, env) {
+  const throwUnsupported = function() {
+    throw new Unsupported();
+  };
+  return { get: throwUnsupported, set: throwUnsupported };
+}
+
 
 export function getBoolDescriptor(member, env) {
   return getDescriptorUsing(member, env, getBoolAccessor)
@@ -255,7 +271,7 @@ export function transformErrorSetDescriptor(int, structure) {
 }
 
 export function isValueExpected(structure) {
-  switch (structure.type) {
+  switch (structure?.type) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
@@ -444,4 +460,5 @@ export function useAllMemberTypes() {
   useComptime();
   useStatic();
   useLiteral();
+  useUnsupported();
 }

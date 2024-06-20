@@ -7,6 +7,12 @@ export class MustBeOverridden extends Error {
   }
 }
 
+export class Unsupported extends TypeError {
+  constructor() {
+    super(`Unsupported`);
+  }
+}
+
 export class NoInitializer extends TypeError {
   constructor(structure) {
     const { name } = structure;

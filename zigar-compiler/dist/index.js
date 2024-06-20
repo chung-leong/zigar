@@ -19,6 +19,7 @@ const MemberType = {
   Literal: 9,
   Null: 10,
   Undefined: 11,
+  Unsupported: 12,
 };
 
 const StructureType = {
@@ -128,6 +129,12 @@ function hasStandardFloatSize({ bitSize }) {
 
 function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
+}
+
+class Unsupported extends TypeError {
+  constructor() {
+    super(`Unsupported`);
+  }
 }
 
 class NoInitializer extends TypeError {
@@ -1628,6 +1635,10 @@ function useUndefined() {
   factories$1[MemberType.Undefined] = getUndefinedDescriptor;
 }
 
+function useUnsupported() {
+  factories$1[MemberType.Unsupported] = getUnsupportedDescriptor;
+}
+
 const transformers = {};
 
 function useEnumerationTransform() {
@@ -1687,6 +1698,14 @@ function getUndefinedDescriptor(member, env) {
     },
   };
 }
+
+function getUnsupportedDescriptor(member, env) {
+  const throwUnsupported = function() {
+    throw new Unsupported();
+  };
+  return { get: throwUnsupported, set: throwUnsupported };
+}
+
 
 function getBoolDescriptor(member, env) {
   return getDescriptorUsing(member, env, getBoolAccessor)
@@ -1809,7 +1828,7 @@ function transformErrorSetDescriptor(int, structure) {
 }
 
 function isValueExpected(structure) {
-  switch (structure.type) {
+  switch (structure?.type) {
     case StructureType.Primitive:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
@@ -1992,6 +2011,7 @@ function useAllMemberTypes() {
   useComptime();
   useStatic();
   useLiteral();
+  useUnsupported();
 }
 
 function defineProperty(object, name, descriptor) {
@@ -3183,7 +3203,7 @@ function getPointerVisitor$1(structure, visitorOptions = {}) {
     isChildMutable = always,
   } = visitorOptions;
   const { instance: { members } } = structure;
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  const pointerMembers = members.filter(m => m.structure?.hasPointer);
   return function visitPointers(cb, options = {}) {
     const {
       source,
@@ -4326,7 +4346,7 @@ function defineUnionShape(structure, env) {
   };
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  const pointerMembers = members.filter(m => m.structure?.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const modifier = (hasInaccessiblePointer && !env.comptime)
   ? function() {
@@ -4365,7 +4385,7 @@ function defineUnionShape(structure, env) {
   const getTagClass = function() { return selectorMember.structure.constructor };
   const getIterator = (isIterator) ? getIteratorIterator : getUnionIterator;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m?.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer, configurable: true },
     dataView: getDataViewDescriptor(structure),
@@ -4576,6 +4596,9 @@ function flagMemberUsage(member, features) {
       break;
     case MemberType.Literal:
       features.useLiteral = true;
+      break;
+    case MemberType.Unsupported:
+      features.useUnsupported = true;
       break;
   }
 }
@@ -6047,9 +6070,6 @@ class Environment {
   endStructure(structure) {
     this.structures.push(structure);
     this.finalizeStructure(structure);
-    for (const structure of this.structures) {
-      this.acquireDefaultPointers(structure);
-    }
   }
 
   defineFactoryArgStruct() {
@@ -6128,6 +6148,7 @@ class Environment {
   }
 
   exportStructures() {
+    this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian } = this;
     return {
@@ -6336,14 +6357,16 @@ class Environment {
   }
 
   /* COMPTIME-ONLY */
-  acquireDefaultPointers(structure) {
-    const { constructor, hasPointer, instance: { template } } = structure;
-    if (hasPointer && template && template[MEMORY]) {
-      // create a placeholder for retrieving default pointers
-      const placeholder = Object.create(constructor.prototype);
-      placeholder[MEMORY] = template[MEMORY];
-      placeholder[SLOTS] = template[SLOTS];
-      this.updatePointerTargets(placeholder);
+  acquireDefaultPointers() {
+    for (const structure of this.structures) {
+      const { constructor, hasPointer, instance: { template } } = structure;
+      if (hasPointer && template && template[MEMORY]) {
+        // create a placeholder for retrieving default pointers
+        const placeholder = Object.create(constructor.prototype);
+        placeholder[MEMORY] = template[MEMORY];
+        placeholder[SLOTS] = template[SLOTS];
+        this.updatePointerTargets(placeholder);
+      }
     }
   }
   /* COMPTIME-ONLY-END */

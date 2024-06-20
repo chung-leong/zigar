@@ -5,7 +5,7 @@ export function addTests(importModule, options) {
   const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url, options);
-  };    
+  };
   describe('Console', function() {
     it('should output to development console', async function() {
       this.timeout(120000);
@@ -21,8 +21,8 @@ export function addTests(importModule, options) {
     })
     it('should capture output from C code', async function() {
       this.timeout(120000);
-      const { 
-        test_printf, 
+      const {
+        test_printf,
         test_fprintf,
         test_putc,
         test_fputc,

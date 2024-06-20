@@ -122,7 +122,7 @@ export function defineUnionShape(structure, env) {
   };
   // non-tagged union as marked as not having pointers--if there're actually
   // members with pointers, we need to disable them
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  const pointerMembers = members.filter(m => m.structure?.hasPointer);
   const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
   const modifier = (hasInaccessiblePointer && !env.comptime)
   ? function() {
@@ -161,7 +161,7 @@ export function defineUnionShape(structure, env) {
   const getTagClass = function() { return selectorMember.structure.constructor };
   const getIterator = (isIterator) ? getIteratorIterator : getUnionIterator;
   const hasAnyPointer = hasPointer || hasInaccessiblePointer;
-  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const hasObject = !!members.find(m => m?.type === MemberType.Object);
   const instanceDescriptors = {
     $: { get: getSelf, set: initializer, configurable: true },
     dataView: getDataViewDescriptor(structure),

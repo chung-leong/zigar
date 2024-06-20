@@ -8,3 +8,4 @@ pub const UnionA = union {
 };
 
 pub var union_a: UnionA = .{ .function = hello };
+pub var union_b: UnionA = .{ .number = 123 };

@@ -12,4 +12,7 @@ pub fn stream(num: i32) ?[*c]c.FILE {
 }
 
 pub const fwrite = c.fwrite;
+pub const fopen = c.fopen;
+pub const fclose = c.fclose;
+pub const fprintf = c.fprintf;
 pub const puts = c.puts;

@@ -7,6 +7,7 @@ fn hello() void {}
 pub const StructA = struct {
     function1: Fn = hello,
     function2: Fn = hello,
+    number: i32 = 1234,
 };
 
 pub var struct_a: StructA = .{};

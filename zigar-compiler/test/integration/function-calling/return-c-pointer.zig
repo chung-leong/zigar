@@ -1,5 +1,7 @@
 const std = @import("std");
-
+const c = @cImport({
+    @cInclude("./return-c-pointer.c");
+});
 pub const Object = extern struct {
     a: i32,
     b: i32,
@@ -15,3 +17,5 @@ pub fn getPointer(allocator: std.mem.Allocator) ![*c]Object {
     }
     return @ptrCast(slice);
 }
+
+pub const getString = c.get_string;

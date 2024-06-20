@@ -172,7 +172,7 @@ export function getPointerVisitor(structure, visitorOptions = {}) {
     isChildMutable = always,
   } = visitorOptions;
   const { instance: { members } } = structure;
-  const pointerMembers = members.filter(m => m.structure.hasPointer);
+  const pointerMembers = members.filter(m => m.structure?.hasPointer);
   return function visitPointers(cb, options = {}) {
     const {
       source,
