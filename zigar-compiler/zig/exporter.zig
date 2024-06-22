@@ -847,7 +847,7 @@ const TypeDataCollector = struct {
                 self.add(eu.error_set);
             },
             .Fn => |f| {
-                if (!f.is_generic and !f.is_var_args) {
+                if (!f.is_generic) {
                     inline for (f.params) |param| {
                         if (param.type) |PT| {
                             if (PT != std.mem.Allocator) {
@@ -2034,7 +2034,6 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype) Variadi
             const RT = f.return_type.?;
             const alloc = try variadic.allocate(arg_attrs);
             const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[0]));
-            const max_stack_count = variadic.max_arg_count - @min(variadic.registers.int, variadic.registers.float);
             var int_args: [variadic.registers.int]isize = undefined;
             var float_args: [variadic.registers.float]f64 = undefined;
             retval_ptr.* = switch (alloc.stack) {
@@ -2043,7 +2042,7 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype) Variadi
                     variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
                     break :call variadic.call(RT, cc, function, float_args, int_args, stack_args);
                 },
-                else => inline for (0..max_stack_count) |stack_count| {
+                else => inline for (0..variadic.max_stack_count + 1) |stack_count| {
                     if (alloc.stack == stack_count) {
                         var stack_args: [stack_count]isize = undefined;
                         variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);

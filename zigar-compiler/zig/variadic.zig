@@ -25,6 +25,7 @@ pub const registers: Registers = switch (builtin.target.cpu.arch) {
     .aarch64, .aarch64_be, .aarch64_32 => .{ .int = 8, .float = 8 },
     else => @compileError("Unsupported platform"),
 };
+pub const max_stack_count = max_arg_count - @min(registers.int, registers.float);
 
 const Destination = enum { int, float, stack };
 const Allocation = struct {
@@ -84,12 +85,12 @@ pub fn allocate(arg_attrs: []const ArgAttributes) !Allocation {
             alloc.stack += if (a.size == @sizeOf(usize) * 2) 2 else 1;
             dest = .stack;
         }
+        if (alloc.stack >= max_stack_count or index >= max_arg_count) {
+            return Error.too_many_arguments;
+        }
         alloc.destinations[index] = dest.?;
     }
-    return switch (alloc.int + alloc.float + alloc.stack <= max_arg_count) {
-        true => alloc,
-        false => Error.too_many_arguments,
-    };
+    return alloc;
 }
 
 pub fn copy(

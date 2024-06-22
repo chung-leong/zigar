@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import { capture, captureWarning } from '../capture.js';
 
 export function addTests(importModule, options) {
-  const { optimize } = options;
+  const { target, optimize } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
@@ -552,7 +552,7 @@ export function addTests(importModule, options) {
     })
     it('should call variadic functions', async function() {
       this.timeout(120000);
-      const { fopen, fprintf, fclose, fwrite, printf, stream, Int, Double, StrPtr } = await importTest('call-variadic-functions');
+      const { printf, Int, Double, StrPtr } = await importTest('call-variadic-functions');
       const lines1 = await capture(() => printf(
         'Hello world, %d %d %d %d %d!!\n',
         new Int('123'),
@@ -577,6 +577,72 @@ export function addTests(importModule, options) {
         new StrPtr('Bingo')
       ));
       expect(lines3).to.eql([ 'Hello world, Dingo Bingo!!' ]);
+      const lines4 = await capture(() => printf(
+        'Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %s!!\n',
+        new Int('1'),
+        new Double('2'),
+        new Int('3'),
+        new Double('4'),
+        new Int('5'),
+        new Double('6'),
+        new Int('7'),
+        new Double('8'),
+        new Int('9'),
+        new Double('10'),
+        new Int('11'),
+        new Double('12'),
+        new Int('13'),
+        new Double('14'),
+        new Int('15'),
+        new Double('16'),
+        new Int('17'),
+        new Double('18'),
+        new Int('19'),
+        new Double('20'),
+        new StrPtr('End')
+      ));
+      expect(lines4).to.eql([
+        'Hello world, 1 2.000000 3 4.000000 5 6.000000 7 8.000000 9 10.000000 11 12.000000 13 14.000000 15 16.000000 17 18.000000 19 20.000000 End!!'
+      ]);
+      const f = () => printf(
+        'Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f!!\n',
+        new Int('1'),
+        new Double('2'),
+        new Int('3'),
+        new Double('4'),
+        new Int('5'),
+        new Double('6'),
+        new Int('7'),
+        new Double('8'),
+        new Int('9'),
+        new Double('10'),
+        new Int('11'),
+        new Double('12'),
+        new Int('13'),
+        new Double('14'),
+        new Int('15'),
+        new Double('16'),
+        new Int('17'),
+        new Double('18'),
+        new Int('19'),
+        new Double('20'),
+        new Int('21'),
+        new Double('22'),
+        new Int('23'),
+        new Double('24'),
+        new Int('25'),
+        new Double('26'),
+        new Int('27'),
+        new Double('28'),
+        new Int('29'),
+        new Double('30'),
+        new Int('31'),
+        new Double('32'),
+      );
+      if (target === 'wasm32') {
+      } else {
+        expect(f).to.throw(Error).with.property('message').that.equal('Too many arguments');
+      }
     })
   })
 }
