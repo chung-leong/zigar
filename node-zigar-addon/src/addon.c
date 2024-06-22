@@ -250,7 +250,7 @@ result attach_method(call ctx,
     napi_env env = ctx->env;
     napi_value args[3] = { structure };
     napi_value result;
-    napi_value name, thunk_id;
+    napi_value name, thunk_id, is_variadic;
     // thunk_id from Zig is the function's address--make it relative to the base address
     size_t adjusted_thunk_id = m->thunk_id - ctx->mod_data->base_address;
     if (napi_create_object(env, &args[1]) == napi_ok
@@ -258,6 +258,8 @@ result attach_method(call ctx,
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
      && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
      && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
+     && napi_get_boolean(env, m->is_variadic, &is_variadic) == napi_ok
+     && napi_set_named_property(env, args[1], "isVariadic", is_variadic) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
      && call_js_function(ctx, "attachMethod", 3, args, &result)) {
@@ -548,6 +550,39 @@ napi_value run_thunk(napi_env env,
     return result;
 }
 
+napi_value run_variadic_thunk(napi_env env,
+                              napi_callback_info info) {
+    module_data* md;
+    size_t argc = 3;
+    napi_value args[3];
+    napi_value js_env;
+    double thunk_id;
+    void* args_ptr;
+    size_t args_len;
+    void* args_attrs_ptr;
+    size_t args_attrs_len;
+    if (napi_get_cb_info(env, info, &argc, args, &js_env, (void*) &md) != napi_ok
+     || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
+        return throw_error(env, "Thunk id must be a number");
+    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
+        return throw_error(env, "Arguments must be a DataView");
+    } else if (napi_get_dataview_info(env, args[2], &args_attrs_len, &args_attrs_ptr, NULL, NULL) != napi_ok) {
+        return throw_error(env, "Attributes must be a DataView");
+    }
+    size_t arg_count = args_attrs_len / 4;
+    call_context ctx = { env, js_env, md };
+    size_t thunk_address = md->base_address + thunk_id;
+    napi_value result;
+    if (args_len == 0) {
+        // pointer might not be valid when length is zero
+        args_ptr = NULL;
+    }
+    if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, args_ptr, arg_count, args_len, args_attrs_ptr, &result) != OK) {
+        return throw_error(env, "Unable to execute function");
+    }
+    return result;
+}
+
 napi_value get_memory_offset(napi_env env,
                              napi_callback_info info) {
     module_data* md;
@@ -625,6 +660,7 @@ bool export_module_functions(napi_env env,
         && export_function(env, js_env, "findSentinel", find_sentinel, md)
         && export_function(env, js_env, "getFactoryThunk", get_factory_thunk, md)
         && export_function(env, js_env, "runThunk", run_thunk, md)
+        && export_function(env, js_env, "runVariadicThunk", run_variadic_thunk, md)
         && export_function(env, js_env, "getMemoryOffset", get_memory_offset, md)
         && export_function(env, js_env, "recreateAddress", recreate_address, md);
 }

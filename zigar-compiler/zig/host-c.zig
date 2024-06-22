@@ -12,6 +12,7 @@ const Member = exporter.Member;
 const Method = exporter.Method;
 const Memory = exporter.Memory;
 const Thunk = exporter.Thunk;
+const VariadicThunk = exporter.VariadicThunk;
 const Error = exporter.Error;
 
 const Call = *anyopaque;
@@ -306,6 +307,16 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
     return .ok;
 }
 
+pub fn runVariadicThunk(call: Call, thunk_address: usize, args: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque, dest: *?Value) callconv(.C) Result {
+    const thunk: VariadicThunk = @ptrFromInt(thunk_address);
+    if (thunk(@ptrCast(call), args, arg_count, attr_ptr)) |result| {
+        dest.* = result;
+    } else {
+        dest.* = null;
+    }
+    return .ok;
+}
+
 // pointer table that's filled on the C side
 const Imports = extern struct {
     allocate_host_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
@@ -332,6 +343,7 @@ const Exports = extern struct {
     free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (Call, usize, *anyopaque, *?Value) callconv(.C) Result,
+    run_variadic_thunk: *const fn (Call, usize, *anyopaque, usize, *const anyopaque, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
 };
 
@@ -375,6 +387,7 @@ pub fn createModule(comptime T: type) Module {
             .free_fixed_memory = freeExternMemory,
             .get_factory_thunk = createGetFactoryThunk(T),
             .run_thunk = runThunk,
+            .run_variadic_thunk = runVariadicThunk,
             .override_write = overrideWrite,
         },
     };

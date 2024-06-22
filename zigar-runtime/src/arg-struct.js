@@ -16,7 +16,7 @@ export function defineArgStruct(structure, env) {
     hasPointer,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
@@ -39,7 +39,7 @@ export function defineArgStruct(structure, env) {
   for (const member of members) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
-  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const { slot: retvalSlot, type: retvalType } = members[0];
   const isChildMutable = (retvalType === MemberType.Object)
   ? function(object) {
       const child = this[VIVIFICATOR](retvalSlot);

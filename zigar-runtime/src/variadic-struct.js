@@ -4,7 +4,8 @@ import { getMemoryCopier } from './memory.js';
 import { defineProperties } from './object.js';
 import { getChildVivificator } from './struct.js';
 import {
-  ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR,
+  ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, PRIMITIVE, SIZE, SLOTS,
+  VIVIFICATOR,
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -33,7 +34,7 @@ export function defineVariadicStruct(structure, env) {
         const err = new InvalidVariadicArgument();
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
-      const argAlign = arg[ALIGN];
+      const argAlign = arg.constructor[ALIGN];
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
       if (argAlign > maxAlign) {
@@ -50,6 +51,15 @@ export function defineVariadicStruct(structure, env) {
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
+    const { littleEndian } = env;
+    const attrDV = env.allocateMemory(args.length * 4, 4);
+    let attrOffset = 0;
+    for (const { bitOffset, byteSize, type } of members) {
+      attrDV.setUint16(attrOffset, bitOffset / 8, littleEndian);
+      attrDV.setUint8(attrOffset + 2, Math.min(255, byteSize));
+      attrDV.setUint8(attrOffset + 3, type == MemberType.Float);
+      attrOffset += 4;
+    }
     for (const [ index, arg ] of varArgs) {
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
@@ -58,13 +68,18 @@ export function defineVariadicStruct(structure, env) {
       const slot = maxSlot + index + 1;
       child.$ = arg;
       this[SLOTS][slot] = child;
+      attrDV.setUint16(attrOffset, offset, littleEndian);
+      attrDV.setUint8(attrOffset + 2, Math.min(255, byteLength));
+      attrDV.setUint8(attrOffset + 3, arg.constructor[PRIMITIVE] == MemberType.Float);
+      attrOffset += 4;
     }
+    this[ATTRIBUTES] = attrDV;
   };
   const memberDescriptors = {};
   for (const member of members) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
-  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const { slot: retvalSlot, type: retvalType } = members[0];
   const isChildMutable = (retvalType === MemberType.Object)
   ? function(object) {
       const child = this[VIVIFICATOR](retvalSlot);

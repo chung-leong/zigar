@@ -43,3 +43,4 @@ export const POINTER_VISITOR = Symbol('pointerVisitor');
 export const ENVIRONMENT = Symbol('environment');
 export const ATTRIBUTES = Symbol('attributes');
 export const MORE = Symbol('more');
+export const PRIMITIVE = Symbol('primitive');

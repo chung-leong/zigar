@@ -1,6 +1,6 @@
 import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
 import { ZigError } from './error.js';
-import { ALIGN, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
+import { ALIGN, ATTRIBUTES, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 /* c8 ignore next 2 */
 const PointerType = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? BigInt : Number;
@@ -19,6 +19,7 @@ export class NodeEnvironment extends Environment {
     defineStructures: null,
     getFactoryThunk: null,
     runThunk: null,
+    runVariadicThunk: null,
     getMemoryOffset: null,
     recreateAddress: null,
   };
@@ -106,18 +107,23 @@ export class NodeEnvironment extends Environment {
     let err;
     // create an object where information concerning pointers can be stored
     this.startContext();
+    const attrs = args[ATTRIBUTES];
     if (args[POINTER_VISITOR]) {
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
       this.updateShadows();
-      err = this.runThunk(thunkId, args[MEMORY]);
+      err = (attrs)
+      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs)
+      : this.runThunk(thunkId, args[MEMORY]);
       // create objects that pointers point to
       this.updateShadowTargets();
       this.updatePointerTargets(args);
       this.releaseShadows();
     } else {
       // don't need to do any of that if there're no pointers
-      err = this.runThunk(thunkId, args[MEMORY]);
+      err = (attrs)
+      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs)
+      : this.runThunk(thunkId, args[MEMORY]);
     }
     // restore the previous context if there's one
     this.endContext();

@@ -424,6 +424,13 @@ export class Environment {
       hasPointer: false,
     });
     this.attachMember(structure, {
+      type: MemberType.Void,
+      name: 'retval',
+      bitOffset: 0,
+      bitSize: 0,
+      byteSize: 0
+    });
+    this.attachMember(structure, {
       type: MemberType.Object,
       name: '0',
       bitOffset: 0,
@@ -431,13 +438,6 @@ export class Environment {
       byteSize: 2,
       slot: 0,
       structure: options,
-    });
-    this.attachMember(structure, {
-      type: MemberType.Void,
-      name: 'retval',
-      bitOffset: 16,
-      bitSize: 0,
-      byteSize: 0
     });
     this.finalizeShape(structure);
     return structure.constructor;

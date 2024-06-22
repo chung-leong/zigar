@@ -11,20 +11,11 @@ pub const ArgAttributes = packed struct {
 pub const Error = error{
     too_many_arguments,
 };
-
-const Registers = struct {
+pub const Registers = struct {
     int: comptime_int,
     float: comptime_int,
 };
-const Destination = enum { int, float, stack };
-const Allocation = struct {
-    int: usize = 0,
-    float: usize = 0,
-    stack: usize = 0,
-    total: usize = 0,
-    destinations: [max_arg_count]Destination = undefined,
-};
-const registers: Registers = switch (builtin.target.cpu.arch) {
+pub const registers: Registers = switch (builtin.target.cpu.arch) {
     .x86 => .{ .int = 0, .float = 0 },
     .x86_64 => switch (builtin.target.os.tag) {
         .windows => .{ .int = 4, .float = 4 },
@@ -35,7 +26,16 @@ const registers: Registers = switch (builtin.target.cpu.arch) {
     else => @compileError("Unsupported platform"),
 };
 
-pub fn convert(comptime T: type, arg_ptr: []const u8, a: ArgAttributes) T {
+const Destination = enum { int, float, stack };
+const Allocation = struct {
+    int: usize = 0,
+    float: usize = 0,
+    stack: usize = 0,
+    total: usize = 0,
+    destinations: [max_arg_count]Destination = undefined,
+};
+
+pub fn convert(comptime T: type, arg_ptr: [*]const u8, a: ArgAttributes) T {
     const start = a.offset;
     const end = start + @as(u16, @intCast(a.size));
     const bytes = arg_ptr[start..end];
@@ -58,7 +58,7 @@ pub fn convert(comptime T: type, arg_ptr: []const u8, a: ArgAttributes) T {
     } else unreachable;
 }
 
-pub fn allocate(arg_attrs: []ArgAttributes) !Allocation {
+pub fn allocate(arg_attrs: []const ArgAttributes) !Allocation {
     var alloc: Allocation = .{};
     for (arg_attrs, 0..) |a, index| {
         var dest: ?Destination = null;
@@ -93,8 +93,8 @@ pub fn allocate(arg_attrs: []ArgAttributes) !Allocation {
 }
 
 pub fn copy(
-    arg_ptr: []const u8,
-    arg_attrs: []ArgAttributes,
+    arg_ptr: [*]const u8,
+    arg_attrs: []const ArgAttributes,
     alloc: Allocation,
     float_args: []f64,
     int_args: []isize,

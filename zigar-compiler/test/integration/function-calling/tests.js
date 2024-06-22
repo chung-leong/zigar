@@ -15,7 +15,7 @@ export function addTests(importModule, options) {
       const { returnNumber } = await importTest('throw-error');
       const result = returnNumber(1234);
       expect(result).to.equal(1234);
-      expect(() => returnNumber(0)).to.throw()
+      expect(() => returnNumber(0)).to.throw(Error)
         .with.property('message', 'System is on fire');
     })
     it('should throw when argument is invalid', async function() {
@@ -532,8 +532,7 @@ export function addTests(importModule, options) {
     })
     it('should call C functions', async function() {
       this.timeout(120000);
-      const { fopen, fwrite, fclose, fprintf, puts, stream } = await importTest('call-c-functions');
-      expect(fprintf).to.be.undefined;
+      const { fopen, fwrite, fclose, puts, stream } = await importTest('call-c-functions');
       const buffer1 = Buffer.from('Hello world');
       const lines1 = await capture(() => puts(buffer1));
       expect(lines1).to.eql([ 'Hello world' ]);
@@ -550,6 +549,11 @@ export function addTests(importModule, options) {
       fclose(f);
       expect(count1).to.equal(BigInt(buffer2.byteLength));
       expect(count2).to.equal(BigInt(buffer2.byteLength));
+    })
+    it('should call variadic functions', async function() {
+      this.timeout(120000);
+      const { fopen, fprintf, fclose, printf, Int } = await importTest('call-variadic-functions');
+      printf('Hello world\n');
     })
   })
 }
