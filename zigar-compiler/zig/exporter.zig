@@ -28,7 +28,7 @@ pub const Error = error{
     unable_to_add_structure_template,
     unable_to_define_structure,
     unable_to_write_to_console,
-    pointer_is_invalid,
+    too_many_arguments,
 };
 
 fn getCString(comptime s: []const u8) [*:0]const u8 {
@@ -48,6 +48,7 @@ pub const StructureType = enum(u32) {
     extern_struct,
     packed_struct,
     arg_struct,
+    variadic_struct,
     extern_union,
     bare_union,
     tagged_union,
@@ -83,6 +84,7 @@ pub const MemberType = enum(u32) {
 
 pub const Value = *opaque {};
 pub const Thunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
+pub const VariadicThunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, arg_size: usize, attr_ptr: *anyopaque) ?Value;
 
 pub const Structure = struct {
     name: ?[]const u8 = null,
@@ -111,6 +113,7 @@ pub const Method = struct {
     name: ?[]const u8 = null,
     thunk_id: usize,
     structure: Value,
+    is_variadic: bool = false,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -323,6 +326,7 @@ const TypeAttributes = packed struct {
     is_supported: bool = false,
     is_comptime_only: bool = false,
     is_arguments: bool = false,
+    is_variadic: bool = false,
     is_slice: bool = false,
     has_pointer: bool = false,
     has_unsupported: bool = false,
@@ -345,7 +349,10 @@ const TypeData = struct {
 
     fn getStructureType(comptime self: @This()) StructureType {
         return if (self.attrs.is_arguments)
-            .arg_struct
+            switch (self.attrs.is_variadic) {
+                false => .arg_struct,
+                true => .variadic_struct,
+            }
         else if (self.attrs.is_slice)
             .slice
         else switch (@typeInfo(self.Type)) {
@@ -794,12 +801,13 @@ const TypeDataCollector = struct {
         // add arg structs once we can determine which functions are callable
         inline for (self.functions.slice()) |FT| {
             const f = @typeInfo(FT).Fn;
-            if (!f.is_generic and !f.is_var_args) {
+            if (!f.is_generic) {
                 const index = self.append(ArgumentStruct(FT));
                 const td = self.at(index);
                 self.setAttributes(td);
                 self.setSlot(td);
                 td.attrs.is_arguments = true;
+                td.attrs.is_variadic = f.is_var_args;
                 td.name = std.fmt.comptimePrint("Arg{d:0>4}", .{td.getSlot()});
             }
         }
@@ -1687,7 +1695,7 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                 switch (@typeInfo(DT)) {
                     .Fn => |f| {
                         const is_callable = check: {
-                            if (f.is_generic or f.is_var_args) {
+                            if (f.is_generic) {
                                 break :check false;
                             }
                             inline for (f.params) |param| {
@@ -1729,9 +1737,13 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 }
                                 break :check true;
                             };
+                            const thunk_id: usize = switch (f.is_var_args) {
+                                false => @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
+                                true => @intFromPtr(createVariadicThunk(@TypeOf(ctx.host), decl_value, ArgT)),
+                            };
                             try ctx.host.attachMethod(structure, .{
                                 .name = @ptrCast(decl.name),
-                                .thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
+                                .thunk_id = thunk_id,
                                 .structure = arg_structure,
                             }, is_static_only);
                         }
@@ -1995,6 +2007,50 @@ test "createThunk" {
             assert(false);
         },
     }
+}
+
+fn createVariadicThunk(comptime HostT: type, comptime function: anytype) VariadicThunk {
+    const variadic = @import("./variadic.zig");
+    const ns = struct {
+        fn tryFunction(_: HostT, arg_ptr: []u8, attrs: []variadic.ArgAttributes) !void {
+            const f = @typeInfo(@TypeOf(function)).Fn;
+            const cc = f.calling_convention;
+            const RT = f.return_type.?;
+            const arg_attrs = attrs[0 .. attrs.len - 1];
+            const alloc = try variadic.allocate(arg_attrs);
+            const retval_attrs = attrs[attrs.len - 1];
+            const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[retval_attrs.offset]));
+            const max_stack_count = variadic.max_arg_count - @min(variadic.registers.int, variadic.registers.float);
+            var int_args: [variadic.registers.int]isize = undefined;
+            var float_args: [variadic.registers.float]f64 = undefined;
+            retval_ptr.* = switch (alloc.stack) {
+                0 => call: {
+                    var stack_args: [0]isize = undefined;
+                    variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
+                    break :call variadic.call(RT, cc, function, float_args, int_args, stack_args);
+                },
+                else => inline for (0..max_stack_count) |stack_count| {
+                    if (alloc.stack == stack_count) {
+                        var stack_args: [stack_count]isize = undefined;
+                        variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
+                        break variadic.call(RT, cc, function, float_args, int_args, stack_args);
+                    }
+                } else unreachable,
+            };
+        }
+
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, arg_size: usize, attr_ptr: *anyopaque) ?Value {
+            const host = HostT.init(ptr, arg_ptr);
+            defer host.release();
+            const attrs = @as([*]variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0 .. arg_count + 1];
+            const arg_slice = @as([*]u8, arg_ptr[0..arg_count])[0..arg_size];
+            tryFunction(host, arg_slice, attrs) catch |err| {
+                return createErrorMessage(host, err) catch null;
+            };
+            return null;
+        }
+    };
+    return ns.invokeFunction;
 }
 
 fn createAllocator(host_ptr: anytype) std.mem.Allocator {

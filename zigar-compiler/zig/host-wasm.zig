@@ -226,6 +226,7 @@ pub const Host = struct {
         try insertProperty(def, "argStruct", method.structure);
         try insertProperty(def, "thunkId", method.thunk_id);
         try insertProperty(def, "name", method.name);
+        try insertProperty(def, "name", method.is_variadic);
         _attachMethod(structure, def, is_static_only);
     }
 
