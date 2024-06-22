@@ -39,11 +39,11 @@ BOOL WINAPI write_file_hook(HANDLE handle,
 }
 #endif
 
-ssize_t write_hook(int fd, 
-                   const void* buffer, 
+ssize_t write_hook(int fd,
+                   const void* buffer,
                    size_t len) {
-    // 1 = stdout, 2 = stderr                         
-    if (fd == 1 || fd == 2) {   
+    // 1 = stdout, 2 = stderr
+    if (fd == 1 || fd == 2) {
         // return value of zero means success
         if (override(buffer, len) == 0) {
             return len;
@@ -52,9 +52,9 @@ ssize_t write_hook(int fd,
     return write(fd, buffer, len);
 }
 
-size_t fwrite_hook(const void *ptr, 
+size_t fwrite_hook(const void *ptr,
                    size_t size,
-		           size_t n, 
+		           size_t n,
                    FILE* s) {
     if (s == stdout || s == stderr) {
         if (override(ptr, size * n) == 0) {
@@ -64,7 +64,7 @@ size_t fwrite_hook(const void *ptr,
     return fwrite(ptr, size, n, s);
 }
 
-int fputs_hook(const char *t, 
+int fputs_hook(const char *t,
                FILE* s) {
     if (s == stdout || s == stderr) {
         size_t len = strlen(t);
@@ -100,13 +100,13 @@ int putchar_hook(int c) {
 }
 
 int vfprintf_hook_impl(FILE* s,
-                       const char* f, 
+                       const char* f,
                        va_list arg) {
     if (s == stdout || s == stderr) {
         // attempt with fixed-size buffer, using a copy of arg
         va_list arg_copy;
         va_copy(arg_copy, arg);
-        char fixed_buffer[1024];        
+        char fixed_buffer[1024];
         char* s = fixed_buffer;
         int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
         bool too_large = len + 1 > sizeof(fixed_buffer);
@@ -127,13 +127,13 @@ int vfprintf_hook_impl(FILE* s,
 }
 
 int vfprintf_hook(FILE* s,
-                  const char* f, 
+                  const char* f,
                   va_list arg) {
     int len = vfprintf_hook_impl(s, f, arg);
     return (len >= 0) ? len : vfprintf(s, f, arg);
 }
 
-int vprintf_hook(const char* f, 
+int vprintf_hook(const char* f,
                  va_list arg) {
     return vfprintf_hook(stdout, f, arg);
 }
@@ -144,7 +144,7 @@ int fprintf_hook(FILE* s,
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_hook(s, f, argptr);
-    va_end(argptr);    
+    va_end(argptr);
     return n;
 }
 
@@ -153,7 +153,7 @@ int printf_hook(const char* f,
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_hook(stdout, f, argptr);
-    va_end(argptr);    
+    va_end(argptr);
     return n;
 }
 
@@ -179,7 +179,7 @@ int vfprintf_chk_hook(FILE* s,
 }
 
 int vprintf_chk_hook(int flag,
-                     const char* f, 
+                     const char* f,
                      va_list arg) {
     return vfprintf_chk_hook(stdout, flag, f, arg);
 }
@@ -191,17 +191,17 @@ int fprintf_chk_hook(FILE* s,
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_chk_hook(s, flag, f, argptr);
-    va_end(argptr);    
+    va_end(argptr);
     return n;
 }
 
-int printf_chk_hook(int flag, 
+int printf_chk_hook(int flag,
                     const char* f,
                     ...) {
     va_list argptr;
     va_start(argptr, f);
     int n = vfprintf_chk_hook(stdout, flag, f, argptr);
-    va_end(argptr);    
+    va_end(argptr);
     return n;
 }
 #endif
@@ -211,13 +211,13 @@ typedef struct {
     void* hook;
 } hook;
 
-hook hooks[] = { 
+hook hooks[] = {
 #if defined(_WIN32)
     { "WriteFile",                  write_file_hook },
     { "_write",                     write_hook },
-#else    
+#else
     { "write",                      write_hook },
-#endif    
+#endif
     { "fputs",                      fputs_hook },
     { "puts",                       puts_hook },
     { "fputc",                      fputc_hook },
@@ -231,7 +231,7 @@ hook hooks[] = {
     { "perror",                     perror_hook },
 #if defined(_WIN32)
     { "__stdio_common_vfprintf",    stdio_common_vfprintf_hook },
-#elif defined(__GLIBC__)    
+#elif defined(__GLIBC__)
     { "__vfprintf_chk",             vfprintf_chk_hook },
     { "__vprintf_chk",              vprintf_chk_hook },
     { "__fprintf_chk",              fprintf_chk_hook },
@@ -239,6 +239,15 @@ hook hooks[] = {
 #endif
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
+
+void* find_hook(const char* name) {
+    for (int i = 0; i < HOOK_COUNT; i++) {
+        if (strcmp(name, hooks[i].name) == 0) {
+            return hooks[i].hook;
+        }
+    }
+    return NULL;
+}
 
 #if defined(_WIN32)
 #include <imagehlp.h>
@@ -248,7 +257,7 @@ void redirect_io_functions(void* handle,
                            override_callback cb) {
     override = cb;
     PBYTE bytes = (PBYTE) handle;
-    /* find IAT */ 
+    /* find IAT */
     ULONG size;
     PVOID data = ImageDirectoryEntryToDataEx(handle, TRUE, IMAGE_DIRECTORY_ENTRY_IMPORT, &size, NULL);
     PIMAGE_IMPORT_DESCRIPTOR import_desc = (PIMAGE_IMPORT_DESCRIPTOR) data;
@@ -260,27 +269,22 @@ void redirect_io_functions(void* handle,
         for (PIMAGE_THUNK_DATA iat_ptr = addr_table, int_ptr = name_table; iat_ptr->u1.Function; iat_ptr++, int_ptr++) {
             if (!IMAGE_SNAP_BY_ORDINAL(int_ptr->u1.Ordinal)) {
                 PIMAGE_IMPORT_BY_NAME ibm_ptr = (PIMAGE_IMPORT_BY_NAME) (bytes + int_ptr->u1.AddressOfData);
-                int found = 0;
-                for (int k = 0; k < HOOK_COUNT; k++) {
-                    if (strcmp(ibm_ptr->Name, hooks[k].name) == 0) {
-                        PROC* fn_pointer = (PROC*) &iat_ptr->u1.Function;
-                        /* make page writable */ 
-                        MEMORY_BASIC_INFORMATION mbi;
-                        DWORD protect = PAGE_READWRITE;
-                        VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
-                        if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
-                            /* replace with hook */
-                            *fn_pointer = hooks[k].hook;
-                            found = 1;
-                            /* restore original flags */
-                            VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
-                        }
-                        break;
+                void* hook = find_hook(ibm_ptr->Name);
+                if (hook) {
+                    PROC* fn_pointer = (PROC*) &iat_ptr->u1.Function;
+                    /* make page writable */
+                    MEMORY_BASIC_INFORMATION mbi;
+                    DWORD protect = PAGE_READWRITE;
+                    VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+                    if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
+                        /* replace with hook */
+                        *fn_pointer = hook;
+                        found = 1;
+                        /* restore original flags */
+                        VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
                     }
                 }
-                if (!found) {
-                    //printf("Not found: %s\n", ibm_ptr->Name);
-                }
+
             }
         }
     }
@@ -298,7 +302,6 @@ void redirect_io_functions(void* handle,
     #define Elf_Rel Elf64_Rela
     #define ELF_R_SYM ELF64_R_SYM
     #define ELF_ST_BIND ELF64_ST_BIND
-    #define REL_PLT ".rela.plt"    
 #else
     #define Elf_Ehdr Elf32_Ehdr
     #define Elf_Shdr Elf32_Shdr
@@ -306,21 +309,28 @@ void redirect_io_functions(void* handle,
     #define Elf_Rel Elf32_Rel
     #define ELF_R_SYM ELF32_R_SYM
     #define ELF_ST_BIND ELF32_ST_BIND
-    #define REL_PLT ".rel.plt"
 #endif
 
 int read_string_table(int fd,
                       Elf_Shdr* strtab,
                       char** ps) {
     char* buffer = malloc(strtab->sh_size);
-    if (!buffer 
-     || lseek(fd, strtab->sh_offset, SEEK_SET) < 0 
+    if (!buffer
+     || lseek(fd, strtab->sh_offset, SEEK_SET) < 0
      || read(fd, buffer, strtab->sh_size) <= 0) {
         *ps = NULL;
         return 0;
     }
     *ps = buffer;
     return 1;
+}
+
+int get_page_size() {
+    static int page_size = 0;
+    if (page_size == 0) {
+        page_size = sysconf(_SC_PAGE_SIZE);
+    }
+    return page_size;
 }
 
 void redirect_io_functions(void* handle,
@@ -341,7 +351,7 @@ void redirect_io_functions(void* handle,
     /* read all sections */
     sections = malloc(header.e_shnum * sizeof(Elf_Shdr));
     if (!sections
-     || lseek(fd, header.e_shoff, SEEK_SET) < 0 
+     || lseek(fd, header.e_shoff, SEEK_SET) < 0
      || read(fd, sections, header.e_shnum * sizeof(Elf_Shdr)) <= 0
      || read_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
         goto exit;
@@ -349,32 +359,23 @@ void redirect_io_functions(void* handle,
     Elf_Sym* symbols = NULL;
     size_t symbol_count = 0;
     char* symbol_strs = NULL;
-    Elf_Shdr* rela_plt = NULL;
+    /* find symbol table */
     for (int i = 0; i < header.e_shnum; i++) {
-        switch (sections[i].sh_type) {
-            case SHT_RELA: {
-                /* see if it holds the PLT */
-                Elf_Shdr* rela = &sections[i]; 
-                const char* name = section_strs + rela->sh_name;
-                if (strcmp(name, REL_PLT) == 0) {
-                    rela_plt = rela;
-                }
-            } break;
-            case SHT_DYNSYM: {
-                /* load symbols */
-                Elf_Shdr* dynsym = &sections[i];
-                symbols = malloc(dynsym->sh_size);
-                symbol_count = dynsym->sh_size / sizeof(Elf_Sym);
-                if (!symbols
-                 || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0 
-                 || read(fd, symbols, dynsym->sh_size) <= 0
-                 || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
-                    goto exit;
-                }
-            } break;
+        if (sections[i].sh_type == SHT_DYNSYM) {
+            /* load symbols */
+            Elf_Shdr* dynsym = &sections[i];
+            symbols = malloc(dynsym->sh_size);
+            symbol_count = dynsym->sh_size / sizeof(Elf_Sym);
+            if (!symbols
+                || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0
+                || read(fd, symbols, dynsym->sh_size) <= 0
+                || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
+                goto exit;
+            }
+            break;
         }
     }
-    if (!symbols || !rela_plt) {
+    if (!symbols) {
         goto exit;
     }
     /* find base address of library */
@@ -390,41 +391,41 @@ void redirect_io_functions(void* handle,
             }
         }
     }
-    /* look for symbols for write() */
-    int page_size = 0;
-    for (int k = 0; k < HOOK_COUNT; k++) {
-        for (int i = 0; i < symbol_count; i++) {
-            const char* symbol_name = symbol_strs + symbols[i].st_name;
-            if (strcmp(symbol_name, hooks[k].name) == 0) {
-                Elf_Rel* plt_entries = (Elf_Rel*) (base_address + rela_plt->sh_addr);
-                size_t plt_entry_count = rela_plt->sh_size / sizeof(Elf_Rel);
-                for (int j = 0; j < plt_entry_count; j++) {
-                    if (ELF_R_SYM(plt_entries[j].r_info) == i) {
+    /* scan through relocations */
+    for (int i = 0; i < header.e_shnum; i++) {
+        if (sections[i].sh_type == SHT_RELA) {
+            Elf_Shdr* rela = &sections[i];
+            Elf_Rel* rela_entries = (Elf_Rel*) (base_address + rela->sh_addr);
+            size_t rela_entry_count = rela->sh_size / sizeof(Elf_Rel);
+            for (int i = 0; i < rela_entry_count; i++) {
+                size_t symbol_index = ELF_R_SYM(rela_entries[i].r_info);
+                if (symbol_index) {
+                    const char* symbol_name = symbol_strs + symbols[symbol_index].st_name;
+                    void* hook = find_hook(symbol_name);
+                    if (hook) {
                         /* get address to GOT entry */
-                        uintptr_t got_entry_address = base_address + plt_entries[j].r_offset;
+                        uintptr_t got_entry_address = base_address + rela_entries[i].r_offset;
                         /* disable write protection */
-                        if (page_size == 0) {
-                            page_size = sysconf(_SC_PAGE_SIZE);
-                            if (page_size == -1) {
-                                goto exit;
-                            }
+                        int page_size = get_page_size();
+                        if (page_size == -1) {
+                            goto exit;
                         }
                         uintptr_t page_address = got_entry_address & ~(page_size - 1);
                         if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
                             goto exit;
                         }
                         void** ptr = (void **) got_entry_address;
-                        *ptr = hooks[k].hook;
+                        *ptr = hook;
                         override = cb;
                         /* reenable write protection */
                         mprotect((void*) page_address, page_size, PROT_READ);
-                        break;
                     }
                 }
-                break;
             }
+
         }
     }
+
 exit:
     free(sections);
     free(section_strs);
@@ -458,8 +459,8 @@ typedef struct ADD_BITS(section)            section;
 typedef struct ADD_BITS(nlist)              nlist;
 typedef struct ADD_BITS(dylib_module)       dylib_module;
 
-int read_command(int fd, 
-                 load_command* lc, 
+int read_command(int fd,
+                 load_command* lc,
                  void *dest,
                  size_t size) {
     if (read(fd, ((load_command*) dest) + 1, size - sizeof(load_command)) < 0) {
@@ -521,7 +522,7 @@ void redirect_io_functions(void* handle,
                 symbol_count = sym_cmd.nsyms;
                 symbol_strs = malloc(sym_cmd.strsize);
                 if (!symbols || !symbol_strs
-                 || lseek(fd, sym_cmd.symoff, SEEK_SET) < 0 
+                 || lseek(fd, sym_cmd.symoff, SEEK_SET) < 0
                  || read(fd, symbols, sym_cmd.nsyms * sizeof(nlist)) <= 0
                  || lseek(fd, sym_cmd.stroff, SEEK_SET) < 0
                  || read(fd, symbol_strs, sym_cmd.strsize) <= 0) {
@@ -571,20 +572,20 @@ void redirect_io_functions(void* handle,
     if (base_address == 0 || got_offset == 0) {
         goto exit;
     }
-    for (int k = 0; k < HOOK_COUNT; k++) {
-        for (int i = 0; i < indirect_symbol_count; i++) {
-            nlist* symbol = &symbols[indirect_symbol_indices[i]];
-            const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
-            if (symbol_name[0] == '_' && strcmp(symbol_name + 1, hooks[k].name) == 0) {
-                /* calculate the address to the GOT entry */
-                uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
-                void** ptr = (void**) got_entry_address;
-                /* insert our hook */
-                *ptr = hooks[k].hook;
-                break;
-            }
-        }        
+    for (int i = 0; i < indirect_symbol_count; i++) {
+        nlist* symbol = &symbols[indirect_symbol_indices[i]];
+        const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
+        void* hook = (symbol_name[0] == '_') ? find_hook(symbol_name + 1) : NULL;
+        if (hook) {
+            /* calculate the address to the GOT entry */
+            uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
+            void** ptr = (void**) got_entry_address;
+            /* insert our hook */
+            *ptr = hook;
+            break;
+        }
     }
+
 exit:
     free(data_sections);
     free(symbols);
