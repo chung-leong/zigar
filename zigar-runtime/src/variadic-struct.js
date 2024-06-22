@@ -5,8 +5,8 @@ import { defineProperties } from './object.js';
 import { always } from './pointer.js';
 import { getChildVivificator } from './struct.js';
 import {
-  ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, PRIMITIVE, SIZE, SLOTS,
-  VIVIFICATOR,
+  ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, PARENT, POINTER_VISITOR, PRIMITIVE, SIZE,
+  SLOTS, VIVIFICATOR
 } from './symbol.js';
 import { MemberType } from './types.js';
 
@@ -63,13 +63,12 @@ export function defineVariadicStruct(structure, env) {
       attrOffset += 4;
     }
     for (const [ index, arg ] of varArgs.entries()) {
+      const slot = maxSlot + index + 1;
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
-      const child = arg.constructor.call(null, childDV);
-      const slot = maxSlot + index + 1;
+      const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
-      this[SLOTS][slot] = child;
       attrDV.setUint16(attrOffset, offset, littleEndian);
       attrDV.setUint8(attrOffset + 2, Math.min(255, byteLength));
       attrDV.setUint8(attrOffset + 3, arg.constructor[PRIMITIVE] == MemberType.Float);

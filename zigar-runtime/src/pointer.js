@@ -52,7 +52,7 @@ export function definePointer(structure, env) {
         const address = getAddressInMemory.call(this);
         const length = (hasLengthInMemory)
         ? getLengthInMemory.call(this)
-        : (sentinel)
+        : (sentinel?.isRequired)
           ? env.findSentinel(address, sentinel.bytes) + 1
           : 1;
         if (address !== this[ADDRESS] || length !== this[LENGTH]) {
@@ -93,15 +93,15 @@ export function definePointer(structure, env) {
   };
   const setTargetObject = function(arg) {
     const pointer = this[POINTER] ?? this;
-    if (pointer[MEMORY][FIXED]) {
-      // the pointer sits in fixed memory--apply the change immediately
-      if (arg[MEMORY][FIXED]) {
-        const address = env.getViewAddress(arg[MEMORY]);
-        setAddress.call(this, address);
-        if (hasLengthInMemory) {
-          setLength.call(this, arg.length);
-        }
-      } else {
+    // the target sits in fixed memory--apply the change immediately
+    if (arg[MEMORY][FIXED]) {
+      const address = env.getViewAddress(arg[MEMORY]);
+      setAddress.call(this, address);
+      if (hasLengthInMemory) {
+        setLength.call(this, arg.length);
+      }
+    } else {
+      if (pointer[MEMORY][FIXED]) {
         throw new FixedMemoryTargetRequired(structure, arg);
       }
     }

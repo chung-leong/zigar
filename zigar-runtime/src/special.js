@@ -126,7 +126,7 @@ export function getBase64Descriptor(structure, handlers = {}) {
 }
 
 export function getStringDescriptor(structure, handlers = {}) {
-  const { sentinel, type, instance: { members }} = structure;
+  const { sentinel, instance: { members }} = structure;
   const { byteSize: charSize } = members[0];
   return markAsSpecial({
     get() {

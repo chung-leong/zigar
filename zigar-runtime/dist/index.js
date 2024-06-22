@@ -21,21 +21,22 @@ const StructureType = {
   ExternStruct: 3,
   PackedStruct: 4,
   ArgStruct: 5,
-  ExternUnion: 6,
-  BareUnion: 7,
-  TaggedUnion: 8,
-  ErrorUnion: 9,
-  ErrorSet: 10,
-  Enum: 11,
-  Optional: 12,
-  SinglePointer: 13,
-  SlicePointer: 14,
-  MultiPointer: 15,
-  CPointer: 16,
-  Slice: 17,
-  Vector: 18,
-  Opaque: 19,
-  Function: 20,
+  VariadicStruct: 6,
+  ExternUnion: 7,
+  BareUnion: 8,
+  TaggedUnion: 9,
+  ErrorUnion: 10,
+  ErrorSet: 11,
+  Enum: 12,
+  Optional: 13,
+  SinglePointer: 14,
+  SlicePointer: 15,
+  MultiPointer: 16,
+  CPointer: 17,
+  Slice: 18,
+  Vector: 19,
+  Opaque: 20,
+  Function: 21,
 };
 
 function getTypeName(member) {
@@ -595,6 +596,7 @@ const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 const MORE = Symbol('more');
+const PRIMITIVE = Symbol('primitive');
 
 function getDestructor(env) {
   return function() {
@@ -2449,15 +2451,20 @@ function getBase64Descriptor(structure, handlers = {}) {
 }
 
 function getStringDescriptor(structure, handlers = {}) {
-  const { sentinel, instance: { members }} = structure;
+  const { sentinel, type, instance: { members }} = structure;
   const { byteSize: charSize } = members[0];
   return markAsSpecial({
     get() {
       const dv = this.dataView;
       const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decodeText(ta, `utf-${charSize * 8}`);
-      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
+      let str = decodeText(ta, `utf-${charSize * 8}`);
+      if (sentinel?.value !== undefined) {
+        if (str.charCodeAt(str.length - 1) === sentinel.value) {
+          str = str.slice(0, -1);
+        }
+      }
+      return str;
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
@@ -3498,7 +3505,7 @@ function defineArgStruct(structure, env) {
     hasPointer,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
@@ -3521,7 +3528,7 @@ function defineArgStruct(structure, env) {
   for (const member of members) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
-  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const { slot: retvalSlot, type: retvalType } = members[0];
   const isChildMutable = (retvalType === MemberType.Object)
   ? function(object) {
       const child = this[VIVIFICATOR](retvalSlot);
@@ -4079,6 +4086,7 @@ function definePrimitive(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
+    [PRIMITIVE]: { value: member.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
@@ -4246,37 +4254,45 @@ function getSentinel(structure, env) {
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
-  const validateValue = (runtimeSafety) ? function(v, i, l) {
-    if (v === value && i !== l - 1) {
-      throw new MisplacedSentinel(structure, v, i, l);
-    } else if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, i, l);
-    }
-  } : function(v, i, l) {
-    if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, l);
-    }
-  };
-  const validateData = (runtimeSafety) ? function(source, len) {
-    for (let i = 0; i < len; i++) {
-      const v = get.call(source, i);
-      if (v === value && i !== len - 1) {
-        throw new MisplacedSentinel(structure, value, i, len);
-      } else if (v !== value && i === len - 1) {
-        throw new MissingSentinel(structure, value, len);
+  const { isRequired } = member;
+  const validateValue = (isRequired)
+  ? (runtimeSafety)
+    ? function(v, i, l) {
+      if (v === value && i !== l - 1) {
+        throw new MisplacedSentinel(structure, v, i, l);
+      } else if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, i, l);
+      }
+    } : function(v, i, l) {
+      if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, l);
       }
     }
-  } : function(source, len) {
-    if (len * byteSize === source[MEMORY].byteLength) {
-      const i = len - 1;
-      const v = get.call(source, i);
-      if (v !== value) {
-        throw new MissingSentinel(structure, value, len);
+  : function() {};
+  const validateData = (isRequired)
+  ? (runtimeSafety)
+    ? function(source, len) {
+        for (let i = 0; i < len; i++) {
+          const v = get.call(source, i);
+          if (v === value && i !== len - 1) {
+            throw new MisplacedSentinel(structure, value, i, len);
+          } else if (v !== value && i === len - 1) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
       }
+    : function(source, len) {
+        if (len * byteSize === source[MEMORY].byteLength) {
+          const i = len - 1;
+          const v = get.call(source, i);
+          if (v !== value) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
     }
-  };
+  : function () {};
   const bytes = template[MEMORY];
-  return { value, bytes, validateValue, validateData };
+  return { value, bytes, validateValue, validateData, isRequired };
 }
 
 function defineUnionShape(structure, env) {
