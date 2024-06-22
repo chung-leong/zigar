@@ -199,35 +199,43 @@ export function getSentinel(structure, env) {
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
-  const validateValue = (runtimeSafety) ? function(v, i, l) {
-    if (v === value && i !== l - 1) {
-      throw new MisplacedSentinel(structure, v, i, l);
-    } else if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, i, l);
-    }
-  } : function(v, i, l) {
-    if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, l);
-    }
-  };
-  const validateData = (runtimeSafety) ? function(source, len) {
-    for (let i = 0; i < len; i++) {
-      const v = get.call(source, i);
-      if (v === value && i !== len - 1) {
-        throw new MisplacedSentinel(structure, value, i, len);
-      } else if (v !== value && i === len - 1) {
-        throw new MissingSentinel(structure, value, len);
+  const { isRequired } = member;
+  const validateValue = (isRequired)
+  ? (runtimeSafety)
+    ? function(v, i, l) {
+      if (v === value && i !== l - 1) {
+        throw new MisplacedSentinel(structure, v, i, l);
+      } else if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, i, l);
+      }
+    } : function(v, i, l) {
+      if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, l);
       }
     }
-  } : function(source, len) {
-    if (len * byteSize === source[MEMORY].byteLength) {
-      const i = len - 1;
-      const v = get.call(source, i);
-      if (v !== value) {
-        throw new MissingSentinel(structure, value, len);
+  : function() {};
+  const validateData = (isRequired)
+  ? (runtimeSafety)
+    ? function(source, len) {
+        for (let i = 0; i < len; i++) {
+          const v = get.call(source, i);
+          if (v === value && i !== len - 1) {
+            throw new MisplacedSentinel(structure, value, i, len);
+          } else if (v !== value && i === len - 1) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
       }
+    : function(source, len) {
+        if (len * byteSize === source[MEMORY].byteLength) {
+          const i = len - 1;
+          const v = get.call(source, i);
+          if (v !== value) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
     }
-  };
+  : function () {};
   const bytes = template[MEMORY];
-  return { value, bytes, validateValue, validateData };
+  return { value, bytes, validateValue, validateData, isRequired };
 }

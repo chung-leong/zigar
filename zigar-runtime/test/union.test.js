@@ -1526,7 +1526,7 @@ describe('Union functions', function() {
       object.$ = { cat: 4567 };
       expect(object.cat).to.equal(4567);
     })
-    it('should define an interator union', function() {
+    it('should define an iterator union', function() {
       const env = new NodeEnvironment();
       const structure = env.beginStructure({
         type: StructureType.ExternUnion,

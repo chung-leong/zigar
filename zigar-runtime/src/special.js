@@ -126,15 +126,20 @@ export function getBase64Descriptor(structure, handlers = {}) {
 }
 
 export function getStringDescriptor(structure, handlers = {}) {
-  const { sentinel, instance: { members }} = structure;
+  const { sentinel, type, instance: { members }} = structure;
   const { byteSize: charSize } = members[0];
   return markAsSpecial({
     get() {
       const dv = this.dataView;
       const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decodeText(ta, `utf-${charSize * 8}`);
-      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
+      let str = decodeText(ta, `utf-${charSize * 8}`);
+      if (sentinel?.value !== undefined) {
+        if (str.charCodeAt(str.length - 1) === sentinel.value) {
+          str = str.slice(0, -1);
+        }
+      }
+      return str;
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {

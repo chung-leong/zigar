@@ -45,7 +45,7 @@ describe('Opaque functions', function() {
       const { constructor: Hello } = structure;
       expect(() => new Hello()).to.throw(TypeError);
     })
-    it('should define an interator opaque', function() {
+    it('should define an iterator opaque', function() {
       const env = new NodeEnvironment();
       const structure = env.beginStructure({
         type: StructureType.Opaque,

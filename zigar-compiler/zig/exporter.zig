@@ -435,14 +435,16 @@ const TypeData = struct {
     fn getTargetType(comptime self: @This()) type {
         return switch (@typeInfo(self.Type)) {
             .Pointer => |pt| switch (pt.size) {
-                .One => if (pt.child == anyopaque) Slice(u8, null) else pt.child,
+                .One => if (pt.child == anyopaque) Slice(u8, null, false) else pt.child,
                 else => define: {
-                    const ST = Sentinel(pt.child);
-                    const sentinel = if (pt.sentinel) |ptr| deref: {
-                        const sentinel_ptr: *const ST = @alignCast(@ptrCast(ptr));
-                        break :deref sentinel_ptr.*;
-                    } else null;
-                    break :define Slice(pt.child, sentinel);
+                    if (pt.sentinel) |ptr| {
+                        const sentinel_ptr: *const pt.child = @alignCast(@ptrCast(ptr));
+                        break :define Slice(pt.child, sentinel_ptr.*, true);
+                    } else if (pt.size == .C and (pt.child == u8 or pt.child == u16)) {
+                        break :define Slice(pt.child, 0, false);
+                    } else {
+                        break :define Slice(pt.child, null, false);
+                    }
                 },
             },
             else => @compileError("Not a pointer"),
@@ -487,6 +489,13 @@ const TypeData = struct {
     fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
         return switch (self.attrs.is_slice) {
             true => @field(self.Type, "sentinel"),
+            else => @compileError("Not a slice"),
+        };
+    }
+
+    fn isSentinelRequired(comptime self: @This()) bool {
+        return switch (self.attrs.is_slice) {
+            true => @field(self.Type, "sentinel_required"),
             else => @compileError("Not a slice"),
         };
     }
@@ -652,12 +661,12 @@ test "TypeData.getStructureType" {
 }
 
 test "TypeData.getElementType" {
-    assertCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+    assertCT(TypeData.getElementType(.{ .Type = Slice(u8, null, false), .attrs = .{ .is_slice = true } }) == u8);
 }
 
 test "TypeData.getTargetType" {
-    assertCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
-    assertCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(u8, null));
+    assertCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null, false));
+    assertCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(u8, null, false));
     assertCT(TypeData.getTargetType(.{ .Type = *i32 }) == i32);
 }
 
@@ -739,10 +748,10 @@ test "TypeData.isIterator" {
 }
 
 test "TypeData.getSentinel" {
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(u8, 0), .attrs = .{ .is_slice = true } }) orelse -1 == 0);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, 7), .attrs = .{ .is_slice = true } }) orelse -1 == 7);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, -2), .attrs = .{ .is_slice = true } }) orelse -1 == -2);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(u8, 0, true), .attrs = .{ .is_slice = true } }) orelse -1 == 0);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, 7, true), .attrs = .{ .is_slice = true } }) orelse -1 == 7);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, -2, true), .attrs = .{ .is_slice = true } }) orelse -1 == -2);
+    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, null, false), .attrs = .{ .is_slice = true } }) == null);
 }
 
 test "TypeData.getSelectorType" {
@@ -1402,6 +1411,7 @@ fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     if (td.getSentinel()) |sentinel| {
         try ctx.host.attachMember(structure, .{
             .name = "sentinel",
+            .is_required = td.isSentinelRequired(),
             .member_type = child_td.getMemberType(false),
             .bit_offset = 0,
             .bit_size = child_td.getBitSize(),
@@ -1917,7 +1927,7 @@ test "Sentinel" {
     assert(B == void);
 }
 
-fn Slice(comptime T: type, s: ?Sentinel(T)) type {
+fn Slice(comptime T: type, s: ?Sentinel(T), req: bool) type {
     const ET = switch (@typeInfo(T)) {
         .Opaque => u8,
         else => T,
@@ -1925,15 +1935,16 @@ fn Slice(comptime T: type, s: ?Sentinel(T)) type {
     return struct {
         const Type = T;
         const sentinel = s;
+        const sentinel_required = req;
 
         element: ET,
     };
 }
 
 test "Slice" {
-    const A = Slice(u8, null);
-    const B = Slice(u8, null);
-    const C = Slice(u8, 0);
+    const A = Slice(u8, null, false);
+    const B = Slice(u8, null, false);
+    const C = Slice(u8, 0, true);
     assert(A == B);
     assert(C != B);
 }

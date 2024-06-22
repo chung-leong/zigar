@@ -1286,7 +1286,7 @@ describe('Struct functions', function() {
       expect(() => object2.$ = object1).to.throw(TypeError)
         .with.property('message').that.contains('cannot point to garbage-collected');
     })
-    it('should define an interator struct', function() {
+    it('should define an iterator struct', function() {
       const env = new NodeEnvironment();
       const structure = env.beginStructure({
         type: StructureType.Struct,
