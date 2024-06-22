@@ -552,8 +552,9 @@ export function addTests(importModule, options) {
     })
     it('should call variadic functions', async function() {
       this.timeout(120000);
-      const { fopen, fprintf, fclose, printf, Int } = await importTest('call-variadic-functions');
-      printf('Hello world\n');
+      const { fopen, fprintf, fclose, printf, stream, Int, Double } = await importTest('call-variadic-functions');
+      const lines1 = await capture(() => printf('Hello world %d!!\n', new Int(1234)));
+      expect(lines1).to.eql([ 'Hello world 1234!!' ]);
     })
   })
 }

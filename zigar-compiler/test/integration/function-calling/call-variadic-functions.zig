@@ -17,3 +17,4 @@ pub const fprintf = c.fprintf;
 pub const printf = c.printf;
 
 pub const Int = c_int;
+pub const Double = f64;

@@ -2,6 +2,7 @@ import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } f
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { defineProperties } from './object.js';
+import { always } from './pointer.js';
 import { getChildVivificator } from './struct.js';
 import {
   ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, PRIMITIVE, SIZE, SLOTS,
@@ -16,7 +17,8 @@ export function defineVariadicStruct(structure, env) {
     instance: { members },
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(1).map(m => m.name);
+  const argMembers = members.slice(1);
+  const argKeys = argMembers.map(m => m.name);
   const maxSlot = members.map(m => m.slot).sort().pop();
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
@@ -28,7 +30,7 @@ export function defineVariadicStruct(structure, env) {
     let maxAlign = align;
     const varArgs = args.slice(argCount);
     const offsets = {};
-    for (const [ index, arg ] of varArgs) {
+    for (const [ index, arg ] of varArgs.entries()) {
       const dv = arg[MEMORY]
       if (!dv) {
         const err = new InvalidVariadicArgument();
@@ -54,17 +56,17 @@ export function defineVariadicStruct(structure, env) {
     const { littleEndian } = env;
     const attrDV = env.allocateMemory(args.length * 4, 4);
     let attrOffset = 0;
-    for (const { bitOffset, byteSize, type } of members) {
+    for (const { bitOffset, byteSize, type } of argMembers) {
       attrDV.setUint16(attrOffset, bitOffset / 8, littleEndian);
       attrDV.setUint8(attrOffset + 2, Math.min(255, byteSize));
       attrDV.setUint8(attrOffset + 3, type == MemberType.Float);
       attrOffset += 4;
     }
-    for (const [ index, arg ] of varArgs) {
+    for (const [ index, arg ] of varArgs.entries()) {
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
-      const child = arg.constructor(childDV);
+      const child = arg.constructor.call(null, childDV);
       const slot = maxSlot + index + 1;
       child.$ = arg;
       this[SLOTS][slot] = child;
@@ -97,7 +99,7 @@ export function defineVariadicStruct(structure, env) {
       isActive,
       isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
     };
-    if (vivificate) {
+    if (vivificate && retvalType === MemberType.Object) {
       this[VIVIFICATOR](retvalSlot);
     }
     for (const child of Object.values(this[SLOTS])) {

@@ -574,10 +574,9 @@ napi_value run_variadic_thunk(napi_env env,
     size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
     if (args_len == 0) {
-        // pointer might not be valid when length is zero
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, args_ptr, arg_count, args_len, args_attrs_ptr, &result) != OK) {
+    if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, args_ptr, arg_count, args_attrs_ptr, &result) != OK) {
         return throw_error(env, "Unable to execute function");
     }
     return result;
