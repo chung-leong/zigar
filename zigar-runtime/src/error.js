@@ -357,6 +357,12 @@ export class CreatingOpaque extends TypeError {
   }
 }
 
+export class InvalidVariadicArgument extends TypeError {
+  constructor() {
+    super(`Arguments passed to variadic function must be casted to a Zig type`);
+  }
+}
+
 export class ZigError extends Error {
   constructor(name) {
     super(deanimalizeErrorName(name));

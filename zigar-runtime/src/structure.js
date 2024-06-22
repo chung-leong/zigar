@@ -14,6 +14,7 @@ import {
   MemberType, StructureType, hasStandardFloatSize, hasStandardIntSize, isByteAligned
 } from './types.js';
 import { defineUnionShape } from './union.js';
+import { defineVariadicStruct } from './variadic-struct.js';
 import { defineVector } from './vector.js';
 
 const factories = Array(Object.values(StructureType).length);
@@ -40,6 +41,10 @@ export function useExternStruct() {
 
 export function useArgStruct() {
   factories[StructureType.ArgStruct] = defineArgStruct;
+}
+
+export function useVariadicStruct() {
+  factories[StructureType.VariadicStruct] = defineVariadicStruct;
 }
 
 export function useExternUnion() {
@@ -221,6 +226,7 @@ export function useAllStructureTypes() {
   useExternStruct();
   usePackedStruct();
   useArgStruct();
+  useVariadicStruct();
   useExternUnion();
   useBareUnion();
   useTaggedUnion();

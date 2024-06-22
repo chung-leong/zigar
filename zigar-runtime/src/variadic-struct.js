@@ -1,0 +1,106 @@
+import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from './error.js';
+import { getDescriptor } from './member.js';
+import { getMemoryCopier } from './memory.js';
+import { defineProperties } from './object.js';
+import { getChildVivificator } from './struct.js';
+import {
+  ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR,
+} from './symbol.js';
+import { MemberType } from './types.js';
+
+export function defineVariadicStruct(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members },
+  } = structure;
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const argKeys = members.slice(1).map(m => m.name);
+  const maxSlot = members.map(m => m.slot).sort().pop();
+  const argCount = argKeys.length;
+  const constructor = structure.constructor = function(args, name, offset) {
+    if (args.length < argCount) {
+      throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
+    }
+    // calculate the actual size of the struct based on arguments given
+    let totalByteSize = byteSize;
+    let maxAlign = align;
+    const varArgs = args.slice(argCount);
+    const offsets = {};
+    for (const [ index, arg ] of varArgs) {
+      const dv = arg[MEMORY]
+      if (!dv) {
+        const err = new InvalidVariadicArgument();
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+      }
+      const argAlign = arg[ALIGN];
+      const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
+      totalByteSize = offset + dv.byteLength;
+      if (argAlign > maxAlign) {
+        maxAlign = argAlign;
+      }
+    }
+    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    this[MEMORY] = dv;
+    this[SLOTS] = {};
+    for (const [ index, key ] of argKeys.entries()) {
+      try {
+        this[key] = args[index];
+      } catch (err) {
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+      }
+    }
+    for (const [ index, arg ] of varArgs) {
+      const { byteLength } = arg[MEMORY];
+      const offset = offsets[index];
+      const childDV = env.obtainView(dv.buffer, offset, byteLength);
+      const child = arg.constructor(childDV);
+      const slot = maxSlot + index + 1;
+      child.$ = arg;
+      this[SLOTS][slot] = child;
+    }
+  };
+  const memberDescriptors = {};
+  for (const member of members) {
+    memberDescriptors[member.name] = getDescriptor(member, env);
+  }
+  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const isChildMutable = (retvalType === MemberType.Object)
+  ? function(object) {
+      const child = this[VIVIFICATOR](retvalSlot);
+      return object === child;
+    }
+  : function() { return false };
+  const visitPointers = function(cb, options = {}) {
+    const {
+      vivificate = false,
+      isActive = always,
+      isMutable = always,
+    } = options;
+    const childOptions = {
+      ...options,
+      isActive,
+      isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
+    };
+    if (vivificate) {
+      this[VIVIFICATOR](retvalSlot);
+    }
+    for (const child of Object.values(this[SLOTS])) {
+      child?.[POINTER_VISITOR]?.(cb, childOptions);
+    }
+  };
+  defineProperties(constructor.prototype, {
+    ...memberDescriptors,
+    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
+    [POINTER_VISITOR]: { value: visitPointers },
+    /* WASM-ONLY */
+    [MEMORY_RESTORER]: { value: function() {} },
+    /* WASM-ONLY-END */
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  });
+  return constructor;
+}

@@ -1830,8 +1830,19 @@ fn ArgumentStruct(comptime T: type) type {
         }
         break :get count;
     };
+    const RT = if (f.return_type) |RT| switch (RT) {
+        noreturn => void,
+        else => RT,
+    } else void;
     var fields: [count]std.builtin.Type.StructField = undefined;
-    var index = 0;
+    fields[0] = .{
+        .name = "retval",
+        .type = RT,
+        .is_comptime = false,
+        .alignment = @alignOf(RT),
+        .default_value = null,
+    };
+    var index = 1;
     for (f.params) |param| {
         if (param.type != std.mem.Allocator and param.type != null) {
             const name = std.fmt.comptimePrint("{d}", .{index});
@@ -1845,17 +1856,6 @@ fn ArgumentStruct(comptime T: type) type {
             index += 1;
         }
     }
-    const RT = if (f.return_type) |RT| switch (RT) {
-        noreturn => void,
-        else => RT,
-    } else void;
-    fields[index] = .{
-        .name = "retval",
-        .type = RT,
-        .is_comptime = false,
-        .alignment = @alignOf(RT),
-        .default_value = null,
-    };
     return @Type(.{
         .Struct = .{
             .layout = .auto,
@@ -1884,14 +1884,14 @@ test "ArgumentStruct" {
     const ArgA = ArgumentStruct(@TypeOf(Test.A));
     const fieldsA = std.meta.fields(ArgA);
     assert(fieldsA.len == 3);
-    assert(fieldsA[0].name[0] == '0');
-    assert(fieldsA[1].name[0] == '1');
-    assert(fieldsA[2].name[0] == 'r');
+    assert(fieldsA[0].name[0] == 'r');
+    assert(fieldsA[1].name[0] == '0');
+    assert(fieldsA[2].name[0] == '1');
     const ArgB = ArgumentStruct(@TypeOf(Test.B));
     const fieldsB = std.meta.fields(ArgB);
     assert(fieldsB.len == 2);
-    assert(fieldsB[0].name[0] == '0');
-    assert(fieldsB[1].name[0] == 'r');
+    assert(fieldsB[0].name[0] == 'r');
+    assert(fieldsB[1].name[0] == '1');
     const ArgC = ArgumentStruct(@TypeOf(Test.C));
     const fieldsC = std.meta.fields(ArgC);
     assert(fieldsC.len == 3);
@@ -2012,14 +2012,12 @@ test "createThunk" {
 fn createVariadicThunk(comptime HostT: type, comptime function: anytype) VariadicThunk {
     const variadic = @import("./variadic.zig");
     const ns = struct {
-        fn tryFunction(_: HostT, arg_ptr: []u8, attrs: []variadic.ArgAttributes) !void {
+        fn tryFunction(_: HostT, arg_ptr: []u8, arg_attrs: []variadic.ArgAttributes) !void {
             const f = @typeInfo(@TypeOf(function)).Fn;
             const cc = f.calling_convention;
             const RT = f.return_type.?;
-            const arg_attrs = attrs[0 .. attrs.len - 1];
             const alloc = try variadic.allocate(arg_attrs);
-            const retval_attrs = attrs[attrs.len - 1];
-            const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[retval_attrs.offset]));
+            const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[0]));
             const max_stack_count = variadic.max_arg_count - @min(variadic.registers.int, variadic.registers.float);
             var int_args: [variadic.registers.int]isize = undefined;
             var float_args: [variadic.registers.float]f64 = undefined;
@@ -2042,8 +2040,8 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype) Variadi
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, arg_size: usize, attr_ptr: *anyopaque) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            const attrs = @as([*]variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0 .. arg_count + 1];
-            const arg_slice = @as([*]u8, arg_ptr[0..arg_count])[0..arg_size];
+            const attrs = @as([*]variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
+            const arg_slice = @as([*]u8, @ptrCast(@alignCast(arg_ptr))[0..arg_size];
             tryFunction(host, arg_slice, attrs) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
