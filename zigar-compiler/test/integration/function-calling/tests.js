@@ -552,7 +552,62 @@ export function addTests(importModule, options) {
     })
     it('should call variadic functions', async function() {
       this.timeout(120000);
-      const { printf, Int, Double, StrPtr } = await importTest('call-variadic-functions', { useLibc: true });
+      const {
+        Int16, Int32, Int64, Int128, printIntegers,
+        Float16, Float32, Float64, Float128, printFloats,
+      } = await importTest('call-variadic-functions');
+      const lines1 = await capture(() => printIntegers(16, 3,
+        new Int16(-10),
+        new Int16(-200),
+        new Int16(-3000),
+      ));
+      expect(lines1).to.eql([ '-10', '-200', '-3000' ]);
+      const lines2 = await capture(() => printIntegers(32, 3,
+        new Int32(-10),
+        new Int32(-200),
+        new Int32(-3000),
+      ));
+      expect(lines2).to.eql([ '-10', '-200', '-3000' ]);
+      const lines3 = await capture(() => printIntegers(64, 3,
+        new Int64(-10),
+        new Int64(-200),
+        new Int64(-3000),
+      ));
+      expect(lines3).to.eql([ '-10', '-200', '-3000' ]);
+      // const lines4 = await capture(() => printIntegers(128, 3,
+      //   new Int128(-10),
+      //   new Int128(-200),
+      //   new Int128(-3000),
+      // ));
+      // expect(lines4).to.eql([ '-10', '-200', '-3000' ]);
+      // const lines5 = await capture(() => printFloats(16, 3,
+      //   new Float16(-10.25),
+      //   new Float16(-200.25),
+      //   new Float16(-3000.25),
+      // ));
+      // expect(lines5).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      // const lines6 = await capture(() => printFloats(32, 3,
+      //   new Float32(-10.25),
+      //   new Float32(-200.25),
+      //   new Float32(-3000.25),
+      // ));
+      // expect(lines6).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      const lines7 = await capture(() => printFloats(64, 3,
+        new Float64(-10.25),
+        new Float64(-200.25),
+        new Float64(-3000.25),
+      ));
+      expect(lines7).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      // const lines8 = await capture(() => printFloats(128, 3,
+      //   new Float128(-10.25),
+      //   new Float128(-200.25),
+      //   new Float128(-3000.25),
+      // ));
+      // expect(lines8).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+    })
+    it('should call printf correctly', async function() {
+      this.timeout(120000);
+      const { printf, Int, Double, StrPtr } = await importTest('call-printf', { useLibc: true });
       const lines1 = await capture(() => printf(
         'Hello world, %d %d %d %d %d!!\n',
         new Int('123'),
@@ -648,5 +703,5 @@ export function addTests(importModule, options) {
         expect(f).to.throw(Error).with.property('message').that.equal('Too many arguments');
       }
     })
-  })
+ })
 }

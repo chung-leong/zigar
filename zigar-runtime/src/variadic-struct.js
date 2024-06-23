@@ -1,7 +1,7 @@
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from './error.js';
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { defineProperties } from './object.js';
+import { defineProperties, getMemoryRestorer } from './object.js';
 import { always } from './pointer.js';
 import { getChildVivificator } from './struct.js';
 import {
@@ -42,7 +42,7 @@ export function defineVariadicStruct(structure, env) {
         maxAlign = argAlign;
       }
     }
-    const attrs = new ArgAttributes(args.length, env);
+    const attrs = new ArgAttributes(args.length, maxAlign);
     const dv = env.allocateMemory(totalByteSize, maxAlign);
     this[MEMORY] = dv;
     this[SLOTS] = {};
@@ -96,34 +96,36 @@ export function defineVariadicStruct(structure, env) {
       child?.[POINTER_VISITOR]?.(cb, childOptions);
     }
   };
+  const ArgAttributes = function(length, align) {
+    this[MEMORY] = env.allocateMemory(length * 4, 4);
+    this.length = length;
+    this.littleEndian = env.littleEndian;
+  }
+  const setAttributes = function(index, offset, size, type) {
+    const dv = this[MEMORY];
+    dv.setUint16(index * 4, offset, env.littleEndian);
+    dv.setUint8(index * 4 + 2, Math.min(255, size));
+    dv.setUint8(index * 4 + 3, type === MemberType.Float);
+  };
+  defineProperties(ArgAttributes.prototype, {
+    set: { value: setAttributes },
+    [COPIER]: { value: getMemoryCopier(4, true) },
+    [ALIGN]: { value: 4 },
+    /* WASM-ONLY */
+    [MEMORY_RESTORER]: { value: getMemoryRestorer(null, env) },
+    /* WASM-ONLY-END */
+  });
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
     [COPIER]: { value: getMemoryCopier(undefined, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: { value: visitPointers },
     /* WASM-ONLY */
-    [MEMORY_RESTORER]: { value: function() {} },
+    [MEMORY_RESTORER]: { value: getMemoryRestorer(null, env) },
     /* WASM-ONLY-END */
   });
   defineProperties(constructor, {
-    [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
   });
   return constructor;
 }
-
-function ArgAttributes(length, env) {
-  this[MEMORY] = env.allocateMemory(length * 4, 4);
-  this.length = length;
-  this.littleEndian = env.littleEndian;
-}
-Object.assign(ArgAttributes.prototype, {
-  [COPIER]: getMemoryCopier(4, true),
-  [ALIGN]: 4,
-  set: function(index, offset, size, type) {
-    const dv = this[MEMORY];
-    dv.setUint16(index * 4, offset, this.littleEndian);
-    dv.setUint8(index * 4 + 2, Math.min(255, size));
-    dv.setUint8(index * 4 + 3, type === MemberType.Float);
-  }
-});

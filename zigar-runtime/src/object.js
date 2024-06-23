@@ -175,7 +175,7 @@ export function getMemoryRestorer(cache, env) {
         newDV[FIXED].align = fixed.align;
       }
       this[MEMORY] = newDV;
-      cache.save(newDV, this);
+      cache?.save(newDV, this);
       return true;
     } else {
       return false;

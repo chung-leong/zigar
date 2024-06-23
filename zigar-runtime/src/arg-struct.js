@@ -1,7 +1,7 @@
 import { ArgumentCountMismatch, adjustArgumentError } from './error.js';
 import { getDescriptor } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { defineProperties } from './object.js';
+import { defineProperties, getMemoryRestorer } from './object.js';
 import { getChildVivificator, getPointerVisitor } from './struct.js';
 import {
   ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR
@@ -52,7 +52,7 @@ export function defineArgStruct(structure, env) {
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
     /* WASM-ONLY */
-    [MEMORY_RESTORER]: { value: function() {} },
+    [MEMORY_RESTORER]: { value: getMemoryRestorer(null, env) },
     /* WASM-ONLY-END */
   });
   defineProperties(constructor, {
