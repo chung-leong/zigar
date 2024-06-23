@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 
 pub const Value = exporter.Value;
 pub const Thunk = exporter.Thunk;
+pub const VariadicThunk = exporter.VariadicThunk;
 pub const Call = *const CallContext;
 
 const HostOptions = exporter.HostOptions;
@@ -42,6 +43,7 @@ extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _startCall(call: Call, arg_struct: Value) *anyopaque;
 extern fn _endCall(call: Call, arg_struct: Value) void;
+extern fn _getArgAttributes() *anyopaque;
 
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,
@@ -226,7 +228,6 @@ pub const Host = struct {
         try insertProperty(def, "argStruct", method.structure);
         try insertProperty(def, "thunkId", method.thunk_id);
         try insertProperty(def, "name", method.name);
-        try insertProperty(def, "name", method.is_variadic);
         _attachMethod(structure, def, is_static_only);
     }
 
@@ -245,15 +246,22 @@ pub const Host = struct {
 };
 
 pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
-    const fallback_allocator: std.mem.Allocator = .{ .ptr = undefined, .vtable = &std.heap.WasmAllocator.vtable };
-    var stack_allocator = std.heap.stackFallback(1024 * 8, fallback_allocator);
-    var call_ctx: CallContext = .{ .allocator = stack_allocator.get() };
+    var call_ctx: CallContext = .{ .allocator = allocator };
     const arg_ptr = _startCall(&call_ctx, arg_struct);
     // function pointers in WASM are indices into function table 0
     // so the thunk_id is really the thunk itself
     const thunk: Thunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
     return thunk(@ptrCast(&call_ctx), arg_ptr);
+}
+
+pub fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?Value {
+    var call_ctx: CallContext = .{ .allocator = allocator };
+    const arg_ptr = _startCall(&call_ctx, arg_struct);
+    const attr_ptr = _getArgAttributes();
+    const thunk: VariadicThunk = @ptrFromInt(thunk_id);
+    defer _endCall(&call_ctx, arg_struct);
+    return thunk(@ptrCast(&call_ctx), arg_ptr, arg_count, attr_ptr);
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {

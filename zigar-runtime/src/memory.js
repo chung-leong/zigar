@@ -107,16 +107,25 @@ export function getMemoryCopier(size, multiple = false) {
 }
 
 export function getCopyFunction(size, multiple = false) {
-  if (!multiple) {
-    const copier = copiers[size];
-    if (copier) {
-      return copier;
+  if (size !== undefined) {
+    if (!multiple) {
+      const copier = copiers[size];
+      if (copier) {
+        return copier;
+      }
     }
+    if (!(size & 0x07)) return copy8x;
+    if (!(size & 0x03)) return copy4x;
+    if (!(size & 0x01)) return copy2x;
+    return copy1x;
+  } else {
+    return copyAny;
   }
-  if (!(size & 0x07)) return copy8x;
-  if (!(size & 0x03)) return copy4x;
-  if (!(size & 0x01)) return copy2x;
-  return copy1x;
+}
+
+function copyAny(dest, src) {
+  const copy = getCopyFunction(dest.byteLength);
+  copy(dest, src);
 }
 
 const copiers = {

@@ -12,6 +12,7 @@ export class WebAssemblyEnvironment extends Environment {
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
     freeShadowMemory: { argType: 'ciii' },
     runThunk: { argType: 'iv', returnType: 'v' },
+    runVariadicThunk: { argType: 'ivi', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
     flushStdout: { argType: '', returnType: '' },
   };
@@ -38,6 +39,7 @@ export class WebAssemblyEnvironment extends Environment {
     endStructure: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
+    getArgAttributes: { argType: '', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -217,12 +219,12 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   importFunctions(exports) {
-    for (const [ name, fn ] of Object.entries(exports)) {
-      const info = this.imports[name];
-      if (info) {
-        const { argType, returnType } = info;
-        this[name] = this.importFunction(fn, argType, returnType);
+    for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
+      const fn = exports[name];
+      if (!fn) {
+        throw new Error(`Unable to import function: ${name}`);
       }
+      this[name] = this.importFunction(fn, argType, returnType);
     }
   }
 
@@ -297,6 +299,10 @@ export class WebAssemblyEnvironment extends Environment {
     }
     // return address of shadow for argumnet struct
     const address = this.getShadowAddress(args);
+    const attrs = args[ATTRIBUTES];
+    if (attrs) {
+      this.context.argAttributes = this.getShadowAddress(attrs);
+    }
     this.updateShadows();
     return address;
   }
@@ -315,11 +321,20 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
+  getArgAttributes() {
+    return this.context.argAttributes;
+  }
+
   async runThunk(thunkId, args) {
-    // wait for compilation
+    // this method will be overridden by the WASM version once compilation completes
     await this.initPromise;
-    // invoke runThunk() from WASM code
     return this.runThunk(thunkId, args);
+  }
+
+  async runVariadicThunk(thunkId, args, argCount) {
+    // ditto
+    await this.initPromise;
+    return this.runVariadicThunk(thunkId, args, argCount);
   }
 
   invokeThunk(thunkId, args) {
@@ -328,7 +343,10 @@ export class WebAssemblyEnvironment extends Environment {
       // we can't do pointer fix up here since we need the context in order to allocate
       // memory from the WebAssembly allocator; pointer target acquisition will happen in
       // endCall()
-      const unexpected = this.runThunk(thunkId, args);
+      const attrs = args[ATTRIBUTES];
+      const unexpected = (attrs)
+      ? this.runVariadicThunk(thunkId, args, attrs.length)
+      : this.runThunk(thunkId, args);
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
       // error strings returned by the thunk are due to problems in the thunking process

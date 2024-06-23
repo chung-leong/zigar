@@ -109,7 +109,6 @@ export function getIteratorIterator() {
   const self = this;
   return {
     next() {
-      debugger;
       const value = self.next();
       const done = value === null;
       return { value, done };

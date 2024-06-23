@@ -250,7 +250,7 @@ result attach_method(call ctx,
     napi_env env = ctx->env;
     napi_value args[3] = { structure };
     napi_value result;
-    napi_value name, thunk_id, is_variadic;
+    napi_value name, thunk_id;
     // thunk_id from Zig is the function's address--make it relative to the base address
     size_t adjusted_thunk_id = m->thunk_id - ctx->mod_data->base_address;
     if (napi_create_object(env, &args[1]) == napi_ok
@@ -258,8 +258,6 @@ result attach_method(call ctx,
      && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
      && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
      && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
-     && napi_get_boolean(env, m->is_variadic, &is_variadic) == napi_ok
-     && napi_set_named_property(env, args[1], "isVariadic", is_variadic) == napi_ok
      && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
      && call_js_function(ctx, "attachMethod", 3, args, &result)) {

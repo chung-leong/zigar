@@ -113,7 +113,7 @@ export class NodeEnvironment extends Environment {
       this.updatePointerAddresses(args);
       this.updateShadows();
       err = (attrs)
-      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs)
+      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs[MEMORY])
       : this.runThunk(thunkId, args[MEMORY]);
       // create objects that pointers point to
       this.updateShadowTargets();
@@ -122,7 +122,7 @@ export class NodeEnvironment extends Environment {
     } else {
       // don't need to do any of that if there're no pointers
       err = (attrs)
-      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs)
+      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs[MEMORY])
       : this.runThunk(thunkId, args[MEMORY]);
     }
     // restore the previous context if there's one

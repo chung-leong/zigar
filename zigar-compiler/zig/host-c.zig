@@ -43,7 +43,6 @@ const MethodC = extern struct {
     name: ?[*:0]const u8,
     thunk_id: usize,
     structure: Value,
-    is_variadic: bool,
 };
 
 pub fn missing(comptime T: type) comptime_int {
@@ -178,7 +177,6 @@ pub const Host = struct {
             .name = if (method.name) |p| @ptrCast(p) else null,
             .thunk_id = method.thunk_id,
             .structure = method.structure,
-            .is_variadic = method.is_variadic,
         };
         if (imports.attach_method(self.context, structure, &method_c, is_static_only) != .ok) {
             return Error.unable_to_add_method;

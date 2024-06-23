@@ -41,11 +41,11 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
 let currentModule;
 
 async function importModule(url, options) {
-  const { 
-    optimize, 
-    embedWASM = false, 
-    useLibc = false, 
-    topLevelAwait = true 
+  const {
+    optimize,
+    embedWASM = false,
+    useLibc = false,
+    topLevelAwait = true
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -64,12 +64,12 @@ async function importModule(url, options) {
   const inputOptions = {
     input: path,
     plugins: [
-      Zigar({ 
-        optimize, 
-        useReadFile: true, 
-        keepNames: optimize === 'ReleaseSafe', 
-        topLevelAwait, 
-        useLibc, 
+      Zigar({
+        optimize,
+        useReadFile: true,
+        keepNames: optimize === 'ReleaseSafe',
+        topLevelAwait,
+        useLibc,
         embedWASM,
       }),
       NodeResolve({

@@ -17,8 +17,7 @@ export function defineVariadicStruct(structure, env) {
     instance: { members },
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argMembers = members.slice(1);
-  const argKeys = argMembers.map(m => m.name);
+  const argKeys = members.slice(1).map(m => m.name);
   const maxSlot = members.map(m => m.slot).sort().pop();
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
@@ -43,38 +42,30 @@ export function defineVariadicStruct(structure, env) {
         maxAlign = argAlign;
       }
     }
+    const attrs = new ArgAttributes(args.length, env);
     const dv = env.allocateMemory(totalByteSize, maxAlign);
     this[MEMORY] = dv;
     this[SLOTS] = {};
     for (const [ index, key ] of argKeys.entries()) {
       try {
         this[key] = args[index];
+        const { bitOffset, byteSize, type } = members[index + 1];
+        attrs.set(index, bitOffset / 8, byteSize, type);
       } catch (err) {
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
-    const { littleEndian } = env;
-    const attrDV = env.allocateMemory(args.length * 4, 4);
-    let attrOffset = 0;
-    for (const { bitOffset, byteSize, type } of argMembers) {
-      attrDV.setUint16(attrOffset, bitOffset / 8, littleEndian);
-      attrDV.setUint8(attrOffset + 2, Math.min(255, byteSize));
-      attrDV.setUint8(attrOffset + 3, type == MemberType.Float);
-      attrOffset += 4;
-    }
     for (const [ index, arg ] of varArgs.entries()) {
+      // create additional child objects and copy arguments into them
       const slot = maxSlot + index + 1;
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
-      attrDV.setUint16(attrOffset, offset, littleEndian);
-      attrDV.setUint8(attrOffset + 2, Math.min(255, byteLength));
-      attrDV.setUint8(attrOffset + 3, arg.constructor[PRIMITIVE] == MemberType.Float);
-      attrOffset += 4;
+      attrs.set(argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
     }
-    this[ATTRIBUTES] = attrDV;
+    this[ATTRIBUTES] = attrs;
   };
   const memberDescriptors = {};
   for (const member of members) {
@@ -107,7 +98,7 @@ export function defineVariadicStruct(structure, env) {
   };
   defineProperties(constructor.prototype, {
     ...memberDescriptors,
-    [COPIER]: { value: getMemoryCopier(byteSize) },
+    [COPIER]: { value: getMemoryCopier(undefined, true) },
     [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
     [POINTER_VISITOR]: { value: visitPointers },
     /* WASM-ONLY */
@@ -120,3 +111,19 @@ export function defineVariadicStruct(structure, env) {
   });
   return constructor;
 }
+
+function ArgAttributes(length, env) {
+  this[MEMORY] = env.allocateMemory(length * 4, 4);
+  this.length = length;
+  this.littleEndian = env.littleEndian;
+}
+Object.assign(ArgAttributes.prototype, {
+  [COPIER]: getMemoryCopier(4, true),
+  [ALIGN]: 4,
+  set: function(index, offset, size, type) {
+    const dv = this[MEMORY];
+    dv.setUint16(index * 4, offset, this.littleEndian);
+    dv.setUint8(index * 4 + 2, Math.min(255, size));
+    dv.setUint8(index * 4 + 3, type === MemberType.Float);
+  }
+});

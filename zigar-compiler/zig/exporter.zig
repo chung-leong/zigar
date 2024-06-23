@@ -113,7 +113,6 @@ pub const Method = struct {
     name: ?[]const u8 = null,
     thunk_id: usize,
     structure: Value,
-    is_variadic: bool = false,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -1752,10 +1751,11 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 }
                                 break :check true;
                             };
-                            const thunk_id: usize = switch (f.is_var_args) {
-                                false => @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value, ArgT)),
-                                true => @intFromPtr(createVariadicThunk(@TypeOf(ctx.host), decl_value)),
+                            const create = switch (f.is_var_args) {
+                                false => createThunk,
+                                true => createVariadicThunk,
                             };
+                            const thunk_id = @intFromPtr(create(@TypeOf(ctx.host), decl_value, ArgT));
                             try ctx.host.attachMethod(structure, .{
                                 .name = @ptrCast(decl.name),
                                 .thunk_id = thunk_id,
@@ -1873,7 +1873,7 @@ fn ArgumentStruct(comptime T: type) type {
     }
     return @Type(.{
         .Struct = .{
-            .layout = .auto,
+            .layout = .@"extern",
             .decls = &.{},
             .fields = &fields,
             .is_tuple = false,
@@ -2025,18 +2025,18 @@ test "createThunk" {
     }
 }
 
-fn createVariadicThunk(comptime HostT: type, comptime function: anytype) VariadicThunk {
+fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) VariadicThunk {
     const variadic = @import("./variadic.zig");
-    const ns = struct {
+    const f = @typeInfo(@TypeOf(function)).Fn;
+    const ns_node = struct {
         fn tryFunction(_: HostT, arg_ptr: [*]u8, arg_attrs: []const variadic.ArgAttributes) !void {
-            const f = @typeInfo(@TypeOf(function)).Fn;
             const cc = f.calling_convention;
             const RT = f.return_type.?;
             const alloc = try variadic.allocate(arg_attrs);
             const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[0]));
             var int_args: [variadic.registers.int]isize = undefined;
             var float_args: [variadic.registers.float]f64 = undefined;
-            retval_ptr.* = switch (alloc.stack) {
+            const retval = switch (alloc.stack) {
                 0 => call: {
                     var stack_args: [0]isize = undefined;
                     variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
@@ -2050,18 +2050,81 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype) Variadi
                     }
                 } else unreachable,
             };
+            retval_ptr.* = retval;
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             const attrs = @as([*]const variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
-            const arg_slice = @as([*]u8, @ptrCast(@alignCast(arg_ptr)));
-            tryFunction(host, arg_slice, attrs) catch |err| {
+            const arg_ptr_bytes = @as([*]u8, @ptrCast(@alignCast(arg_ptr)));
+            tryFunction(host, arg_ptr_bytes, attrs) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
             return null;
         }
+    };
+    const ns_wasm = struct {
+        fn tryFunction(_: HostT, arg_ptr: *ArgT, extra: [*]const u8) !void {
+            const param_count = f.params.len + 1;
+            const params: [param_count]std.builtin.Type.Fn.Param = define: {
+                comptime var list: [param_count]std.builtin.Type.Fn.Param = undefined;
+                inline for (&list, 0..) |*p, index| {
+                    if (index < f.params.len) {
+                        p.* = f.params[index];
+                    } else {
+                        p.is_generic = false;
+                        p.is_noalias = false;
+                        p.type = [*]const u8;
+                    }
+                }
+                break :define list;
+            };
+            const F = @Type(.{
+                .Fn = .{
+                    .calling_convention = f.calling_convention,
+                    .is_generic = false,
+                    .is_var_args = false,
+                    .return_type = f.return_type,
+                    .params = &params,
+                },
+            });
+            const Args = std.meta.ArgsTuple(F);
+            var args: Args = undefined;
+            // use a variable here, so that Zig doesn't try to call it as a vararg function
+            // despite the cast to a non-vararg one
+            var function_ptr: *const F = @ptrCast(&function);
+            _ = &function_ptr;
+            inline for (0..f.params.len + 1) |index| {
+                if (index < f.params.len) {
+                    const name = std.fmt.comptimePrint("{d}", .{index});
+                    args[index] = @field(arg_ptr.*, name);
+                } else {
+                    args[index] = extra;
+                }
+            }
+            arg_ptr.retval = @call(.auto, function_ptr, args);
+        }
+
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value {
+            const host = HostT.init(ptr, arg_ptr);
+            defer host.release();
+            const attrs = @as([*]const variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
+            const vararg_offset = switch (arg_count > f.params.len) {
+                true => attrs[f.params.len].offset,
+                false => attrs[f.params.len - 1].offset + attrs[f.params.len - 1].size,
+            };
+            const arg_ptr_bytes = @as([*]u8, @ptrCast(@alignCast(arg_ptr)));
+            const extra = arg_ptr_bytes[vararg_offset..];
+            tryFunction(host, @ptrCast(@alignCast(arg_ptr)), extra) catch |err| {
+                return createErrorMessage(host, err) catch null;
+            };
+            return null;
+        }
+    };
+    const ns = switch (builtin.target.cpu.arch) {
+        .wasm32, .wasm64 => ns_wasm,
+        else => ns_node,
     };
     return ns.invokeFunction;
 }

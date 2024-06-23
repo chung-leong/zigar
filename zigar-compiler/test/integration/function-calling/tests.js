@@ -5,9 +5,9 @@ import { capture, captureWarning } from '../capture.js';
 export function addTests(importModule, options) {
   const { target, optimize } = options;
   const runtimeSafety = [ 'Debug', 'ReleaseSafe' ].includes(optimize);
-  const importTest = async (name) => {
+  const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
-      return importModule(url);
+      return importModule(url, options);
   };
   describe('Function calling', function() {
     it('should throw when function returns an error', async function() {
@@ -552,7 +552,7 @@ export function addTests(importModule, options) {
     })
     it('should call variadic functions', async function() {
       this.timeout(120000);
-      const { printf, Int, Double, StrPtr } = await importTest('call-variadic-functions');
+      const { printf, Int, Double, StrPtr } = await importTest('call-variadic-functions', { useLibc: true });
       const lines1 = await capture(() => printf(
         'Hello world, %d %d %d %d %d!!\n',
         new Int('123'),
@@ -640,6 +640,10 @@ export function addTests(importModule, options) {
         new Double('32'),
       );
       if (target === 'wasm32') {
+        const lines5 = await capture(f);
+        expect(lines5).to.eql([
+          'Hello world, 1 2.000000 3 4.000000 5 6.000000 7 8.000000 9 10.000000 11 12.000000 13 14.000000 15 16.000000 17 18.000000 19 20.000000 21 22.000000 23 24.000000 25 26.000000 27 28.000000 29 30.000000 31 32.000000!!'
+        ]);
       } else {
         expect(f).to.throw(Error).with.property('message').that.equal('Too many arguments');
       }

@@ -29,21 +29,22 @@ const StructureType = {
   ExternStruct: 3,
   PackedStruct: 4,
   ArgStruct: 5,
-  ExternUnion: 6,
-  BareUnion: 7,
-  TaggedUnion: 8,
-  ErrorUnion: 9,
-  ErrorSet: 10,
-  Enum: 11,
-  Optional: 12,
-  SinglePointer: 13,
-  SlicePointer: 14,
-  MultiPointer: 15,
-  CPointer: 16,
-  Slice: 17,
-  Vector: 18,
-  Opaque: 19,
-  Function: 20,
+  VariadicStruct: 6,
+  ExternUnion: 7,
+  BareUnion: 8,
+  TaggedUnion: 9,
+  ErrorUnion: 10,
+  ErrorSet: 11,
+  Enum: 12,
+  Optional: 13,
+  SinglePointer: 14,
+  SlicePointer: 15,
+  MultiPointer: 16,
+  CPointer: 17,
+  Slice: 18,
+  Vector: 19,
+  Opaque: 20,
+  Function: 21,
 };
 
 function getTypeName(member) {
@@ -461,6 +462,12 @@ class CreatingOpaque extends TypeError {
   }
 }
 
+class InvalidVariadicArgument extends TypeError {
+  constructor() {
+    super(`Arguments passed to variadic function must be casted to a Zig type`);
+  }
+}
+
 class ZigError extends Error {
   constructor(name) {
     super(deanimalizeErrorName(name));
@@ -597,6 +604,7 @@ const POINTER_VISITOR = Symbol('pointerVisitor');
 const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 const MORE = Symbol('more');
+const PRIMITIVE = Symbol('primitive');
 
 function getDestructor(env) {
   return function() {
@@ -705,16 +713,25 @@ function getMemoryCopier(size, multiple = false) {
 }
 
 function getCopyFunction(size, multiple = false) {
-  if (!multiple) {
-    const copier = copiers[size];
-    if (copier) {
-      return copier;
+  if (size !== undefined) {
+    if (!multiple) {
+      const copier = copiers[size];
+      if (copier) {
+        return copier;
+      }
     }
+    if (!(size & 0x07)) return copy8x;
+    if (!(size & 0x03)) return copy4x;
+    if (!(size & 0x01)) return copy2x;
+    return copy1x;
+  } else {
+    return copyAny;
   }
-  if (!(size & 0x07)) return copy8x;
-  if (!(size & 0x03)) return copy4x;
-  if (!(size & 0x01)) return copy2x;
-  return copy1x;
+}
+
+function copyAny(dest, src) {
+  const copy = getCopyFunction(dest.byteLength);
+  copy(dest, src);
 }
 
 const copiers = {
@@ -2485,8 +2502,13 @@ function getStringDescriptor(structure, handlers = {}) {
       const dv = this.dataView;
       const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
       const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-      const s = decodeText(ta, `utf-${charSize * 8}`);
-      return (sentinel?.value === undefined) ? s : s.slice(0, -1);
+      let str = decodeText(ta, `utf-${charSize * 8}`);
+      if (sentinel?.value !== undefined) {
+        if (str.charCodeAt(str.length - 1) === sentinel.value) {
+          str = str.slice(0, -1);
+        }
+      }
+      return str;
     },
     set(str, fixed) {
       if (typeof(str) !== 'string') {
@@ -2563,7 +2585,7 @@ function definePointer(structure, env) {
         const address = getAddressInMemory.call(this);
         const length = (hasLengthInMemory)
         ? getLengthInMemory.call(this)
-        : (sentinel)
+        : (sentinel?.isRequired)
           ? env.findSentinel(address, sentinel.bytes) + 1
           : 1;
         if (address !== this[ADDRESS] || length !== this[LENGTH]) {
@@ -2604,15 +2626,15 @@ function definePointer(structure, env) {
   };
   const setTargetObject = function(arg) {
     const pointer = this[POINTER] ?? this;
-    if (pointer[MEMORY][FIXED]) {
-      // the pointer sits in fixed memory--apply the change immediately
-      if (arg[MEMORY][FIXED]) {
-        const address = env.getViewAddress(arg[MEMORY]);
-        setAddress.call(this, address);
-        if (hasLengthInMemory) {
-          setLength.call(this, arg.length);
-        }
-      } else {
+    // the target sits in fixed memory--apply the change immediately
+    if (arg[MEMORY][FIXED]) {
+      const address = env.getViewAddress(arg[MEMORY]);
+      setAddress.call(this, address);
+      if (hasLengthInMemory) {
+        setLength.call(this, arg.length);
+      }
+    } else {
+      if (pointer[MEMORY][FIXED]) {
         throw new FixedMemoryTargetRequired(structure, arg);
       }
     }
@@ -3140,7 +3162,6 @@ function getIteratorIterator() {
   const self = this;
   return {
     next() {
-      debugger;
       const value = self.next();
       const done = value === null;
       return { value, done };
@@ -3247,7 +3268,7 @@ function defineArgStruct(structure, env) {
     hasPointer,
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(0, -1).map(m => m.name);
+  const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
     const dv = env.allocateMemory(byteSize, align);
@@ -3270,7 +3291,7 @@ function defineArgStruct(structure, env) {
   for (const member of members) {
     memberDescriptors[member.name] = getDescriptor(member, env);
   }
-  const { slot: retvalSlot, type: retvalType } = members[members.length - 1];
+  const { slot: retvalSlot, type: retvalType } = members[0];
   const isChildMutable = (retvalType === MemberType.Object)
   ? function(object) {
       const child = this[VIVIFICATOR](retvalSlot);
@@ -4041,6 +4062,7 @@ function definePrimitive(structure, env) {
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
+    [PRIMITIVE]: { value: member.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
@@ -4208,37 +4230,45 @@ function getSentinel(structure, env) {
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
-  const validateValue = (runtimeSafety) ? function(v, i, l) {
-    if (v === value && i !== l - 1) {
-      throw new MisplacedSentinel(structure, v, i, l);
-    } else if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, i, l);
-    }
-  } : function(v, i, l) {
-    if (v !== value && i === l - 1) {
-      throw new MissingSentinel(structure, value, l);
-    }
-  };
-  const validateData = (runtimeSafety) ? function(source, len) {
-    for (let i = 0; i < len; i++) {
-      const v = get.call(source, i);
-      if (v === value && i !== len - 1) {
-        throw new MisplacedSentinel(structure, value, i, len);
-      } else if (v !== value && i === len - 1) {
-        throw new MissingSentinel(structure, value, len);
+  const { isRequired } = member;
+  const validateValue = (isRequired)
+  ? (runtimeSafety)
+    ? function(v, i, l) {
+      if (v === value && i !== l - 1) {
+        throw new MisplacedSentinel(structure, v, i, l);
+      } else if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, i, l);
+      }
+    } : function(v, i, l) {
+      if (v !== value && i === l - 1) {
+        throw new MissingSentinel(structure, value, l);
       }
     }
-  } : function(source, len) {
-    if (len * byteSize === source[MEMORY].byteLength) {
-      const i = len - 1;
-      const v = get.call(source, i);
-      if (v !== value) {
-        throw new MissingSentinel(structure, value, len);
+  : function() {};
+  const validateData = (isRequired)
+  ? (runtimeSafety)
+    ? function(source, len) {
+        for (let i = 0; i < len; i++) {
+          const v = get.call(source, i);
+          if (v === value && i !== len - 1) {
+            throw new MisplacedSentinel(structure, value, i, len);
+          } else if (v !== value && i === len - 1) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
       }
+    : function(source, len) {
+        if (len * byteSize === source[MEMORY].byteLength) {
+          const i = len - 1;
+          const v = get.call(source, i);
+          if (v !== value) {
+            throw new MissingSentinel(structure, value, len);
+          }
+        }
     }
-  };
+  : function () {};
   const bytes = template[MEMORY];
-  return { value, bytes, validateValue, validateData };
+  return { value, bytes, validateValue, validateData, isRequired };
 }
 
 function defineUnionShape(structure, env) {
@@ -4453,6 +4483,124 @@ function getUnionEntriesIterator(options) {
   };
 }
 
+function defineVariadicStruct(structure, env) {
+  const {
+    byteSize,
+    align,
+    instance: { members },
+  } = structure;
+  const hasObject = !!members.find(m => m.type === MemberType.Object);
+  const argKeys = members.slice(1).map(m => m.name);
+  const maxSlot = members.map(m => m.slot).sort().pop();
+  const argCount = argKeys.length;
+  const constructor = structure.constructor = function(args, name, offset) {
+    if (args.length < argCount) {
+      throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
+    }
+    // calculate the actual size of the struct based on arguments given
+    let totalByteSize = byteSize;
+    let maxAlign = align;
+    const varArgs = args.slice(argCount);
+    const offsets = {};
+    for (const [ index, arg ] of varArgs.entries()) {
+      const dv = arg[MEMORY];
+      if (!dv) {
+        const err = new InvalidVariadicArgument();
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+      }
+      const argAlign = arg.constructor[ALIGN];
+      const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
+      totalByteSize = offset + dv.byteLength;
+      if (argAlign > maxAlign) {
+        maxAlign = argAlign;
+      }
+    }
+    const attrs = new ArgAttributes(args.length, env);
+    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    this[MEMORY] = dv;
+    this[SLOTS] = {};
+    for (const [ index, key ] of argKeys.entries()) {
+      try {
+        this[key] = args[index];
+        const { bitOffset, byteSize, type } = members[index + 1];
+        attrs.set(index, bitOffset / 8, byteSize, type);
+      } catch (err) {
+        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+      }
+    }
+    for (const [ index, arg ] of varArgs.entries()) {
+      // create additional child objects and copy arguments into them
+      const slot = maxSlot + index + 1;
+      const { byteLength } = arg[MEMORY];
+      const offset = offsets[index];
+      const childDV = env.obtainView(dv.buffer, offset, byteLength);
+      const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
+      child.$ = arg;
+      attrs.set(argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
+    }
+    this[ATTRIBUTES] = attrs;
+  };
+  const memberDescriptors = {};
+  for (const member of members) {
+    memberDescriptors[member.name] = getDescriptor(member, env);
+  }
+  const { slot: retvalSlot, type: retvalType } = members[0];
+  const isChildMutable = (retvalType === MemberType.Object)
+  ? function(object) {
+      const child = this[VIVIFICATOR](retvalSlot);
+      return object === child;
+    }
+  : function() { return false };
+  const visitPointers = function(cb, options = {}) {
+    const {
+      vivificate = false,
+      isActive = always,
+      isMutable = always,
+    } = options;
+    const childOptions = {
+      ...options,
+      isActive,
+      isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
+    };
+    if (vivificate && retvalType === MemberType.Object) {
+      this[VIVIFICATOR](retvalSlot);
+    }
+    for (const child of Object.values(this[SLOTS])) {
+      child?.[POINTER_VISITOR]?.(cb, childOptions);
+    }
+  };
+  defineProperties(constructor.prototype, {
+    ...memberDescriptors,
+    [COPIER]: { value: getMemoryCopier(undefined, true) },
+    [VIVIFICATOR]: hasObject && { value: getChildVivificator$1(structure, env) },
+    [POINTER_VISITOR]: { value: visitPointers },
+    /* WASM-ONLY */
+    [MEMORY_RESTORER]: { value: function() {} },
+    /* WASM-ONLY-END */
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: align },
+    [SIZE]: { value: byteSize },
+  });
+  return constructor;
+}
+
+function ArgAttributes(length, env) {
+  this[MEMORY] = env.allocateMemory(length * 4, 4);
+  this.length = length;
+  this.littleEndian = env.littleEndian;
+}
+Object.assign(ArgAttributes.prototype, {
+  [COPIER]: getMemoryCopier(4, true),
+  [ALIGN]: 4,
+  set: function(index, offset, size, type) {
+    const dv = this[MEMORY];
+    dv.setUint16(index * 4, offset, this.littleEndian);
+    dv.setUint8(index * 4 + 2, Math.min(255, size));
+    dv.setUint8(index * 4 + 3, type === MemberType.Float);
+  }
+});
+
 const factories = Array(Object.values(StructureType).length);
 
 function usePrimitive() {
@@ -4477,6 +4625,10 @@ function useExternStruct() {
 
 function useArgStruct() {
   factories[StructureType.ArgStruct] = defineArgStruct;
+}
+
+function useVariadicStruct() {
+  factories[StructureType.VariadicStruct] = defineVariadicStruct;
 }
 
 function useExternUnion() {
@@ -4651,6 +4803,7 @@ function useAllStructureTypes() {
   useExternStruct();
   usePackedStruct();
   useArgStruct();
+  useVariadicStruct();
   useExternUnion();
   useBareUnion();
   useTaggedUnion();
@@ -6104,6 +6257,13 @@ class Environment {
       hasPointer: false,
     });
     this.attachMember(structure, {
+      type: MemberType.Void,
+      name: 'retval',
+      bitOffset: 0,
+      bitSize: 0,
+      byteSize: 0
+    });
+    this.attachMember(structure, {
       type: MemberType.Object,
       name: '0',
       bitOffset: 0,
@@ -6111,13 +6271,6 @@ class Environment {
       byteSize: 2,
       slot: 0,
       structure: options,
-    });
-    this.attachMember(structure, {
-      type: MemberType.Void,
-      name: 'retval',
-      bitOffset: 16,
-      bitSize: 0,
-      byteSize: 0
     });
     this.finalizeShape(structure);
     return structure.constructor;
@@ -6356,6 +6509,43 @@ class Environment {
     args[POINTER_VISITOR](callback, { vivificate: true });
   }
 
+  writeToConsole(dv) {
+    const { console } = this;
+    try {
+      // make copy of array, in case incoming buffer is pointing to stack memory
+      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
+      // send text up to the last newline character
+      const index = array.lastIndexOf(0x0a);
+      if (index === -1) {
+        this.consolePending.push(array);
+      } else {
+        const beginning = array.subarray(0, index);
+        const remaining = array.subarray(index + 1);
+        const list = [ ...this.consolePending, beginning ];
+        console.log(decodeText(list));
+        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
+      }
+      clearTimeout(this.consoleTimeout);
+      if (this.consolePending.length > 0) {
+        this.consoleTimeout = setTimeout(() => {
+          console.log(decodeText(this.consolePending));
+          this.consolePending = [];
+        }, 250);
+      }
+      /* c8 ignore next 3 */
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  flushConsole() {
+    if (this.consolePending.length > 0) {
+      console.log(decodeText(this.consolePending));
+      this.consolePending = [];
+      clearTimeout(this.consoleTimeout);
+    }
+  }
+
   /* COMPTIME-ONLY */
   acquireDefaultPointers() {
     for (const structure of this.structures) {
@@ -6429,6 +6619,7 @@ class WebAssemblyEnvironment extends Environment {
     allocateShadowMemory: { argType: 'cii', returnType: 'v' },
     freeShadowMemory: { argType: 'ciii' },
     runThunk: { argType: 'iv', returnType: 'v' },
+    runVariadicThunk: { argType: 'ivi', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
     flushStdout: { argType: '', returnType: '' },
   };
@@ -6455,6 +6646,7 @@ class WebAssemblyEnvironment extends Environment {
     endStructure: { argType: 'v' },
     startCall: { argType: 'iv', returnType: 'i' },
     endCall: { argType: 'iv', returnType: 'i' },
+    getArgAttributes: { argType: '', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -6629,12 +6821,12 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   importFunctions(exports) {
-    for (const [ name, fn ] of Object.entries(exports)) {
-      const info = this.imports[name];
-      if (info) {
-        const { argType, returnType } = info;
-        this[name] = this.importFunction(fn, argType, returnType);
+    for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
+      const fn = exports[name];
+      if (!fn) {
+        throw new Error(`Unable to import function: ${name}`);
       }
+      this[name] = this.importFunction(fn, argType, returnType);
     }
   }
 
@@ -6709,6 +6901,10 @@ class WebAssemblyEnvironment extends Environment {
     }
     // return address of shadow for argumnet struct
     const address = this.getShadowAddress(args);
+    const attrs = args[ATTRIBUTES];
+    if (attrs) {
+      this.context.argAttributes = this.getShadowAddress(attrs);
+    }
     this.updateShadows();
     return address;
   }
@@ -6727,11 +6923,20 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
+  getArgAttributes() {
+    return this.context.argAttributes;
+  }
+
   async runThunk(thunkId, args) {
-    // wait for compilation
+    // this method will be overridden by the WASM version once compilation completes
     await this.initPromise;
-    // invoke runThunk() from WASM code
     return this.runThunk(thunkId, args);
+  }
+
+  async runVariadicThunk(thunkId, args, argCount) {
+    // ditto
+    await this.initPromise;
+    return this.runVariadicThunk(thunkId, args, argCount);
   }
 
   invokeThunk(thunkId, args) {
@@ -6740,7 +6945,10 @@ class WebAssemblyEnvironment extends Environment {
       // we can't do pointer fix up here since we need the context in order to allocate
       // memory from the WebAssembly allocator; pointer target acquisition will happen in
       // endCall()
-      const unexpected = this.runThunk(thunkId, args);
+      const attrs = args[ATTRIBUTES];
+      const unexpected = (attrs)
+      ? this.runVariadicThunk(thunkId, args, attrs.length)
+      : this.runThunk(thunkId, args);
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
       // error strings returned by the thunk are due to problems in the thunking process

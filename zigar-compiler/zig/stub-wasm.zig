@@ -28,6 +28,10 @@ export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     return host.runThunk(thunk_id, arg_struct);
 }
 
+export fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?Value {
+    return host.runVariadicThunk(thunk_id, arg_struct, arg_count);
+}
+
 export fn isRuntimeSafetyActive() bool {
     return host.isRuntimeSafetyActive();
 }
