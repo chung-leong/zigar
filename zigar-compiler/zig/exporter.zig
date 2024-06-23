@@ -2040,9 +2040,6 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptim
                 if (alloc.stack == stack_count) {
                     var stack_args: [stack_count]isize = undefined;
                     @memcpy(&stack_args, alloc.stack_values[0..stack_count]);
-                    // _ = cc;
-                    // _ = float_args;
-                    // _ = int_args;
                     break variadic.call(RT, cc, function, float_args, int_args, stack_args);
                 }
             } else unreachable;

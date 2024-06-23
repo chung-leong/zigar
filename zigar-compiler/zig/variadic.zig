@@ -9,7 +9,7 @@ pub const ArgAttributes = packed struct {
 };
 pub const Error = error{
     too_many_arguments,
-    invalid_type_for_variadic_function,
+    unsupported_type_for_variadic_function,
 };
 pub const Registers = struct {
     int: comptime_int,
@@ -41,33 +41,24 @@ pub fn allocate(arg_ptr: [*]const u8, arg_attrs: []const ArgAttributes) !Allocat
     for (arg_attrs) |a| {
         const bytes = arg_ptr[a.offset .. a.offset + @as(u16, @intCast(a.size))];
         const toValue = std.mem.bytesToValue;
+        if (@sizeOf(isize) == 8 and a.size == 16) {
+            // don't know how to deal with this
+            return Error.unsupported_type_for_variadic_function;
+        }
         if (a.is_float) {
-            var values: [2]?f64 = .{ null, null };
+            var values: [1]?f64 = .{null};
             values[0] = switch (a.size) {
                 2 => @bitCast(@as(i64, @intCast(@as(i16, @bitCast(toValue(f16, bytes)))))),
                 4 => @bitCast(@as(i64, @intCast(@as(i32, @bitCast(toValue(f32, bytes)))))),
                 8 => std.mem.bytesToValue(f64, bytes),
-                12 => @bitCast(@as(i64, @intCast(@as(i32, @bitCast(toValue(f32, bytes[0..8])))))),
-                16 => std.mem.bytesToValue(f64, bytes[0..8]),
-                else => return Error.invalid_type_for_variadic_function,
+                else => unreachable,
             };
-            values[1] = switch (a.size) {
-                12 => toValue(f64, bytes[4..12]),
-                16 => toValue(f64, bytes[8..16]),
-                else => null,
-            };
-            const needed: usize = if (values[1] != null) 2 else 1;
+            const needed: usize = 1;
             if (alloc.float + needed <= alloc.float_values.len) {
                 alloc.float_values[alloc.float] = values[0].?;
-                if (values[1] != null) {
-                    alloc.float_values[alloc.float + 1] = values[1].?;
-                }
                 alloc.float += needed;
             } else if (alloc.stack + needed <= alloc.stack_values.len) {
                 alloc.stack_values[alloc.stack] = @bitCast(values[0].?);
-                if (values[1] != null) {
-                    alloc.stack_values[alloc.stack + 1] = @bitCast(values[1].?);
-                }
                 alloc.stack += needed;
             } else {
                 return Error.too_many_arguments;
@@ -83,20 +74,11 @@ pub fn allocate(arg_ptr: [*]const u8, arg_attrs: []const ArgAttributes) !Allocat
                     4 => toValue(i32, bytes[0..4]),
                     else => unreachable,
                 },
-                16 => switch (@sizeOf(usize)) {
-                    8 => toValue(i32, bytes[0..8]),
-                    4 => @bitCast(@intFromPtr(&bytes[0])),
-                    else => unreachable,
-                },
                 else => @bitCast(@intFromPtr(&bytes[0])),
             };
             values[1] = switch (a.size) {
                 8 => switch (@sizeOf(usize)) {
-                    4 => toValue(i32, bytes[0..4]),
-                    else => null,
-                },
-                16 => switch (@sizeOf(usize)) {
-                    8 => toValue(i32, bytes[8..16]),
+                    4 => toValue(i32, bytes[4..8]),
                     else => null,
                 },
                 else => null,

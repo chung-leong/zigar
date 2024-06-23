@@ -575,43 +575,33 @@ export function addTests(importModule, options) {
         new Int64(-3000),
       ));
       expect(lines3).to.eql([ '-10', '-200', '-3000' ]);
-      // const lines4 = await capture(() => printIntegers(128, 3,
-      //   new Int128(-10),
-      //   new Int128(-200),
-      //   new Int128(-3000),
-      // ));
-      // expect(lines4).to.eql([ '-10', '-200', '-3000' ]);
-      const lines5 = await capture(() => printFloats(16, 3,
+      const lines4 = await capture(() => printFloats(16, 3,
         new Float16(-10),
         new Float16(-200),
         new Float16(-3000),
       ));
-      expect(lines5).to.eql([ '-10', '-200', '-3000' ]);
-      const lines6 = await capture(() => printFloats(32, 3,
+      expect(lines4).to.eql([ '-10', '-200', '-3000' ]);
+      const lines5 = await capture(() => printFloats(32, 3,
         new Float32(-10.25),
         new Float32(-200.25),
         new Float32(-3000.25),
       ));
-      expect(lines6).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      const lines7 = await capture(() => printFloats(64, 3,
+      expect(lines5).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      const lines6 = await capture(() => printFloats(64, 3,
         new Float64(-10.25),
         new Float64(-200.25),
         new Float64(-3000.25),
       ));
-      expect(lines7).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      // const lines8 = await capture(() => printFloats(128, 3,
-      //   new Float128(10.25),
-      //   new Float128(-200.25),
-      //   new Float128(-3000.25),
-      // ));
-      // expect(lines8).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      const lines9 = await capture(() => printStrings(3,
+      expect(lines6).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      if (target !== 'wasm32') {
+        expect(() => printFloats(128, 1, new Float128(123))).to.throw();
+      }
+      const lines7 = await capture(() => printStrings(3,
         new StrPtr('Agnieszka'),
         new StrPtr('Basia'),
         new StrPtr('Czesia'),
       ));
-      expect(lines9).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
-
+      expect(lines7).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
     })
     it('should call printf correctly', async function() {
       this.timeout(120000);
