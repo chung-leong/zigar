@@ -6,10 +6,10 @@ pub const ArgAttributes = packed struct {
     offset: u16,
     size: u8,
     is_float: bool = false,
-    is_signed: bool = false,
 };
 pub const Error = error{
     too_many_arguments,
+    invalid_type_for_variadic_function,
 };
 pub const Registers = struct {
     int: comptime_int,
@@ -27,113 +27,102 @@ pub const registers: Registers = switch (builtin.target.cpu.arch) {
 };
 pub const max_stack_count = max_arg_count - @min(registers.int, registers.float);
 
-const Destination = enum { int, float, stack };
 const Allocation = struct {
-    int: usize = 0,
     float: usize = 0,
+    int: usize = 0,
     stack: usize = 0,
-    total: usize = 0,
-    destinations: [max_arg_count]Destination = undefined,
+    float_values: [registers.float]f64 = undefined,
+    int_values: [registers.int]isize = undefined,
+    stack_values: [max_stack_count]isize = undefined,
 };
 
-pub fn convert(comptime T: type, arg_ptr: [*]const u8, a: ArgAttributes) T {
-    const start = a.offset;
-    const end = start + @as(u16, @intCast(a.size));
-    const bytes = arg_ptr[start..end];
-    if (a.is_float) {
-        const value: f64 = switch (a.size) {
-            4 => @floatCast(std.mem.bytesToValue(f32, bytes)),
-            8 => std.mem.bytesToValue(f64, bytes),
-            else => unreachable,
-        };
-        return if (T == f64) value else @bitCast(value);
-    } else if (T == isize) {
-        const value: isize = switch (a.size) {
-            1 => @intCast(std.mem.bytesToValue(i8, bytes)),
-            2 => @intCast(std.mem.bytesToValue(i16, bytes)),
-            4 => @intCast(std.mem.bytesToValue(i32, bytes)),
-            8 => if (@sizeOf(isize) == 8) std.mem.bytesToValue(i32, bytes) else unreachable,
-            else => unreachable,
-        };
-        return value;
-    } else unreachable;
-}
-
-pub fn allocate(arg_attrs: []const ArgAttributes) !Allocation {
+pub fn allocate(arg_ptr: [*]const u8, arg_attrs: []const ArgAttributes) !Allocation {
     var alloc: Allocation = .{};
-    for (arg_attrs, 0..) |a, index| {
-        var dest: ?Destination = null;
-        if (a.is_float and a.size <= @sizeOf(f64)) {
-            if (alloc.float + 1 <= registers.float) {
-                alloc.float += 1;
-                dest = .float;
+    for (arg_attrs) |a| {
+        const bytes = arg_ptr[a.offset .. a.offset + @as(u16, @intCast(a.size))];
+        const toValue = std.mem.bytesToValue;
+        if (a.is_float) {
+            var values: [2]?f64 = .{ null, null };
+            values[0] = switch (a.size) {
+                2 => @bitCast(@as(i64, @intCast(@as(i16, @bitCast(toValue(f16, bytes)))))),
+                4 => @bitCast(@as(i64, @intCast(@as(i32, @bitCast(toValue(f32, bytes)))))),
+                8 => std.mem.bytesToValue(f64, bytes),
+                12 => @bitCast(@as(i64, @intCast(@as(i32, @bitCast(toValue(f32, bytes[0..8])))))),
+                16 => std.mem.bytesToValue(f64, bytes[0..8]),
+                else => return Error.invalid_type_for_variadic_function,
+            };
+            values[1] = switch (a.size) {
+                12 => toValue(f64, bytes[4..12]),
+                16 => toValue(f64, bytes[8..16]),
+                else => null,
+            };
+            const needed: usize = if (values[1] != null) 2 else 1;
+            if (alloc.float + needed <= alloc.float_values.len) {
+                alloc.float_values[alloc.float] = values[0].?;
+                if (values[1] != null) {
+                    alloc.float_values[alloc.float + 1] = values[1].?;
+                }
+                alloc.float += needed;
+            } else if (alloc.stack + needed <= alloc.stack_values.len) {
+                alloc.stack_values[alloc.stack] = @bitCast(values[0].?);
+                if (values[1] != null) {
+                    alloc.stack_values[alloc.stack + 1] = @bitCast(values[1].?);
+                }
+                alloc.stack += needed;
+            } else {
+                return Error.too_many_arguments;
             }
         } else {
-            if (a.size == @sizeOf(usize) * 2) {
-                if (alloc.int + 2 <= registers.int) {
-                    alloc.int += 2;
-                    dest = .int;
+            var values: [2]?isize = .{ null, null };
+            values[0] = switch (a.size) {
+                1 => @intCast(toValue(i8, bytes)),
+                2 => @intCast(toValue(i16, bytes)),
+                4 => @intCast(toValue(i32, bytes)),
+                8 => switch (@sizeOf(isize)) {
+                    8 => toValue(i32, bytes),
+                    4 => toValue(i32, bytes[0..4]),
+                    else => unreachable,
+                },
+                16 => switch (@sizeOf(usize)) {
+                    8 => toValue(i32, bytes[0..8]),
+                    4 => @bitCast(@intFromPtr(&bytes[0])),
+                    else => unreachable,
+                },
+                else => @bitCast(@intFromPtr(&bytes[0])),
+            };
+            values[1] = switch (a.size) {
+                8 => switch (@sizeOf(usize)) {
+                    4 => toValue(i32, bytes[0..4]),
+                    else => null,
+                },
+                16 => switch (@sizeOf(usize)) {
+                    8 => toValue(i32, bytes[8..16]),
+                    else => null,
+                },
+                else => null,
+            };
+            const needed: usize = if (values[1] != null) 2 else 1;
+            if (alloc.int + needed <= alloc.int_values.len) {
+                alloc.int_values[alloc.int] = values[0].?;
+                if (values[1] != null) {
+                    alloc.int_values[alloc.int + 1] = values[1].?;
                 }
+                alloc.int += needed;
+            } else if (alloc.stack + needed <= alloc.stack_values.len) {
+                alloc.stack_values[alloc.stack] = values[0].?;
+                if (values[1] != null) {
+                    alloc.stack_values[alloc.stack + 1] = values[1].?;
+                }
+                alloc.stack += needed;
             } else {
-                if (alloc.int + 1 <= registers.int) {
-                    alloc.int += 1;
-                    dest = .int;
-                }
+                return Error.too_many_arguments;
             }
         }
-        if (dest == null) {
-            alloc.stack += if (a.size == @sizeOf(usize) * 2) 2 else 1;
-            dest = .stack;
-        }
-        if (alloc.stack >= max_stack_count or index >= max_arg_count) {
-            return Error.too_many_arguments;
-        }
-        alloc.destinations[index] = dest.?;
+    }
+    if (alloc.int + alloc.float + alloc.stack > max_arg_count) {
+        return Error.too_many_arguments;
     }
     return alloc;
-}
-
-pub fn copy(
-    arg_ptr: [*]const u8,
-    arg_attrs: []const ArgAttributes,
-    alloc: Allocation,
-    float_args: []f64,
-    int_args: []isize,
-    stack_args: []isize,
-) void {
-    var float_index: usize = 0;
-    var int_index: usize = 0;
-    var stack_index: usize = 0;
-    for (arg_attrs, 0..) |a, index| {
-        switch (alloc.destinations[index]) {
-            .float => {
-                float_args[float_index] = convert(f64, arg_ptr, a);
-                float_index += 1;
-            },
-            else => |d| {
-                const ptr_args = if (d == .int) &int_args else &stack_args;
-                const ptr_index = if (d == .int) &int_index else &stack_index;
-                if (a.size <= @sizeOf(usize)) {
-                    ptr_args.*[ptr_index.*] = convert(isize, arg_ptr, a);
-                    ptr_index.* += 1;
-                } else if (a.size == @sizeOf(usize) * 2) {
-                    ptr_args.*[ptr_index.*] = convert(isize, arg_ptr, .{
-                        .offset = a.offset,
-                        .size = @sizeOf(usize),
-                    });
-                    ptr_index.* += 1;
-                    ptr_args.*[ptr_index.*] = convert(isize, arg_ptr, .{
-                        .offset = a.offset + @sizeOf(usize),
-                        .size = @sizeOf(usize),
-                    });
-                    ptr_index.* += 1;
-                } else {
-                    ptr_args.*[ptr_index.*] = @bitCast(@intFromPtr(&arg_ptr[a.offset]));
-                    ptr_index.* += 1;
-                }
-            },
-        }
-    }
 }
 
 pub fn call(

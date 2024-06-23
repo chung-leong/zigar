@@ -4511,7 +4511,7 @@ function defineVariadicStruct(structure, env) {
         const err = new InvalidVariadicArgument();
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
-      const argAlign = arg.constructor[ALIGN];
+      const argAlign = Math.max(env.wordSize, arg.constructor[ALIGN]);
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
       if (argAlign > maxAlign) {
@@ -5927,6 +5927,7 @@ class Environment {
   abandoned = false;
   released = false;
   littleEndian = true;
+  wordSize = 4;
   runtimeSafety = true;
   comptime = false;
   /* COMPTIME-ONLY */

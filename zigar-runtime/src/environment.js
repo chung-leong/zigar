@@ -23,6 +23,7 @@ export class Environment {
   abandoned = false;
   released = false;
   littleEndian = true;
+  wordSize = 4;
   runtimeSafety = true;
   comptime = false;
   /* COMPTIME-ONLY */

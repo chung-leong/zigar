@@ -2032,25 +2032,20 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptim
         fn tryFunction(_: HostT, arg_ptr: [*]u8, arg_attrs: []const variadic.ArgAttributes) !void {
             const cc = f.calling_convention;
             const RT = f.return_type.?;
-            const alloc = try variadic.allocate(arg_attrs);
+            const alloc = try variadic.allocate(arg_ptr, arg_attrs);
             const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[0]));
-            var int_args: [variadic.registers.int]isize = undefined;
-            var float_args: [variadic.registers.float]f64 = undefined;
-            const retval = switch (alloc.stack) {
-                0 => call: {
-                    var stack_args: [0]isize = undefined;
-                    variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
-                    break :call variadic.call(RT, cc, function, float_args, int_args, stack_args);
-                },
-                else => inline for (0..variadic.max_stack_count + 1) |stack_count| {
-                    if (alloc.stack == stack_count) {
-                        var stack_args: [stack_count]isize = undefined;
-                        variadic.copy(arg_ptr, arg_attrs, alloc, &float_args, &int_args, &stack_args);
-                        break variadic.call(RT, cc, function, float_args, int_args, stack_args);
-                    }
-                } else unreachable,
-            };
-            retval_ptr.* = retval;
+            const int_args = alloc.int_values;
+            const float_args = alloc.float_values;
+            retval_ptr.* = inline for (0..variadic.max_stack_count + 1) |stack_count| {
+                if (alloc.stack == stack_count) {
+                    var stack_args: [stack_count]isize = undefined;
+                    @memcpy(&stack_args, alloc.stack_values[0..stack_count]);
+                    // _ = cc;
+                    // _ = float_args;
+                    // _ = int_args;
+                    break variadic.call(RT, cc, function, float_args, int_args, stack_args);
+                }
+            } else unreachable;
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value {

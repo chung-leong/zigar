@@ -2,10 +2,6 @@ import { Environment, add, getAlignedAddress, isMisaligned } from './environment
 import { ZigError } from './error.js';
 import { ALIGN, ATTRIBUTES, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 
-/* c8 ignore next 2 */
-const PointerType = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? BigInt : Number;
-const defaultAlignment = (PointerType == BigInt) ? 16 : 8;
-
 export class NodeEnvironment extends Environment {
   // C code will patch in these functions:
   imports = {
@@ -23,7 +19,7 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
-  /* c8 ignore next */
+  wordSize = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 8 : 4;
 
   async init() {
     return;
@@ -31,7 +27,7 @@ export class NodeEnvironment extends Environment {
 
   allocateRelocMemory(len, align) {
     // allocate extra memory for alignment purpose when align is larger than the default
-    const extra = (align > defaultAlignment && this.getBufferAddress) ? align : 0;
+    const extra = (align > this.wordSize * 2 && this.getBufferAddress) ? align : 0;
     const buffer = new ArrayBuffer(len + extra);
     let offset = 0;
     if (extra) {
