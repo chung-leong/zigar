@@ -305,9 +305,9 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
     return .ok;
 }
 
-pub fn runVariadicThunk(call: Call, thunk_address: usize, args: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque, dest: *?Value) callconv(.C) Result {
+pub fn runVariadicThunk(call: Call, thunk_address: usize, args: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize, dest: *?Value) callconv(.C) Result {
     const thunk: VariadicThunk = @ptrFromInt(thunk_address);
-    if (thunk(@ptrCast(call), args, arg_count, attr_ptr)) |result| {
+    if (thunk(@ptrCast(call), args, attr_ptr, arg_count)) |result| {
         dest.* = result;
     } else {
         dest.* = null;
@@ -341,7 +341,7 @@ const Exports = extern struct {
     free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (Call, usize, *anyopaque, *?Value) callconv(.C) Result,
-    run_variadic_thunk: *const fn (Call, usize, *anyopaque, usize, *const anyopaque, *?Value) callconv(.C) Result,
+    run_variadic_thunk: *const fn (Call, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
 };
 

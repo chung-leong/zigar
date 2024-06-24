@@ -1,113 +1,181 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const max_arg_count = 32;
 pub const ArgAttributes = packed struct {
     offset: u16,
     size: u8,
-    is_float: bool = false,
+    is_float: bool,
+    is_signed: bool,
 };
 pub const Error = error{
     too_many_arguments,
     unsupported_type_for_variadic_function,
 };
-pub const Registers = struct {
-    int: comptime_int,
-    float: comptime_int,
-};
-pub const registers: Registers = switch (builtin.target.cpu.arch) {
-    .x86 => .{ .int = 0, .float = 0 },
-    .x86_64 => switch (builtin.target.os.tag) {
-        .windows => .{ .int = 4, .float = 4 },
-        else => .{ .int = 6, .float = 8 },
+
+pub fn call(function: anytype, arg_ptr: [*]u8, attrs: []const ArgAttributes) !void {
+    const f = @typeInfo(@TypeOf(function)).Fn;
+    const RT = f.return_type.?;
+    const alloc = try allocate(arg_ptr, attrs[1..]);
+    const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[attrs[0].offset]));
+    const int_args = alloc.int_values;
+    const float_args = alloc.float_values;
+    retval_ptr.* = inline for (0..max_stack_count + 1) |stack_count| {
+        if (alloc.stack == stack_count) {
+            var stack_args: [stack_count]isize = undefined;
+            @memcpy(&stack_args, alloc.stack_values[0..stack_count]);
+            break callWithArgs(RT, f.calling_convention, function, float_args, int_args, stack_args);
+        }
+    } else unreachable;
+}
+
+const max_arg_count = 32;
+const max_stack_count = max_arg_count - @min(abi.registers.int, abi.registers.float);
+const Abi = struct {
+    registers: struct {
+        int: comptime_int,
+        float: comptime_int,
     },
-    .arm, .armeb => .{ .int = 0, .float = 0 },
-    .aarch64, .aarch64_be, .aarch64_32 => .{ .int = 8, .float = 8 },
+    FloatType: type = f64,
+    IntType: type = isize,
+};
+const abi: Abi = switch (builtin.target.cpu.arch) {
+    .x86_64 => switch (builtin.target.os.tag) {
+        .windows => .{
+            .registers = .{
+                // RCX, RDX, R8, R9
+                .int = 4,
+                // XMM0, XMM1, XMM2, XMM3
+                .float = 4,
+            },
+        },
+        else => .{
+            .registers = .{
+                // RDI, RSI, RDX, RCX, R8, R9
+                .int = 6,
+                // XMM0 - XMM7
+                .float = 8,
+            },
+        },
+    },
+    .aarch64, .aarch64_be, .aarch64_32 => .{
+        .registers = .{
+            // x0-x7
+            .int = 8,
+            .float = 0,
+        },
+    },
+    .x86 => .{
+        .registers = .{ .int = 0, .float = 0 },
+    },
+    .arm, .armeb => .{
+        .registers = .{ .int = 0, .float = 0 },
+    },
     else => @compileError("Unsupported platform"),
 };
-pub const max_stack_count = max_arg_count - @min(registers.int, registers.float);
 
 const Allocation = struct {
     float: usize = 0,
     int: usize = 0,
     stack: usize = 0,
-    float_values: [registers.float]f64 = undefined,
-    int_values: [registers.int]isize = undefined,
-    stack_values: [max_stack_count]isize = undefined,
+    float_values: [abi.registers.float]abi.FloatType = undefined,
+    int_values: [abi.registers.int]abi.IntType = undefined,
+    stack_values: [max_stack_count]abi.IntType = undefined,
 };
 
-pub fn allocate(arg_ptr: [*]const u8, arg_attrs: []const ArgAttributes) !Allocation {
-    var alloc: Allocation = .{};
-    for (arg_attrs) |a| {
-        const bytes = arg_ptr[a.offset .. a.offset + @as(u16, @intCast(a.size))];
-        const toValue = std.mem.bytesToValue;
-        if (@sizeOf(isize) == 8 and a.size == 16) {
-            // don't know how to deal with this
-            return Error.unsupported_type_for_variadic_function;
+fn floatFromBytes(bytes: []const u8) abi.FloatType {
+    return inline for (.{ f16, f32, f64, f128 }) |T| {
+        const float = @typeInfo(T).Float;
+        if (bytes.len * 8 == float.bits) {
+            const value = std.mem.bytesToValue(T, bytes);
+            const int_value: @Type(.{ .Int = .{
+                .signedness = .unsigned,
+                .bits = float.bits,
+            } }) = @bitCast(value);
+            const enlarged_int_value: @Type(.{
+                .Int = .{
+                    .signedness = .unsigned,
+                    .bits = @typeInfo(abi.IntType).Int.bits,
+                },
+            }) = @intCast(int_value);
+            break @bitCast(enlarged_int_value);
         }
+    } else unreachable;
+}
+
+fn intFromBytes(bytes: []const u8, is_signed: bool) abi.IntType {
+    return inline for (.{ i8, u8, i16, u16, i32, u32, i64, u64 }) |T| {
+        const int = @typeInfo(T).Int;
+        if (bytes.len * 8 == int.bits and is_signed == (int.signedness == .signed)) {
+            const value = std.mem.bytesToValue(T, bytes);
+            const enlarged_value: @Type(.{
+                .Int = .{
+                    .signedness = int.signedness,
+                    .bits = @typeInfo(abi.IntType).Int.bits,
+                },
+            }) = @intCast(value);
+            break @bitCast(enlarged_value);
+        }
+    } else unreachable;
+}
+
+fn allocate(arg_ptr: [*]const u8, arg_attrs: []const ArgAttributes) !Allocation {
+    var alloc: Allocation = .{};
+    loop: for (arg_attrs) |a| {
+        var bytes = arg_ptr[a.offset .. a.offset + @as(u16, @intCast(a.size))];
         if (a.is_float) {
-            var values: [1]?f64 = .{null};
-            values[0] = switch (a.size) {
-                2 => @bitCast(@as(i64, @intCast(@as(i16, @bitCast(toValue(f16, bytes)))))),
-                4 => @bitCast(@as(i64, @intCast(@as(i32, @bitCast(toValue(f32, bytes)))))),
-                8 => std.mem.bytesToValue(f64, bytes),
-                else => unreachable,
-            };
-            const needed: usize = 1;
-            if (alloc.float + needed <= alloc.float_values.len) {
-                alloc.float_values[alloc.float] = values[0].?;
-                alloc.float += needed;
-            } else if (alloc.stack + needed <= alloc.stack_values.len) {
-                alloc.stack_values[alloc.stack] = @bitCast(values[0].?);
-                alloc.stack += needed;
-            } else {
-                return Error.too_many_arguments;
+            if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
+                while (true) {
+                    if (alloc.float < alloc.float_values.len) {
+                        const end = @min(bytes.len, @sizeOf(abi.FloatType));
+                        alloc.float_values[alloc.float] = floatFromBytes(bytes[0..end]);
+                        alloc.float += 1;
+                        if (end == bytes.len) continue :loop;
+                        bytes = bytes[end..];
+                    } else {
+                        break;
+                    }
+                }
             }
         } else {
-            var values: [2]?isize = .{ null, null };
-            values[0] = switch (a.size) {
-                1 => @intCast(toValue(i8, bytes)),
-                2 => @intCast(toValue(i16, bytes)),
-                4 => @intCast(toValue(i32, bytes)),
-                8 => switch (@sizeOf(isize)) {
-                    8 => toValue(i32, bytes),
-                    4 => toValue(i32, bytes[0..4]),
-                    else => unreachable,
-                },
-                else => @bitCast(@intFromPtr(&bytes[0])),
-            };
-            values[1] = switch (a.size) {
-                8 => switch (@sizeOf(usize)) {
-                    4 => toValue(i32, bytes[4..8]),
-                    else => null,
-                },
-                else => null,
-            };
-            const needed: usize = if (values[1] != null) 2 else 1;
-            if (alloc.int + needed <= alloc.int_values.len) {
-                alloc.int_values[alloc.int] = values[0].?;
-                if (values[1] != null) {
-                    alloc.int_values[alloc.int + 1] = values[1].?;
+            if (a.size <= @sizeOf(abi.IntType) * 2 and comptime abi.registers.int > 0) {
+                while (true) {
+                    if (alloc.int < alloc.int_values.len) {
+                        const end = @min(bytes.len, @sizeOf(abi.IntType));
+                        alloc.int_values[alloc.int] = intFromBytes(bytes[0..end], a.is_signed);
+                        alloc.int += 1;
+                        if (end == bytes.len) continue :loop;
+                        bytes = bytes[end..];
+                    } else {
+                        break;
+                    }
                 }
-                alloc.int += needed;
-            } else if (alloc.stack + needed <= alloc.stack_values.len) {
-                alloc.stack_values[alloc.stack] = values[0].?;
-                if (values[1] != null) {
-                    alloc.stack_values[alloc.stack + 1] = values[1].?;
+            }
+        }
+        if (a.size <= @sizeOf(abi.IntType) * 2) {
+            while (true) {
+                if (alloc.stack < alloc.stack_values.len) {
+                    const end = @min(bytes.len, @sizeOf(abi.IntType));
+                    alloc.stack_values[alloc.stack] = intFromBytes(bytes[0..end], a.is_signed);
+                    alloc.stack += 1;
+                    if (end == bytes.len) continue :loop;
+                    bytes = bytes[end..];
+                } else {
+                    return Error.too_many_arguments;
                 }
-                alloc.stack += needed;
+            }
+        } else {
+            if (alloc.stack < alloc.stack_values.len) {
+                alloc.stack_values[alloc.stack] = @bitCast(@intFromPtr(bytes.ptr));
+                alloc.stack += 1;
             } else {
                 return Error.too_many_arguments;
             }
         }
-    }
-    if (alloc.int + alloc.float + alloc.stack > max_arg_count) {
-        return Error.too_many_arguments;
     }
     return alloc;
 }
 
-pub fn call(
+fn callWithArgs(
     comptime RT: type,
     comptime cc: std.builtin.CallingConvention,
     ptr: *const anyopaque,
@@ -129,13 +197,31 @@ pub fn call(
         .Fn = .{
             .calling_convention = cc,
             .is_generic = false,
-            .is_var_args = false,
+            .is_var_args = true,
             .return_type = RT,
             .params = &params,
         },
     });
     const function: *const F = @ptrCast(ptr);
-    const Args = std.meta.ArgsTuple(F);
+    comptime var tuple_fields: [params.len]std.builtin.Type.StructField = undefined;
+    inline for (params, 0..) |param, index| {
+        const T = param.type.?;
+        tuple_fields[index] = .{
+            .name = std.fmt.comptimePrint("{d}", .{index}),
+            .type = T,
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
+        };
+    }
+    const Args = @Type(.{
+        .Struct = .{
+            .is_tuple = true,
+            .layout = .auto,
+            .decls = &.{},
+            .fields = &tuple_fields,
+        },
+    });
     var args: Args = undefined;
     comptime var index = 0;
     inline for (float_args) |f_arg| {

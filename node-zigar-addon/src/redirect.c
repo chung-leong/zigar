@@ -279,12 +279,10 @@ void redirect_io_functions(void* handle,
                     if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
                         /* replace with hook */
                         *fn_pointer = hook;
-                        found = 1;
                         /* restore original flags */
                         VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
                     }
                 }
-
             }
         }
     }

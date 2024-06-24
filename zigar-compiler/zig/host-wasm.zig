@@ -261,7 +261,7 @@ pub fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?V
     const attr_ptr = _getArgAttributes();
     const thunk: VariadicThunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
-    return thunk(@ptrCast(&call_ctx), arg_ptr, arg_count, attr_ptr);
+    return thunk(@ptrCast(&call_ctx), arg_ptr, attr_ptr, arg_count);
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {

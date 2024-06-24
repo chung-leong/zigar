@@ -84,7 +84,7 @@ pub const MemberType = enum(u32) {
 
 pub const Value = *opaque {};
 pub const Thunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
-pub const VariadicThunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value;
+pub const VariadicThunk = *const fn (ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value;
 
 pub const Structure = struct {
     name: ?[]const u8 = null,
@@ -2027,36 +2027,24 @@ test "createThunk" {
 
 fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) VariadicThunk {
     const variadic = @import("./variadic.zig");
-    const f = @typeInfo(@TypeOf(function)).Fn;
     const ns_node = struct {
-        fn tryFunction(_: HostT, arg_ptr: [*]u8, arg_attrs: []const variadic.ArgAttributes) !void {
-            const cc = f.calling_convention;
-            const RT = f.return_type.?;
-            const alloc = try variadic.allocate(arg_ptr, arg_attrs);
-            const retval_ptr: *RT = @ptrCast(@alignCast(&arg_ptr[0]));
-            const int_args = alloc.int_values;
-            const float_args = alloc.float_values;
-            retval_ptr.* = inline for (0..variadic.max_stack_count + 1) |stack_count| {
-                if (alloc.stack == stack_count) {
-                    var stack_args: [stack_count]isize = undefined;
-                    @memcpy(&stack_args, alloc.stack_values[0..stack_count]);
-                    break variadic.call(RT, cc, function, float_args, int_args, stack_args);
-                }
-            } else unreachable;
+        fn tryFunction(_: HostT, arg_ptr: [*]u8, attrs: []const variadic.ArgAttributes) !void {
+            return variadic.call(function, arg_ptr, attrs);
         }
 
-        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value {
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            const attrs = @as([*]const variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
-            const arg_ptr_bytes = @as([*]u8, @ptrCast(@alignCast(arg_ptr)));
-            tryFunction(host, arg_ptr_bytes, attrs) catch |err| {
+            // the first item of attrs is for the return value
+            const attrs = @as([*]const variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0 .. arg_count + 1];
+            tryFunction(host, @as([*]u8, @ptrCast(@alignCast(arg_ptr))), attrs) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
             return null;
         }
     };
     const ns_wasm = struct {
+        const f = @typeInfo(@TypeOf(function)).Fn;
         fn tryFunction(_: HostT, arg_ptr: *ArgT, extra: [*]const u8) !void {
             const param_count = f.params.len + 1;
             const params: [param_count]std.builtin.Type.Fn.Param = define: {
@@ -2098,7 +2086,7 @@ fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptim
             arg_ptr.retval = @call(.auto, function_ptr, args);
         }
 
-        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, arg_count: usize, attr_ptr: *const anyopaque) ?Value {
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             const attrs = @as([*]const variadic.ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];

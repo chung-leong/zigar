@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { capture } from '../capture.js';
+import { platform } from 'os';
 
 export function addTests(importModule, options) {
   const importTest = async (name, options) => {
@@ -48,7 +49,10 @@ export function addTests(importModule, options) {
       expect(await capture(() => test_puts())).eql([ 'Hello world' ]);
       expect(await capture(() => test_fwrite())).eql([ 'Hello world' ]);
       expect(await capture(() => test_write())).eql([ 'Hello world' ]);
-      expect(await capture(() => test_perror())).eql([ 'Hello: No such file or directory' ]);
+      const errorMsg = (platform() === 'win32')
+      ? 'Hello: Permission denied'
+      : 'Hello: No such file or directory';
+      expect(await capture(() => test_perror())).eql([ errorMsg ]);
     })
   })
 }

@@ -49,21 +49,24 @@ export function defineVariadicStruct(structure, env) {
     for (const [ index, key ] of argKeys.entries()) {
       try {
         this[key] = args[index];
-        const { bitOffset, byteSize, type } = members[index + 1];
-        attrs.set(index, bitOffset / 8, byteSize, type);
       } catch (err) {
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
+    // set attributes of retval and fixed args
+    for (const [ index, { bitOffset, byteSize, type } ] of members.entries()) {
+      attrs.set(index, bitOffset / 8, byteSize, type);
+    }
+    // create additional child objects and copy arguments into them
     for (const [ index, arg ] of varArgs.entries()) {
-      // create additional child objects and copy arguments into them
       const slot = maxSlot + index + 1;
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
-      attrs.set(argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
+      // set attributes
+      attrs.set(1 + argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
     }
     this[ATTRIBUTES] = attrs;
   };
@@ -97,7 +100,7 @@ export function defineVariadicStruct(structure, env) {
     }
   };
   const ArgAttributes = function(length, align) {
-    this[MEMORY] = env.allocateMemory(length * 4, 4);
+    this[MEMORY] = env.allocateMemory((1 + length) * 4, 4);
     this.length = length;
     this.littleEndian = env.littleEndian;
   }
@@ -105,7 +108,12 @@ export function defineVariadicStruct(structure, env) {
     const dv = this[MEMORY];
     dv.setUint16(index * 4, offset, env.littleEndian);
     dv.setUint8(index * 4 + 2, Math.min(255, size));
-    dv.setUint8(index * 4 + 3, type === MemberType.Float);
+    let flags = 0;
+    switch (type) {
+      case MemberType.Float: flags |= 0x80; break;
+      case MemberType.Int: flags |= 0x40; break;
+    }
+    dv.setUint8(index * 4 + 3, flags);
   };
   defineProperties(ArgAttributes.prototype, {
     set: { value: setAttributes },
