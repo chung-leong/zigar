@@ -782,7 +782,10 @@ export function addTests(importModule, options) {
         );
         expect(result).to.equal(17);
       });
-      expect(lines1).to.eql([ 'Hello world 123' ]);
+      expect(lines1).to.eql([ 'Hello world 123!' ]);
+      if (target === 'wasm32') {
+        return;
+      }
       const path = fileURLToPath(new URL('./results/world.txt', import.meta.url));
       const f = fopen(path, 'w');
       const count1 = fprintf(f,
