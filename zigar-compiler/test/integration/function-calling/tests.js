@@ -782,7 +782,7 @@ export function addTests(importModule, options) {
         );
         expect(result).to.equal(17);
       });
-      expect(lines1).to.eql([ 'Hello world 123!' ]);
+      expect(lines1).to.eql([ 'Hello world 123' ]);
       const path = fileURLToPath(new URL('./results/world.txt', import.meta.url));
       const f = fopen(path, 'w');
       const count1 = fprintf(f,
@@ -797,5 +797,19 @@ export function addTests(importModule, options) {
       expect(count1).to.equal(19);
       expect(count2).to.equal(19);
     })
- })
+    it('should call snprintf correctly', async function() {
+      this.timeout(300000);
+      const { snprintf, Int, StrPtr } = await importTest('call-snprintf', { useLibc: true });
+      const buffer = new ArrayBuffer(20);
+      const result1 = snprintf(buffer, buffer.byteLength,
+        'Hello world %d!\n',
+        new Int('123'),
+      );
+      expect(result1).to.equal(17);
+      const ta = new Uint8Array(buffer);
+      expect(ta[0]).to.equal('H'.charCodeAt(0));
+      expect(ta[1]).to.equal('e'.charCodeAt(0));
+      expect(ta[result1]).to.equal(0);
+    })
+  })
 }

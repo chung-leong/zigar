@@ -2,7 +2,7 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-pub const printf = c.printf;
+pub const snprintf = c.snprintf;
 
 pub const Int = i32;
 pub const Double = f64;
