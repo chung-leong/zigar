@@ -63,7 +63,7 @@ pub fn call(function: anytype, arg: anytype, attr_ptr: *const anyopaque, arg_cou
         }
         arg.retval = @call(.auto, function_ptr, args);
     } else {
-        const alloc = try allocate(arg_bytes, arg_attrs);
+        const alloc = try allocate(arg_bytes, arg_attrs, f.params.len);
         const int_args: *const @TypeOf(alloc.int_regs) = &alloc.int_regs;
         const float_args: *const @TypeOf(alloc.float_regs) = &alloc.float_regs;
         arg.retval = inline for (0..max_stack_count + 1) |stack_count| {
@@ -92,6 +92,7 @@ const Abi = struct {
         int: comptime_int,
         float: comptime_int,
     },
+    pass_variadic_float_as_int: bool = false,
     min_stack_align: comptime_int = @alignOf(isize),
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
@@ -117,11 +118,18 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
     },
     .aarch64, .aarch64_be, .aarch64_32 => .{
         .registers = .{
-            // x0-x7
+            // x0 - x7
             .int = 8,
             .float = 0,
         },
     },
+    // .riscv64 => .{
+    //     .registers = .{
+    //         .int = 8,
+    //         .float = 8,
+    //     },
+    //     .pass_variadic_float_as_int = true,
+    // },
     .x86 => .{
         .registers = .{ .int = 0, .float = 0 },
         .min_stack_align = @alignOf(u8),
@@ -129,7 +137,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
     .arm, .armeb => .{
         .registers = .{ .int = 0, .float = 0 },
     },
-    else => @compileError("Unsupported platform"),
+    else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
 };
 const Allocation = struct {
     float_count: usize = 0,
@@ -176,14 +184,18 @@ fn intFromBytes(bytes: []const u8, is_signed: bool) abi.IntType {
     } else unreachable;
 }
 
-fn allocate(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes) !Allocation {
+fn allocate(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !Allocation {
     var alloc: Allocation = .{};
-    loop: for (arg_attrs) |a| {
+    loop: for (arg_attrs, 0..) |a, index| {
         var bytes = arg_bytes[a.offset .. a.offset + a.size];
         if (a.alignment == 0) {
             return Error.invalid_argument_attributes;
         }
-        if (a.is_float) {
+        const can_use_float = switch (abi.pass_variadic_float_as_int) {
+            false => true,
+            true => if (index < fixed_arg_count) true else false,
+        };
+        if (a.is_float and can_use_float) {
             if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
                 while (true) {
                     if (alloc.float_count < alloc.float_regs.len) {
@@ -391,6 +403,42 @@ test "parameter passing - i32, i32" {
     createTest(u32, .{
         @as(i32, 1234),
         @as(i32, 4567),
+    }).run();
+}
+
+test "parameter passing - f32" {
+    createTest(u32, .{
+        @as(f32, 1.234),
+    }).run();
+}
+
+test "parameter passing - i32, f32" {
+    createTest(u32, .{
+        @as(i32, 1234),
+        @as(f32, 1.234),
+    }).run();
+}
+
+test "parameter passing - f32, f32" {
+    createTest(u32, .{
+        @as(f32, 1.234),
+        @as(f32, 4.567),
+    }).run();
+}
+
+test "parameter passing - f32, f32, f32" {
+    createTest(u32, .{
+        @as(f32, 1.234),
+        @as(f32, 4.567),
+        @as(f32, 7.890),
+    }).run();
+}
+
+test "parameter passing - i32, f32, f32" {
+    createTest(u32, .{
+        @as(i32, 1234),
+        @as(f32, 1.234),
+        @as(f32, 4.567),
     }).run();
 }
 
