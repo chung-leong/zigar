@@ -771,5 +771,31 @@ export function addTests(importModule, options) {
         expect(f).to.throw(Error).with.property('message').that.equal('Too many arguments');
       }
     })
+    it('should call fprintf correctly', async function() {
+      this.timeout(300000);
+      const { fprintf, fopen, fclose, stream, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
+      const stdout = stream(1);
+      const lines1 = await capture(() => {
+        const result = fprintf(stdout,
+          'Hello world %d!\n',
+          new Int('123'),
+        );
+        expect(result).to.equal(17);
+      });
+      expect(lines1).to.eql([ 'Hello world 123!' ]);
+      const path = fileURLToPath(new URL('./results/world.txt', import.meta.url));
+      const f = fopen(path, 'w');
+      const count1 = fprintf(f,
+        'Hello world %d!\n',
+        new Int(12345),
+      );
+      const count2 = fprintf(f,
+        'Hello world %s!\n',
+        new StrPtr('dingo'),
+      )
+      fclose(f);
+      expect(count1).to.equal(19);
+      expect(count2).to.equal(19);
+    })
  })
 }
