@@ -26,24 +26,25 @@ export function defineVariadicStruct(structure, env) {
     }
     // calculate the actual size of the struct based on arguments given
     let totalByteSize = byteSize;
-    let maxAlign = align;
     const varArgs = args.slice(argCount);
     const offsets = {};
     for (const [ index, arg ] of varArgs.entries()) {
       const dv = arg[MEMORY]
-      if (!dv) {
+      let argAlign = arg.constructor[ALIGN];
+      if (!dv || !argAlign) {
         const err = new InvalidVariadicArgument();
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
-      const argAlign = Math.max(env.wordSize, arg.constructor[ALIGN]);
+      /* WASM-ONLY */
+      // the arg struct is passed to the function in WebAssembly and fields are 
+      // expected to aligned to at least 4
+      argAlign = Math.max(env.wordSize, argAlign);
+      /* WASM-ONLY-END */
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
-      if (argAlign > maxAlign) {
-        maxAlign = argAlign;
-      }
     }
-    const attrs = new ArgAttributes(args.length, maxAlign);
-    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    const attrs = new ArgAttributes(args.length);
+    const dv = env.allocateMemory(totalByteSize);
     this[MEMORY] = dv;
     this[SLOTS] = {};
     for (const [ index, key ] of argKeys.entries()) {
@@ -54,8 +55,8 @@ export function defineVariadicStruct(structure, env) {
       }
     }
     // set attributes of retval and fixed args
-    for (const [ index, { bitOffset, byteSize, type } ] of members.entries()) {
-      attrs.set(index, bitOffset / 8, byteSize, type);
+    for (const [ index, { bitOffset, byteSize, type, structure: { align } } ] of members.entries()) {
+      attrs.set(index, bitOffset / 8, byteSize, align, type);
     }
     // create additional child objects and copy arguments into them
     for (const [ index, arg ] of varArgs.entries()) {
@@ -66,7 +67,7 @@ export function defineVariadicStruct(structure, env) {
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
       // set attributes
-      attrs.set(1 + argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
+      attrs.set(1 + argCount + index, offset, byteLength, arg.constructor[ALIGN], arg.constructor[PRIMITIVE]);
     }
     this[ATTRIBUTES] = attrs;
   };
@@ -99,21 +100,19 @@ export function defineVariadicStruct(structure, env) {
       child?.[POINTER_VISITOR]?.(cb, childOptions);
     }
   };
-  const ArgAttributes = function(length, align) {
-    this[MEMORY] = env.allocateMemory((1 + length) * 4, 4);
+  const ArgAttributes = function(length) {
+    this[MEMORY] = env.allocateMemory((1 + length) * 8, 4);
     this.length = length;
     this.littleEndian = env.littleEndian;
   }
-  const setAttributes = function(index, offset, size, type) {
+  const setAttributes = function(index, offset, size, align, type) {
     const dv = this[MEMORY];
-    dv.setUint16(index * 4, offset, env.littleEndian);
-    dv.setUint8(index * 4 + 2, Math.min(255, size));
-    let flags = 0;
-    switch (type) {
-      case MemberType.Float: flags |= 0x80; break;
-      case MemberType.Int: flags |= 0x40; break;
-    }
-    dv.setUint8(index * 4 + 3, flags);
+    const le = env.littleEndian;
+    dv.setUint16(index * 8, offset, le);
+    dv.setUint16(index * 8 + 2, size, le);
+    dv.setUint16(index * 8 + 4, align, le);
+    dv.setUint8(index * 8 + 6, type == MemberType.Float);
+    dv.setUint8(index * 8 + 7, type == MemberType.Int);
   };
   defineProperties(ArgAttributes.prototype, {
     set: { value: setAttributes },

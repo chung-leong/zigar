@@ -2,7 +2,7 @@ import 'mocha-skip-if';
 import { expect } from 'chai';
 import { fileURLToPath } from 'url';
 import { capture, captureWarning } from '../capture.js';
-import { platform } from 'os';
+import { platform, arch } from 'os';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -552,60 +552,99 @@ export function addTests(importModule, options) {
       expect(count1).to.equal(BigInt(buffer2.byteLength));
       expect(count2).to.equal(BigInt(buffer2.byteLength));
     })
-    // VaList is "disabled due to miscompilations" on Windows currently
-    skip.if(platform() === 'win32').
+    // VaList is "disabled due to miscompilations" on 64-bits Windows currently
+    skip.if(platform() === 'win32' && arch() === 'x64').
     it('should call variadic functions', async function() {
       this.timeout(300000);
       const {
-        Int16, Int32, Int64, Int128, printIntegers,
+        Int8, Int16, Int32, Int64, Int128, printIntegers,
         Float16, Float32, Float64, Float128, printFloats,
         StrPtr, printStrings,
       } = await importTest('call-variadic-functions');
-      const lines1 = await capture(() => printIntegers(16, 3,
+      const lines1 = await capture(() => printIntegers(8, 3,
+        new Int8(-10),
+        new Int8(-20),
+        new Int8(-30),
+      ));
+      expect(lines1).to.eql([ '-10', '-20', '-30' ]);
+      const lines2 = await capture(() => printIntegers(16, 3,
         new Int16(-10),
         new Int16(-200),
         new Int16(-3000),
       ));
-      expect(lines1).to.eql([ '-10', '-200', '-3000' ]);
-      const lines2 = await capture(() => printIntegers(32, 3,
+      expect(lines2).to.eql([ '-10', '-200', '-3000' ]);
+      const lines3 = await capture(() => printIntegers(32, 3,
         new Int32(-10),
         new Int32(-200),
         new Int32(-3000),
       ));
-      expect(lines2).to.eql([ '-10', '-200', '-3000' ]);
-      const lines3 = await capture(() => printIntegers(64, 3,
+      expect(lines3).to.eql([ '-10', '-200', '-3000' ]);
+      const lines4 = await capture(() => printIntegers(64, 3,
         new Int64(-10),
         new Int64(-200),
         new Int64(-3000),
       ));
-      expect(lines3).to.eql([ '-10', '-200', '-3000' ]);
-      const lines4 = await capture(() => printFloats(16, 3,
+      expect(lines4).to.eql([ '-10', '-200', '-3000' ]);    
+      const lines5 = await capture(() => printFloats(16, 3,
         new Float16(-10),
         new Float16(-200),
         new Float16(-3000),
       ));
-      expect(lines4).to.eql([ '-10', '-200', '-3000' ]);
-      const lines5 = await capture(() => printFloats(32, 3,
+      expect(lines5).to.eql([ '-10', '-200', '-3000' ]);
+      const lines6 = await capture(() => printFloats(32, 3,
         new Float32(-10.25),
         new Float32(-200.25),
         new Float32(-3000.25),
       ));
-      expect(lines5).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      const lines6 = await capture(() => printFloats(64, 3,
+      expect(lines6).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      const lines7 = await capture(() => printFloats(64, 3,
         new Float64(-10.25),
         new Float64(-200.25),
         new Float64(-3000.25),
       ));
-      expect(lines6).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      if (target !== 'wasm32') {
-        expect(() => printFloats(128, 1, new Float128(123))).to.throw();
-      }
-      const lines7 = await capture(() => printStrings(3,
+      expect(lines7).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      const lines8 = await capture(() => printStrings(3,
         new StrPtr('Agnieszka'),
         new StrPtr('Basia'),
         new StrPtr('Czesia'),
       ));
-      expect(lines7).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
+      expect(lines8).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
+    })
+    it('should correctly pass unsigned int to variadic function', async function() {
+      this.timeout(300000);
+      const {
+        Uint8, Uint16, Uint32, Uint64, Uint128, printUnsigned,
+      } = await importTest('call-variadic-functions-with-unsigned-int');
+      const lines1 = await capture(() => printUnsigned(8, 3,
+        new Uint8(255),
+        new Uint8(254),
+        new Uint8(253),
+      ));
+      expect(lines1).to.eql([ '255', '254', '253' ]);
+      const lines2 = await capture(() => printUnsigned(16, 3,
+        new Uint16(65535),
+        new Uint16(65534),
+        new Uint16(65533),
+      ));
+      expect(lines2).to.eql([ '65535', '65534', '65533' ]);
+      const lines3 = await capture(() => printUnsigned(32, 3,
+        new Uint32(4294967295),
+        new Uint32(4294967294),
+        new Uint32(4294967293),
+      ));
+      expect(lines3).to.eql([ '4294967295', '4294967294', '4294967293' ]);
+      const lines4 = await capture(() => printUnsigned(64, 3,
+        new Uint64(18446744073709551615n),
+        new Uint64(18446744073709551614n),
+        new Uint64(18446744073709551613n),
+      ));
+      expect(lines4).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);  
+      const lines5 = await capture(() => printUnsigned(128, 3,
+        new Uint128(18446744073709551615n),
+        new Uint128(18446744073709551614n),
+        new Uint128(18446744073709551613n),
+      ));
+      expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
     })
     it('should call printf correctly', async function() {
       this.timeout(300000);
@@ -617,7 +656,6 @@ export function addTests(importModule, options) {
         );
         expect(result).to.equal(17);
       });
-      return;
       const lines1 = await capture(() => printf(
         'Hello world, %d %d %d %d %d!!\n',
         new Int('123'),

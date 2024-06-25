@@ -1,5 +1,6 @@
 const std = @import("std");
 
+pub const Int8 = i8;
 pub const Int16 = i16;
 pub const Int32 = i32;
 pub const Int64 = i64;
@@ -10,10 +11,10 @@ pub const Float64 = f64;
 pub const Float128 = f128;
 pub const StrPtr = [*:0]const u8;
 
-pub fn printIntegers(bits: u16, count: usize, ...) callconv(.C) void {
+pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
     for (0..count) |_| {
-        inline for (.{ i16, i32, i64, i128 }) |T| {
+        inline for (.{ i8, i16, i32, i64, i128 }) |T| {
             if (bits == @typeInfo(T).Int.bits) {
                 const number = @cVaArg(&va_list, T);
                 std.debug.print("{d}\n", .{number});
