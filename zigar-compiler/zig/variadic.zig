@@ -255,7 +255,7 @@ fn callWithArgs(
             .params = &params,
         },
     });
-    const function: *const F = @ptrCast(ptr);
+    const function: *const F = @ptrCast(@alignCast(ptr));
     comptime var fields: [params.len]std.builtin.Type.StructField = undefined;
     inline for (params, 0..) |param, index| {
         const T = param.type.?;
