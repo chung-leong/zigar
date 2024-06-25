@@ -4490,53 +4490,58 @@ function defineVariadicStruct(structure, env) {
     instance: { members },
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(1).map(m => m.name);
+  const argMembers = members.slice(1);
+  const argCount = argMembers.length;
+  const argKeys = argMembers.map(m => m.name);
   const maxSlot = members.map(m => m.slot).sort().pop();
-  const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
     if (args.length < argCount) {
       throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
     }
     // calculate the actual size of the struct based on arguments given
     let totalByteSize = byteSize;
-    let maxAlign = align;
     const varArgs = args.slice(argCount);
     const offsets = {};
     for (const [ index, arg ] of varArgs.entries()) {
       const dv = arg[MEMORY];
-      if (!dv) {
+      let argAlign = arg.constructor[ALIGN];
+      if (!dv || !argAlign) {
         const err = new InvalidVariadicArgument();
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
-      const argAlign = Math.max(env.wordSize, arg.constructor[ALIGN]);
+      /* WASM-ONLY */
+      // the arg struct is passed to the function in WebAssembly and fields are
+      // expected to aligned to at least 4
+      argAlign = Math.max(env.wordSize, argAlign);
+      /* WASM-ONLY-END */
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
-      if (argAlign > maxAlign) {
-        maxAlign = argAlign;
-      }
     }
     const attrs = new ArgAttributes(args.length);
-    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    const dv = env.allocateMemory(totalByteSize);
     this[MEMORY] = dv;
     this[SLOTS] = {};
     for (const [ index, key ] of argKeys.entries()) {
       try {
         this[key] = args[index];
-        const { bitOffset, byteSize, type } = members[index + 1];
-        attrs.set(index, bitOffset / 8, byteSize, type);
       } catch (err) {
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
     }
+    // set attributes of retval and fixed args
+    for (const [ index, { bitOffset, byteSize, type, structure: { align } } ] of argMembers.entries()) {
+      attrs.set(index, bitOffset / 8, byteSize, align, type);
+    }
+    // create additional child objects and copy arguments into them
     for (const [ index, arg ] of varArgs.entries()) {
-      // create additional child objects and copy arguments into them
       const slot = maxSlot + index + 1;
       const { byteLength } = arg[MEMORY];
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
-      attrs.set(argCount + index, offset, byteLength, arg.constructor[PRIMITIVE]);
+      // set attributes
+      attrs.set(argCount + index, offset, byteLength, arg.constructor[ALIGN], arg.constructor[PRIMITIVE]);
     }
     this[ATTRIBUTES] = attrs;
   };
@@ -4569,16 +4574,19 @@ function defineVariadicStruct(structure, env) {
       child?.[POINTER_VISITOR]?.(cb, childOptions);
     }
   };
-  const ArgAttributes = function(length, align) {
-    this[MEMORY] = env.allocateMemory(length * 4, 4);
+  const ArgAttributes = function(length) {
+    this[MEMORY] = env.allocateMemory(length * 8, 4);
     this.length = length;
     this.littleEndian = env.littleEndian;
   };
-  const setAttributes = function(index, offset, size, type) {
+  const setAttributes = function(index, offset, size, align, type) {
     const dv = this[MEMORY];
-    dv.setUint16(index * 4, offset, env.littleEndian);
-    dv.setUint8(index * 4 + 2, Math.min(255, size));
-    dv.setUint8(index * 4 + 3, type === MemberType.Float);
+    const le = env.littleEndian;
+    dv.setUint16(index * 8, offset, le);
+    dv.setUint16(index * 8 + 2, size, le);
+    dv.setUint16(index * 8 + 4, align, le);
+    dv.setUint8(index * 8 + 6, type == MemberType.Float);
+    dv.setUint8(index * 8 + 7, type == MemberType.Int);
   };
   defineProperties(ArgAttributes.prototype, {
     set: { value: setAttributes },

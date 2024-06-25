@@ -17,9 +17,10 @@ export function defineVariadicStruct(structure, env) {
     instance: { members },
   } = structure;
   const hasObject = !!members.find(m => m.type === MemberType.Object);
-  const argKeys = members.slice(1).map(m => m.name);
+  const argMembers = members.slice(1);
+  const argCount = argMembers.length;
+  const argKeys = argMembers.map(m => m.name);
   const maxSlot = members.map(m => m.slot).sort().pop();
-  const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
     if (args.length < argCount) {
       throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
@@ -36,7 +37,7 @@ export function defineVariadicStruct(structure, env) {
         throw adjustArgumentError(name, index - offset, argCount - offset, err);
       }
       /* WASM-ONLY */
-      // the arg struct is passed to the function in WebAssembly and fields are 
+      // the arg struct is passed to the function in WebAssembly and fields are
       // expected to aligned to at least 4
       argAlign = Math.max(env.wordSize, argAlign);
       /* WASM-ONLY-END */
@@ -55,7 +56,7 @@ export function defineVariadicStruct(structure, env) {
       }
     }
     // set attributes of retval and fixed args
-    for (const [ index, { bitOffset, byteSize, type, structure: { align } } ] of members.entries()) {
+    for (const [ index, { bitOffset, byteSize, type, structure: { align } } ] of argMembers.entries()) {
       attrs.set(index, bitOffset / 8, byteSize, align, type);
     }
     // create additional child objects and copy arguments into them
@@ -67,7 +68,7 @@ export function defineVariadicStruct(structure, env) {
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
       child.$ = arg;
       // set attributes
-      attrs.set(1 + argCount + index, offset, byteLength, arg.constructor[ALIGN], arg.constructor[PRIMITIVE]);
+      attrs.set(argCount + index, offset, byteLength, arg.constructor[ALIGN], arg.constructor[PRIMITIVE]);
     }
     this[ATTRIBUTES] = attrs;
   };
@@ -101,7 +102,7 @@ export function defineVariadicStruct(structure, env) {
     }
   };
   const ArgAttributes = function(length) {
-    this[MEMORY] = env.allocateMemory((1 + length) * 8, 4);
+    this[MEMORY] = env.allocateMemory(length * 8, 4);
     this.length = length;
     this.littleEndian = env.littleEndian;
   }

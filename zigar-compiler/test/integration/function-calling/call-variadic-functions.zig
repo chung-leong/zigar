@@ -14,6 +14,7 @@ pub const StrPtr = [*:0]const u8;
 
 pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
+    defer @cVaEnd(&va_list);
     for (0..count) |_| {
         inline for (.{ i8, i16, i32, i64, i128 }) |T| {
             if (bits == @typeInfo(T).Int.bits) {
@@ -22,11 +23,11 @@ pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
             }
         }
     }
-    @cVaEnd(&va_list);
 }
 
 pub fn printFloats(bits: u16, count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
+    defer @cVaEnd(&va_list);
     for (0..count) |_| {
         inline for (.{ f16, f32, f64, f80, f128 }) |T| {
             if (bits == @typeInfo(T).Float.bits) {
@@ -39,14 +40,13 @@ pub fn printFloats(bits: u16, count: usize, ...) callconv(.C) void {
             }
         }
     }
-    @cVaEnd(&va_list);
 }
 
 pub fn printStrings(count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
+    defer @cVaEnd(&va_list);
     for (0..count) |_| {
         const str = @cVaArg(&va_list, [*:0]const u8);
         std.debug.print("{s}\n", .{str});
     }
-    @cVaEnd(&va_list);
 }

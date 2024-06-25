@@ -567,7 +567,7 @@ napi_value run_variadic_thunk(napi_env env,
     } else if (napi_get_dataview_info(env, args[2], &args_attrs_len, &args_attrs_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Attributes must be a DataView");
     }
-    size_t arg_count = (args_attrs_len / 8) - 1;
+    size_t arg_count = args_attrs_len / 8;
     call_context ctx = { env, js_env, md };
     size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
@@ -711,7 +711,7 @@ napi_value load_module(napi_env env,
     }
     md->base_address = (uintptr_t) dl_info.dli_fbase;
 
-    // redirect_io_functions(handle, path, mod->imports->override_write);
+    redirect_io_functions(handle, path, mod->imports->override_write);
     free(path);
 
     /* attach exports to module */
