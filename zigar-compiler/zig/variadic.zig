@@ -36,7 +36,6 @@ const max_stack_count = max_arg_count - @min(abi.registers.int, abi.registers.fl
 const Abi = struct {
     FloatType: type = f64,
     IntType: type = isize,
-
     registers: struct {
         int: comptime_int,
         float: comptime_int,
@@ -46,6 +45,7 @@ const Abi = struct {
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .windows => .{
+            .FloatType = f128,
             .registers = .{
                 // RCX, RDX, R8, R9
                 .int = 4,
@@ -54,6 +54,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             },
         },
         else => .{
+            .FloatType = f128,
             .registers = .{
                 // RDI, RSI, RDX, RCX, R8, R9
                 .int = 6,
@@ -190,7 +191,7 @@ fn callWithArgs(
         inline for (&list, 0..) |*p, index| {
             p.is_generic = false;
             p.is_noalias = false;
-            p.type = if (index < float_args.len) f64 else isize;
+            p.type = if (index < float_args.len) abi.FloatType else abi.IntType;
         }
         break :define list;
     };
