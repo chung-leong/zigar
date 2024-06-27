@@ -309,7 +309,7 @@ void redirect_io_functions(void* handle,
     #define ELF_ST_BIND ELF32_ST_BIND
 #endif
 
-int read_string_table(int fd,
+int extract_string_table(int fd,
                       Elf_Shdr* strtab,
                       char** ps) {
     char* buffer = malloc(strtab->sh_size);
@@ -351,7 +351,7 @@ void redirect_io_functions(void* handle,
     if (!sections
      || lseek(fd, header.e_shoff, SEEK_SET) < 0
      || read(fd, sections, header.e_shnum * sizeof(Elf_Shdr)) <= 0
-     || read_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
+     || extract_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
         goto exit;
     }
     Elf_Sym* symbols = NULL;
@@ -367,7 +367,7 @@ void redirect_io_functions(void* handle,
             if (!symbols
                 || lseek(fd, dynsym->sh_offset, SEEK_SET) < 0
                 || read(fd, symbols, dynsym->sh_size) <= 0
-                || read_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
+                || extract_string_table(fd, &sections[dynsym->sh_link], &symbol_strs) == 0) {
                 goto exit;
             }
             break;
@@ -464,9 +464,9 @@ int read_command(int fd,
     return 1;
 }
 
-char* read_string(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
-    char* s = &bytes[pos];
-    for (int i = pos; i < *end; i++) {
+const char* extract_string(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+    const char* s = (const char*) &bytes[*pos + 1];
+    for (uint32_t i = *pos + 1; i < *end; i++) {
         if (bytes[i] == 0) {
             *pos = i;
             break;
@@ -475,11 +475,12 @@ char* read_string(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
     return s;
 }
 
-uint64_t read_uleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+uint64_t extract_uleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
     uint64_t result = 0;
-    for (int i = pos; i < *end; i++) {
+    int bit = 0;
+    for (uint32_t i = *pos + 1; i < *end; i++) {
         uint8_t byte = bytes[i];
-        uint64_t slice = bytes & 0x7f;
+        uint64_t slice = byte & 0x7f;
         if (bit >= 64 || slice << bit >> bit != slice) {
             *end = 0;
             break;
@@ -488,15 +489,18 @@ uint64_t read_uleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
             bit += 7;
         }
         if (!(byte & 0x80)) {
+            *pos = i;
             break;
         }
     }
+    printf("uleb: %zu\n", result);
     return result;
 }
 
-int64_t read_sleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+int64_t extract_sleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
     int64_t result = 0;
-    for (int i = pos; i < *end; i++) {
+    int bit;
+    for (uint32_t i = *pos + 1; i < *end; i++) {
         uint8_t byte = bytes[i];
         result |= ((byte & 0x7f) << bit);
         bit += 7;
@@ -504,12 +508,13 @@ int64_t read_sleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
             if ((byte & 0x40) != 0) {
                 result |= (-1LL) << bit;
             }
+            *pos = i;
             break;
         }
     }
+    printf("sleb: %zd\n", result);
     return result;
 }
-
 
 void redirect_io_functions(void* handle,
                            const char* filename,
@@ -544,6 +549,8 @@ void redirect_io_functions(void* handle,
                 }
                 if (strcmp(seg_cmd.segname, SEG_DATA) == 0) {
                     data_segment_offset = seg_cmd.vmaddr;
+                    data_segment_index = segment_count;
+                    printf("DATA: %zu %zu\n\n", data_segment_offset, data_segment_index);
                 }
                 segment_count++;
             } break;
@@ -554,37 +561,38 @@ void redirect_io_functions(void* handle,
                     goto exit;
                 }
                 uint32_t bind_offsets[3] = { info_cmd.bind_off, info_cmd.weak_bind_off, info_cmd.lazy_bind_off };
-                uint32_t bind_size[3] = { info_cmd.bind_size, info_Cmd.weak_bind_size, info_cmd.lazy_bind_size };
-                for (int i = 0; i < 3; i++) {
-                    uint32_t offset = bind_offsets[i], size = bind_size[i];
-                    if (size == 0) continue;
-                    uint8_t *byte_codes = malloc(size);
+                uint32_t bind_size[3] = { info_cmd.bind_size, info_cmd.weak_bind_size, info_cmd.lazy_bind_size };
+                for (int i = 1; i < 2; i++) {
+                    if (bind_size[i] == 0) continue;
+                    uint8_t *byte_codes = malloc(bind_size[i]);
                     if (!byte_codes
-                    || lseek(fd, offset, SEEK_SET) < 0
-                    || read(fd, byte_codes, size) <= 0) {
+                    || lseek(fd, bind_offsets[i], SEEK_SET) < 0
+                    || read(fd, byte_codes, bind_size[i]) <= 0) {
                         free(byte_codes);
                         goto exit;
                     }
 		            uint8_t type = 0;
 		            uint8_t flags;
-		            uint64_t offset = base_offset;
+		            uint64_t offset = 0;
 		            const char* symbol_name = NULL;
 		            uint32_t segment_index = 0;
-		            uint32_t count;
-		            uint32_t skip;
-                    for (uint32_t j = 0; j < size; j++) {
+		            uint32_t byte_code_count = bind_size[i];
+                    for (uint32_t j = 0; j < byte_code_count; j++) {
                         uint8_t byte = byte_codes[j];
                         uint8_t immediate = byte & BIND_IMMEDIATE_MASK;
                         uint8_t opcode = byte & BIND_OPCODE_MASK;
                         switch (opcode) {
                             case BIND_OPCODE_DONE: {
-                                size = 0;
+                                // byte_code_count = 0;
+                                printf("BIND_OPCODE_DONE\n");
                             } break;
                             case BIND_OPCODE_SET_DYLIB_ORDINAL_IMM: {
                                 uint64_t library_ordinal = immediate;
+                                printf("BIND_OPCODE_SET_DYLIB_ORDINAL_IMM\n");
                             } break;
                             case BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB: {
-                                uint64_t library_ordinal = read_uleb128(byte_codes, &j, &size);
+                                uint64_t library_ordinal = extract_uleb128(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB\n");
                             } break;
                             case BIND_OPCODE_SET_DYLIB_SPECIAL_IMM: {
                                 if (immediate == 0) {
@@ -593,48 +601,66 @@ void redirect_io_functions(void* handle,
                                     int8_t sign_extended = BIND_OPCODE_MASK | immediate;
                                     uint64_t library_ordinal = sign_extended;
                                 }
+                                printf("BIND_OPCODE_SET_DYLIB_SPECIAL_IMM\n");
                             } break;
                             case BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM: {
                                 flags = immediate;
-                                symbol_name = read_string(byte_codes, &j, &size);
+                                symbol_name = extract_string(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM\n");
+                                //printf("symbol = %s\n", symbol_name);
                             } break;
                             case BIND_OPCODE_SET_TYPE_IMM: {
                                 type = immediate;
+                                printf("BIND_OPCODE_SET_TYPE_IMM\n");
                             } break;
                             case BIND_OPCODE_SET_ADDEND_SLEB: {
-                                int64_t addend = read_sleb128(byte_codes, &j, &size);
+                                int64_t addend = extract_sleb128(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_SET_ADDEND_SLEB\n");
                             } break;
                             case BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB: {
                                 segment_index = immediate;
-                                offset = read_uleb128(byte_codes, &j, &size);
+                                offset = extract_uleb128(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB\n");
+                            } break;
+                            case BIND_OPCODE_ADD_ADDR_ULEB: {
+                                offset += extract_uleb128(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_ADD_ADDR_ULEB\n");
                             } break;
             				case BIND_OPCODE_DO_BIND:
 				            case BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
                             case BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED: {
                                 /* here's where we do the lookup */
-                                if (symbol_name && segment_index == data_segment_index) {
-                                    printf("%s => %zu", symbol_name, offset);
+                                if (symbol_name) {
+                                    printf("%s => %zu, %d, %d, %d\n", symbol_name, segment_index, offset, type, flags);
                                 }
                                 uint32_t extra = 0;
                                 switch (opcode) {
                                     case BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB: {
-                    					extra = read_uleb128(byte_codes, &j, &size);
+                    					extra = extract_uleb128(byte_codes, &j, &byte_code_count);
+                                        printf("BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB\n");
                                     } break;
                                     case BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED: {
         			            		extra = (immediate + 1) * sizeof(uintptr_t);
+                                        printf("BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED\n");
                                     } break;
-                                    default: extra = 0;
+                                    default: {
+                                        extra = 0;
+                                        printf("BIND_OPCODE_DO_BIND\n");
+                                    }
                                 }
                                 offset += sizeof(uintptr_t) + extra;
                                 symbol_name = NULL;
                             } break;
                             case BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB: {
-            					uint64_t count = read_uleb128(byte_codes, &j, &size);
-            					uint64_t skip = read_uleb128(byte_codes, &j, &size);
+            					uint64_t count = extract_uleb128(byte_codes, &j, &byte_code_count);
+            					uint64_t skip = extract_uleb128(byte_codes, &j, &byte_code_count);
+                                printf("BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB\n");
+                                offset += count * (sizeof(uintptr_t) + skip);
                             } break;
                             default: {
                                 /* invalid op code*/
-                                size = 0;
+                                byte_code_count = 0;
+                                printf("invalid opcode\n");
                             }
                         }
                     }
