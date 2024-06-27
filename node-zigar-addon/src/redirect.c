@@ -450,12 +450,8 @@ exit:
 
 typedef struct ADD_BITS(mach_header)        mach_header;
 typedef struct load_command                 load_command;
-typedef struct symtab_command			    symtab_command;
-typedef struct dysymtab_command             dysymtab_command;
+typedef struct dyld_info_command            dyld_info_command;
 typedef struct ADD_BITS(segment_command)    segment_command;
-typedef struct ADD_BITS(section)            section;
-typedef struct ADD_BITS(nlist)              nlist;
-typedef struct ADD_BITS(dylib_module)       dylib_module;
 
 int read_command(int fd,
                  load_command* lc,
@@ -468,6 +464,53 @@ int read_command(int fd,
     return 1;
 }
 
+char* read_string(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+    char* s = &bytes[pos];
+    for (int i = pos; i < *end; i++) {
+        if (bytes[i] == 0) {
+            *pos = i;
+            break;
+        }
+    }
+    return s;
+}
+
+uint64_t read_uleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+    uint64_t result = 0;
+    for (int i = pos; i < *end; i++) {
+        uint8_t byte = bytes[i];
+        uint64_t slice = bytes & 0x7f;
+        if (bit >= 64 || slice << bit >> bit != slice) {
+            *end = 0;
+            break;
+        } else {
+            result |= (slice << bit);
+            bit += 7;
+        }
+        if (!(byte & 0x80)) {
+            break;
+        }
+    }
+    return result;
+}
+
+int64_t read_sleb128(const uint8_t* bytes, uint32_t* pos, uint32_t* end) {
+    int64_t result = 0;
+    for (int i = pos; i < *end; i++) {
+        uint8_t byte = bytes[i];
+        result |= ((byte & 0x7f) << bit);
+        bit += 7;
+        if (!(byte & 0x80)) {
+            if ((byte & 0x40) != 0) {
+                result |= (-1LL) << bit;
+            }
+            break;
+        }
+    }
+    return result;
+}
+
+
 void redirect_io_functions(void* handle,
                            const char* filename,
                            override_callback cb) {
@@ -476,13 +519,10 @@ void redirect_io_functions(void* handle,
     if (fd <= 0) {
         return;
     }
-    section* data_sections = NULL;
-    size_t data_section_count = 0;
-    nlist* symbols = NULL;
-    size_t symbol_count = 0;
-    char* symbol_strs = NULL;
-    uint32_t* indirect_symbol_indices = NULL;
-    size_t indirect_symbol_count = 0;
+    size_t segment_count = 0;
+    uint32_t data_segment_offset;
+    uint32_t data_segment_index;
+    uintptr_t base_address = 0;
     /* read mach-o header */
 	mach_header header;
 	if(read(fd, &header, sizeof(header)) < 0) {
@@ -503,92 +543,109 @@ void redirect_io_functions(void* handle,
                     goto exit;
                 }
                 if (strcmp(seg_cmd.segname, SEG_DATA) == 0) {
-                    data_sections = malloc(seg_cmd.nsects * sizeof(section));
-                    data_section_count = seg_cmd.nsects;
-                    if (!data_sections || read(fd, data_sections, seg_cmd.nsects * sizeof(section)) <= 0) {
+                    data_segment_offset = seg_cmd.vmaddr;
+                }
+                segment_count++;
+            } break;
+            case LC_DYLD_INFO:
+            case LC_DYLD_INFO_ONLY: {
+                dyld_info_command info_cmd;
+                if (read_command(fd, &load_cmd, &info_cmd, sizeof(info_cmd)) == 0) {
+                    goto exit;
+                }
+                uint32_t bind_offsets[3] = { info_cmd.bind_off, info_cmd.weak_bind_off, info_cmd.lazy_bind_off };
+                uint32_t bind_size[3] = { info_cmd.bind_size, info_Cmd.weak_bind_size, info_cmd.lazy_bind_size };
+                for (int i = 0; i < 3; i++) {
+                    uint32_t offset = bind_offsets[i], size = bind_size[i];
+                    if (size == 0) continue;
+                    uint8_t *byte_codes = malloc(size);
+                    if (!byte_codes
+                    || lseek(fd, offset, SEEK_SET) < 0
+                    || read(fd, byte_codes, size) <= 0) {
+                        free(byte_codes);
                         goto exit;
                     }
-                }
-            } break;
-            case LC_SYMTAB: {
-                /* load symbols */
-                symtab_command sym_cmd;
-                if (read_command(fd, &load_cmd, &sym_cmd, sizeof(sym_cmd)) == 0) {
-                    goto exit;
-                }
-                symbols = malloc(sym_cmd.nsyms * sizeof(nlist));
-                symbol_count = sym_cmd.nsyms;
-                symbol_strs = malloc(sym_cmd.strsize);
-                if (!symbols || !symbol_strs
-                 || lseek(fd, sym_cmd.symoff, SEEK_SET) < 0
-                 || read(fd, symbols, sym_cmd.nsyms * sizeof(nlist)) <= 0
-                 || lseek(fd, sym_cmd.stroff, SEEK_SET) < 0
-                 || read(fd, symbol_strs, sym_cmd.strsize) <= 0) {
-                    goto exit;
-                }
-            } break;
-            case LC_DYSYMTAB: {
-                /* find out which symbols are indirect */
-                dysymtab_command dysym_cmd;
-                if (read_command(fd, &load_cmd, &dysym_cmd, sizeof(dysym_cmd)) == 0) {
-                    goto exit;
-                }
-                indirect_symbol_indices = malloc(dysym_cmd.nindirectsyms * sizeof(uint32_t));
-                indirect_symbol_count = dysym_cmd.nindirectsyms;
-                if (!indirect_symbol_indices
-                 || lseek(fd, dysym_cmd.indirectsymoff, SEEK_SET) < 0
-                 || read(fd, indirect_symbol_indices, dysym_cmd.nindirectsyms * sizeof(uint32_t)) <= 0) {
-                    goto exit;
+		            uint8_t type = 0;
+		            uint8_t flags;
+		            uint64_t offset = base_offset;
+		            const char* symbol_name = NULL;
+		            uint32_t segment_index = 0;
+		            uint32_t count;
+		            uint32_t skip;
+                    for (uint32_t j = 0; j < size; j++) {
+                        uint8_t byte = byte_codes[j];
+                        uint8_t immediate = byte & BIND_IMMEDIATE_MASK;
+                        uint8_t opcode = byte & BIND_OPCODE_MASK;
+                        switch (opcode) {
+                            case BIND_OPCODE_DONE: {
+                                size = 0;
+                            } break;
+                            case BIND_OPCODE_SET_DYLIB_ORDINAL_IMM: {
+                                uint64_t library_ordinal = immediate;
+                            } break;
+                            case BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB: {
+                                uint64_t library_ordinal = read_uleb128(byte_codes, &j, &size);
+                            } break;
+                            case BIND_OPCODE_SET_DYLIB_SPECIAL_IMM: {
+                                if (immediate == 0) {
+                                    uint64_t library_ordinal = 0;
+                                } else {
+                                    int8_t sign_extended = BIND_OPCODE_MASK | immediate;
+                                    uint64_t library_ordinal = sign_extended;
+                                }
+                            } break;
+                            case BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM: {
+                                flags = immediate;
+                                symbol_name = read_string(byte_codes, &j, &size);
+                            } break;
+                            case BIND_OPCODE_SET_TYPE_IMM: {
+                                type = immediate;
+                            } break;
+                            case BIND_OPCODE_SET_ADDEND_SLEB: {
+                                int64_t addend = read_sleb128(byte_codes, &j, &size);
+                            } break;
+                            case BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB: {
+                                segment_index = immediate;
+                                offset = read_uleb128(byte_codes, &j, &size);
+                            } break;
+            				case BIND_OPCODE_DO_BIND:
+				            case BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB:
+                            case BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED: {
+                                /* here's where we do the lookup */
+                                if (symbol_name && segment_index == data_segment_index) {
+                                    printf("%s => %zu", symbol_name, offset);
+                                }
+                                uint32_t extra = 0;
+                                switch (opcode) {
+                                    case BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB: {
+                    					extra = read_uleb128(byte_codes, &j, &size);
+                                    } break;
+                                    case BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED: {
+        			            		extra = (immediate + 1) * sizeof(uintptr_t);
+                                    } break;
+                                    default: extra = 0;
+                                }
+                                offset += sizeof(uintptr_t) + extra;
+                                symbol_name = NULL;
+                            } break;
+                            case BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB: {
+            					uint64_t count = read_uleb128(byte_codes, &j, &size);
+            					uint64_t skip = read_uleb128(byte_codes, &j, &size);
+                            } break;
+                            default: {
+                                /* invalid op code*/
+                                size = 0;
+                            }
+                        }
+                    }
+                    free(byte_codes);
                 }
             } break;
         }
 		pos += load_cmd.cmdsize;
     }
-    if (!symbols || !indirect_symbol_indices || !data_sections) {
-        goto exit;
-    }
-    uintptr_t base_address = 0;
-    for (int i = 0; i < symbol_count; i++) {
-        nlist* symbol = &symbols[i];
-        if (symbol->n_type & N_EXT) {
-            const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
-            uintptr_t symbol_address = (uintptr_t) dlsym(handle, symbol_name + 1);
-            if (symbol_address != 0) {
-                base_address = symbol_address - symbol->n_value;
-                break;
-            }
-        }
-    }
-    uintptr_t got_offset = 0;
-    for (int i = 0; i < data_section_count; i++) {
-        section* data_section = &data_sections[i];
-        if ((data_section->flags & SECTION_TYPE) == S_LAZY_SYMBOL_POINTERS) {
-            got_offset = data_section->addr;
-            break;
-        }
-    }
-    if (base_address == 0 || got_offset == 0) {
-        goto exit;
-    }
-    for (int i = 0; i < indirect_symbol_count; i++) {
-        nlist* symbol = &symbols[indirect_symbol_indices[i]];
-        const char* symbol_name = symbol_strs + symbol->n_un.n_strx;
-        void* hook = (symbol_name[0] == '_') ? find_hook(symbol_name + 1) : NULL;
-        if (hook) {
-            /* calculate the address to the GOT entry */
-            uintptr_t got_entry_address = base_address + got_offset + (i * sizeof(void*));
-            void** ptr = (void**) got_entry_address;
-            /* insert our hook */
-            *ptr = hook;
-            break;
-        }
-    }
 
 exit:
-    free(data_sections);
-    free(symbols);
-    free(symbol_strs);
-    free(indirect_symbol_indices);
     close(fd);
 }
 #else

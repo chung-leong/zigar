@@ -651,12 +651,14 @@ export function addTests(importModule, options) {
         new Uint64(18446744073709551613n),
       ));
       expect(lines4).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
-      const lines5 = await capture(() => printUnsigned(128, 3,
-        new Uint128(18446744073709551615n),
-        new Uint128(18446744073709551614n),
-        new Uint128(18446744073709551613n),
-      ));
-      expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
+      if (arch() != 'x64') {  // compiler issue https://github.com/ziglang/zig/issues/20417
+        const lines5 = await capture(() => printUnsigned(128, 3,
+          new Uint128(18446744073709551615n),
+          new Uint128(18446744073709551614n),
+          new Uint128(18446744073709551613n),
+        ));
+        expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
+      }
     })
     it('should call printf correctly', async function() {
       this.timeout(300000);
@@ -773,7 +775,7 @@ export function addTests(importModule, options) {
     })
     it('should call fprintf correctly', async function() {
       this.timeout(300000);
-      const { fprintf, fopen, fclose, stream, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
+      const { fprintf, stream, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
       const stdout = stream(1);
       const lines1 = await capture(() => {
         const result = fprintf(stdout,
@@ -783,9 +785,11 @@ export function addTests(importModule, options) {
         expect(result).to.equal(17);
       });
       expect(lines1).to.eql([ 'Hello world 123!' ]);
-      if (target === 'wasm32') {
-        return;
-      }
+    });
+    skip.if(target === 'wasm32').
+    it('should write to a file using fprintf', async function() {
+      this.timeout(300000);
+      const { fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
       const path = fileURLToPath(new URL('./results/world.txt', import.meta.url));
       const f = fopen(path, 'w');
       const count1 = fprintf(f,
