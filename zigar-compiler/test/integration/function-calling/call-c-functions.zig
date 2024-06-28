@@ -2,7 +2,7 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-pub fn stream(num: i32) ?[*c]c.FILE {
+pub fn stream(num: i32) ?@TypeOf(c.stdout) {
     if (comptime @hasDecl(c, "__acrt_iob_func")) {
         return c.__acrt_iob_func(@intCast(num));
     } else {

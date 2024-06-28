@@ -5145,7 +5145,9 @@ class Environment {
     if (!object[MEMORY][FIXED]) {
       return;
     }
+    /* WASM-ONLY */
     object[MEMORY_RESTORER]();
+    /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
@@ -5792,7 +5794,7 @@ class WebAssemblyEnvironment extends Environment {
       this.memory = memory;
       // run the init function if there one
       /* c8 ignore next */
-      _initialize?.();
+      //_initialize?.();
     })();
   }
 

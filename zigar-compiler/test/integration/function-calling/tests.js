@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
+import { WASI } from 'wasi';
 import { capture, captureWarning } from '../capture.js';
 
 export function addTests(importModule, options) {
@@ -534,7 +535,7 @@ export function addTests(importModule, options) {
     })
     it('should call C functions', async function() {
       this.timeout(300000);
-      const { fopen, fwrite, fclose, puts, stream } = await importTest('call-c-functions');
+      const { fopen, fwrite, fclose, puts, stream } = await importTest('call-c-functions', { useLibc: true });
       const buffer1 = Buffer.from('Hello world');
       const lines1 = await capture(() => puts(buffer1));
       expect(lines1).to.eql([ 'Hello world' ]);
@@ -544,13 +545,6 @@ export function addTests(importModule, options) {
       expect(lines2).to.eql([ 'Hello world!' ]);
       const lines3 = await capture(() => fwrite('Hello?', 1, 6, stdout));
       expect(lines3).to.eql([ 'Hello?' ]);
-      const path = fileURLToPath(new URL('./results/hello.txt', import.meta.url));
-      const f = fopen(path, 'w');
-      const count1 = fwrite(buffer2, 1, buffer2.byteLength, f);
-      const count2 = fwrite(buffer2, 1, buffer2.byteLength, f);
-      fclose(f);
-      expect(count1).to.equal(BigInt(buffer2.byteLength));
-      expect(count2).to.equal(BigInt(buffer2.byteLength));
     })
     // VaList is "disabled due to miscompilations" on 64-bits Windows currently
     skip.if(platform() === 'win32' && arch() === 'x64').
@@ -786,11 +780,23 @@ export function addTests(importModule, options) {
       });
       expect(lines1).to.eql([ 'Hello world 123!' ]);
     });
-    skip.if(target === 'wasm32').
     it('should write to a file using fprintf', async function() {
       this.timeout(300000);
-      const { fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
-      const path = fileURLToPath(new URL('./results/world.txt', import.meta.url));
+      const { __zigar, fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true, topLevelAwait: false });
+      if (target == 'wasm32') {
+        const wasi = new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+          },
+        });
+        await __zigar.init(wasi);
+      }
+      const path = (target == 'wasm32')
+      ? '/local/world-wasm.txt'
+      : fileURLToPath(new URL(`./test-data/world.txt`, import.meta.url));
       const f = fopen(path, 'w');
       const count1 = fprintf(f,
         'Hello world %d!\n',
@@ -803,6 +809,58 @@ export function addTests(importModule, options) {
       fclose(f);
       expect(count1).to.equal(19);
       expect(count2).to.equal(19);
+    })
+    it('should write to a file using fwrite', async function() {
+      this.timeout(300000);
+      const { __zigar, fwrite, fopen, fclose } = await importTest('call-fwrite', { useLibc: true, topLevelAwait: false });
+      if (target == 'wasm32') {
+        const wasi = new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+          },
+        });
+        await __zigar.init(wasi);
+      }
+      const path = (target == 'wasm32')
+      ? '/local/hello-wasm.txt'
+      : fileURLToPath(new URL(`./test-data/hello.txt`, import.meta.url));
+      const buffer = Buffer.from('Hello world!\n');
+      const f = fopen(path, 'w');
+      const count1 = fwrite(buffer, 1, buffer.byteLength, f);
+      const count2 = fwrite(buffer, 1, buffer.byteLength, f);
+      fclose(f);
+      expect(count1).to.equal(buffer.byteLength);
+      expect(count2).to.equal(buffer.byteLength);
+    })
+    it('should read from a file using fread', async function() {
+      this.timeout(300000);
+      const { __zigar, fread, fopen, fclose } = await importTest('call-fread', { useLibc: true, topLevelAwait: false });
+      if (target == 'wasm32') {
+        const wasi = new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+          },
+        });
+        await __zigar.init(wasi);
+      }
+      const path = (target == 'wasm32')
+      ? '/local/donuts.txt'
+      : fileURLToPath(new URL(`./test-data/donuts.txt`, import.meta.url));
+      const buffer1 = new Uint8Array(3), buffer2 = new Uint8Array(3);
+      const f = fopen(path, 'r');
+      const count1 = fread(buffer1, 1, buffer1.byteLength, f);
+      const count2 = fread(buffer2, 1, buffer2.byteLength, f);
+      fclose(f);
+      expect(count1).to.equal(buffer1.byteLength);
+      expect(count2).to.equal(buffer2.byteLength);
+      expect(String.fromCharCode(...buffer1)).to.equal('Was');
+      expect(String.fromCharCode(...buffer2)).to.equal('abi');
     })
     it('should call snprintf correctly', async function() {
       this.timeout(300000);

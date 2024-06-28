@@ -251,9 +251,6 @@ export class WebAssemblyEnvironment extends Environment {
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
-      // run the init function if there one
-      /* c8 ignore next */
-      _initialize?.();
     })();
   }
 

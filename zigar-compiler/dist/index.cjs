@@ -6872,7 +6872,7 @@ class WebAssemblyEnvironment extends Environment {
       this.memory = memory;
       // run the init function if there one
       /* c8 ignore next */
-      _initialize?.();
+      //_initialize?.();
     })();
   }
 
