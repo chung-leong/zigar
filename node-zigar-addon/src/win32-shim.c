@@ -1,6 +1,6 @@
 #include "./win32-shim.h"
 
-/* Node-API */
+// Node-API
 #define NAPI_EXTERN        extern
 #define NAPI_FUNC_COUNT    147
 
@@ -1257,8 +1257,8 @@ const char* func_names[NAPI_FUNC_COUNT] = {
     "napi_add_async_cleanup_hook",
 };
 
-BOOL WINAPI DllMain(HINSTANCE instance, 
-                    DWORD reason, 
+BOOL WINAPI DllMain(HINSTANCE instance,
+                    DWORD reason,
                     LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         HMODULE executable = GetModuleHandle(NULL);

@@ -22,7 +22,7 @@ void release_module(napi_env env,
         napi_value js_env, released;
         if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
          && napi_get_boolean(env, true, &released) == napi_ok) {
-            /* indicate to the environment that the shared lib has been released */
+            // indicate to the environment that the shared lib has been released
             napi_set_named_property(env, js_env, "released", released);
         }
         if (md->so_handle) {
@@ -344,7 +344,7 @@ napi_value get_buffer_address(napi_env env,
     size_t argc = 1;
     napi_value args[1];
     void* bytes;
-    /* check arguments */
+    // check arguments
     if (napi_get_cb_info(env, info, &argc, &args[0], NULL, NULL) != napi_ok
      || napi_get_arraybuffer_info(env, args[0], &bytes, NULL) != napi_ok) {
         return throw_error(env, "Argument must be ArrayBuffer");
@@ -417,25 +417,25 @@ napi_value obtain_external_buffer(napi_env env,
     napi_value buffer;
     void* src = (void*) address;
     void* dest;
-    /* need to include at least one byte */
+    // need to include at least one byte
     size_t len = len_float, min_len = !len ? 1 : len;
     switch (napi_create_external_arraybuffer(env, src, min_len, finalize_external_buffer, md, &buffer)) {
         case napi_ok: break;
         case napi_no_external_buffers_allowed: {
-            /* make copy of external memory instead */
+            // make copy of external memory instead
             void* copy;
             if (napi_create_arraybuffer(env, len, &copy, &buffer) == napi_ok
              && napi_add_finalizer(env, buffer, NULL, finalize_external_buffer, md, NULL) == napi_ok) {
                 memcpy(copy, src, len);
                 break;
             } else {
-                /* fall through */
+                // fall through
             }
         }
         default: throw_last_error(env);
     }
-    /* create a reference to the module so that the shared library doesn't get unloaded
-       while the external buffer is still around pointing to it */
+    // create a reference to the module so that the shared library doesn't get unloaded
+    // while the external buffer is still around pointing to it
     reference_module(md);
     buffer_count++;
     return buffer;
@@ -592,7 +592,7 @@ napi_value get_memory_offset(napi_env env,
     }
     size_t base = md->base_address;
     if (address < base) {
-        /* this happens when we encounter a regular ArrayBuffer with byteLength = 0 */
+        // this happens when we encounter a regular ArrayBuffer with byteLength = 0
         address = base;
     }
     napi_value offset;
@@ -637,7 +637,7 @@ bool export_function(napi_env env,
                 && napi_add_finalizer(env, function, (void*) name, finalize_function, md, NULL) == napi_ok
                 && napi_set_named_property(env, js_env, name, function) == napi_ok;
     if (success) {
-        /* maintain a reference on the module */
+        // maintain a reference on the module
         reference_module(md);
         function_count++;
         return true;
@@ -674,19 +674,21 @@ bool set_module_attributes(napi_env env,
         && napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) == napi_ok;
 }
 
+#include <stdio.h>
+
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
     module_data* md;
     size_t argc = 1;
     size_t path_len;
     napi_value args[1];
-    /* check arguments */
+    // check arguments
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_string_utf8(env, args[0], NULL, 0, &path_len) != napi_ok) {
         return throw_error(env, "Invalid arguments");
     }
 
-    /* load the shared library */
+    // load the shared library
     char* path = malloc(path_len + 1);
     napi_get_value_string_utf8(env, args[0], path, path_len + 1, &path_len);
     void* handle = md->so_handle = dlopen(path, RTLD_NOW);
@@ -694,17 +696,18 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to load shared library");
     }
 
-    /* find the zig module */
+    // find the zig module
     void* symbol = dlsym(handle, "zig_module");
     if (!symbol) {
         return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
     module* mod = md->mod = (module*) symbol;
     if (mod->version != 4) {
+        printf("version, value = %d, address = %zu\n", mod->version, &mod->version);
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 
-    /* set base address */
+    // set base address
     Dl_info dl_info;
     if (!dladdr(symbol, &dl_info)) {
         return throw_error(env, "Unable to obtain address of shared library");
@@ -714,7 +717,7 @@ napi_value load_module(napi_env env,
     redirect_io_functions(handle, path, mod->imports->override_write);
     free(path);
 
-    /* attach exports to module */
+    // attach exports to module
     export_table* exports = mod->exports;
     exports->allocate_host_memory = allocate_host_memory;
     exports->free_host_memory = free_host_memory;
@@ -732,7 +735,7 @@ napi_value load_module(napi_env env,
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;
 
-    /* add functions and attributes to environment */
+    // add functions and attributes to environment
     if (!export_module_functions(env, md) || !set_module_attributes(env, md)) {
         return throw_error(env, "Unable to modify runtime environment");
     }
@@ -741,12 +744,12 @@ napi_value load_module(napi_env env,
 
 bool compile_javascript(napi_env env,
                         napi_value *dest) {
-    /* compile the code */
+    // compile the code
     static const char* addon_js_txt = (
         #include "addon.js.txt"
     );
-    /* getting the length of the string this way due to VC throwing "compiler is out of heap space" error
-       when addon_js_txt is a char array instead of a pointer */
+    // getting the length of the string this way due to VC throwing "compiler is out of heap space" error
+    // when addon_js_txt is a char array instead of a pointer
     static size_t addon_js_txt_len = sizeof(
         #include "addon.js.txt"
     ) - 1;
@@ -758,31 +761,31 @@ bool compile_javascript(napi_env env,
 
 napi_value create_environment(napi_env env,
                               napi_callback_info info) {
-    /* look for cached copy of environment constructor */
+    // look for cached copy of environment constructor
     addon_data* ad;
     napi_value env_constructor;
     if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &ad) != napi_ok
      || !ad->env_constructor
      || napi_get_reference_value(env, ad->env_constructor, &env_constructor) != napi_ok
      || !env_constructor) {
-        /* compile embedded JavaScript */
+        // compile embedded JavaScript
         napi_value js_module;
         if (!compile_javascript(env, &js_module)) {
             return throw_error(env, "Unable to compile embedded JavaScript");
         }
-        /* look for the Environment class */
+        // look for the Environment class
         napi_value env_name;
         if (napi_create_string_utf8(env, "Environment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
         || napi_get_property(env, js_module, env_name, &env_constructor) != napi_ok) {
             return throw_error(env, "Unable to find the class \"Environment\"");
         }
-        /* save in weak reference */
+        // save in weak reference
         if (napi_create_reference(env, env_constructor, 0, &ad->env_constructor) != napi_ok) {
             ad->env_constructor = NULL;
         }
     }
-    /* create the environment and add loadModule--the function keeps a reference to
-       the module data, allowing its freeing when js_env gets gc'ed */
+    // create the environment and add loadModule--the function keeps a reference to
+    // the module data, allowing its freeing when js_env gets gc'ed
     napi_value js_env;
     module_data* md = new_module(env);
     if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok
