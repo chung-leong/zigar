@@ -208,7 +208,7 @@ int printf_chk_hook(int flag,
 
 typedef struct {
     const char* name;
-    void* hook;
+    void* function;
 } hook;
 
 hook hooks[] = {
@@ -243,7 +243,7 @@ hook hooks[] = {
 void* find_hook(const char* name) {
     for (int i = 0; i < HOOK_COUNT; i++) {
         if (strcmp(name, hooks[i].name) == 0) {
-            return hooks[i].hook;
+            return hooks[i].function;
         }
     }
     return NULL;
@@ -272,15 +272,17 @@ void redirect_io_functions(void* handle,
                 void* hook = find_hook(ibm_ptr->Name);
                 if (hook) {
                     PROC* fn_pointer = (PROC*) &iat_ptr->u1.Function;
-                    // make page writable
-                    MEMORY_BASIC_INFORMATION mbi;
-                    DWORD protect = PAGE_READWRITE;
-                    VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
-                    if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
-                        // replace with hook
-                        *fn_pointer = hook;
-                        // restore original flags
-                        VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
+                    if (*fn_pointer != hook) {
+                        // make page writable
+                        MEMORY_BASIC_INFORMATION mbi;
+                        DWORD protect = PAGE_READWRITE;
+                        VirtualQuery(fn_pointer, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+                        if (VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect)) {
+                            // replace with hook
+                            *fn_pointer = hook;
+                            // restore original flags
+                            VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect);
+                        }
                     }
                 }
             }
@@ -402,21 +404,23 @@ void redirect_io_functions(void* handle,
                     void* hook = find_hook(symbol_name);
                     if (hook) {
                         // get address to GOT entry
-                        uintptr_t got_entry_address = base_address + rela_entries[i].r_offset;
-                        // disable write protection
-                        int page_size = get_page_size();
-                        if (page_size == -1) {
-                            goto exit;
+                        uintptr_t address = base_address + rela_entries[i].r_offset;
+                        void** ptr = (void **) address;
+                        if (*ptr != hook) {
+                            // disable write protection
+                            int page_size = get_page_size();
+                            if (page_size == -1) {
+                                goto exit;
+                            }
+                            uintptr_t page_address = address & ~(page_size - 1);
+                            if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
+                                goto exit;
+                            }
+                            *ptr = hook;
+                            override = cb;
+                            // reenable write protection
+                            mprotect((void*) page_address, page_size, PROT_READ);
                         }
-                        uintptr_t page_address = got_entry_address & ~(page_size - 1);
-                        if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
-                            goto exit;
-                        }
-                        void** ptr = (void **) got_entry_address;
-                        *ptr = hook;
-                        override = cb;
-                        // reenable write protection
-                        mprotect((void*) page_address, page_size, PROT_READ);
                     }
                 }
             }
@@ -693,6 +697,7 @@ void redirect_io_functions(void* handle,
                                 void** ptr = (void**) address;
                                 if (*ptr != hook) {
                                     if (read_only) {
+                                        // disable write protection
                                         int page_size = get_page_size();
                                         if (page_size == -1) {
                                             goto exit;
@@ -703,6 +708,7 @@ void redirect_io_functions(void* handle,
                                         }
                                         // insert our hook
                                         *ptr = hook;
+                                        // reenable write protection
                                         if (mprotect((void*) page_address, page_size, PROT_READ) < 0) {
                                             goto exit;
                                         }
