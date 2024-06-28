@@ -4479,7 +4479,7 @@ function defineUnionShape(structure, env) {
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
-  attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
   // replace regular setters with ones that change the active field
   const setters = constructor.prototype[PROP_SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
@@ -5145,6 +5145,7 @@ class Environment {
     if (!object[MEMORY][FIXED]) {
       return;
     }
+    object[MEMORY_RESTORER]();
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
@@ -5369,6 +5370,9 @@ class Environment {
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
     }
+    /* WASM-ONLY */
+    shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
+    /* WASM-ONLY-END */
     shadowMap.set(shadow, object);
     this.registerMemory(shadow[MEMORY], object[MEMORY], align);
     return shadow;

@@ -3,11 +3,12 @@ import { AlignmentConflict, MustBeOverridden } from './error.js';
 import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
 import { addMethods } from './method.js';
-import { defineProperties } from './object.js';
+import { defineProperties, getMemoryRestorer } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
   ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
+  MEMORY_RESTORER,
   POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
@@ -697,6 +698,9 @@ export class Environment {
     if (!object[MEMORY][FIXED]) {
       return;
     }
+    /* WASM-ONLY */
+    object[MEMORY_RESTORER]();
+    /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
     const dest = Object.create(object.constructor.prototype);
@@ -922,6 +926,9 @@ export class Environment {
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
     }
+    /* WASM-ONLY */
+    shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
+    /* WASM-ONLY-END */
     shadowMap.set(shadow, object);
     this.registerMemory(shadow[MEMORY], object[MEMORY], align);
     return shadow;

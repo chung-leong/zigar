@@ -187,7 +187,7 @@ export function defineUnionShape(structure, env) {
     [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
-  attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+  attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
   // replace regular setters with ones that change the active field
   const setters = constructor.prototype[PROP_SETTERS];
   for (const [ name, init ] of Object.entries(memberInitializers)) {
