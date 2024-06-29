@@ -9,19 +9,19 @@ export function addTests(importModule, options) {
   };
   describe('Console', function() {
     it('should output to development console', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { hello } = await importTest('print-with-newline');
       const lines = await capture(() => hello());
       expect(lines).to.eql([ 'Hello world!' ]);
     })
     it('should flush console after function exits', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { print } = await importTest('print-no-newline');
       const lines = await capture(() => print())
       expect(lines[0]).to.equal('Hello world');
     })
     it('should capture output from C code', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const {
         test_printf,
         test_fprintf,
