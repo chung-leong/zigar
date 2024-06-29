@@ -2530,6 +2530,377 @@ describe('Pointer functions', function() {
       expect(slice5.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 } ]);
       expect(slice5).to.equal(slice1);
     })
+    it('should allow C pointer to be initialized with a single pointer', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const spStructure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_c]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32Ptr } = spStructure;
+      const { constructor: Int32CPtr } = cpStructure;
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32);
+      const intCPointer = new Int32CPtr(intPointer);
+      expect(intCPointer['*'][0]).to.equal(1234);
+    })
+    it('should allow C pointer to be cast from a single pointer', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const spStructure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32Ptr } = spStructure;
+      const { constructor: Int32CPtr } = cpStructure;
+      const int32 = new Int32(1234);
+      const intPointer = new Int32Ptr(int32);
+      const intCPointer = Int32CPtr(intPointer);
+      expect(intCPointer['*'][0]).to.equal(1234);
+      expect(intCPointer.length).to.equal(1);
+    })
+    it('should allow C pointer to be initialized with a slice pointer', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const spStructure = env.beginStructure({
+        type: StructureType.SlicePointer,
+        name: '[]i32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32SPtr } = spStructure;
+      const { constructor: Int32CPtr } = cpStructure;
+      const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
+      const intCPointer = new Int32CPtr(intSPointer);
+      expect(intCPointer['*']).to.equal(intSPointer['*']);
+      intCPointer.length = 3;
+      expect([ ...intCPointer['*'] ]).to.eql([ 1, 2, 3 ]);
+      expect(intSPointer.length).to.equal(4);
+    })
+    it('should allow C pointer to be cast from with a slice pointer', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const spStructure = env.beginStructure({
+        type: StructureType.SlicePointer,
+        name: '[]i32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32SPtr } = spStructure;
+      const { constructor: Int32CPtr } = cpStructure;
+      const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
+      const intCPointer = Int32CPtr(intSPointer);
+      expect(intCPointer['*']).to.equal(intSPointer['*']);
+      intCPointer.length = 3;
+      expect([ ...intCPointer['*'] ]).to.eql([ 1, 2, 3 ]);
+      expect(intSPointer.length).to.equal(4);
+    })
+    it('should allow pointer with no sentinel to be initialized with a pointer that uses one', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+
+      const sliceStructureWS = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_:0]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructureWS, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(sliceStructureWS, {
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const template = {
+        [MEMORY]: new DataView(new ArrayBuffer(4)),
+      };
+      env.attachTemplate(sliceStructureWS, template);
+      env.finalizeShape(sliceStructureWS);
+      env.finalizeStructure(sliceStructureWS);
+      const spStructure = env.beginStructure({
+        type: StructureType.SlicePointer,
+        name: '[]i32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const muStructure = env.beginStructure({
+        type: StructureType.MultiPointer,
+        name: '[*:0]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(muStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructureWS,
+      });
+      env.finalizeShape(muStructure);
+      env.finalizeStructure(muStructure);
+      const { constructor: Int32SPtr } = spStructure;
+      const { constructor: Int32MPtr } = muStructure;
+      const intMPointer = new Int32MPtr([ 1, 2, 3, 4 ]);
+      const intSPointer = new Int32SPtr(intMPointer);
+      expect(intSPointer.length).to.equal(4);
+      expect([ ...intSPointer['*'] ]).to.eql([ ...intMPointer['*'] ]);
+    })
   })
   describe('makePointerReadOnly', function() {
     it('should make pointer read-only', function() {

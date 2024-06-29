@@ -1133,7 +1133,7 @@ function isTypedArray(arg, TypedArray) {
   return (!!TypedArray && tag === TypedArray.name);
 }
 
-function isCompatible(arg, constructor) {
+function isCompatibleBuffer(arg, constructor) {
   const tags = constructor[COMPAT];
   if (tags) {
     const tag = arg?.[Symbol.toStringTag];
@@ -2917,6 +2917,9 @@ function definePointer(structure, env) {
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*']), options);
+    } else if (isCompatiblePointer(arg, Target, type)) {
+      // casting between C/multi/slice pointers
+      return new constructor(arg);
     } else if (targetType === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -2939,6 +2942,10 @@ function definePointer(structure, env) {
         throw new ConstantConstraint(structure, arg);
       }
       arg = arg[SLOTS][0];
+    } else if (type != StructureType.SinglePointer) {
+      if (isCompatiblePointer(arg, Target, type)) {
+        arg = Target.child(arg[SLOTS][0][MEMORY]);
+      }
     }
     if (arg instanceof Target) {
       /* WASM-ONLY */
@@ -2954,7 +2961,7 @@ function definePointer(structure, env) {
       }
     } else if (type === StructureType.CPointer && arg instanceof Target.child) {
       arg = Target(arg[MEMORY]);
-    } else if (isCompatible(arg, Target)) {
+    } else if (isCompatibleBuffer(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv);
@@ -2991,6 +2998,7 @@ function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
+      console.log({ isCompatiblePointer: isCompatiblePointer(arg, Target, type) });
       throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
@@ -3094,6 +3102,17 @@ function visitPointer(fn, options = {}) {
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function isCompatiblePointer(arg, Target, type) {
+  if (type !== StructureType.SinglePointer) {
+    if (arg?.constructor?.child?.child === Target.child && arg['*']) {
+      return true;
+    } else if (type === StructureType.CPointer && isPointerOf(arg, Target.child)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getConstProxy(target) {
@@ -5792,9 +5811,6 @@ class WebAssemblyEnvironment extends Environment {
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
       this.memory = memory;
-      // run the init function if there one
-      /* c8 ignore next */
-      //_initialize?.();
     })();
   }
 

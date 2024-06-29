@@ -254,7 +254,7 @@ export function isTypedArray(arg, TypedArray) {
   return (!!TypedArray && tag === TypedArray.name);
 }
 
-export function isCompatible(arg, constructor) {
+export function isCompatibleBuffer(arg, constructor) {
   const tags = constructor[COMPAT];
   if (tags) {
     const tag = arg?.[Symbol.toStringTag];

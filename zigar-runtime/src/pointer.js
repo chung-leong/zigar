@@ -1,4 +1,4 @@
-import { getDataView, isCompatible } from './data-view.js';
+import { getDataView, isCompatibleBuffer } from './data-view.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
   InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
@@ -165,6 +165,9 @@ export function definePointer(structure, env) {
     } else if (isPointerOf(arg, Target)) {
       // const/non-const casting
       return new constructor(Target(arg['*']), options);
+    } else if (isCompatiblePointer(arg, Target, type)) {
+      // casting between C/multi/slice pointers
+      return new constructor(arg);
     } else if (targetType === StructureType.Slice) {
       // allow casting to slice through constructor of its pointer
       return new constructor(Target(arg), options);
@@ -187,6 +190,10 @@ export function definePointer(structure, env) {
         throw new ConstantConstraint(structure, arg);
       }
       arg = arg[SLOTS][0];
+    } else if (type != StructureType.SinglePointer) {
+      if (isCompatiblePointer(arg, Target, type)) {
+        arg = Target(arg[SLOTS][0][MEMORY]);
+      }
     }
     if (arg instanceof Target) {
       /* WASM-ONLY */
@@ -202,7 +209,7 @@ export function definePointer(structure, env) {
       }
     } else if (type === StructureType.CPointer && arg instanceof Target.child) {
       arg = Target(arg[MEMORY]);
-    } else if (isCompatible(arg, Target)) {
+    } else if (isCompatibleBuffer(arg, Target)) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv);
@@ -239,6 +246,7 @@ export function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
+      console.log({ isCompatiblePointer: isCompatiblePointer(arg, Target, type) });
       throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
@@ -345,6 +353,17 @@ function visitPointer(fn, options = {}) {
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
+}
+
+function isCompatiblePointer(arg, Target, type) {
+  if (type !== StructureType.SinglePointer) {
+    if (arg?.constructor?.child?.child === Target.child && arg['*']) {
+      return true;
+    } else if (type === StructureType.CPointer && isPointerOf(arg, Target.child)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getConstProxy(target) {
