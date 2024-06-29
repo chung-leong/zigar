@@ -2654,7 +2654,7 @@
 "        arg = arg[SLOTS][0];\n"
 "      } else if (type != StructureType.SinglePointer) {\n"
 "        if (isCompatiblePointer(arg, Target, type)) {\n"
-"          arg = Target.child(arg[SLOTS][0][MEMORY]);\n"
+"          arg = Target(arg[SLOTS][0][MEMORY]);\n"
 "        }\n"
 "      }\n"
 "      if (arg instanceof Target) {\n"
@@ -5933,4 +5933,3 @@
 "  return exports;\n"
 "\n"
 "})({}))"
-

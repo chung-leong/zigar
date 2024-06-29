@@ -125,10 +125,14 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
     },
     // .riscv64 => .{
     //     .registers = .{
+    //         // x10 - x17
     //         .int = 8,
     //         .float = 8,
     //     },
     //     .pass_variadic_float_as_int = true,
+    // },
+    // .powerpc64le => .{
+    //     .registers = .{ .int = 0, .float = 0 },
     // },
     .x86 => .{
         .registers = .{ .int = 0, .float = 0 },
@@ -193,7 +197,7 @@ fn allocate(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_
         }
         const can_use_float = switch (abi.pass_variadic_float_as_int) {
             false => true,
-            true => if (index < fixed_arg_count) true else false,
+            true => index < fixed_arg_count,
         };
         if (a.is_float and can_use_float) {
             if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
@@ -407,8 +411,8 @@ test "parameter passing - i32, i32" {
 }
 
 test "parameter passing - f32" {
-    createTest(u32, .{
-        @as(f32, 1.234),
+    createTest(f32, .{
+        @as(f64, 1.234),
     }).run();
 }
 
@@ -438,6 +442,22 @@ test "parameter passing - i32, f32, f32" {
     createTest(u32, .{
         @as(i32, 1234),
         @as(f32, 1.234),
+        @as(f32, 4.567),
+    }).run();
+}
+
+test "parameter passing - u64, f32, f64" {
+    createTest(u32, .{
+        @as(u64, 1234),
+        @as(f32, 1.234),
+        @as(f64, 4.567),
+    }).run();
+}
+
+test "parameter passing - f80, f64, f32" {
+    createTest(u32, .{
+        @as(f128, 1234),
+        @as(f64, 1.234),
         @as(f32, 4.567),
     }).run();
 }
@@ -504,5 +524,28 @@ test "parameter passing - [*:0]const u8, f32, f32, f32, f32, f32, f32, f32, f32,
         @as(f32, 0.8),
         @as(f32, 0.9),
         @as([*:0]const u8, @ptrCast("World")),
+    }).run();
+}
+
+test "parameter passing - i64, i64" {
+    createTest(i64, .{
+        @as(i64, -1),
+        @as(i64, -2),
+    }).run();
+}
+
+test "parameter passing - u128, u128" {
+    createTest(i64, .{
+        @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
+        @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFE),
+    }).run();
+}
+
+test "parameter passing - u128, u128, u128, u128" {
+    createTest(i64, .{
+        @as(u128, 1000),
+        @as(u128, 2000),
+        @as(u128, 3000),
+        @as(u128, 4000),
     }).run();
 }

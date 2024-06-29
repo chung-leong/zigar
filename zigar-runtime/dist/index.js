@@ -2944,7 +2944,7 @@ function definePointer(structure, env) {
       arg = arg[SLOTS][0];
     } else if (type != StructureType.SinglePointer) {
       if (isCompatiblePointer(arg, Target, type)) {
-        arg = Target.child(arg[SLOTS][0][MEMORY]);
+        arg = Target(arg[SLOTS][0][MEMORY]);
       }
     }
     if (arg instanceof Target) {
