@@ -638,8 +638,8 @@ export function addTests(importModule, options) {
       const count1 = fwrite(buffer, 1, buffer.byteLength, f);
       const count2 = fwrite(buffer, 1, buffer.byteLength, f);
       fclose(f);
-      expect(count1).to.equal(buffer.byteLength);
-      expect(count2).to.equal(buffer.byteLength);
+      expect(`${count1}`).to.equal(`${buffer.byteLength}`);
+      expect(`${count2}`).to.equal(`${buffer.byteLength}`);
     })
     it('should read from a file using fread', async function() {
       this.timeout(300000);
@@ -663,8 +663,8 @@ export function addTests(importModule, options) {
       const count1 = fread(buffer1, 1, buffer1.byteLength, f);
       const count2 = fread(buffer2, 1, buffer2.byteLength, f);
       fclose(f);
-      expect(count1).to.equal(buffer1.byteLength);
-      expect(count2).to.equal(buffer2.byteLength);
+      expect(`${count1}`).to.equal(`${buffer1.byteLength}`);
+      expect(`${count2}`).to.equal(`${buffer2.byteLength}`);
       expect(String.fromCharCode(...buffer1)).to.equal('Was');
       expect(String.fromCharCode(...buffer2)).to.equal('abi');
     })
