@@ -1738,8 +1738,6 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                             }
                         };
                         if (is_callable) {
-                            const ArgT = ArgumentStruct(DT);
-                            const arg_structure = try getStructure(ctx, ArgT);
                             // see if the first param is an instance of the type in question or
                             // a pointer to one
                             const is_static_only = check: {
@@ -1751,15 +1749,11 @@ fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
                                 }
                                 break :check true;
                             };
-                            const create = switch (f.is_var_args) {
-                                false => createThunk,
-                                true => createVariadicThunk,
-                            };
-                            const thunk_id = @intFromPtr(create(@TypeOf(ctx.host), decl_value, ArgT));
+                            const thunk_id = @intFromPtr(createThunk(@TypeOf(ctx.host), decl_value));
                             try ctx.host.attachMethod(structure, .{
                                 .name = @ptrCast(decl.name),
                                 .thunk_id = thunk_id,
-                                .structure = arg_structure,
+                                .structure = try getStructure(ctx, ArgumentStruct(DT)),
                             }, is_static_only);
                         }
                     },
@@ -1949,11 +1943,22 @@ test "Slice" {
     assert(C != B);
 }
 
-fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) Thunk {
-    const Args = std.meta.ArgsTuple(@TypeOf(function));
-    const ns = struct {
-        fn tryFunction(host: HostT, arg_ptr: *ArgT) !void {
+fn ThunkType(comptime function: anytype) type {
+    return switch (@typeInfo(@TypeOf(function)).Fn.is_var_args) {
+        false => Thunk,
+        true => VariadicThunk,
+    };
+}
+
+fn createThunk(comptime HostT: type, comptime function: anytype) ThunkType(function) {
+    const FT = @TypeOf(function);
+    const f = @typeInfo(FT).Fn;
+    const ArgStruct = ArgumentStruct(FT);
+    const ns_regular = struct {
+        fn tryFunction(host: HostT, arg_ptr: *anyopaque) !void {
             // extract arguments from argument struct
+            const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
+            const Args = std.meta.ArgsTuple(FT);
             var args: Args = undefined;
             const fields = @typeInfo(Args).Struct.fields;
             comptime var index = 0;
@@ -1963,31 +1968,50 @@ fn createThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: 
                 } else {
                     const name = std.fmt.comptimePrint("{d}", .{index});
                     // get the argument only if it isn't empty
-                    if (comptime @sizeOf(@TypeOf(@field(arg_ptr.*, name))) > 0) {
-                        args[i] = @field(arg_ptr.*, name);
+                    if (comptime @sizeOf(@TypeOf(@field(arg_struct.*, name))) > 0) {
+                        args[i] = @field(arg_struct.*, name);
                     }
                     index += 1;
                 }
             }
             // never inline the function so its name would show up in the trace (unless it's marked inline)
-            const modifier = switch (@typeInfo(@TypeOf(function)).Fn.calling_convention) {
+            const modifier = switch (f.calling_convention) {
                 .Inline => .auto,
                 else => .never_inline,
             };
             const retval = @call(modifier, function, args);
             if (comptime @TypeOf(retval) != noreturn) {
-                arg_ptr.retval = retval;
+                arg_struct.retval = retval;
             }
         }
 
         fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            tryFunction(host, @ptrCast(@alignCast(arg_ptr))) catch |err| {
+            tryFunction(host, arg_ptr) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
             return null;
         }
+    };
+    const ns_variadic = struct {
+        fn tryFunction(_: HostT, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) !void {
+            const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
+            return @import("./variadic.zig").call(function, arg_struct, attr_ptr, arg_count);
+        }
+
+        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
+            const host = HostT.init(ptr, arg_ptr);
+            defer host.release();
+            tryFunction(host, arg_ptr, attr_ptr, arg_count) catch |err| {
+                return createErrorMessage(host, err) catch null;
+            };
+            return null;
+        }
+    };
+    const ns = switch (f.is_var_args) {
+        false => ns_regular,
+        true => ns_variadic,
     };
     return ns.invokeFunction;
 }
@@ -1998,7 +2022,6 @@ test "createThunk" {
             return if (a > 10 and b) true else false;
         }
     };
-    const ArgA = ArgumentStruct(@TypeOf(Test.A));
     const Host = struct {
         pub fn init(_: *anyopaque, _: ?*anyopaque) @This() {
             return .{};
@@ -2006,7 +2029,7 @@ test "createThunk" {
 
         pub fn release(_: @This()) void {}
     };
-    const thunk = createThunk(Host, Test.A, ArgA);
+    const thunk = createThunk(Host, Test.A);
     switch (@typeInfo(@TypeOf(thunk))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
@@ -2023,24 +2046,6 @@ test "createThunk" {
             assert(false);
         },
     }
-}
-
-fn createVariadicThunk(comptime HostT: type, comptime function: anytype, comptime ArgT: type) VariadicThunk {
-    const ns = struct {
-        fn tryFunction(_: HostT, arg: *ArgT, attr_ptr: *const anyopaque, arg_count: usize) !void {
-            return @import("./variadic.zig").call(function, arg, attr_ptr, arg_count);
-        }
-
-        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
-            const host = HostT.init(ptr, arg_ptr);
-            defer host.release();
-            tryFunction(host, @ptrCast(@alignCast(arg_ptr)), attr_ptr, arg_count) catch |err| {
-                return createErrorMessage(host, err) catch null;
-            };
-            return null;
-        }
-    };
-    return ns.invokeFunction;
 }
 
 fn createAllocator(host_ptr: anytype) std.mem.Allocator {

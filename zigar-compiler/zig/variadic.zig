@@ -8,13 +8,13 @@ pub const Error = error{
     invalid_argument_attributes,
 };
 
-pub fn call(function: anytype, arg: anytype, attr_ptr: *const anyopaque, arg_count: usize) !void {
+pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, arg_count: usize) !void {
     const is_wasm = switch (builtin.target.cpu.arch) {
         .wasm32, .wasm64 => true,
         else => false,
     };
     const f = @typeInfo(@TypeOf(function)).Fn;
-    const arg_bytes: [*]u8 = @ptrCast(arg);
+    const arg_bytes: [*]u8 = @ptrCast(arg_struct);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime is_wasm) {
         const param_count = f.params.len + 1;
@@ -50,23 +50,23 @@ pub fn call(function: anytype, arg: anytype, attr_ptr: *const anyopaque, arg_cou
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
             // just point it to the end of the struct
-            false => @sizeOf(@TypeOf(arg)),
+            false => @sizeOf(@TypeOf(arg_struct)),
         };
         const vararg_ptr: [*]const u8 = arg_bytes[vararg_offset..];
         inline for (0..f.params.len + 1) |index| {
             if (index < f.params.len) {
                 const name = std.fmt.comptimePrint("{d}", .{index});
-                args[index] = @field(arg.*, name);
+                args[index] = @field(arg_struct.*, name);
             } else {
                 args[index] = vararg_ptr;
             }
         }
-        arg.retval = @call(.auto, function_ptr, args);
+        arg_struct.retval = @call(.auto, function_ptr, args);
     } else {
         const alloc = try allocate(arg_bytes, arg_attrs, f.params.len);
         const int_args: *const @TypeOf(alloc.int_regs) = &alloc.int_regs;
         const float_args: *const @TypeOf(alloc.float_regs) = &alloc.float_regs;
-        arg.retval = inline for (0..max_stack_count + 1) |stack_count| {
+        arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
             if (alloc.stack_count == stack_count * @sizeOf(abi.IntType)) {
                 const stack_args: *const [stack_count]abi.IntType = @ptrCast(@alignCast(&alloc.stack));
                 const result = callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
