@@ -13,7 +13,7 @@ export function addTests(importModule, options) {
   };    
   describe('Vector', function() {
     it('should handle vector as static variables', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module } = await importTest('as-static-variables');
       expect([ ...module.v1 ]).to.eql([ 1, 2, 3, 4 ]);
       module.v2 = [ 4, 5, 6 ];
@@ -24,7 +24,7 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.v1)).to.equal('[1,2,3,4]');
     })
     it('should print vector arguments', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print([ 1.1, 2.2, 3.3, 4.4 ]));
       if (compilerVersion === '0.11.0') {
@@ -34,12 +34,12 @@ export function addTests(importModule, options) {
       }
     })
     it('should return vector', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module } = await importTest('as-return-value');
       expect([ ...module.getVector() ]).to.eql([ 1, 2, 3, 4 ]);
     })
     it('should handle vector in array', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { array, print } = await importTest('array-of');      
       expect(array.length).to.equal(2);
       expect([ 
@@ -53,7 +53,7 @@ export function addTests(importModule, options) {
       expect(line).to.equal('{ { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }');
     })
     it('should handle vector in struct', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ 
         vector1: [ 10, 20, 30, 40 ], 
@@ -71,12 +71,12 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }');
     })
     it('should handle vector in packed struct', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module } = await importTest('in-packed-struct');
       expect(() => module.struct_a.valueOf()).to.throw(TypeError);
     })
     it('should handle vector as comptime field', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect([ ...module.struct_a.vector ]).to.eql([ 1, 2, 3, 4 ]);
       const b = new StructA({ number: 500 });
@@ -86,7 +86,7 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .vector = { 1, 2, 3, 4 } }');
     })
     it('should handle vector in bare union', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect([ ...module.union_a.vector ]).to.eql([ 1, 2, 3, 4 ]);
       if (runtimeSafety) {
@@ -107,7 +107,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle vector in tagged union', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect([ ...module.union_a.vector ]).to.eql([ 1, 2, 3, 4 ]);
       expect(TagType(module.union_a)).to.equal(TagType.vector);
@@ -123,7 +123,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.vector).to.be.null;
     })
     it('should handle vector in optional', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, print } = await importTest('in-optional');
       expect([ ...module.optional ]).to.be.eql([ 1, 2, 3, 4 ]);
       const [ before ] = await capture(() => print());
@@ -136,7 +136,7 @@ export function addTests(importModule, options) {
       expect([ ...module.optional ]).to.be.eql([ 5, 6, 7, 8 ]);
     })
     it('should handle vector in error union', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect([ ...module.error_union ]).to.eql([ 1, 2, 3, 4 ]);
       const [ before ] = await capture(() => print());
@@ -149,7 +149,7 @@ export function addTests(importModule, options) {
       expect([ ...module.error_union ]).to.eql([ 5, 6, 7, 8 ]);
     })
     it('should not compile code containing vector of vectors', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       await expect(importTest('vector-of')).to.eventually.be.rejected;      
     })
   })

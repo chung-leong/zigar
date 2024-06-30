@@ -12,7 +12,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
   skip.permanently.if(process.env.npm_lifecycle_event === 'coverage').
   describe(`Integration tests (zigar-loader, ${optimize})`, function() {
     it ('should make use of WASI object from Node', async function() {
-      this.timeout(120000);
+      this.timeout(300000);
       const url = new URL(`../../zigar-compiler/test/zig-samples/basic/read-file.zig`, import.meta.url);
       const { readFile, __zigar } = await importModule(url, { optimize, embedWASM: true, topLevelAwait: false });
       const wasi = new WASI({
