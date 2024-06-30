@@ -4172,7 +4172,7 @@
 "    const { get: getSentinelValue } = getDescriptor(sentinel, env);\n"
 "    const value = getSentinelValue.call(template, 0);\n"
 "    const { get } = getDescriptor(member, env);\n"
-"    const { isRequired } = member;\n"
+"    const { isRequired } = sentinel;\n"
 "    const validateValue = (isRequired)\n"
 "    ? (runtimeSafety)\n"
 "      ? function(v, i, l) {\n"

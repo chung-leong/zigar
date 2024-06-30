@@ -4249,7 +4249,7 @@ function getSentinel(structure, env) {
   const { get: getSentinelValue } = getDescriptor(sentinel, env);
   const value = getSentinelValue.call(template, 0);
   const { get } = getDescriptor(member, env);
-  const { isRequired } = member;
+  const { isRequired } = sentinel;
   const validateValue = (isRequired)
   ? (runtimeSafety)
     ? function(v, i, l) {
