@@ -10,7 +10,7 @@ import { promisify } from 'util';
 
 const execFile = promisify(childProcess.execFile);
 
-export async function acquireLock(pidPath, staleTime) {
+export async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
       await createDirectory(dirname(pidPath));
@@ -21,6 +21,9 @@ export async function acquireLock(pidPath, staleTime) {
     } catch (err) {
       if (err.code === 'EEXIST') {
         if (await checkPidFile(pidPath, staleTime)) {
+          if (!wait) {
+            throw err;
+          }
           await delay(250);
           continue;
         }
@@ -36,7 +39,7 @@ export async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-async function checkPidFile(pidPath, staleTime = 60000 * 5) {
+async function checkPidFile(pidPath, staleTime) {
   let stale = false;
   try {
     const pid = await loadFile(pidPath);
@@ -180,4 +183,23 @@ export function normalizePath(url) {
   });
   const path = parts.join(sep);
   return { path, archive }
+}
+
+export async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await readdir(dirPath);
+  for (const name of names) {
+    const path = join(dirPath, name);
+    let info = await stat(path);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
 }

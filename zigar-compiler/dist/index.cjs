@@ -5250,7 +5250,7 @@ function* chunk(arr, n) {
 
 const execFile$1 = util.promisify(childProcess.execFile);
 
-async function acquireLock(pidPath, staleTime) {
+async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
       await createDirectory(path.dirname(pidPath));
@@ -5261,6 +5261,9 @@ async function acquireLock(pidPath, staleTime) {
     } catch (err) {
       if (err.code === 'EEXIST') {
         if (await checkPidFile(pidPath, staleTime)) {
+          if (!wait) {
+            throw err;
+          }
           await delay(250);
           continue;
         }
@@ -5276,7 +5279,7 @@ async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-async function checkPidFile(pidPath, staleTime = 60000 * 5) {
+async function checkPidFile(pidPath, staleTime) {
   let stale = false;
   try {
     const pid = await loadFile(pidPath);
@@ -5422,6 +5425,25 @@ function normalizePath(url$1) {
   return { path: path$1, archive }
 }
 
+async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await promises.readdir(dirPath);
+  for (const name of names) {
+    const path$1 = path.join(dirPath, name);
+    let info = await promises.stat(path$1);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path$1);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
+}
+
 const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
@@ -5473,6 +5495,7 @@ async function compile(srcPath, modPath, options) {
         await deleteDirectory(moduleBuildDir);
       }
       await releaseLock(pidPath);
+      cleanBuildDirectory(config);
     }
     const outputMTimeAfter = await getOutputMTime();
     changed = outputMTimeBefore != outputMTimeAfter;
@@ -5566,6 +5589,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     clean = false,
     buildDir = path.join(os.tmpdir(), 'zigar-build'),
+    buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
   } = options;
@@ -5636,6 +5660,8 @@ function createConfig(srcPath, modPath, options = {}) {
     moduleDir,
     moduleBuildDir,
     stubPath,
+    buildDir,
+    buildDirSize,
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
@@ -5700,6 +5726,42 @@ async function findSourcePaths(buildPath) {
     }
   }
   return Object.keys(involved);
+}
+
+async function cleanBuildDirectory(config) {
+  const { buildDir, buildDirSize } = config;
+  try {
+    const names = await promises.readdir(buildDir);
+    const list = [];
+    let total = 0;
+    for (const name of names) {
+      const path$1 = path.join(buildDir, name);
+      const info = await promises.stat(path$1);
+      if (info.isDirectory()) {
+        const { size, mtimeMs } = await getDirectoryStats(path$1);
+        total += size;
+        list.push({ path: path$1, size, mtimeMs });
+      }
+    }
+    list.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const { path, size } of list) {
+      if (!(total > buildDirSize)) {
+        break;
+      }
+      try {
+        const pidPath = `${path}.pid`;
+        await acquireLock(pidPath, false);
+        try {
+          await deleteDirectory(path);
+          total -= size;
+        } finally {
+          await releaseLock(pidPath);
+        }
+      } catch (err) {
+      }
+    }
+  } catch (err) {
+  }
 }
 
 const optionsForCompile = {

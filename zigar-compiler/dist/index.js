@@ -5247,7 +5247,7 @@ function* chunk(arr, n) {
 
 const execFile$1 = promisify(childProcess.execFile);
 
-async function acquireLock(pidPath, staleTime) {
+async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
       await createDirectory(dirname(pidPath));
@@ -5258,6 +5258,9 @@ async function acquireLock(pidPath, staleTime) {
     } catch (err) {
       if (err.code === 'EEXIST') {
         if (await checkPidFile(pidPath, staleTime)) {
+          if (!wait) {
+            throw err;
+          }
           await delay(250);
           continue;
         }
@@ -5273,7 +5276,7 @@ async function releaseLock(pidPath) {
   await deleteFile(pidPath);
 }
 
-async function checkPidFile(pidPath, staleTime = 60000 * 5) {
+async function checkPidFile(pidPath, staleTime) {
   let stale = false;
   try {
     const pid = await loadFile(pidPath);
@@ -5419,6 +5422,25 @@ function normalizePath(url) {
   return { path, archive }
 }
 
+async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await readdir(dirPath);
+  for (const name of names) {
+    const path = join(dirPath, name);
+    let info = await stat(path);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
+}
+
 const execFile = promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
@@ -5470,6 +5492,7 @@ async function compile(srcPath, modPath, options) {
         await deleteDirectory(moduleBuildDir);
       }
       await releaseLock(pidPath);
+      cleanBuildDirectory(config);
     }
     const outputMTimeAfter = await getOutputMTime();
     changed = outputMTimeBefore != outputMTimeAfter;
@@ -5563,6 +5586,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
+    buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
   } = options;
@@ -5633,6 +5657,8 @@ function createConfig(srcPath, modPath, options = {}) {
     moduleDir,
     moduleBuildDir,
     stubPath,
+    buildDir,
+    buildDirSize,
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
@@ -5697,6 +5723,42 @@ async function findSourcePaths(buildPath) {
     }
   }
   return Object.keys(involved);
+}
+
+async function cleanBuildDirectory(config) {
+  const { buildDir, buildDirSize } = config;
+  try {
+    const names = await readdir(buildDir);
+    const list = [];
+    let total = 0;
+    for (const name of names) {
+      const path = join(buildDir, name);
+      const info = await stat(path);
+      if (info.isDirectory()) {
+        const { size, mtimeMs } = await getDirectoryStats(path);
+        total += size;
+        list.push({ path, size, mtimeMs });
+      }
+    }
+    list.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const { path, size } of list) {
+      if (!(total > buildDirSize)) {
+        break;
+      }
+      try {
+        const pidPath = `${path}.pid`;
+        await acquireLock(pidPath, false);
+        try {
+          await deleteDirectory(path);
+          total -= size;
+        } finally {
+          await releaseLock(pidPath);
+        }
+      } catch (err) {
+      }
+    }
+  } catch (err) {
+  }
 }
 
 const optionsForCompile = {

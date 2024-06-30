@@ -12,9 +12,10 @@ import {
   delay,
   deleteDirectory,
   deleteFile,
+  getDirectoryStats,
   loadFile,
   normalizePath,
-  releaseLock,
+  releaseLock
 } from '../src/utility-functions.js';
 
 describe('Utility functions', function() {
@@ -50,6 +51,14 @@ describe('Utility functions', function() {
       await expect(promise).to.eventually.be.rejected;
     })
   })
+  describe('getDirectoryStats', function() {
+    it('should get size and mtime of directory', async function() {
+      const path = absolute('./zig-samples');
+      const info = await getDirectoryStats(path);
+      expect(info.size).to.be.above(4000);
+      expect(info.mtimeMs).to.be.above(1700000000000);
+    })
+  })
   describe('delay', function() {
     it('should pause execution for the specified amount of time', async function() {
       const start = new Date;
@@ -77,7 +86,7 @@ describe('Utility functions', function() {
       let info;
       try {
         info = await stat(path);
-      } catch (err) {        
+      } catch (err) {
       }
       expect(info).to.be.undefined;
     })

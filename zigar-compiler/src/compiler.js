@@ -5,7 +5,7 @@ import { basename, isAbsolute, join, parse, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import {
-  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getPlatform,
+  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getDirectoryStats, getPlatform,
   md5,
   releaseLock
 } from './utility-functions.js';
@@ -61,6 +61,7 @@ export async function compile(srcPath, modPath, options) {
         await deleteDirectory(moduleBuildDir);
       }
       await releaseLock(pidPath);
+      cleanBuildDirectory(config);
     }
     const outputMTimeAfter = await getOutputMTime();
     changed = outputMTimeBefore != outputMTimeAfter;
@@ -156,6 +157,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
+    buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
   } = options;
@@ -226,6 +228,8 @@ export function createConfig(srcPath, modPath, options = {}) {
     moduleDir,
     moduleBuildDir,
     stubPath,
+    buildDir,
+    buildDirSize,
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
@@ -290,4 +294,40 @@ async function findSourcePaths(buildPath) {
     }
   }
   return Object.keys(involved);
+}
+
+async function cleanBuildDirectory(config) {
+  const { buildDir, buildDirSize } = config;
+  try {
+    const names = await readdir(buildDir);
+    const list = [];
+    let total = 0;
+    for (const name of names) {
+      const path = join(buildDir, name);
+      const info = await stat(path);
+      if (info.isDirectory()) {
+        const { size, mtimeMs } = await getDirectoryStats(path);
+        total += size;
+        list.push({ path, size, mtimeMs });
+      }
+    }
+    list.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const { path, size } of list) {
+      if (!(total > buildDirSize)) {
+        break;
+      }
+      try {
+        const pidPath = `${path}.pid`;
+        await acquireLock(pidPath, false);
+        try {
+          await deleteDirectory(path);
+          total -= size;
+        } finally {
+          await releaseLock(pidPath);
+        }
+      } catch (err) {
+      }
+    }
+  } catch (err) {
+  }
 }
