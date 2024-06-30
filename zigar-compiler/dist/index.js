@@ -4181,9 +4181,10 @@ function defineSlice(structure, env) {
   function getSubArrayView(begin, end) {
     begin = (begin === undefined) ? 0 : adjustIndex(begin, this.length);
     end = (end === undefined) ? this.length : adjustIndex(end, this.length);
+    const dv = this[MEMORY];
     const offset = begin * elementSize;
     const len = (end * elementSize) - offset;
-    return env.obtainView(this[MEMORY].buffer, offset, len);
+    return env.obtainView(dv.buffer, dv.byteOffset + offset, len);
   }
   function getSubarrayOf(begin, end) {
     const dv = getSubArrayView.call(this, begin, end);
@@ -4192,10 +4193,11 @@ function defineSlice(structure, env) {
     const {
       fixed = false
     } = options;
-    const source = { [MEMORY]: getSubArrayView.call(this, begin, end) };
-    const dest = constructor(env.allocateMemory(source[MEMORY].byteLength, align, fixed));
-    copier.call(dest, source);
-    return dest;
+    const dv1 = getSubArrayView.call(this, begin, end);
+    const dv2 = env.allocateMemory(dv1.byteLength, align, fixed);
+    const slice = constructor(dv2);
+    copier.call(slice, { [MEMORY]: dv1 });
+    return slice;
   };
   const finalizer = createArrayProxy;
   const copier = getMemoryCopier(elementSize, true);

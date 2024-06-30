@@ -86,8 +86,8 @@ export function addTests(importModule, options) {
       expect(u8_c_pointer.length).to.equal(11);
       expect(u8_c_pointer.string).to.equal('Hello world');
       const subarray = u8_c_pointer.subarray(0, 5);
-      const subslice = u8_c_pointer.subarray(0, 5);
       expect(subarray.string).to.equal('Hello');
+      const subslice = u8_c_pointer.slice(0, 5);
       expect(subslice.string).to.equal('Hello');
     })
     it('should print pointer arguments', async function() {
