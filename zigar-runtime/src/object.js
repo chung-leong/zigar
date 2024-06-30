@@ -78,7 +78,6 @@ export function createConstructor(structure, handlers, env) {
     byteSize,
     align,
     instance: { members, template },
-    hasPointer,
   } = structure;
   const {
     modifier,

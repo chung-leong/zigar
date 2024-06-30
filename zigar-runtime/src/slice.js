@@ -15,18 +15,19 @@ import {
   getTypedArrayDescriptor, getValueOf
 } from './special.js';
 import {
-  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, LENGTH, MAX_LENGTH, MEMORY, POINTER_VISITOR, SIZE, TYPE,
+  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, LENGTH,
+  MEMORY, POINTER_VISITOR, SIZE, TYPE,
   VIVIFICATOR, WRITE_DISABLER
 } from './symbol.js';
-import { MemberType, StructureType } from './types.js';
+import { MemberType } from './types.js';
 
 export function defineSlice(structure, env) {
   const {
-    type,
     align,
     instance: {
       members: [ member ],
     },
+    byteSize,
     hasPointer,
   } = structure;
   /* DEV-TEST */
@@ -53,9 +54,6 @@ export function defineSlice(structure, env) {
     }
     this[MEMORY] = dv;
     this[LENGTH] = length;
-    if (type === StructureType.Slice) {
-      this[MAX_LENGTH] = length;
-    }
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
@@ -175,7 +173,7 @@ export function defineSlice(structure, env) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
-    [SIZE]: { value: elementSize },
+    [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);

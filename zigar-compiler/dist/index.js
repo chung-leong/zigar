@@ -1058,10 +1058,13 @@ function checkDataViewSize(dv, structure) {
 
 function setDataView(dv, structure, copy, fixed, handlers) {
   const { byteSize, type, sentinel } = structure;
+  const elementSize = byteSize ?? 1;
   if (!this[MEMORY]) {
     const { shapeDefiner } = handlers;
-    checkDataViewSize(dv, structure);
-    const len = dv.byteLength / byteSize;
+    if (byteSize !== undefined) {
+      checkDataViewSize(dv, structure);
+    }
+    const len = dv.byteLength / elementSize;
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, len);
     if (fixed) {
@@ -1073,7 +1076,7 @@ function setDataView(dv, structure, copy, fixed, handlers) {
       this[COPIER](source);
     }
   } else {
-    const byteLength = (type === StructureType.Slice) ? byteSize * this.length : byteSize;
+    const byteLength = (type === StructureType.Slice) ? elementSize * this.length : elementSize;
     if (dv.byteLength !== byteLength) {
       throw new BufferSizeMismatch(structure, dv, this);
     }
@@ -2102,7 +2105,6 @@ function createConstructor(structure, handlers, env) {
     byteSize,
     align,
     instance: { members, template },
-    hasPointer,
   } = structure;
   const {
     modifier,
@@ -2561,7 +2563,7 @@ function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type: targetType, sentinel, byteSize: elementSize } = targetStructure;
+  const { type: targetType, sentinel, byteSize: elementSize = 1 } = targetStructure;
   // length for slice can be zero or undefined
   const hasLengthInMemory = type === StructureType.SlicePointer;
   const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
@@ -2779,7 +2781,6 @@ function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
-      console.log({ isCompatiblePointer: isCompatiblePointer(arg, Target, type) });
       throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
@@ -4088,11 +4089,11 @@ function definePrimitive(structure, env) {
 
 function defineSlice(structure, env) {
   const {
-    type,
     align,
     instance: {
       members: [ member ],
     },
+    byteSize,
     hasPointer,
   } = structure;
   const { get, set } = getDescriptor(member, env);
@@ -4110,9 +4111,6 @@ function defineSlice(structure, env) {
     }
     this[MEMORY] = dv;
     this[LENGTH] = length;
-    if (type === StructureType.Slice) {
-      this[MAX_LENGTH] = length;
-    }
   };
   const shapeChecker = function(arg, length) {
     if (length !== this[LENGTH]) {
@@ -4231,7 +4229,7 @@ function defineSlice(structure, env) {
     child: { get: () => elementStructure.constructor },
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
-    [SIZE]: { value: elementSize },
+    [SIZE]: { value: byteSize },
     [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);

@@ -177,10 +177,13 @@ export function checkDataViewSize(dv, structure) {
 
 export function setDataView(dv, structure, copy, fixed, handlers) {
   const { byteSize, type, sentinel } = structure;
+  const elementSize = byteSize ?? 1;
   if (!this[MEMORY]) {
     const { shapeDefiner } = handlers;
-    checkDataViewSize(dv, structure);
-    const len = dv.byteLength / byteSize;
+    if (byteSize !== undefined) {
+      checkDataViewSize(dv, structure);
+    }
+    const len = dv.byteLength / elementSize;
     const source = { [MEMORY]: dv };
     sentinel?.validateData(source, len);
     if (fixed) {
@@ -192,7 +195,7 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
       this[COPIER](source);
     }
   } else {
-    const byteLength = (type === StructureType.Slice) ? byteSize * this.length : byteSize;
+    const byteLength = (type === StructureType.Slice) ? elementSize * this.length : elementSize;
     if (dv.byteLength !== byteLength) {
       throw new BufferSizeMismatch(structure, dv, this);
     }

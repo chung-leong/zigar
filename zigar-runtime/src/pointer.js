@@ -28,7 +28,7 @@ export function definePointer(structure, env) {
     runtimeSafety = true,
   } = env;
   const { structure: targetStructure } = member;
-  const { type: targetType, sentinel, byteSize: elementSize } = targetStructure;
+  const { type: targetType, sentinel, byteSize: elementSize = 1 } = targetStructure;
   // length for slice can be zero or undefined
   const hasLengthInMemory = type === StructureType.SlicePointer;
   const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
@@ -246,7 +246,6 @@ export function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
-      console.log({ isCompatiblePointer: isCompatiblePointer(arg, Target, type) });
       throw new InvalidPointerTarget(structure, arg);
     }
     this[TARGET_SETTER](arg);
