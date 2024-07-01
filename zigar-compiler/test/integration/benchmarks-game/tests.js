@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
+import os from 'os';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { capture } from '../capture.js';
@@ -10,13 +11,18 @@ export function addTests(importModule, options) {
     return importModule(url);
   };
   const loadData = async (name, encoding) => {
-    const url = new URL(`./data/${name}.dat`, import.meta.url).href;
+    const url = new URL(`./data/${name}.txt`, import.meta.url).href;
     const path = fileURLToPath(url);
-    const data = await readFile(path, encoding);
+    let data = await readFile(path, encoding);
+
     if (typeof(data) === 'string') {
       return data.trim().split(/\r?\n/);
     } else {
-      return data;
+      if (os.platform() === 'win32') {
+        return Buffer.from(data.toString().replace(/\r\n/g, '\n'));
+      } else {
+        return data;
+      }
     }
   };
   describe('Zig Benchmarks Game', function() {
@@ -156,6 +162,7 @@ export function addTests(importModule, options) {
       for (let i = 0; i < refData.byteLength; i++) {
         if (data[i] !== refData[i]) {
           different = true;
+          break;
         }
       }
       expect(different).to.be.false;
