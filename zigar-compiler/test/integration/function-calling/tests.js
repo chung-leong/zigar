@@ -616,6 +616,45 @@ export function addTests(importModule, options) {
       ));
       expect(lines10).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
     })
+    skip.if(platform() === 'win32' && arch() === 'x64').
+    it('should correctly pass unsigned int to variadic function', async function() {
+      this.timeout(300000);
+      const {
+        Uint8, Uint16, Uint32, Uint64, Uint128, printUnsigned,
+      } = await importTest('call-variadic-functions-with-unsigned-int');
+      const lines1 = await capture(() => printUnsigned(8, 3,
+        new Uint8(255),
+        new Uint8(254),
+        new Uint8(253),
+      ));
+      expect(lines1).to.eql([ '255', '254', '253' ]);
+      const lines2 = await capture(() => printUnsigned(16, 3,
+        new Uint16(65535),
+        new Uint16(65534),
+        new Uint16(65533),
+      ));
+      expect(lines2).to.eql([ '65535', '65534', '65533' ]);
+      const lines3 = await capture(() => printUnsigned(32, 3,
+        new Uint32(4294967295),
+        new Uint32(4294967294),
+        new Uint32(4294967293),
+      ));
+      expect(lines3).to.eql([ '4294967295', '4294967294', '4294967293' ]);
+      const lines4 = await capture(() => printUnsigned(64, 3,
+        new Uint64(18446744073709551615n),
+        new Uint64(18446744073709551614n),
+        new Uint64(18446744073709551613n),
+      ));
+      expect(lines4).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
+      if (arch() != 'x64') {  // compiler issue https://github.com/ziglang/zig/issues/20417
+        const lines5 = await capture(() => printUnsigned(128, 3,
+          new Uint128(18446744073709551615n),
+          new Uint128(18446744073709551614n),
+          new Uint128(18446744073709551613n),
+        ));
+        expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
+      }
+    })
     it('should write to a file using fwrite', async function() {
       this.timeout(300000);
       const { __zigar, fwrite, fopen, fclose } = await importTest('call-fwrite', { useLibc: true, topLevelAwait: false });
@@ -667,44 +706,6 @@ export function addTests(importModule, options) {
       expect(`${count2}`).to.equal(`${buffer2.byteLength}`);
       expect(String.fromCharCode(...buffer1)).to.equal('Was');
       expect(String.fromCharCode(...buffer2)).to.equal('abi');
-    })
-    it('should correctly pass unsigned int to variadic function', async function() {
-      this.timeout(300000);
-      const {
-        Uint8, Uint16, Uint32, Uint64, Uint128, printUnsigned,
-      } = await importTest('call-variadic-functions-with-unsigned-int');
-      const lines1 = await capture(() => printUnsigned(8, 3,
-        new Uint8(255),
-        new Uint8(254),
-        new Uint8(253),
-      ));
-      expect(lines1).to.eql([ '255', '254', '253' ]);
-      const lines2 = await capture(() => printUnsigned(16, 3,
-        new Uint16(65535),
-        new Uint16(65534),
-        new Uint16(65533),
-      ));
-      expect(lines2).to.eql([ '65535', '65534', '65533' ]);
-      const lines3 = await capture(() => printUnsigned(32, 3,
-        new Uint32(4294967295),
-        new Uint32(4294967294),
-        new Uint32(4294967293),
-      ));
-      expect(lines3).to.eql([ '4294967295', '4294967294', '4294967293' ]);
-      const lines4 = await capture(() => printUnsigned(64, 3,
-        new Uint64(18446744073709551615n),
-        new Uint64(18446744073709551614n),
-        new Uint64(18446744073709551613n),
-      ));
-      expect(lines4).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
-      if (arch() != 'x64') {  // compiler issue https://github.com/ziglang/zig/issues/20417
-        const lines5 = await capture(() => printUnsigned(128, 3,
-          new Uint128(18446744073709551615n),
-          new Uint128(18446744073709551614n),
-          new Uint128(18446744073709551613n),
-        ));
-        expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
-      }
     })
     it('should call printf correctly', async function() {
       this.timeout(300000);
