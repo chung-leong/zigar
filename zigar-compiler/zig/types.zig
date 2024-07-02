@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const assert = std.debug.assert;
+const expect = std.testing.expect;
 
 pub const Error = error{
     unknown,
@@ -196,16 +196,16 @@ test "Memory.from" {
     const memE = Memory.from(e, false);
     const f: [*:0]const u8 = "Hello";
     const memF = Memory.from(f, false);
-    assert(memA.len == 4);
-    assert(memA.attributes.is_const == false);
-    assert(memB.len == 5);
-    assert(memB.attributes.is_const == true);
-    assert(memC.len == 1);
-    assert(memC.attributes.is_comptime == true);
-    assert(memD.len == 1);
-    assert(memD.attributes.is_const == true);
-    assert(memE.len == @sizeOf(@TypeOf(b)));
-    assert(memF.len == 6);
+    try expect(memA.len == 4);
+    try expect(memA.attributes.is_const == false);
+    try expect(memB.len == 5);
+    try expect(memB.attributes.is_const == true);
+    try expect(memC.len == 1);
+    try expect(memC.attributes.is_comptime == true);
+    try expect(memD.len == 1);
+    try expect(memD.attributes.is_const == true);
+    try expect(memE.len == @sizeOf(@TypeOf(b)));
+    try expect(memF.len == 6);
 }
 
 test "Memory.to" {
@@ -215,18 +215,18 @@ test "Memory.to" {
         .len = array.len,
     };
     const p1 = memory.to(*u8);
-    assert(p1.* == 'H');
-    assert(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
+    try expect(p1.* == 'H');
+    try expect(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
     const p2 = memory.to([]u8);
-    assert(p2[0] == 'H');
-    assert(p2.len == 5);
-    assert(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
+    try expect(p2[0] == 'H');
+    try expect(p2.len == 5);
+    try expect(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
     const p3 = memory.to([*]u8);
-    assert(p3[0] == 'H');
-    assert(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
+    try expect(p3[0] == 'H');
+    try expect(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
     const p4 = memory.to([*c]u8);
-    assert(p4[0] == 'H');
-    assert(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
+    try expect(p4[0] == 'H');
+    try expect(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
 
 fn IntType(comptime n: comptime_int) type {
@@ -241,11 +241,11 @@ fn IntType(comptime n: comptime_int) type {
 }
 
 test "IntType" {
-    assertCT(IntType(0) == u8);
-    assertCT(IntType(0xFFFFFFFF) == u32);
-    assertCT(IntType(-0xFFFFFFFF) == i64);
-    assertCT(IntType(123) == u8);
-    assertCT(IntType(-123) == i8);
+    try expectCT(IntType(0) == u8);
+    try expectCT(IntType(0xFFFFFFFF) == u32);
+    try expectCT(IntType(-0xFFFFFFFF) == i64);
+    try expectCT(IntType(123) == u8);
+    try expectCT(IntType(-123) == i8);
 }
 
 fn ErrorIntType() type {
@@ -258,7 +258,7 @@ fn ErrorIntType() type {
 }
 
 test "ErrorIntType" {
-    assertCT(ErrorIntType() == u16);
+    try expectCT(ErrorIntType() == u16);
 }
 
 fn ComptimeList(comptime T: type) type {
@@ -299,14 +299,14 @@ test "ComptimeList.concat" {
     inline for (0..17) |index| {
         list = list.concat(index + 1000);
     }
-    assertCT(list.entries[4] == 1004);
+    try expectCT(list.entries[4] == 1004);
     inline for (0..17) |index| {
         list = list.concat(index + 2000);
     }
-    assertCT(list.entries[0] == 1000);
-    assertCT(list.entries[16] == 1016);
-    assertCT(list.entries[17] == 2000);
-    assertCT(list.entries[33] == 2016);
+    try expectCT(list.entries[0] == 1000);
+    try expectCT(list.entries[16] == 1016);
+    try expectCT(list.entries[17] == 2000);
+    try expectCT(list.entries[33] == 2016);
 }
 
 pub const TypeAttributes = packed struct {
@@ -629,8 +629,8 @@ pub const TypeData = struct {
 };
 
 test "TypeData.getName" {
-    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
-    assertCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .name = "nothing" }), "nothing"));
+    try expectCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
+    try expectCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .name = "nothing" }), "nothing"));
 }
 
 test "TypeData.getStructureType" {
@@ -641,72 +641,72 @@ test "TypeData.getStructureType" {
     };
     const BareUnion = union {};
     const ExternUnion = extern union {};
-    assertCT(TypeData.getStructureType(.{ .Type = i32 }) == .primitive);
-    assertCT(TypeData.getStructureType(.{ .Type = Enum }) == .@"enum");
-    assertCT(TypeData.getStructureType(.{ .Type = BareUnion }) == .bare_union);
-    assertCT(TypeData.getStructureType(.{ .Type = TaggedUnion }) == .tagged_union);
-    assertCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
+    try expectCT(TypeData.getStructureType(.{ .Type = i32 }) == .primitive);
+    try expectCT(TypeData.getStructureType(.{ .Type = Enum }) == .@"enum");
+    try expectCT(TypeData.getStructureType(.{ .Type = BareUnion }) == .bare_union);
+    try expectCT(TypeData.getStructureType(.{ .Type = TaggedUnion }) == .tagged_union);
+    try expectCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
 }
 
 test "TypeData.getElementType" {
-    assertCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+    try expectCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
 }
 
 test "TypeData.getTargetType" {
-    assertCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
-    assertCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(anyopaque, null));
-    assertCT(TypeData.getTargetType(.{ .Type = *i32 }) == i32);
+    try expectCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
+    try expectCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(anyopaque, null));
+    try expectCT(TypeData.getTargetType(.{ .Type = *i32 }) == i32);
 }
 
 test "TypeData.getMemberType" {
-    assertCT(TypeData.getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }, false) == .int);
-    assertCT(TypeData.getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }, false) == .uint);
-    assertCT(TypeData.getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }, false) == .object);
-    assertCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, false) == .type);
-    assertCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, true) == .@"comptime");
-    assertCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = false } }, true) == .unsupported);
+    try expectCT(TypeData.getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }, false) == .int);
+    try expectCT(TypeData.getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }, false) == .uint);
+    try expectCT(TypeData.getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }, false) == .object);
+    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, false) == .type);
+    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, true) == .@"comptime");
+    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = false } }, true) == .unsupported);
 }
 
 test "TypeData.getByteSize" {
-    assertCT(TypeData.getByteSize(.{ .Type = void }) == 0);
-    assertCT(TypeData.getByteSize(.{ .Type = @TypeOf(null) }) == 0);
-    assertCT(TypeData.getByteSize(.{ .Type = u8 }) == 1);
+    try expectCT(TypeData.getByteSize(.{ .Type = void }) == 0);
+    try expectCT(TypeData.getByteSize(.{ .Type = @TypeOf(null) }) == 0);
+    try expectCT(TypeData.getByteSize(.{ .Type = u8 }) == 1);
 }
 
 test "TypeData.getBitSize" {
-    assertCT(TypeData.getBitSize(.{ .Type = void }) == 0);
-    assertCT(TypeData.getBitSize(.{ .Type = @TypeOf(null) }) == 0);
-    assertCT(TypeData.getBitSize(.{ .Type = u8 }) == 8);
+    try expectCT(TypeData.getBitSize(.{ .Type = void }) == 0);
+    try expectCT(TypeData.getBitSize(.{ .Type = @TypeOf(null) }) == 0);
+    try expectCT(TypeData.getBitSize(.{ .Type = u8 }) == 8);
 }
 
 test "TypeData.getAlignment" {
-    assertCT(TypeData.getAlignment(.{ .Type = void }) == 1);
-    assertCT(TypeData.getAlignment(.{ .Type = u8 }) == 1);
-    assertCT(TypeData.getAlignment(.{ .Type = u32 }) == 4);
+    try expectCT(TypeData.getAlignment(.{ .Type = void }) == 1);
+    try expectCT(TypeData.getAlignment(.{ .Type = u8 }) == 1);
+    try expectCT(TypeData.getAlignment(.{ .Type = u32 }) == 4);
 }
 
 test "TypeData.getLength" {
-    assertCT(TypeData.getLength(.{ .Type = [5]u8 }) == 5);
-    assertCT(TypeData.getLength(.{ .Type = u8 }) == null);
-    assertCT(TypeData.getLength(.{ .Type = @Vector(3, f32) }) == 3);
+    try expectCT(TypeData.getLength(.{ .Type = [5]u8 }) == 5);
+    try expectCT(TypeData.getLength(.{ .Type = u8 }) == null);
+    try expectCT(TypeData.getLength(.{ .Type = @Vector(3, f32) }) == 3);
 }
 
 test "TypeData.isConst" {
-    assertCT(TypeData.isConst(.{ .Type = i32 }) == false);
-    assertCT(TypeData.isConst(.{ .Type = *i32 }) == false);
-    assertCT(TypeData.isConst(.{ .Type = *const i32 }) == true);
+    try expectCT(TypeData.isConst(.{ .Type = i32 }) == false);
+    try expectCT(TypeData.isConst(.{ .Type = *i32 }) == false);
+    try expectCT(TypeData.isConst(.{ .Type = *const i32 }) == true);
 }
 
 test "TypeData.isSingle" {
-    assertCT(TypeData.isSingle(.{ .Type = i32 }) == false);
-    assertCT(TypeData.isSingle(.{ .Type = *i32 }) == true);
-    assertCT(TypeData.isSingle(.{ .Type = []i32 }) == false);
-    assertCT(TypeData.isSingle(.{ .Type = [*]i32 }) == false);
+    try expectCT(TypeData.isSingle(.{ .Type = i32 }) == false);
+    try expectCT(TypeData.isSingle(.{ .Type = *i32 }) == true);
+    try expectCT(TypeData.isSingle(.{ .Type = []i32 }) == false);
+    try expectCT(TypeData.isSingle(.{ .Type = [*]i32 }) == false);
 }
 
 test "TypeData.isTuple" {
-    assertCT(TypeData.isTuple(.{ .Type = @TypeOf(.{}) }) == true);
-    assertCT(TypeData.isTuple(.{ .Type = struct {} }) == false);
+    try expectCT(TypeData.isTuple(.{ .Type = @TypeOf(.{}) }) == true);
+    try expectCT(TypeData.isTuple(.{ .Type = struct {} }) == false);
 }
 
 test "TypeData.isPacked" {
@@ -718,28 +718,28 @@ test "TypeData.isPacked" {
         flag1: bool,
         flag2: bool,
     };
-    assertCT(TypeData.isPacked(.{ .Type = A }) == false);
-    assertCT(TypeData.isPacked(.{ .Type = B }) == true);
+    try expectCT(TypeData.isPacked(.{ .Type = A }) == false);
+    try expectCT(TypeData.isPacked(.{ .Type = B }) == true);
 }
 
 test "TypeData.isBitVector" {
     const A = @Vector(8, bool);
     const B = @Vector(4, f32);
-    assertCT(TypeData.isBitVector(.{ .Type = A }) == true);
-    assertCT(TypeData.isBitVector(.{ .Type = B }) == false);
+    try expectCT(TypeData.isBitVector(.{ .Type = A }) == true);
+    try expectCT(TypeData.isBitVector(.{ .Type = B }) == false);
 }
 
 test "TypeData.isIterator" {
-    assert(TypeData.isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
-    assert(TypeData.isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
-    assert(TypeData.isIterator(.{ .Type = std.fs.path }) == false);
+    try expect(TypeData.isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
+    try expect(TypeData.isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
+    try expect(TypeData.isIterator(.{ .Type = std.fs.path }) == false);
 }
 
 test "TypeData.getSentinel" {
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
-    assertCT(TypeData.getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
+    try expectCT(TypeData.getSentinel(.{ .Type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
+    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
+    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
+    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
 }
 
 test "TypeData.getSelectorType" {
@@ -748,13 +748,13 @@ test "TypeData.getSelectorType" {
         cat: u32,
         dog: u32,
     };
-    assertCT(TypeData.getSelectorType(.{ .Type = Union }) == Tag);
+    try expectCT(TypeData.getSelectorType(.{ .Type = Union }) == Tag);
     if (runtime_safety) {
         const BareUnion = union {
             cat: u32,
             dog: u32,
         };
-        assertCT(TypeData.getSelectorType(.{ .Type = BareUnion }) == u8);
+        try expectCT(TypeData.getSelectorType(.{ .Type = BareUnion }) == u8);
     }
 }
 
@@ -763,7 +763,7 @@ test "TypeData.getSelectorBitOffset" {
         cat: i32,
         dog: i32,
     };
-    assertCT(TypeData.getSelectorBitOffset(.{ .Type = Union }) == 32);
+    try expectCT(TypeData.getSelectorBitOffset(.{ .Type = Union }) == 32);
 }
 
 test "TypeData.getContentBitOffset" {
@@ -771,7 +771,7 @@ test "TypeData.getContentBitOffset" {
         cat: i32,
         dog: i32,
     };
-    assertCT(TypeData.getContentBitOffset(.{ .Type = Union }) == 0);
+    try expectCT(TypeData.getContentBitOffset(.{ .Type = Union }) == 0);
 }
 
 fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
@@ -796,11 +796,11 @@ fn PayloadType(comptime T: type) ?type {
 
 test "PayloadType" {
     const T1 = PayloadType(?i32) orelse unreachable;
-    assert(T1 == i32);
+    try expect(T1 == i32);
     const T2 = PayloadType(anyerror!?i32) orelse unreachable;
-    assert(T2 == i32);
+    try expect(T2 == i32);
     const T3 = PayloadType(i32);
-    assert(T3 == null);
+    try expect(T3 == null);
 }
 
 test "NextMethodReturnType" {
@@ -826,15 +826,15 @@ test "NextMethodReturnType" {
         }
     };
     const T1 = NextMethodReturnType(@TypeOf(S.next1), S) orelse unreachable;
-    assert(T1 == i32);
+    try expect(T1 == i32);
     const T2 = NextMethodReturnType(@TypeOf(S.next2), S) orelse unreachable;
-    assert(T2 == i32);
+    try expect(T2 == i32);
     const T3 = NextMethodReturnType(@TypeOf(S.next3), S);
-    assert(T3 == null);
+    try expect(T3 == null);
     const T4 = NextMethodReturnType(@TypeOf(S.next4), S);
-    assert(T4 == null);
+    try expect(T4 == null);
     const T5 = NextMethodReturnType(@TypeOf(S.next5), S);
-    assert(T5 == null);
+    try expect(T5 == null);
 }
 
 pub const TypeDataCollector = struct {
@@ -1185,7 +1185,7 @@ test "TypeDataCollector.scan" {
     };
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
-    assertCT(tdc.find(Test.StructA) == true);
+    try expectCT(tdc.find(Test.StructA) == true);
 }
 
 test "TypeDataCollector.setAttributes" {
@@ -1257,39 +1257,39 @@ test "TypeDataCollector.setAttributes" {
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
     // is_supported
-    assertCT(tdc.get(Test.StructA).isSupported() == true);
-    assertCT(tdc.get(Test.StructB).isSupported() == true);
-    assertCT(tdc.get(Thunk).isSupported() == false);
-    assertCT(tdc.get(*Test.StructA).isSupported() == true);
-    assertCT(tdc.get(*Test.StructB).isSupported() == true);
-    assertCT(tdc.get(Test.StructC).isSupported() == true);
-    assertCT(tdc.get(Test.StructD).isSupported() == true);
-    assertCT(tdc.get(Test.UnionA).isSupported() == true);
-    assertCT(tdc.get(@TypeOf(null)).isSupported() == true);
-    assertCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
-    assertCT(tdc.get(noreturn).isSupported() == true);
-    assertCT(tdc.get(u17).isSupported() == true);
-    assertCT(tdc.get(i18).isSupported() == true);
+    try expectCT(tdc.get(Test.StructA).isSupported() == true);
+    try expectCT(tdc.get(Test.StructB).isSupported() == true);
+    try expectCT(tdc.get(Thunk).isSupported() == false);
+    try expectCT(tdc.get(*Test.StructA).isSupported() == true);
+    try expectCT(tdc.get(*Test.StructB).isSupported() == true);
+    try expectCT(tdc.get(Test.StructC).isSupported() == true);
+    try expectCT(tdc.get(Test.StructD).isSupported() == true);
+    try expectCT(tdc.get(Test.UnionA).isSupported() == true);
+    try expectCT(tdc.get(@TypeOf(null)).isSupported() == true);
+    try expectCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
+    try expectCT(tdc.get(noreturn).isSupported() == true);
+    try expectCT(tdc.get(u17).isSupported() == true);
+    try expectCT(tdc.get(i18).isSupported() == true);
     // pointer should include this
-    assertCT(tdc.get(usize).isSupported() == true);
+    try expectCT(tdc.get(usize).isSupported() == true);
 
     // is_comptime_only
-    assertCT(tdc.get(type).isComptimeOnly() == true);
-    assertCT(tdc.get(*const type).isComptimeOnly() == true);
-    assertCT(tdc.get(?type).isComptimeOnly() == true);
+    try expectCT(tdc.get(type).isComptimeOnly() == true);
+    try expectCT(tdc.get(*const type).isComptimeOnly() == true);
+    try expectCT(tdc.get(?type).isComptimeOnly() == true);
     // has_pointer
-    assertCT(tdc.get(i32).hasPointer() == false);
-    assertCT(tdc.get([*]i32).hasPointer() == true);
-    assertCT(tdc.get([]const u8).hasPointer() == true);
-    assertCT(tdc.get([5]*u8).hasPointer() == true);
-    assertCT(tdc.get([][]u8).hasPointer() == true);
-    assertCT(tdc.get(Test.A).hasPointer() == false);
-    assertCT(tdc.get(Test.B).hasPointer() == false);
-    assertCT(tdc.get(Test.C).hasPointer() == true);
+    try expectCT(tdc.get(i32).hasPointer() == false);
+    try expectCT(tdc.get([*]i32).hasPointer() == true);
+    try expectCT(tdc.get([]const u8).hasPointer() == true);
+    try expectCT(tdc.get([5]*u8).hasPointer() == true);
+    try expectCT(tdc.get([][]u8).hasPointer() == true);
+    try expectCT(tdc.get(Test.A).hasPointer() == false);
+    try expectCT(tdc.get(Test.B).hasPointer() == false);
+    try expectCT(tdc.get(Test.C).hasPointer() == true);
     // pointers in union are inaccessible
-    assertCT(tdc.get(Test.D).hasPointer() == false);
+    try expectCT(tdc.get(Test.D).hasPointer() == false);
     // // comptime fields should be ignored
-    assertCT(tdc.get(Test.E).hasPointer() == false);
+    try expectCT(tdc.get(Test.E).hasPointer() == false);
 }
 
 test "TypeDataCollector.setNames" {
@@ -1302,10 +1302,10 @@ test "TypeDataCollector.setNames" {
     comptime tdc.scan(Test);
     const s_td = tdc.get(@TypeOf(Test.tuple));
     const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
-    assertCT(std.mem.eql(u8, s_td.getName(), s_name));
+    try expectCT(std.mem.eql(u8, s_td.getName(), s_name));
     const e_td = tdc.get(Test.Error);
     const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
-    assertCT(std.mem.eql(u8, e_td.getName(), e_name));
+    try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
 }
 
 fn TypeDatabase(comptime len: comptime_int) type {
@@ -1353,14 +1353,14 @@ test "TypeDatabase.get" {
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(Test);
     const tdb = comptime tdc.createDatabase();
-    assertCT(tdb.get(Test.StructA).isSupported() == true);
-    assertCT(tdb.get(Test.StructB).isSupported() == true);
-    assertCT(tdb.get(Thunk).isSupported() == false);
-    assertCT(tdb.get(*Test.StructA).isSupported() == true);
-    assertCT(tdb.get(*const Test.StructA).isSupported() == true);
-    assertCT(tdb.get(Test.StructC).isSupported() == true);
-    assertCT(tdb.get(Test.StructD).isSupported() == true);
-    assertCT(tdb.get(Test.UnionA).isSupported() == true);
+    try expectCT(tdb.get(Test.StructA).isSupported() == true);
+    try expectCT(tdb.get(Test.StructB).isSupported() == true);
+    try expectCT(tdb.get(Thunk).isSupported() == false);
+    try expectCT(tdb.get(*Test.StructA).isSupported() == true);
+    try expectCT(tdb.get(*const Test.StructA).isSupported() == true);
+    try expectCT(tdb.get(Test.StructC).isSupported() == true);
+    try expectCT(tdb.get(Test.StructD).isSupported() == true);
+    try expectCT(tdb.get(Test.UnionA).isSupported() == true);
 }
 
 fn Sentinel(comptime T: type) type {
@@ -1392,8 +1392,8 @@ test "Slice" {
     const A = Slice(u8, null);
     const B = Slice(u8, null);
     const C = Slice(u8, .{ .value = 0 });
-    assert(A == B);
-    assert(C != B);
+    try expect(A == B);
+    try expect(C != B);
 }
 
 pub fn ArgumentStruct(comptime T: type) type {
@@ -1460,18 +1460,18 @@ test "ArgumentStruct" {
     };
     const ArgA = ArgumentStruct(@TypeOf(Test.A));
     const fieldsA = std.meta.fields(ArgA);
-    assert(fieldsA.len == 3);
-    assert(fieldsA[0].name[0] == 'r');
-    assert(fieldsA[1].name[0] == '0');
-    assert(fieldsA[2].name[0] == '1');
+    try expect(fieldsA.len == 3);
+    try expect(fieldsA[0].name[0] == 'r');
+    try expect(fieldsA[1].name[0] == '0');
+    try expect(fieldsA[2].name[0] == '1');
     const ArgB = ArgumentStruct(@TypeOf(Test.B));
     const fieldsB = std.meta.fields(ArgB);
-    assert(fieldsB.len == 2);
-    assert(fieldsB[0].name[0] == 'r');
-    assert(fieldsB[1].name[0] == '0');
+    try expect(fieldsB.len == 2);
+    try expect(fieldsB[0].name[0] == 'r');
+    try expect(fieldsB[1].name[0] == '0');
     const ArgC = ArgumentStruct(@TypeOf(Test.C));
     const fieldsC = std.meta.fields(ArgC);
-    assert(fieldsC.len == 3);
+    try expect(fieldsC.len == 3);
 }
 
 pub fn ThunkType(comptime function: anytype) type {
@@ -1481,8 +1481,8 @@ pub fn ThunkType(comptime function: anytype) type {
     };
 }
 
-fn assertCT(comptime value: bool) void {
-    assert(value);
+fn expectCT(comptime value: bool) !void {
+    try expect(value);
 }
 
 const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);

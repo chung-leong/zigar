@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
-const assert = std.debug.assert;
+const expect = std.testing.expect;
 
 const Value = types.Value;
 const Memory = types.Memory;
@@ -398,6 +398,6 @@ test "createModule" {
         }
     };
     const module = createModule(Test);
-    assert(module.version == 4);
-    assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
+    try expect(module.version == 4);
+    try expect(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
 }
