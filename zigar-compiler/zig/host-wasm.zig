@@ -1,21 +1,12 @@
 const std = @import("std");
-const exporter = @import("exporter.zig");
 const builtin = @import("builtin");
+const exporter = @import("./exporter.zig");
+const types = @import("./types.zig");
 
-pub const Value = exporter.Value;
-pub const Thunk = exporter.Thunk;
-pub const VariadicThunk = exporter.VariadicThunk;
+pub const Value = types.Value;
 pub const Call = *const CallContext;
-
-const HostOptions = exporter.HostOptions;
-const StructureType = exporter.StructureType;
-const Structure = exporter.Structure;
-const MemberType = exporter.MemberType;
-const Member = exporter.Member;
-const Method = exporter.Method;
-const Memory = exporter.Memory;
-const MemoryAttributes = exporter.MemoryAttributes;
-const Error = exporter.Error;
+const Memory = types.Memory;
+const Error = types.Error;
 
 const CallContext = struct {
     allocator: std.mem.Allocator,
@@ -106,11 +97,11 @@ pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) vo
 
 pub const Host = struct {
     context: Call,
-    options: HostOptions,
+    options: types.HostOptions,
 
     pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
         const context: Call = @ptrCast(@alignCast(call_ptr));
-        const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
+        const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
         return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
     }
 
@@ -191,7 +182,7 @@ pub const Host = struct {
         }
     }
 
-    pub fn beginStructure(_: Host, def: Structure) !Value {
+    pub fn beginStructure(_: Host, def: types.Structure) !Value {
         const structure = beginDefinition();
         try insertProperty(structure, "name", def.name);
         try insertProperty(structure, "type", def.structure_type);
@@ -206,7 +197,7 @@ pub const Host = struct {
             Error.unable_to_start_structure_definition;
     }
 
-    pub fn attachMember(_: Host, structure: Value, member: Member, is_static: bool) !void {
+    pub fn attachMember(_: Host, structure: Value, member: types.Member, is_static: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "type", member.member_type);
         try insertProperty(def, "isRequired", member.is_required);
@@ -223,7 +214,7 @@ pub const Host = struct {
         _finalizeShape(structure);
     }
 
-    pub fn attachMethod(_: Host, structure: Value, method: Method, is_static_only: bool) !void {
+    pub fn attachMethod(_: Host, structure: Value, method: types.Method, is_static_only: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "argStruct", method.structure);
         try insertProperty(def, "thunkId", method.thunk_id);
@@ -250,7 +241,7 @@ pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
     const arg_ptr = _startCall(&call_ctx, arg_struct);
     // function pointers in WASM are indices into function table 0
     // so the thunk_id is really the thunk itself
-    const thunk: Thunk = @ptrFromInt(thunk_id);
+    const thunk: types.Thunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
     return thunk(@ptrCast(&call_ctx), arg_ptr);
 }
@@ -259,7 +250,7 @@ pub fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?V
     var call_ctx: CallContext = .{ .allocator = allocator };
     const arg_ptr = _startCall(&call_ctx, arg_struct);
     const attr_ptr = _getArgAttributes();
-    const thunk: VariadicThunk = @ptrFromInt(thunk_id);
+    const thunk: types.VariadicThunk = @ptrFromInt(thunk_id);
     defer _endCall(&call_ctx, arg_struct);
     return thunk(@ptrCast(&call_ctx), arg_ptr, attr_ptr, arg_count);
 }

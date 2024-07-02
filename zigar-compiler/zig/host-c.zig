@@ -1,26 +1,19 @@
 const std = @import("std");
-const exporter = @import("exporter.zig");
 const builtin = @import("builtin");
+const exporter = @import("./exporter.zig");
+const types = @import("./types.zig");
 const assert = std.debug.assert;
 
-const Value = exporter.Value;
-const HostOptions = exporter.HostOptions;
-const StructureType = exporter.StructureType;
-const Structure = exporter.Structure;
-const MemberType = exporter.MemberType;
-const Member = exporter.Member;
-const Method = exporter.Method;
-const Memory = exporter.Memory;
-const Thunk = exporter.Thunk;
-const VariadicThunk = exporter.VariadicThunk;
-const Error = exporter.Error;
+const Value = types.Value;
+const Memory = types.Memory;
+const Error = types.Error;
 
 const Call = *anyopaque;
 
 // struct for C
 const StructureC = extern struct {
     name: ?[*:0]const u8,
-    structure_type: StructureType,
+    structure_type: types.StructureType,
     length: usize,
     byte_size: usize,
     alignment: u16,
@@ -31,7 +24,7 @@ const StructureC = extern struct {
 };
 const MemberC = extern struct {
     name: ?[*:0]const u8,
-    member_type: MemberType,
+    member_type: types.MemberType,
     is_required: bool,
     bit_offset: usize,
     bit_size: usize,
@@ -56,11 +49,11 @@ threadlocal var initial_context: ?Call = null;
 // host interface
 pub const Host = struct {
     context: Call,
-    options: HostOptions,
+    options: types.HostOptions,
 
     pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
         const context: Call = @ptrCast(@alignCast(call_ptr));
-        const options_ptr: ?*HostOptions = @ptrCast(@alignCast(arg_ptr));
+        const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
         if (initial_context == null) {
             initial_context = context;
         }
@@ -133,7 +126,7 @@ pub const Host = struct {
         }
     }
 
-    pub fn beginStructure(self: Host, def: Structure) !Value {
+    pub fn beginStructure(self: Host, def: types.Structure) !Value {
         const def_c: StructureC = .{
             .name = if (def.name) |p| @ptrCast(p) else null,
             .structure_type = def.structure_type,
@@ -152,7 +145,7 @@ pub const Host = struct {
         return structure;
     }
 
-    pub fn attachMember(self: Host, structure: Value, member: Member, is_static: bool) !void {
+    pub fn attachMember(self: Host, structure: Value, member: types.Member, is_static: bool) !void {
         const member_c: MemberC = .{
             .name = if (member.name) |p| @ptrCast(p) else null,
             .member_type = member.member_type,
@@ -172,7 +165,7 @@ pub const Host = struct {
         }
     }
 
-    pub fn attachMethod(self: Host, structure: Value, method: Method, is_static_only: bool) !void {
+    pub fn attachMethod(self: Host, structure: Value, method: types.Method, is_static_only: bool) !void {
         const method_c: MethodC = .{
             .name = if (method.name) |p| @ptrCast(p) else null,
             .thunk_id = method.thunk_id,
@@ -296,7 +289,7 @@ pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
 }
 
 pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Value) callconv(.C) Result {
-    const thunk: Thunk = @ptrFromInt(thunk_address);
+    const thunk: types.Thunk = @ptrFromInt(thunk_address);
     if (thunk(@ptrCast(call), args)) |result| {
         dest.* = result;
     } else {
@@ -306,7 +299,7 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
 }
 
 pub fn runVariadicThunk(call: Call, thunk_address: usize, args: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize, dest: *?Value) callconv(.C) Result {
-    const thunk: VariadicThunk = @ptrFromInt(thunk_address);
+    const thunk: types.VariadicThunk = @ptrFromInt(thunk_address);
     if (thunk(@ptrCast(call), args, attr_ptr, arg_count)) |result| {
         dest.* = result;
     } else {
@@ -405,6 +398,6 @@ test "createModule" {
         }
     };
     const module = createModule(Test);
-    assert(module.version == 3);
+    assert(module.version == 4);
     assert(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
 }
