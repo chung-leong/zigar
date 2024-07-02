@@ -25,7 +25,7 @@ pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
     }
 }
 
-pub fn printFloats(bits: u16, count: usize, ...) callconv(.C) void {
+pub fn printFloats(bits: u8, count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
     defer @cVaEnd(&va_list);
     for (0..count) |_| {
