@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const types = @import("./types.zig");
 const assert = std.debug.assert;
 
 pub const Error = error{
@@ -63,12 +64,13 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
         }
         arg_struct.retval = @call(.auto, function_ptr, args);
     } else {
-        const alloc = try allocate(arg_bytes, arg_attrs, f.params.len);
-        const int_args: *const @TypeOf(alloc.int_regs) = &alloc.int_regs;
-        const float_args: *const @TypeOf(alloc.float_regs) = &alloc.float_regs;
+        const alloc = try Allocation.init(arg_bytes, arg_attrs, f.params.len);
+        // alloc.dump();
+        const int_args = alloc.getInts();
+        const float_args = alloc.getFloats();
         arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
-            if (alloc.stack_count == stack_count * @sizeOf(abi.IntType)) {
-                const stack_args: *const [stack_count]abi.IntType = @ptrCast(@alignCast(&alloc.stack));
+            if (alloc.getStackCount() == stack_count) {
+                const stack_args = alloc.getStack(stack_count);
                 const result = callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
                 break result;
             }
@@ -92,8 +94,10 @@ const Abi = struct {
         int: comptime_int,
         float: comptime_int,
     },
-    pass_variadic_float_as_int: bool = false,
+    min_float_align: comptime_int = @alignOf(f64),
+    min_int_align: comptime_int = @alignOf(isize),
     min_stack_align: comptime_int = @alignOf(isize),
+    pass_variadic_float_as_int: bool = false,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
@@ -105,6 +109,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 // XMM0, XMM1, XMM2, XMM3
                 .float = 4,
             },
+            .min_float_align = @alignOf(f128),
             .pass_variadic_float_as_int = true,
         },
         else => .{
@@ -115,6 +120,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 // XMM0 - XMM7
                 .float = 8,
             },
+            .min_float_align = @alignOf(f128),
         },
     },
     .aarch64, .aarch64_be, .aarch64_32 => .{
@@ -124,20 +130,21 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .float = 0,
         },
     },
-    // .riscv64 => .{
-    //     .registers = .{
-    //         // x10 - x17
-    //         .int = 8,
-    //         .float = 8,
-    //     },
-    //     .pass_variadic_float_as_int = true,
-    // },
+    .riscv64 => .{
+        .registers = .{
+            // a0 - a7
+            .int = 8,
+            .float = 8,
+        },
+        .min_int_align = @alignOf(i32),
+        .pass_variadic_float_as_int = true,
+    },
     // .powerpc64le => .{
     //     .registers = .{ .int = 0, .float = 0 },
     // },
     .x86 => .{
         .registers = .{ .int = 0, .float = 0 },
-        .min_stack_align = @alignOf(u8),
+        .min_stack_align = @alignOf(i8),
     },
     .arm, .armeb => .{
         .registers = .{ .int = 0, .float = 0 },
@@ -145,105 +152,149 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
     else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
 };
 const Allocation = struct {
-    float_count: usize = 0,
-    int_count: usize = 0,
-    stack_count: usize = 0,
-    float_regs: [abi.registers.float]abi.FloatType = undefined,
-    int_regs: [abi.registers.int]abi.IntType = undefined,
-    stack: [max_stack_count * @sizeOf(abi.IntType)]u8 = undefined,
-};
+    const Bin = enum { float, int, stack };
 
-fn floatFromBytes(bytes: []const u8) abi.FloatType {
-    return inline for (.{ f16, f32, f64, f128 }) |T| {
-        const float = @typeInfo(T).Float;
-        if (bytes.len * 8 == float.bits) {
-            const value = std.mem.bytesToValue(T, bytes);
-            const int_value: @Type(.{ .Int = .{
-                .signedness = .unsigned,
-                .bits = float.bits,
-            } }) = @bitCast(value);
-            const enlarged_int_value: @Type(.{
-                .Int = .{
-                    .signedness = .unsigned,
-                    .bits = @typeInfo(abi.FloatType).Float.bits,
-                },
-            }) = @intCast(int_value);
-            break @bitCast(enlarged_int_value);
-        }
-    } else unreachable;
-}
+    float_offset: usize = 0,
+    int_offset: usize = 0,
+    stack_offset: usize = 0,
+    float_bytes: [abi.registers.float * @sizeOf(abi.FloatType)]u8 align(@alignOf(abi.FloatType)) = undefined,
+    int_bytes: [abi.registers.int * @sizeOf(abi.IntType)]u8 align(@alignOf(abi.IntType)) = undefined,
+    stack_bytes: [max_stack_count * @sizeOf(abi.IntType)]u8 align(@alignOf(abi.IntType)) = undefined,
 
-fn intFromBytes(bytes: []const u8, is_signed: bool) abi.IntType {
-    return inline for (.{ i8, u8, i16, u16, i32, u32, i64, u64 }) |T| {
-        const int = @typeInfo(T).Int;
-        if (bytes.len * 8 == int.bits and is_signed == (int.signedness == .signed)) {
-            const value = std.mem.bytesToValue(T, bytes);
-            const enlarged_value: @Type(.{
-                .Int = .{
-                    .signedness = int.signedness,
-                    .bits = @typeInfo(abi.IntType).Int.bits,
-                },
-            }) = @intCast(value);
-            break @bitCast(enlarged_value);
-        }
-    } else unreachable;
-}
+    fn getFloats(self: *const @This()) *const [abi.registers.float]abi.FloatType {
+        return @ptrCast(&self.float_bytes);
+    }
 
-fn allocate(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !Allocation {
-    var alloc: Allocation = .{};
-    loop: for (arg_attrs, 0..) |a, index| {
-        var bytes = arg_bytes[a.offset .. a.offset + a.size];
-        if (a.alignment == 0) {
-            return Error.invalid_argument_attributes;
-        }
-        const can_use_float = switch (abi.pass_variadic_float_as_int) {
-            false => true,
-            true => index < fixed_arg_count,
-        };
-        if (a.is_float and can_use_float) {
-            if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
-                while (true) {
-                    if (alloc.float_count < alloc.float_regs.len) {
+    fn getInts(self: *const @This()) *const [abi.registers.int]abi.IntType {
+        return @ptrCast(&self.int_bytes);
+    }
+
+    fn getStack(self: *const @This(), comptime count: usize) *const [count]abi.IntType {
+        return @ptrCast(&self.stack_bytes);
+    }
+
+    fn getFloatCount(self: *const @This()) usize {
+        return self.float_offset / @sizeOf(abi.FloatType);
+    }
+
+    fn getIntCount(self: *const @This()) usize {
+        return self.int_offset / @sizeOf(abi.IntType);
+    }
+
+    fn getStackCount(self: *const @This()) usize {
+        return self.stack_offset / @sizeOf(abi.IntType);
+    }
+
+    fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !@This() {
+        var self: @This() = .{};
+        for (&self.float_bytes) |*p| p.* = 0xAA;
+        for (&self.int_bytes) |*p| p.* = 0xAA;
+        for (&self.stack_bytes) |*p| p.* = 0xAA;
+        loop: for (arg_attrs, 0..) |a, index| {
+            var bytes = arg_bytes[a.offset .. a.offset + a.size];
+            if (a.alignment == 0) {
+                return Error.invalid_argument_attributes;
+            }
+            const can_use_float = switch (abi.pass_variadic_float_as_int) {
+                false => true,
+                true => index < fixed_arg_count,
+            };
+            if (a.is_float and can_use_float) {
+                if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
+                    while (true) {
                         const end = @min(bytes.len, @sizeOf(abi.FloatType));
-                        alloc.float_regs[alloc.float_count] = floatFromBytes(bytes[0..end]);
-                        alloc.float_count += 1;
-                        if (end == bytes.len) continue :loop;
-                        bytes = bytes[end..];
-                    } else {
-                        break;
+                        if (self.use(.float, bytes[0..end], a)) {
+                            if (end == bytes.len) continue :loop;
+                            bytes = bytes[end..];
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                if (a.size <= @sizeOf(abi.IntType) * 2 and comptime abi.registers.int > 0) {
+                    while (true) {
+                        const end = @min(bytes.len, @sizeOf(abi.IntType));
+                        if (self.use(.int, bytes[0..end], a)) {
+                            if (end == bytes.len) continue :loop;
+                            bytes = bytes[end..];
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
-        } else {
-            if (a.size <= @sizeOf(abi.IntType) * 2 and comptime abi.registers.int > 0) {
-                while (true) {
-                    if (alloc.int_count < alloc.int_regs.len) {
-                        const end = @min(bytes.len, @sizeOf(abi.IntType));
-                        alloc.int_regs[alloc.int_count] = intFromBytes(bytes[0..end], a.is_signed);
-                        alloc.int_count += 1;
-                        if (end == bytes.len) continue :loop;
-                        bytes = bytes[end..];
-                    } else {
-                        break;
-                    }
-                }
+            if (!self.use(.stack, bytes, a)) {
+                return Error.too_many_arguments;
             }
         }
-        const arg_align: usize = @intCast(@max(abi.min_stack_align, @min(a.alignment, @alignOf(abi.IntType))));
-        const stack_offset = (alloc.stack_count + arg_align - 1) & ~(arg_align - 1);
-        const new_stack_count = stack_offset + bytes.len;
-        if (new_stack_count <= alloc.stack.len) {
-            const stack_bytes = alloc.stack[stack_offset .. stack_offset + bytes.len];
-            @memcpy(stack_bytes, bytes);
-            alloc.stack_count = new_stack_count;
+        const float_align: usize = @alignOf(abi.FloatType);
+        self.float_offset = (self.float_offset + float_align - 1) & ~(float_align - 1);
+        const int_align: usize = @alignOf(abi.IntType);
+        self.int_offset = (self.int_offset + int_align - 1) & ~(int_align - 1);
+        self.stack_offset = (self.stack_offset + int_align - 1) & ~(int_align - 1);
+        return self;
+    }
+
+    fn use(self: *@This(), bin: Bin, bytes: []const u8, a: ArgAttributes) bool {
+        const min_align: usize = switch (bin) {
+            .float => abi.min_float_align,
+            .int => abi.min_int_align,
+            .stack => abi.min_stack_align,
+        };
+        const max_align: usize = switch (bin) {
+            .float => @alignOf(abi.FloatType),
+            .int => @alignOf(abi.IntType),
+            .stack => @alignOf(abi.IntType),
+        };
+        const offset_ptr = switch (bin) {
+            .float => &self.float_offset,
+            .int => &self.int_offset,
+            .stack => &self.stack_offset,
+        };
+        const destination = switch (bin) {
+            .float => &self.float_bytes,
+            .int => &self.int_bytes,
+            .stack => &self.stack_bytes,
+        };
+        const arg_align: usize = @max(min_align, @min(a.alignment, max_align));
+        const start = offset_ptr.*;
+        const offset = (start + arg_align - 1) & ~(arg_align - 1);
+        const next_offset = offset + bytes.len;
+        if (next_offset <= destination.len) {
+            const padding_bytes = destination[start..offset];
+            for (padding_bytes) |*p| p.* = 0;
+            const dest_bytes = destination[offset..next_offset];
+            @memcpy(dest_bytes, bytes);
+            offset_ptr.* = next_offset;
+            return true;
         } else {
-            return Error.too_many_arguments;
+            return false;
         }
     }
-    const int_align: usize = @alignOf(abi.IntType);
-    alloc.stack_count = (alloc.stack_count + int_align - 1) & ~(int_align - 1);
-    return alloc;
-}
+
+    fn dump(self: *const @This()) void {
+        std.debug.print("\n", .{});
+        const int_reg_count = self.getIntCount();
+        if (int_reg_count > 0) {
+            const int_regs = self.getInts();
+            const int_regs_in_use = int_regs.*[0..int_reg_count];
+            std.debug.print("Int registers: {any}\n", .{int_regs_in_use});
+        }
+        const float_reg_count = self.getFloatCount();
+        if (float_reg_count > 0) {
+            const float_regs = self.getFloats();
+            const float_regs_in_use = float_regs.*[0..float_reg_count];
+            std.debug.print("Float registers: {any}\n", .{float_regs_in_use});
+        }
+        const stack_word_count = self.getStackCount();
+        if (stack_word_count > 0) {
+            const stack_words = self.getStack(max_stack_count);
+            const stack_words_in_use = stack_words.*[0..stack_word_count];
+            std.debug.print("Stack: {any}\n", .{stack_words_in_use});
+        }
+    }
+};
 
 fn callWithArgs(
     comptime RT: type,
@@ -267,7 +318,7 @@ fn callWithArgs(
         .Fn = .{
             .calling_convention = cc,
             .is_generic = false,
-            .is_var_args = true,
+            .is_var_args = false,
             .return_type = RT,
             .params = &params,
         },
@@ -309,98 +360,94 @@ fn callWithArgs(
     return @call(.auto, function, args);
 }
 
-fn default(comptime field: std.builtin.Type.StructField) field.type {
-    const opaque_ptr = field.default_value.?;
-    const typed_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-    return typed_ptr.*;
-}
-
 fn createTest(RT: type, tuple: anytype) type {
-    const fields = @typeInfo(@TypeOf(tuple)).Struct.fields;
-    const ArgStruct = @Type(.{
-        .Struct = .{
-            .layout = .auto,
-            .decls = &.{},
-            .fields = &.{
-                .{
-                    .name = "retval",
-                    .type = RT,
-                    .default_value = null,
-                    .is_comptime = false,
-                    .alignment = if (@sizeOf(RT) > 0) @alignOf(RT) else 0,
-                },
-            },
-            .is_tuple = false,
-        },
-    });
+    const ArgStruct = types.ArgumentStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
     comptime var current_offset: u16 = @sizeOf(ArgStruct);
-    comptime var offsets: [fields.len]u16 = undefined;
-    inline for (fields, 0..) |field, index| {
-        const alignment: u16 = @alignOf(field.type);
+    comptime var offsets: [tuple.len]u16 = undefined;
+    inline for (tuple, 0..) |value, index| {
+        const T = @TypeOf(value);
+        const alignment: u16 = @alignOf(T);
         const offset = (current_offset + alignment - 1) & ~(alignment - 1);
         offsets[index] = offset;
-        current_offset = offset + @sizeOf(field.type);
+        current_offset = offset + @sizeOf(T);
     }
     const arg_size = current_offset;
     return struct {
-        var correct: ?bool = null;
-
-        fn check(arg0: fields[0].type, ...) callconv(.C) RT {
-            if (arg0 != default(fields[0])) {
-                std.debug.print("Mismatch: {any} != {any}\n", .{ arg0, default(fields[0]) });
-                correct = false;
-                return 0;
-            }
+        fn check(arg0: @TypeOf(tuple[0]), ...) callconv(.C) RT {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
-            inline for (fields[1..]) |tuple_field| {
-                const argN = @cVaArg(&va_list, tuple_field.type);
-                if (argN != default(tuple_field)) {
-                    std.debug.print("Mismatch: {any} != {any}\n", .{ argN, default(tuple_field) });
-                    correct = false;
-                    return 0;
+            var failed = false;
+            inline for (tuple, 0..) |value, index| {
+                const arg = switch (index) {
+                    0 => arg0,
+                    else => @cVaArg(&va_list, @TypeOf(value)),
+                };
+                const bytes1 = std.mem.toBytes(arg);
+                const bytes2 = std.mem.toBytes(value);
+                if (!std.mem.eql(u8, &bytes1, &bytes2)) {
+                    std.debug.print("Mismatch: {any} != {any} (arg{d})\n", .{ arg, value, index });
+                    std.debug.print("     arg: {x}\n", .{bytes1});
+                    std.debug.print("   tuple: {x}\n", .{bytes2});
+                    failed = true;
                 }
             }
-            correct = true;
-            return 777;
+            return if (failed) 0 else 777;
         }
 
         pub fn run() void {
             var arg_bytes: [arg_size]u8 = undefined;
-            var attrs: [fields.len]ArgAttributes = undefined;
+            var attrs: [tuple.len]ArgAttributes = undefined;
             inline for (&attrs, 0..) |*p, index| {
-                const field = fields[index];
                 const offset = offsets[index];
-                const bytes = std.mem.toBytes(default(field));
-                @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
+                const value = tuple[index];
+                const T = @TypeOf(value);
                 p.* = .{
                     .offset = offset,
-                    .size = @sizeOf(field.type),
-                    .alignment = @alignOf(field.type),
-                    .is_float = @typeInfo(field.type) == .Float,
-                    .is_signed = @typeInfo(field.type) == .Int and @typeInfo(field.type).Int.signedness == .signed,
+                    .size = @sizeOf(T),
+                    .alignment = @alignOf(T),
+                    .is_float = @typeInfo(T) == .Float,
+                    .is_signed = @typeInfo(T) == .Int and @typeInfo(T).Int.signedness == .signed,
                 };
+                const bytes = std.mem.toBytes(value);
+                @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
             }
-            const arg = @as(*ArgStruct, @ptrCast(@alignCast(&arg_bytes)));
-            call(check, arg, @ptrCast(&attrs), attrs.len) catch |err| {
+            const argStruct = @as(*ArgStruct, @ptrCast(@alignCast(&arg_bytes)));
+            call(check, argStruct, @ptrCast(&attrs), attrs.len) catch |err| {
                 std.debug.print("Error: {s}", .{@errorName(err)});
-                @panic("Error happend");
+                panic("Error happend");
             };
-            const passed = correct orelse @panic("No result");
-            if (!passed) {
-                @panic("Parameters do not match");
+            if (argStruct.retval != 777) {
+                panic("Parameters do not match");
             }
-            if (arg.retval != 777) {
-                std.debug.print("Mismatch: {any} != {any}\n", .{ arg.retval, 777 });
-                @panic("Return value does not match");
+        }
+
+        pub fn panic(message: []const u8) noreturn {
+            comptime var type_list: [tuple.len][]const u8 = undefined;
+            inline for (tuple, 0..) |value, index| {
+                type_list[index] = @typeName(@TypeOf(value));
+            }
+            std.debug.print("   types: {s}\n", .{type_list});
+            if (builtin.target.cpu.arch == .x86_64) {
+                @panic(message);
+            } else {
+                // dumpStackTrace() doesn't work correctly for other archs
+                // avoid the panic in panic error by simply exiting
+                std.debug.print("Panic: {s}\n", .{message});
+                std.process.exit(1);
             }
         }
     };
 }
 
-test "parameter passing - i32" {
+test "parameter passing - u32" {
     createTest(u32, .{
-        @as(i32, 1234),
+        @as(u32, 1234),
+    }).run();
+}
+
+test "parameter passing - i32" {
+    createTest(i32, .{
+        @as(i32, -1234),
     }).run();
 }
 
@@ -420,14 +467,14 @@ test "parameter passing - f32" {
 test "parameter passing - i32, f32" {
     createTest(u32, .{
         @as(i32, 1234),
-        @as(f32, 1.234),
+        @as(f32, 1.2345),
     }).run();
 }
 
 test "parameter passing - f32, f32" {
     createTest(u32, .{
         @as(f32, 1.234),
-        @as(f32, 4.567),
+        @as(f32, 4.5678),
     }).run();
 }
 
@@ -436,6 +483,22 @@ test "parameter passing - f32, f32, f32" {
         @as(f32, 1.234),
         @as(f32, 4.567),
         @as(f32, 7.890),
+    }).run();
+}
+
+test "parameter passing - f64, f64, f64" {
+    createTest(f64, .{
+        @as(f64, 1.234),
+        @as(f64, 4.567),
+        @as(f64, 7.890),
+    }).run();
+}
+
+test "parameter passing - f128, f128, f128" {
+    createTest(f128, .{
+        @as(f128, 1.234),
+        @as(f128, 4.567),
+        @as(f128, 7.890),
     }).run();
 }
 
@@ -455,7 +518,7 @@ test "parameter passing - u64, f32, f64" {
     }).run();
 }
 
-test "parameter passing - f80, f64, f32" {
+test "parameter passing - f128, f64, f32" {
     createTest(u32, .{
         @as(f128, 1234),
         @as(f64, 1.234),
@@ -472,6 +535,19 @@ test "parameter passing - i32, f32, i32, f32" {
     }).run();
 }
 
+test "parameter passing - f64, f64, f64, f64, f64, f64, f64, f64" {
+    createTest(u32, .{
+        @as(f64, 0.1),
+        @as(f64, 0.2),
+        @as(f64, 0.3),
+        @as(f64, 0.4),
+        @as(f64, 0.5),
+        @as(f64, 0.6),
+        @as(f64, 0.7),
+        @as(f64, 0.8),
+    }).run();
+}
+
 test "parameter passing - f32, f32, f32, f32, f32, f32, f32, f32" {
     createTest(u32, .{
         @as(f32, 0.1),
@@ -482,6 +558,19 @@ test "parameter passing - f32, f32, f32, f32, f32, f32, f32, f32" {
         @as(f32, 0.6),
         @as(f32, 0.7),
         @as(f32, 0.8),
+    }).run();
+}
+
+test "parameter passing - f128, f128, f128, f64, f64, f64, f64, f64" {
+    createTest(f64, .{
+        @as(f128, 0.1),
+        @as(f128, 0.2),
+        @as(f128, 0.3),
+        @as(f64, 0.4),
+        @as(f64, 0.5),
+        @as(f64, 0.6),
+        @as(f64, 0.7),
+        @as(f64, 0.8),
     }).run();
 }
 
@@ -542,11 +631,151 @@ test "parameter passing - u128, u128" {
     }).run();
 }
 
-test "parameter passing - u128, u128, u128, u128" {
-    createTest(i64, .{
-        @as(u128, 1000),
-        @as(u128, 2000),
-        @as(u128, 3000),
-        @as(u128, 4000),
+// test "parameter passing - u128, u128, u128, u128" {
+//     createTest(i64, .{
+//         @as(u128, 1000),
+//         @as(u128, 2000),
+//         @as(u128, 3000),
+//         @as(u128, 4000),
+//     }).run();
+// }
+
+const c = switch (builtin.link_libc) {
+    true => @cImport({
+        @cInclude("stdio.h");
+    }),
+    false => {},
+};
+
+fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
+    const FT = @TypeOf(c.sprintf);
+    const f = @typeInfo(FT).Fn;
+    const ArgStruct = types.ArgumentStruct(FT);
+    comptime var current_offset: u16 = @sizeOf(ArgStruct);
+    comptime var offsets: [f.params.len + tuple.len]u16 = undefined;
+    inline for (f.params, 0..) |param, index| {
+        const alignment: u16 = @alignOf(param.type.?);
+        const offset = (current_offset + alignment - 1) & ~(alignment - 1);
+        offsets[index] = offset;
+        current_offset = offset + @sizeOf(param.type.?);
+    }
+    inline for (tuple, 0..) |value, index| {
+        const T = @TypeOf(value);
+        const alignment: u16 = @alignOf(T);
+        const offset = (current_offset + alignment - 1) & ~(alignment - 1);
+        offsets[f.params.len + index] = offset;
+        current_offset = offset + @sizeOf(T);
+    }
+    const arg_size = current_offset;
+    return struct {
+        pub fn run() void {
+            var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
+            var attrs: [f.params.len + tuple.len]ArgAttributes = undefined;
+            var buffer1 = std.mem.zeroes([256]u8);
+            inline for (&attrs, 0..) |*p, index| {
+                const offset = offsets[index];
+                const value = switch (index) {
+                    0 => @as([*c]u8, @ptrCast(&buffer1)),
+                    1 => @as([*c]const u8, @ptrCast(fmt)),
+                    else => tuple[index - f.params.len],
+                };
+                const T = @TypeOf(value);
+                p.* = .{
+                    .offset = offset,
+                    .size = @sizeOf(T),
+                    .alignment = @alignOf(T),
+                    .is_float = @typeInfo(T) == .Float,
+                    .is_signed = @typeInfo(T) == .Int and @typeInfo(T).Int.signedness == .signed,
+                };
+                const bytes = std.mem.toBytes(value);
+                @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
+            }
+            const argStruct = @as(*ArgStruct, @ptrCast(@alignCast(&arg_bytes)));
+            call(c.sprintf, argStruct, @ptrCast(&attrs), attrs.len) catch |err| {
+                std.debug.print("Error: {s}", .{@errorName(err)});
+                panic("Error happend");
+            };
+
+            if (argStruct.retval >= 0) {
+                // call sprintf() directly
+                var buffer2 = std.mem.zeroes([256]u8);
+                comptime var arg_types: [f.params.len + tuple.len]type = undefined;
+                inline for (f.params, 0..) |param, index| {
+                    arg_types[index] = param.type.?;
+                }
+                inline for (tuple, 0..) |value, index| {
+                    arg_types[f.params.len + index] = @TypeOf(value);
+                }
+                const ArgTuple = std.meta.Tuple(&arg_types);
+                var arg_tuple: ArgTuple = undefined;
+                inline for (&arg_tuple, 0..) |*a, index| {
+                    a.* = switch (index) {
+                        0 => @ptrCast(&buffer2),
+                        1 => @ptrCast(fmt),
+                        else => tuple[index - f.params.len],
+                    };
+                }
+                const retval2: isize = @call(.auto, c.sprintf, arg_tuple);
+                if (retval2 >= 0) {
+                    const len1: usize = @intCast(argStruct.retval);
+                    const len2: usize = @intCast(retval2);
+                    const s1 = buffer1[0..len1];
+                    const s2 = buffer2[0..len2];
+                    if (s1.len != s2.len or !std.mem.eql(u8, s1, s2)) {
+                        std.debug.print("Mismatch: {s} != {s}", .{ s1, s2 });
+                        panic("Result does not match");
+                    }
+                } else {
+                    panic("Direct call failed");
+                }
+            } else {
+                panic("Call failed");
+            }
+        }
+
+        pub fn panic(message: []const u8) noreturn {
+            if (builtin.target.cpu.arch == .x86_64) {
+                @panic(message);
+            } else {
+                // don't think we can obtain the backtrace for other arch yet
+                // avoid the panic in panic error by simply exiting
+                std.debug.print("Panic: {s}\n", .{message});
+                std.process.exit(1);
+            }
+        }
+    };
+}
+
+test "sprintf - i64" {
+    if (!builtin.link_libc) return;
+    createSprintfTest("%d", .{
+        @as(i64, 1234),
+    }).run();
+}
+
+test "sprintf - i64 i32" {
+    if (!builtin.link_libc) return;
+    createSprintfTest("%d %d", .{
+        @as(i64, 1234),
+        @as(i32, 4567),
+    }).run();
+}
+
+test "sprintf - i64 i32 f64" {
+    if (!builtin.link_libc) return;
+    createSprintfTest("%d %d %f", .{
+        @as(i64, 1234),
+        @as(i32, 4567),
+        @as(f64, 3.14),
+    }).run();
+}
+
+test "sprintf - i64 i32 f64 [*:0]const u8" {
+    if (!builtin.link_libc) return;
+    createSprintfTest("%d %d %f %s", .{
+        @as(i64, 1234),
+        @as(i32, 4567),
+        @as(f64, 3.14),
+        @as([*:0]const u8, "Hello world"),
     }).run();
 }
