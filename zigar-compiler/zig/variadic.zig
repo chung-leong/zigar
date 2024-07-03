@@ -67,15 +67,37 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
     } else {
         const alloc = try Allocation.init(arg_bytes, arg_attrs, f.params.len);
         // alloc.dump();
-        const int_args = alloc.get(.int, abi.registers.int);
-        const float_args = alloc.get(.float, abi.registers.float);
-        arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
-            if (alloc.getCount(.stack) == stack_count) {
-                const stack_args = alloc.get(.stack, stack_count);
-                const result = callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
-                break result;
-            }
-        } else unreachable;
+        if (abi.extra_registers_ok) {
+            // on most platforms, we can call the function with extra pass-by-register arguments;
+            // they just gets ignored; this reduce the number of functions we need to generate
+            const int_args = alloc.get(.int, abi.registers.int);
+            const float_args = alloc.get(.float, abi.registers.float);
+            arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
+                if (alloc.getCount(.stack) == stack_count) {
+                    const stack_args = alloc.get(.stack, stack_count);
+                    break callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
+                }
+            } else unreachable;
+        } else {
+            // on PowerPC we can't do that, since stack space is allocated for pass-by-register
+            // arguments; we have to generate all the possible combinations
+            arg_struct.retval = inline for (0..abi.registers.int + 1) |int_count| {
+                if (alloc.getCount(.int) == int_count) {
+                    const int_args = alloc.get(.int, int_count);
+                    break inline for (0..abi.registers.float + 1) |float_count| {
+                        const float_args = alloc.get(.float, float_count);
+                        if (alloc.getCount(.float) == float_count) {
+                            break inline for (0..max_stack_count + 1) |stack_count| {
+                                if (alloc.getCount(.stack) == stack_count) {
+                                    const stack_args = alloc.get(.stack, stack_count);
+                                    break callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
+                                }
+                            } else unreachable;
+                        }
+                    } else unreachable;
+                }
+            } else unreachable;
+        }
     }
 }
 
@@ -107,6 +129,8 @@ const Abi = struct {
     } = .{},
     variadic_float: ArgDestination = .float,
     misfitting_float: ArgDestination = .stack,
+    extra_registers_ok: bool = true,
+    promote_float: bool = false,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
@@ -184,9 +208,19 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
         .variadic_float = .int,
         .misfitting_float = .int,
     },
-    // .powerpc64le => .{
-    //     .registers = .{ .int = 0, .float = 0 },
-    // },
+    .powerpc64le => .{
+        .registers = .{
+            .int = 0,
+            // f1 - f13
+            .float = 13,
+        },
+        .variadic_float = .stack,
+        .extra_registers_ok = false,
+        .promote_float = true,
+        .min_align = .{
+            .stack = @alignOf(isize),
+        },
+    },
     .x86 => .{
         .registers = .{
             .int = 0,
@@ -237,10 +271,18 @@ const Allocation = struct {
         }
         std.debug.print("\n", .{});
         for (arg_attrs, 0..) |a, index| {
-            const bytes = arg_bytes[a.offset .. a.offset + a.size];
             if (a.alignment == 0) {
                 return Error.invalid_argument_attributes;
             }
+            const is_variadic = index >= fixed_arg_count;
+            const raw_bytes = arg_bytes[a.offset .. a.offset + a.size];
+            const bytes: []const u8 = switch (abi.promote_float and a.is_float and a.size == 4 and !is_variadic) {
+                true => promote: {
+                    const double: f64 = @floatCast(std.mem.bytesToValue(f32, raw_bytes));
+                    break :promote &std.mem.toBytes(double);
+                },
+                false => raw_bytes,
+            };
             inline for (bins) |bin| {
                 const bin_name = @tagName(bin);
                 // don't generate code for pass-by-register when there're no registers to use
@@ -253,7 +295,7 @@ const Allocation = struct {
                     if (bin == .float) {
                         if (a.is_float) {
                             // variadic floats are passed as int on some platforms
-                            if (abi.variadic_float != .float and index >= fixed_arg_count) {
+                            if (abi.variadic_float != .float and is_variadic) {
                                 break :alloc;
                             }
                         } else {
@@ -263,7 +305,7 @@ const Allocation = struct {
                         if (a.is_float) {
                             if (abi.misfitting_float != .int) {
                                 if (abi.variadic_float == .int) {
-                                    if (index < fixed_arg_count) {
+                                    if (!is_variadic) {
                                         // this happens when the number of fixed float arg is larger than
                                         // the number of float registers
                                         break :alloc;
@@ -505,6 +547,18 @@ test "parameter passing (i32, i32)" {
 
 test "parameter passing (f32)" {
     try createTest(f32, .{
+        @as(f32, 1.234),
+    }).run();
+}
+
+test "parameter passing (i64)" {
+    try createTest(u32, .{
+        @as(i64, 1234),
+    }).run();
+}
+
+test "parameter passing (f64)" {
+    try createTest(f32, .{
         @as(f64, 1.234),
     }).run();
 }
@@ -520,6 +574,20 @@ test "parameter passing (f32, f32)" {
     try createTest(u32, .{
         @as(f32, 1.234),
         @as(f32, 4.5678),
+    }).run();
+}
+
+test "parameter passing (f64, f32)" {
+    try createTest(u32, .{
+        @as(f64, 1.234),
+        @as(f32, 4.5678),
+    }).run();
+}
+
+test "parameter passing (f64, f64)" {
+    try createTest(u32, .{
+        @as(f64, 1.24),
+        @as(f64, 4.5678),
     }).run();
 }
 
@@ -548,13 +616,13 @@ test "parameter passing (f64, f64, f64)" {
     }).run();
 }
 
-// test "parameter passing (f128, f128, f128)" {
-//     try createTest(f128, .{
-//         @as(f128, 1.234),
-//         @as(f128, 4.567),
-//         @as(f128, 7.890),
-//     }).run();
-// }
+test "parameter passing (f128, f128, f128)" {
+    try createTest(f128, .{
+        @as(f128, 1.234),
+        @as(f128, 4.567),
+        @as(f128, 7.890),
+    }).run();
+}
 
 test "parameter passing (i32, f32, f32)" {
     try createTest(u32, .{
@@ -646,18 +714,18 @@ test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32)" {
     }).run();
 }
 
-// test "parameter passing (f128, f128, f128, f64, f64, f64, f64, f64)" {
-//     try createTest(f64, .{
-//         @as(f128, 0.1),
-//         @as(f128, 0.2),
-//         @as(f128, 0.3),
-//         @as(f64, 0.4),
-//         @as(f64, 0.5),
-//         @as(f64, 0.6),
-//         @as(f64, 0.7),
-//         @as(f64, 0.8),
-//     }).run();
-// }
+test "parameter passing (f128, f128, f128, f64, f64, f64, f64, f64)" {
+    try createTest(f64, .{
+        @as(f128, 0.1),
+        @as(f128, 0.2),
+        @as(f128, 0.3),
+        @as(f64, 0.4),
+        @as(f64, 0.5),
+        @as(f64, 0.6),
+        @as(f64, 0.7),
+        @as(f64, 0.8),
+    }).run();
+}
 
 test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32)" {
     try createTest(u32, .{
@@ -709,21 +777,21 @@ test "parameter passing (i64, i64)" {
     }).run();
 }
 
-// test "parameter passing (u128, u128)" {
-//     try createTest(i64, .{
-//         @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
-//         @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFE),
-//     }).run();
-// }
+test "parameter passing (u128, u128)" {
+    try createTest(i64, .{
+        @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
+        @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFE),
+    }).run();
+}
 
-// test "parameter passing (u128, u128, u128, u128)" {
-//     try createTest(i64, .{
-//         @as(u128, 1000),
-//         @as(u128, 2000),
-//         @as(u128, 3000),
-//         @as(u128, 4000),
-//     }).run();
-// }
+test "parameter passing (u128, u128, u128, u128)" {
+    try createTest(i64, .{
+        @as(u128, 1000),
+        @as(u128, 2000),
+        @as(u128, 3000),
+        @as(u128, 4000),
+    }).run();
+}
 
 const c = switch (builtin.link_libc) {
     true => @cImport({
