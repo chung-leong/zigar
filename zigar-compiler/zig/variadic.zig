@@ -66,39 +66,48 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
         arg_struct.retval = @call(.auto, function_ptr, args);
     } else {
         const alloc = try Allocation.init(arg_bytes, arg_attrs, f.params.len);
-        // alloc.dump();
-        if (abi.extra_registers_ok) {
-            // on most platforms, we can call the function with extra pass-by-register arguments;
-            // they just gets ignored; this reduce the number of functions we need to generate
-            const int_args = alloc.get(.int, abi.registers.int);
-            const float_args = alloc.get(.float, abi.registers.float);
-            arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
-                if (alloc.getCount(.stack) == stack_count) {
-                    const stack_args = alloc.get(.stack, stack_count);
-                    break callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
-                }
-            } else unreachable;
-        } else {
-            // on PowerPC we can't do that, since stack space is allocated for pass-by-register
-            // arguments; we have to generate all the possible combinations
-            arg_struct.retval = inline for (0..abi.registers.int + 1) |int_count| {
-                if (alloc.getCount(.int) == int_count) {
-                    const int_args = alloc.get(.int, int_count);
-                    break inline for (0..abi.registers.float + 1) |float_count| {
-                        const float_args = alloc.get(.float, float_count);
-                        if (alloc.getCount(.float) == float_count) {
-                            break inline for (0..max_stack_count + 1) |stack_count| {
-                                if (alloc.getCount(.stack) == stack_count) {
-                                    const stack_args = alloc.get(.stack, stack_count);
-                                    break callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
-                                }
-                            } else unreachable;
-                        }
-                    } else unreachable;
-                }
-            } else unreachable;
+        // on most platforms, we can call the function with extra pass-by-register arguments;
+        // they just gets ignored; this reduce the number of functions we need to generate
+        // on PowerPC we can't do that, since stack space is allocated for pass-by-register
+        // arguments; luckily only fixed float arguments are passed by register though, so
+        // we just need to count those
+        const max_int_count = abi.registers.int;
+        const max_float_count = get: {
+            if (abi.variadic_float == .float) {
+                break :get abi.registers.float;
+            } else if (abi.registers.float > 0) {
+                break :get @min(abi.registers.float, getFloatArgCount(function));
+            } else {
+                break :get 0;
+            }
+        };
+        const int_args = alloc.get(.int, max_int_count);
+        const float_args = alloc.get(.float, max_float_count);
+        arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
+            if (alloc.getCount(.stack) == stack_count) {
+                const stack_args = alloc.get(.stack, stack_count);
+                break callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
+            }
+        } else unreachable;
+    }
+}
+
+fn getFloatArgCount(function: anytype) comptime_int {
+    comptime var count = 0;
+    inline for (@typeInfo(@TypeOf(function)).Fn.params) |param| {
+        if (param.type) |T| {
+            switch (@typeInfo(T)) {
+                .Float => |float| {
+                    if (float.bits <= 64) {
+                        count += 1;
+                    }
+                    //count += if (float.bits > 64) 2 else 1;
+                },
+                else => {},
+            }
         }
     }
+    return count;
 }
 
 const max_arg_count = 32;
@@ -123,13 +132,15 @@ const Abi = struct {
         float: comptime_int = @sizeOf(f64) * 2,
     } = .{},
     min_align: struct {
-        int: comptime_int = @alignOf(f64),
-        float: comptime_int = @alignOf(isize),
-        stack: comptime_int = @alignOf(isize),
+        int: comptime_int = @alignOf(isize),
+        float: comptime_int = @alignOf(f64),
+        stack: struct {
+            int: comptime_int = @alignOf(isize),
+            float: comptime_int = @alignOf(isize),
+        } = .{},
     } = .{},
     variadic_float: ArgDestination = .float,
     misfitting_float: ArgDestination = .stack,
-    extra_registers_ok: bool = true,
     promote_float: bool = false,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
@@ -147,9 +158,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = @sizeOf(f128),
             },
             .min_align = .{
-                .int = @sizeOf(isize),
                 .float = @alignOf(f128),
-                .stack = @sizeOf(isize),
             },
             .variadic_float = .int,
         },
@@ -162,13 +171,10 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = 8,
             },
             .limits = .{
-                .int = @sizeOf(isize) * 2,
                 .float = @sizeOf(f128),
             },
             .min_align = .{
-                .int = @sizeOf(isize),
                 .float = @alignOf(f128),
-                .stack = @sizeOf(isize),
             },
         },
     },
@@ -181,13 +187,15 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .float = 8,
         },
         .limits = .{
-            .int = @sizeOf(isize) * 2,
             .float = @sizeOf(f128),
         },
         .min_align = .{
             .int = @sizeOf(isize),
             .float = @alignOf(f128),
-            .stack = @sizeOf(isize),
+            .stack = .{
+                .int = @sizeOf(isize),
+                .float = @sizeOf(isize),
+            },
         },
     },
     .riscv64 => .{
@@ -196,14 +204,17 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .int = 8,
             .float = 8,
         },
-        .min_align = .{
-            .int = @alignOf(i32),
-            .float = @alignOf(i64),
-            .stack = @alignOf(isize),
-        },
         .limits = .{
             .int = 8 * @sizeOf(isize),
             .float = @sizeOf(f64),
+        },
+        .min_align = .{
+            .int = @alignOf(i32),
+            .float = @alignOf(i64),
+            .stack = .{
+                .int = @sizeOf(isize),
+                .float = @sizeOf(isize),
+            },
         },
         .variadic_float = .int,
         .misfitting_float = .int,
@@ -215,10 +226,14 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .float = 13,
         },
         .variadic_float = .stack,
-        .extra_registers_ok = false,
         .promote_float = true,
+        .limits = .{
+            .float = @sizeOf(f64),
+        },
         .min_align = .{
-            .stack = @alignOf(isize),
+            .stack = .{
+                .float = @sizeOf(i32),
+            },
         },
     },
     .x86 => .{
@@ -227,11 +242,17 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .float = 0,
         },
         .min_align = .{
-            .stack = @alignOf(i8),
+            .stack = .{
+                .int = @alignOf(i8),
+                .float = @alignOf(f32),
+            },
         },
     },
     .arm, .armeb => .{
-        .registers = .{ .int = 0, .float = 0 },
+        .registers = .{
+            .int = 0,
+            .float = 0,
+        },
     },
     else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
 };
@@ -267,7 +288,7 @@ const Allocation = struct {
         const bins = [_]ArgDestination{ .float, .int, .stack };
         inline for (bins) |bin| {
             const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
-            for (dest_bytes) |*p| p.* = 0xAA;
+            for (dest_bytes) |*p| p.* = 0xbb;
         }
         std.debug.print("\n", .{});
         for (arg_attrs, 0..) |a, index| {
@@ -321,7 +342,13 @@ const Allocation = struct {
                         const limit = @field(abi.limits, bin_name);
                         if (a.size > limit) break :alloc;
                     }
-                    const min_align = @field(abi.min_align, bin_name);
+                    const min_align: usize = get: {
+                        const value = @field(abi.min_align, bin_name);
+                        break :get switch (bin) {
+                            .stack => if (a.is_float) value.float else value.int,
+                            else => value,
+                        };
+                    };
                     const offset_ptr = &@field(self, bin_name ++ "_offset");
                     const dest_bytes = &@field(self, bin_name ++ "_bytes");
                     const arg_align: usize = @max(min_align, a.alignment);
@@ -968,6 +995,24 @@ test "sprintf (f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, 
     }).run();
 }
 
+test "sprintf (i64, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%ld %f", .{
+        @as(i64, -123),
+        @as(f64, 3.14),
+    }).run();
+}
+
+test "sprintf (i64, f64, i64, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%ld %f %ld %f", .{
+        @as(i64, -123),
+        @as(f64, 3.14),
+        @as(i64, -235),
+        @as(f64, 7.77),
+    }).run();
+}
+
 test "sprintf (i16, i16)" {
     if (!builtin.link_libc) return error.SkipZigTest;
     try createSprintfTest("%hd %hd", .{
@@ -981,6 +1026,24 @@ test "sprintf (i8, i8)" {
     try createSprintfTest("%hhd %hhd", .{
         @as(i16, -123),
         @as(i16, -124),
+    }).run();
+}
+
+test "sprintf (i64, c_longdouble, i64, c_longdouble)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%ld %f", .{
+        @as(i64, -123),
+        @as(c_longdouble, 3.14),
+        @as(i64, -235),
+        @as(c_longdouble, 7.77),
+    }).run();
+}
+
+test "sprintf (c_longdouble, c_longdouble)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%ld %f", .{
+        @as(c_longdouble, 3.14),
+        @as(c_longdouble, 7.77),
     }).run();
 }
 
