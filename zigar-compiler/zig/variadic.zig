@@ -149,10 +149,21 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
         },
     },
     .aarch64, .aarch64_be, .aarch64_32 => .{
+        .FloatType = f128,
         .registers = .{
             // x0 - x7
             .int = 8,
-            .float = 0,
+            // v0 - v7
+            .float = 8,
+        },
+        .limits = .{
+            .int = @sizeOf(isize) * 2,
+            .float = @sizeOf(f128),
+        },
+        .min_align = .{
+            .int = @sizeOf(isize),
+            .float = @alignOf(f128),
+            .stack = @sizeOf(isize),
         },
     },
     .riscv64 => .{
@@ -842,6 +853,66 @@ test "sprintf (i64, i32, f64, [*:0]const u8)" {
         @as(i32, 4567),
         @as(f64, 3.14),
         @as([*:0]const u8, "Hello world"),
+    }).run();
+}
+
+test "sprintf (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", .{
+        @as(i64, 1),
+        @as(i64, 2),
+        @as(i64, 3),
+        @as(i64, 4),
+        @as(i64, 5),
+        @as(i64, 6),
+        @as(i64, 7),
+        @as(i64, 8),
+        @as(i64, 9),
+        @as(i64, 10),
+        @as(i64, 11),
+        @as(i64, 12),
+        @as(i64, 13),
+        @as(i64, 14),
+        @as(i64, 15),
+        @as(i64, 16),
+    }).run();
+}
+
+test "sprintf (f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f", .{
+        @as(f64, 1),
+        @as(f64, 2),
+        @as(f64, 3),
+        @as(f64, 4),
+        @as(f64, 5),
+        @as(f64, 6),
+        @as(f64, 7),
+        @as(f64, 8),
+        @as(f64, 9),
+        @as(f64, 10),
+        @as(f64, 11),
+        @as(f64, 12),
+        @as(f64, 13),
+        @as(f64, 14),
+        @as(f64, 15),
+        @as(f64, 16),
+    }).run();
+}
+
+test "sprintf (i16, i16)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%hd %hd", .{
+        @as(i16, -123),
+        @as(i16, -124),
+    }).run();
+}
+
+test "sprintf (i8, i8)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%hhd %hhd", .{
+        @as(i16, -123),
+        @as(i16, -124),
     }).run();
 }
 
