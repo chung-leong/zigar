@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("./types.zig");
-const assert = std.debug.assert;
+const expect = std.testing.expect;
 
 const Value = types.Value;
 const Memory = types.Memory;
@@ -545,16 +545,16 @@ test "createThunk" {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .Fn => |f| {
-                    assert(f.params.len == 2);
-                    assert(f.calling_convention == .C);
+                    try expect(f.params.len == 2);
+                    try expect(f.calling_convention == .C);
                 },
                 else => {
-                    assert(false);
+                    try expect(false);
                 },
             }
         },
         else => {
-            assert(false);
+            try expect(false);
         },
     }
 }

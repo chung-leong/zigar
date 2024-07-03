@@ -245,7 +245,7 @@ test "clearBytes" {
         const bytes = allocator.rawAlloc(len, ptr_align, 0) orelse @panic("No memory");
         clearBytes(bytes, len);
         for (bytes[0..len]) |byte| {
-            assert(byte == 0);
+            try expect(byte == 0);
         }
         allocator.rawFree(bytes[0..len], ptr_align, 0);
     }
