@@ -67,11 +67,11 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
     } else {
         const alloc = try Allocation.init(arg_bytes, arg_attrs, f.params.len);
         // alloc.dump();
-        const int_args = alloc.getInts();
-        const float_args = alloc.getFloats();
+        const int_args = alloc.get(.int, abi.registers.int);
+        const float_args = alloc.get(.float, abi.registers.float);
         arg_struct.retval = inline for (0..max_stack_count + 1) |stack_count| {
-            if (alloc.getStackCount() == stack_count) {
-                const stack_args = alloc.getStack(stack_count);
+            if (alloc.getCount(.stack) == stack_count) {
+                const stack_args = alloc.get(.stack, stack_count);
                 const result = callWithArgs(f.return_type.?, f.calling_convention, function, float_args, int_args, stack_args);
                 break result;
             }
@@ -88,6 +88,7 @@ const ArgAttributes = extern struct {
     is_float: bool,
     is_signed: bool,
 };
+const ArgDestination = enum { float, int, stack };
 const Abi = struct {
     FloatType: type = f64,
     IntType: type = isize,
@@ -95,10 +96,17 @@ const Abi = struct {
         int: comptime_int,
         float: comptime_int,
     },
-    min_float_align: comptime_int = @alignOf(f64),
-    min_int_align: comptime_int = @alignOf(isize),
-    min_stack_align: comptime_int = @alignOf(isize),
-    pass_variadic_float_as_int: bool = false,
+    limits: struct {
+        int: comptime_int = @sizeOf(isize) * 2,
+        float: comptime_int = @sizeOf(f64) * 2,
+    } = .{},
+    min_align: struct {
+        int: comptime_int = @alignOf(f64),
+        float: comptime_int = @alignOf(isize),
+        stack: comptime_int = @alignOf(isize),
+    } = .{},
+    variadic_float: ArgDestination = .float,
+    misfitting_float: ArgDestination = .stack,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
@@ -110,8 +118,16 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 // XMM0, XMM1, XMM2, XMM3
                 .float = 4,
             },
-            .min_float_align = @alignOf(f128),
-            .pass_variadic_float_as_int = true,
+            .limits = .{
+                .int = @sizeOf(isize),
+                .float = @sizeOf(f128),
+            },
+            .min_align = .{
+                .int = @sizeOf(isize),
+                .float = @alignOf(f128),
+                .stack = @sizeOf(isize),
+            },
+            .variadic_float = .int,
         },
         else => .{
             .FloatType = f128,
@@ -121,7 +137,15 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 // XMM0 - XMM7
                 .float = 8,
             },
-            .min_float_align = @alignOf(f128),
+            .limits = .{
+                .int = @sizeOf(isize) * 2,
+                .float = @sizeOf(f128),
+            },
+            .min_align = .{
+                .int = @sizeOf(isize),
+                .float = @alignOf(f128),
+                .stack = @sizeOf(isize),
+            },
         },
     },
     .aarch64, .aarch64_be, .aarch64_32 => .{
@@ -137,15 +161,29 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             .int = 8,
             .float = 8,
         },
-        .min_int_align = @alignOf(i32),
-        .pass_variadic_float_as_int = true,
+        .min_align = .{
+            .int = @alignOf(i32),
+            .float = @alignOf(i64),
+            .stack = @alignOf(isize),
+        },
+        .limits = .{
+            .int = 8 * @sizeOf(isize),
+            .float = @sizeOf(f64),
+        },
+        .variadic_float = .int,
+        .misfitting_float = .int,
     },
     // .powerpc64le => .{
     //     .registers = .{ .int = 0, .float = 0 },
     // },
     .x86 => .{
-        .registers = .{ .int = 0, .float = 0 },
-        .min_stack_align = @alignOf(i8),
+        .registers = .{
+            .int = 0,
+            .float = 0,
+        },
+        .min_align = .{
+            .stack = @alignOf(i8),
+        },
     },
     .arm, .armeb => .{
         .registers = .{ .int = 0, .float = 0 },
@@ -162,154 +200,139 @@ const Allocation = struct {
     int_bytes: [abi.registers.int * @sizeOf(abi.IntType)]u8 align(@alignOf(abi.IntType)) = undefined,
     stack_bytes: [max_stack_count * @sizeOf(abi.IntType)]u8 align(@alignOf(abi.IntType)) = undefined,
 
-    fn getFloats(self: *const @This()) *const [abi.registers.float]abi.FloatType {
-        return @ptrCast(&self.float_bytes);
+    fn get(self: *const @This(), comptime bin: ArgDestination, comptime count: usize) *const [count]switch (bin) {
+        .float => abi.FloatType,
+        else => abi.IntType,
+    } {
+        const bytes = &@field(self, @tagName(bin) ++ "_bytes");
+        return @ptrCast(bytes);
     }
 
-    fn getInts(self: *const @This()) *const [abi.registers.int]abi.IntType {
-        return @ptrCast(&self.int_bytes);
-    }
-
-    fn getStack(self: *const @This(), comptime count: usize) *const [count]abi.IntType {
-        return @ptrCast(&self.stack_bytes);
-    }
-
-    fn getFloatCount(self: *const @This()) usize {
-        return self.float_offset / @sizeOf(abi.FloatType);
-    }
-
-    fn getIntCount(self: *const @This()) usize {
-        return self.int_offset / @sizeOf(abi.IntType);
-    }
-
-    fn getStackCount(self: *const @This()) usize {
-        return self.stack_offset / @sizeOf(abi.IntType);
+    fn getCount(self: *const @This(), comptime bin: ArgDestination) usize {
+        const offset = @field(self, @tagName(bin) ++ "_offset");
+        const T = switch (bin) {
+            .float => abi.FloatType,
+            else => abi.IntType,
+        };
+        return offset / @sizeOf(T);
     }
 
     fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !@This() {
         var self: @This() = .{};
-        for (&self.float_bytes) |*p| p.* = 0xAA;
-        for (&self.int_bytes) |*p| p.* = 0xAA;
-        for (&self.stack_bytes) |*p| p.* = 0xAA;
-        loop: for (arg_attrs, 0..) |a, index| {
+        const bins = [_]ArgDestination{ .float, .int, .stack };
+        inline for (bins) |bin| {
+            const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
+            for (dest_bytes) |*p| p.* = 0xAA;
+        }
+        std.debug.print("\n", .{});
+        for (arg_attrs, 0..) |a, index| {
             const bytes = arg_bytes[a.offset .. a.offset + a.size];
             if (a.alignment == 0) {
                 return Error.invalid_argument_attributes;
             }
-            const can_use_float = switch (abi.pass_variadic_float_as_int) {
-                false => true,
-                true => index < fixed_arg_count and false,
-            };
-            if (a.is_float and can_use_float) {
-                if (a.size <= @sizeOf(abi.FloatType) * 2 and comptime abi.registers.float > 0) {
-                    if (self.use(.float, bytes, a)) {
-                        continue :loop;
+            inline for (bins) |bin| {
+                const bin_name = @tagName(bin);
+                // don't generate code for pass-by-register when there're no registers to use
+                if (@hasField(@TypeOf(abi.registers), bin_name)) {
+                    if (@field(abi.registers, bin_name) == 0) continue;
+                }
+                // runtime controlled continue is not allowed by Zig for some reason
+                // we need to use break-to-label here instead
+                alloc: {
+                    if (bin == .float) {
+                        if (a.is_float) {
+                            // variadic floats are passed as int on some platforms
+                            if (abi.variadic_float != .float and index >= fixed_arg_count) {
+                                break :alloc;
+                            }
+                        } else {
+                            break :alloc;
+                        }
+                    } else if (bin == .int) {
+                        if (a.is_float) {
+                            if (abi.misfitting_float != .int) {
+                                if (abi.variadic_float == .int) {
+                                    if (index < fixed_arg_count) {
+                                        // this happens when the number of fixed float arg is larger than
+                                        // the number of float registers
+                                        break :alloc;
+                                    }
+                                } else {
+                                    break :alloc;
+                                }
+                            }
+                        }
+                    }
+                    if (@hasField(@TypeOf(abi.limits), bin_name)) {
+                        // see if the argument is too large to pass by register
+                        const limit = @field(abi.limits, bin_name);
+                        if (a.size > limit) break :alloc;
+                    }
+                    const min_align = @field(abi.min_align, bin_name);
+                    const offset_ptr = &@field(self, bin_name ++ "_offset");
+                    const dest_bytes = &@field(self, bin_name ++ "_bytes");
+                    const arg_align: usize = @max(min_align, a.alignment);
+                    const last_offset = offset_ptr.*;
+                    const start = alignForward(usize, last_offset, arg_align);
+                    const end = start + bytes.len;
+                    if (end <= dest_bytes.len) {
+                        // std.debug.print("{any}: {d} - {d}\n", .{ bin, start, end });
+                        const padding_bytes = dest_bytes[last_offset..start];
+                        for (padding_bytes) |*p| p.* = 0;
+                        const arg_dest_bytes = dest_bytes[start..end];
+                        @memcpy(arg_dest_bytes, bytes);
+                        offset_ptr.* = end;
+                        if (@alignOf(abi.IntType) != abi.min_align.int and abi.variadic_float == .int) {
+                            if (bin == .int and !a.is_float) {
+                                const next_offset = alignForward(usize, end, @alignOf(abi.IntType));
+                                const padding_bytes_after = dest_bytes[end..next_offset];
+                                for (padding_bytes_after) |*p| p.* = 0;
+                                offset_ptr.* = next_offset;
+                            }
+                        }
+                        break;
                     }
                 }
             } else {
-                if (a.size <= @sizeOf(abi.IntType) * 2 and comptime abi.registers.int > 0) {
-                    if (self.use(.int, bytes, a)) {
-                        continue :loop;
-                    }
-                }
-            }
-            if (!self.use(.stack, bytes, a)) {
                 return Error.too_many_arguments;
             }
         }
-        self.finalize(.float);
-        self.finalize(.int);
-        self.finalize(.stack);
-        return self;
-    }
-
-    fn use(self: *@This(), bin: Type, bytes: []const u8, a: ArgAttributes) bool {
-        const min_align: usize = switch (bin) {
-            .float => abi.min_float_align,
-            .int => abi.min_int_align,
-            .stack => abi.min_stack_align,
-        };
-        const max_align: usize = switch (bin) {
-            .float => @alignOf(abi.FloatType),
-            .int => @alignOf(abi.IntType),
-            .stack => std.math.maxInt(usize),
-        };
-        const offset_ptr = switch (bin) {
-            .float => &self.float_offset,
-            .int => &self.int_offset,
-            .stack => &self.stack_offset,
-        };
-        const destination = switch (bin) {
-            .float => &self.float_bytes,
-            .int => &self.int_bytes,
-            .stack => &self.stack_bytes,
-        };
-        const arg_align: usize = @max(min_align, a.alignment);
-        const last_offset = offset_ptr.*;
-        const start = alignForward(usize, last_offset, arg_align);
-        const end = start + bytes.len;
-        if (end > destination.len) {
-            return false;
-        }
-        std.debug.print("{any}: {d} - {d}\n", .{ bin, start, end });
-        const padding_bytes = destination[last_offset..start];
-        for (padding_bytes) |*p| p.* = 0;
-        const dest_bytes = destination[start..end];
-        @memcpy(dest_bytes, bytes);
-        if (bin == .int and !a.is_float and comptime @alignOf(abi.IntType) != abi.min_int_align) {
-            // if we're storing an int in a int register, don't leave space for the next argument
-            const next_offset = alignForward(usize, end, max_align);
-            const padding_bytes_after = destination[end..next_offset];
-            for (padding_bytes_after) |*p| p.* = 0;
-            offset_ptr.* = next_offset;
-        } else {
+        inline for (bins) |bin| {
+            const end_align: usize = switch (bin) {
+                .float => @alignOf(abi.FloatType),
+                else => @alignOf(abi.IntType),
+            };
+            const offset_ptr = &@field(self, @tagName(bin) ++ "_offset");
+            const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
+            const last_offset = offset_ptr.*;
+            const end = alignForward(usize, last_offset, end_align);
+            const padding_bytes = dest_bytes[last_offset..end];
+            for (padding_bytes) |*p| p.* = 0;
             offset_ptr.* = end;
         }
-        return true;
-    }
-
-    fn finalize(self: *@This(), bin: Type) void {
-        const end_align: usize = switch (bin) {
-            .float => @alignOf(abi.FloatType),
-            .int => @alignOf(abi.IntType),
-            .stack => @alignOf(abi.IntType),
-        };
-        const offset_ptr = switch (bin) {
-            .float => &self.float_offset,
-            .int => &self.int_offset,
-            .stack => &self.stack_offset,
-        };
-        const destination = switch (bin) {
-            .float => &self.float_bytes,
-            .int => &self.int_bytes,
-            .stack => &self.stack_bytes,
-        };
-        const last_offset = offset_ptr.*;
-        const end = alignForward(usize, last_offset, end_align);
-        const padding_bytes = destination[last_offset..end];
-        for (padding_bytes) |*p| p.* = 0;
-        offset_ptr.* = end;
+        return self;
     }
 
     fn dump(self: *const @This()) void {
         std.debug.print("\n", .{});
-        const int_reg_count = self.getIntCount();
-        if (int_reg_count > 0) {
-            const int_regs = self.getInts();
-            const int_regs_in_use = int_regs.*[0..int_reg_count];
-            std.debug.print("Int registers: {any}\n", .{int_regs_in_use});
-        }
-        const float_reg_count = self.getFloatCount();
-        if (float_reg_count > 0) {
-            const float_regs = self.getFloats();
-            const float_regs_in_use = float_regs.*[0..float_reg_count];
-            std.debug.print("Float registers: {any}\n", .{float_regs_in_use});
-        }
-        const stack_word_count = self.getStackCount();
-        if (stack_word_count > 0) {
-            const stack_words = self.getStack(max_stack_count);
-            const stack_words_in_use = stack_words.*[0..stack_word_count];
-            std.debug.print("Stack: {any}\n", .{stack_words_in_use});
+        const bins = [_]ArgDestination{ .float, .int, .stack };
+        inline for (bins) |bin| {
+            const count = self.getCount(bin);
+            if (count > 0) {
+                const max_count = switch (bin) {
+                    .float => abi.registers.float,
+                    .int => abi.registers.int,
+                    .stack => max_stack_count,
+                };
+                const words = self.get(bin, max_count);
+                const in_use = words.*[0..count];
+                const label = switch (bin) {
+                    .float => "Float registers",
+                    .int => "Int registers",
+                    .stack => "Stack",
+                };
+                std.debug.print("{s}: {any}\n", .{ label, in_use });
+            }
         }
     }
 };
@@ -413,7 +436,7 @@ fn createTest(RT: type, tuple: anytype) type {
         }
 
         pub fn attempt() !void {
-            var arg_bytes: [arg_size]u8 = undefined;
+            var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
             var attrs: [tuple.len]ArgAttributes = undefined;
             inline for (&attrs, 0..) |*p, index| {
                 const offset = offsets[index];
@@ -705,7 +728,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     comptime var current_offset: u16 = @sizeOf(ArgStruct);
     comptime var offsets: [f.params.len + tuple.len]u16 = undefined;
     inline for (f.params, 0..) |param, index| {
-        const offset = alignForward(current_offset, @alignOf(param.type.?));
+        const offset = alignForward(usize, current_offset, @alignOf(param.type.?));
         offsets[index] = offset;
         current_offset = offset + @sizeOf(param.type.?);
     }
