@@ -4,13 +4,10 @@ const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
 
 pub const Value = types.Value;
-pub const Call = *const CallContext;
 const Memory = types.Memory;
 const Error = types.Error;
 
-const CallContext = struct {
-    allocator: std.mem.Allocator,
-};
+const Call = *anyopaque;
 
 extern fn _allocateHostMemory(len: usize, alignment: u16) ?Value;
 extern fn _freeHostMemory(bytes: [*]u8, len: usize, alignment: u16) void;
@@ -32,8 +29,6 @@ extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
 extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
-extern fn _startCall(call: Call, arg_struct: Value) *anyopaque;
-extern fn _endCall(call: Call, arg_struct: Value) void;
 extern fn _getArgAttributes() *anyopaque;
 
 const allocator: std.mem.Allocator = .{
@@ -75,34 +70,32 @@ pub fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
     allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
-pub fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
+pub fn allocateShadowMemory(len: usize, alignment: u16) ?Value {
     if (len == 0) {
         return _captureView(null, len, false);
     }
     const ptr_align = getPtrAlign(alignment);
-    if (call.allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
+    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         return _captureView(bytes, len, false);
     } else {
         return null;
     }
 }
 
-pub fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) void {
+pub fn freeShadowMemory(bytes: [*]u8, len: usize, alignment: u16) void {
     if (len == 0) {
         return;
     }
     const ptr_align = getPtrAlign(alignment);
-    call.allocator.rawFree(bytes[0..len], ptr_align, 0);
+    allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
 pub const Host = struct {
-    context: Call,
     options: types.HostOptions,
 
-    pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(call_ptr));
+    pub fn init(_: ?*anyopaque, arg_ptr: ?*anyopaque) Host {
         const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
-        return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
+        return .{ .options = if (options_ptr) |ptr| ptr.* else .{} };
     }
 
     pub fn release(_: Host) void {}
@@ -236,23 +229,16 @@ pub const Host = struct {
     }
 };
 
-pub fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
-    var call_ctx: CallContext = .{ .allocator = allocator };
-    const arg_ptr = _startCall(&call_ctx, arg_struct);
+pub fn runThunk(thunk_id: usize, arg_ptr: *anyopaque) ?Value {
     // function pointers in WASM are indices into function table 0
     // so the thunk_id is really the thunk itself
     const thunk: types.Thunk = @ptrFromInt(thunk_id);
-    defer _endCall(&call_ctx, arg_struct);
-    return thunk(@ptrCast(&call_ctx), arg_ptr);
+    return thunk(null, arg_ptr);
 }
 
-pub fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?Value {
-    var call_ctx: CallContext = .{ .allocator = allocator };
-    const arg_ptr = _startCall(&call_ctx, arg_struct);
-    const attr_ptr = _getArgAttributes();
+pub fn runVariadicThunk(thunk_id: usize, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
     const thunk: types.VariadicThunk = @ptrFromInt(thunk_id);
-    defer _endCall(&call_ctx, arg_struct);
-    return thunk(@ptrCast(&call_ctx), arg_ptr, attr_ptr, arg_count);
+    return thunk(null, arg_ptr, attr_ptr, arg_count);
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {

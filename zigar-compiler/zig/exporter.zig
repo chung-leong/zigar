@@ -496,7 +496,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype) types.ThunkType
             }
         }
 
-        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
+        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             tryFunction(host, arg_ptr) catch |err| {
@@ -511,7 +511,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype) types.ThunkType
             return @import("./variadic.zig").call(function, arg_struct, attr_ptr, arg_count);
         }
 
-        fn invokeFunction(ptr: *anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
+        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             tryFunction(host, arg_ptr, attr_ptr, arg_count) catch |err| {
@@ -802,7 +802,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) types.Thunk {
     comptime tdc.scan(T);
     const tdb = comptime tdc.createDatabase();
     const RootFactory = struct {
-        fn exportStructure(ptr: *anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
+        fn exportStructure(ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             @setEvalBranchQuota(2000000);
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();

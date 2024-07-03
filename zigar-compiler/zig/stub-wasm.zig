@@ -2,7 +2,6 @@ const std = @import("std");
 const host = @import("./host-wasm.zig");
 
 const Value = host.Value;
-const Call = host.Call;
 
 export fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
     return host.allocateExternMemory(len, alignment);
@@ -12,24 +11,24 @@ export fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
     host.freeExternMemory(bytes, len, alignment);
 }
 
-export fn allocateShadowMemory(call: Call, len: usize, alignment: u16) ?Value {
-    return host.allocateShadowMemory(call, len, alignment);
+export fn allocateShadowMemory(len: usize, alignment: u16) ?Value {
+    return host.allocateShadowMemory(len, alignment);
 }
 
-export fn freeShadowMemory(call: Call, bytes: [*]u8, len: usize, alignment: u16) void {
-    host.freeShadowMemory(call, bytes, len, alignment);
+export fn freeShadowMemory(bytes: [*]u8, len: usize, alignment: u16) void {
+    host.freeShadowMemory(bytes, len, alignment);
 }
 
 export fn getFactoryThunk() usize {
     return host.getFactoryThunk(@import("module"));
 }
 
-export fn runThunk(thunk_id: usize, arg_struct: Value) ?Value {
-    return host.runThunk(thunk_id, arg_struct);
+export fn runThunk(thunk_id: usize, arg_ptr: *anyopaque) ?Value {
+    return host.runThunk(thunk_id, arg_ptr);
 }
 
-export fn runVariadicThunk(thunk_id: usize, arg_struct: Value, arg_count: usize) ?Value {
-    return host.runVariadicThunk(thunk_id, arg_struct, arg_count);
+export fn runVariadicThunk(thunk_id: usize, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
+    return host.runVariadicThunk(thunk_id, arg_ptr, attr_ptr, arg_count);
 }
 
 export fn isRuntimeSafetyActive() bool {

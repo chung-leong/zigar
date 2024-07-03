@@ -51,8 +51,8 @@ pub const Host = struct {
     context: Call,
     options: types.HostOptions,
 
-    pub fn init(call_ptr: *anyopaque, arg_ptr: ?*anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(call_ptr));
+    pub fn init(call_ptr: ?*anyopaque, arg_ptr: ?*anyopaque) Host {
+        const context: Call = @ptrCast(@alignCast(call_ptr.?));
         const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
         if (initial_context == null) {
             initial_context = context;

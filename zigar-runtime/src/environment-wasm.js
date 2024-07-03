@@ -9,10 +9,10 @@ export class WebAssemblyEnvironment extends Environment {
     getFactoryThunk: { argType: '', returnType: 'i' },
     allocateExternMemory: { argType: 'ii', returnType: 'i' },
     freeExternMemory: { argType: 'iii' },
-    allocateShadowMemory: { argType: 'cii', returnType: 'v' },
-    freeShadowMemory: { argType: 'ciii' },
-    runThunk: { argType: 'iv', returnType: 'v' },
-    runVariadicThunk: { argType: 'ivi', returnType: 'v' },
+    allocateShadowMemory: { argType: 'ii', returnType: 'v' },
+    freeShadowMemory: { argType: 'iii' },
+    runThunk: { argType: 'ii', returnType: 'v' },
+    runVariadicThunk: { argType: 'iiii', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
     flushStdout: { argType: '', returnType: '' },
   };
@@ -37,9 +37,6 @@ export class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
-    startCall: { argType: 'iv', returnType: 'i' },
-    endCall: { argType: 'iv', returnType: 'i' },
-    getArgAttributes: { argType: '', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -287,98 +284,57 @@ export class WebAssemblyEnvironment extends Environment {
     return reloc;
   }
 
-  startCall(call, args) {
-    this.startContext();
-    // call context, used by allocateShadowMemory and freeShadowMemory
-    this.context.call = call;
-    if (args[POINTER_VISITOR]) {
-      this.updatePointerAddresses(args);
-    }
-    // return address of shadow for argumnet struct
-    const address = this.getShadowAddress(args);
-    const attrs = args[ATTRIBUTES];
-    if (attrs) {
-      this.context.argAttributes = this.getShadowAddress(attrs);
-    }
-    this.updateShadows();
-    return address;
-  }
-
-  endCall(call, args) {
-    this.updateShadowTargets();
-    if (args[POINTER_VISITOR]) {
-      this.updatePointerTargets(args);
-    }
-    this.releaseShadows();
-    // restore the previous context if there's one
-    this.endContext();
-    if (!this.context && this.flushConsole) {
-      this.flushStdout();
-      this.flushConsole();
-    }
-  }
-
-  getArgAttributes() {
-    return this.context.argAttributes;
-  }
-
-  async runThunk(thunkId, args) {
-    // this method will be overridden by the WASM version once compilation completes
-    await this.initPromise;
-    return this.runThunk(thunkId, args);
-  }
-
-  async runVariadicThunk(thunkId, args, argCount) {
-    // ditto
-    await this.initPromise;
-    return this.runVariadicThunk(thunkId, args, argCount);
-  }
-
   invokeThunk(thunkId, args) {
+    // runThunk will be present only after WASM has compiled
+    if (this.runThunk) {
+      return this.invokeThunkForReal(thunkId, args);
+    } else {
+      return this.initPromise.then(() => {
+        return this.invokeThunkForReal(thunkId, args);
+      });
+    }
+  }
+
+  invokeThunkForReal(thunkId, args) {
     try {
-      // wasm-exporter.zig will invoke startCall() with the context address and the args
-      // we can't do pointer fix up here since we need the context in order to allocate
-      // memory from the WebAssembly allocator; pointer target acquisition will happen in
-      // endCall()
+      this.startContext();
+      if (args[POINTER_VISITOR]) {
+        this.updatePointerAddresses(args);
+      }
+      // return address of shadow for argumnet struct
+      const address = this.getShadowAddress(args);
       const attrs = args[ATTRIBUTES];
-      const unexpected = (attrs)
-      ? this.runVariadicThunk(thunkId, args, attrs.length)
-      : this.runThunk(thunkId, args);
+      // get address of attributes if function variadic
+      const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
+      this.updateShadows();
+      const err = (attrs)
+      ? this.runVariadicThunk(thunkId, address, attrAddress, attrs.length)
+      : this.runThunk(thunkId, address, );
+      // create objects that pointers point to
+      this.updateShadowTargets();
+      if (args[POINTER_VISITOR]) {
+        this.updatePointerTargets(args);
+      }
+      this.releaseShadows();
+      // restore the previous context if there's one
+      this.endContext();
+      if (!this.context && this.flushConsole) {
+        this.flushStdout();
+        this.flushConsole();
+      }
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
       // error strings returned by the thunk are due to problems in the thunking process
       // (i.e. bugs in export.zig)
-      if (unexpected) {
-        if (unexpected[Symbol.toStringTag] === 'Promise') {
-          // getting a promise, WASM is not yet ready
-          // wait for fulfillment, then either return result or throw
-          return unexpected.then((unexpected) => {
-            if (unexpected) {
-              this.handleError(unexpected);
-            }
-            return args.retval;
-          }, (err) => {
-            this.handleError(err);
-          })
-        } else {
-          throw unexpected;
-        }
+      if (err) {
+        throw new ZigError(err);
       }
       return args.retval;
     } catch (err) {
-      this.handleError(err);
-    }
-  }
-
-  handleError(unexpected) {
-    if (typeof(unexpected) === 'string') {
-      // an error string
-      throw new ZigError(unexpected);
-    } else if (unexpected instanceof Exit && unexpected.code === 0) {
       // do nothing when exit code is 0
-      return;
-    } else {
-      throw unexpected;
+      if (!(err instanceof Exit && err.code === 0)) {
+        throw err;
+      }
     }
   }
 
