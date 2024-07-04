@@ -5608,7 +5608,6 @@ function isInvalidAddress(address) {
 
 class WebAssemblyEnvironment extends Environment {
   imports = {
-    getFactoryThunk: { argType: '', returnType: 'i' },
     allocateExternMemory: { argType: 'iii', returnType: 'i' },
     freeExternMemory: { argType: 'iiii' },
     runThunk: { argType: 'ii', returnType: 'v' },

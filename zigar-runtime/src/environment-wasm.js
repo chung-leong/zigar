@@ -7,7 +7,9 @@ import { MemoryType } from './types.js';
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
+    /* COMPTIME-ONLY */
     getFactoryThunk: { argType: '', returnType: 'i' },
+    /* COMPTIME-ONLY-END */
     allocateExternMemory: { argType: 'iii', returnType: 'i' },
     freeExternMemory: { argType: 'iiii' },
     runThunk: { argType: 'ii', returnType: 'v' },
