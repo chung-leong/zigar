@@ -47,7 +47,7 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
         // use a variable here, so that Zig doesn't try to call it as a vararg function
         // despite the cast to a non-vararg one
         var function_ptr: *const F = @ptrCast(&function);
-        _ = &function_ptr;
+        std.mem.doNotOptimizeAway(&function_ptr);
         const vararg_offset = switch (arg_count > f.params.len) {
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
