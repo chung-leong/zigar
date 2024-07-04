@@ -386,8 +386,8 @@ napi_value allocate_external_memory(napi_env env,
 napi_value free_external_memory(napi_env env,
                                 napi_callback_info info) {
     module_data* md;
-    size_t argc = 3;
-    napi_value args[3];
+    size_t argc = 4;
+    napi_value args[4];
     uintptr_t address;
     double len;
     uint32_t bin;
