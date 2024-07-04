@@ -129,6 +129,12 @@ function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
+class InvalidDeallocation extends ReferenceError {
+  constructor(address) {
+    super(`Invalid memory deallocation: @${address.toString(16)}`);
+  }
+}
+
 class Unsupported extends TypeError {
   constructor() {
     super(`Unsupported`);
@@ -4891,9 +4897,10 @@ class Environment {
   unregisterMemory(address) {
     const { memoryList } = this.context;
     const index = findMemoryIndex(memoryList, address);
-    const prev = memoryList[index - 1];
-    if (prev?.address === address) {
+    const entry = memoryList[index - 1];
+    if (entry?.address === address) {
       memoryList.splice(index - 1, 1);
+      return entry.dv;
     }
   }
 
@@ -4932,17 +4939,6 @@ class Environment {
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
     return this.obtainFixedView(address, len);
-  }
-
-  findAllocatedMemory(address, len) {
-    if (this.context) {
-      const { memoryList } = this.context;
-      const index = findMemoryIndex(memoryList, address);
-      const entry = memoryList[index - 1];
-      if (entry?.address === address && entry.len === len) {
-        return entry.dv;
-      }
-    }
   }
 
   getViewAddress(dv) {
@@ -5669,11 +5665,12 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const shadowDV = this.findAllocatedMemory(address, len, 1);
+    const shadowDV = this.unregisterMemory(address);
     if (shadowDV) {
       this.removeShadow(shadowDV);
-      this.unregisterMemory(address);
       this.freeShadowMemory(shadowDV);
+    } else {
+      throw new InvalidDeallocation(address);
     }
   }
 
@@ -5728,6 +5725,7 @@ class WebAssemblyEnvironment extends Environment {
   captureString(address, len) {
     const { buffer } = this.memory;
     const ta = new Uint8Array(buffer, address, len);
+
     return decodeText(ta);
   }
 

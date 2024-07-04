@@ -179,9 +179,10 @@ export class Environment {
   unregisterMemory(address) {
     const { memoryList } = this.context;
     const index = findMemoryIndex(memoryList, address);
-    const prev = memoryList[index - 1];
-    if (prev?.address === address) {
+    const entry = memoryList[index - 1];
+    if (entry?.address === address) {
       memoryList.splice(index - 1, 1);
+      return entry.dv;
     }
   }
 
@@ -220,17 +221,6 @@ export class Environment {
     }
     // not found in any of the buffers we've seen--assume it's fixed memory
     return this.obtainFixedView(address, len);
-  }
-
-  findAllocatedMemory(address, len) {
-    if (this.context) {
-      const { memoryList } = this.context;
-      const index = findMemoryIndex(memoryList, address);
-      const entry = memoryList[index - 1];
-      if (entry?.address === address && entry.len === len) {
-        return entry.dv;
-      }
-    }
   }
 
   getViewAddress(dv) {

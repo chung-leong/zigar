@@ -1,5 +1,5 @@
 import { Environment } from './environment.js';
-import { Exit, ZigError } from './error.js';
+import { Exit, InvalidDeallocation, ZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier } from './memory.js';
 import { ALIGN, ATTRIBUTES, COPIER, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
@@ -71,11 +71,12 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const shadowDV = this.findAllocatedMemory(address, len, 1);
+    const shadowDV = this.unregisterMemory(address);
     if (shadowDV) {
       this.removeShadow(shadowDV);
-      this.unregisterMemory(address);
       this.freeShadowMemory(shadowDV);
+    } else {
+      throw new InvalidDeallocation(address);
     }
   }
 
@@ -135,6 +136,7 @@ export class WebAssemblyEnvironment extends Environment {
   captureString(address, len) {
     const { buffer } = this.memory;
     const ta = new Uint8Array(buffer, address, len);
+
     return decodeText(ta);
   }
 

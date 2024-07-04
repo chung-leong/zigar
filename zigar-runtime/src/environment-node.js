@@ -1,5 +1,5 @@
 import { Environment, add, getAlignedAddress, isMisaligned } from './environment.js';
-import { ZigError } from './error.js';
+import { InvalidDeallocation, ZigError } from './error.js';
 import { ALIGN, ATTRIBUTES, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 export class NodeEnvironment extends Environment {
@@ -46,7 +46,10 @@ export class NodeEnvironment extends Environment {
 
   freeHostMemory(address, len, align) {
     // no freeing actually occurs--memory will await garbage collection
-    this.unregisterMemory(address);
+    const dv = this.unregisterMemory(address);
+    if (!dv) {
+      throw new InvalidDeallocation(address);
+    }
   }
 
   allocateShadowMemory(len, align) {
