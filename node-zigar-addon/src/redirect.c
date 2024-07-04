@@ -395,31 +395,36 @@ void redirect_io_functions(void* handle,
     for (int i = 0; i < header.e_shnum; i++) {
         if (sections[i].sh_type == SHT_RELA) {
             Elf_Shdr* rela = &sections[i];
+            const char* section_name = section_strs + rela->sh_name;
             Elf_Rel* rela_entries = (Elf_Rel*) (base_address + rela->sh_addr);
             size_t rela_entry_count = rela->sh_size / sizeof(Elf_Rel);
-            for (int i = 0; i < rela_entry_count; i++) {
-                size_t symbol_index = ELF_R_SYM(rela_entries[i].r_info);
+            for (int j = 0; j < rela_entry_count; j++) {
+                size_t symbol_index = ELF_R_SYM(rela_entries[j].r_info);
                 if (symbol_index) {
                     const char* symbol_name = symbol_strs + symbols[symbol_index].st_name;
                     void* hook = find_hook(symbol_name);
                     if (hook) {
                         // get address to GOT entry
-                        uintptr_t address = base_address + rela_entries[i].r_offset;
+                        uintptr_t address = base_address + rela_entries[j].r_offset;
                         void** ptr = (void **) address;
                         if (*ptr != hook) {
-                            // disable write protection
-                            int page_size = get_page_size();
-                            if (page_size == -1) {
-                                goto exit;
+                            bool read_only = strcmp(section_name, ".rela.plt") == 0;
+                            if (read_only) {
+                                // disable write protection
+                                int page_size = get_page_size();
+                                if (page_size == -1) {
+                                    goto exit;
+                                }
+                                uintptr_t page_address = address & ~(page_size - 1);
+                                if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
+                                    goto exit;
+                                }
+                                *ptr = hook;
+                                // reenable write protection
+                                mprotect((void*) page_address, page_size, PROT_READ);
+                            } else {
+                                *ptr = hook;
                             }
-                            uintptr_t page_address = address & ~(page_size - 1);
-                            if (mprotect((void*) page_address, page_size, PROT_READ | PROT_WRITE) < 0) {
-                                goto exit;
-                            }
-                            *ptr = hook;
-                            override = cb;
-                            // reenable write protection
-                            mprotect((void*) page_address, page_size, PROT_READ);
                         }
                     }
                 }
@@ -684,7 +689,7 @@ void redirect_io_functions(void* handle,
                         void* hook = find_hook(symbol_name + 1);
                         if (hook) {
                             uintptr_t ds_offset = 0;
-                            bool read_only;
+                            bool read_only = true;
                             for (int k = 0; k < data_segment_count; k++) {
                                 if (data_segments[k].index == segment_index) {
                                     ds_offset = data_segments[k].offset;
