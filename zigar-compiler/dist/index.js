@@ -6173,6 +6173,17 @@ class Environment {
     return this.obtainFixedView(address, len);
   }
 
+  findAllocatedMemory(address, len) {
+    if (this.context) {
+      const { memoryList } = this.context;
+      const index = findMemoryIndex(memoryList, address);
+      const entry = memoryList[index - 1];
+      if (entry?.address === address && entry.len === len) {
+        return entry.dv;
+      }
+    }
+  }
+
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
@@ -6555,6 +6566,9 @@ class Environment {
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
     }
+    if (!shadow[MEMORY][FIXED]) {
+      debugger;
+    }
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
     /* WASM-ONLY-END */
@@ -6794,10 +6808,12 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const dv = this.findMemory(address, len, 1);
-    this.removeShadow(dv);
-    this.unregisterMemory(address);
-    this.freeShadowMemory(dv);
+    const shadowDV = this.findAllocatedMemory(address, len, 1);
+    if (shadowDV) {
+      this.removeShadow(shadowDV);
+      this.unregisterMemory(address);
+      this.freeShadowMemory(shadowDV);
+    }
   }
 
   allocateShadowMemory(len, align) {
@@ -7031,7 +7047,6 @@ class WebAssemblyEnvironment extends Environment {
       const address = this.getShadowAddress(args);
       const attrs = args[ATTRIBUTES];
       // get address of attributes if function variadic
-      debugger;
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)

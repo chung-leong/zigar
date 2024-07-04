@@ -69,10 +69,12 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   freeHostMemory(address, len, align) {
-    const dv = this.findMemory(address, len, 1);
-    this.removeShadow(dv);
-    this.unregisterMemory(address);
-    this.freeShadowMemory(dv);
+    const shadowDV = this.findAllocatedMemory(address, len, 1);
+    if (shadowDV) {
+      this.removeShadow(shadowDV);
+      this.unregisterMemory(address);
+      this.freeShadowMemory(shadowDV);
+    }
   }
 
   allocateShadowMemory(len, align) {
@@ -311,7 +313,6 @@ export class WebAssemblyEnvironment extends Environment {
       const address = this.getShadowAddress(args);
       const attrs = args[ATTRIBUTES];
       // get address of attributes if function variadic
-      debugger;
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)

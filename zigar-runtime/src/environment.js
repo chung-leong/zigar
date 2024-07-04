@@ -222,6 +222,17 @@ export class Environment {
     return this.obtainFixedView(address, len);
   }
 
+  findAllocatedMemory(address, len) {
+    if (this.context) {
+      const { memoryList } = this.context;
+      const index = findMemoryIndex(memoryList, address);
+      const entry = memoryList[index - 1];
+      if (entry?.address === address && entry.len === len) {
+        return entry.dv;
+      }
+    }
+  }
+
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
@@ -921,6 +932,9 @@ export class Environment {
     let { shadowMap } = this.context;
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
+    }
+    if (!shadow[MEMORY][FIXED]) {
+      debugger;
     }
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
