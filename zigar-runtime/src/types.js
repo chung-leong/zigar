@@ -39,6 +39,11 @@ export const StructureType = {
   Function: 21,
 };
 
+export const MemoryType = {
+  Normal: 0,
+  Scratch: 1,
+};
+
 export function getTypeName(member) {
   const { type, bitSize, byteSize } = member;
   if (type === MemberType.Int) {

@@ -128,8 +128,8 @@ typedef struct {
 } export_table;
 
 typedef struct {
-    result (__cdecl *allocate_extern_memory)(size_t, uint16_t, memory*);
-    result (__cdecl *free_extern_memory)(const memory*);
+    result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
+    result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);
     result (__cdecl *run_thunk)(call, size_t, void*, napi_value*);
     result (__cdecl *run_variadic_thunk)(call, size_t, void*, void*, size_t, napi_value*);

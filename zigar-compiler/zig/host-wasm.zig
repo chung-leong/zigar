@@ -4,6 +4,7 @@ const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
 
 pub const Value = types.Value;
+pub const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 
@@ -35,6 +36,39 @@ const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &std.heap.WasmAllocator.vtable,
 };
+var sfa = std.heap.stackFallback(64 * 1024, allocator);
+var scratch_allocator: ?std.mem.Allocator = null;
+
+pub fn getAllocator(bin: MemoryType) std.mem.Allocator {
+    return switch (bin) {
+        .scratch => get: {
+            if (scratch_allocator == null) {
+                scratch_allocator = sfa.get();
+            }
+            break :get scratch_allocator.?;
+        },
+        else => allocator,
+    };
+}
+
+pub fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 {
+    const a = getAllocator(bin);
+    const ptr_align = getPtrAlign(alignment);
+    if (a.rawAlloc(len, ptr_align, 0)) |bytes| {
+        if (bin == .normal) {
+            clearBytes(bytes, len);
+        }
+        return bytes;
+    } else {
+        return null;
+    }
+}
+
+pub fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment: u16) void {
+    const a = getAllocator(bin);
+    const ptr_align = getPtrAlign(alignment);
+    a.rawFree(bytes[0..len], ptr_align, 0);
+}
 
 fn clearBytes(bytes: [*]u8, len: usize) void {
     var start: usize = 0;
@@ -53,41 +87,6 @@ fn clearBytes(bytes: [*]u8, len: usize) void {
 
 pub fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
-}
-
-pub fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
-    const ptr_align = getPtrAlign(alignment);
-    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        clearBytes(bytes, len);
-        return bytes;
-    } else {
-        return null;
-    }
-}
-
-pub fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    const ptr_align = getPtrAlign(alignment);
-    allocator.rawFree(bytes[0..len], ptr_align, 0);
-}
-
-pub fn allocateShadowMemory(len: usize, alignment: u16) ?Value {
-    if (len == 0) {
-        return _captureView(null, len, false);
-    }
-    const ptr_align = getPtrAlign(alignment);
-    if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
-        return _captureView(bytes, len, false);
-    } else {
-        return null;
-    }
-}
-
-pub fn freeShadowMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    if (len == 0) {
-        return;
-    }
-    const ptr_align = getPtrAlign(alignment);
-    allocator.rawFree(bytes[0..len], ptr_align, 0);
 }
 
 pub const Host = struct {

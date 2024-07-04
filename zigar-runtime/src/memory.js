@@ -1,4 +1,4 @@
-import { FIXED, MEMORY, MEMORY_RESTORER, SLOTS } from './symbol.js';
+import { MEMORY, MEMORY_RESTORER, SLOTS } from './symbol.js';
 
 export function getDestructor(env) {
   return function() {
@@ -7,9 +7,7 @@ export function getDestructor(env) {
     if (this[SLOTS]) {
       this[SLOTS] = {};
     }
-    if (dv[FIXED]) {
-      env.releaseFixedView(dv);
-    }
+    env.releaseFixedView(dv);
   };
 }
 

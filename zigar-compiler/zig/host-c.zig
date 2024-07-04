@@ -5,6 +5,7 @@ const types = @import("./types.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
+const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 
@@ -251,7 +252,7 @@ test "clearBytes" {
     }
 }
 
-fn allocateExternMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
+fn allocateExternMemory(_: MemoryType, len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
     const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
     if (allocator.rawAlloc(len, ptr_align, 0)) |bytes| {
         clearBytes(bytes, len);
@@ -266,7 +267,7 @@ fn allocateExternMemory(len: usize, alignment: u8, memory: *Memory) callconv(.C)
     }
 }
 
-fn freeExternMemory(memory: *const Memory) callconv(.C) Result {
+fn freeExternMemory(_: MemoryType, memory: *const Memory) callconv(.C) Result {
     if (memory.bytes) |bytes| {
         const alignment = memory.attributes.alignment;
         const len = memory.len;
@@ -330,8 +331,8 @@ var imports: Imports = undefined;
 
 // pointer table that's used on the C side
 const Exports = extern struct {
-    allocate_fixed_memory: *const fn (usize, u8, *Memory) callconv(.C) Result,
-    free_fixed_memory: *const fn (*const Memory) callconv(.C) Result,
+    allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
+    free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (Call, usize, *anyopaque, *?Value) callconv(.C) Result,
     run_variadic_thunk: *const fn (Call, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,

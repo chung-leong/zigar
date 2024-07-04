@@ -290,7 +290,6 @@ const Allocation = struct {
             const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
             for (dest_bytes) |*p| p.* = 0xbb;
         }
-        std.debug.print("\n", .{});
         for (arg_attrs, 0..) |a, index| {
             if (a.alignment == 0) {
                 return Error.invalid_argument_attributes;

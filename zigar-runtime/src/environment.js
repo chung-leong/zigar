@@ -7,12 +7,13 @@ import { defineProperties, getMemoryRestorer } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ADDRESS_SETTER, ALIGN, ATTRIBUTES, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
+  ADDRESS_SETTER, ALIGN,
+  CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
   MEMORY_RESTORER,
   POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
-import { MemberType, StructureType, getStructureName } from './types.js';
+import { MemberType, MemoryType, StructureType, getStructureName } from './types.js';
 
 export class Environment {
   context;
@@ -64,7 +65,7 @@ export class Environment {
     throw new MustBeOverridden();
   }
 
-  freeShadowMemory(address, len, align) {
+  freeShadowMemory(dv) {
     // free memory allocated for shadow
     throw new MustBeOverridden();
   }
@@ -120,16 +121,18 @@ export class Environment {
     }
   }
 
-  allocateFixedMemory(len, align) {
-    const address = (len) ? this.allocateExternMemory(len, align) : 0;
+  allocateFixedMemory(len, align, type = MemoryType.Normal) {
+    const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
     const dv = this.obtainFixedView(address, len);
     dv[FIXED].align = align;
+    dv[FIXED].type = type;
     return dv;
   }
 
-  freeFixedMemory(address, len, align) {
+  freeFixedMemory(dv) {
+    const { address, unalignedAddress, len, align, type } = dv[FIXED];
     if (len) {
-      this.freeExternMemory(address, len, align);
+      this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   }
 
@@ -154,10 +157,9 @@ export class Environment {
   }
 
   releaseFixedView(dv) {
-    const { address, len, align } = dv[FIXED];
-    // only allocated memory would have align attached
-    if (align !== undefined) {
-      this.freeFixedMemory(address, len, align);
+    // only allocated memory would have type attached
+    if (dv[FIXED].type !== undefined) {
+      this.freeFixedMemory(dv);
       dv[FIXED] = null;
     }
   }
@@ -883,11 +885,10 @@ export class Environment {
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = shadowDV;
-    shadow[ATTRIBUTES] = {
-      address: unalignedAddress,
-      len: unalignedShadowDV.byteLength,
-      align: 1,
-    };
+    /* WASM-ONLY */
+    // attach fixed memory info to aligned data view so it gets freed correctly
+    shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
+    /* WASM-ONLY-END */
     return this.addShadow(shadow, source, 1);
   }
   /* RUNTIME-ONLY-END */
@@ -912,12 +913,7 @@ export class Environment {
     // try to the alignment specified when the memory was allocated
     const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
-    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    shadow[ATTRIBUTES] = {
-      address: this.getViewAddress(shadowDV),
-      len: shadowDV.byteLength,
-      align,
-    };
+    shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     return this.addShadow(shadow, object, align);
   }
 
@@ -972,8 +968,7 @@ export class Environment {
       return;
     }
     for (const [ shadow ] of shadowMap) {
-      const { address, len, align } = shadow[ATTRIBUTES];
-      this.freeShadowMemory(address, len, align);
+      this.freeShadowMemory(shadow[MEMORY]);
     }
   }
 

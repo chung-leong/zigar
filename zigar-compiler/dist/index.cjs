@@ -50,6 +50,11 @@ const StructureType = {
   Function: 21,
 };
 
+const MemoryType = {
+  Normal: 0,
+  Scratch: 1,
+};
+
 function getTypeName(member) {
   const { type, bitSize, byteSize } = member;
   if (type === MemberType.Int) {
@@ -616,9 +621,7 @@ function getDestructor(env) {
     if (this[SLOTS]) {
       this[SLOTS] = {};
     }
-    if (dv[FIXED]) {
-      env.releaseFixedView(dv);
-    }
+    env.releaseFixedView(dv);
   };
 }
 
@@ -4539,6 +4542,7 @@ function defineVariadicStruct(structure, env) {
     }
     // calculate the actual size of the struct based on arguments given
     let totalByteSize = byteSize;
+    let maxAlign = align;
     const varArgs = args.slice(argCount);
     const offsets = {};
     for (const [ index, arg ] of varArgs.entries()) {
@@ -4553,11 +4557,16 @@ function defineVariadicStruct(structure, env) {
       // expected to aligned to at least 4
       argAlign = Math.max(env.wordSize, argAlign);
       /* WASM-ONLY-END */
+      if (argAlign > maxAlign) {
+        maxAlign = argAlign;
+      }
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
     }
     const attrs = new ArgAttributes(args.length);
-    const dv = env.allocateMemory(totalByteSize);
+    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    // attach the alignment so we can correctly shadow the struct
+    dv[ALIGN] = maxAlign;
     this[MEMORY] = dv;
     this[SLOTS] = {};
     for (const [ index, key ] of argKeys.entries()) {
@@ -4627,10 +4636,12 @@ function defineVariadicStruct(structure, env) {
     dv.setUint8(index * 8 + 6, type == MemberType.Float);
     dv.setUint8(index * 8 + 7, type == MemberType.Int);
   };
+  defineProperties(ArgAttributes, {
+    [ALIGN]: { value: 4 },
+  });
   defineProperties(ArgAttributes.prototype, {
     set: { value: setAttributes },
     [COPIER]: { value: getMemoryCopier(4, true) },
-    [ALIGN]: { value: 4 },
     /* WASM-ONLY */
     [MEMORY_RESTORER]: { value: getMemoryRestorer(null, env) },
     /* WASM-ONLY-END */
@@ -4646,6 +4657,7 @@ function defineVariadicStruct(structure, env) {
   });
   defineProperties(constructor, {
     [SIZE]: { value: byteSize },
+    // [ALIGN]: omitted so that Environment.createShadow() would obtain the alignment from the data view
   });
   return constructor;
 }
@@ -6063,16 +6075,18 @@ class Environment {
     }
   }
 
-  allocateFixedMemory(len, align) {
-    const address = (len) ? this.allocateExternMemory(len, align) : 0;
+  allocateFixedMemory(len, align, type = MemoryType.Normal) {
+    const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
     const dv = this.obtainFixedView(address, len);
     dv[FIXED].align = align;
+    dv[FIXED].type = type;
     return dv;
   }
 
-  freeFixedMemory(address, len, align) {
+  freeFixedMemory(dv) {
+    const { address, unalignedAddress, len, align, type } = dv[FIXED];
     if (len) {
-      this.freeExternMemory(address, len, align);
+      this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   }
 
@@ -6097,10 +6111,9 @@ class Environment {
   }
 
   releaseFixedView(dv) {
-    const { address, len, align } = dv[FIXED];
-    // only allocated memory would have align attached
-    if (align !== undefined) {
-      this.freeFixedMemory(address, len, align);
+    // only allocated memory would have type attached
+    if (dv[FIXED].type !== undefined) {
+      this.freeFixedMemory(dv);
       dv[FIXED] = null;
     }
   }
@@ -6536,12 +6549,7 @@ class Environment {
     // try to the alignment specified when the memory was allocated
     const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
-    const shadowDV = shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    shadow[ATTRIBUTES] = {
-      address: this.getViewAddress(shadowDV),
-      len: shadowDV.byteLength,
-      align,
-    };
+    shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     return this.addShadow(shadow, object, align);
   }
 
@@ -6596,8 +6604,7 @@ class Environment {
       return;
     }
     for (const [ shadow ] of shadowMap) {
-      const { address, len, align } = shadow[ATTRIBUTES];
-      this.freeShadowMemory(address, len, align);
+      this.freeShadowMemory(shadow[MEMORY]);
     }
   }
 
@@ -6729,10 +6736,8 @@ function isElectron() {
 class WebAssemblyEnvironment extends Environment {
   imports = {
     getFactoryThunk: { argType: '', returnType: 'i' },
-    allocateExternMemory: { argType: 'ii', returnType: 'i' },
-    freeExternMemory: { argType: 'iii' },
-    allocateShadowMemory: { argType: 'ii', returnType: 'v' },
-    freeShadowMemory: { argType: 'iii' },
+    allocateExternMemory: { argType: 'iii', returnType: 'i' },
+    freeExternMemory: { argType: 'iiii' },
     runThunk: { argType: 'ii', returnType: 'v' },
     runVariadicThunk: { argType: 'iiii', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
@@ -6787,7 +6792,6 @@ class WebAssemblyEnvironment extends Environment {
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
-    shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object, align);
     return shadowDV;
   }
@@ -6796,7 +6800,15 @@ class WebAssemblyEnvironment extends Environment {
     const dv = this.findMemory(address, len, 1);
     this.removeShadow(dv);
     this.unregisterMemory(address);
-    this.freeShadowMemory(address, len, align);
+    this.freeShadowMemory(dv);
+  }
+
+  allocateShadowMemory(len, align) {
+    return this.allocateFixedMemory(len, align, MemoryType.Scratch);
+  }
+
+  freeShadowMemory(dv) {
+    return this.freeFixedMemory(dv);
   }
 
   getBufferAddress(buffer) {
@@ -7022,6 +7034,7 @@ class WebAssemblyEnvironment extends Environment {
       const address = this.getShadowAddress(args);
       const attrs = args[ATTRIBUTES];
       // get address of attributes if function variadic
+      debugger;
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)

@@ -359,18 +359,21 @@ napi_value get_buffer_address(napi_env env,
 napi_value allocate_external_memory(napi_env env,
                                     napi_callback_info info) {
     module_data* md;
-    size_t argc = 2;
-    napi_value args[2];
+    size_t argc = 3;
+    napi_value args[3];
     double len;
+    uint32_t bin;
     uint32_t align;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_double(env, args[0], &len) != napi_ok) {
+     || napi_get_value_uint32(env, args[0], &align) != napi_ok) {
+        return throw_error(env, "Type must be number");
+    } else if(napi_get_value_double(env, args[1], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
-    } else if (napi_get_value_uint32(env, args[1], &align) != napi_ok) {
+    } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
     memory mem;
-    if (md->mod->imports->allocate_extern_memory(len, align, &mem) != OK) {
+    if (md->mod->imports->allocate_extern_memory(bin, len, align, &mem) != OK) {
         return throw_error(env, "Unable to allocate fixed memory");
     }
     napi_value address;
@@ -387,17 +390,20 @@ napi_value free_external_memory(napi_env env,
     napi_value args[3];
     uintptr_t address;
     double len;
+    uint32_t bin;
     uint32_t align;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
+     || napi_get_value_uint32(env, args[0], &bin) != napi_ok) {
+        return throw_error(env, "Type must be number");
+    } else if (napi_get_value_uintptr(env, args[1], &address) != napi_ok) {
         return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
-    } else if (napi_get_value_double(env, args[1], &len) != napi_ok) {
+    } else if (napi_get_value_double(env, args[2], &len) != napi_ok) {
         return throw_error(env, "Length must be number");
-    } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
+    } else if (napi_get_value_uint32(env, args[3], &align) != napi_ok) {
         return throw_error(env, "Align must be number");
     }
     memory mem = { (void*) address, len, { align, false, false } };
-    md->mod->imports->free_extern_memory(&mem);
+    md->mod->imports->free_extern_memory(bin, &mem);
     return NULL;
 }
 

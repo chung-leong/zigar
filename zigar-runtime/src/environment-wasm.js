@@ -3,14 +3,13 @@ import { Exit, ZigError } from './error.js';
 import { getCopyFunction, getMemoryCopier } from './memory.js';
 import { ALIGN, ATTRIBUTES, COPIER, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 import { decodeText } from './text.js';
+import { MemoryType } from './types.js';
 
 export class WebAssemblyEnvironment extends Environment {
   imports = {
     getFactoryThunk: { argType: '', returnType: 'i' },
-    allocateExternMemory: { argType: 'ii', returnType: 'i' },
-    freeExternMemory: { argType: 'iii' },
-    allocateShadowMemory: { argType: 'ii', returnType: 'v' },
-    freeShadowMemory: { argType: 'iii' },
+    allocateExternMemory: { argType: 'iii', returnType: 'i' },
+    freeExternMemory: { argType: 'iiii' },
     runThunk: { argType: 'ii', returnType: 'v' },
     runVariadicThunk: { argType: 'iiii', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
@@ -65,7 +64,6 @@ export class WebAssemblyEnvironment extends Environment {
     // create a shadow for the relocatable memory
     const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
     const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
-    shadow[ATTRIBUTES] = { address: this.getViewAddress(shadowDV), len, align };
     this.addShadow(shadow, object, align);
     return shadowDV;
   }
@@ -74,7 +72,15 @@ export class WebAssemblyEnvironment extends Environment {
     const dv = this.findMemory(address, len, 1);
     this.removeShadow(dv);
     this.unregisterMemory(address);
-    this.freeShadowMemory(address, len, align);
+    this.freeShadowMemory(dv);
+  }
+
+  allocateShadowMemory(len, align) {
+    return this.allocateFixedMemory(len, align, MemoryType.Scratch);
+  }
+
+  freeShadowMemory(dv) {
+    return this.freeFixedMemory(dv);
   }
 
   getBufferAddress(buffer) {
@@ -305,6 +311,7 @@ export class WebAssemblyEnvironment extends Environment {
       const address = this.getShadowAddress(args);
       const attrs = args[ATTRIBUTES];
       // get address of attributes if function variadic
+      debugger;
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)

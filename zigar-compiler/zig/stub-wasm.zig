@@ -2,21 +2,14 @@ const std = @import("std");
 const host = @import("./host-wasm.zig");
 
 const Value = host.Value;
+const MemoryType = host.MemoryType;
 
-export fn allocateExternMemory(len: usize, alignment: u16) ?[*]u8 {
-    return host.allocateExternMemory(len, alignment);
+export fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 {
+    return host.allocateExternMemory(bin, len, alignment);
 }
 
-export fn freeExternMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    host.freeExternMemory(bytes, len, alignment);
-}
-
-export fn allocateShadowMemory(len: usize, alignment: u16) ?Value {
-    return host.allocateShadowMemory(len, alignment);
-}
-
-export fn freeShadowMemory(bytes: [*]u8, len: usize, alignment: u16) void {
-    host.freeShadowMemory(bytes, len, alignment);
+export fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment: u16) void {
+    host.freeExternMemory(bin, bytes, len, alignment);
 }
 
 export fn getFactoryThunk() usize {

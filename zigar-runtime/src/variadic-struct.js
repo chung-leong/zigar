@@ -27,6 +27,7 @@ export function defineVariadicStruct(structure, env) {
     }
     // calculate the actual size of the struct based on arguments given
     let totalByteSize = byteSize;
+    let maxAlign = align;
     const varArgs = args.slice(argCount);
     const offsets = {};
     for (const [ index, arg ] of varArgs.entries()) {
@@ -41,11 +42,16 @@ export function defineVariadicStruct(structure, env) {
       // expected to aligned to at least 4
       argAlign = Math.max(env.wordSize, argAlign);
       /* WASM-ONLY-END */
+      if (argAlign > maxAlign) {
+        maxAlign = argAlign;
+      }
       const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
       totalByteSize = offset + dv.byteLength;
     }
     const attrs = new ArgAttributes(args.length);
-    const dv = env.allocateMemory(totalByteSize);
+    const dv = env.allocateMemory(totalByteSize, maxAlign);
+    // attach the alignment so we can correctly shadow the struct
+    dv[ALIGN] = maxAlign;
     this[MEMORY] = dv;
     this[SLOTS] = {};
     for (const [ index, key ] of argKeys.entries()) {
@@ -115,10 +121,12 @@ export function defineVariadicStruct(structure, env) {
     dv.setUint8(index * 8 + 6, type == MemberType.Float);
     dv.setUint8(index * 8 + 7, type == MemberType.Int);
   };
+  defineProperties(ArgAttributes, {
+    [ALIGN]: { value: 4 },
+  });
   defineProperties(ArgAttributes.prototype, {
     set: { value: setAttributes },
     [COPIER]: { value: getMemoryCopier(4, true) },
-    [ALIGN]: { value: 4 },
     /* WASM-ONLY */
     [MEMORY_RESTORER]: { value: getMemoryRestorer(null, env) },
     /* WASM-ONLY-END */
@@ -134,6 +142,7 @@ export function defineVariadicStruct(structure, env) {
   });
   defineProperties(constructor, {
     [SIZE]: { value: byteSize },
+    // [ALIGN]: omitted so that Environment.createShadow() would obtain the alignment from the data view
   });
   return constructor;
 }

@@ -54,7 +54,7 @@ export class NodeEnvironment extends Environment {
     return this.allocateRelocMemory(len, align);
   }
 
-  freeShadowMemory(address, len, align) {
+  freeShadowMemory(dv) {
     // nothing needs to happen
   }
 

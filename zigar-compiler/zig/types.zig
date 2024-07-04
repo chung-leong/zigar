@@ -110,6 +110,11 @@ pub const MemoryAttributes = packed struct {
     _: u14 = 0,
 };
 
+pub const MemoryType = enum(u32) {
+    normal,
+    scratch,
+};
+
 pub const Memory = struct {
     bytes: ?[*]u8 = null,
     len: usize = 0,
@@ -229,7 +234,7 @@ test "Memory.to" {
     try expect(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
 }
 
-fn IntType(comptime n: comptime_int) type {
+pub fn IntType(comptime n: comptime_int) type {
     comptime var bits = 8;
     const signedness = if (n < 0) .signed else .unsigned;
     return inline while (true) : (bits *= 2) {
@@ -248,7 +253,7 @@ test "IntType" {
     try expectCT(IntType(-123) == i8);
 }
 
-fn ErrorIntType() type {
+pub fn ErrorIntType() type {
     return @Type(.{
         .Int = .{
             .signedness = .unsigned,
