@@ -22,7 +22,8 @@ export function addTests(importModule, options) {
         u8_slice_w_sentinel,
         i64_slice_w_sentinel,
         u8_multi_pointer,
-        u8_c_pointer
+        u8_c_pointer,
+        printPointer,
       } = await importTest('as-static-variables');
       expect([ ...module.int32_array ]).to.eql([ 123, 456, 789 ]);
       expect([ ...int32_slice ]).to.eql([ 123, 456, 789 ]);
@@ -89,6 +90,15 @@ export function addTests(importModule, options) {
       expect(subarray.string).to.equal('Hello');
       const subslice = u8_c_pointer.slice(0, 5);
       expect(subslice.string).to.equal('Hello');
+      const intSlice = module.i32_c_pointer['*'];
+      expect(intSlice[0]).to.equal(1234);
+      const [ pointerBefore ] = await capture(() => printPointer());
+      module.i32_c_pointer = null;
+      const [ pointerAfter ] = await capture(() => printPointer());
+      expect(pointerAfter).to.be.equal('i32@0');
+      module.i32_c_pointer = intSlice;
+      const [ pointerAfterRestore ] = await capture(() => printPointer());
+      expect(pointerAfterRestore).to.equal(pointerBefore);
     })
     it('should print pointer arguments', async function() {
       this.timeout(300000);

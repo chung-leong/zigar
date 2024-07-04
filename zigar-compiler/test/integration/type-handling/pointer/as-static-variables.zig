@@ -38,3 +38,10 @@ pub const i64_slice_w_sentinel: [*:7]const i64 = @ptrCast(&i64_array);
 
 pub const u8_multi_pointer: [*]const u8 = @ptrCast(u8_slice_w_sentinel);
 pub const u8_c_pointer: [*]const u8 = @ptrCast(u8_slice_w_sentinel);
+
+const i32_value: i32 = 1234;
+pub var i32_c_pointer: [*c]const i32 = &i32_value;
+
+pub fn printPointer() void {
+    std.debug.print("{any}\n", .{i32_c_pointer});
+}

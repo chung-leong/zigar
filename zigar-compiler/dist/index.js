@@ -1139,16 +1139,18 @@ function isTypedArray(arg, TypedArray) {
 }
 
 function isCompatibleBuffer(arg, constructor) {
-  const tags = constructor[COMPAT];
-  if (tags) {
-    const tag = arg?.[Symbol.toStringTag];
-    if (tags.includes(tag)) {
-      return true;
+  if (arg) {
+    const tags = constructor[COMPAT];
+    if (tags) {
+      const tag = arg?.[Symbol.toStringTag];
+      if (tags.includes(tag)) {
+        return true;
+      }
     }
-  }
-  if (constructor.child) {
-    if (findElements(arg, constructor.child) !== undefined) {
-      return true;
+    if (constructor.child) {
+      if (findElements(arg, constructor.child) !== undefined) {
+        return true;
+      }
     }
   }
   return false;
@@ -2622,27 +2624,40 @@ function definePointer(structure, env) {
     const pointer = this[POINTER] ?? this;
     const target = updateTarget.call(pointer, false);
     if (!target) {
+      if (type === StructureType.CPointer) {
+        return null;
+      }
       throw new NullPointer();
     }
     return (isConst) ? getConstProxy(target) : target;
   };
   const setTargetObject = function(arg) {
+    if (arg === undefined) {
+      return;
+    }
     const pointer = this[POINTER] ?? this;
     // the target sits in fixed memory--apply the change immediately
-    if (arg[MEMORY][FIXED]) {
-      const address = env.getViewAddress(arg[MEMORY]);
-      setAddress.call(this, address);
-      if (hasLengthInMemory) {
-        setLength.call(this, arg.length);
+    if (arg) {
+      if (arg[MEMORY][FIXED]) {
+        const address = env.getViewAddress(arg[MEMORY]);
+        setAddress.call(this, address);
+        if (hasLengthInMemory) {
+          setLength.call(this, arg.length);
+        }
+      } else {
+        if (pointer[MEMORY][FIXED]) {
+          throw new FixedMemoryTargetRequired(structure, arg);
+        }
       }
-    } else {
-      if (pointer[MEMORY][FIXED]) {
-        throw new FixedMemoryTargetRequired(structure, arg);
+    } else if (pointer[MEMORY][FIXED]) {
+      setAddress.call(this, 0);
+      if (hasLengthInMemory) {
+        setLength.call(this, 0);
       }
     }
-    pointer[SLOTS][0] = arg;
+    pointer[SLOTS][0] = arg ?? null;
     if (hasLengthInMemory) {
-      pointer[MAX_LENGTH] = arg.length;
+      pointer[MAX_LENGTH] = (arg) ? arg.length : 0;
     }
   };
   const getTarget = isValueExpected(targetStructure)
@@ -2659,7 +2674,7 @@ function definePointer(structure, env) {
   : throwReadOnly;
   const getTargetLength = function() {
     const target = getTargetObject.call(this);
-    return target.length;
+    return (target) ? target.length : 0;
   };
   const setTargetLength = function(len) {
     len = len | 0;
@@ -2748,7 +2763,7 @@ function definePointer(structure, env) {
       // autocast to target type
       const dv = getDataView(targetStructure, arg, env);
       arg = Target(dv);
-    } else if (arg !== undefined && !arg[MEMORY]) {
+    } else if (arg != undefined && !arg[MEMORY]) {
       if (type === StructureType.CPointer) {
         if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
           let single = true;
@@ -2781,7 +2796,9 @@ function definePointer(structure, env) {
       }
       arg = autoObj;
     } else if (arg !== undefined) {
-      throw new InvalidPointerTarget(structure, arg);
+      if (type !== StructureType.CPointer || arg !== null) {
+        throw new InvalidPointerTarget(structure, arg);
+      }
     }
     this[TARGET_SETTER](arg);
   };

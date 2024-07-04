@@ -258,16 +258,18 @@ export function isTypedArray(arg, TypedArray) {
 }
 
 export function isCompatibleBuffer(arg, constructor) {
-  const tags = constructor[COMPAT];
-  if (tags) {
-    const tag = arg?.[Symbol.toStringTag];
-    if (tags.includes(tag)) {
-      return true;
+  if (arg) {
+    const tags = constructor[COMPAT];
+    if (tags) {
+      const tag = arg?.[Symbol.toStringTag];
+      if (tags.includes(tag)) {
+        return true;
+      }
     }
-  }
-  if (constructor.child) {
-    if (findElements(arg, constructor.child) !== undefined) {
-      return true;
+    if (constructor.child) {
+      if (findElements(arg, constructor.child) !== undefined) {
+        return true;
+      }
     }
   }
   return false;

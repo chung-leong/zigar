@@ -868,6 +868,11 @@ export function addTests(importModule, options) {
       expect(ta[0]).to.equal('H'.charCodeAt(0));
       expect(ta[1]).to.equal('e'.charCodeAt(0));
       expect(ta[result1]).to.equal(0);
+      const result2 = snprintf(null, 0,
+        'Hello world %d!\n',
+        new Int('12345'),
+      );
+      expect(result2).to.equal(19);
     })
   })
 }

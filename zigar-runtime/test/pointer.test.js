@@ -57,6 +57,7 @@ describe('Pointer functions', function() {
       expect(String(intPointer)).to.equal('1234');
       expect(`${intPointer}`).to.equal('1234');
       expect(() => intPointer.delete()).to.not.throw();
+      expect(() => new Int32Ptr(null)).to.throw(TypeError);
     })
     it('should cast the same buffer to the same object', function() {
       const intStructure = env.beginStructure({
@@ -2807,6 +2808,56 @@ describe('Pointer functions', function() {
       expect([ ...intCPointer['*'] ]).to.eql([ 1, 2, 3 ]);
       expect(intSPointer.length).to.equal(4);
     })
+    it('should allow C pointer to be set to null', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32CPtr } = cpStructure;
+      const intCPointer = new Int32CPtr(null);
+      expect(intCPointer['*']).to.be.null;
+      expect(intCPointer.length).to.equal(0);
+    })
+
     it('should allow pointer with no sentinel to be initialized with a pointer that uses one', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
