@@ -139,6 +139,12 @@ const Abi = struct {
             float: comptime_int = @alignOf(isize),
         } = .{},
     } = .{},
+    max_align: struct {
+        stack: struct {
+            int: ?comptime_int = null,
+            float: ?comptime_int = null,
+        } = .{},
+    } = .{},
     variadic_float: ArgDestination = .float,
     misfitting_float: ArgDestination = .stack,
     promote_float: bool = false,
@@ -236,18 +242,19 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             },
         },
     },
-    .x86 => .{
-        .registers = .{
-            .int = 0,
-            .float = 0,
+    .x86 => .{ .registers = .{
+        .int = 0,
+        .float = 0,
+    }, .min_align = .{
+        .stack = .{
+            .int = @alignOf(i8),
+            .float = @alignOf(i8),
         },
-        .min_align = .{
-            .stack = .{
-                .int = @alignOf(i8),
-                .float = @alignOf(i8),
-            },
+    }, .max_align = .{
+        .stack = .{
+            .float = @alignOf(i32),
         },
-    },
+    } },
     .arm, .armeb => .{
         .registers = .{
             .int = 0,
@@ -348,9 +355,19 @@ const Allocation = struct {
                             else => value,
                         };
                     };
+                    const max_align: usize = get: {
+                        if (bin == .stack) {
+                            if (a.is_float) {
+                                if (abi.max_align.stack.float) |v| break :get v;
+                            } else {
+                                if (abi.max_align.stack.int) |v| break :get v;
+                            }
+                        }
+                        break :get std.math.maxInt(usize);
+                    };
                     const offset_ptr = &@field(self, bin_name ++ "_offset");
                     const dest_bytes = &@field(self, bin_name ++ "_bytes");
-                    const arg_align: usize = @max(min_align, a.alignment);
+                    const arg_align: usize = @min(max_align, @max(min_align, a.alignment));
                     const last_offset = offset_ptr.*;
                     const start = alignForward(usize, last_offset, arg_align);
                     const end = start + bytes.len;
