@@ -718,26 +718,22 @@ export function addTests(importModule, options) {
       await capture(() => {
         const result = printf(
           'Hello world %d!\n',
-          new Int('123'),
+          new Int(123),
         );
         expect(result).to.equal(17);
       });
       const lines1 = await capture(() => printf(
         'Hello world, %d %d %d %d %d!!\n',
-        new Int('123'),
-        new Int('234'),
-        new Int('345'),
-        new Int('456'),
-        new Int('567'),
+        new Int(123),
+        new Int(234),
+        new Int(345),
+        new Int(456),
+        new Int(567),
       ));
       expect(lines1).to.eql([ 'Hello world, 123 234 345 456 567!!' ]);
       const lines2 = await capture(() => printf(
-        'Hello world, %.2f %.2f %.2f %.2f %.2f!!\n',
-        new Double('1.23'),
-        new Double('2.34'),
-        new Double('3.45'),
-        new Double('4.56'),
-        new Double('5.67'),
+        'Hello world, %.2f!!\n',
+        new Double(1.23),
       ));
       expect(lines2).to.eql([ 'Hello world, 1.23 2.34 3.45 4.56 5.67!!' ]);
       const lines3 = await capture(() => printf(
@@ -748,26 +744,26 @@ export function addTests(importModule, options) {
       expect(lines3).to.eql([ 'Hello world, Dingo Bingo!!' ]);
       const lines4 = await capture(() => printf(
         'Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %s!!\n',
-        new Int('1'),
-        new Double('2'),
-        new Int('3'),
-        new Double('4'),
-        new Int('5'),
-        new Double('6'),
-        new Int('7'),
-        new Double('8'),
-        new Int('9'),
-        new Double('10'),
-        new Int('11'),
-        new Double('12'),
-        new Int('13'),
-        new Double('14'),
-        new Int('15'),
-        new Double('16'),
-        new Int('17'),
-        new Double('18'),
-        new Int('19'),
-        new Double('20'),
+        new Int(1),
+        new Double(2),
+        new Int(3),
+        new Double(4),
+        new Int(5),
+        new Double(6),
+        new Int(7),
+        new Double(8),
+        new Int(9),
+        new Double(10),
+        new Int(11),
+        new Double(12),
+        new Int(13),
+        new Double(14),
+        new Int(15),
+        new Double(16),
+        new Int(17),
+        new Double(18),
+        new Int(19),
+        new Double(20),
         new StrPtr('End')
       ));
       expect(lines4).to.eql([
@@ -775,46 +771,46 @@ export function addTests(importModule, options) {
       ]);
       const f = () => printf(
         'Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f!!\n',
-        new Int('1'),
-        new Double('2'),
-        new Int('3'),
-        new Double('4'),
-        new Int('5'),
-        new Double('6'),
-        new Int('7'),
-        new Double('8'),
-        new Int('9'),
-        new Double('10'),
-        new Int('11'),
-        new Double('12'),
-        new Int('13'),
-        new Double('14'),
-        new Int('15'),
-        new Double('16'),
-        new Int('17'),
-        new Double('18'),
-        new Int('19'),
-        new Double('20'),
-        new Int('21'),
-        new Double('22'),
-        new Int('23'),
-        new Double('24'),
-        new Int('25'),
-        new Double('26'),
-        new Int('27'),
-        new Double('28'),
-        new Int('29'),
-        new Double('30'),
-        new Int('31'),
-        new Double('32'),
-        new Int('33'),
-        new Double('34'),
-        new Int('35'),
-        new Double('36'),
-        new Int('37'),
-        new Double('38'),
-        new Int('39'),
-        new Double('40'),
+        new Int(1),
+        new Double(2),
+        new Int(3),
+        new Double(4),
+        new Int(5),
+        new Double(6),
+        new Int(7),
+        new Double(8),
+        new Int(9),
+        new Double(10),
+        new Int(11),
+        new Double(12),
+        new Int(13),
+        new Double(14),
+        new Int(15),
+        new Double(16),
+        new Int(17),
+        new Double(18),
+        new Int(19),
+        new Double(20),
+        new Int(21),
+        new Double(22),
+        new Int(23),
+        new Double(24),
+        new Int(25),
+        new Double(26),
+        new Int(27),
+        new Double(28),
+        new Int(29),
+        new Double(30),
+        new Int(31),
+        new Double(32),
+        new Int(33),
+        new Double(34),
+        new Int(35),
+        new Double(36),
+        new Int(37),
+        new Double(38),
+        new Int(39),
+        new Double(40),
       );
       if (target === 'wasm32') {
         const lines5 = await capture(f);
@@ -855,13 +851,37 @@ export function addTests(importModule, options) {
       expect(count1).to.equal(19);
       expect(count2).to.equal(19);
     })
+    it('should call sprintf correctly', async function() {
+      this.timeout(300000);
+      const { sprintf, Int, Double, StrPtr } = await importTest('call-sprintf', { useLibc: true });
+      const buffer = new ArrayBuffer(1024);
+      const result1 = sprintf(buffer, 
+        'Hello world %d!\n',
+        new Int(123),
+      );
+      expect(result1).to.equal(17);
+      const ta = new Uint8Array(buffer);
+      expect(ta[0]).to.equal('H'.charCodeAt(0));
+      expect(ta[1]).to.equal('e'.charCodeAt(0));
+      expect(ta[result1]).to.equal(0);
+      const result2 = sprintf(buffer,
+        'Hello world %d!\n',
+        new Int(12345),
+      );
+      expect(result2).to.equal(19);
+      const result3 = sprintf(buffer,
+        'Hello world, %.2f!\n',
+        new Double(1.23),
+      );
+      expect(result3).to.equal(19);
+    })
     it('should call snprintf correctly', async function() {
       this.timeout(300000);
-      const { snprintf, Int, StrPtr } = await importTest('call-snprintf', { useLibc: true });
-      const buffer = new ArrayBuffer(20);
+      const { snprintf, Int, Double, StrPtr } = await importTest('call-snprintf', { useLibc: true });
+      const buffer = new ArrayBuffer(32);
       const result1 = snprintf(buffer, buffer.byteLength,
         'Hello world %d!\n',
-        new Int('123'),
+        new Int(123),
       );
       expect(result1).to.equal(17);
       const ta = new Uint8Array(buffer);
@@ -870,9 +890,14 @@ export function addTests(importModule, options) {
       expect(ta[result1]).to.equal(0);
       const result2 = snprintf(null, 0,
         'Hello world %d!\n',
-        new Int('12345'),
+        new Int(12345),
       );
       expect(result2).to.equal(19);
+      const result3 = snprintf(buffer, buffer.byteLength,
+        'Hello world, %.2f!!\n',
+        new Double(1.23),
+      );
+      expect(result3).to.equal(18);
     })
   })
 }

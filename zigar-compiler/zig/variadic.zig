@@ -286,10 +286,10 @@ const Allocation = struct {
     fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !@This() {
         var self: @This() = .{};
         const bins = [_]ArgDestination{ .float, .int, .stack };
-        inline for (bins) |bin| {
-            const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
-            for (dest_bytes) |*p| p.* = 0xbb;
-        }
+        // inline for (bins) |bin| {
+        //     const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
+        //     for (dest_bytes) |*p| p.* = 0xbb;
+        // }
         for (arg_attrs, 0..) |a, index| {
             if (a.alignment == 0) {
                 return Error.invalid_argument_attributes;
@@ -540,13 +540,12 @@ fn createTest(RT: type, tuple: anytype) type {
 
         pub fn run() !void {
             attempt() catch |err| {
-                if (builtin.target.cpu.arch == .x86_64) {
-                    return err;
-                } else {
+                return switch (builtin.target.cpu.arch) {
+                    .x86_64, .x86, .aarch64 => err,
                     // dumpStackTrace() doesn't work correctly for other archs
                     // avoid the panic in panic error by skipping the test
-                    return error.SkipZigTest;
-                }
+                    else => error.SkipZigTest,
+                };
             };
         }
     };
@@ -603,6 +602,21 @@ test "parameter passing (f32, f32)" {
     }).run();
 }
 
+test "parameter passing (i32, f64)" {
+    try createTest(u32, .{
+        @as(i32, 1000),
+        @as(f64, 1.23),
+    }).run();
+}
+
+test "parameter passing (i32, i32, f64)" {
+    try createTest(u32, .{
+        @as(i32, 1000),
+        @as(i32, 2000),
+        @as(f64, 3.14),
+    }).run();
+}
+
 test "parameter passing (f64, f32)" {
     try createTest(u32, .{
         @as(f64, 1.234),
@@ -613,6 +627,13 @@ test "parameter passing (f64, f32)" {
 test "parameter passing (f64, f64)" {
     try createTest(u32, .{
         @as(f64, 1.24),
+        @as(f64, 4.5678),
+    }).run();
+}
+
+test "parameter passing (i64, f64)" {
+    try createTest(u32, .{
+        @as(i64, 1000),
         @as(f64, 4.5678),
     }).run();
 }
@@ -848,7 +869,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
         pub fn attempt() !void {
             var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
             var attrs: [f.params.len + tuple.len]ArgAttributes = undefined;
-            var buffer1 = std.mem.zeroes([256]u8);
+            var buffer1 = std.mem.zeroes([1024]u8);
             inline for (&attrs, 0..) |*p, index| {
                 const offset = offsets[index];
                 const value = switch (index) {
@@ -906,11 +927,10 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
 
         pub fn run() !void {
             attempt() catch |err| {
-                if (builtin.target.cpu.arch == .x86_64) {
-                    return err;
-                } else {
-                    return error.SkipZigTest;
-                }
+                return switch (builtin.target.cpu.arch) {
+                    .x86_64, .x86, .aarch64 => err,
+                    else => error.SkipZigTest,
+                };
             };
         }
     };
@@ -969,6 +989,54 @@ test "sprintf (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, 
         @as(i64, 14),
         @as(i64, 15),
         @as(i64, 16),
+    }).run();
+}
+
+test "sprintf (f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%f", .{
+        @as(f64, 1.23),
+    }).run();
+}
+
+test "sprintf (f64, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("Hello %f %f!!", .{
+        @as(f64, 1.234),
+        @as(f64, 4.234),
+    }).run();
+}
+
+test "sprintf (i32, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%d %f", .{
+        @as(i32, 123),
+        @as(f64, 1.23),
+    }).run();
+}
+
+test "sprintf (i32, i32, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%d %d %f", .{
+        @as(i32, 123),
+        @as(i32, 456),
+        @as(f64, 1.23),
+    }).run();
+}
+
+test "sprintf (f64, f64, f64, f64, f64, f64, f64, f64, f64, f64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%f %f %f %f %f %f %f %f %f %f", .{
+        @as(f64, 1),
+        @as(f64, 2),
+        @as(f64, 3),
+        @as(f64, 4),
+        @as(f64, 5),
+        @as(f64, 6),
+        @as(f64, 7),
+        @as(f64, 8),
+        @as(f64, 9),
+        @as(f64, 10),
     }).run();
 }
 
