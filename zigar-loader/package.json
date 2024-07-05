@@ -35,10 +35,10 @@
     "zigar-runtime": "^0.13.1-alpha.0"
   },
   "devDependencies": {
-    "c8": "^9.1.0",
+    "c8": "^10.1.2",
     "chai": "^5.1.1",
-    "mocha": "^10.4.0",
+    "mocha": "^10.6.0",
     "mocha-skip-if": "^1.0.4",
-    "webpack": "^5.91.0"
+    "webpack": "^5.92.1"
   }
 }
