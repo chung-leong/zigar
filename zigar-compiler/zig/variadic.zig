@@ -244,7 +244,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
         .min_align = .{
             .stack = .{
                 .int = @alignOf(i8),
-                .float = @alignOf(f32),
+                .float = @alignOf(i8),
             },
         },
     },
