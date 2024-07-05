@@ -59,10 +59,12 @@ result allocate_host_memory(call ctx,
     napi_value args[2];
     napi_value result;
     void* data;
+    size_t actual_len;
     if (napi_create_uint32(env, len, &args[0]) == napi_ok
      && napi_create_uint32(env, align, &args[1]) == napi_ok
      && call_js_function(ctx, "allocateHostMemory", 2, args, &result)
-     && napi_get_dataview_info(env, result, NULL, &data, NULL, NULL) == napi_ok) {
+     && napi_get_dataview_info(env, result, &actual_len, &data, NULL, NULL) == napi_ok
+     && actual_len == len) {
         dest->bytes = (uint8_t*) data;
         dest->len = len;
         dest->attributes.is_const = false;
