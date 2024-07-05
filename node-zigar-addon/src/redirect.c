@@ -297,6 +297,7 @@ void redirect_io_functions(void* handle,
 
 #if defined __x86_64 || defined __aarch64__
     #define Elf_Ehdr Elf64_Ehdr
+    #define Elf_Phdr Elf64_Phdr
     #define Elf_Shdr Elf64_Shdr
     #define Elf_Sym Elf64_Sym
     #define Elf_Rel Elf64_Rela
@@ -304,6 +305,7 @@ void redirect_io_functions(void* handle,
     #define ELF_ST_BIND ELF64_ST_BIND
 #else
     #define Elf_Ehdr Elf32_Ehdr
+    #define Elf_Phdr Elf32_Phdr
     #define Elf_Shdr Elf32_Shdr
     #define Elf_Sym Elf32_Sym
     #define Elf_Rel Elf32_Rel
@@ -336,24 +338,27 @@ int get_page_size() {
 void redirect_io_functions(void* handle,
                            const char* filename,
                            override_callback cb) {
+    // printf("%s\n", filename);
     override = cb;
     int fd = open(filename, O_RDONLY);
     if (fd <= 0) {
         return;
     }
+    Elf_Phdr* segments = NULL;
     Elf_Shdr* sections = NULL;
-    char* section_strs = NULL;
     // read ELF header
     Elf_Ehdr header;
     if (read(fd, &header, sizeof(header)) <= 0) {
         goto exit;
     }
     // read all sections
+    segments = malloc(header.e_phnum * sizeof(Elf_Phdr));
     sections = malloc(header.e_shnum * sizeof(Elf_Shdr));
-    if (!sections
+    if (!sections || !segments
+     || lseek(fd, header.e_phoff, SEEK_SET) < 0
+     || read(fd, segments, header.e_phnum * sizeof(Elf_Phdr)) <= 0
      || lseek(fd, header.e_shoff, SEEK_SET) < 0
-     || read(fd, sections, header.e_shnum * sizeof(Elf_Shdr)) <= 0
-     || read_string_table(fd, &sections[header.e_shstrndx], &section_strs) == 0) {
+     || read(fd, sections, header.e_shnum * sizeof(Elf_Shdr)) <= 0) {
         goto exit;
     }
     Elf_Sym* symbols = NULL;
@@ -395,7 +400,7 @@ void redirect_io_functions(void* handle,
     for (int i = 0; i < header.e_shnum; i++) {
         if (sections[i].sh_type == SHT_RELA) {
             Elf_Shdr* rela = &sections[i];
-            const char* section_name = section_strs + rela->sh_name;
+            // const char* section_name = section_strs + rela->sh_name;
             Elf_Rel* rela_entries = (Elf_Rel*) (base_address + rela->sh_addr);
             size_t rela_entry_count = rela->sh_size / sizeof(Elf_Rel);
             for (int j = 0; j < rela_entry_count; j++) {
@@ -405,10 +410,19 @@ void redirect_io_functions(void* handle,
                     void* hook = find_hook(symbol_name);
                     if (hook) {
                         // get address to GOT entry
-                        uintptr_t address = base_address + rela_entries[j].r_offset;
+                        uintptr_t offset = rela_entries[j].r_offset;
+                        uintptr_t address = base_address + offset;
                         void** ptr = (void **) address;
                         if (*ptr != hook) {
-                            bool read_only = strcmp(section_name, ".rela.plt") == 0;
+                            bool read_only;
+                            // get protection flags from segment load commands
+                            for (int k = 0; k < header.e_phnum; k++) {
+                                uintptr_t segment_start = segments[k].p_vaddr;
+                                uintptr_t segment_end = segment_start + segments[k].p_memsz;
+                                if(segment_start <= offset && offset < segment_end) {
+                                    read_only = !(segments[k].p_flags & PF_W);
+                                }
+                            }
                             if (read_only) {
                                 // disable write protection
                                 int page_size = get_page_size();
@@ -434,8 +448,8 @@ void redirect_io_functions(void* handle,
     }
 
 exit:
+    free(segments);
     free(sections);
-    free(section_strs);
     free(symbols);
     free(symbol_strs);
     close(fd);
@@ -689,7 +703,7 @@ void redirect_io_functions(void* handle,
                         void* hook = find_hook(symbol_name + 1);
                         if (hook) {
                             uintptr_t ds_offset = 0;
-                            bool read_only = true;
+                            bool read_only;
                             for (int k = 0; k < data_segment_count; k++) {
                                 if (data_segments[k].index == segment_index) {
                                     ds_offset = data_segments[k].offset;
