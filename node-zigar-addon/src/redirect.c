@@ -295,7 +295,7 @@ void redirect_io_functions(void* handle,
 #include <sys/mman.h>
 #include <elf.h>
 
-#if defined __x86_64 || defined __aarch64__
+#if defined __x86_64 || defined __aarch64__ || defined __ppc64__
     #define Elf_Ehdr Elf64_Ehdr
     #define Elf_Phdr Elf64_Phdr
     #define Elf_Shdr Elf64_Shdr
