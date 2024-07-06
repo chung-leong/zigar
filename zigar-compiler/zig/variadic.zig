@@ -69,17 +69,47 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
         // on most platforms, we can call the function with extra pass-by-register arguments;
         // they just gets ignored; this reduce the number of functions we need to generate
         // on PowerPC we can't do that, since stack space is allocated for pass-by-register
-        // arguments; luckily only fixed float arguments are passed by register though, so
-        // we just need to count those
-        const max_int_count = abi.registers.int;
-        const max_float_count = get: {
-            if (abi.variadic_float == .float) {
-                break :get abi.registers.float;
-            } else if (abi.registers.float > 0) {
-                break :get @min(abi.registers.float, getFloatArgCount(function));
-            } else {
-                break :get 0;
-            }
+        // arguments; luckily only fixed arguments are passed by register so we just need
+        // to count those
+        const max_int_count = switch (abi.register_shadowing) {
+            false => abi.registers.int,
+            true => comptime count: {
+                var n = 0;
+                for (@typeInfo(@TypeOf(function)).Fn.params) |param| {
+                    if (param.type) |T| {
+                        switch (@typeInfo(T)) {
+                            .Float => {},
+                            else => {
+                                if (@sizeOf(T) <= abi.limits.int) {
+                                    const size = std.mem.alignForward(usize, @sizeOf(T), @sizeOf(abi.IntType));
+                                    n += size / @sizeOf(abi.IntType);
+                                }
+                            },
+                        }
+                    }
+                }
+                break :count @min(abi.registers.float, n);
+            },
+        };
+        const max_float_count = switch (abi.register_shadowing) {
+            false => abi.registers.float,
+            true => comptime count: {
+                var n = 0;
+                for (@typeInfo(@TypeOf(function)).Fn.params) |param| {
+                    if (param.type) |T| {
+                        switch (@typeInfo(T)) {
+                            .Float => {
+                                if (@sizeOf(T) <= abi.limits.float) {
+                                    const size = std.mem.alignForward(usize, @sizeOf(T), @sizeOf(abi.IntType));
+                                    n += size / @sizeOf(abi.IntType);
+                                }
+                            },
+                            else => {},
+                        }
+                    }
+                }
+                break :count @min(abi.registers.int, n);
+            },
         };
         const int_args = alloc.get(.int, max_int_count);
         const float_args = alloc.get(.float, max_float_count);
@@ -92,26 +122,7 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
     }
 }
 
-fn getFloatArgCount(function: anytype) comptime_int {
-    comptime var count = 0;
-    inline for (@typeInfo(@TypeOf(function)).Fn.params) |param| {
-        if (param.type) |T| {
-            switch (@typeInfo(T)) {
-                .Float => |float| {
-                    if (float.bits <= 64) {
-                        count += 1;
-                    }
-                    //count += if (float.bits > 64) 2 else 1;
-                },
-                else => {},
-            }
-        }
-    }
-    return count;
-}
-
-const max_arg_count = 32;
-const max_stack_count = max_arg_count - @min(abi.registers.int, abi.registers.float);
+const max_stack_count = 32;
 const ArgAttributes = extern struct {
     offset: u16,
     size: u16,
@@ -145,9 +156,16 @@ const Abi = struct {
             float: ?comptime_int = null,
         } = .{},
     } = .{},
-    variadic_float: ArgDestination = .float,
-    misfitting_float: ArgDestination = .stack,
-    promote_float: bool = false,
+    variadic: struct {
+        int: ArgDestination = .int,
+        float: ArgDestination = .float,
+    } = .{},
+    misfitting: struct {
+        int: ArgDestination = .stack,
+        float: ArgDestination = .stack,
+    } = .{},
+    float_promotion: bool = false,
+    register_shadowing: bool = false,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
@@ -160,13 +178,14 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = 4,
             },
             .limits = .{
-                .int = @sizeOf(isize),
                 .float = @sizeOf(f128),
             },
             .min_align = .{
                 .float = @alignOf(f128),
             },
-            .variadic_float = .int,
+            .variadic = .{
+                .float = .int,
+            },
         },
         else => .{
             .FloatType = f128,
@@ -184,23 +203,39 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             },
         },
     },
-    .aarch64, .aarch64_be, .aarch64_32 => .{
-        .FloatType = f128,
-        .registers = .{
-            // x0 - x7
-            .int = 8,
-            // v0 - v7
-            .float = 8,
+    .aarch64 => switch (builtin.target.os.tag) {
+        .macos, .ios, .tvos, .watchos => .{
+            .FloatType = f128,
+            .registers = .{
+                // x0 - x7
+                .int = 8,
+                // v0 - v7
+                .float = 8,
+            },
+            .limits = .{
+                .float = @sizeOf(f128),
+            },
+            .min_align = .{
+                .float = @alignOf(f128),
+            },
+            .variadic = .{
+                .int = .stack,
+                .float = .stack,
+            },
         },
-        .limits = .{
-            .float = @sizeOf(f128),
-        },
-        .min_align = .{
-            .int = @sizeOf(isize),
-            .float = @alignOf(f128),
-            .stack = .{
-                .int = @sizeOf(isize),
-                .float = @sizeOf(isize),
+        else => .{
+            .FloatType = f128,
+            .registers = .{
+                // x0 - x7
+                .int = 8,
+                // v0 - v7
+                .float = 8,
+            },
+            .limits = .{
+                .float = @sizeOf(f128),
+            },
+            .min_align = .{
+                .float = @alignOf(f128),
             },
         },
     },
@@ -222,17 +257,24 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = @sizeOf(isize),
             },
         },
-        .variadic_float = .int,
-        .misfitting_float = .int,
+        .variadic = .{
+            .float = .int,
+        },
+        .misfitting = .{
+            .float = .int,
+        },
     },
     .powerpc64le => .{
         .registers = .{
-            .int = 0,
+            // r3 - r10
+            .int = 8,
             // f1 - f13
             .float = 13,
         },
-        .variadic_float = .stack,
-        .promote_float = true,
+        .variadic = .{
+            .int = .stack,
+            .float = .stack,
+        },
         .limits = .{
             .float = @sizeOf(f64),
         },
@@ -241,6 +283,8 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = @sizeOf(i32),
             },
         },
+        .float_promotion = true,
+        .register_shadowing = true,
     },
     .x86 => .{
         .registers = .{
@@ -259,7 +303,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
             },
         },
     },
-    .arm, .armeb => .{
+    .arm => .{
         .registers = .{
             .int = 0,
             .float = 0,
@@ -307,7 +351,7 @@ const Allocation = struct {
             }
             const is_variadic = index >= fixed_arg_count;
             const raw_bytes = arg_bytes[a.offset .. a.offset + a.size];
-            const bytes: []const u8 = switch (abi.promote_float and a.is_float and a.size == 4 and !is_variadic) {
+            const bytes: []const u8 = switch (abi.float_promotion and a.is_float and a.size == 4 and !is_variadic) {
                 true => promote: {
                     const double: f64 = @floatCast(std.mem.bytesToValue(f32, raw_bytes));
                     break :promote &std.mem.toBytes(double);
@@ -326,7 +370,7 @@ const Allocation = struct {
                     if (bin == .float) {
                         if (a.is_float) {
                             // variadic floats are passed as int on some platforms
-                            if (abi.variadic_float != .float and is_variadic) {
+                            if (abi.variadic.float != .float and is_variadic) {
                                 break :alloc;
                             }
                         } else {
@@ -334,8 +378,8 @@ const Allocation = struct {
                         }
                     } else if (bin == .int) {
                         if (a.is_float) {
-                            if (abi.misfitting_float != .int) {
-                                if (abi.variadic_float == .int) {
+                            if (abi.misfitting.float != .int) {
+                                if (abi.variadic.float == .int) {
                                     if (!is_variadic) {
                                         // this happens when the number of fixed float arg is larger than
                                         // the number of float registers
@@ -344,6 +388,10 @@ const Allocation = struct {
                                 } else {
                                     break :alloc;
                                 }
+                            }
+                        } else {
+                            if (abi.variadic.int != .int and is_variadic) {
+                                break :alloc;
                             }
                         }
                     }
@@ -382,7 +430,7 @@ const Allocation = struct {
                         const arg_dest_bytes = dest_bytes[start..end];
                         @memcpy(arg_dest_bytes, bytes);
                         offset_ptr.* = end;
-                        if (@alignOf(abi.IntType) != abi.min_align.int and abi.variadic_float == .int) {
+                        if (@alignOf(abi.IntType) != abi.min_align.int and abi.variadic.float == .int) {
                             if (bin == .int and !a.is_float) {
                                 const next_offset = alignForward(usize, end, @alignOf(abi.IntType));
                                 const padding_bytes_after = dest_bytes[end..next_offset];
@@ -414,7 +462,6 @@ const Allocation = struct {
     }
 
     fn dump(self: *const @This()) void {
-        std.debug.print("\n", .{});
         const bins = [_]ArgDestination{ .float, .int, .stack };
         inline for (bins) |bin| {
             const count = self.getCount(bin);
