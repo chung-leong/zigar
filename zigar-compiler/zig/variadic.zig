@@ -757,8 +757,8 @@ test "parameter passing (f16, f16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
-        @as(f16, 1),
-        @as(f16, 2),
+        @as(f16, -1),
+        @as(f16, -2),
     }).run();
 }
 
@@ -768,9 +768,9 @@ test "parameter passing (u8, usize, f16, f16, f16)" {
     try createTest(u32, .{
         @as(u8, 16),
         @as(usize, 2),
-        @as(f16, 1),
-        @as(f16, 2),
-        @as(f16, 3),
+        @as(f16, -1),
+        @as(f16, -2),
+        @as(f16, -3),
     }).run();
 }
 
