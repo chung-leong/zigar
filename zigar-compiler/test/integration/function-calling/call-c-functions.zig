@@ -6,16 +6,14 @@ pub fn stream(num: i32) ?*c.FILE {
     if (comptime @hasDecl(c, "__acrt_iob_func")) {
         return c.__acrt_iob_func(@intCast(num));
     } else {
-        const s = switch (num) {
-            0 => c.stdin,
-            1 => c.stdout,
-            2 => c.stderr,
-            else => null,
-        };
-        return switch (@typeInfo(@TypeOf(s))) {
-            .Fn => s(),
-            else => s,
-        };
+        const names = .{ "stdin", "stdout", "stderr" };
+        return inline for (names, 0..) |name, index| {
+            if (num == index) {
+                // on the Mac we get a function returning the stream instead of the stream
+                const s = @field(c, name);
+                return if (@typeInfo(@TypeOf(s)) == .Fn) s() else s;
+            }
+        } else null;
     }
 }
 
