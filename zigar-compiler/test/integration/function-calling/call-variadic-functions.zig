@@ -29,7 +29,7 @@ pub fn printFloats(bits: u8, count: usize, ...) callconv(.C) void {
     var va_list = @cVaStart();
     defer @cVaEnd(&va_list);
     for (0..count) |_| {
-        inline for (.{ f16, f32, f64, f80, f128 }) |T| {
+        inline for (.{ f16, f32, f64, f80 }) |T| {
             if (bits == @typeInfo(T).Float.bits) {
                 const number = @cVaArg(&va_list, T);
                 if (bits <= 64) {
