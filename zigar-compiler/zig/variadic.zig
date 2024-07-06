@@ -131,6 +131,7 @@ const ArgAttributes = extern struct {
     is_signed: bool,
 };
 const ArgDestination = enum { float, int, stack };
+const SignExtender = enum { callee, caller };
 const Abi = struct {
     FloatType: type = f64,
     IntType: type = isize,
@@ -166,6 +167,7 @@ const Abi = struct {
     } = .{},
     float_promotion: bool = false,
     register_shadowing: bool = false,
+    sign_extender: SignExtender = .callee,
 };
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
@@ -222,6 +224,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .int = .stack,
                 .float = .stack,
             },
+            .sign_extender = .caller,
         },
         else => .{
             .FloatType = f128,
@@ -283,8 +286,14 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
                 .float = @sizeOf(i32),
             },
         },
+        .max_align = .{
+            .stack = .{
+                .float = @sizeOf(i32),
+            },
+        },
         .float_promotion = true,
         .register_shadowing = true,
+        .sign_extender = .caller,
     },
     .x86 => .{
         .registers = .{
@@ -341,10 +350,10 @@ const Allocation = struct {
     fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !@This() {
         var self: @This() = .{};
         const bins = [_]ArgDestination{ .float, .int, .stack };
-        // inline for (bins) |bin| {
-        //     const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
-        //     for (dest_bytes) |*p| p.* = 0xbb;
-        // }
+        inline for (bins) |bin| {
+            const dest_bytes = &@field(self, @tagName(bin) ++ "_bytes");
+            for (dest_bytes) |*p| p.* = 0x00;
+        }
         for (arg_attrs, 0..) |a, index| {
             if (a.alignment == 0) {
                 return Error.invalid_argument_attributes;
@@ -400,7 +409,7 @@ const Allocation = struct {
                         const limit = @field(abi.limits, bin_name);
                         if (a.size > limit) break :alloc;
                     }
-                    const min_align: usize = get: {
+                    var min_align: usize = get: {
                         const value = @field(abi.min_align, bin_name);
                         break :get switch (bin) {
                             .stack => if (a.is_float) value.float else value.int,
@@ -419,25 +428,27 @@ const Allocation = struct {
                     };
                     const offset_ptr = &@field(self, bin_name ++ "_offset");
                     const dest_bytes = &@field(self, bin_name ++ "_bytes");
-                    const arg_align: usize = @min(max_align, @max(min_align, a.alignment));
+                    const arg_align: usize = @min(max_align, a.alignment);
                     const last_offset = offset_ptr.*;
                     const start = alignForward(usize, last_offset, arg_align);
                     const end = start + bytes.len;
                     if (end <= dest_bytes.len) {
-                        // std.debug.print("{any}: {d} - {d}\n", .{ bin, start, end });
-                        const padding_bytes = dest_bytes[last_offset..start];
-                        for (padding_bytes) |*p| p.* = 0;
                         const arg_dest_bytes = dest_bytes[start..end];
                         @memcpy(arg_dest_bytes, bytes);
-                        offset_ptr.* = end;
                         if (@alignOf(abi.IntType) != abi.min_align.int and abi.variadic.float == .int) {
+                            // when an small int is placed in a int register, let it use the whole thing
                             if (bin == .int and !a.is_float) {
-                                const next_offset = alignForward(usize, end, @alignOf(abi.IntType));
-                                const padding_bytes_after = dest_bytes[end..next_offset];
-                                for (padding_bytes_after) |*p| p.* = 0;
-                                offset_ptr.* = next_offset;
+                                min_align = @alignOf(abi.IntType);
                             }
                         }
+                        const next_offset = alignForward(usize, end, min_align);
+                        const padding_bytes = dest_bytes[end..next_offset];
+                        const byte: u8 = switch (abi.sign_extender) {
+                            .callee => 0x00,
+                            .caller => if (bytes[bytes.len - 1] & 0x80 != 0) 0xFF else 0x00,
+                        };
+                        for (padding_bytes) |*p| p.* = byte;
+                        offset_ptr.* = next_offset;
                         break;
                     }
                 }
