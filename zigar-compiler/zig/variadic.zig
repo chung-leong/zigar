@@ -742,13 +742,21 @@ test "parameter passing (i64, f64)" {
     }).run();
 }
 
+test "parameter passing (f16, f16)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f16, 1),
+    }).run();
+}
+
 test "parameter passing (f32, f32, f32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
-        @as(f32, 1.234),
-        @as(f32, 4.567),
-        @as(f32, 7.890),
+        @as(f32, -1.234),
+        @as(f32, -4.567),
+        @as(f32, -7.890),
     }).run();
 }
 
