@@ -7,16 +7,13 @@ const SignExtender = enum { callee, caller };
 const Abi = struct {
     Ints: []const type, // integer types that the CPU can address naturally
     Floats: []const type, // float types that the CPU can address naturally
+    FloatsAsInts: []const type = &.{}, // float types that can be passed in int registers
 
     registers: struct { // number of registers
         int: comptime_int = 0,
         float: comptime_int = 0,
     } = .{},
     variadic: struct { // how variadic arguments are passed
-        int: ArgDestination = .stack,
-        float: ArgDestination = .stack,
-    } = .{},
-    misfitting: struct { // where arguments not
         int: ArgDestination = .stack,
         float: ArgDestination = .stack,
     } = .{},
@@ -119,12 +116,16 @@ const Abi = struct {
         };
     }
 
-    fn hasType(comptime self: @This(), comptime T: type) bool {
-        return inline for (self.Ints) |Int| {
-            if (Int == T) break true;
-        } else inline for (self.Floats) |Float| {
-            if (Float == T) break true;
-        } else false;
+    fn packInt(comptime self: @This(), values: anytype) self.Ints[0] {
+        const Int = self.Ints[0];
+        var bytes: [@sizeOf(Int)]u8 = undefined;
+        var index: usize = 0;
+        inline for (values) |value| {
+            const value_bytes = std.mem.toBytes(value);
+            @memcpy(bytes[index .. index + value_bytes.len], &value_bytes);
+            index += value_bytes.len;
+        }
+        return std.mem.bytesToValue(Int, &bytes);
     }
 };
 
@@ -257,6 +258,7 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
     .riscv64 => .{
         .Ints = &.{i64},
         .Floats = &.{f64},
+        .FloatsAsInts = &.{ f64, f32 },
         .registers = .{
             // a0 - a7
             .int = 8,
@@ -265,13 +267,11 @@ const abi: Abi = switch (builtin.target.cpu.arch) {
         .variadic = .{
             .float = .int,
         },
-        .misfitting = .{
-            .float = .int,
-        },
     },
     .powerpc64le => .{
         .Ints = &.{i64},
         .Floats = &.{f64},
+        .FloatsAsInts = &.{ f64, f32 },
         .registers = .{
             // r3 - r10
             .int = 8,
@@ -406,8 +406,8 @@ test "callArgs (i64...i64, f64)" {
         }
     };
     const result1 = ns.function(1000, @as(i64, 7), @as(f64, 3.14));
-    const Float = abi.Floats[0];
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Float = abi.Floats[0];
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = switch (abi.variadic.float) {
@@ -427,61 +427,201 @@ test "callArgs (i64...i64, f64)" {
         variadic_floats,
         variadic_ints,
     );
+    const variadic_floats_plus_garbage = switch (abi.variadic.float) {
+        .float => variadic_floats ++ abi.toFloats(@as(f64, 34.32443)) ++ abi.toFloats(@as(f64, 434343.3)),
+        else => variadic_floats,
+    };
+    const variadic_ints_plus_garbage = variadic_ints ++ abi.toInts(@as(i64, 1213)) ++ abi.toInts(@as(i64, 324));
     try expect(result1 == result2);
-    // extra args
-    // const result3 = callWithArgs(
-    //     f.return_type.?,
-    //     f.calling_convention,
-    //     @ptrCast(&ns.function),
-    //     [_]f64{},
-    //     [_]i64{1000},
-    //     if (variadic_floats.len > 0) variadic_floats ++ [_]f64{ 34.32443, 434343.3, 32e9 } else variadic_floats,
-    //     variadic_ints ++ [_]i64{ 1213, 324, 234324, 32434 },
-    // );
-    // try expect(result1 == result3);
+    // call with extra args
+    const result3 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats_plus_garbage,
+        variadic_ints_plus_garbage,
+    );
+    try expect(result1 == result3);
 }
 
-// test "callArgs (i64...i32, i32, i32)" {
-//     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-//     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
-//     const ns = struct {
-//         fn function(arg0: i64, ...) callconv(.C) i64 {
-//             var va_list = @cVaStart();
-//             defer @cVaEnd(&va_list);
-//             const arg1 = @cVaArg(&va_list, i64);
-//             const arg2 = @cVaArg(&va_list, i32);
-//             const arg3 = @cVaArg(&va_list, i32);
-//             return arg0 + arg1 + arg2 + arg3;
-//         }
-//     };
-//     const result1 = ns.a(1000, @as(i64, 7), @as(i32, -5), @as(i32, -2));
-//     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-//     const fixed_floats = [_]f64{};
-//     const fixed_ints = [_]i64{1000};
-//     const variadic_floats = [_]f64{};
-//     const variadic_ints = switch (abi.Ints[0]) {
-//         i64 => [_]i64{7, abi.expand(i64, @as(i32, -5)), abi.expand(i64, @as(i32, -2)) },
-//         else => [_]i64{ 7, @bitCast(@as(f64, 3.14)) },
-//     };
-//     const result2 = callWithArgs(
-//         f.return_type.?,
-//         f.calling_convention,
-//         @ptrCast(&ns.function),
-//         fixed_floats,
-//         fixed_ints,
-//         variadic_floats,
-//         variadic_ints,
-//     );
-//     try expect(result1 == result2);
-//     // extra args
-//     const result3 = callWithArgs(
-//         f.return_type.?,
-//         f.calling_convention,
-//         @ptrCast(&function),
-//         [_]f64{},
-//         [_]i64{1000},
-//         if (variadic_floats.len > 0) variadic_floats ++ [_]f64{ 34.32443, 434343.3, 32e9 } else variadic_floats,
-//         variadic_ints ++ [_]i64{ 1213, 324, 234324, 32434 },
-//     );
-//     try expect(result1 == result3);
-// }
+test "callArgs (i64...i64, i32, i32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) i64 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i64);
+            const arg2 = @cVaArg(&va_list, i32);
+            const arg3 = @cVaArg(&va_list, i32);
+            return arg0 + arg1 + arg2 + arg3;
+        }
+    };
+    const result1 = ns.function(1000, @as(i64, 7), @as(i32, -5), @as(i32, -2));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = [_]Float{};
+    const variadic_ints = abi.toInts(@as(i64, 7)) ++ abi.toInts(@as(i32, -5)) ++ abi.toInts(@as(i32, -2));
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    try expect(result1 == result2);
+}
+
+test "callArgs (i64...i32, i32, i32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) i64 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i32);
+            const arg2 = @cVaArg(&va_list, i32);
+            const arg3 = @cVaArg(&va_list, i32);
+            return arg0 + arg1 + arg2 + arg3;
+        }
+    };
+    const result1 = ns.function(1000, @as(i32, 7), @as(i32, -5), @as(i32, -2));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = [_]Float{};
+    const variadic_ints = abi.toInts(@as(i32, 7)) ++ abi.toInts(@as(i32, -5)) ++ abi.toInts(@as(i32, -2));
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    try expect(result1 == result2);
+}
+
+test "callArgs (i64...i32, f32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) f64 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i32);
+            const arg2 = @cVaArg(&va_list, f32);
+            const arg3 = @cVaArg(&va_list, f32);
+            std.debug.print("\n{any} {any} {any}\n", .{ arg1, arg2, arg3 });
+            return @as(f64, @floatFromInt(arg0)) + @as(f64, @floatFromInt(arg1)) + arg2 + arg3;
+        }
+    };
+    const result1 = ns.function(1000, @as(i32, 7), @as(f32, -5), @as(f32, -2));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Int = abi.Ints[0];
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = switch (abi.variadic.float) {
+        .float => abi.toFloats(@as(f32, -5)) ++ abi.toFloats(@as(f32, -2)),
+        else => [_]Float{},
+    };
+    const variadic_ints = switch (abi.variadic.float) {
+        .float => abi.toInts(@as(i32, 7)),
+        else => switch (abi.FloatsAsInts.len >= 2 and abi.FloatsAsInts[1] == f32) {
+            true => abi.toInts(@as(i32, 7)) ++ [1]Int{abi.packInt(.{ @as(f32, -5), @as(f32, -2) })},
+            else => abi.toInts(@as(i32, 7)) ++ abi.toInts(@as(f32, -5)) ++ abi.toInts(@as(f32, -2)),
+        },
+    };
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
+    // try expect(result1 == result2);
+}
+
+test "callArgs (i64...i16, i16)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) i64 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i16);
+            const arg2 = @cVaArg(&va_list, i16);
+            return arg0 + arg1 + arg2;
+        }
+    };
+    const result1 = ns.function(1000, @as(i16, 7), @as(i16, -5));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Int = abi.Ints[0];
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = [_]Float{};
+    const variadic_ints = comptime switch (std.mem.indexOfScalar(type, abi.Ints, i16) != null) {
+        true => [_]Int{abi.packInt(.{ @as(i16, 7), @as(i16, -5) })},
+        false => abi.toInts(@as(i16, 7)) ++ abi.toInts(@as(i16, -5)),
+    };
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
+    // try expect(result1 == result2);
+}
+
+test "callArgs (i64...i8, i8)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) i64 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i8);
+            const arg2 = @cVaArg(&va_list, i8);
+            return arg0 + arg1 + arg2;
+        }
+    };
+    const result1 = ns.function(1000, @as(i8, 7), @as(i8, -5));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Int = abi.Ints[0];
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = [_]Float{};
+    const variadic_ints = comptime switch (std.mem.indexOfScalar(type, abi.Ints, i8) != null) {
+        true => [_]Int{abi.packInt(.{ @as(i8, 7), @as(i8, -5) })},
+        false => abi.toInts(@as(i8, 7)) ++ abi.toInts(@as(i8, -5)),
+    };
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
+    // try expect(result1 == result2);
+}
