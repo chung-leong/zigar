@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+echo "x86_64-linux:"
+zig test "$@" -target x86_64-linux
+echo "--------"
+
+echo "x86-linux:"
+zig test "$@" -target x86-linux
+echo "--------"
+
+echo "aarch64-linux:"
+zig test "$@" -target aarch64-linux
+echo "--------"
+
+echo "arm-linux:"
+zig test "$@" -target arm-linux
+echo "--------"
+
+echo "riscv64-linux:"
+zig test "$@" -target riscv64-linux
+echo "--------"
+
+echo "powerpc64le-linux:"
+zig test "$@" -target powerpc64le-linux
+echo "--------"
