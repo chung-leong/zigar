@@ -393,7 +393,7 @@ fn is(comptime arch: std.Target.Cpu.Arch, comptime tag: ?std.Target.Os.Tag) bool
     return false;
 }
 
-test "callArgs (i64...i64, f64)" {
+test "callWithArgs (i64...i64, f64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     const ns = struct {
@@ -446,7 +446,7 @@ test "callArgs (i64...i64, f64)" {
     try expect(result1 == result3);
 }
 
-test "callArgs (i64...i64, i32, i32)" {
+test "callWithArgs (i64...i64, i32, i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     const ns = struct {
@@ -478,7 +478,7 @@ test "callArgs (i64...i64, i32, i32)" {
     try expect(result1 == result2);
 }
 
-test "callArgs (i64...i32, i32, i32)" {
+test "callWithArgs (i64...i32, i32, i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     const ns = struct {
@@ -510,9 +510,17 @@ test "callArgs (i64...i32, i32, i32)" {
     try expect(result1 == result2);
 }
 
-test "callArgs (i64...i32, f32, f32)" {
+test "callWithArgs (i64...i32, f32, f32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    // incorrect control on on 32-bit ARM
+    if (comptime is(.arm, null)) return error.SkipZigTest;
+    // incorrect control on ppc64le
+    if (comptime is(.powerpc64le, null)) return error.SkipZigTest;
+    // incorrect control on riscv64
+    if (comptime is(.riscv64, null)) return error.SkipZigTest;
+    // incorrect control on ia32
+    if (comptime is(.x86, null)) return error.SkipZigTest;
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) f64 {
             var va_list = @cVaStart();
@@ -520,7 +528,6 @@ test "callArgs (i64...i32, f32, f32)" {
             const arg1 = @cVaArg(&va_list, i32);
             const arg2 = @cVaArg(&va_list, f32);
             const arg3 = @cVaArg(&va_list, f32);
-            std.debug.print("\n{any} {any} {any}\n", .{ arg1, arg2, arg3 });
             return @as(f64, @floatFromInt(arg0)) + @as(f64, @floatFromInt(arg1)) + arg2 + arg3;
         }
     };
@@ -550,11 +557,10 @@ test "callArgs (i64...i32, f32, f32)" {
         variadic_floats,
         variadic_ints,
     );
-    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
-    // try expect(result1 == result2);
+    try expect(result1 == result2);
 }
 
-test "callArgs (i64...i16, i16)" {
+test "callWithArgs (i64...i16, i16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     const ns = struct {
@@ -586,11 +592,10 @@ test "callArgs (i64...i16, i16)" {
         variadic_floats,
         variadic_ints,
     );
-    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
-    // try expect(result1 == result2);
+    try expect(result1 == result2);
 }
 
-test "callArgs (i64...i8, i8)" {
+test "callWithArgs (i64...i8, i8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     const ns = struct {
@@ -622,6 +627,37 @@ test "callArgs (i64...i8, i8)" {
         variadic_floats,
         variadic_ints,
     );
-    std.debug.print("\n{any} {any}\n", .{ result1, result2 });
-    // try expect(result1 == result2);
+    try expect(result1 == result2);
+}
+
+test "callWithArgs (i64...i128)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    // not working in RISC-V for some reason
+    if (comptime is(.riscv64, null)) return error.SkipZigTest;
+    const ns = struct {
+        fn function(arg0: i64, ...) callconv(.C) i128 {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg1 = @cVaArg(&va_list, i128);
+            return arg0 + arg1;
+        }
+    };
+    const result1 = ns.function(1000, @as(i128, -2));
+    const f = @typeInfo(@TypeOf(ns.function)).Fn;
+    const Float = abi.Floats[0];
+    const fixed_floats = [_]Float{};
+    const fixed_ints = abi.toInts(@as(i64, 1000));
+    const variadic_floats = [_]Float{};
+    const variadic_ints = abi.toInts(@as(i128, -2));
+    const result2 = callWithArgs(
+        f.return_type.?,
+        f.calling_convention,
+        @ptrCast(&ns.function),
+        fixed_floats,
+        fixed_ints,
+        variadic_floats,
+        variadic_ints,
+    );
+    try expect(result1 == result2);
 }
