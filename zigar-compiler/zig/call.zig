@@ -2,6 +2,16 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
+const isAligned = std.mem.isAligned;
+const alignForward = std.mem.alignForward;
+const bytesToValue = std.mem.bytesToValue;
+
+pub const Error = error{
+    too_many_arguments,
+    unsupported_type_for_variadic_function,
+    invalid_argument_attributes,
+};
+
 const SignExtender = enum { callee, caller };
 const Abi = struct {
     registers: struct {
@@ -23,6 +33,165 @@ const Abi = struct {
         },
     },
     sign_extender: SignExtender = .callee,
+
+    fn init(arch: std.Target.Cpu.Arch, os_tag: std.Target.Os.Tag) @This() {
+        return switch (arch) {
+            .x86_64 => switch (os_tag) {
+                .windows => .{
+                    .registers = .{
+                        .int = .{
+                            .type = i64,
+                            .count = 4, // RCX, RDX, R8, R9
+                            .accept = .{
+                                .fixed = &.{i64},
+                                .variadic = &.{ i64, f128, f80, f64 },
+                            },
+                        },
+                        .float = .{
+                            .type = f128,
+                            .count = 4, // XMM0, XMM1, XMM2, XMM3
+                            .accept = .{
+                                .fixed = &.{f128},
+                            },
+                        },
+                    },
+                },
+                else => .{
+                    .registers = .{
+                        .int = .{
+                            .type = i64,
+                            .count = 6, // RDI, RSI, RDX, RCX, R8, R9
+                            .accept = .{
+                                .fixed = &.{i64},
+                                .variadic = &.{i64},
+                            },
+                        },
+                        .float = .{
+                            .type = f128,
+                            .count = 8, // // XMM0 - XMM7
+                            .accept = .{
+                                .fixed = &.{f128},
+                                .variadic = &.{f128},
+                            },
+                        },
+                    },
+                },
+            },
+            .aarch64 => switch (builtin.target.os.tag) {
+                .macos, .ios, .tvos, .watchos => .{
+                    .registers = .{
+                        .int = .{
+                            .type = i64,
+                            .count = 8, // x0 - x7
+                            .accept = .{
+                                .fixed = &.{i64},
+                            },
+                        },
+                        .float = .{
+                            .type = f128,
+                            .count = 8, // v0 - v7
+                            .accept = .{
+                                .fixed = &.{f128},
+                            },
+                        },
+                    },
+                    .sign_extender = .caller,
+                },
+                else => .{
+                    .registers = .{
+                        .int = .{
+                            .type = i64,
+                            .count = 8, // x0 - x7
+                            .accept = .{
+                                .fixed = &.{ i64, i128 },
+                                .variadic = &.{ i64, i128 },
+                            },
+                        },
+                        .float = .{
+                            .type = f128,
+                            .count = 8, // v0 - v7
+                            .accept = .{
+                                .fixed = &.{f128},
+                                .variadic = &.{f128},
+                            },
+                        },
+                    },
+                },
+            },
+            .riscv64 => .{
+                .registers = .{
+                    .int = .{
+                        .type = i64,
+                        .count = 8, // a0 - a7
+                        .accept = .{
+                            .fixed = &.{ i64, i128, f128, f80 },
+                            .variadic = &.{ i64, i128, f128, f80, f64, f32, f16 },
+                        },
+                    },
+                    .float = .{
+                        .type = f64,
+                        .count = 8, // fa0 = fa7
+                        .accept = .{
+                            .fixed = &.{f64},
+                        },
+                    },
+                },
+            },
+            .powerpc64le => .{
+                .registers = .{
+                    .int = .{
+                        .type = i64,
+                        .count = 8, // r3 - r10
+                        .accept = .{
+                            .fixed = &.{i64},
+                            .variadic = &.{ i64, f64, f32 },
+                        },
+                    },
+                    .float = .{
+                        .type = f64,
+                        .count = 13, // f1 - f13
+                        .accept = .{
+                            .fixed = &.{f64},
+                        },
+                    },
+                },
+                .sign_extender = .caller,
+            },
+            .x86 => .{
+                .registers = .{
+                    .int = .{
+                        .type = i32,
+                        .count = 0,
+                        .accept = .{
+                            .fixed = &.{ i32, i16, i8 },
+                            .variadic = &.{ i32, i16, i8 },
+                        },
+                    },
+                    .float = .{
+                        .type = f64,
+                        .count = 0,
+                    },
+                },
+            },
+            .arm => .{
+                .registers = .{
+                    .int = .{
+                        .type = i32,
+                        .count = 0,
+                        .accept = .{
+                            .fixed = &.{i32},
+                            .variadic = &.{i32},
+                        },
+                    },
+                    .float = .{
+                        .type = f64,
+                        .count = 0,
+                    },
+                },
+            },
+            else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
+        };
+    }
 
     fn extend(comptime self: @This(), comptime T: type, value: anytype) T {
         const ValueType = @TypeOf(value);
@@ -238,163 +407,6 @@ test "Abi.toFloats" {
     try expect(c.len == 2);
 }
 
-const abi: Abi = switch (builtin.target.cpu.arch) {
-    .x86_64 => switch (builtin.target.os.tag) {
-        .windows => .{
-            .registers = .{
-                .int = .{
-                    .type = i64,
-                    .count = 4, // RCX, RDX, R8, R9
-                    .accept = .{
-                        .fixed = &.{i64},
-                        .variadic = &.{ i64, f128, f80, f64 },
-                    },
-                },
-                .float = .{
-                    .type = f128,
-                    .count = 4, // XMM0, XMM1, XMM2, XMM3
-                    .accept = .{
-                        .fixed = &.{f128},
-                    },
-                },
-            },
-        },
-        else => .{
-            .registers = .{
-                .int = .{
-                    .type = i64,
-                    .count = 6, // RDI, RSI, RDX, RCX, R8, R9
-                    .accept = .{
-                        .fixed = &.{i64},
-                        .variadic = &.{i64},
-                    },
-                },
-                .float = .{
-                    .type = f128,
-                    .count = 8, // // XMM0 - XMM7
-                    .accept = .{
-                        .fixed = &.{f128},
-                        .variadic = &.{f128},
-                    },
-                },
-            },
-        },
-    },
-    .aarch64 => switch (builtin.target.os.tag) {
-        .macos, .ios, .tvos, .watchos => .{
-            .registers = .{
-                .int = .{
-                    .type = i64,
-                    .count = 8, // x0 - x7
-                    .accept = .{
-                        .fixed = &.{i64},
-                    },
-                },
-                .float = .{
-                    .type = f128,
-                    .count = 8, // v0 - v7
-                    .accept = .{
-                        .fixed = &.{f128},
-                    },
-                },
-            },
-            .sign_extender = .caller,
-        },
-        else => .{
-            .registers = .{
-                .int = .{
-                    .type = i64,
-                    .count = 8, // x0 - x7
-                    .accept = .{
-                        .fixed = &.{ i64, i128 },
-                        .variadic = &.{ i64, i128 },
-                    },
-                },
-                .float = .{
-                    .type = f128,
-                    .count = 8, // v0 - v7
-                    .accept = .{
-                        .fixed = &.{f128},
-                        .variadic = &.{f128},
-                    },
-                },
-            },
-        },
-    },
-    .riscv64 => .{
-        .registers = .{
-            .int = .{
-                .type = i64,
-                .count = 8, // a0 - a7
-                .accept = .{
-                    .fixed = &.{ i64, i128, f128, f80 },
-                    .variadic = &.{ i64, i128, f128, f80, f64, f32, f16 },
-                },
-            },
-            .float = .{
-                .type = f64,
-                .count = 8, // fa0 = fa7
-                .accept = .{
-                    .fixed = &.{f64},
-                },
-            },
-        },
-    },
-    .powerpc64le => .{
-        .registers = .{
-            .int = .{
-                .type = i64,
-                .count = 8, // r3 - r10
-                .accept = .{
-                    .fixed = &.{i64},
-                    .variadic = &.{ i64, f64, f32 },
-                },
-            },
-            .float = .{
-                .type = f64,
-                .count = 13, // f1 - f13
-                .accept = .{
-                    .fixed = &.{f64},
-                },
-            },
-        },
-        .sign_extender = .caller,
-    },
-    .x86 => .{
-        .registers = .{
-            .int = .{
-                .type = i32,
-                .count = 0,
-                .accept = .{
-                    .fixed = &.{ i32, i16, i8 },
-                    .variadic = &.{ i32, i16, i8 },
-                },
-            },
-            .float = .{
-                .type = f64,
-                .count = 0,
-            },
-        },
-    },
-    .arm => .{
-        .registers = .{
-            .int = .{
-                .type = i32,
-                .count = 0,
-                .accept = .{
-                    .fixed = &.{i32},
-                    .variadic = &.{i32},
-                },
-            },
-            .float = .{
-                .type = f64,
-                .count = 0,
-            },
-        },
-    },
-    else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
-};
-
 fn callWithArgs(
     comptime RT: type,
     comptime cc: std.builtin.CallingConvention,
@@ -502,6 +514,7 @@ fn in(comptime T: type, comptime list: []const type) bool {
 test "callWithArgs (i64...i64, f64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) f64 {
             var va_list = @cVaStart();
@@ -555,6 +568,7 @@ test "callWithArgs (i64...i64, f64)" {
 test "callWithArgs (i64...i64, i32, i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
             var va_list = @cVaStart();
@@ -587,6 +601,7 @@ test "callWithArgs (i64...i64, i32, i32)" {
 test "callWithArgs (i64...i32, i32, i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
             var va_list = @cVaStart();
@@ -619,6 +634,7 @@ test "callWithArgs (i64...i32, i32, i32)" {
 test "callWithArgs (i64...i32, f32, f32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) f64 {
             var va_list = @cVaStart();
@@ -663,6 +679,7 @@ test "callWithArgs (i64...i32, f32, f32)" {
 test "callWithArgs (i64...i16, i16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
             var va_list = @cVaStart();
@@ -700,6 +717,7 @@ test "callWithArgs (i64...i16, i16)" {
 test "callWithArgs (i64...i8, i8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
             var va_list = @cVaStart();
@@ -737,6 +755,7 @@ test "callWithArgs (i64...i8, i8)" {
 test "callWithArgs (i64...i128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i128 {
             var va_list = @cVaStart();
@@ -767,4 +786,108 @@ test "callWithArgs (i64...i128)" {
         variadic_ints,
     );
     try expect(result1 == result2);
+}
+
+const ArgAttributes = extern struct {
+    offset: u16,
+    size: u16,
+    alignment: u16,
+    is_float: bool,
+    is_signed: bool,
+};
+
+fn Allocation(comptime abi: Abi) type {
+    return struct {
+        const Destination = enum { int, float };
+        const Int = abi.registers.int.type;
+        const Float = abi.registers.float.type;
+        const stack_counts = .{ 0, 8, 16, 32, 64, 128, 256 };
+        const max_stack_count = stack_counts[stack_counts.len - 1];
+        const int_byte_count = (abi.registers.int.count + max_stack_count) * @sizeOf(Int);
+        const float_byte_count = abi.registers.float.count * @sizeOf(Float);
+        const u_types = .{ u8, u16, u32, u64, u128 };
+        const i_types = .{ i8, i16, i32, i64, i128 };
+        const f_types = .{ f16, f32, f64, f80, f128 };
+
+        float_offset: usize = 0,
+        int_offset: usize = 0,
+        float_bytes: [float_byte_count]u8 align(@alignOf(Float)) = undefined,
+        int_bytes: [int_byte_count]u8 align(@alignOf(Int)) = undefined,
+
+        fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes, fixed_arg_count: usize) !@This() {
+            var self: @This() = .{};
+            var index: usize = 0;
+            inline for (.{ "fixed", "variadic" }) |arg_type_name| {
+                while (index < arg_attrs.len) : (index += 1) {
+                    if (index == fixed_arg_count) {
+                        break;
+                    }
+                    alloc: {
+                        const a = arg_attrs[index];
+                        const bytes = arg_bytes[a.offset .. a.offset + a.size];
+                        if (a.is_float) {
+                            const dest_types = @field(abi.registers.float.accept, arg_type_name);
+                            for (1..3) |stage| {
+                                inline for (dest_types) |T| {
+                                    const use = switch (stage) {
+                                        1 => isAligned(self.float_offset, @alignOf(T)) and a.size == @sizeOf(T),
+                                        2 => a.size == @sizeOf(T),
+                                        else => a.size < @sizeOf(T),
+                                    };
+                                    if (use) {
+                                        const start = alignForward(usize, self.float_offset, @sizeOf(T));
+                                        const end = start + bytes.len;
+                                        if (end <= self.float_bytes.len) {
+                                            const dest_ptr: *T = @ptrCast(&self.float_bytes[start]);
+                                            inline for (f_types) |ArgT| {
+                                                if (a.size == @sizeOf(ArgT)) {
+                                                    const arg_value = bytesToValue(ArgT, bytes);
+                                                    dest_ptr.* = abi.extend(T, arg_value);
+                                                    break :alloc;
+                                                }
+                                            }
+                                        } else {
+                                            // need to place int on stack or int registers
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        const dest_types = @field(abi.registers.int.accept, arg_type_name);
+                        for (1..3) |stage| {
+                            inline for (dest_types) |T| {
+                                const use = switch (stage) {
+                                    1 => isAligned(self.int_offset, @alignOf(T)) and a.size == @sizeOf(T),
+                                    2 => a.size == @sizeOf(T),
+                                    else => true,
+                                };
+                                if (use) {
+                                    const start = alignForward(usize, self.int_offset, @sizeOf(T));
+                                    const end = start + bytes.len;
+                                    if (end <= self.int_bytes.len) {
+                                        const dest_ptr: *T = @ptrCast(&self.int_bytes[start]);
+                                        inline for (u_types ++ i_types) |ArgT| {
+                                            if (a.size == @sizeOf(ArgT)) {
+                                                if (a.is_signed == (@typeInfo(ArgT).Int.signedness == .signed)) {
+                                                    const arg_value = bytesToValue(ArgT, bytes);
+                                                    dest_ptr.* = abi.extend(T, arg_value);
+                                                    break :alloc;
+                                                }
+                                            }
+                                        } else {
+                                            const dest_bytes = self.int_bytes[start..end];
+                                            @memcpy(dest_bytes, bytes);
+                                            break :alloc;
+                                        }
+                                    } else {
+                                        return Error.too_many_arguments;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
 }
