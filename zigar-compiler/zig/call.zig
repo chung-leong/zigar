@@ -2,21 +2,26 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
-const ArgDestination = enum { float, int, stack };
 const SignExtender = enum { callee, caller };
 const Abi = struct {
-    Ints: []const type, // integer types that the CPU can address naturally
-    Floats: []const type, // float types that the CPU can address naturally
-    FloatsAsInts: []const type = &.{}, // float types that can be passed in int registers
-
-    registers: struct { // number of registers
-        int: comptime_int = 0,
-        float: comptime_int = 0,
-    } = .{},
-    variadic: struct { // how variadic arguments are passed
-        int: ArgDestination = .stack,
-        float: ArgDestination = .stack,
-    } = .{},
+    registers: struct {
+        int: struct {
+            type: type,
+            count: comptime_int = 0,
+            accept: struct {
+                fixed: []const type = &.{},
+                variadic: []const type = &.{},
+            } = .{},
+        },
+        float: struct {
+            type: type,
+            count: comptime_int = 0,
+            accept: struct {
+                fixed: []const type = &.{},
+                variadic: []const type = &.{},
+            } = .{},
+        },
+    },
     sign_extender: SignExtender = .callee,
 
     fn extend(comptime self: @This(), comptime T: type, value: anytype) T {
@@ -54,7 +59,7 @@ const Abi = struct {
     }
 
     fn getIntCount(comptime self: @This(), comptime T: type) usize {
-        const Int = self.Ints[0];
+        const Int = self.registers.int.type;
         return switch (@sizeOf(T) <= @sizeOf(Int)) {
             true => 1,
             false => @sizeOf(T) / @sizeOf(Int),
@@ -62,15 +67,15 @@ const Abi = struct {
     }
 
     fn getFloatCount(comptime self: @This(), comptime T: type) usize {
-        const Float = self.Floats[0];
+        const Float = self.registers.float.type;
         return switch (@sizeOf(T) <= @sizeOf(Float)) {
             true => 1,
             false => std.mem.alignForward(usize, @sizeOf(T), @sizeOf(Float)) / @sizeOf(Float),
         };
     }
 
-    fn toInts(comptime self: @This(), value: anytype) [self.getIntCount(@TypeOf(value))]self.Ints[0] {
-        const Int = self.Ints[0];
+    fn toInts(comptime self: @This(), value: anytype) [self.getIntCount(@TypeOf(value))]self.registers.int.type {
+        const Int = self.registers.int.type;
         const count = comptime self.getIntCount(@TypeOf(value));
         return switch (count) {
             1 => [1]Int{self.extend(Int, value)},
@@ -86,8 +91,8 @@ const Abi = struct {
         };
     }
 
-    fn toFloats(comptime self: @This(), value: anytype) [self.getFloatCount(@TypeOf(value))]self.Floats[0] {
-        const Float = self.Floats[0];
+    fn toFloats(comptime self: @This(), value: anytype) [self.getFloatCount(@TypeOf(value))]self.registers.float.type {
+        const Float = self.registers.float.type;
         const count = comptime self.getFloatCount(@TypeOf(value));
         return switch (count) {
             1 => [1]Float{self.extend(Float, value)},
@@ -116,8 +121,8 @@ const Abi = struct {
         };
     }
 
-    fn packInt(comptime self: @This(), values: anytype) self.Ints[0] {
-        const Int = self.Ints[0];
+    fn packInt(comptime self: @This(), values: anytype) self.registers.int.type {
+        const Int = self.registers.int.type;
         var bytes: [@sizeOf(Int)]u8 = undefined;
         var index: usize = 0;
         inline for (values) |value| {
@@ -131,8 +136,14 @@ const Abi = struct {
 
 test "Abi.extend" {
     const abi1: Abi = .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i64,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .caller,
     };
     const a = abi1.extend(u64, @as(u8, 233));
@@ -140,8 +151,14 @@ test "Abi.extend" {
     const b = abi1.extend(i64, @as(i8, -1));
     try expect(b == -1);
     const abi2: Abi = .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i64,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .callee,
     };
     const c = abi2.extend(u64, @as(u8, 0xFF));
@@ -158,16 +175,28 @@ test "Abi.extend" {
 
 test "Abi.toInts" {
     const abi1: Abi = .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i64,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .caller,
     };
     const a = abi1.toInts(@as(i8, -2));
     try expect(a.len == 1);
     try expect(a[0] == -2);
     const abi2: Abi = .{
-        .Ints = &.{i32},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i32,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .caller,
     };
     const b = abi2.toInts(@as(i64, -2));
@@ -179,16 +208,28 @@ test "Abi.toInts" {
 
 test "Abi.toFloats" {
     const abi1: Abi = .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i64,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .caller,
     };
     const a = abi1.toFloats(@as(f64, -2));
     try expect(a.len == 1);
     try expect(a[0] == -2);
     const abi2: Abi = .{
-        .Ints = &.{i32},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i32,
+            },
+            .float = .{
+                .type = f64,
+            },
+        },
         .sign_extender = .caller,
     };
     const b = abi2.toFloats(@as(f128, -2));
@@ -200,97 +241,156 @@ test "Abi.toFloats" {
 const abi: Abi = switch (builtin.target.cpu.arch) {
     .x86_64 => switch (builtin.target.os.tag) {
         .windows => .{
-            .Ints = &.{i64},
-            .Floats = &.{f128},
             .registers = .{
-                // RCX, RDX, R8, R9
-                .int = 4,
-                // XMM0, XMM1, XMM2, XMM3
-                .float = 4,
-            },
-            .variadic = .{
-                .int = .int,
-                .float = .int,
+                .int = .{
+                    .type = i64,
+                    .count = 4, // RCX, RDX, R8, R9
+                    .accept = .{
+                        .fixed = &.{i64},
+                        .variadic = &.{ i64, f128, f80, f64 },
+                    },
+                },
+                .float = .{
+                    .type = f128,
+                    .count = 4, // XMM0, XMM1, XMM2, XMM3
+                    .accept = .{
+                        .fixed = &.{f128},
+                    },
+                },
             },
         },
         else => .{
-            .Ints = &.{i64},
-            .Floats = &.{f128},
             .registers = .{
-                // RDI, RSI, RDX, RCX, R8, R9
-                .int = 6,
-                // XMM0 - XMM7
-                .float = 8,
-            },
-            .variadic = .{
-                .int = .int,
-                .float = .float,
+                .int = .{
+                    .type = i64,
+                    .count = 6, // RDI, RSI, RDX, RCX, R8, R9
+                    .accept = .{
+                        .fixed = &.{i64},
+                        .variadic = &.{i64},
+                    },
+                },
+                .float = .{
+                    .type = f128,
+                    .count = 8, // // XMM0 - XMM7
+                    .accept = .{
+                        .fixed = &.{f128},
+                        .variadic = &.{f128},
+                    },
+                },
             },
         },
     },
     .aarch64 => switch (builtin.target.os.tag) {
         .macos, .ios, .tvos, .watchos => .{
-            .Ints = &.{i64},
-            .Floats = &.{f128},
             .registers = .{
-                // x0 - x7
-                .int = 8,
-                // v0 - v7
-                .float = 8,
+                .int = .{
+                    .type = i64,
+                    .count = 8, // x0 - x7
+                    .accept = .{
+                        .fixed = &.{i64},
+                    },
+                },
+                .float = .{
+                    .type = f128,
+                    .count = 8, // v0 - v7
+                    .accept = .{
+                        .fixed = &.{f128},
+                    },
+                },
             },
             .sign_extender = .caller,
         },
         else => .{
-            .Ints = &.{ i64, i128 },
-            .Floats = &.{f128},
             .registers = .{
-                // x0 - x7
-                .int = 8,
-                // v0 - v7
-                .float = 8,
-            },
-            .variadic = .{
-                .int = .int,
-                .float = .float,
+                .int = .{
+                    .type = i64,
+                    .count = 8, // x0 - x7
+                    .accept = .{
+                        .fixed = &.{ i64, i128 },
+                        .variadic = &.{ i64, i128 },
+                    },
+                },
+                .float = .{
+                    .type = f128,
+                    .count = 8, // v0 - v7
+                    .accept = .{
+                        .fixed = &.{f128},
+                        .variadic = &.{f128},
+                    },
+                },
             },
         },
     },
     .riscv64 => .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
-        .FloatsAsInts = &.{ f64, f32 },
         .registers = .{
-            // a0 - a7
-            .int = 8,
-            .float = 8,
-        },
-        .variadic = .{
-            .float = .int,
+            .int = .{
+                .type = i64,
+                .count = 8, // a0 - a7
+                .accept = .{
+                    .fixed = &.{ i64, i128, f128, f80 },
+                    .variadic = &.{ i64, i128, f128, f80, f64, f32, f16 },
+                },
+            },
+            .float = .{
+                .type = f64,
+                .count = 8, // fa0 = fa7
+                .accept = .{
+                    .fixed = &.{f64},
+                },
+            },
         },
     },
     .powerpc64le => .{
-        .Ints = &.{i64},
-        .Floats = &.{f64},
-        .FloatsAsInts = &.{ f64, f32 },
         .registers = .{
-            // r3 - r10
-            .int = 8,
-            // f1 - f13
-            .float = 13,
-        },
-        .variadic = .{
-            .int = .stack,
-            .float = .stack,
+            .int = .{
+                .type = i64,
+                .count = 8, // r3 - r10
+                .accept = .{
+                    .fixed = &.{i64},
+                    .variadic = &.{ i64, f64, f32 },
+                },
+            },
+            .float = .{
+                .type = f64,
+                .count = 13, // f1 - f13
+                .accept = .{
+                    .fixed = &.{f64},
+                },
+            },
         },
         .sign_extender = .caller,
     },
     .x86 => .{
-        .Ints = &.{ i32, i16, i8 },
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i32,
+                .count = 0,
+                .accept = .{
+                    .fixed = &.{ i32, i16, i8 },
+                    .variadic = &.{ i32, i16, i8 },
+                },
+            },
+            .float = .{
+                .type = f64,
+                .count = 0,
+            },
+        },
     },
     .arm => .{
-        .Ints = &.{i32},
-        .Floats = &.{f64},
+        .registers = .{
+            .int = .{
+                .type = i32,
+                .count = 0,
+                .accept = .{
+                    .fixed = &.{i32},
+                    .variadic = &.{i32},
+                },
+            },
+            .float = .{
+                .type = f64,
+                .count = 0,
+            },
+        },
     },
     else => @compileError("Variadic functions not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
 };
@@ -393,6 +493,12 @@ fn is(comptime arch: std.Target.Cpu.Arch, comptime tag: ?std.Target.Os.Tag) bool
     return false;
 }
 
+fn in(comptime T: type, comptime list: []const type) bool {
+    return inline for (list) |T2| {
+        if (T == T2) break true;
+    } else false;
+}
+
 test "callWithArgs (i64...i64, f64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
@@ -407,16 +513,16 @@ test "callWithArgs (i64...i64, f64)" {
     };
     const result1 = ns.function(1000, @as(i64, 7), @as(f64, 3.14));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Float = abi.Floats[0];
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
-    const variadic_floats = switch (abi.variadic.float) {
-        .float => abi.toFloats(@as(f64, 3.14)),
-        else => [_]f64{},
+    const variadic_floats = comptime switch (in(Float, abi.registers.float.accept.variadic)) {
+        true => abi.toFloats(@as(f64, 3.14)),
+        false => [_]f64{},
     };
-    const variadic_ints = switch (abi.variadic.float) {
-        .float => abi.toInts(@as(i64, 7)),
-        else => abi.toInts(@as(i64, 7)) ++ abi.toInts(@as(f64, 3.14)),
+    const variadic_ints = comptime switch (in(Float, abi.registers.float.accept.variadic)) {
+        true => abi.toInts(@as(i64, 7)),
+        false => abi.toInts(@as(i64, 7)) ++ abi.toInts(@as(f64, 3.14)),
     };
     const result2 = callWithArgs(
         f.return_type.?,
@@ -427,9 +533,9 @@ test "callWithArgs (i64...i64, f64)" {
         variadic_floats,
         variadic_ints,
     );
-    const variadic_floats_plus_garbage = switch (abi.variadic.float) {
-        .float => variadic_floats ++ abi.toFloats(@as(f64, 34.32443)) ++ abi.toFloats(@as(f64, 434343.3)),
-        else => variadic_floats,
+    const variadic_floats_plus_garbage = comptime switch (in(f64, abi.registers.float.accept.variadic)) {
+        true => variadic_floats ++ abi.toFloats(@as(f64, 34.32443)) ++ abi.toFloats(@as(f64, 434343.3)),
+        false => variadic_floats,
     };
     const variadic_ints_plus_garbage = variadic_ints ++ abi.toInts(@as(i64, 1213)) ++ abi.toInts(@as(i64, 324));
     try expect(result1 == result2);
@@ -461,7 +567,7 @@ test "callWithArgs (i64...i64, i32, i32)" {
     };
     const result1 = ns.function(1000, @as(i64, 7), @as(i32, -5), @as(i32, -2));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Float = abi.Floats[0];
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = [_]Float{};
@@ -493,7 +599,7 @@ test "callWithArgs (i64...i32, i32, i32)" {
     };
     const result1 = ns.function(1000, @as(i32, 7), @as(i32, -5), @as(i32, -2));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Float = abi.Floats[0];
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = [_]Float{};
@@ -525,17 +631,17 @@ test "callWithArgs (i64...i32, f32, f32)" {
     };
     const result1 = ns.function(1000, @as(i32, 7), @as(f32, -5), @as(f32, -2));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Int = abi.Ints[0];
-    const Float = abi.Floats[0];
+    const Int = abi.registers.int.type;
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
-    const variadic_floats = switch (abi.variadic.float) {
-        .float => abi.toFloats(@as(f32, -5)) ++ abi.toFloats(@as(f32, -2)),
-        else => [_]Float{},
+    const variadic_floats = comptime switch (in(Float, abi.registers.float.accept.variadic)) {
+        true => abi.toFloats(@as(f32, -5)) ++ abi.toFloats(@as(f32, -2)),
+        false => [_]Float{},
     };
-    const variadic_ints = switch (abi.variadic.float) {
-        .float => abi.toInts(@as(i32, 7)),
-        else => switch (abi.FloatsAsInts.len >= 2 and abi.FloatsAsInts[1] == f32) {
+    const variadic_ints = comptime switch (in(Float, abi.registers.float.accept.variadic)) {
+        true => abi.toInts(@as(i32, 7)),
+        false => switch (Int == i64 and in(f32, abi.registers.int.accept.variadic)) {
             true => abi.toInts(@as(i32, 7)) ++ [1]Int{abi.packInt(.{ @as(f32, -5), @as(f32, -2) })},
             else => abi.toInts(@as(i32, 7)) ++ abi.toInts(@as(f32, -5)) ++ abi.toInts(@as(f32, -2)),
         },
@@ -568,12 +674,12 @@ test "callWithArgs (i64...i16, i16)" {
     };
     const result1 = ns.function(1000, @as(i16, 7), @as(i16, -5));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Int = abi.Ints[0];
-    const Float = abi.Floats[0];
+    const Int = abi.registers.int.type;
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = [_]Float{};
-    const variadic_ints = comptime switch (std.mem.indexOfScalar(type, abi.Ints, i16) != null) {
+    const variadic_ints = comptime switch (in(i16, abi.registers.int.accept.variadic)) {
         true => [_]Int{abi.packInt(.{ @as(i16, 7), @as(i16, -5) })},
         false => abi.toInts(@as(i16, 7)) ++ abi.toInts(@as(i16, -5)),
     };
@@ -605,12 +711,12 @@ test "callWithArgs (i64...i8, i8)" {
     };
     const result1 = ns.function(1000, @as(i8, 7), @as(i8, -5));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Int = abi.Ints[0];
-    const Float = abi.Floats[0];
+    const Int = abi.registers.int.type;
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = [_]Float{};
-    const variadic_ints = comptime switch (std.mem.indexOfScalar(type, abi.Ints, i8) != null) {
+    const variadic_ints = comptime switch (in(i8, abi.registers.int.accept.variadic)) {
         true => [_]Int{abi.packInt(.{ @as(i8, 7), @as(i8, -5) })},
         false => abi.toInts(@as(i8, 7)) ++ abi.toInts(@as(i8, -5)),
     };
@@ -641,11 +747,16 @@ test "callWithArgs (i64...i128)" {
     };
     const result1 = ns.function(1000, @as(i128, -2));
     const f = @typeInfo(@TypeOf(ns.function)).Fn;
-    const Float = abi.Floats[0];
+    const Int = abi.registers.int.type;
+    const Float = abi.registers.float.type;
     const fixed_floats = [_]Float{};
     const fixed_ints = abi.toInts(@as(i64, 1000));
     const variadic_floats = [_]Float{};
-    const variadic_ints = abi.toInts(@as(i128, -2));
+    const alignment_ints = comptime switch (in(i128, abi.registers.int.accept.variadic)) {
+        true => [_]Int{0},
+        false => [_]Int{},
+    };
+    const variadic_ints = alignment_ints ++ abi.toInts(@as(i128, -2));
     const result2 = callWithArgs(
         f.return_type.?,
         f.calling_convention,
