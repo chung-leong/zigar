@@ -13,7 +13,7 @@ zig test "$@" -target aarch64-linux
 echo "--------"
 
 echo "arm-linux:"
-zig test "$@" -target arm-linux
+zig test "$@" -target arm-linux-musleabi
 echo "--------"
 
 echo "riscv64-linux:"
