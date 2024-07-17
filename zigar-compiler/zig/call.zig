@@ -162,7 +162,7 @@ fn createTest(RT: type, tuple: anytype) type {
     };
 }
 
-test "parameter passing (i8)" {
+test "parameter passing (i8...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -170,7 +170,7 @@ test "parameter passing (i8)" {
     }).run();
 }
 
-test "parameter passing (i8, i8)" {
+test "parameter passing (i8...i8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -179,7 +179,7 @@ test "parameter passing (i8, i8)" {
     }).run();
 }
 
-test "parameter passing (i8, i8, i8, i8)" {
+test "parameter passing (i8...i8, i8, i8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -190,7 +190,7 @@ test "parameter passing (i8, i8, i8, i8)" {
     }).run();
 }
 
-test "parameter passing (u8)" {
+test "parameter passing (u8...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -198,7 +198,7 @@ test "parameter passing (u8)" {
     }).run();
 }
 
-test "parameter passing (u8, u8)" {
+test "parameter passing (u8...u8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -207,7 +207,7 @@ test "parameter passing (u8, u8)" {
     }).run();
 }
 
-test "parameter passing (u8, u8, u8, u8)" {
+test "parameter passing (u8...u8, u8, u8)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -218,7 +218,7 @@ test "parameter passing (u8, u8, u8, u8)" {
     }).run();
 }
 
-test "parameter passing (i16)" {
+test "parameter passing (i16...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -226,7 +226,7 @@ test "parameter passing (i16)" {
     }).run();
 }
 
-test "parameter passing (i16, i16)" {
+test "parameter passing (i16...i16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -235,7 +235,7 @@ test "parameter passing (i16, i16)" {
     }).run();
 }
 
-test "parameter passing (i16, i16, i16, i16)" {
+test "parameter passing (i16...i16, i16, i16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -246,7 +246,7 @@ test "parameter passing (i16, i16, i16, i16)" {
     }).run();
 }
 
-test "parameter passing (u16)" {
+test "parameter passing (u16...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -254,7 +254,7 @@ test "parameter passing (u16)" {
     }).run();
 }
 
-test "parameter passing (u16, u16)" {
+test "parameter passing (u16...u16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -263,7 +263,7 @@ test "parameter passing (u16, u16)" {
     }).run();
 }
 
-test "parameter passing (u16, u16, u16, u16)" {
+test "parameter passing (u16...u16, u16, u16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -274,7 +274,7 @@ test "parameter passing (u16, u16, u16, u16)" {
     }).run();
 }
 
-test "parameter passing (i32)" {
+test "parameter passing (i32...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -282,7 +282,7 @@ test "parameter passing (i32)" {
     }).run();
 }
 
-test "parameter passing (i32, i32)" {
+test "parameter passing (i32...i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -291,7 +291,7 @@ test "parameter passing (i32, i32)" {
     }).run();
 }
 
-test "parameter passing (i32, i32, i32, i32)" {
+test "parameter passing (i32...i32, i32, i32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -302,7 +302,7 @@ test "parameter passing (i32, i32, i32, i32)" {
     }).run();
 }
 
-test "parameter passing (u32)" {
+test "parameter passing (u32...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -310,7 +310,7 @@ test "parameter passing (u32)" {
     }).run();
 }
 
-test "parameter passing (u32, u32)" {
+test "parameter passing (u32...u32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -319,7 +319,7 @@ test "parameter passing (u32, u32)" {
     }).run();
 }
 
-test "parameter passing (u32, u32, u32, u32)" {
+test "parameter passing (u32...u32, u32, u32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -330,7 +330,7 @@ test "parameter passing (u32, u32, u32, u32)" {
     }).run();
 }
 
-test "parameter passing (i64)" {
+test "parameter passing (i64...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -338,7 +338,7 @@ test "parameter passing (i64)" {
     }).run();
 }
 
-test "parameter passing (i64, i64)" {
+test "parameter passing (i64...i64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -347,7 +347,7 @@ test "parameter passing (i64, i64)" {
     }).run();
 }
 
-test "parameter passing (i64, i64, i64, i64)" {
+test "parameter passing (i64...i64, i64, i64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -358,7 +358,7 @@ test "parameter passing (i64, i64, i64, i64)" {
     }).run();
 }
 
-test "parameter passing (u64)" {
+test "parameter passing (u64...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -366,7 +366,7 @@ test "parameter passing (u64)" {
     }).run();
 }
 
-test "parameter passing (u64, u64)" {
+test "parameter passing (u64...u64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -375,7 +375,7 @@ test "parameter passing (u64, u64)" {
     }).run();
 }
 
-test "parameter passing (u64, u64, u64, u64)" {
+test "parameter passing (u64...u64, u64, u64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -386,7 +386,7 @@ test "parameter passing (u64, u64, u64, u64)" {
     }).run();
 }
 
-test "parameter passing (i128)" {
+test "parameter passing (i128...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -394,7 +394,7 @@ test "parameter passing (i128)" {
     }).run();
 }
 
-test "parameter passing (i128, i128)" {
+test "parameter passing (i128...i128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -403,7 +403,7 @@ test "parameter passing (i128, i128)" {
     }).run();
 }
 
-test "parameter passing (i128, i128, i128, i128)" {
+test "parameter passing (i128...i128, i128, i128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -414,7 +414,7 @@ test "parameter passing (i128, i128, i128, i128)" {
     }).run();
 }
 
-test "parameter passing (u128)" {
+test "parameter passing (u128...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -422,7 +422,7 @@ test "parameter passing (u128)" {
     }).run();
 }
 
-test "parameter passing (u128, u128)" {
+test "parameter passing (u128...u128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -431,7 +431,7 @@ test "parameter passing (u128, u128)" {
     }).run();
 }
 
-test "parameter passing (u128, u128, u128, u128)" {
+test "parameter passing (u128...u128, u128, u128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(u32, .{
@@ -442,16 +442,18 @@ test "parameter passing (u128, u128, u128, u128)" {
     }).run();
 }
 
-test "parameter passing (f16)" {
+test "parameter passing (f16...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.arm, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
         @as(f16, -1.25),
     }).run();
 }
 
-test "parameter passing (f16, f16)" {
+test "parameter passing (f16...f16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.arm, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
         @as(f16, 1.25),
@@ -459,8 +461,9 @@ test "parameter passing (f16, f16)" {
     }).run();
 }
 
-test "parameter passing (f16, f16, f16, f16)" {
+test "parameter passing (f16...f16, f16, f16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.arm, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
         @as(f16, -1.25),
@@ -470,7 +473,7 @@ test "parameter passing (f16, f16, f16, f16)" {
     }).run();
 }
 
-test "parameter passing (f32)" {
+test "parameter passing (f32...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -478,7 +481,7 @@ test "parameter passing (f32)" {
     }).run();
 }
 
-test "parameter passing (f32, f32)" {
+test "parameter passing (f32...f32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -487,7 +490,7 @@ test "parameter passing (f32, f32)" {
     }).run();
 }
 
-test "parameter passing (f32, f32, f32, f32)" {
+test "parameter passing (f32...f32, f32, f32)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -498,7 +501,7 @@ test "parameter passing (f32, f32, f32, f32)" {
     }).run();
 }
 
-test "parameter passing (f64)" {
+test "parameter passing (f64...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -506,7 +509,7 @@ test "parameter passing (f64)" {
     }).run();
 }
 
-test "parameter passing (f64, f64)" {
+test "parameter passing (f64...f64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -515,7 +518,7 @@ test "parameter passing (f64, f64)" {
     }).run();
 }
 
-test "parameter passing (f64, f64, f64, f64)" {
+test "parameter passing (f64...f64, f64, f64)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -526,7 +529,7 @@ test "parameter passing (f64, f64, f64, f64)" {
     }).run();
 }
 
-test "parameter passing (f80)" {
+test "parameter passing (f80...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -534,7 +537,7 @@ test "parameter passing (f80)" {
     }).run();
 }
 
-test "parameter passing (f80, f80)" {
+test "parameter passing (f80...f80)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -543,7 +546,7 @@ test "parameter passing (f80, f80)" {
     }).run();
 }
 
-test "parameter passing (f80, f80, f80, f80)" {
+test "parameter passing (f80...f80, f80, f80)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -554,7 +557,7 @@ test "parameter passing (f80, f80, f80, f80)" {
     }).run();
 }
 
-test "parameter passing (f128)" {
+test "parameter passing (f128...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -562,7 +565,7 @@ test "parameter passing (f128)" {
     }).run();
 }
 
-test "parameter passing (f128, f128)" {
+test "parameter passing (f128...f128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -571,7 +574,7 @@ test "parameter passing (f128, f128)" {
     }).run();
 }
 
-test "parameter passing (f128, f128, f128, f128)" {
+test "parameter passing (f128...f128, f128, f128)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
     try createTest(i32, .{
@@ -748,22 +751,31 @@ test "sprintf (u64, u64, u64, u64)" {
 
 test "sprintf (i64)" {
     if (!builtin.link_libc) return error.SkipZigTest;
-    try createSprintfTest("%d", .{
+    try createSprintfTest("%ld", .{
         @as(i64, 1234),
     }).run();
 }
 
 test "sprintf (i64, i32)" {
     if (!builtin.link_libc) return error.SkipZigTest;
-    try createSprintfTest("%d %d", .{
+    try createSprintfTest("%ld %d", .{
         @as(i64, 1234),
         @as(i32, 4567),
     }).run();
 }
 
+test "sprintf (i64, i32, i64)" {
+    if (!builtin.link_libc) return error.SkipZigTest;
+    try createSprintfTest("%ld %d %ld", .{
+        @as(i64, 1234),
+        @as(i32, 4567),
+        @as(i64, -314),
+    }).run();
+}
+
 test "sprintf (i64, i32, f64)" {
     if (!builtin.link_libc) return error.SkipZigTest;
-    try createSprintfTest("%d %d %f", .{
+    try createSprintfTest("%ld %d %f", .{
         @as(i64, 1234),
         @as(i32, 4567),
         @as(f64, 3.14),
@@ -907,6 +919,13 @@ test "sprintf (i64, f64, i64, f64)" {
 //         @as(c_longdouble, 7.77),
 //     }).run();
 // }
+
+fn getRequiredCount(comptime T: type, comptime VT: type) usize {
+    return switch (@sizeOf(VT) <= @sizeOf(T)) {
+        true => 1,
+        false => std.mem.alignForward(usize, @sizeOf(VT), @sizeOf(T)) / @sizeOf(T),
+    };
+}
 
 const SignExtender = enum { callee, caller };
 const Abi = struct {
@@ -1123,22 +1142,8 @@ const Abi = struct {
         return @bitCast(big_int_value);
     }
 
-    fn getIntCount(comptime T: type, comptime VT: type) usize {
-        return switch (@sizeOf(VT) <= @sizeOf(T)) {
-            true => 1,
-            false => std.mem.alignForward(usize, @sizeOf(VT), @sizeOf(T)) / @sizeOf(T),
-        };
-    }
-
-    fn getFloatCount(comptime T: type, comptime VT: type) usize {
-        return switch (@sizeOf(VT) <= @sizeOf(T)) {
-            true => 1,
-            false => std.mem.alignForward(usize, @sizeOf(VT), @sizeOf(T)) / @sizeOf(T),
-        };
-    }
-
-    fn toInts(comptime self: @This(), comptime T: type, value: anytype) [getIntCount(T, @TypeOf(value))]T {
-        const count = comptime getIntCount(T, @TypeOf(value));
+    fn toInts(comptime self: @This(), comptime T: type, value: anytype) [getRequiredCount(T, @TypeOf(value))]T {
+        const count = comptime getRequiredCount(T, @TypeOf(value));
         return switch (count) {
             1 => [1]T{self.extend(T, value)},
             else => split: {
@@ -1153,8 +1158,8 @@ const Abi = struct {
         };
     }
 
-    fn toFloats(comptime self: @This(), comptime T: type, value: anytype) [getFloatCount(T, @TypeOf(value))]T {
-        const count = comptime getFloatCount(T, @TypeOf(value));
+    fn toFloats(comptime self: @This(), comptime T: type, value: anytype) [getRequiredCount(T, @TypeOf(value))]T {
+        const count = comptime getRequiredCount(T, @TypeOf(value));
         return switch (count) {
             1 => [1]T{self.extend(T, value)},
             else => split: {
@@ -1308,6 +1313,8 @@ fn callWithArgs(
     variadic_floats: anytype,
     variadic_ints: anytype,
 ) RT {
+    // std.debug.print("\n{any}\n", .{fixed_ints});
+    // std.debug.print("{any}\n", .{variadic_ints});
     const Float = @typeInfo(@TypeOf(fixed_floats)).Array.child;
     const Int = @typeInfo(@TypeOf(fixed_ints)).Array.child;
     const fixed_arg_count = fixed_floats.len + fixed_ints.len;
@@ -1734,7 +1741,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
             for (f.params) |param| {
                 const T = param.type.?;
                 alloc: {
-                    if (@typeInfo(T) == .Float) {
+                    if (@typeInfo(T) == .Float and abi.registers.float.count > 0) {
                         const dest_types = abi.registers.float.accept.fixed;
                         for (1..4) |stage| {
                             for (dest_types) |DT| {
@@ -1748,7 +1755,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                                         1 => float_offset,
                                         else => std.mem.alignForward(usize, float_offset, @sizeOf(DT)),
                                     };
-                                    float_offset = start + @sizeOf(DT);
+                                    float_offset = start + @sizeOf(DT) * getRequiredCount(DT, T);
                                     break :alloc;
                                 }
                             }
@@ -1767,7 +1774,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                                     1 => int_offset,
                                     else => std.mem.alignForward(usize, int_offset, @sizeOf(DT)),
                                 };
-                                int_offset = start + @sizeOf(DT);
+                                int_offset = start + @sizeOf(DT) * getRequiredCount(DT, T);
                                 break :alloc;
                             }
                         }
@@ -1867,7 +1874,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
 
         fn processValue(self: *@This(), value: anytype, comptime kind: []const u8) bool {
             const T = @TypeOf(value);
-            if (@typeInfo(T) == .Float) {
+            if (@typeInfo(T) == .Float and abi.registers.float.count > 0) {
                 const dest_types = @field(abi.registers.float.accept, kind);
                 for (1..4) |stage| {
                     inline for (dest_types) |DT| {
@@ -1884,7 +1891,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                                 1 => self.float_offset,
                                 else => std.mem.alignForward(usize, self.float_offset, @sizeOf(DT)),
                             };
-                            const end = start + @sizeOf(DT);
+                            const end = start + @sizeOf(DT) * getRequiredCount(DT, T);
                             if (end <= self.float_bytes.len) {
                                 const src_words = abi.toFloats(DT, value);
                                 const dest_words: [*]DT = @ptrCast(@alignCast(&self.float_bytes[start]));
@@ -1912,7 +1919,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                             1 => self.int_offset,
                             else => std.mem.alignForward(usize, self.int_offset, @sizeOf(DT)),
                         };
-                        const end = start + @sizeOf(DT);
+                        const end = start + @sizeOf(DT) * getRequiredCount(DT, T);
                         if (end <= self.int_bytes.len) {
                             const src_words = abi.toInts(DT, value);
                             const dest_words: [*]DT = @ptrCast(@alignCast(&self.int_bytes[start]));
@@ -1930,7 +1937,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
     };
 }
 
-test "ArgAllocation(x86) (i8, ... i8)" {
+test "ArgAllocation(x86) (i8...i8)" {
     const abi = Abi.init(.x86, .linux);
     const ns = struct {
         fn f(_: i8) void {}
@@ -1945,13 +1952,65 @@ test "ArgAllocation(x86) (i8, ... i8)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    const variadic_ints = alloc.getVariadicInts(1);
     try expect(fixed_ints.len == 1);
     try expect(fixed_ints[0] == 256 - 88); // unsigned here, as callee extends sign
+    const variadic_ints = alloc.getVariadicInts(1);
     try expect(variadic_ints[0] == 123);
 }
 
-test "ArgAllocation(riscv64) (i64, i64, ... i8, i8)" {
+test "ArgAllocation(x86) (i8...i8, i8, i8)" {
+    const abi = Abi.init(.x86, .linux);
+    const ns = struct {
+        fn f(_: i8) void {}
+    };
+    const Args = extern struct {
+        retval: i32 = undefined,
+        arg0: i8 = -88,
+        arg1: i8 = 123,
+        arg2: i8 = 124,
+        arg3: i8 = 125,
+    };
+    const args: Args = .{};
+    const bytes = std.mem.toBytes(args);
+    const attrs = ArgAttributes.init(Args);
+    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const fixed_ints = alloc.getFixedInts();
+    try expect(fixed_ints.len == 1);
+    try expect(fixed_ints[0] == 256 - 88);
+    const variadic_int_count = alloc.getVariadicIntCount();
+    try expect(variadic_int_count == 3);
+    const variadic_ints = alloc.getVariadicInts(3);
+    try expect(variadic_ints[0] == 123);
+    try expect(variadic_ints[1] == 124);
+    try expect(variadic_ints[2] == 125);
+}
+
+test "ArgAllocation(x86) (i64...i64)" {
+    const abi = Abi.init(.x86, .linux);
+    const ns = struct {
+        fn f(_: i64) void {}
+    };
+    const Args = extern struct {
+        retval: i32 = undefined,
+        arg0: i64 = -88,
+        arg1: i64 = 123,
+    };
+    const args: Args = .{};
+    const bytes = std.mem.toBytes(args);
+    const attrs = ArgAttributes.init(Args);
+    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const fixed_ints = alloc.getFixedInts();
+    try expect(fixed_ints.len == 2);
+    try expect(fixed_ints[0] == -88);
+    try expect(fixed_ints[1] == -1);
+    const variadic_int_count = alloc.getVariadicIntCount();
+    try expect(variadic_int_count == 2);
+    const variadic_ints = alloc.getVariadicInts(2);
+    try expect(variadic_ints[0] == 123);
+    try expect(variadic_ints[1] == 0);
+}
+
+test "ArgAllocation(riscv64) (i64, i64...i8, i8)" {
     const abi = Abi.init(.riscv64, .linux);
     const ns = struct {
         fn f(_: i64, _: i64) void {}
@@ -1978,7 +2037,7 @@ test "ArgAllocation(riscv64) (i64, i64, ... i8, i8)" {
     try expect(variadic_ints[1] == 256 - 1);
 }
 
-test "ArgAllocation(riscv64) (i64, i64, ... i16, i16)" {
+test "ArgAllocation(riscv64) (i64, i64...i16, i16)" {
     const abi = Abi.init(.riscv64, .linux);
     const ns = struct {
         fn f(_: i64, _: i64) void {}
@@ -2005,7 +2064,7 @@ test "ArgAllocation(riscv64) (i64, i64, ... i16, i16)" {
     try expect(variadic_ints[1] == 65536 - 1);
 }
 
-test "ArgAllocation(powerpc64le) (i8, ... i8)" {
+test "ArgAllocation(powerpc64le) (i8...i8)" {
     const abi = Abi.init(.powerpc64le, .linux);
     const ns = struct {
         fn f(_: i8) void {}
