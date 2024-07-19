@@ -590,6 +590,236 @@ test "parameter passing (f128...f128, f128, f128)" {
     }).run();
 }
 
+test "parameter passing (i32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1234),
+        @as(f32, 1.2345),
+    }).run();
+}
+
+test "parameter passing (i32, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1000),
+        @as(f64, 1.23),
+    }).run();
+}
+
+test "parameter passing (i32, i32, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1000),
+        @as(i32, 2000),
+        @as(f64, 3.14),
+    }).run();
+}
+
+test "parameter passing (f64, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f64, 1.234),
+        @as(f32, 4.5678),
+    }).run();
+}
+
+test "parameter passing (i64, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i64, 1000),
+        @as(f64, 4.5678),
+    }).run();
+}
+
+test "parameter passing (u8, usize, f16, f16, f16)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(u8, 16),
+        @as(usize, 2),
+        @as(f16, -1),
+        @as(f16, -2),
+        @as(f16, -3),
+    }).run();
+}
+
+test "parameter passing (i32, f32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1234),
+        @as(f32, 1.234),
+        @as(f32, 4.567),
+    }).run();
+}
+
+test "parameter passing (u64, f32, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(u64, 1234),
+        @as(f32, 1.234),
+        @as(f64, 4.567),
+    }).run();
+}
+
+test "parameter passing (f128, f64, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f128, 1234),
+        @as(f64, 1.234),
+        @as(f32, 4.567),
+    }).run();
+}
+
+test "parameter passing (i32, f32, i32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1234),
+        @as(f32, 1.234),
+        @as(i32, 4567),
+        @as(f32, 4.567),
+    }).run();
+}
+
+test "parameter passing (i32, f32, i32, f32, i32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i64, 1234),
+        @as(i32, 9999),
+        @as(f32, 1.234),
+        @as(i32, 4567),
+        @as(f32, 4.567),
+        @as(i32, 7),
+        @as(f32, 7.890),
+        @as(f32, 17.890),
+    }).run();
+}
+
+test "parameter passing (i32, f64, i32, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(i32, 1234),
+        @as(f64, 1.234),
+        @as(i32, 4567),
+        @as(f64, 4.567),
+    }).run();
+}
+
+test "parameter passing (f32, i32, f32, i32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f32, 1.234),
+        @as(i32, 4567),
+        @as(f32, 4.567),
+        @as(i32, 1234),
+    }).run();
+}
+
+test "parameter passing (f64, f64, f64, f64, f64, f64, f64, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f64, 0.1),
+        @as(f64, 0.2),
+        @as(f64, 0.3),
+        @as(f64, 0.4),
+        @as(f64, 0.5),
+        @as(f64, 0.6),
+        @as(f64, 0.7),
+        @as(f64, 0.8),
+    }).run();
+}
+
+test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f32, 0.1),
+        @as(f32, 0.2),
+        @as(f32, 0.3),
+        @as(f32, 0.4),
+        @as(f32, 0.5),
+        @as(f32, 0.6),
+        @as(f32, 0.7),
+        @as(f32, 0.8),
+    }).run();
+}
+
+test "parameter passing (f128, f128, f128, f64, f64, f64, f64, f64)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(f64, .{
+        @as(f128, 0.1),
+        @as(f128, 0.2),
+        @as(f128, 0.3),
+        @as(f64, 0.4),
+        @as(f64, 0.5),
+        @as(f64, 0.6),
+        @as(f64, 0.7),
+        @as(f64, 0.8),
+    }).run();
+}
+
+test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as(f32, 0.1),
+        @as(f32, 0.2),
+        @as(f32, 0.3),
+        @as(f32, 0.4),
+        @as(f32, 0.5),
+        @as(f32, 0.6),
+        @as(f32, 0.7),
+        @as(f32, 0.8),
+        @as(f32, 0.9),
+        @as(f32, 1.0),
+    }).run();
+}
+
+test "parameter passing (u32, u32, u32, u32, u32, u32, u32, u32)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(i64, .{
+        @as(u32, 1000),
+        @as(u32, 2000),
+        @as(u32, 3000),
+        @as(u32, 4000),
+        @as(u32, 5000),
+        @as(u32, 6000),
+        @as(u32, 7000),
+        @as(u32, 8000),
+    }).run();
+}
+
+test "parameter passing ([*:0]const u8, f32, f32, f32, f32, f32, f32, f32, f32, [*:0]const u8)" {
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    try createTest(u32, .{
+        @as([*:0]const u8, @ptrCast("Hello")),
+        @as(f32, 0.2),
+        @as(f32, 0.3),
+        @as(f32, 0.4),
+        @as(f32, 0.5),
+        @as(f32, 0.6),
+        @as(f32, 0.7),
+        @as(f32, 0.8),
+        @as(f32, 0.9),
+        @as([*:0]const u8, @ptrCast("World")),
+    }).run();
+}
+
 fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     const c = @cImport({
         @cInclude("stdio.h");
