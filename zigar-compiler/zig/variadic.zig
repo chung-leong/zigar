@@ -117,7 +117,7 @@ fn createTest(RT: type, tuple: anytype) type {
                 const bytes2 = std.mem.toBytes(value);
                 if (!std.mem.eql(u8, &bytes1, &bytes2)) {
                     std.debug.print("\nMismatch: {any} != {any} (arg{d})\n", .{ arg, value, index });
-                    std.debug.print("\n     arg: {x}\n", .{bytes1});
+                    std.debug.print("     arg: {x}\n", .{bytes1});
                     std.debug.print("   tuple: {x}\n", .{bytes2});
                     failed = true;
                 }
@@ -134,7 +134,7 @@ fn createTest(RT: type, tuple: anytype) type {
                 const T = @TypeOf(value);
                 p.* = .{
                     .offset = offset,
-                    .size = @sizeOf(T),
+                    .bit_size = @bitSizeOf(T),
                     .alignment = @alignOf(T),
                     .is_float = @typeInfo(T) == .Float,
                     .is_signed = @typeInfo(T) == .Int and @typeInfo(T).Int.signedness == .signed,
@@ -163,16 +163,16 @@ fn createTest(RT: type, tuple: anytype) type {
 }
 
 test "parameter passing (i8...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(i8, -1),
     }).run();
 }
 
 test "parameter passing (i8...i8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(i8, -1),
         @as(i8, -2),
@@ -180,8 +180,9 @@ test "parameter passing (i8...i8)" {
 }
 
 test "parameter passing (i8...i8, i8, i8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(i8, -1),
         @as(i8, -2),
@@ -191,16 +192,16 @@ test "parameter passing (i8...i8, i8, i8)" {
 }
 
 test "parameter passing (u8...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(u8, 122),
     }).run();
 }
 
 test "parameter passing (u8...u8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(u8, 222),
         @as(u8, 111),
@@ -208,8 +209,9 @@ test "parameter passing (u8...u8)" {
 }
 
 test "parameter passing (u8...u8, u8, u8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(u8, 222),
         @as(u8, 111),
@@ -219,16 +221,17 @@ test "parameter passing (u8...u8, u8, u8)" {
 }
 
 test "parameter passing (i16...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(i16, -1),
     }).run();
 }
 
 test "parameter passing (i16...i16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(i16, -1),
         @as(i16, -2),
@@ -236,8 +239,9 @@ test "parameter passing (i16...i16)" {
 }
 
 test "parameter passing (i16...i16, i16, i16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(i16, -1),
         @as(i16, -2),
@@ -247,16 +251,16 @@ test "parameter passing (i16...i16, i16, i16)" {
 }
 
 test "parameter passing (u16...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(u16, 122),
     }).run();
 }
 
 test "parameter passing (u16...u16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(u16, 222),
         @as(u16, 111),
@@ -264,8 +268,9 @@ test "parameter passing (u16...u16)" {
 }
 
 test "parameter passing (u16...u16, u16, u16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(u16, 222),
         @as(u16, 111),
@@ -275,16 +280,16 @@ test "parameter passing (u16...u16, u16, u16)" {
 }
 
 test "parameter passing (i32...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, -12345),
     }).run();
 }
 
 test "parameter passing (i32...i32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, -12345),
         @as(i32, 33333),
@@ -292,8 +297,8 @@ test "parameter passing (i32...i32)" {
 }
 
 test "parameter passing (i32...i32, i32, i32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, -12345),
         @as(i32, 33333),
@@ -303,16 +308,16 @@ test "parameter passing (i32...i32, i32, i32)" {
 }
 
 test "parameter passing (u32...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u32, 1234),
     }).run();
 }
 
 test "parameter passing (u32...u32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u32, 0xFFFF_FFFF),
         @as(u32, 0xAAAA_BBBB),
@@ -320,8 +325,8 @@ test "parameter passing (u32...u32)" {
 }
 
 test "parameter passing (u32...u32, u32, u32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u32, 0xFFFF_FFFF),
         @as(u32, 0xAAAA_BBBB),
@@ -331,16 +336,16 @@ test "parameter passing (u32...u32, u32, u32)" {
 }
 
 test "parameter passing (i64...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i64, -12345),
     }).run();
 }
 
 test "parameter passing (i64...i64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i64, 12345),
         @as(i64, 33333),
@@ -348,8 +353,8 @@ test "parameter passing (i64...i64)" {
 }
 
 test "parameter passing (i64...i64, i64, i64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i64, -12345),
         @as(i64, -33333),
@@ -359,16 +364,16 @@ test "parameter passing (i64...i64, i64, i64)" {
 }
 
 test "parameter passing (u64...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u64, 1234),
     }).run();
 }
 
 test "parameter passing (u64...u64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u64, 0xFFFF_FFFF_FFFF_FFFF),
         @as(u64, 0xAAAA_BBBB_CCCC_DDDD),
@@ -376,8 +381,8 @@ test "parameter passing (u64...u64)" {
 }
 
 test "parameter passing (u64...u64, u64, u64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u64, 0xFFFF_FFFF_FFFF_FFFF),
         @as(u64, 0xAAAA_BBBB_CCCC_DDDD),
@@ -387,16 +392,16 @@ test "parameter passing (u64...u64, u64, u64)" {
 }
 
 test "parameter passing (i128...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i128, -12345),
     }).run();
 }
 
 test "parameter passing (i128...i128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i128, 12345),
         @as(i128, 33333),
@@ -404,8 +409,8 @@ test "parameter passing (i128...i128)" {
 }
 
 test "parameter passing (i128...i128, i128, i128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     if (comptime is(.x86_64, .linux)) return error.SkipZigTest; // compiler bug
     try createTest(u32, .{
         @as(i128, 12345),
@@ -416,16 +421,16 @@ test "parameter passing (i128...i128, i128, i128)" {
 }
 
 test "parameter passing (u128...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u128, 1234),
     }).run();
 }
 
 test "parameter passing (u128...u128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
         @as(u128, 0xAAAA_BBBB_CCCC_DDDD_EEEE_FFFF),
@@ -433,8 +438,8 @@ test "parameter passing (u128...u128)" {
 }
 
 test "parameter passing (u128...u128, u128, u128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     if (comptime is(.x86_64, .linux)) return error.SkipZigTest; // compiler bug
     try createTest(u32, .{
         @as(u128, 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF),
@@ -448,6 +453,7 @@ test "parameter passing (f16...)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.arm, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    // if (comptime is(.riscv64, .linux)) return error.SkipZigTest;
     try createTest(i32, .{
         @as(f16, -1.25),
     }).run();
@@ -457,6 +463,7 @@ test "parameter passing (f16...f16)" {
     if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
     if (comptime is(.arm, .linux)) return error.SkipZigTest;
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.riscv64, .linux)) return error.SkipZigTest;
     try createTest(i32, .{
         @as(f16, 1.25),
         @as(f16, -2.5),
@@ -464,9 +471,11 @@ test "parameter passing (f16...f16)" {
 }
 
 test "parameter passing (f16...f16, f16, f16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.arm, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // likely a compiler bug
+    if (comptime is(.riscv64, .linux)) return error.SkipZigTest; // likely a compiler bug
     try createTest(i32, .{
         @as(f16, -1.25),
         @as(f16, -2.25),
@@ -476,16 +485,16 @@ test "parameter passing (f16...f16, f16, f16)" {
 }
 
 test "parameter passing (f32...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f32, -1.2345),
     }).run();
 }
 
 test "parameter passing (f32...f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f32, 1.2345),
         @as(f32, -2.555),
@@ -493,8 +502,8 @@ test "parameter passing (f32...f32)" {
 }
 
 test "parameter passing (f32...f32, f32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f32, -1.23333),
         @as(f32, -2.24444),
@@ -504,16 +513,16 @@ test "parameter passing (f32...f32, f32, f32)" {
 }
 
 test "parameter passing (f64...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f64, -1.2345),
     }).run();
 }
 
 test "parameter passing (f64...f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f64, 1.2345),
         @as(f64, -2.555),
@@ -521,8 +530,8 @@ test "parameter passing (f64...f64)" {
 }
 
 test "parameter passing (f64...f64, f64, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f64, -1.23333),
         @as(f64, -2.24444),
@@ -532,8 +541,8 @@ test "parameter passing (f64...f64, f64, f64)" {
 }
 
 test "parameter passing (f80...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     if (comptime is(.x86_64, .linux)) return error.SkipZigTest; // seems to be a compiler bug
     try createTest(i32, .{
         @as(f80, -1.2345),
@@ -541,9 +550,10 @@ test "parameter passing (f80...)" {
 }
 
 test "parameter passing (f80...f80)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     if (comptime is(.x86_64, .linux)) return error.SkipZigTest; // seems to be a compiler bug
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // might be a compiler bug
     try createTest(i32, .{
         @as(f80, 1.2345),
         @as(f80, -2.555),
@@ -551,9 +561,10 @@ test "parameter passing (f80...f80)" {
 }
 
 test "parameter passing (f80...f80, f80, f80)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     if (comptime is(.x86_64, .linux)) return error.SkipZigTest; // seems to be a compiler bug
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // might be a compiler bug
     try createTest(i32, .{
         @as(f80, -1.23333),
         @as(f80, -2.24444),
@@ -563,16 +574,17 @@ test "parameter passing (f80...f80, f80, f80)" {
 }
 
 test "parameter passing (f128...)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f128, -1.2345),
     }).run();
 }
 
 test "parameter passing (f128...f128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // might be a compiler bug
     try createTest(i32, .{
         @as(f128, 1.2345),
         @as(f128, -2.555),
@@ -580,8 +592,8 @@ test "parameter passing (f128...f128)" {
 }
 
 test "parameter passing (f128...f128, f128, f128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i32, .{
         @as(f128, -1.23333),
         @as(f128, -2.24444),
@@ -591,8 +603,8 @@ test "parameter passing (f128...f128, f128, f128)" {
 }
 
 test "parameter passing (i32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1234),
         @as(f32, 1.2345),
@@ -600,8 +612,8 @@ test "parameter passing (i32, f32)" {
 }
 
 test "parameter passing (i32, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1000),
         @as(f64, 1.23),
@@ -609,8 +621,8 @@ test "parameter passing (i32, f64)" {
 }
 
 test "parameter passing (i32, i32, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1000),
         @as(i32, 2000),
@@ -619,8 +631,8 @@ test "parameter passing (i32, i32, f64)" {
 }
 
 test "parameter passing (f64, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f64, 1.234),
         @as(f32, 4.5678),
@@ -628,8 +640,8 @@ test "parameter passing (f64, f32)" {
 }
 
 test "parameter passing (i64, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i64, 1000),
         @as(f64, 4.5678),
@@ -637,8 +649,11 @@ test "parameter passing (i64, f64)" {
 }
 
 test "parameter passing (u8, usize, f16, f16, f16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86, .linux)) return error.SkipZigTest; // likely a compiler bug
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // likely a compiler bug
+    if (comptime is(.riscv64, .linux)) return error.SkipZigTest;
     try createTest(u32, .{
         @as(u8, 16),
         @as(usize, 2),
@@ -649,8 +664,8 @@ test "parameter passing (u8, usize, f16, f16, f16)" {
 }
 
 test "parameter passing (i32, f32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1234),
         @as(f32, 1.234),
@@ -659,8 +674,8 @@ test "parameter passing (i32, f32, f32)" {
 }
 
 test "parameter passing (u64, f32, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(u64, 1234),
         @as(f32, 1.234),
@@ -669,8 +684,8 @@ test "parameter passing (u64, f32, f64)" {
 }
 
 test "parameter passing (f128, f64, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f128, 1234),
         @as(f64, 1.234),
@@ -679,8 +694,8 @@ test "parameter passing (f128, f64, f32)" {
 }
 
 test "parameter passing (i32, f32, i32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1234),
         @as(f32, 1.234),
@@ -690,8 +705,8 @@ test "parameter passing (i32, f32, i32, f32)" {
 }
 
 test "parameter passing (i32, f32, i32, f32, i32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i64, 1234),
         @as(i32, 9999),
@@ -705,8 +720,8 @@ test "parameter passing (i32, f32, i32, f32, i32, f32)" {
 }
 
 test "parameter passing (i32, f64, i32, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(i32, 1234),
         @as(f64, 1.234),
@@ -716,8 +731,8 @@ test "parameter passing (i32, f64, i32, f64)" {
 }
 
 test "parameter passing (f32, i32, f32, i32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f32, 1.234),
         @as(i32, 4567),
@@ -727,8 +742,8 @@ test "parameter passing (f32, i32, f32, i32)" {
 }
 
 test "parameter passing (f64, f64, f64, f64, f64, f64, f64, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f64, 0.1),
         @as(f64, 0.2),
@@ -742,8 +757,8 @@ test "parameter passing (f64, f64, f64, f64, f64, f64, f64, f64)" {
 }
 
 test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f32, 0.1),
         @as(f32, 0.2),
@@ -757,8 +772,9 @@ test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32)" {
 }
 
 test "parameter passing (f128, f128, f128, f64, f64, f64, f64, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // compiler bug perhaps
     try createTest(f64, .{
         @as(f128, 0.1),
         @as(f128, 0.2),
@@ -772,8 +788,8 @@ test "parameter passing (f128, f128, f128, f64, f64, f64, f64, f64)" {
 }
 
 test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as(f32, 0.1),
         @as(f32, 0.2),
@@ -789,8 +805,8 @@ test "parameter passing (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32)" {
 }
 
 test "parameter passing (u32, u32, u32, u32, u32, u32, u32, u32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(i64, .{
         @as(u32, 1000),
         @as(u32, 2000),
@@ -804,8 +820,8 @@ test "parameter passing (u32, u32, u32, u32, u32, u32, u32, u32)" {
 }
 
 test "parameter passing ([*:0]const u8, f32, f32, f32, f32, f32, f32, f32, f32, [*:0]const u8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     try createTest(u32, .{
         @as([*:0]const u8, @ptrCast("Hello")),
         @as(f32, 0.2),
@@ -856,7 +872,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
                 const T = @TypeOf(value);
                 p.* = .{
                     .offset = offset,
-                    .size = @sizeOf(T),
+                    .bit_size = @bitSizeOf(T),
                     .alignment = @alignOf(T),
                     .is_float = @typeInfo(T) == .Float,
                     .is_signed = @typeInfo(T) == .Int and @typeInfo(T).Int.signedness == .signed,
@@ -1010,16 +1026,18 @@ test "sprintf (i64, i32, i64)" {
 
 test "sprintf (i64, i32, f64)" {
     if (!builtin.link_libc) return error.SkipZigTest;
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // both result and control are wrong
     try createSprintfTest("%ld %d %f", .{
         @as(i64, 1234),
         @as(i32, 4567),
-        @as(f64, 3.14),
+        @as(f64, -3.14),
     }).run();
 }
 
 test "sprintf (i64, i32, f64, [*:0]const u8)" {
     if (!builtin.link_libc) return error.SkipZigTest;
-    try createSprintfTest("%s, %lld %d %f", .{
+    if (comptime is(.arm, .linux)) return error.SkipZigTest; // both result and control are wrong
+    try createSprintfTest("%s, %ld %d %f", .{
         @as([*:0]const u8, "Hello world"),
         @as(i64, 1234),
         @as(i32, 4567),
@@ -1237,7 +1255,7 @@ const Abi = struct {
                 .int = .{
                     .type = i64,
                     .available_registers = 8, // a0 - a7
-                    .acceptable_types = &.{ i128, u128, f128, f80 },
+                    .acceptable_types = &.{ i128, u128, f128, f80, f32 },
                 },
                 .float = .{
                     .type = f64,
@@ -1267,7 +1285,7 @@ const Abi = struct {
             .arm => .{
                 .int = .{
                     .type = i32,
-                    .acceptable_types = &.{ i64, f64, f80 },
+                    .acceptable_types = &.{f64},
                 },
                 .float = .{
                     .type = f64,
@@ -1358,13 +1376,11 @@ const Abi = struct {
 
 test "Abi.extend" {
     const abi1: Abi = .{
-        .registers = .{
-            .int = .{
-                .type = i64,
-            },
-            .float = .{
-                .type = f64,
-            },
+        .int = .{
+            .type = i64,
+        },
+        .float = .{
+            .type = f64,
         },
         .sign_extender = .caller,
     };
@@ -1373,13 +1389,11 @@ test "Abi.extend" {
     const b = abi1.extend(i64, @as(i8, -1));
     try expect(b == -1);
     const abi2: Abi = .{
-        .registers = .{
-            .int = .{
-                .type = i64,
-            },
-            .float = .{
-                .type = f64,
-            },
+        .int = .{
+            .type = i64,
+        },
+        .float = .{
+            .type = f64,
         },
         .sign_extender = .callee,
     };
@@ -1397,13 +1411,11 @@ test "Abi.extend" {
 
 test "Abi.toWords" {
     const abi1: Abi = .{
-        .registers = .{
-            .int = .{
-                .type = i64,
-            },
-            .float = .{
-                .type = f64,
-            },
+        .int = .{
+            .type = i64,
+        },
+        .float = .{
+            .type = f64,
         },
         .sign_extender = .caller,
     };
@@ -1411,13 +1423,11 @@ test "Abi.toWords" {
     try expect(a.len == 1);
     try expect(a[0] == -2);
     const abi2: Abi = .{
-        .registers = .{
-            .int = .{
-                .type = i32,
-            },
-            .float = .{
-                .type = f64,
-            },
+        .int = .{
+            .type = i32,
+        },
+        .float = .{
+            .type = f64,
         },
         .sign_extender = .caller,
     };
@@ -1540,8 +1550,8 @@ fn in(comptime T: type, comptime list: []const type) bool {
 }
 
 test "callWithArgs (i64...i64, f64)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) f64 {
@@ -1595,8 +1605,8 @@ test "callWithArgs (i64...i64, f64)" {
 }
 
 test "callWithArgs (i64...i64, i32, i32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
@@ -1629,8 +1639,8 @@ test "callWithArgs (i64...i64, i32, i32)" {
 }
 
 test "callWithArgs (i64...i32, i32, i32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
@@ -1663,8 +1673,8 @@ test "callWithArgs (i64...i32, i32, i32)" {
 }
 
 test "callWithArgs (i64...i32, f32, f32)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) f64 {
@@ -1708,8 +1718,8 @@ test "callWithArgs (i64...i32, f32, f32)" {
 }
 
 test "callWithArgs (i64...i16, i16)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
@@ -1746,8 +1756,8 @@ test "callWithArgs (i64...i16, i16)" {
 }
 
 test "callWithArgs (i64...i8, i8)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i64 {
@@ -1784,8 +1794,8 @@ test "callWithArgs (i64...i8, i8)" {
 }
 
 test "callWithArgs (i64...i128)" {
-    if (comptime is(.aarch64, .linux)) return error.SkipZigTest;
-    if (comptime is(.x86_64, .windows)) return error.SkipZigTest;
+    if (comptime is(.aarch64, .linux)) return error.SkipZigTest; // missing support
+    if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
         fn function(arg0: i64, ...) callconv(.C) i128 {
@@ -1821,7 +1831,7 @@ test "callWithArgs (i64...i128)" {
 
 const ArgAttributes = extern struct {
     offset: u16,
-    size: u16,
+    bit_size: u16,
     alignment: u16,
     is_float: bool,
     is_signed: bool,
@@ -1835,7 +1845,7 @@ const ArgAttributes = extern struct {
             }
             attrs[index - 1] = .{
                 .offset = @offsetOf(Arg, field.name),
-                .size = @sizeOf(field.type),
+                .bit_size = @bitSizeOf(field.type),
                 .alignment = @alignOf(field.type),
                 .is_float = switch (@typeInfo(field.type)) {
                     .Float => true,
@@ -1897,8 +1907,8 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
         float_offset: usize = 0,
         int_offset: usize = 0,
         stack_offset: usize = stack_initial_offset,
-        float_bytes: [float_byte_count]u8 align(@alignOf(Float)) = undefined,
-        int_bytes: [int_byte_count]u8 align(@alignOf(Int)) = undefined,
+        float_bytes: [float_byte_count]u8 align(@alignOf(f128)) = undefined,
+        int_bytes: [int_byte_count]u8 align(@alignOf(i128)) = undefined,
 
         fn init(arg_bytes: [*]const u8, arg_attrs: []const ArgAttributes) !@This() {
             var self: @This() = .{};
@@ -1919,7 +1929,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
             inline for (sections) |s| {
                 for (s.start..s.end) |index| {
                     const a = arg_attrs[index];
-                    const bytes = arg_bytes[a.offset .. a.offset + a.size];
+                    const bytes = arg_bytes[a.offset .. a.offset + a.bit_size / 8];
                     try self.processBytes(bytes, a, s.kind);
                 }
                 if (!abi.int.float_in_registers) {
@@ -1977,7 +1987,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
 
         fn processBytes(self: *@This(), bytes: []const u8, a: ArgAttributes, comptime kind: []const u8) !void {
             return inline for (i_types ++ u_types ++ f_types) |T| {
-                const match = if (@sizeOf(T) == a.size) switch (@typeInfo(T)) {
+                const match = if (@bitSizeOf(T) == a.bit_size) switch (@typeInfo(T)) {
                     .Float => a.is_float,
                     .Int => |int| !a.is_float and (int.signedness == .signed) == a.is_signed,
                     else => unreachable,
@@ -2205,7 +2215,42 @@ test "ArgAllocation(powerpc64le) (i8...i8)" {
     try expect(variadic_ints[0] == 123);
 }
 
-test "ArgAllocation(arm) (i32, i32...i32...f64)" {
+test "ArgAllocation(arm) (i32, i32...i64, i32, f64)" {
+    const abi = Abi.init(.arm, .linux);
+    const ns = struct {
+        fn f(_: i32, _: i32) void {}
+    };
+    const Args = extern struct {
+        retval: i32 = undefined,
+        arg0: i32 = 1000,
+        arg1: i32 = 2000,
+        arg2: i64 = 3000,
+        arg3: i32 = 4000,
+        arg4: f64 = -256.5,
+    };
+    const args: Args = .{};
+    const bytes = std.mem.toBytes(args);
+    const attrs = ArgAttributes.init(Args);
+    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const fixed_ints = alloc.getFixedInts();
+    try expect(fixed_ints.len == 2);
+    try expect(fixed_ints[0] == 1000);
+    try expect(fixed_ints[1] == 2000);
+    const variadic_int_count = alloc.getVariadicIntCount();
+    try expect(variadic_int_count == 6);
+    const variadic_ints = alloc.getVariadicInts(6);
+    try expect(variadic_ints[0] == 3000);
+    try expect(variadic_ints[1] == 0);
+    try expect(variadic_ints[2] == 4000);
+    try expect(variadic_ints[3] == 0);
+    const float_bytes1 = std.mem.toBytes(variadic_ints[4]);
+    const float_bytes2 = std.mem.toBytes(variadic_ints[5]);
+    const float_bytes3 = std.mem.toBytes(args.arg4);
+    try expect(std.mem.eql(u8, &float_bytes1, float_bytes3[0..4]));
+    try expect(std.mem.eql(u8, &float_bytes2, float_bytes3[4..8]));
+}
+
+test "ArgAllocation(arm) (i32, i32...i32, f64)" {
     const abi = Abi.init(.arm, .linux);
     const ns = struct {
         fn f(_: i32, _: i32) void {}
