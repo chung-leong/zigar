@@ -2019,7 +2019,8 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                 // need to place float on stack or int registers
             }
             const DT = comptime if (in(T, abi.int.acceptable_types)) T else abi.int.type;
-            if (!abi.int.float_in_registers) {
+            if (!abi.int.float_in_registers and self.int_offset < stack_initial_offset) {
+                // float need to go into the stack and not all int registers are used
                 if (@typeInfo(T) == .Float) {
                     const start = std.mem.alignForward(usize, self.stack_offset, @sizeOf(DT));
                     const end = start + @sizeOf(DT) * getWordCount(DT, T);
@@ -2029,13 +2030,12 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                         inline for (src_words, 0..) |src_word, index| {
                             dest_words[index] = src_word;
                         }
-                        self.stack_offset = end;
                         return;
                     } else {
                         return Error.too_many_arguments;
                     }
                 } else {
-                    if (self.stack_offset != stack_initial_offset and self.int_offset < stack_initial_offset) {
+                    if (self.stack_offset != stack_initial_offset) {
                         // we've started using the stack already (to store floats)
                         // check if there's enough register space remaining for this int value
                         const start = std.mem.alignForward(usize, self.int_offset, @sizeOf(DT));

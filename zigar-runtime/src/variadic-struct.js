@@ -5,7 +5,7 @@ import { defineProperties, getMemoryRestorer } from './object.js';
 import { always } from './pointer.js';
 import { getChildVivificator } from './struct.js';
 import {
-  ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, PARENT, POINTER_VISITOR, PRIMITIVE, SIZE,
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPIER, MEMORY, MEMORY_RESTORER, PARENT, POINTER_VISITOR, PRIMITIVE, SIZE,
   SLOTS, VIVIFICATOR
 } from './symbol.js';
 import { MemberType } from './types.js';
@@ -62,8 +62,8 @@ export function defineVariadicStruct(structure, env) {
       }
     }
     // set attributes of retval and fixed args
-    for (const [ index, { bitOffset, byteSize, type, structure: { align } } ] of argMembers.entries()) {
-      attrs.set(index, bitOffset / 8, byteSize, align, type);
+    for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
+      attrs.set(index, bitOffset / 8, bitSize, align, type);
     }
     // create additional child objects and copy arguments into them
     for (const [ index, arg ] of varArgs.entries()) {
@@ -72,9 +72,12 @@ export function defineVariadicStruct(structure, env) {
       const offset = offsets[index];
       const childDV = env.obtainView(dv.buffer, offset, byteLength);
       const child = this[SLOTS][slot] = arg.constructor.call(PARENT, childDV);
+      const bitSize = arg.constructor[BIT_SIZE] ?? byteLength * 8;
+      const align = arg.constructor[ALIGN];
+      const type = arg.constructor[PRIMITIVE];
       child.$ = arg;
       // set attributes
-      attrs.set(argCount + index, offset, byteLength, arg.constructor[ALIGN], arg.constructor[PRIMITIVE]);
+      attrs.set(argCount + index, offset, bitSize, align, type);
     }
     this[ATTRIBUTES] = attrs;
   };
@@ -112,11 +115,11 @@ export function defineVariadicStruct(structure, env) {
     this.length = length;
     this.littleEndian = env.littleEndian;
   }
-  const setAttributes = function(index, offset, size, align, type) {
+  const setAttributes = function(index, offset, bitSize, align, type) {
     const dv = this[MEMORY];
     const le = env.littleEndian;
     dv.setUint16(index * 8, offset, le);
-    dv.setUint16(index * 8 + 2, size, le);
+    dv.setUint16(index * 8 + 2, bitSize, le);
     dv.setUint16(index * 8 + 4, align, le);
     dv.setUint8(index * 8 + 6, type == MemberType.Float);
     dv.setUint8(index * 8 + 7, type == MemberType.Int);

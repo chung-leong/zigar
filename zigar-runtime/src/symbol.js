@@ -31,6 +31,7 @@ export const PROXY = Symbol('proxy');
 export const COMPAT = Symbol('compat');
 export const CACHE = Symbol('cache');
 export const SIZE = Symbol('size');
+export const BIT_SIZE = Symbol('bitSize');
 export const ALIGN = Symbol('align');
 export const ARRAY = Symbol('array');
 export const POINTER = Symbol('pointer');

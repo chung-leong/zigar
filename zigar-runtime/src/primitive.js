@@ -8,7 +8,9 @@ import {
 import {
   convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
 } from './special.js';
-import { ALIGN, COMPAT, COPIER, PRIMITIVE, SIZE, TYPE, WRITE_DISABLER } from './symbol.js';
+import {
+  ALIGN, BIT_SIZE, COMPAT, COPIER, PRIMITIVE, SIZE, TYPE, WRITE_DISABLER,
+} from './symbol.js';
 import { getPrimitiveType } from './types.js';
 
 export function definePrimitive(structure, env) {
@@ -51,6 +53,7 @@ export function definePrimitive(structure, env) {
     [COMPAT]: { value: getCompatibleTags(structure) },
     [ALIGN]: { value: align },
     [SIZE]: { value: byteSize },
+    [BIT_SIZE]: { value: member.bitSize },
     [TYPE]: { value: structure.type },
     [PRIMITIVE]: { value: member.type },
   };
