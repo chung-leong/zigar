@@ -28,8 +28,11 @@ pub fn build(b: *std.Build) void {
     if (cfg.use_libc) {
         lib.linkLibC();
     }
-    const wf = b.addWriteFiles();
-    _ = wf.addCopyFile(lib.getEmittedBin(), cfg.output_path);
+    const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
+        true => b.addUpdateSourceFiles(),
+        false => b.addWriteFiles(),
+    };
+    wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
 }
