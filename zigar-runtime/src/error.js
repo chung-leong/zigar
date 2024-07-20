@@ -192,7 +192,7 @@ export class InvalidSliceLength extends TypeError {
     if (length < 0) {
       super(`Length of slice cannot be negative`);
     } else {
-      super(`Length of slice must be less than ${max}, received ${length}`);
+      super(`Length of slice can be ${max} or less, received ${length}`);
     }
   }
 }

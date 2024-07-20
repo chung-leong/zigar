@@ -63,7 +63,7 @@ export function definePointer(structure, env) {
           this[ADDRESS] = address;
           this[LENGTH] = length;
           if (hasLengthInMemory) {
-            this[MAX_LENGTH] = length;
+            this[MAX_LENGTH] = undefined;
           }
           return newTarget;
         }
@@ -120,7 +120,7 @@ export function definePointer(structure, env) {
     }
     pointer[SLOTS][0] = arg ?? null;
     if (hasLengthInMemory) {
-      pointer[MAX_LENGTH] = (arg) ? arg.length : 0;
+      pointer[MAX_LENGTH] = undefined;
     }
   };
   const getTarget = isValueExpected(targetStructure)
@@ -150,6 +150,9 @@ export function definePointer(structure, env) {
     if (!fixed) {
       if (hasLengthInMemory) {
         max = this[MAX_LENGTH];
+        if (max === undefined) {
+          max = this[MAX_LENGTH] = target?.length ?? 0;
+        }
       } else {
         max = (bytesAvailable / elementSize) | 0;
       }
