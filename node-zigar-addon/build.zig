@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) !void {
     }
     lib.linkLibC();
     const wf = b.addWriteFiles();
-    _ = wf.addCopyFile(lib.getEmittedBin(), cfg.output_path);
+    _ = wf.addCopyFile(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
 }
