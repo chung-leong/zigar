@@ -18,6 +18,7 @@ import { MemberType, StructureType, isPointer } from './types.js';
 
 export function definePointer(structure, env) {
   const {
+    name,
     type,
     byteSize,
     align,
@@ -209,6 +210,19 @@ export function definePointer(structure, env) {
     } else if (type != StructureType.SinglePointer) {
       if (isCompatiblePointer(arg, Target, type)) {
         arg = Target(arg[SLOTS][0][MEMORY]);
+      }
+    } else if (name === '*anyopaque' && arg) {
+      if (isPointer(arg.constructor[TYPE])) {
+        arg = arg['*']?.[MEMORY];
+      } else if (arg[MEMORY]) {
+        arg = arg[MEMORY];
+      } else if (arg?.buffer instanceof ArrayBuffer) {
+        if (!(arg instanceof Uint8Array || arg instanceof DataView)) {
+          const { byteOffset, byteLength } = arg;
+          if (byteOffset !== undefined && byteLength !== undefined) {
+            arg = new DataView(arg.buffer, byteOffset, byteLength);
+          }
+        }
       }
     }
     if (arg instanceof Target) {
