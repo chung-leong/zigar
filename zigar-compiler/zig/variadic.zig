@@ -2056,9 +2056,6 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
                     dest_words[index] = src_word;
                 }
                 self.int_offset = end;
-                if (end > stack_initial_offset) {
-                    self.stack_offset = end;
-                }
                 return;
             } else {
                 return Error.too_many_arguments;
