@@ -1,3 +1,13 @@
+## 0.13.1
+
+* Enhanced handling of multi-item and C pointers
+* Implemented expected behavior from poitner to anyopaque
+* Added support for iterators
+* Added support for variadic functions
+* Added buildDirSize option to control size of build directory
+* Added support for Zig 0.14.0/master
+* Various bug fixes
+
 ## 0.13.0
 
 * Added support for Zig 0.13.0
