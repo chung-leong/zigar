@@ -1829,6 +1829,7 @@ test "callWithArgs (i64...i128)" {
     try expect(result1 == result2);
 }
 
+const ArgKind = enum { fixed, variadic };
 const ArgAttributes = extern struct {
     offset: u16,
     bit_size: u16,
@@ -1916,12 +1917,12 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
             for (&self.float_bytes) |*p| p.* = 0;
             const sections = .{
                 .{
-                    .kind = "fixed",
+                    .kind = .fixed,
                     .start = 0,
                     .end = f.params.len,
                 },
                 .{
-                    .kind = "variadic",
+                    .kind = .variadic,
                     .start = f.params.len,
                     .end = arg_attrs.len,
                 },
@@ -1985,7 +1986,7 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
             return self.float_offset / @sizeOf(Float) - fixed.float;
         }
 
-        fn processBytes(self: *@This(), bytes: []const u8, a: ArgAttributes, comptime kind: []const u8) !void {
+        fn processBytes(self: *@This(), bytes: []const u8, a: ArgAttributes, comptime kind: ArgKind) !void {
             return inline for (i_types ++ u_types ++ f_types) |T| {
                 const match = if (@bitSizeOf(T) == a.bit_size) switch (@typeInfo(T)) {
                     .Float => a.is_float,
@@ -1999,10 +2000,10 @@ fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
             } else Error.unsupported_argument_type;
         }
 
-        fn processValue(self: *@This(), value: anytype, comptime kind: []const u8) !void {
+        fn processValue(self: *@This(), value: anytype, comptime kind: ArgKind) !void {
             const T = @TypeOf(value);
             const has_float_reg = abi.float.available_registers > 0;
-            const using_float_reg = std.mem.eql(u8, kind, "fixed") or abi.float.accept_variadic;
+            const using_float_reg = (kind == .fixed) or abi.float.accept_variadic;
             if (@typeInfo(T) == .Float and has_float_reg and using_float_reg) {
                 const DT = comptime if (in(T, abi.float.acceptable_types)) T else abi.float.type;
                 const start = std.mem.alignForward(usize, self.float_offset, @sizeOf(DT));

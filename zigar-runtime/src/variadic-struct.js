@@ -122,7 +122,7 @@ export function defineVariadicStruct(structure, env) {
     dv.setUint16(index * 8 + 2, bitSize, le);
     dv.setUint16(index * 8 + 4, align, le);
     dv.setUint8(index * 8 + 6, type == MemberType.Float);
-    dv.setUint8(index * 8 + 7, type == MemberType.Int);
+    dv.setUint8(index * 8 + 7, type == MemberType.Int || type == MemberType.Float);
   };
   defineProperties(ArgAttributes, {
     [ALIGN]: { value: 4 },
