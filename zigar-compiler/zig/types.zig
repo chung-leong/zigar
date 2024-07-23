@@ -782,7 +782,12 @@ test "TypeData.getContentBitOffset" {
 fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
     const f = @typeInfo(FT).Fn;
     if (f.return_type) |RT| {
-        if (f.params.len == 1 and f.params[0].type == *T) {
+        const param_match = switch (f.params.len) {
+            1 => f.params[0].type == *T,
+            2 => f.params[0].type == *T and f.params[1].type == std.mem.Allocator,
+            else => false,
+        };
+        if (param_match) {
             if (PayloadType(RT)) |PT| {
                 return PT;
             }
