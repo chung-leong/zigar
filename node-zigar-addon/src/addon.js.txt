@@ -5700,7 +5700,7 @@
 "      const pointerMap = new Map();\n"
 "      const callback = function({ isActive, isMutable }) {\n"
 "        // bypass proxy\n"
-"        const pointer = this[POINTER];\n"
+"        const pointer = this[POINTER] ?? this;\n"
 "        if (!pointerMap.get(pointer)) {\n"
 "          pointerMap.set(pointer, true);\n"
 "          const writable = !pointer.constructor.const;\n"

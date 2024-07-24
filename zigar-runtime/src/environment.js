@@ -980,7 +980,7 @@ export class Environment {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER];
+      const pointer = this[POINTER] ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;
