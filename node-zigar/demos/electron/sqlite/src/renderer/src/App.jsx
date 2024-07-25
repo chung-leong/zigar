@@ -1,34 +1,67 @@
-import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
+import { useCallback, useDeferredValue, useEffect, useState } from 'react';
 
 function App() {
-  const ipcHandle = () => window.electron.ipcRenderer.send('ping')
+  const [ albums, setAlbums ] = useState([])
+  const [ tracks, setTracks ] = useState([])
+  const [ searchString, setSearchString ] = useState('')
+  const [ selectedAlbumId, setSelectedAlbumId ] = useState()
+  const deferredSearchString = useDeferredValue(searchString)
+
+  const onSearchChange = useCallback((evt) => {
+    setSearchString(evt.target.value);
+  }, []);
+  const onAlbumClick = useCallback((evt) => {
+    if (evt.target.tagName === 'LI') {
+      setSelectedAlbumId(parseInt(evt.target.dataset.albumId));
+    }
+  }, []);
+  useEffect(() => {
+    window.electron.ipcRenderer.invoke('findAlbums', deferredSearchString).then(setAlbums)
+  }, [ deferredSearchString ])
+  useEffect(() => {
+    if (selectedAlbumId !== undefined) {
+      window.electron.ipcRenderer.invoke('getTracks', selectedAlbumId).then(setTracks)
+    } else {
+      setTracks([])
+    }
+  }, [ selectedAlbumId ])
+  useEffect(() => {
+    if (selectedAlbumId) {
+      if (!albums.find(a => a.AlbumId === selectedAlbumId)) {
+        setSelectedAlbumId(undefined);
+      }
+    }
+  }, [ albums ]);
 
   return (
     <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
+      <div id="header">
+        <input id="search" value={searchString} onChange={onSearchChange} />
+        <div id="toolbar"></div>
       </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="actions">
-        <div className="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">
-            Documentation
-          </a>
-        </div>
-        <div className="action">
-          <a target="_blank" rel="noreferrer" onClick={ipcHandle}>
-            Send IPC
-          </a>
-        </div>
+      <div id="content">
+        <ul id="album-list" onClick={onAlbumClick}>
+          {albums.map(album =>
+            <li className={album.AlbumId === selectedAlbumId ? 'selected' : ''} data-album-id={album.AlbumId}>{album.Title}</li>)
+          }
+        </ul>
+        <ul id="track-list">
+          {tracks.map(track =>
+            <li data-track-id={track.TrackId}>[{formatTime(track.Milliseconds)}] {track.Name}</li>)
+          }
+        </ul>
       </div>
-      <Versions></Versions>
     </>
   )
+}
+
+function formatTime(ms) {
+  const min = Math.floor(ms / 60000).toString();
+  let sec = Math.floor((ms % 60000) / 1000).toString();
+  if (sec.length == 1) {
+    sec = '0' + sec;
+  }
+  return `${min}:${sec}`;
 }
 
 export default App

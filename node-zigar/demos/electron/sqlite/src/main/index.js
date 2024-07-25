@@ -2,6 +2,11 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { join, resolve } from 'path';
 import icon from '../../resources/icon.png?asset';
+require ('node-zigar/cjs');
+const { openDb, closeDb, findAlbums, getTracks } = require('../../zig/sqlite.zig');
+
+const path = resolve(__dirname, '../../chinook.db');
+const db = openDb(path);
 
 function createWindow() {
   // Create the browser window.
@@ -49,8 +54,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.handle('findAlbums', (_, searchStr) => toArray(findAlbums(db, searchStr)))
+  ipcMain.handle('getTracks', (_, albumId) => toArray(getTracks(db, albumId)))
 
   createWindow()
 
@@ -69,15 +74,16 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+app.on('quit', () => closeDb(db))
 
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
-require ('node-zigar/cjs');
-const { openDb, closeDb, findAlbums, getTracks } = require('../../zig/sqlite.zig');
-
-const path = resolve(__dirname, '../../chinook.db');
-const db = openDb(path);
-for (const track of getTracks(db, 147)) {
-  console.log(`${track.Name.string}`);
+function toArray(iterator) {
+  return [ ...iterator ].map(row => {
+    const object = {};
+    for (const [ name, value ] of row) {
+      object[name] = (typeof(value) === 'object') ? value.string : value;
+    }
+    return object;
+  });
 }
-closeDb(db);

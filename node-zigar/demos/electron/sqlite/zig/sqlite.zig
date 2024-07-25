@@ -87,8 +87,8 @@ const FindAlbumsIterator = Iterator(Album,
     \\WHERE a.Title LIKE '%' || ? || '%'
 );
 
-pub fn findAlbums(db_op: SqliteOpaquePtr, title: []const u8) !FindAlbumsIterator {
-    return try FindAlbumsIterator.init(db_op, .{title});
+pub fn findAlbums(db_op: SqliteOpaquePtr, search_str: []const u8) !FindAlbumsIterator {
+    return try FindAlbumsIterator.init(db_op, .{search_str});
 }
 
 pub const Track = struct {
