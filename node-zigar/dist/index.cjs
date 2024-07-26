@@ -11,7 +11,8 @@ Module._load = new Proxy(Module._load, {
     if (!extensionsRegex.exec(request)) {
       return Reflect.apply(target, self, args);
     }
-    const url = new URL(request, pathToFileURL(parent.filename)).href
+    const parentURL = pathToFileURL(parent.filename ?? join(process.cwd(), 'script'));
+    const url = new URL(request, parentURL).href
     // start a worker so we can handle compilation in async code
     const buffers = {
       length: new Int32Array(new SharedArrayBuffer(4)),
