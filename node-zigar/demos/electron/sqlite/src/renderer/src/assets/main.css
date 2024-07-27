@@ -68,3 +68,28 @@ body {
   padding-left: 1em;
   list-style:none;
 }
+
+#form-add {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+#form-add SECTION {
+  padding: 5px 5px 5px 5px;
+}
+
+#form-add LABEL {
+  display: block;
+  padding-bottom: 0;
+}
+
+#form-add INPUT {
+  width: 50vw;
+}
+
+#form-add BUTTON {
+  margin-left: 5px;
+}

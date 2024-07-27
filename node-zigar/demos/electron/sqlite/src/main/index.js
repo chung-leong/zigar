@@ -3,7 +3,7 @@ import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { join, resolve } from 'path';
 import icon from '../../resources/icon.png?asset';
 require ('node-zigar/cjs');
-const { openDb, closeDb, findAlbums, getTracks } = require('../../zig/sqlite.zig');
+const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../../zig/sqlite.zig');
 
 const path = resolve(__dirname, '../../chinook.db');
 const db = openDb(path);
@@ -56,6 +56,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('findAlbums', (_, searchStr) => toArray(findAlbums(db, searchStr)))
   ipcMain.handle('getTracks', (_, albumId) => toArray(getTracks(db, albumId)))
+  ipcMain.handle('addAlbum', (_, album) => addAlbum(db, album))
 
   createWindow()
 

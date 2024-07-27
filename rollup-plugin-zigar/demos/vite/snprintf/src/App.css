@@ -1,0 +1,71 @@
+#root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+#call {
+  text-align: center;
+}
+
+#format {
+  margin-left: .5em;
+  width: 15em;
+}
+
+#arg-str {
+  margin-left: .5em;
+  width: 20em;
+}
+
+#arg-container {
+  display: inline-block;
+  position: relative;
+}
+
+#arg-types {
+  position: absolute;
+  left: .5em;
+  top: 1.75em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#arg-types LABEL {
+  font-size: 80%;
+  padding: 1px 2px 1px 2px;
+  margin-right: 3px;
+  border: 1px solid black;
+}
+
+#arg-types LABEL.signed {
+  background-color: #CCFFFF;
+}
+
+#arg-types LABEL.unsigned {
+  background-color: #FFCCFF;
+}
+
+#arg-types LABEL.float {
+  background-color: #FFCCCC;
+}
+
+#arg-types LABEL.other {
+  background-color: #FFFFCC;
+}
+
+#result {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 110%;
+  margin-top: 3em;
+  padding: .5em .5em .5em .5em;
+  border: 2px dashed #999999;
+  width: fit-content;
+  white-space: pre;
+}
+
+#result.error {
+  border-color: #FF0000;
+  color: #FF0000;
+}
