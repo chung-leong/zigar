@@ -4,11 +4,13 @@ import {
 } from '../zig/snprintf.zig';
 import './App.css';
 
+const { searchParams } = new URL(window.location);
+
 function App() {
-  const [format, setFormat] = useState('')
-  const [argStr, setArgStr] = useState('')
+  const [format, setFormat] = useState(searchParams.get('format') ?? '')
+  const [argStr, setArgStr] = useState(searchParams.get('args') ?? '')
   const argTypes = useMemo(() => {
-    const list = [];
+    const list = []
     const re = /%(.*?)([diuoxfegacspn%])/gi
     let m
     while (m = re.exec(format)) {
@@ -17,39 +19,25 @@ function App() {
         case 'n':
         case 'i':
         case 'd': {
-          if (m[1].includes('hh')) {
-            type = I8
-          } else if (m[1].includes('h')) {
-            type = I16
-          } else if (m[1].includes('ll') || m[1].includes('j')) {
-            type = I64
-          } else if (m[1].includes('z')) {
-            type = Usize
-          } else {
-            type = I32
-          }
+          if (m[1].includes('hh')) type = I8
+          else if (m[1].includes('h')) type = I16
+          else if (m[1].includes('ll') || m[1].includes('j')) type = I64
+          else if (m[1].includes('z')) type = Usize
+          else type = I32
         } break
         case 'u':
         case 'x':
         case 'o': {
-          if (m[1].includes('hh')) {
-            type = U8
-          } else if (m[1].includes('h')) {
-            type = U16
-          } else if (m[1].includes('ll') || m[1].includes('j')) {
-            type = U64
-          } else if (m[1].includes('z')) {
-            type = Usize
-          } else {
-            type = U32
-          }
+          if (m[1].includes('hh')) type = U8
+          else if (m[1].includes('h')) type = U16
+          else if (m[1].includes('ll') || m[1].includes('j')) type = U64
+          else if (m[1].includes('z')) type = Usize
+          else type = U32
         } break
         case 'a':
         case 'f':
         case 'e':
-        case 'g': {
-          type = F64;
-        } break;
+        case 'g': type = F64; break;
         case 'c': type = U8; break
         case 's': type = CStr; break
         case 'p': type = Usize; break
@@ -73,16 +61,14 @@ function App() {
       const vargs = []
       for (const [ index, arg ] of args.entries()) {
         const type = argTypes[index]
-        if (!type) throw new Error(`No specifier for argument #${index + 1}: ${arg}`);
+        if (!type) throw new Error(`No specifier for argument #${index + 1}: ${arg}`)
         vargs.push(new type(arg))
       }
-      const len = snprintf(null, 0, format, ...vargs);
-      if (len < 0) {
-        throw new Error('Invalid format string');
-      }
-      const buffer = new CStr(len + 1);
-      snprintf(buffer, buffer.length, format, ...vargs);
-      return buffer.string;
+      const len = snprintf(null, 0, format, ...vargs)
+      if (len < 0) throw new Error('Invalid format string')
+      const buffer = new CStr(len + 1)
+      snprintf(buffer, buffer.length, format, ...vargs)
+      return buffer.string
     } catch (err) {
       return err
     }
@@ -94,15 +80,10 @@ function App() {
     setArgStr(evt.target.value)
   }, [])
   const categorize = function(t) {
-    if (t.name.startsWith('i')) {
-      return 'signed';
-    } else if (t.name.startsWith('u')) {
-      return 'unsigned';
-    } else if (t.name.startsWith('f')) {
-      return 'float';
-    } else {
-      return 'other';
-    }
+    if (t.name.startsWith('i')) return 'signed'
+    else if (t.name.startsWith('u')) return 'unsigned'
+    else if (t.name.startsWith('f')) return 'float'
+    else return 'other'
   }
 
   return (
@@ -113,14 +94,7 @@ function App() {
           <div id="arg-container">
             <input id="arg-str" value={argStr} onChange={onArgStrChange} />
             <div id="arg-types">
-              {
-                argTypes.map((t) =>
-                  <label className={categorize(t)}>
-                    {t.name}
-                  </label>
-                )
-              }
-
+              {argTypes.map((t) => <label className={categorize(t)}>{t.name}</label>)}
             </div>
           </div>
         );
