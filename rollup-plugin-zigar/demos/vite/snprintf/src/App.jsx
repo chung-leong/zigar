@@ -44,13 +44,13 @@ function App() {
             type = U32
           }
         } break
+        case 'a':
         case 'f':
         case 'e':
         case 'g': {
           type = F64;
         } break;
         case 'c': type = U8; break
-        case 'z': type = U8; break
         case 's': type = CStr; break
         case 'p': type = Usize; break
       }
