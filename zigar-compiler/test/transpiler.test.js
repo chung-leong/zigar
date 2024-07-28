@@ -14,7 +14,7 @@ describe('Transpilation', function() {
     return fileURLToPath(url);
   };
   const saveWASM = async (path, data) => {
-    const { name } = parse(path); 
+    const { name } = parse(path);
     const url = new URL(`./wasm-samples/${name}.wasm`, import.meta.url);
     const wasmPath = fileURLToPath(url);
     await writeFile(wasmPath, data);
@@ -32,9 +32,9 @@ describe('Transpilation', function() {
     it('should transpile zig source code contain a method', async function() {
       this.timeout(600000);
       const path = getSamplePath('simple');
-      const options = { 
-        optimize: 'ReleaseSmall', 
-        embedWASM: false, 
+      const options = {
+        optimize: 'ReleaseSmall',
+        embedWASM: false,
         stripWASM: false,
         wasmLoader: saveWASM,
       };
@@ -45,10 +45,10 @@ describe('Transpilation', function() {
     it('should transpile zig source code accessing the file system', async function() {
       this.timeout(600000);
       const path = getSamplePath('read-file');
-      const options = { 
-        optimize: 'ReleaseSmall', 
-        embedWASM: false, 
-        wasmLoader: saveWASM, 
+      const options = {
+        optimize: 'ReleaseSmall',
+        embedWASM: false,
+        wasmLoader: saveWASM,
       };
       const { code } = await transpile(path, options);
       expect(code).to.contain('"readFile"');

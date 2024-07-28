@@ -158,7 +158,7 @@ export class Environment {
 
   releaseFixedView(dv) {
     // only allocated memory would have type attached
-    if (dv[FIXED].type !== undefined) {
+    if (dv[FIXED]?.type !== undefined) {
       this.freeFixedMemory(dv);
       dv[FIXED] = null;
     }

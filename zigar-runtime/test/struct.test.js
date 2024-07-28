@@ -1212,7 +1212,7 @@ describe('Struct functions', function() {
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new NodeEnvironment();
       let nextAddress = 0x1000n;
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress;
         nextAddress += BigInt(len * 0x0F);
         return address;

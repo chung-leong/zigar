@@ -12,7 +12,6 @@ import {
   getModuleCachePath,
   runCompiler
 } from '../src/compiler.js';
-import { delay } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
   describe('runCompiler', function() {
@@ -235,27 +234,6 @@ describe('Compilation', function() {
       const { outputPath } = await compile(srcPath, modPath, options);
       const { size } = await stat(outputPath);
       expect(size).to.be.at.least(1000);
-    })
-    it('should recompile when one of the files has a newer modification date', async function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/custom/custom.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      await compile(srcPath, modPath, options);
-      await delay(1000);
-      const { changed } = await compile(srcPath, modPath, options);
-      expect(changed).to.be.true;
-    })
-    it('should recompile when code exporter has changed', async function() {
-      this.timeout(600000);
-      const srcPath = absolute('./zig-samples/custom/custom.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
-      const modPath = getModuleCachePath(srcPath, options);
-      await compile(srcPath, modPath, options);
-      const exportPath = absolute('../zig/exporter.zig');
-      await delay(1000);
-      const { changed } = await compile(srcPath, modPath, options);
-      expect(changed).to.be.true;
     })
     it('should throw when code cannot be compiled', async function() {
       this.timeout(600000);

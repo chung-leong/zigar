@@ -105,9 +105,9 @@ describe('Utility functions', function() {
     })
     it('should overwrite a lock after a while', async function() {
       const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
-      await acquireLock(path, 60 * 1000);
+      await acquireLock(path, true, 60 * 1000);
       let lock2 = false;
-      const promise2 = acquireLock(path, 200);
+      const promise2 = acquireLock(path, true, 200);
       promise2.then(() => lock2 = true);
       await delay(100);
       expect(lock2).to.be.false;

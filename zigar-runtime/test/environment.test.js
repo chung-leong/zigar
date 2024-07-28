@@ -16,7 +16,7 @@ import {
   ADDRESS,
   ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED,
   LENGTH,
-  LENGTH_SETTER, MEMORY, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
+  LENGTH_SETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
@@ -86,7 +86,7 @@ describe('Environment', function() {
   describe('allocateFixedMemory', function() {
     it('should try to allocate fixed memory from zig', function() {
       const env = new Environment();
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         return 0x1000n;
       };
       env.obtainExternView = function(address, len) {
@@ -101,7 +101,7 @@ describe('Environment', function() {
     })
     it('should return empty data view when len is 0', function() {
       const env = new Environment();
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         return 0x1000n;
       };
       env.obtainExternView = function(address, len) {
@@ -175,7 +175,7 @@ describe('Environment', function() {
   describe('releaseFixedView', function() {
     it('should free a data view that was allocated using allocateFixedMemory', function() {
       const env = new Environment();
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         return 0x1000n;
       };
       env.obtainExternView = function(address, len) {
@@ -1209,7 +1209,7 @@ describe('Environment', function() {
     it('should pass variables to unlinkObject', function() {
       const env = new Environment();
       let nextAddress = 0x1000n;
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
         nextAddress += BigInt(len * 0x0F);
         return address;
@@ -1223,6 +1223,7 @@ describe('Environment', function() {
         this[MEMORY] = dv;
       };
       Test.prototype[COPIER] = getMemoryCopier(16);
+      Test.prototype[MEMORY_RESTORER] = function() {};
       const object1 = new Test(env.allocateMemory(16, 8, true));
       const object2 = new Test(env.allocateMemory(16, 8, true));
       env.variables.push({ name: 'a', object: object1 });
@@ -1236,7 +1237,7 @@ describe('Environment', function() {
     it('should replace buffer in fixed memory with ones in relocatable memory', function() {
       const env = new Environment();
       let nextAddress = 0x1000n;
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
         nextAddress += BigInt(len * 0x0F);
         return address;
@@ -1250,6 +1251,7 @@ describe('Environment', function() {
         this[MEMORY] = dv;
       };
       Test.prototype[COPIER] = getMemoryCopier(16);
+      Test.prototype[MEMORY_RESTORER] = function() {};
       const object = new Test(env.allocateMemory(16, 8, true));
       const dv = object[MEMORY];
       expect(dv[FIXED]).to.be.an('object');
@@ -1464,6 +1466,14 @@ describe('Environment', function() {
         hasPointer: true,
       });
       env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitOffset: 0,
+        bitSize: 0,
+        byteSize: 0,
+        structure: {},
+      });
+      env.attachMember(structure, {
         name: '0',
         type: MemberType.Object,
         bitOffset: 0,
@@ -1498,14 +1508,6 @@ describe('Environment', function() {
         byteSize: 8,
         slot: 3,
         structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Void,
-        bitOffset: 256,
-        bitSize: 0,
-        byteSize: 0,
-        structure: {},
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -2231,6 +2233,14 @@ describe('Environment', function() {
         hasPointer: true,
       });
       env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.attachMember(structure, {
         name: '0',
         type: MemberType.Object,
         bitOffset: 0,
@@ -2238,14 +2248,6 @@ describe('Environment', function() {
         byteSize: 8,
         slot: 0,
         structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Bool,
-        bitOffset: 0,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
       });
       env.finalizeShape(structure);
       env.finalizeStructure(structure);
@@ -2548,7 +2550,7 @@ describe('Environment', function() {
     })
   })
   describe('acquireDefaultPointers', function() {
-    it('should acquire targets of pointers in structure template slots ', function() {
+    it('should acquire targets of pointers in structure template slots', function() {
       const env = new Environment();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -2611,7 +2613,7 @@ describe('Environment', function() {
       const template = env.createTemplate(dv);
       env.attachTemplate(structure, template);
       env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       // function mocks
       const requests = [];
       env.obtainExternView = function(address, len) {

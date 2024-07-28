@@ -489,9 +489,9 @@ describe('Code generation', function() {
       const { code } = generateCode(def, params);
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
-      expect(code).to.contain('usePointer()');
+      expect(code).to.contain('useSinglePointer()');
       // find export section
-      const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
+      const m = /export \{([\s\S]*)\}/.exec(code);
       expect(m).to.not.be.null;
       expect(m[1]).to.contain('panda');
     })
@@ -547,10 +547,10 @@ describe('Code generation', function() {
       const { code } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: true, ...params });
       expect(code).to.contain('package');
       expect(code).to.contain('useStruct()');
-      const m = /export const \{([\s\S]*)\} = constructor/.exec(code);
+      const m = /export \{([\s\S]*)\}/.exec(code);
       expect(m).to.not.be.null;
       expect(m[1]).to.contain('hello');
-      expect(code).to.contain('await __zigar.init()');
+      expect(code).to.contain('await v1.init()');
       expect(code).to.contain('env.linkVariables(false)');
       const { code: codeAlt } = generateCode(def, { binarySource: `loadWASM()`, topLevelAwait: false });
       expect(codeAlt).to.not.contain('await __zigar.init()');

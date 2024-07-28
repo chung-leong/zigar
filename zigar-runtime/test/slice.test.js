@@ -359,7 +359,7 @@ describe('Slice functions', function() {
     })
     it('should initialize correctly from a string when fixed is specified', function() {
       const env = new NodeEnvironment();
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         return 0x1000n;
       };
       env.obtainExternBuffer = function(address, len) {
@@ -1251,6 +1251,7 @@ describe('Slice functions', function() {
       });
       env.attachMember(structure, {
         type: MemberType.Uint,
+        isRequired: true,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1282,6 +1283,7 @@ describe('Slice functions', function() {
       });
       env.attachMember(structure, {
         type: MemberType.Uint,
+        isRequired: true,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
@@ -1316,6 +1318,7 @@ describe('Slice functions', function() {
       });
       env.attachMember(structure, {
         type: MemberType.Uint,
+        isRequired: true,
         bitOffset: 0,
         bitSize: 8,
         byteSize: 1,

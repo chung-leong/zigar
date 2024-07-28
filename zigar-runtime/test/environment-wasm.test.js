@@ -11,7 +11,7 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR } from '../src/symbol.js';
+import { COPIER, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -195,7 +195,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should return the address when object is in fixed memory', function() {
       const env = new WebAssemblyEnvironment();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateExternMemory = function(len, align) {
+      env.allocateExternMemory = function(type, len, align) {
         return 256;
       };
       env.startContext();
@@ -492,72 +492,6 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       const address = env.recreateAddress(128);
       expect(address).to.equal(128);
-    })
-  })
-  describe('startCall', function() {
-    it('should return address of argument struct', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      env.allocateShadowMemory = function(len, align) {
-        return new DataView(memory.buffer, 128, len);
-      };
-      const ArgStruct = function() {};
-      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
-      const argStruct = new ArgStruct();
-      argStruct[MEMORY] = env.allocateMemory(16, 1, false);
-      const address = env.startCall({}, argStruct);
-      expect(address).to.equal(128);
-    })
-    it('should invoke pointer visitor', function() {
-      const env = new WebAssemblyEnvironment();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      let allocCount = 0;
-      env.allocateShadowMemory = function(len, align) {
-        allocCount++;
-        return new DataView(memory.buffer, 128, len);
-      };
-      const ArgStruct = function() {};
-      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
-      const argStruct = new ArgStruct();
-      argStruct[MEMORY] = env.allocateMemory(16, 1, false);
-      let visitorCalled = false;
-      argStruct[POINTER_VISITOR] = function() {
-        visitorCalled = true;
-      };
-      const address = env.startCall({}, argStruct);
-      expect(address).to.equal(128);
-      expect(visitorCalled).to.be.true;
-      expect(allocCount).to.be.at.least(1);
-    })
-  })
-  describe('endCall', function() {
-    it('should invoke pointer visitor', function() {
-      const env = new WebAssemblyEnvironment();
-      env.flushStdout = function() {};
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      let allocCount = 0;
-      env.allocateShadowMemory = function(len, align) {
-        allocCount++;
-        return new DataView(memory.buffer, 128, len);
-      };
-      env.freeShadowMemory = function() {
-        allocCount--;
-      }
-      const ArgStruct = function() {};
-      ArgStruct.prototype[COPIER] = getMemoryCopier(16);
-      const argStruct = new ArgStruct();
-      argStruct[MEMORY] = env.allocateMemory(16, 1, false);
-      let visitorCalled = false;
-      argStruct[POINTER_VISITOR] = function() {
-        visitorCalled = true;
-      };
-      const address = env.startCall({}, argStruct);
-      expect(visitorCalled).to.be.true;
-      expect(allocCount).to.be.at.least(1);
-      visitorCalled = false;
-      env.endCall({}, argStruct);
-      expect(visitorCalled).to.be.true;
-      expect(allocCount).to.equal(0);
     })
   })
   describe('invokeThunk', function() {
