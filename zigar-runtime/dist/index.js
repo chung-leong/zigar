@@ -4898,7 +4898,7 @@ class Environment {
 
   releaseFixedView(dv) {
     // only allocated memory would have type attached
-    if (dv[FIXED].type !== undefined) {
+    if (dv[FIXED]?.type !== undefined) {
       this.freeFixedMemory(dv);
       dv[FIXED] = null;
     }
@@ -5501,7 +5501,7 @@ class Environment {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER];
+      const pointer = this[POINTER] ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;
