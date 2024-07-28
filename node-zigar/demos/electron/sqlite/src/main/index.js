@@ -3,9 +3,9 @@ import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { join, resolve } from 'path';
 import icon from '../../resources/icon.png?asset';
 require ('node-zigar/cjs');
-const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../../zig/sqlite.zig');
+const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../lib/sqlite.zigar');
 
-const path = resolve(__dirname, '../../chinook.db');
+const path = resolve(__dirname, '../../resources/chinook.db');
 const db = openDb(path);
 
 function createWindow() {

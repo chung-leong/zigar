@@ -11,7 +11,7 @@ pub fn openDb(path: [:0]const u8) !SqliteOpaquePtr {
     errdefer allocator.destroy(db_ptr);
     db_ptr.* = try sqlite.Db.init(.{
         .mode = .{ .File = path },
-        .open_flags = .{},
+        .open_flags = .{ .write = true },
         .threading_mode = .MultiThread,
     });
     return @ptrCast(db_ptr);
@@ -74,9 +74,9 @@ fn Iterator(comptime T: type, query: []const u8) type {
 }
 
 pub const Album = struct {
-    AlbumId: u32,
+    AlbumId: ?u32 = null,
     Title: []const u8,
-    ArtistId: u32,
+    ArtistId: ?u32 = null,
     Artist: []const u8,
 };
 
@@ -89,6 +89,23 @@ const FindAlbumsIterator = Iterator(Album,
 
 pub fn findAlbums(db_op: SqliteOpaquePtr, search_str: []const u8) !FindAlbumsIterator {
     return try FindAlbumsIterator.init(db_op, .{search_str});
+}
+
+pub fn addAlbum(db_op: SqliteOpaquePtr, album: *Album) !void {
+    const db_ptr: *sqlite.Db = @ptrCast(db_op);
+    if (album.ArtistId == null) {
+        const find_artist = "SELECT ArtistId FROM artists WHERE Name = ?";
+        if (try db_ptr.one(u32, find_artist, .{}, .{album.Artist})) |id| {
+            album.ArtistId = id;
+        } else {
+            const insert_artist = "INSERT INTO artists (Name) VALUES (?)";
+            try db_ptr.exec(insert_artist, .{}, .{album.Artist});
+            album.ArtistId = @intCast(db_ptr.getLastInsertRowID());
+        }
+    }
+    const insert_album = "INSERT INTO albums (Title, ArtistId) VALUES (?, ?)";
+    try db_ptr.exec(insert_album, .{}, .{ album.Title, album.ArtistId });
+    album.AlbumId = @intCast(db_ptr.getLastInsertRowID());
 }
 
 pub const Track = struct {
