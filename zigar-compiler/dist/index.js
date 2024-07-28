@@ -5685,8 +5685,9 @@ function createConfig(srcPath, modPath, options = {}) {
       mips: 'mips',
       mipsel: 'mipsel',
       ppc: 'powerpc',
-      ppc64: 'powerpc64',
+      ppc64: 'powerpc64le',
       s390: undefined,
+      riscv64: 'riscv64',
       s390x: 's390x',
       x64: 'x86_64',
     };
@@ -6137,7 +6138,7 @@ class Environment {
 
   releaseFixedView(dv) {
     // only allocated memory would have type attached
-    if (dv[FIXED].type !== undefined) {
+    if (dv[FIXED]?.type !== undefined) {
       this.freeFixedMemory(dv);
       dv[FIXED] = null;
     }
@@ -6641,7 +6642,7 @@ class Environment {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER];
+      const pointer = this[POINTER] ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;

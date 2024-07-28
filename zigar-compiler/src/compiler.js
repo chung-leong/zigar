@@ -199,8 +199,9 @@ export function createConfig(srcPath, modPath, options = {}) {
       mips: 'mips',
       mipsel: 'mipsel',
       ppc: 'powerpc',
-      ppc64: 'powerpc64',
+      ppc64: 'powerpc64le',
       s390: undefined,
+      riscv64: 'riscv64',
       s390x: 's390x',
       x64: 'x86_64',
     };
