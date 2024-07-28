@@ -21,21 +21,21 @@ describe('ArgStruct functions', function() {
         byteSize: 4 * 3,
       });
       env.attachMember(structure, {
-        name: 'cat',
+        name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: 'dog',
+        name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: 'retval',
+        name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -79,10 +79,17 @@ describe('ArgStruct functions', function() {
         byteSize: childStructure.byteSize + 4 + 4,
       });
       env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
         name: 'pet',
         type: MemberType.Object,
         bitSize: childStructure.byteSize * 8,
-        bitOffset: 0,
+        bitOffset: 32,
         byteSize: childStructure.byteSize,
         slot: 0,
         structure: childStructure,
@@ -91,14 +98,7 @@ describe('ArgStruct functions', function() {
         name: 'number',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: childStructure.byteSize * 8,
-        byteSize: 4,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
+        bitOffset: 32 + childStructure.byteSize * 8,
         byteSize: 4,
       });
       env.finalizeShape(structure);
@@ -145,7 +145,7 @@ describe('ArgStruct functions', function() {
         hasPointer: true,
       });
       env.attachMember(structure, {
-        name: '0',
+        name: 'retval',
         type: MemberType.Object,
         bitSize: ptrStructure.byteSize * 8,
         bitOffset: 0,
@@ -154,7 +154,7 @@ describe('ArgStruct functions', function() {
         structure: ptrStructure,
       });
       env.attachMember(structure, {
-        name: 'retval',
+        name: '0',
         type: MemberType.Object,
         bitSize: ptrStructure.byteSize * 8,
         bitOffset: ptrStructure.byteSize * 8,
@@ -174,10 +174,10 @@ describe('ArgStruct functions', function() {
         mutabilities.push(isMutable(this));
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(2);
-      expect(pointers[0]).to.equal(object['0']);
-      expect(pointers[1]).to.equal(object['retval']);
-      expect(mutabilities[0]).to.be.false;
-      expect(mutabilities[1]).to.be.true;
+      expect(pointers[0]).to.equal(object['retval']);
+      expect(pointers[1]).to.equal(object['0']);
+      expect(mutabilities[0]).to.be.true;
+      expect(mutabilities[1]).to.be.false;
     })
     it('should throw when initialized with the wrong number of arguments', function() {
       const structure = env.beginStructure({
@@ -186,21 +186,21 @@ describe('ArgStruct functions', function() {
         byteSize: 4 * 3,
       });
       env.attachMember(structure, {
-        name: 'cat',
+        name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: 'dog',
+        name: 'cat',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: 'retval',
+        name: 'dog',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -219,22 +219,22 @@ describe('ArgStruct functions', function() {
         byteSize: 4 * 3,
       });
       env.attachMember(structure, {
-        name: '0',
+        name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Uint,
+        name: '0',
+        type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
       });
       env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
+        name: '1',
+        type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 64,
         byteSize: 4,

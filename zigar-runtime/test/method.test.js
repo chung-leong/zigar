@@ -39,20 +39,20 @@ describe('Method functions', function() {
         byteSize: 12,
       });
       env.attachMember(argStruct, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: structure.byteSize * 8,
-        bitOffset: 0,
-        byteSize: structure.byteSize,
-        structure,
-        slot: 0,
-      });
-      env.attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: 0,
         byteSize: 4,
+      });
+      env.attachMember(argStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: structure.byteSize * 8,
+        bitOffset: 32,
+        byteSize: structure.byteSize,
+        structure,
+        slot: 0,
       });
       env.finalizeShape(argStruct);
       env.finalizeStructure(argStruct);
@@ -75,9 +75,9 @@ describe('Method functions', function() {
       let call;
       env.runThunk = function(thunkId, argDV) {
         call = { thunkId, argDV };
-        const dog = argDV.getInt32(0, true);
-        const cat = argDV.getInt32(4, true);
-        argDV.setInt32(8, dog + cat, true);
+        const dog = argDV.getInt32(4, true);
+        const cat = argDV.getInt32(8, true);
+        argDV.setInt32(0, dog + cat, true);
       };
       const res1 = object.merge();
       expect(res1).to.equal(23);
@@ -119,10 +119,17 @@ describe('Method functions', function() {
         byteSize: 12,
       });
       env.attachMember(argStruct, {
+        name: 'retval',
+        type: MemberType.Bool,
+        bitSize: 1,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      env.attachMember(argStruct, {
         name: '0',
         type: MemberType.Uint,
         bitSize: 32,
-        bitOffset: 0,
+        bitOffset: 32,
         byteSize: 4,
         structure,
       });
@@ -130,15 +137,8 @@ describe('Method functions', function() {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-      });
-      env.attachMember(argStruct, {
-        name: 'retval',
-        type: MemberType.Bool,
-        bitSize: 1,
         bitOffset: 64,
-        byteSize: 1,
+        byteSize: 4,
       });
       env.finalizeShape(argStruct);
       env.finalizeStructure(argStruct);
@@ -185,20 +185,20 @@ describe('Method functions', function() {
         byteSize: 12,
       });
       env.attachMember(getterArgStruct, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: structure.byteSize * 8,
-        bitOffset: 0,
-        byteSize: structure.byteSize,
-        structure,
-        slot: 0,
-      });
-      env.attachMember(getterArgStruct, {
         name: 'retval',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: 0,
         byteSize: 4,
+      });
+      env.attachMember(getterArgStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: structure.byteSize * 8,
+        bitOffset: 32,
+        byteSize: structure.byteSize,
+        structure,
+        slot: 0,
       });
       env.finalizeShape(getterArgStruct);
       env.finalizeStructure(getterArgStruct);
@@ -214,6 +214,13 @@ describe('Method functions', function() {
         byteSize: 12,
       });
       env.attachMember(setterArgStruct, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 96,
+        byteSize: 0,
+      });
+      env.attachMember(setterArgStruct, {
         name: '0',
         type: MemberType.Object,
         bitSize: structure.byteSize * 8,
@@ -226,15 +233,8 @@ describe('Method functions', function() {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: structure.byteSize * 8,
         byteSize: 4,
-      });
-      env.attachMember(setterArgStruct, {
-        name: 'retval',
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 96,
-        byteSize: 0,
       });
       env.finalizeShape(setterArgStruct);
       env.finalizeStructure(setterArgStruct);
@@ -297,18 +297,18 @@ describe('Method functions', function() {
         byteSize: 4,
       });
       env.attachMember(setterArgStruct, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+      });
+      env.attachMember(setterArgStruct, {
         name: '0',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-      });
-      env.attachMember(setterArgStruct, {
-        name: 'retval',
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 32,
-        byteSize: 0,
       });
       env.finalizeShape(setterArgStruct);
       env.finalizeStructure(setterArgStruct);

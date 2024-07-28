@@ -1349,21 +1349,21 @@ describe('Struct functions', function() {
         hasPointer: true,
       });
       env.attachMember(argStruct, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: ptrStructure,
-        slot: 0,
-      });
-      env.attachMember(argStruct, {
         name: 'retval',
         type: MemberType.Object,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: 0,
         byteSize: 5,
         structure: optStructure,
+      });
+      env.attachMember(argStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: optStructure.byteSize * 8,
+        byteSize: 8,
+        structure: ptrStructure,
+        slot: 0,
       });
       env.finalizeShape(argStruct);
       env.finalizeStructure(argStruct);
@@ -1377,11 +1377,11 @@ describe('Struct functions', function() {
       let i = 0;
       env.runThunk = function(thunkId, argDV) {
         if (i++ < 5) {
-          argDV.setInt32(8, i, true);
-          argDV.setInt8(12, 1);
+          argDV.setInt32(0, i, true);
+          argDV.setInt8(4, 1);
         } else {
-          argDV.setInt32(8, 0, true);
-          argDV.setInt8(12, 0);
+          argDV.setInt32(0, 0, true);
+          argDV.setInt8(4, 0);
         }
       };
       env.getBufferAddress = function(buffer) {
