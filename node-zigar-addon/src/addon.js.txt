@@ -4889,7 +4889,7 @@
 "\n"
 "    releaseFixedView(dv) {\n"
 "      // only allocated memory would have type attached\n"
-"      if (dv[FIXED].type !== undefined) {\n"
+"      if (dv[FIXED]?.type !== undefined) {\n"
 "        this.freeFixedMemory(dv);\n"
 "        dv[FIXED] = null;\n"
 "      }\n"

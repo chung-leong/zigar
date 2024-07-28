@@ -1,0 +1,11 @@
+{
+  "optimize": "ReleaseSmall",
+  "sourceFiles": {
+    "lib/functions.zigar": "zig/functions.zig"
+  },
+  "targets": [
+    { "platform": "linux-musl", "arch": "x64" },
+    { "platform": "linux-musl", "arch": "arm64" },
+    { "platform": "linux-musl", "arch": "ppc64" }
+  ]
+}

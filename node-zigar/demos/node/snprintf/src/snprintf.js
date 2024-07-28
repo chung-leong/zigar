@@ -1,5 +1,5 @@
 require('node-zigar/cjs');
-const { snprintf, I32, F64, CStr } = require('../zig/functions.zig');
+const { snprintf, I32, F64, CStr } = require('../lib/functions.zigar');
 
 const format = 'hello world %d %.9f %s\n';
 const args = [ new I32(1234), new F64(Math.PI), new CStr('donut') ];
