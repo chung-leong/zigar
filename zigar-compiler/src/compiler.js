@@ -58,7 +58,11 @@ export async function compile(srcPath, modPath, options) {
       // get list of files involved in build
       sourcePaths = await findSourcePaths(moduleBuildDir);
     } catch(err) {
-      if (err.code !== 'ENOENT' || !outputMTimeBefore) {
+      if (err.code === 'ENOENT') {
+        if (!outputMTimeBefore) {
+          throw new MissingModule(outputPath);
+        }
+      } else {
         throw err;
       }
     } finally {
@@ -111,6 +115,12 @@ class CompilationError extends Error {
       } catch (err) {
       }
     }
+  }
+}
+
+class MissingModule extends Error {
+  constructor(path) {
+    super(`Module not found: ${path}`);
   }
 }
 

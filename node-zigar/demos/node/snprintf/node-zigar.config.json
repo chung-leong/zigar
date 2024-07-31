@@ -4,8 +4,7 @@
     "lib/functions.zigar": "zig/functions.zig"
   },
   "targets": [
-    { "platform": "linux-musl", "arch": "x64" },
-    { "platform": "linux-musl", "arch": "arm64" },
-    { "platform": "linux-musl", "arch": "ppc64" }
+    { "platform": "linux", "arch": "x64" },
+    { "platform": "linux", "arch": "arm64" }
   ]
 }

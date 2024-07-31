@@ -79,7 +79,11 @@ async function buildAddon(addonDir, options) {
     try {
       await runCompiler('zig', args, { cwd, onStart, onEnd });
     } catch (err) {
-      if (err.code !== 'ENOENT' || !outputMTimeBefore) {
+      if (err.code === 'ENOENT') {
+        if (!outputMTimeBefore) {
+          throw new MissingModule(outputPath);
+        }
+      } else {
         throw err;
       }
     }
@@ -158,6 +162,12 @@ class CompilationError extends Error {
       } catch (err) {
       }
     }
+  }
+}
+
+class MissingModule extends Error {
+  constructor(path) {
+    super(`Module not found: ${path}`);
   }
 }
 
