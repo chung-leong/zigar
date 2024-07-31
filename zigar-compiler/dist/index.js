@@ -1,4 +1,5 @@
 import childProcess, { execFileSync } from 'child_process';
+import { writeFileSync } from 'fs';
 import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, resolve, isAbsolute } from 'path';
@@ -5508,7 +5509,7 @@ async function compile(srcPath, modPath, options) {
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
   let changed = false;
-  let sourcePaths;
+  let sourcePaths = [];
   if (srcPath) {
     // add custom build file
     try {
@@ -5544,6 +5545,10 @@ async function compile(srcPath, modPath, options) {
       await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       // get list of files involved in build
       sourcePaths = await findSourcePaths(moduleBuildDir);
+    } catch(err) {
+      if (err.code !== 'ENOENT' || !outputMTimeBefore) {
+        throw err;
+      }
     } finally {
       if (config.clean) {
         await deleteDirectory(moduleBuildDir);
@@ -5571,20 +5576,29 @@ async function runCompiler(path, args, options) {
     onStart?.();
     return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
-    let message = 'Zig compilation failed';
-    if (err.stderr) {
-      try {
-        const logPath = join(cwd, 'log');
-        await writeFile(logPath, err.stderr);
-        /* c8 ignore next 2 */
-      } catch (err) {
-      }
-      message += `\n\n${err.stderr}`;
-    }
-    throw new Error(message);
+    throw new CompilationError(path, args, cwd, err);
     /* c8 ignore next */
   } finally {
     onEnd?.();
+  }
+}
+
+class CompilationError extends Error {
+  constructor(path, args, cwd, err) {
+    super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
+    this.path = path;
+    this.args = args;
+    this.errno = err.errno;
+    this.code = err.code;
+    if (err.stderr) {
+      try {
+        const logPath = join(cwd, 'log');
+        writeFileSync(logPath, err.stderr);
+        this.log = logPath;
+        /* c8 ignore next 2 */
+      } catch (err) {
+      }
+    }
   }
 }
 

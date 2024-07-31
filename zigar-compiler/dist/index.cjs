@@ -1,6 +1,7 @@
 'use strict';
 
 var childProcess = require('child_process');
+var fs = require('fs');
 var promises = require('fs/promises');
 var os = require('os');
 var path = require('path');
@@ -5511,7 +5512,7 @@ async function compile(srcPath, modPath, options) {
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
   let changed = false;
-  let sourcePaths;
+  let sourcePaths = [];
   if (srcPath) {
     // add custom build file
     try {
@@ -5547,6 +5548,10 @@ async function compile(srcPath, modPath, options) {
       await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
       // get list of files involved in build
       sourcePaths = await findSourcePaths(moduleBuildDir);
+    } catch(err) {
+      if (err.code !== 'ENOENT' || !outputMTimeBefore) {
+        throw err;
+      }
     } finally {
       if (config.clean) {
         await deleteDirectory(moduleBuildDir);
@@ -5564,7 +5569,7 @@ async function compile(srcPath, modPath, options) {
   return { outputPath, changed, sourcePaths }
 }
 
-async function runCompiler(path$1, args, options) {
+async function runCompiler(path, args, options) {
   const {
     cwd,
     onStart,
@@ -5572,22 +5577,31 @@ async function runCompiler(path$1, args, options) {
   } = options;
   try {
     onStart?.();
-    return await execFile(path$1, args, { cwd, windowsHide: true });
+    return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
-    let message = 'Zig compilation failed';
-    if (err.stderr) {
-      try {
-        const logPath = path.join(cwd, 'log');
-        await promises.writeFile(logPath, err.stderr);
-        /* c8 ignore next 2 */
-      } catch (err) {
-      }
-      message += `\n\n${err.stderr}`;
-    }
-    throw new Error(message);
+    throw new CompilationError(path, args, cwd, err);
     /* c8 ignore next */
   } finally {
     onEnd?.();
+  }
+}
+
+class CompilationError extends Error {
+  constructor(path$1, args, cwd, err) {
+    super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
+    this.path = path$1;
+    this.args = args;
+    this.errno = err.errno;
+    this.code = err.code;
+    if (err.stderr) {
+      try {
+        const logPath = path.join(cwd, 'log');
+        fs.writeFileSync(logPath, err.stderr);
+        this.log = logPath;
+        /* c8 ignore next 2 */
+      } catch (err) {
+      }
+    }
   }
 }
 

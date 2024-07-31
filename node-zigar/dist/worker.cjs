@@ -22,22 +22,23 @@
       platform,
       arch,
     };
-    if (!archive) {
-      const configPath = await findConfigFile('node-zigar.config.json', dirname(path));
-      if (configPath) {
-        // add options from config file
-        Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
-      }
+    const configPath = !archive ? await findConfigFile('node-zigar.config.json', dirname(path)) : null;
+    if (configPath) {
+      // add options from config file
+      Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
     }
     // allow overriding of options using query variables
     Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
     const ext = extname(path);
-    const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
-    const modPath = (ext === '.zig') ? getModuleCachePath(path, options) : path;
-    const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
+    const useCode = ext === '.zig';
+    const srcPath = (useCode) ? path : findSourceFile(path, options);
+    const modPath = (useCode) ? getModuleCachePath(path, options) : path;
+    const addonParentDir = (useCode) ? getCachePath(options) : dirname(path);
     const addonDir = join(addonParentDir, 'node-zigar-addon');
-    // build the Node-API addon if necessary
-    const addonOptions = { recompile: !archive };
+    // try recompiling the Node-API addon only if app is not stored in an archive
+    // and we're loading a .zig or if there's a config file
+    const recompile = !archive && (useCode || !!configPath);
+    const addonOptions = { recompile };
     if (!options.quiet) {
       const modName = parse(path).name;
       Object.assign(options, {

@@ -1,7 +1,8 @@
 const { execFileSync, execFile: execFileAsync } = require('child_process');
 const { promisify } = require('util');
 const execFile = promisify(execFileAsync);
-const { readdir, stat, utimes } = require('fs/promises');
+const { stat  } = require('fs/promises');
+const { writeFileSync } = require('fs');
 const os = require('os');
 const { join, resolve } = require('path');
 
@@ -37,43 +38,53 @@ async function buildAddon(addonDir, options) {
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
   let changed = false;
   if (recompile) {
-    const srcDir = resolve(__dirname, '../src');
-    changed = await isOlderThan(outputPath, [ srcDir, options.configPath ]);
-    if (changed) {
-      const cwd = resolve(__dirname, '../');
-      const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
-      if (platform && arch) {
-        // translate from names used by Node to those used by Zig
-        const cpuArchs = {
-          arm: 'arm',
-          arm64: 'aarch64',
-          ia32: 'x86',
-          loong64: 'loong64',
-          mips: 'mips',
-          mipsel: 'mipsel',
-          ppc: 'powerpc',
-          ppc64: 'powerpc64',
-          s390: undefined,
-          s390x: 's390x',
-          x64: 'x86_64',
-        };
-        const osTags = {
-          aix: 'aix',
-          darwin: 'macos',
-          freebsd: 'freebsd',
-          linux: 'linux-gnu',
-          openbsd: 'openbsd',
-          sunos: 'solaris',
-          win32: 'windows',
-        };
-        const cpuArch = cpuArchs[arch] ?? arch;
-        const osTag = osTags[platform] ?? platform;
-        args.push(`-Dtarget=${cpuArch}-${osTag}`);
-      }
-      await runCompiler('zig', args, { cwd, onStart, onEnd });
-      const now = new Date();
-      await utimes(outputPath, now, now);
+    const cwd = resolve(__dirname, '../');
+    const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
+    if (platform && arch) {
+      // translate from names used by Node to those used by Zig
+      const cpuArchs = {
+        arm: 'arm',
+        arm64: 'aarch64',
+        ia32: 'x86',
+        loong64: 'loong64',
+        mips: 'mips',
+        mipsel: 'mipsel',
+        ppc: 'powerpc',
+        ppc64: 'powerpc64',
+        s390: undefined,
+        s390x: 's390x',
+        x64: 'x86_64',
+      };
+      const osTags = {
+        aix: 'aix',
+        darwin: 'macos',
+        freebsd: 'freebsd',
+        linux: 'linux-gnu',
+        openbsd: 'openbsd',
+        sunos: 'solaris',
+        win32: 'windows',
+      };
+      const cpuArch = cpuArchs[arch] ?? arch;
+      const osTag = osTags[platform] ?? platform;
+      args.push(`-Dtarget=${cpuArch}-${osTag}`);
     }
+    const getOutputMTime = async () => {
+      try {
+        const stats = await stat(outputPath);
+        return stats.mtime.valueOf();
+      } catch (err) {
+      }
+    };
+    const outputMTimeBefore = await getOutputMTime();
+    try {
+      await runCompiler('zig', args, { cwd, onStart, onEnd });
+    } catch (err) {
+      if (err.code !== 'ENOENT' || !outputMTimeBefore) {
+        throw err;
+      }
+    }
+    const outputMTimeAfter = await getOutputMTime();
+    changed = outputMTimeBefore != outputMTimeAfter;
   }
   return { outputPath, changed };
 }
@@ -124,60 +135,29 @@ async function runCompiler(path, args, options) {
     onStart?.();
     return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
-    let message = 'Zig compilation failed';
-    if (err.stderr) {
-      try {
-        const logPath = join(cwd, 'log');
-        await writeFile(logPath, err.stderr);
-      } catch (_) {
-      }
-      message += `\n\n${err.stderr}`;
-    }
-    throw new Error(message);
+    throw new CompilationError(path, args, cwd, err);
+    /* c8 ignore next */
   } finally {
     onEnd?.();
   }
 }
 
-async function isOlderThan(targetPath, srcPaths) {
-  try {
-    const targetInfo = await stat(targetPath);
-    const checked = new Map();
-    const check = async (path) => {
-      if (!path) {
-        return false;
-      }
-      /* c8 ignore next 3 */
-      if (checked.get(path)) {
-        return false;
-      }
-      checked.set(path, true);
-      const info = await stat(path);
-      if (info.isFile()) {
-        if (targetInfo.mtime < info.mtime) {
-          return true;
-        }
-      } else if (info.isDirectory()) {
-        const list = await readdir(path);
-        for (const name of list) {
-          if (name.startsWith('.') || name === 'node_modules' || name === 'zig-cache') {
-            continue;
-          }
-          if (await check(join(path, name))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-    for (const srcPath of srcPaths) {
-      if (await check(srcPath)) {
-        return true;
+class CompilationError extends Error {
+  constructor(path, args, cwd, err) {
+    super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
+    this.path = path;
+    this.args = args;
+    this.errno = err.errno;
+    this.code = err.code;
+    if (err.stderr) {
+      try {
+        const logPath = join(cwd, 'log');
+        writeFileSync(logPath, err.stderr);
+        this.log = logPath;
+        /* c8 ignore next 2 */
+      } catch (err) {
       }
     }
-    return false;
-  } catch (err) {
-    return true;
   }
 }
 
