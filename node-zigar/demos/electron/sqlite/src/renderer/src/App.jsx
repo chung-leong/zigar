@@ -1,12 +1,13 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react';
 
 function App() {
-  const [ screen, setScreen ] = useState('main');
+  const [ screen, setScreen ] = useState('main')
   const [ albums, setAlbums ] = useState([])
   const [ tracks, setTracks ] = useState([])
   const [ searchString, setSearchString ] = useState('')
-  const [ title, setTitle ] = useState('');
-  const [ artist, setArtist ] = useState('');
+  const [ title, setTitle ] = useState('')
+  const [ artist, setArtist ] = useState('')
+  const [ error, setError ] = useState('')
   const [ selectedAlbumId, setSelectedAlbumId ] = useState()
   const deferredSearchString = useDeferredValue(searchString)
 
@@ -28,10 +29,14 @@ function App() {
     setArtist(evt.target.value)
   })
   const onSaveClick = useCallback(async (evt) => {
-    await window.electron.ipcRenderer.invoke('addAlbum', { Title: title, Artist: artist })
-    setScreen('main')
-    setTitle('')
-    setArtist('')
+    try {
+      await window.electron.ipcRenderer.invoke('addAlbum', { Title: title, Artist: artist })
+      setScreen('main')
+      setTitle('')
+      setArtist('')
+    } catch (err) {
+      setError(err.message);
+    }
   })
   const onCancelClick = useCallback((evt) => {
     setScreen('main')
@@ -52,7 +57,7 @@ function App() {
         setSelectedAlbumId(undefined)
       }
     }
-  }, [ albums ]);
+  }, [ albums ])
   switch (screen) {
     case 'add':
       return (
@@ -64,6 +69,9 @@ function App() {
           <section>
             <label htmlFor="title">Artist:</label>
             <input id="artist" value={artist} onChange={onArtistChange} />
+          </section>
+          <section>
+            <div id="error">{error}</div>
           </section>
           <section>
             <button onClick={onSaveClick}>Save</button>
@@ -98,12 +106,12 @@ function App() {
 }
 
 function formatTime(ms) {
-  const min = Math.floor(ms / 60000).toString();
-  let sec = Math.floor((ms % 60000) / 1000).toString();
+  const min = Math.floor(ms / 60000).toString()
+  let sec = Math.floor((ms % 60000) / 1000).toString()
   if (sec.length == 1) {
     sec = '0' + sec;
   }
-  return `${min}:${sec}`;
+  return `${min}:${sec}`
 }
 
 export default App

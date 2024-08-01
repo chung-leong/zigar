@@ -1,12 +1,17 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { BrowserWindow, app, ipcMain, shell } from 'electron';
+import { copyFileSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import icon from '../../resources/icon.png?asset';
-require ('node-zigar/cjs');
-const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../lib/sqlite.zigar');
+require ('node-zigar/cjs')
+const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../lib/sqlite.zigar')
 
-const path = resolve(__dirname, '../../resources/chinook.db');
-const db = openDb(path);
+const path = join(app.getPath('documents'), 'chinook.db')
+if (!existsSync(path)) {
+  const src = resolve(__dirname, '../../chinook.db')
+  copyFileSync(src, path)
+}
+const db = openDb(path)
 
 function createWindow() {
   // Create the browser window.
@@ -86,5 +91,5 @@ function toArray(iterator) {
       object[name] = (typeof(value) === 'object') ? value.string : value;
     }
     return object;
-  });
+  })
 }

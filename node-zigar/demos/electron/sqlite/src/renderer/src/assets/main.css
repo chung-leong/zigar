@@ -93,3 +93,7 @@ body {
 #form-add BUTTON {
   margin-left: 5px;
 }
+
+#error {
+  color: #ff0000;
+}
