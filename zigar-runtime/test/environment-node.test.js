@@ -5,7 +5,7 @@ import {
 } from '../src/environment-node.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
+import { ALIGN, ATTRIBUTES, MEMORY, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 
 describe('NodeEnvironment', function() {
   beforeEach(function() {
@@ -45,6 +45,11 @@ describe('NodeEnvironment', function() {
       env.freeHostMemory(address, 32, 32);
       const bad = env.findMemory(address, 32);
       expect(bad).to.be.null;
+    })
+    it('should throw when address is invalid', function() {
+      const env = new NodeEnvironment();
+      env.startContext();
+      expect(() => env.freeHostMemory(0x1000, 32, 32)).to.throw(ReferenceError);
     })
   })
   describe('allocateShadowMemory', function() {
@@ -205,6 +210,53 @@ describe('NodeEnvironment', function() {
       expect(thunkCalled).to.be.true;
       expect(visitorCalledBefore).to.be.true;
       expect(visitorCalledAfter).to.be.true;
+    })
+    it('should use variadic handler when argument struct has attributes', function() {
+      const env = new NodeEnvironment();
+      let recv, thunkId, argDV, attrDV;
+      env.runVariadicThunk = function(...args) {
+        recv = this;
+        thunkId = args[0];
+        argDV = args[1];
+        attrDV = args[2];
+      };
+      const argAttrs = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+      };
+      const argStruct = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [SLOTS]: { 0: {} },
+        [ATTRIBUTES]: argAttrs,
+      };
+      env.invokeThunk(100, argStruct);
+      expect(recv).to.equal(env);
+      expect(thunkId).to.equal(100);
+      expect(argDV).to.equal(argStruct[MEMORY]);
+      expect(attrDV).to.equal(argAttrs[MEMORY]);
+    })
+    it('should use variadic handler when argument struct has attributes and pointers', function() {
+      const env = new NodeEnvironment();
+      let recv, thunkId, argDV, attrDV;
+      env.runVariadicThunk = function(...args) {
+        recv = this;
+        thunkId = args[0];
+        argDV = args[1];
+        attrDV = args[2];
+      };
+      const argAttrs = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+      };
+      const argStruct = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [SLOTS]: { 0: {} },
+        [ATTRIBUTES]: argAttrs,
+        [POINTER_VISITOR]: () => {},
+      };
+      env.invokeThunk(100, argStruct);
+      expect(recv).to.equal(env);
+      expect(thunkId).to.equal(100);
+      expect(argDV).to.equal(argStruct[MEMORY]);
+      expect(attrDV).to.equal(argAttrs[MEMORY]);
     })
   })
 })

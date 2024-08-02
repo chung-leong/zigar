@@ -98,5 +98,22 @@ describe('Object functions', function() {
       expect(() => object[MEMORY].getInt8(0)).to.not.throw();
       expect(cache.find(object[MEMORY])).to.equal(object);
     })
+    it('should add align to new buffer when previous buffer has one attached', function() {
+      const env = new WebAssemblyEnvironment();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const cache = new ObjectCache();
+      const dv = new DataView(memory.buffer, 1000, 8);
+      dv[FIXED] = { address: 1000, len: 8, align: 4 };
+      const object = {
+        [MEMORY]: dv,
+        [MEMORY_RESTORER]: getMemoryRestorer(cache, env),
+      };
+      memory.grow(1);
+      expect(() => dv.getInt8(0)).to.throw(TypeError);
+      object[MEMORY_RESTORER]();
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+      expect(object[MEMORY][FIXED].align).to.equal(4);
+    })
   })
 })

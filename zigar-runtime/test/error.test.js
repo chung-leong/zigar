@@ -19,11 +19,13 @@ import {
   InvalidInitializer,
   InvalidPointerTarget,
   InvalidType,
+  InvalidVariadicArgument,
   MisplacedSentinel,
   MissingInitializers,
   MissingSentinel,
   MissingUnionInitializer,
   MultipleUnionInitializers,
+  MustBeOverridden,
   NoCastingToPointer,
   NoInitializer,
   NoProperty,
@@ -34,6 +36,7 @@ import {
   OutOfBound,
   Overflow,
   TypeMismatch,
+  Unsupported,
   ZigError,
   adjustArgumentError,
   adjustRangeError,
@@ -44,6 +47,12 @@ import {
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Error functions', function() {
+  describe('MustBeOverridden', function() {
+    it('should have expected message', function() {
+      const err = new MustBeOverridden();
+      expect(err.message).to.contain('overridden');
+    })
+  })
   describe('NoInitializer', function() {
     it('should have expected message', function() {
       const structure = {
@@ -170,6 +179,12 @@ describe('Error functions', function() {
       };
       const err = new InvalidType(structure, 16);
       expect(err.message).to.contain('Hello');
+    })
+  })
+  describe('InvalidVariadicArgument', function() {
+    it('should have expected message', function() {
+      const err = new InvalidVariadicArgument();
+      expect(err.message).to.contain('variadic function');
     })
   })
   describe('MultipleUnionInitializers', function() {
@@ -486,6 +501,12 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const err = new TypeMismatch('string', 8);
       expect(err.message).to.contain('a string');
+    })
+  })
+  describe('Unsupported', function() {
+    it('should have expected message', function() {
+      const err = new Unsupported();
+      expect(err.message).to.contain('Unsupported');
     })
   })
   describe('InaccessiblePointer', function() {

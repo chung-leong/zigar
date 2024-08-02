@@ -69,6 +69,18 @@ describe('Memory functions', function() {
       }
       expect(functions).to.have.lengthOf(10);
     })
+    it('should return function for copying buffers of unknown size', function() {
+      const src = new DataView(new ArrayBuffer(23));
+      for (let i = 0; i < 23; i++) {
+        src.setInt8(i, i);
+      }
+      const dest = new DataView(new ArrayBuffer(23));
+      const f = getCopyFunction(undefined);
+      f(dest, src);
+      for (let i = 0; i < 23; i++) {
+        expect(dest.getInt8(i)).to.equal(i);
+      }
+    })
   })
   describe('getResetFunction', function() {
     it('should return optimal function for clearing buffers of various sizes', function() {

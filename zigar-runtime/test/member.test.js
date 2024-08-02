@@ -2,6 +2,7 @@ import { expect } from 'chai';
 
 import { useAllExtendedTypes } from '../src/data-view.js';
 import { WebAssemblyEnvironment } from '../src/environment-wasm.js';
+import { Unsupported } from '../src/error.js';
 import {
   getDescriptor,
   isReadOnly,
@@ -82,7 +83,6 @@ describe('Member functions', function() {
       expect(() => set.call(object, 1, 0)).to.throw(TypeError);
       expect(() => set.call(object, 4, undefined)).to.throw(RangeError);
     })
-
     it('should return null descriptor', function() {
       const member = {
         type: MemberType.Null,
@@ -106,6 +106,18 @@ describe('Member functions', function() {
       const { get, set } = getDescriptor(member, env);
       expect(get.call(object)).to.be.undefined;
       expect(set).to.be.undefined;
+    })
+    it('should return unsupported descriptor', function() {
+      const member = {
+        type: MemberType.Unsupported,
+        bitSize: 32,
+        byteSize: 4,
+      };
+      const dv = new DataView(new ArrayBuffer(12));
+      const object = { [MEMORY]: dv };
+      const { get, set } = getDescriptor(member, env);
+      expect(() => get.call(object)).to.throw(Unsupported);
+      expect(() => set.call(object, 123)).to.throw(Unsupported);
     })
     it('should return error descriptor', function() {
       const MyError = function(arg) {

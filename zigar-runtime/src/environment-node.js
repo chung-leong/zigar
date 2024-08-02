@@ -19,7 +19,7 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
-  wordSize = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 8 : 4;
+  wordSize = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 8 : /* c8 ignore next */ 4;
 
   async init() {
     return;

@@ -1,6 +1,5 @@
 import { StructureType, getPrimitiveType, getTypeName, isErrorJSON } from './types.js';
 
-/* c8 ignore next 5 */
 export class MustBeOverridden extends Error {
   constructor() {
     super(`Method must be overridden`);
