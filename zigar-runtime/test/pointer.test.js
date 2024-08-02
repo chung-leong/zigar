@@ -2533,6 +2533,77 @@ describe('Pointer functions', function() {
       expect(slice5.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 } ]);
       expect(slice5).to.equal(slice1);
     })
+    it('should allow anyopaque pointer to point at anything', function() {
+      const byteStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u8',
+        byteSize: 1,
+        hasPointer: false,
+      });
+      env.attachMember(byteStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+      });
+      env.finalizeShape(byteStructure);
+      env.finalizeStructure(byteStructure);
+      const { constructor: U8 } = byteStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*u8',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: byteStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const { constructor: PtrU8 } = ptrStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        byteSize: 1,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: byteStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*anyopaque',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const pointer = new HelloPtr(undefined);
+      expect(() => pointer.$ = new DataView(new ArrayBuffer(8))).to.not.throw();
+      expect(() => pointer.$ = new ArrayBuffer(8)).to.not.throw();
+      expect(() => pointer.$ = new Float32Array(8)).to.not.throw();
+      expect(() => pointer.$ = new U8(123)).to.not.throw();
+      expect(() => pointer.$ = new PtrU8(123)).to.not.throw();
+    })
     it('should allow C pointer to point at a single object', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
