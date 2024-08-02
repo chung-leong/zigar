@@ -5,7 +5,7 @@ import { WebAssemblyEnvironment } from '../src/environment-wasm.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { MEMORY } from '../src/symbol.js';
+import { MEMORY, POINTER_VISITOR } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('VariadicStruct functions', function() {
@@ -94,6 +94,78 @@ describe('VariadicStruct functions', function() {
       expect(() => new VariadicStruct([ 123, 0xFFFF_FFFF_FFFFn ], 'hello', 0)).to.throw(TypeError);
       expect(() => new VariadicStruct([ 123, 456, 1, 2 ], 'hello', 0)).to.throw(InvalidVariadicArgument)
         .with.property('message').that.contains('args[2]');
+    })
+    it('should define an argument struct containing pointers', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+        align: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const ptrStructure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*i32',
+        byteSize: 4,
+        align: 4,
+        hasPointer: true,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(ptrStructure);
+      env.finalizeStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.VariadicStruct,
+        name: 'Hello',
+        byteSize: 4 + 4,
+        align: 4,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: ptrStructure,
+        slot: 0,
+      });
+      env.attachMember(structure, {
+        name: 'pointer',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: ptrStructure,
+        slot: 1,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: VariadicStruct } = structure;
+      expect(VariadicStruct).to.be.a('function');
+      const args1 = new VariadicStruct([ 88 ], 'hello', 0);
+      expect(args1[MEMORY].byteLength).to.equal(8);
+      const pointers = [], active = [], mutable = [];
+      args1[POINTER_VISITOR](function({ isActive, isMutable }) {
+        pointers.push(this);
+        active.push(isActive());
+        mutable.push(isMutable());
+      }, { vivificate: true });
+      expect(pointers).to.have.lengthOf(2);
+      expect(pointers[1]['*']).to.equal(88);
     })
   })
 })
