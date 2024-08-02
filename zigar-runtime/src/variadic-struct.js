@@ -35,7 +35,7 @@ export function defineVariadicStruct(structure, env) {
       let argAlign = arg.constructor[ALIGN];
       if (!dv || !argAlign) {
         const err = new InvalidVariadicArgument();
-        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+        throw adjustArgumentError(name, argCount + index - offset, args.length - offset, err);
       }
       /* WASM-ONLY */
       // the arg struct is passed to the function in WebAssembly and fields are
@@ -45,8 +45,8 @@ export function defineVariadicStruct(structure, env) {
       if (argAlign > maxAlign) {
         maxAlign = argAlign;
       }
-      const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
-      totalByteSize = offset + dv.byteLength;
+      const byteOffset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
+      totalByteSize = byteOffset + dv.byteLength;
     }
     const attrs = new ArgAttributes(args.length);
     const dv = env.allocateMemory(totalByteSize, maxAlign);
