@@ -5,7 +5,7 @@ import { NodeEnvironment } from '../src/environment-node.js';
 import { InvalidSliceLength } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ADDRESS, ADDRESS_SETTER, ENVIRONMENT, LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
+import { ADDRESS, ADDRESS_SETTER, ENVIRONMENT, LENGTH, LENGTH_SETTER, MEMORY, POINTER, TARGET_SETTER, TARGET_UPDATER, WRITE_DISABLER } from '../src/symbol.js';
 import { MemberType, StructureType } from '../src/types.js';
 
 describe('Pointer functions', function() {
@@ -2533,6 +2533,56 @@ describe('Pointer functions', function() {
       expect(slice5.valueOf()).to.eql([ { cat: 1, dog: 10 }, { cat: 2, dog: 20 }, { cat: 3, dog: 30 } ]);
       expect(slice5).to.equal(slice1);
     })
+    it('should allow C pointer to point at a single object', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32CPtr } = cpStructure;
+      const int32 = new Int32(1234);
+      const intCPointer = new Int32CPtr(int32);
+      expect(intCPointer['*'][0]).to.equal(1234);
+    })
     it('should allow C pointer to be initialized with a single pointer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -2600,6 +2650,125 @@ describe('Pointer functions', function() {
       const intPointer = new Int32Ptr(int32);
       const intCPointer = new Int32CPtr(intPointer);
       expect(intCPointer['*'][0]).to.equal(1234);
+    })
+    it('should allow C pointer to be initialized with an object', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const pointer = new HelloPtr({ cat: 123, dog: 456 });
+      expect(pointer[0].cat).to.equal(123);
+      expect(pointer[0].dog).to.equal(456);
+    })
+    it('should allow C pointer to be initialized with an object containg a special prop', function() {
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+      });
+      env.finalizeShape(structStructure);
+      env.finalizeStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]Hello',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const dv = new DataView(new ArrayBuffer(8));
+      dv.setUint32(0, 123, true);
+      dv.setUint32(4, 456, true);
+      const pointer = new HelloPtr({ dataView: dv });
+      expect(pointer[0].cat).to.equal(123);
+      expect(pointer[0].dog).to.equal(456);
     })
     it('should allow C pointer to be cast from a single pointer', function() {
       const intStructure = env.beginStructure({
@@ -2810,6 +2979,77 @@ describe('Pointer functions', function() {
       expect([ ...intCPointer['*'] ]).to.eql([ 1, 2, 3 ]);
       expect(intSPointer.length).to.equal(4);
     })
+    it('should allow C pointer to accept an array', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const spStructure = env.beginStructure({
+        type: StructureType.SlicePointer,
+        name: '[]i32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      const { constructor: Int32SPtr } = spStructure;
+      const { constructor: Int32CPtr } = cpStructure;
+      const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
+      const intCPointer = Int32CPtr(intSPointer);
+      expect(intCPointer['*']).to.equal(intSPointer['*']);
+      intCPointer.length = 3;
+      expect([ ...intCPointer['*'] ]).to.eql([ 1, 2, 3 ]);
+      expect(intSPointer.length).to.equal(4);
+    })
+
     it('should allow C pointer to be set to null', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -2953,6 +3193,189 @@ describe('Pointer functions', function() {
       const intSPointer = new Int32SPtr(intMPointer);
       expect(intSPointer.length).to.equal(4);
       expect([ ...intSPointer['*'] ]).to.eql([ ...intMPointer['*'] ]);
+    })
+    it('should immediately update a pointer in fixed memory', function() {
+      const env = new NodeEnvironment();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.SinglePointer,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.finalizeShape(structure);
+      env.finalizeStructure(structure);
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(type, len, align) {
+        const address = nextAddress;
+        nextAddress += 0x1000n;
+        return address;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      const { constructor: Int32Ptr } = structure;
+      expect(Int32Ptr.child).to.equal(Int32);
+      const int1 = new Int32(1234, { fixed: true });
+      const intPointer = new Int32Ptr(int1, { fixed: true });
+      const dv = intPointer[MEMORY];
+      expect(dv.getBigUint64(0, true)).to.equal(0x1000n);
+      const int2 = new Int32(4567, { fixed: true });
+      intPointer.$ = int2;
+      expect(dv.getBigUint64(0, true)).to.equal(0x3000n);
+    })
+    it('should immediately update a slice pointer in fixed memory', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const spStructure = env.beginStructure({
+        type: StructureType.SlicePointer,
+        name: '[]i32',
+        byteSize: 16,
+        hasPointer: true,
+      });
+      env.attachMember(spStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(spStructure);
+      env.finalizeStructure(spStructure);
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(type, len, align) {
+        const address = nextAddress;
+        nextAddress += 0x1000n;
+        return address;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      const { constructor: Int32SPtr } = spStructure;
+      const intSPointer1 = new Int32SPtr([ 1, 2, 3, 4 ], { fixed: true });
+      const intSPointer2 = new Int32SPtr(undefined, { fixed: true });
+      const dv = intSPointer2[MEMORY];
+      expect(dv.getBigUint64(0, true)).to.equal(0n);
+      expect(dv.getBigUint64(8, true)).to.equal(0n);
+      intSPointer2.$ = intSPointer1;
+      expect(dv.getBigUint64(0, true)).to.equal(0x2000n);
+      expect(dv.getBigUint64(8, true)).to.equal(4n);
+      // can't actually set slice pointer to null, but there's code for that just in case
+      intSPointer2[TARGET_SETTER](null);
+      expect(dv.getBigUint64(0, true)).to.equal(0n);
+      expect(dv.getBigUint64(8, true)).to.equal(0n);
+    })
+    it('should immediately update a C pointer in fixed memory', function() {
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+      });
+      env.finalizeShape(intStructure);
+      env.finalizeStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]i32',
+        byteSize: 4,
+        hasPointer: false,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.finalizeShape(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const cpStructure = env.beginStructure({
+        type: StructureType.CPointer,
+        name: '[*c]i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(cpStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.finalizeShape(cpStructure);
+      env.finalizeStructure(cpStructure);
+      let nextAddress = 0x1000n;
+      env.allocateExternMemory = function(type, len, align) {
+        const address = nextAddress;
+        nextAddress += 0x1000n;
+        return address;
+      };
+      env.obtainExternBuffer = function(address, len) {
+        return new ArrayBuffer(len);
+      };
+      const { constructor: Int32CPtr } = cpStructure;
+      const intCPointer1 = new Int32CPtr([ 1, 2, 3, 4 ], { fixed: true });
+      const intCPointer2 = new Int32CPtr(undefined, { fixed: true });
+      const dv = intCPointer2[MEMORY];
+      expect(dv.getBigUint64(0, true)).to.equal(0n);
+      intCPointer2.$ = intCPointer1;
+      expect(dv.getBigUint64(0, true)).to.equal(0x2000n);
+      intCPointer2.$ = null;
+      expect(dv.getBigUint64(0, true)).to.equal(0n);
     })
   })
   describe('makePointerReadOnly', function() {

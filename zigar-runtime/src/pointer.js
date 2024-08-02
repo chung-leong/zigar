@@ -387,7 +387,7 @@ function isPointerOf(arg, Target) {
 }
 
 function isCompatiblePointer(arg, Target, type) {
-  if (type !== StructureType.SinglePointer) {
+  if (type !== StructureType.SinglePointer && Target.child) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;
     } else if (type === StructureType.CPointer && isPointerOf(arg, Target.child)) {
