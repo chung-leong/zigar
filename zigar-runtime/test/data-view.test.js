@@ -9,10 +9,12 @@ import {
   getTypedArrayClass,
   isTypedArray,
   requireDataView,
+  setDataView,
   useAllExtendedTypes
 } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
-import { MEMORY } from '../src/symbol.js';
+import { getMemoryCopier } from '../src/memory.js';
+import { COPIER, MEMORY } from '../src/symbol.js';
 import { MemberType, StructureType, getIntRange } from '../src/types.js';
 
 describe('Data view functions', function() {
@@ -306,6 +308,22 @@ describe('Data view functions', function() {
       const arg = {};
       expect(() => requireDataView(structure, arg)).to.throw(TypeError)
         .with.property('message').that.contains('8');
+    })
+  })
+  describe('setDataView', function() {
+    it('should assume element size of one when structure has no shape', function() {
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Opaque',
+        byteSize: undefined,
+      };
+      const target = {
+        [MEMORY]: new DataView(new ArrayBuffer(16)),
+        [COPIER]: getMemoryCopier(16),
+        length: 16,
+      };
+      const dv = new DataView(new ArrayBuffer(16));
+      setDataView.call(target, dv, structure, false, false, {});
     })
   })
   describe('getBoolAccessor', function() {

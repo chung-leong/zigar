@@ -90,7 +90,7 @@ export function defineSlice(structure, env) {
       }
     } else if (typeof(arg) === 'number') {
       if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
-        shapeDefiner.call(this, null, arg);
+        shapeDefiner.call(this, null, arg, fixed);
       } else {
         throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }

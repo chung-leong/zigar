@@ -6,12 +6,12 @@ import { fileURLToPath } from 'url';
 import {
   WebAssemblyEnvironment,
 } from '../src/environment-wasm.js';
-import { Exit } from '../src/error.js';
+import { Exit, InvalidDeallocation } from '../src/error.js';
 import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { ALIGN, COPIER, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
+import { ALIGN, ATTRIBUTES, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SLOTS } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -84,6 +84,11 @@ describe('WebAssemblyEnvironment', function() {
       const dv = env.allocateHostMemory(64, 32);
       env.freeHostMemory(128, 64, 32);
       expect(freed).to.equal(dv);
+    })
+    it('should throw when given invalid address', function() {
+      const env = new WebAssemblyEnvironment();
+      env.startContext();
+      expect(() => env.freeHostMemory(128, 64, 32)).to.throw(InvalidDeallocation);
     })
   })
   describe('getBufferAddress', function() {
@@ -380,6 +385,10 @@ describe('WebAssemblyEnvironment', function() {
       expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
       expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
     })
+    it('should throw when a function is missing', function() {
+      const env = new WebAssemblyEnvironment();
+      expect(() => env.importFunctions({})).to.throw(Error);
+    })
   })
   describe('instantiateWebAssembly', function() {
     it('should attempt to stream in a WASM instance', async function() {
@@ -515,6 +524,32 @@ describe('WebAssemblyEnvironment', function() {
       env.invokeThunk(100, args);
       expect(thunkId).to.equal(100);
       expect(argAddress).to.equal(0x1000);
+    })
+    it('should attempt to update pointers in argument struct', function() {
+      const env = new WebAssemblyEnvironment();
+      let thunkId, argAddress;
+      env.runThunk = function(...args) {
+        thunkId = args[0];
+        argAddress = args[1];
+      };
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      let called = false;
+      Arg.prototype[POINTER_VISITOR] = function() {
+        called = true;
+      };
+      const args = new Arg();
+      env.invokeThunk(100, args);
+      expect(called).to.equal(true);
     })
     it('should throw when runThunk returns a string', function() {
       const env = new WebAssemblyEnvironment();
@@ -652,7 +687,44 @@ describe('WebAssemblyEnvironment', function() {
       done();
       await promise;
     })
-
+    it('should use variadic handler when argument struct has attributes', function() {
+      const env = new WebAssemblyEnvironment();
+      let recv, thunkId, argAddress, attrAddress;
+      env.runThunk = function() {};
+      env.runVariadicThunk = function(...args) {
+        recv = this;
+        thunkId = args[0];
+        argAddress = args[1];
+        attrAddress = args[2];
+      };
+      let nextAddress = 0x1000;
+      env.allocateExternMemory = function(type, len, align) {
+        const address = nextAddress;
+        nextAddress += 0x1000;
+        return address;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const Attributes = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+      };
+      Attributes.prototype[COPIER] = getMemoryCopier(undefined);
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[SLOTS] = { 0: {} };
+        this[ATTRIBUTES] = new Attributes();
+        this.retval = 123;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(16);
+      const args = new Arg();
+      env.invokeThunk(100, args);
+      expect(recv).to.equal(env);
+      expect(thunkId).to.equal(100);
+      expect(argAddress).to.equal(0x1000);
+      expect(attrAddress).to.equal(0x2000);
+    })
   })
   describe('getWASIImport', function() {
     it('should write to console when fd_write is invoked', async function() {
@@ -741,6 +813,7 @@ describe('WebAssemblyEnvironment', function() {
       expect(() => wasi.path_open()).to.not.throw();
       expect(() => wasi.fd_read()).to.not.throw();
       expect(() => wasi.fd_close()).to.not.throw();
+      expect(() => wasi.fd_prestat_get()).to.not.throw();
     })
     it('should throw exit error when proc_exit is called', async function() {
       const env = new WebAssemblyEnvironment();

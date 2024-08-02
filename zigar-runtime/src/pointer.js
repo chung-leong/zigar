@@ -143,6 +143,12 @@ export function definePointer(structure, env) {
   const setTargetLength = function(len) {
     len = len | 0;
     const target = getTargetObject.call(this);
+    if (!target) {
+      if (len !== 0) {
+        throw new InvalidSliceLength(len, 0);
+      }
+      return;
+    }
     const dv = target[MEMORY];
     const fixed = dv[FIXED];
     const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
@@ -152,7 +158,7 @@ export function definePointer(structure, env) {
       if (hasLengthInMemory) {
         max = this[MAX_LENGTH];
         if (max === undefined) {
-          max = this[MAX_LENGTH] = target?.length ?? 0;
+          max = this[MAX_LENGTH] = target.length;
         }
       } else {
         max = (bytesAvailable / elementSize) | 0;
@@ -387,7 +393,7 @@ function isPointerOf(arg, Target) {
 }
 
 function isCompatiblePointer(arg, Target, type) {
-  if (type !== StructureType.SinglePointer && Target.child) {
+  if (type !== StructureType.SinglePointer) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;
     } else if (type === StructureType.CPointer && isPointerOf(arg, Target.child)) {
