@@ -60,6 +60,11 @@ export class Environment {
     throw new MustBeOverridden();
   }
 
+  allocateExternMemory(type, len, align) {
+    // allocate external memory
+    throw new MustBeOverridden();
+  }
+
   freeHostMemory(address, len, align) {
     // free previously allocated memory
     throw new MustBeOverridden();
@@ -67,6 +72,11 @@ export class Environment {
 
   freeShadowMemory(dv) {
     // free memory allocated for shadow
+    throw new MustBeOverridden();
+  }
+
+  freeExternMemory(type, address, len, align) {
+    // free previously allocated external memory
     throw new MustBeOverridden();
   }
 

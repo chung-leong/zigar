@@ -14,7 +14,8 @@ import { getMemoryCopier } from '../src/memory.js';
 import { useAllStructureTypes } from '../src/structure.js';
 import {
   ADDRESS,
-  ADDRESS_SETTER, ALIGN, ATTRIBUTES, COPIER, ENVIRONMENT, FIXED,
+  ADDRESS_SETTER, ALIGN,
+  COPIER, ENVIRONMENT, FIXED,
   LENGTH,
   LENGTH_SETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SLOTS, TARGET_GETTER, WRITE_DISABLER
 } from '../src/symbol.js';
@@ -121,11 +122,35 @@ describe('Environment', function() {
     it('should try to free fixed memory through Zig', function() {
       const env = new Environment();
       let args;
-      env.freeExternMemory = function(address, len, align) {
-        args = { address, len, align };
+      env.freeExternMemory = function(type, address, len, align) {
+        args = { type, address, len, align };
       };
-      env.freeFixedMemory(0x1000n, 10, 2);
-      expect(args).to.eql({ address: 0x1000n, len: 10, align: 2 });
+      const dv = new DataView(new ArrayBuffer(16));
+      dv[FIXED] = {
+        type: 0,
+        address: 0x1000n,
+        len: 16,
+        align: 4,
+      };
+      env.freeFixedMemory(dv);
+      expect(args).to.eql({ type: 0, address: 0x1000n, len: 16, align: 4 });
+    })
+    it('should try to free fixed memory with unaligned address through Zig', function() {
+      const env = new Environment();
+      let args;
+      env.freeExternMemory = function(type, address, len, align) {
+        args = { type, address, len, align };
+      };
+      const dv = new DataView(new ArrayBuffer(16));
+      dv[FIXED] = {
+        type: 0,
+        unalignedAddress: 0x1000n,
+        address: 0x1004n,
+        len: 16,
+        align: 4,
+      };
+      env.freeFixedMemory(dv);
+      expect(args).to.eql({ type: 0, address: 0x1000n, len: 16, align: 4 });
     })
     it('should do nothing when len is 0', function() {
       const env = new Environment();
@@ -133,7 +158,14 @@ describe('Environment', function() {
       env.freeExternMemory = function(address, len, align) {
         called = true;
       };
-      env.freeFixedMemory(0x1000n, 0, 0);
+      const dv = new DataView(new ArrayBuffer(0));
+      dv[FIXED] = {
+        type: 0,
+        address: 0x1000n,
+        len: 0,
+        align: 0,
+      };
+      env.freeFixedMemory(dv);
       expect(called).to.equal(false);
     })
   })
@@ -185,12 +217,12 @@ describe('Environment', function() {
         return dv;
       };
       let args;
-      env.freeExternMemory = function(address, len, align) {
-        args = { address, len, align };
+      env.freeExternMemory = function(type, address, len, align) {
+        args = { type, address, len, align };
       };
       const dv = env.allocateFixedMemory(400, 4);
       env.releaseFixedView(dv);
-      expect(args).to.eql({ address: 0x1000n, len: 400, align: 4 });
+      expect(args).to.eql({ type: 0, address: 0x1000n, len: 400, align: 4 });
     })
   })
   describe('registerMemory', function() {
@@ -2105,27 +2137,18 @@ describe('Environment', function() {
       };
       const shadow = {
         [MEMORY]: new DataView(new ArrayBuffer(4)),
-        [ATTRIBUTES]: {
-          address: 0x1000,
-          len: 4,
-          align: 1,
-        },
       };
       env.getBufferAddress = function() {
         return 0x1000;
       };
-      let address, len, align;
-      env.freeShadowMemory = function(...args) {
-        address = args[0];
-        len = args[1];
-        align = args[2];
-      }
+      let freed;
+      env.freeShadowMemory = function(dv) {
+        freed = dv;
+      };
       env.startContext();
       env.addShadow(shadow, object);
       env.releaseShadows();
-      expect(address).to.equal(0x1000);
-      expect(len).to.equal(4);
-      expect(align).to.equal(1);
+      expect(freed).to.equal(shadow[MEMORY]);
     })
   })
   describe('updatePointerTargets', function() {

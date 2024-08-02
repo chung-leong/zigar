@@ -11,7 +11,7 @@ import { useAllMemberTypes } from '../src/member.js';
 import { getMemoryCopier } from '../src/memory.js';
 import { ObjectCache, getMemoryRestorer } from '../src/object.js';
 import { useAllStructureTypes } from '../src/structure.js';
-import { COPIER, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
+import { ALIGN, COPIER, MEMORY, MEMORY_RESTORER } from '../src/symbol.js';
 
 describe('WebAssemblyEnvironment', function() {
   beforeEach(function() {
@@ -76,18 +76,14 @@ describe('WebAssemblyEnvironment', function() {
       env.allocateShadowMemory = function(len, align) {
         return new DataView(memory.buffer, 128, len);
       };
-      let address, align, len;
-      env.freeShadowMemory = function(...args) {
-        address = args[0];
-        len = args[1];
-        align = args[2];
+      let freed;
+      env.freeShadowMemory = function(dv) {
+        freed = dv;
       };
       env.startContext();
       const dv = env.allocateHostMemory(64, 32);
       env.freeHostMemory(128, 64, 32);
-      expect(address).to.equal(128);
-      expect(len).to.equal(64);
-      expect(align).to.equal(32);
+      expect(freed).to.equal(dv);
     })
   })
   describe('getBufferAddress', function() {
@@ -362,25 +358,27 @@ describe('WebAssemblyEnvironment', function() {
   describe('importFunctions', function() {
     it('should create methods in the environment object', function() {
       const env = new WebAssemblyEnvironment();
-      let call;
+      let freed;
       const exports = {
-        allocateShadowMemory: () => {},
-        freeShadowMemory: (...args) => {
-          call = args[0];
+        allocateExternMemory: () => {},
+        freeExternMemory: (type, address, len, align) => {
+          freed = { type, address, len, align };
         },
         runThunk: () => {},
+        runVariadicThunk: () => {},
         isRuntimeSafetyActive: () => {},
+        getFactoryThunk: () => {},
+        flushStdout: () => {},
         garbage: () => {},
       };
       env.importFunctions(exports);
-      expect(env.allocateShadowMemory).to.be.a('function');
-      expect(env.freeShadowMemory).to.be.a('function');
+      expect(env.allocateExternMemory).to.be.a('function');
+      expect(env.freeExternMemory).to.be.a('function');
       expect(env.runThunk).to.be.a('function');
+      expect(env.runVariadicThunk).to.be.a('function');
       expect(env.isRuntimeSafetyActive).to.be.a('function');
-      // make sure context is provided to functions that need it
-      env.context = { call: 0x8000 };
-      expect(() => env.freeShadowMemory(123, 4, 2)).to.not.throw();
-      expect(call).to.equal(0x8000);
+      expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
+      expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
     })
   })
   describe('instantiateWebAssembly', function() {
@@ -497,49 +495,99 @@ describe('WebAssemblyEnvironment', function() {
   describe('invokeThunk', function() {
     it('should call runThunk', function() {
       const env = new WebAssemblyEnvironment();
-      let thunkId, argStruct;
+      let thunkId, argAddress;
       env.runThunk = function(...args) {
         thunkId = args[0];
-        argStruct = args[1];
+        argAddress = args[1];
       };
-      env.invokeThunk(100, {});
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      const args = new Arg();
+      env.invokeThunk(100, args);
       expect(thunkId).to.equal(100);
-      expect(argStruct).to.be.an('object');
+      expect(argAddress).to.equal(0x1000);
     })
     it('should throw when runThunk returns a string', function() {
       const env = new WebAssemblyEnvironment();
       env.runThunk = function(...args) {
         return 'NoDonut';
       };
-      expect(() => env.invokeThunk(100, {})).to.throw(Error)
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      const args = new Arg();
+      expect(() => env.invokeThunk(100, args)).to.throw(Error)
         .with.property('message', 'No donut');
     })
     it('should return promise when thunk runner is not ready', async function() {
       const env = new WebAssemblyEnvironment();
       let done;
       env.initPromise = new Promise(resolve => done = resolve);
-      const promise = env.invokeThunk(100, { retval: 123 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+        this.retval = 123;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const args = new Arg();
+      const promise = env.invokeThunk(100, args);
       expect(promise).to.be.a('promise');
-      let thunkId, argStruct;
+      let thunkId, argAddress;
       env.runThunk = function(...args) {
         thunkId = args[0];
-        argStruct = args[1];
+        argAddress = args[1];
       };
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
       done();
       const result = await promise;
       expect(result).to.equal(123);
       expect(thunkId).to.equal(100);
-      expect(argStruct).to.be.an('object');
+      expect(argAddress).to.equal(0x1000);
     })
     it('should throw when thunk runner eventually returns a string', async function() {
       const env = new WebAssemblyEnvironment();
       let done;
       env.initPromise = new Promise(resolve => done = resolve);
-      const promise = env.invokeThunk(100, { retval: 123 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+        this.retval = 123;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const args = new Arg();
+      const promise = env.invokeThunk(100, args);
       expect(promise).to.be.a('promise');
       env.runThunk = function(...args) {
         return 'TooManyDonuts';
       };
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
       done();
       try {
         await promise;
@@ -552,11 +600,24 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       let done;
       env.initPromise = new Promise(resolve => done = resolve);
-      const promise = env.invokeThunk(100, { retval: 123 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+        this.retval = 123;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const args = new Arg();
+      const promise = env.invokeThunk(100, args);
       expect(promise).to.be.a('promise');
       env.runThunk = function(...args) {
         throw new Exit(-1);
       };
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
       done();
       try {
         await promise;
@@ -570,11 +631,24 @@ describe('WebAssemblyEnvironment', function() {
       const env = new WebAssemblyEnvironment();
       let done;
       env.initPromise = new Promise(resolve => done = resolve);
-      const promise = env.invokeThunk(100, { retval: 123 });
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(4));
+        this[MEMORY][ALIGN] = 4;
+        this.retval = 123;
+      };
+      Arg.prototype[COPIER] = getMemoryCopier(4);
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const args = new Arg();
+      const promise = env.invokeThunk(100, args);
       expect(promise).to.be.a('promise');
       env.runThunk = function(...args) {
         throw new Exit(0);
       };
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      env.flushStdout = function() {};
       done();
       await promise;
     })
