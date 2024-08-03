@@ -1,7 +1,7 @@
 const { execFileSync, execFile: execFileAsync } = require('child_process');
 const { promisify } = require('util');
 const execFile = promisify(execFileAsync);
-const { stat  } = require('fs/promises');
+const { stat, readdir } = require('fs/promises');
 const { writeFileSync } = require('fs');
 const os = require('os');
 const { join, resolve } = require('path');
@@ -82,6 +82,7 @@ async function buildAddon(addonDir, options) {
       try {
         const stats = await getDirectoryStats(srcDir);
         return stats.mtimeMs;
+        /* c8 ignore next 2 */
       } catch (err) {
       }
     };
