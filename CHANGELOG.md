@@ -6,7 +6,8 @@
 * Added support for variadic functions
 * Added buildDirSize option to control size of build directory
 * Added support for Zig 0.14.0/master
-* Various bug fixes
+* Various bug fixes and optimizations
+* Tested on ARM64 (including MacOS on ARM)
 
 ## 0.13.0
 
