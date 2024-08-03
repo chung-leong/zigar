@@ -1,5 +1,6 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
+import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 use(chaiPromised);
@@ -85,8 +86,8 @@ describe('Configuration', function() {
       const path = await findConfigFile('node-zigar.config.json', absolute('./config-samples/correct/hello/world'));
       const options = await loadConfigFile(path, optionsForCompile);
       const cfgPath = absolute('./config-samples/correct');
-      const soPath = `${cfgPath}/hello.zigar`;
-      const srcPath = `${cfgPath}/src/hello.zig`;
+      const soPath = join(cfgPath, 'hello.zigar');
+      const srcPath = join(cfgPath, 'src', 'hello.zig');
       expect(options).to.eql({ optimize: 'Debug', sourceFiles: { [soPath]: srcPath } });
     })
     it('should throw when config file is malformed', async function() {
@@ -106,11 +107,11 @@ describe('Configuration', function() {
     it('should find source file for Zigar module', async function() {
       const cfgPath = absolute('./config-samples/overlapping');
       const options = await loadConfigFile(`${cfgPath}/node-zigar.config.json`, optionsForCompile);
-      const src1 = findSourceFile(`${cfgPath}/lib/world.zigar`, options);
-      const src2 = findSourceFile(`${cfgPath}/lib/hello/world.zigar`, options);
-      const src3 = findSourceFile(`${cfgPath}/lib/hello.zigar`, options);
-      expect(src1).to.equal(`${absolute('./config-samples/overlapping')}/src/world.zig`);
-      expect(src2).to.equal(`${absolute('./config-samples/overlapping')}/src/hello-world.zig`);
+      const src1 = findSourceFile(join(cfgPath, 'lib', 'world.zigar'), options);
+      const src2 = findSourceFile(join(cfgPath, 'lib', 'hello', 'world.zigar'), options);
+      const src3 = findSourceFile(join(cfgPath, 'lib', 'hello.zigar'), options);
+      expect(src1).to.equal(join(absolute('./config-samples/overlapping'), 'src', 'world.zig'));
+      expect(src2).to.equal(join(absolute('./config-samples/overlapping'), 'src', 'hello-world.zig'));
       expect(src3).to.be.undefined;
     })
   })

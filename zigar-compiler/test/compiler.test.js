@@ -2,7 +2,7 @@ import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
 import { readdir, stat } from 'fs/promises';
 import os, { tmpdir } from 'os';
-import { join } from 'path';
+import { join, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 use(chaiPromised);
@@ -50,7 +50,12 @@ describe('Compilation', function() {
         cacheDir: '/project/zigar-cache',
       };
       const modPath = getModuleCachePath(srcPath, options);
-      expect(modPath).to.match(/^\/project\/zigar-cache\/src\-\w{8}\/Debug\/hello\.zigar$/);
+      const parts = modPath.split(sep);
+      expect(parts[1]).to.equal('project');
+      expect(parts[2]).to.equal('zigar-cache');
+      expect(parts[3]).to.match(/^src\-\w{8}$/);
+      expect(parts[4]).to.equal('Debug');
+      expect(parts[5]).to.equal('hello.zigar');
     })
   })
   describe('createConfig', function() {
@@ -81,9 +86,9 @@ describe('Compilation', function() {
         platform: 'win32',
         arch: 'x64',
       };
-      const modPath = '/lib/hello.zigar';
+      const modPath = join('lib', 'hello.zigar');
       const config = createConfig(srcPath, modPath, options);
-      expect(config.outputPath).to.equal('/lib/hello.zigar/win32.x64.dll');
+      expect(config.outputPath).to.equal(join(modPath, 'win32.x64.dll'));
     })
     it('should use Unix extension for unrecogized platforms', function() {
       const srcPath = '/project/src/hello.zig';
@@ -91,9 +96,9 @@ describe('Compilation', function() {
         platform: 'freebsd',
         arch: 'arm64',
       };
-      const modPath = '/lib/hello.zigar';
+      const modPath = join('lib', 'hello.zigar');
       const config = createConfig(srcPath, modPath, options);
-      expect(config.outputPath).to.equal('/lib/hello.zigar/freebsd.arm64.so');
+      expect(config.outputPath).to.equal(join(modPath, 'freebsd.arm64.so'));
     })
   })
   describe('compile', function() {
@@ -240,9 +245,9 @@ describe('Compilation', function() {
     it('should return sub-path of module path when source file is omitted', async function() {
       this.timeout(600000);
       const options = { optimize: 'Debug', platform: 'linux', arch: 'arm64' };
-      const modPath = '/lib/hello.zigar';
+      const modPath = join('lib', 'hello.zigar');
       const { outputPath, changed } = await compile(null, modPath, options);
-      expect(outputPath).to.equal('/lib/hello.zigar/linux.arm64.so');
+      expect(outputPath).to.equal(join(modPath, 'linux.arm64.so'));
       expect(changed).to.be.false;
     })
     it('should use custom build file', async function() {

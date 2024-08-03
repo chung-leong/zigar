@@ -1,7 +1,7 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
 import { writeFileSync } from 'fs';
-import { tmpdir } from 'os';
+import os, { tmpdir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -47,7 +47,7 @@ describe('Utility functions', function() {
       expect(promise).to.eventually.be.fulfilled;
     })
     it('should throw when directory cannot be removed', async function() {
-      const promise = deleteDirectory('/dev/null');
+      const promise = deleteDirectory(fileURLToPath(import.meta.url));
       await expect(promise).to.eventually.be.rejected;
     })
   })

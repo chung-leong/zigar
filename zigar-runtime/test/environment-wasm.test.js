@@ -22,7 +22,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should accept a WASI object', async function() {
       const env = new WebAssemblyEnvironment();
       const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-      const buffer = await readFile(url.pathname);
+      const buffer = await readFile(fileURLToPath(url));
       env.loadModule(buffer);
       const wasi = new WASI({
         version: 'preview1',
@@ -37,7 +37,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should throw when WASM source has already been obtained', async function() {
       const env = new WebAssemblyEnvironment();
       const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-      const buffer = await readFile(url.pathname);
+      const buffer = await readFile(fileURLToPath(url));
       await env.instantiateWebAssembly(buffer);
       const wasi = new WASI({
         version: 'preview1',
@@ -404,7 +404,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should initiate a WASM instance from a buffer', async function() {
       const env = new WebAssemblyEnvironment();
       const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-      const buffer = await readFile(url.pathname);
+      const buffer = await readFile(fileURLToPath(url));
       const wasm = await env.instantiateWebAssembly(buffer);
     })
   })
@@ -412,7 +412,7 @@ describe('WebAssemblyEnvironment', function() {
     it('should load a module', async function() {
       const env = new WebAssemblyEnvironment();
       const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-      const buffer = await readFile(url.pathname);
+      const buffer = await readFile(fileURLToPath(url));
       expect(env.getFactoryThunk).to.be.undefined;
       await env.loadModule(buffer);
       expect(env.allocateExternMemory).to.be.a('function');

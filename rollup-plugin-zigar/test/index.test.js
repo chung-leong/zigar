@@ -5,6 +5,7 @@ import 'mocha-skip-if';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { rollup } from 'rollup';
+import { fileURLToPath } from 'url';
 import { createServer } from 'vite';
 import Zigar from '../dist/index.js';
 
@@ -124,5 +125,5 @@ async function md5(text) {
 }
 
 function absolute(relPath) {
-  return new URL(relPath, import.meta.url).pathname;
+  return fileURLToPath(new URL(relPath, import.meta.url));
 }

@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { readFile, readdir } from 'fs/promises';
+import { fileURLToPath } from 'url';
 
 import {
   MagicNumber,
@@ -25,7 +26,7 @@ describe('WASM stripper', function() {
         'simple',
         'table',
         'table2',
-      ].map(name => resolve(`./wasm-samples/${name}.wasm`));
+      ].map(name => absolute(`./wasm-samples/${name}.wasm`));
       for (const path of wasmFiles) {
         const content = await readFile(path);
         const binary = new DataView(content.buffer);
@@ -45,7 +46,7 @@ describe('WASM stripper', function() {
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
-      this.timeout(20000);
+      this.timeout(600000);
       const wasmFiles = [
         'fail',
         'global',
@@ -53,7 +54,7 @@ describe('WASM stripper', function() {
         'simple',
         'table',
         'table2',
-      ].map(name => resolve(`./wasm-samples/${name}.wasm`));
+      ].map(name => absolute(`./wasm-samples/${name}.wasm`));
       for (const path of wasmFiles) {
         const content = await readFile(path);
         const binary = new DataView(content.buffer);
@@ -66,8 +67,8 @@ describe('WASM stripper', function() {
       }
     })
     it('should recreate WASM files from WABT test suite', async function() {
-      this.timeout(20000);
-      const dir = resolve(`./wasm-samples/wabt-test-suite`);
+      this.timeout(600000);
+      const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
       for (const path of wasmFiles) {
@@ -84,7 +85,7 @@ describe('WASM stripper', function() {
   })
   describe('parseFunction', function() {
     it('should parse a function body in the code section', async function() {
-      const path = resolve(`./wasm-samples/fail.wasm`);
+      const path = absolute(`./wasm-samples/fail.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const module = parseBinary(binary);
@@ -104,7 +105,7 @@ describe('WASM stripper', function() {
   })
   describe('repackFunction', function() {
     it('should recreate function body', async function() {
-      const path = resolve(`./wasm-samples/fail.wasm`);
+      const path = absolute(`./wasm-samples/fail.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const module = parseBinary(binary);
@@ -122,7 +123,7 @@ describe('WASM stripper', function() {
     })
     it('should handle more complicated file', async function() {
       this.timeout(600000);
-      const path = resolve(`./wasm-samples/ziglyph.wasm`);
+      const path = absolute(`./wasm-samples/ziglyph.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const module = parseBinary(binary);
@@ -142,7 +143,7 @@ describe('WASM stripper', function() {
     })
     it('should repack code from WABT test suite', async function() {
       this.timeout(600000);
-      const dir = resolve(`./wasm-samples/wabt-test-suite`);
+      const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
       for (const path of wasmFiles) {
@@ -167,14 +168,14 @@ describe('WASM stripper', function() {
   })
   describe('stripUnused', function() {
     it('should remove unused functions', async function() {
-      const path = resolve(`./wasm-samples/simple.wasm`);
+      const path = absolute(`./wasm-samples/simple.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const newBinary = stripUnused(binary);
       expect(newBinary.byteLength).to.be.below(binary.byteLength);
     })
     it('should retain names when keepNames is true', async function() {
-      const path = resolve(`./wasm-samples/simple-with-names.wasm`);
+      const path = absolute(`./wasm-samples/simple-with-names.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);      
       const newBinary = stripUnused(binary, { keepNames: true });
@@ -186,7 +187,7 @@ describe('WASM stripper', function() {
   })
   describe('parseNames', function() {
     it('should extract module name from name section', async function() {
-      const path = resolve(`./wasm-samples/module-name.wasm`);
+      const path = absolute(`./wasm-samples/module-name.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const { sections } = parseBinary(binary);
@@ -230,6 +231,6 @@ describe('WASM stripper', function() {
   })
 })
 
-function resolve(relPath) {
-  return new URL(relPath, import.meta.url).pathname;
+function absolute(relPath) {
+  return fileURLToPath(new URL(relPath, import.meta.url));
 }

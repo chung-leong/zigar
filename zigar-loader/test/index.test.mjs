@@ -2,14 +2,15 @@ import { join, parse } from 'path';
 import { expect } from 'chai';
 import { tmpdir } from 'os';
 import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
 import webpack from 'webpack'
 import 'mocha-skip-if';
 
-const loader = resolve('../dist/index.js');
+const loader = absolute('../dist/index.js');
 
 describe('Loader', function() {
   describe('Options', function() {
-    const path = resolve('../../zigar-compiler/test/zig-samples/basic/console.zig');
+    const path = absolute('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
       this.timeout(60000);
       const code = await transpile(path, { embedWASM: true });
@@ -73,7 +74,7 @@ async function transpile(path, options = {}) {
       chunkFormat: 'module',
     },
     resolve: {
-      modules: [ resolve(`../node_modules`) ],
+      modules: [ absolute(`../node_modules`) ],
     },
     module: {
       rules: [
@@ -112,6 +113,6 @@ async function md5(text) {
   return hash.digest('hex');
 }
 
-function resolve(relPath) {
-  return new URL(relPath, import.meta.url).pathname;
+function absolute(relPath) {
+  return fileURLToPath(new URL(relPath, import.meta.url));
 }
