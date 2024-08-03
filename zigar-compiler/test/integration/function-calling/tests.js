@@ -548,8 +548,10 @@ export function addTests(importModule, options) {
       const lines4 = await capture(() => puts('Hello world'));
       expect(lines4).to.eql([ 'Hello world' ]);
     })
-    // VaList is "disabled due to miscompilations" on 64-bits Windows currently
+    // VaList is "disabled due to miscompilations" on 64-bits Windows
+    // and ARM64 Linux currently
     skip.if(platform() === 'win32' && arch() === 'x64').
+    or(platform() === 'linux' && arch() === 'aarch64').
     it('should call variadic functions', async function() {
       this.timeout(300000);
       const {
@@ -620,6 +622,7 @@ export function addTests(importModule, options) {
       expect(lines10).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
     })
     skip.if(platform() === 'win32' && arch() === 'x64').
+    or(platform() === 'linux' && arch() === 'aarch64').
     it('should correctly pass unsigned int to variadic function', async function() {
       this.timeout(300000);
       const {
