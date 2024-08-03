@@ -682,8 +682,6 @@ bool set_module_attributes(napi_env env,
         && napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) == napi_ok;
 }
 
-#include <stdio.h>
-
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
     module_data* md;
@@ -711,7 +709,6 @@ napi_value load_module(napi_env env,
     }
     module* mod = md->mod = (module*) symbol;
     if (mod->version != 4) {
-        printf("version, value = %d, address = %zu\n", mod->version, &mod->version);
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 

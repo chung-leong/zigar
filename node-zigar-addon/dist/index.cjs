@@ -32,6 +32,7 @@ async function buildAddon(addonDir, options) {
     recompile = true,
     arch = getArch(),
     platform = getPlatform(),
+    zigPath = 'zig',
     onStart,
     onEnd,
   } = options;
@@ -78,7 +79,7 @@ async function buildAddon(addonDir, options) {
     };
     const outputMTimeBefore = await getOutputMTime();
     try {
-      await runCompiler('zig', args, { cwd, onStart, onEnd });
+      await runCompiler(zigPath, args, { cwd, onStart, onEnd });
     } catch (err) {
       if (err.code === 'ENOENT') {
         if (!outputMTimeBefore) {

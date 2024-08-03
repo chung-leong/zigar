@@ -43,6 +43,22 @@ describe('Addon functionalities', function() {
       } catch (err) {
       }
     })
+    it('should ignore missing compiler when library file is present', async function() {
+      this.timeout(300000);
+      await buildAddon(addonDir, { platform: 'linux', arch: 'x64' });
+      const { changed } = await buildAddon(addonDir, { platform: 'linux', arch: 'x64', zigPath: 'zigo' });
+      expect(changed).to.be.false;
+    })
+    it('should throw when both compiler and library file are missing', async function() {
+      this.timeout(300000);
+      let failed = false;
+      try {
+        await buildAddon(addonDir, { platform: 'linux', arch: 'riscv64', zigPath: 'zigo' });
+      } catch (err) {
+        failed = true;
+      }
+      expect(failed).to.be.true;
+    })
   })
   describe('Module loading', function() {
     const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
@@ -51,7 +67,7 @@ describe('Addon functionalities', function() {
     before(async () => {
       const { outputPath } = await buildAddon(addonDir, {});
       addonPath = outputPath;
-    }) 
+    })
     after(() => execSync(`rm -rf '${addonDir}'`))
     const options = {
       arch: os.arch(),
@@ -79,13 +95,13 @@ describe('Addon functionalities', function() {
           error = err;
         }
         expect(error).to.be.an('error');
-      })      
+      })
     })
     describe('getGCStatistics', function() {
       it('should get gc statistics', function() {
         const stats = getGCStatistics({ addonPath, recompile: true });
         expect(stats).to.be.an('object');
-      })  
+      })
     })
     describe('getLibraryPath', function() {
       it('should return path to library', function() {
