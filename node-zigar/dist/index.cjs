@@ -11,7 +11,8 @@ Module._load = new Proxy(Module._load, {
     if (!extensionsRegex.exec(request)) {
       return Reflect.apply(target, self, args);
     }
-    const parentURL = pathToFileURL(parent.filename ?? join(process.cwd(), 'script'));
+    const parentPath = parent.filename ?? /* c8 ignore next */ join(process.cwd(), 'script');
+    const parentURL = pathToFileURL(parentPath);
     const url = new URL(request, parentURL).href
     // start a worker so we can handle compilation in async code
     const buffers = {

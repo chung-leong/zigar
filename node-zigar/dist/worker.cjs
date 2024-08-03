@@ -22,7 +22,10 @@
       platform,
       arch,
     };
-    const configPath = !archive ? await findConfigFile('node-zigar.config.json', dirname(path)) : null;
+    const configPath = !archive
+    ? await findConfigFile('node-zigar.config.json', dirname(path))
+    /* c8 ignore next */
+    : null;
     if (configPath) {
       // add options from config file
       Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
