@@ -7,8 +7,7 @@ import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import {
   acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getDirectoryStats, getPlatform,
-  md5,
-  releaseLock
+  md5, releaseLock,
 } from './utility-functions.js';
 
 const execFile = promisify(ChildProcess.execFile);
@@ -44,7 +43,7 @@ export async function compile(srcPath, modPath, options) {
     const getOutputMTime = async () => {
       try {
         const stats = await stat(outputPath);
-        return stats.mtime.valueOf();
+        return stats.mtimeMs;
       } catch (err) {
       }
     };
@@ -70,10 +69,10 @@ export async function compile(srcPath, modPath, options) {
         await deleteDirectory(moduleBuildDir);
       }
       await releaseLock(pidPath);
-      cleanBuildDirectory(config);
+      cleanBuildDirectory(config).catch(() => {});
     }
     const outputMTimeAfter = await getOutputMTime();
-    changed = outputMTimeBefore != outputMTimeAfter;
+    changed = outputMTimeBefore !== outputMTimeAfter;
     sourcePaths.push(config.buildFilePath);
     if (config.packageConfigPath) {
       sourcePaths.push(config.packageConfigPath);

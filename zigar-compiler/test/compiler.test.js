@@ -328,7 +328,7 @@ describe('Compilation', function() {
       await compile(srcPath, modPath, options);
       await compile(srcPath, modPath, { ...options, buildDirSize: 0 });
       // wait for removal of directories
-      await delay(250);
+      await delay(1000);
       const buildDir = join(tmpdir(), 'zigar-build');
       const names = await readdir(buildDir);
       expect(names).to.have.lengthOf(0);

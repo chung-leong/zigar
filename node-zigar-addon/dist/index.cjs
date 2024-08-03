@@ -37,9 +37,9 @@ async function buildAddon(addonDir, options) {
     onEnd,
   } = options;
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
+  const baseDir = resolve(__dirname, '../');
   let changed = false;
   if (recompile) {
-    const cwd = resolve(__dirname, '../');
     const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
     if (platform && arch) {
       // translate from names used by Node to those used by Zig
@@ -73,24 +73,35 @@ async function buildAddon(addonDir, options) {
     const getOutputMTime = async () => {
       try {
         const stats = await stat(outputPath);
-        return stats.mtime.valueOf();
+        return stats.mtimeMs;
+      } catch (err) {
+      }
+    };
+    const getSourceMTime = async () => {
+      const srcDir = join(baseDir, 'src');
+      try {
+        const stats = await getDirectoryStats(srcDir);
+        return stats.mtimeMs;
       } catch (err) {
       }
     };
     const outputMTimeBefore = await getOutputMTime();
-    try {
-      await runCompiler(zigPath, args, { cwd, onStart, onEnd });
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        if (!outputMTimeBefore) {
-          throw new MissingModule(outputPath);
+    const sourceMTime = await getSourceMTime();
+    if (!outputMTimeBefore || outputMTimeBefore < sourceMTime) {
+      try {
+        await runCompiler(zigPath, args, { cwd: baseDir, onStart, onEnd });
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          if (!outputMTimeBefore) {
+            throw new MissingModule(outputPath);
+          }
+        } else {
+          throw err;
         }
-      } else {
-        throw err;
       }
+      const outputMTimeAfter = await getOutputMTime();
+      changed = outputMTimeBefore !== outputMTimeAfter;
     }
-    const outputMTimeAfter = await getOutputMTime();
-    changed = outputMTimeBefore != outputMTimeAfter;
   }
   return { outputPath, changed };
 }
@@ -129,6 +140,25 @@ function getPlatform() {
 
 function getArch() {
   return os.arch();
+}
+
+async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await readdir(dirPath);
+  for (const name of names) {
+    const path = join(dirPath, name);
+    let info = await stat(path);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
 }
 
 async function runCompiler(path, args, options) {

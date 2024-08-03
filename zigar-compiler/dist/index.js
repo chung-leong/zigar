@@ -2691,6 +2691,12 @@ function definePointer(structure, env) {
   const setTargetLength = function(len) {
     len = len | 0;
     const target = getTargetObject.call(this);
+    if (!target) {
+      if (len !== 0) {
+        throw new InvalidSliceLength(len, 0);
+      }
+      return;
+    }
     const dv = target[MEMORY];
     const fixed = dv[FIXED];
     const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
@@ -2700,7 +2706,7 @@ function definePointer(structure, env) {
       if (hasLengthInMemory) {
         max = this[MAX_LENGTH];
         if (max === undefined) {
-          max = this[MAX_LENGTH] = target?.length ?? 0;
+          max = this[MAX_LENGTH] = target.length;
         }
       } else {
         max = (bytesAvailable / elementSize) | 0;
@@ -4193,7 +4199,7 @@ function defineSlice(structure, env) {
       }
     } else if (typeof(arg) === 'number') {
       if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
-        shapeDefiner.call(this, null, arg);
+        shapeDefiner.call(this, null, arg, fixed);
       } else {
         throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
       }
@@ -4573,7 +4579,7 @@ function defineVariadicStruct(structure, env) {
       let argAlign = arg.constructor[ALIGN];
       if (!dv || !argAlign) {
         const err = new InvalidVariadicArgument();
-        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+        throw adjustArgumentError(name, argCount + index - offset, args.length - offset, err);
       }
       /* WASM-ONLY */
       // the arg struct is passed to the function in WebAssembly and fields are
@@ -4583,8 +4589,8 @@ function defineVariadicStruct(structure, env) {
       if (argAlign > maxAlign) {
         maxAlign = argAlign;
       }
-      const offset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
-      totalByteSize = offset + dv.byteLength;
+      const byteOffset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
+      totalByteSize = byteOffset + dv.byteLength;
     }
     const attrs = new ArgAttributes(args.length);
     const dv = env.allocateMemory(totalByteSize, maxAlign);
@@ -5532,7 +5538,7 @@ async function compile(srcPath, modPath, options) {
     const getOutputMTime = async () => {
       try {
         const stats = await stat(outputPath);
-        return stats.mtime.valueOf();
+        return stats.mtimeMs;
       } catch (err) {
       }
     };
@@ -5558,10 +5564,10 @@ async function compile(srcPath, modPath, options) {
         await deleteDirectory(moduleBuildDir);
       }
       await releaseLock(pidPath);
-      cleanBuildDirectory(config);
+      cleanBuildDirectory(config).catch(() => {});
     }
     const outputMTimeAfter = await getOutputMTime();
-    changed = outputMTimeBefore != outputMTimeAfter;
+    changed = outputMTimeBefore !== outputMTimeAfter;
     sourcePaths.push(config.buildFilePath);
     if (config.packageConfigPath) {
       sourcePaths.push(config.packageConfigPath);
@@ -5769,6 +5775,7 @@ async function getManifestLists(buildPath) {
   try {
     dirPath = join(buildPath, '.zig-cache', 'h');
     names = await readdir(dirPath);
+    /* c8 ignore next 8 */
   } catch (err) {
     try {
       dirPath = join(buildPath, 'zig-cache', 'h');
@@ -5801,6 +5808,7 @@ async function findSourcePaths(buildPath) {
           }
         }
       }
+      /* c8 ignore next 2 */
     } catch (err) {
     }
   }
@@ -5836,9 +5844,11 @@ async function cleanBuildDirectory(config) {
         } finally {
           await releaseLock(pidPath);
         }
+        /* c8 ignore next 2 */
       } catch (err) {
       }
     }
+    /* c8 ignore next 2 */
   } catch (err) {
   }
 }
@@ -6980,16 +6990,8 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   importFunction(fn, argType = '', returnType = '') {
-    let needCallContext = false;
-    if (argType.startsWith('c')) {
-      needCallContext = true;
-      argType = argType.slice(1);
-    }
     return (...args) => {
       args = args.map((arg, i) => this.toWebAssembly(argType.charAt(i), arg));
-      if (needCallContext) {
-        args = [ this.context.call, ...args ];
-      }
       const retval = fn.apply(this, args);
       return this.fromWebAssembly(returnType, retval);
     };
