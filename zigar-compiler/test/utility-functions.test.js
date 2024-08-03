@@ -115,6 +115,13 @@ describe('Utility functions', function() {
       expect(lock2).to.be.true;
       await releaseLock(path);
     })
+    it('should fail immediately on lock contention when wait is false', async function() {
+      const path = join(tmpdir(), (Math.random() * 0x7FFFFFF).toString(16));
+      await acquireLock(path, true, 60 * 1000);
+      const promise2 = acquireLock(path, false, 200);
+      await expect(promise2).to.eventually.be.rejected;
+      await releaseLock(path);
+    })
   })
   describe('normalizePath', function() {
     it('should report ASAR archive path', function() {

@@ -283,6 +283,7 @@ async function getManifestLists(buildPath) {
   try {
     dirPath = join(buildPath, '.zig-cache', 'h');
     names = await readdir(dirPath);
+    /* c8 ignore next 8 */
   } catch (err) {
     try {
       dirPath = join(buildPath, 'zig-cache', 'h');
@@ -315,6 +316,7 @@ async function findSourcePaths(buildPath) {
           }
         }
       }
+      /* c8 ignore next 2 */
     } catch (err) {
     }
   }
@@ -350,9 +352,11 @@ async function cleanBuildDirectory(config) {
         } finally {
           await releaseLock(pidPath);
         }
+        /* c8 ignore next 2 */
       } catch (err) {
       }
     }
+    /* c8 ignore next 2 */
   } catch (err) {
   }
 }

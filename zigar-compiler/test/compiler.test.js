@@ -1,17 +1,19 @@
 import { expect, use } from 'chai';
 import { chaiPromised } from 'chai-promised';
-import { stat } from 'fs/promises';
+import { readdir, stat } from 'fs/promises';
 import os, { tmpdir } from 'os';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
 
 use(chaiPromised);
 
-import { fileURLToPath } from 'url';
 import {
   compile,
   createConfig,
   getModuleCachePath,
   runCompiler
 } from '../src/compiler.js';
+import { delay } from '../src/utility-functions.js';
 
 describe('Compilation', function() {
   describe('runCompiler', function() {
@@ -189,7 +191,6 @@ describe('Compilation', function() {
       const { size } = await stat(outputPath);
       expect(size).to.be.at.least(1000);
     })
-
     it('should work correctly when the same file is compiled at the same time', async function() {
       this.timeout(600000);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
@@ -201,6 +202,24 @@ describe('Compilation', function() {
       const result1 = await promise1;
       const { size } = await stat(result2.outputPath);
       expect(size).to.be.at.least(1000);
+    })
+    it('should ignore missing compiler when library file exists', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      await compile(srcPath, modPath, options);
+      const { changed } = await compile(srcPath, modPath, { ...options, zigPath: 'zigo' });
+      expect(changed).to.be.false;
+    })
+    it('should throw when both compiler when library file are missing', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/empty.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      const promise = compile(srcPath, modPath, { ...options, zigPath: 'zigo' });
+      await expect(promise).to.eventually.be.rejectedWith(Error)
+        .with.property('message').that.contains('not found');
     })
     it('should handle directory reference', async function() {
       this.timeout(600000);
@@ -300,6 +319,19 @@ describe('Compilation', function() {
       const hasPackageCfgFile = !!sourcePaths.find(p => p.includes('build.zig.zon'));
       expect(hasBuildFile).to.be.true;
       expect(hasPackageCfgFile).to.be.true;
+    })
+    it('should begin deleting files from build directory when it becomes too large', async function() {
+      this.timeout(600000);
+      const srcPath = absolute('./zig-samples/basic/integers.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      await compile(srcPath, modPath, options);
+      await compile(srcPath, modPath, { ...options, buildDirSize: 0 });
+      // wait for removal of directories
+      await delay(250);
+      const buildDir = join(tmpdir(), 'zigar-build');
+      const names = await readdir(buildDir);
+      expect(names).to.have.lengthOf(0);
     })
   })
 })
