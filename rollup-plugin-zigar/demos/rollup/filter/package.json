@@ -15,6 +15,6 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "http-server": "^14.1.1",
     "rollup": "^4.16.4",
-    "rollup-plugin-zigar": "^0.13.0"
+    "rollup-plugin-zigar": "^0.13.1"
   }
 }
