@@ -847,7 +847,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     }
     const arg_size = current_offset;
     return struct {
-        pub fn attempt() !void {
+        pub fn run() !void {
             var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
             var attrs: [f.params.len + tuple.len]ArgAttributes = undefined;
             var buffer1 = std.mem.zeroes([1024]u8);
@@ -904,15 +904,6 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
                 std.debug.print("\nMismatch: {s} != {s}\n", .{ s1, s2 });
                 return error.TestUnexpectedResult;
             }
-        }
-
-        pub fn run() !void {
-            attempt() catch |err| {
-                return switch (builtin.target.cpu.arch) {
-                    .x86_64, .x86 => err,
-                    else => error.SkipZigTest,
-                };
-            };
         }
     };
 }
