@@ -1229,7 +1229,7 @@ const Abi = struct {
                     .int = .{
                         .type = i64,
                         .available_registers = 8, // x0 - x7
-                        .float_in_registers = false,
+                        .float_in_registers = true,
                     },
                     .float = .{
                         .type = f128,
