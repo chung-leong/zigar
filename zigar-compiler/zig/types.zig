@@ -72,7 +72,7 @@ pub const MemberType = enum(u32) {
 
 pub const Value = *opaque {};
 pub const Thunk = *const fn (ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
-pub const VariadicThunk = *const fn (ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value;
+pub const VariadicThunk = *const fn (ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) callconv(.C) ?Value;
 
 pub const Structure = struct {
     name: ?[]const u8 = null,

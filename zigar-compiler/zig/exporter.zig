@@ -511,7 +511,7 @@ fn createThunk(comptime HostT: type, comptime function: anytype) types.ThunkType
             return @import("./variadic.zig").call(function, arg_struct, attr_ptr, arg_count);
         }
 
-        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
+        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
             tryFunction(host, arg_ptr, attr_ptr, arg_count) catch |err| {
@@ -534,7 +534,7 @@ test "createThunk" {
         }
     };
     const Host = struct {
-        pub fn init(_: *anyopaque, _: ?*anyopaque) @This() {
+        pub fn init(_: ?*anyopaque, _: *anyopaque) @This() {
             return .{};
         }
 
