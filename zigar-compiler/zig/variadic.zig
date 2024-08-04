@@ -125,7 +125,7 @@ fn createTest(RT: type, tuple: anytype) type {
             return if (failed) 0 else 777;
         }
 
-        pub fn attempt() !void {
+        pub fn run() !void {
             var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
             var attrs: [tuple.len]ArgAttributes = undefined;
             inline for (&attrs, 0..) |*p, index| {
@@ -147,17 +147,6 @@ fn createTest(RT: type, tuple: anytype) type {
             if (argStruct.retval != 777) {
                 return error.TestUnexpectedResult;
             }
-        }
-
-        pub fn run() !void {
-            attempt() catch |err| {
-                return switch (builtin.target.cpu.arch) {
-                    .x86_64, .x86 => err,
-                    // dumpStackTrace() doesn't work correctly for other archs
-                    // avoid the panic in panic error by skipping the test
-                    else => error.SkipZigTest,
-                };
-            };
         }
     };
 }
