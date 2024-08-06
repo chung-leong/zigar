@@ -1,7 +1,7 @@
 ## 0.13.1
 
 * Enhanced handling of multi-item and C pointers
-* Implemented expected behavior from poitner to anyopaque
+* Implemented expected behavior from pointer to anyopaque
 * Added support for iterators
 * Added support for variadic functions
 * Added buildDirSize option to control size of build directory
