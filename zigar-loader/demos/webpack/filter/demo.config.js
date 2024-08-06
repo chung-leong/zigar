@@ -4,7 +4,7 @@ const htmlWebpackPlugin = require('html-webpack-plugin');
 module.exports = {
   entry: './src/index.js',
   output: {
-    path: path.join(__dirname, '/dist'),
+    path: path.resolve(__dirname, '../../../../docs/demos/webpack/filter'),
     filename: 'bundle.js',
   },
   plugins: [
@@ -30,6 +30,10 @@ module.exports = {
         test: /\.zig$/,
         exclude: /node_modules/,
         use: 'zigar-loader',
+      },
+      {
+        test: /\.(png|jpe?g|gif)$/i,
+        use: 'file-loader',
       },
     ],
   },
