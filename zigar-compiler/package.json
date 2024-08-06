@@ -42,7 +42,7 @@
     "chai-promised": "^1.0.6",
     "mocha": "^10.7.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.19.1",
+    "rollup": "^4.20.0",
     "rollup-plugin-strip-code": "^0.2.7"
   }
 }
