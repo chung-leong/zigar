@@ -1,0 +1,51 @@
+{
+  "name": "bun-zigar",
+  "version": "0.13.1",
+  "description": "Enable the use of Zig in Bun.js",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "bin": {
+    "bun-zigar": "./bin/cli.js"
+  },
+  "type": "module",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "bun node_modules/mocha/bin/mocha.js -- test/*.test.js",
+    "test:extended": "bun node_modules/mocha/bin/mocha.js -- test/*.test.js",
+    "debug": "bun node_modules/mocha/bin/mocha.js --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "bun node_modules/c8/bin/c8.js bun node_modules/mocha/bin/mocha.js -- test/*.test.js"
+  },
+  "files": [
+    "dist/*",
+    "bin/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chung-leong/zigar.git"
+  },
+  "keywords": [
+    "zig",
+    "bunjs"
+  ],
+  "author": "Chung Leong",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/chung-leong/zigar/issues"
+  },
+  "homepage": "https://github.com/chung-leong/zigar/wiki",
+  "dependencies": {
+    "node-zigar-addon": "^0.13.1",
+    "zigar-compiler": "^0.13.1"
+  },
+  "devDependencies": {
+    "c8": "^10.1.2",
+    "chai": "^5.1.1",
+    "mocha": "^10.7.0",
+    "mocha-skip-if": "^1.0.4"
+  }
+}
