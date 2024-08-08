@@ -1,19 +1,25 @@
 import { plugin } from 'bun';
 import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon';
-import { dirname, extname, join, parse } from 'path';
+import { dirname, extname, join, parse, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import {
-  compile,
-  findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
-  getModuleCachePath, getPlatform, loadConfigFile,
-  optionsForCompile
+  compile, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath,
+  getPlatform, optionsForCompile
 } from 'zigar-compiler';
+import { loadConfigFile } from './config.js';
 import { hideStatus, showStatus } from './status.js';
 
 await plugin({
   name: "ZIG",
   async setup(build) {
-    build.onLoad({ filter: /\.(zig|zigar)$/ }, async ({ path }) => {
+    build.onResolve({ filter: /\.(zig|zigar)$/ }, async ({ path }) => {
+      return { path, namespace: 'zigar' };
+    })
+    build.onResolve({ filter: /.*/, namespace: 'zigar' }, async ({ path, importer }) => {
+      path = resolve(dirname(importer), path);
+      return { path, namespace: 'zigar' };
+    })
+    build.onLoad({ filter: /.*/, namespace: 'zigar' }, async ({ path }) => {
       const platform = getPlatform();
       const arch = getArch();
       const options = {
@@ -22,7 +28,7 @@ await plugin({
         platform,
         arch,
       };
-      const configPath = await findConfigFile('bun-zigar.config.json', dirname(path));
+      const configPath = await findConfigFile('bun-zigar.toml', dirname(path));
       if (configPath) {
         // add options from config file
         Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
