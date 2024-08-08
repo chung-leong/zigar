@@ -1,0 +1,18 @@
+{
+  "name": "filter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.js",
+    "build": "bun-zigar build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fastify": "^4.26.2",
+    "sharp": "^0.33.3"
+  }
+}

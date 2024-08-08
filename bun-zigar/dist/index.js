@@ -1,25 +1,27 @@
 import { plugin } from 'bun';
 import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon';
-import { dirname, extname, join, parse, resolve } from 'path';
+import { dirname, extname, join, parse } from 'path';
 import { pathToFileURL } from 'url';
 import {
-  compile, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath,
-  getPlatform, optionsForCompile
+  compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
+  getModuleCachePath, getPlatform, normalizePath, optionsForCompile
 } from 'zigar-compiler';
 import { loadConfigFile } from './config.js';
 import { hideStatus, showStatus } from './status.js';
 
 await plugin({
-  name: "ZIG",
+  name: "zigar",
   async setup(build) {
-    build.onResolve({ filter: /\.(zig|zigar)$/ }, async ({ path }) => {
+    build.onResolve({ filter: /\.(zig|zigar)($|\?)/ }, async ({ path, importer }) => {
+      const parentURL = pathToFileURL(importer);
+      const url = new URL(path, parentURL).href
+      return { path: url, namespace: 'zigar' };
+    })
+    build.onResolve({ filter: /.*/, namespace: 'zigar' }, async ({ path }) => {
       return { path, namespace: 'zigar' };
     })
-    build.onResolve({ filter: /.*/, namespace: 'zigar' }, async ({ path, importer }) => {
-      path = resolve(dirname(importer), path);
-      return { path, namespace: 'zigar' };
-    })
-    build.onLoad({ filter: /.*/, namespace: 'zigar' }, async ({ path }) => {
+    build.onLoad({ filter: /.*/, namespace: 'zigar' }, async ({ path: url }) => {
+      const { path } = normalizePath(url);
       const platform = getPlatform();
       const arch = getArch();
       const options = {
@@ -33,6 +35,8 @@ await plugin({
         // add options from config file
         Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
       }
+      // allow overriding of options using query variables
+      Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
       const ext = extname(path);
       const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
       const modPath = (ext === '.zig') ? getModuleCachePath(path, options) : path;
