@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, join, parse } from 'path';
@@ -83,18 +83,48 @@ async function buildModules() {
 
 async function createConfig() {
   const path = join(process.cwd(), 'bun-zigar.toml');
-  const config = {
-    optimize: 'ReleaseSmall',
-    sourceFiles: {},
-    targets: [
-      {
-        platform: os.platform(),
-        arch: os.arch(),
-      }
-    ],
-  };
-  const json = JSON.stringify(config, undefined, 2);
-  await writeFile(path, json);
+  const platform = os.platform();
+  const arch = os.arch();
+  const toml = `
+optimize = "ReleaseSmall"
+
+[sourceFiles]
+
+[[targets]]
+arch = "${arch}"
+platform = "${platform}"
+  `.trim() + '\n';
+  await writeFile(path, toml);
+}
+
+async function addPreload() {
+  const packagePath = await findConfigFile('package.json', process.cwd());
+  if (!packagePath) {
+    throw new Error(`Unable to find package.json`);
+  }
+  const bunfigPath = join(dirname(packagePath), 'bunfig.toml');
+  let bunfigTOML = '';
+  let bunfig;
+  try {
+    bunfigTOML = await readFile(bunfigPath, 'utf-8');
+    if (bunfigTOML.trim()) {
+      bunfig = await import(bunfigPath);
+    }
+  } catch (err) {
+  }
+  if (!bunfig || !Array.isArray(bunfig.preload) || !bunfig.preload.includes('bun-zigar')) {
+    let m;
+    if (m = /(preload\s*=\s*\[.*?)(\])/.exec(bunfigTOML)) {
+      bunfigTOML = bunfigTOML.substring(0, m.index) + m[1] + ', "bun-zigar"' + m[2];
+    } else {
+      bunfigTOML = bunfigTOML.trim() ? bunfigTOML.trimEnd() + `
+
+` : '';
+      bunfigTOML = bunfigTOML + `preload = ["bun-zigar"]
+`;
+    }
+    await writeFile(bunfigPath, bunfigTOML);
+  }
 }
 
 function printHelp() {
@@ -104,6 +134,7 @@ function printHelp() {
     'Commands:',
     '',
     '  init          Create basic config file',
+    '  preload       Add bun-zigar as preloaded module to bunfig.toml',
     '  build         Build library files for Zig modules and Bun.js addon',
     '  help          Show this message',
     '',
@@ -118,6 +149,9 @@ try {
   switch (cmd) {
     case 'build':
       await buildModules();
+      break;
+    case 'preload':
+      await addPreload();
       break;
     case 'init':
       await createConfig();
