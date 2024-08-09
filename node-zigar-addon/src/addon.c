@@ -21,7 +21,8 @@ void release_module(napi_env env,
     if (md->ref_count == 0) {
         napi_value js_env, released;
         if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
-         && napi_get_boolean(env, true, &released) == napi_ok) {
+          && js_env != NULL
+          && napi_get_boolean(env, true, &released) == napi_ok) {
             // indicate to the environment that the shared lib has been released
             napi_set_named_property(env, js_env, "released", released);
         }
@@ -553,6 +554,9 @@ napi_value run_thunk(napi_env env,
     if (md->mod->imports->run_thunk(&ctx, thunk_address, args_ptr, &result) != OK) {
         return throw_error(env, "Unable to execute function");
     }
+    if (!result) {
+        napi_get_null(env, &result);
+    }
     return result;
 }
 
@@ -584,6 +588,9 @@ napi_value run_variadic_thunk(napi_env env,
     }
     if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, args_ptr, args_attrs_ptr, arg_count, &result) != OK) {
         return throw_error(env, "Unable to execute function");
+    }
+    if (!result) {
+        napi_get_null(env, &result);
     }
     return result;
 }
@@ -657,6 +664,7 @@ bool export_module_functions(napi_env env,
                              module_data* md) {
     napi_value js_env;
     return napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+        && js_env != NULL
         && export_function(env, js_env, "getBufferAddress", get_buffer_address, md)
         && export_function(env, js_env, "allocateExternMemory", allocate_external_memory, md)
         && export_function(env, js_env, "freeExternMemory", free_external_memory, md)
@@ -676,6 +684,7 @@ bool set_module_attributes(napi_env env,
     napi_value little_endian, runtime_safety;
     napi_value js_env;
     return napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
+        && js_env != NULL
         && napi_get_boolean(env, attributes.little_endian, &little_endian) == napi_ok
         && napi_set_named_property(env, js_env, "littleEndian", little_endian) == napi_ok
         && napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) == napi_ok

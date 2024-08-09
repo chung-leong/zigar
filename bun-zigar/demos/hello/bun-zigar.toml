@@ -1,0 +1,20 @@
+optimize = "ReleaseSmall"
+
+[sourceFiles]
+"lib/hello.zigar" = "zig/hello.zig"
+
+[[targets]]
+platform = "linux"
+arch = "x64"
+
+[[targets]]
+platform = "linux"
+arch = "arm64"
+
+[[targets]]
+platform = "linux-musl"
+arch = "x64"
+
+[[targets]]
+platform = "linux-musl"
+arch = "arm64"
