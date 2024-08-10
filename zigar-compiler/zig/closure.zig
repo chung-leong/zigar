@@ -6,6 +6,7 @@ pub const Closure = struct {
     const code_size = switch (builtin.target.cpu.arch) {
         .x86_64 => 22,
         .aarch64 => 36,
+        .riscv64 => 42,
         .x86 => 12,
         else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
     };
@@ -21,6 +22,9 @@ pub const Closure = struct {
             ),
             .aarch64 => asm (""
                 : [ret] "={x9}" (-> usize),
+            ),
+            .riscv64 => asm (""
+                : [ret] "={x5}" (-> usize),
             ),
             .x86 => asm (""
                 : [ret] "={eax}" (-> usize),
@@ -55,7 +59,7 @@ pub const Closure = struct {
                 const JMP = packed struct {
                     op: u8 = 0xff,
                     rm: u3,
-                    reg: u3 = 4,
+                    ope: u3 = 0x4,
                     mod: u2 = 0x3,
                 };
                 @as(*align(1) MOV, @ptrCast(&ip[0])).* = .{
@@ -135,6 +139,106 @@ pub const Closure = struct {
                     .rn = 10,
                 };
             },
+            .riscv64 => {
+                const LUI = packed struct {
+                    opcode: u7 = 0x37,
+                    rd: u5,
+                    imm20: u20,
+                };
+                const ADDI = packed struct {
+                    opcode: u7 = 0x1b,
+                    rd: u5,
+                    func: u3 = 0,
+                    rs: u5,
+                    imm12: u12,
+                };
+                const C_SLLI = packed struct {
+                    opcode: u2 = 0x2,
+                    imm5: u5,
+                    rd: u5,
+                    imm1: u1,
+                    func: u3 = 0,
+                };
+                const C_ADD = packed struct {
+                    opcode: u2 = 0x2,
+                    rs: u5,
+                    rd: u5,
+                    func1: u1 = 1,
+                    func2: u3 = 0x4,
+                };
+                const C_JR = packed struct {
+                    opcode: u2 = 0x2,
+                    rs2: u5 = 0,
+                    rs: u5,
+                    func1: u1 = 0,
+                    func2: u3 = 0x4,
+                };
+                const self_addr_11_0 = (self_addr >> 0 & 0xFFF);
+                const self_addr_31_12 = (self_addr >> 12 & 0xFFFFF) + (self_addr >> 11 & 1);
+                const self_addr_43_32 = (self_addr >> 32 & 0xFFF) + (self_addr >> 31 & 1);
+                const self_addr_63_44 = (self_addr >> 44 & 0xFFFFF) + (self_addr >> 43 & 1);
+                @as(*align(1) LUI, @ptrCast(&ip[0])).* = .{
+                    .imm20 = @truncate(self_addr_63_44),
+                    .rd = 5,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[4])).* = .{
+                    .imm12 = @truncate(self_addr_43_32),
+                    .rd = 5,
+                    .rs = 5,
+                };
+                @as(*align(1) LUI, @ptrCast(&ip[8])).* = .{
+                    .imm20 = @truncate(self_addr_31_12),
+                    .rd = 7,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[12])).* = .{
+                    .imm12 = @truncate(self_addr_11_0),
+                    .rd = 7,
+                    .rs = 7,
+                };
+                @as(*align(1) C_SLLI, @ptrCast(&ip[16])).* = .{
+                    .imm5 = 0,
+                    .imm1 = 1, // imm1 << 5 | imm5 = 32
+                    .rd = 5,
+                };
+                @as(*align(1) C_ADD, @ptrCast(&ip[18])).* = .{
+                    .rs = 7,
+                    .rd = 5,
+                };
+                const fn_addr_11_0 = (fn_addr >> 0 & 0xFFF);
+                const fn_addr_31_12 = (fn_addr >> 12 & 0xFFFFF) + (fn_addr >> 11 & 1);
+                const fn_addr_43_32 = (fn_addr >> 32 & 0xFFF) + (fn_addr >> 31 & 1);
+                const fn_addr_63_44 = (fn_addr >> 44 & 0xFFFFF) + (fn_addr >> 43 & 1);
+                @as(*align(1) LUI, @ptrCast(&ip[20])).* = .{
+                    .imm20 = @truncate(fn_addr_63_44),
+                    .rd = 6,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[24])).* = .{
+                    .imm12 = @truncate(fn_addr_43_32),
+                    .rd = 6,
+                    .rs = 6,
+                };
+                @as(*align(1) LUI, @ptrCast(&ip[28])).* = .{
+                    .imm20 = @truncate(fn_addr_31_12),
+                    .rd = 7,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[32])).* = .{
+                    .imm12 = @truncate(fn_addr_11_0),
+                    .rd = 7,
+                    .rs = 7,
+                };
+                @as(*align(1) C_SLLI, @ptrCast(&ip[36])).* = .{
+                    .imm5 = 0,
+                    .imm1 = 1,
+                    .rd = 6,
+                };
+                @as(*align(1) C_ADD, @ptrCast(&ip[38])).* = .{
+                    .rs = 7,
+                    .rd = 6,
+                };
+                @as(*align(1) C_JR, @ptrCast(&ip[40])).* = .{
+                    .rs = 6,
+                };
+            },
             .x86 => {
                 const MOV = packed struct {
                     reg: u3,
@@ -144,7 +248,7 @@ pub const Closure = struct {
                 const JMP = packed struct {
                     op: u8 = 0xff,
                     rm: u3,
-                    reg: u3 = 4,
+                    ope: u3 = 0x4,
                     mod: u2 = 0x3,
                 };
                 @as(*align(1) MOV, @ptrCast(&ip[0])).* = .{
