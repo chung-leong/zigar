@@ -20,7 +20,7 @@ pub const Closure = struct {
     pub inline fn get() *const @This() {
         const address = switch (builtin.target.cpu.arch) {
             .x86_64 => asm (""
-                : [ret] "={rax}" (-> usize),
+                : [ret] "={r10}" (-> usize),
             ),
             .aarch64 => asm (""
                 : [ret] "={x9}" (-> usize),
@@ -59,12 +59,13 @@ pub const Closure = struct {
         switch (builtin.target.cpu.arch) {
             .x86_64 => {
                 const MOV = packed struct {
-                    prefix: u8 = 0x48,
+                    rex: u8 = 0x4B, // W + X
                     reg: u3,
                     opc: u5 = 0x17,
                     imm64: usize,
                 };
                 const JMP = packed struct {
+                    rex: u8 = 0x4B,
                     opc: u8 = 0xff,
                     rm: u3,
                     ope: u3 = 0x4,
@@ -72,14 +73,14 @@ pub const Closure = struct {
                 };
                 @as(*align(1) MOV, @ptrCast(&ip[0])).* = .{
                     .imm64 = self_addr,
-                    .reg = 0, // rax
+                    .reg = 2, // r10
                 };
                 @as(*align(1) MOV, @ptrCast(&ip[10])).* = .{
                     .imm64 = fn_addr,
-                    .reg = 3, // rbx
+                    .reg = 3, // r11
                 };
                 @as(*align(1) JMP, @ptrCast(&ip[20])).* = .{
-                    .rm = 3, // rbx
+                    .rm = 3, // r11
                 };
             },
             .aarch64 => {
@@ -369,10 +370,10 @@ pub const Closure = struct {
                 };
                 @as(*align(1) MOV, @ptrCast(&ip[5])).* = .{
                     .imm32 = fn_addr,
-                    .reg = 3, // ebx
+                    .reg = 2, // edx
                 };
                 @as(*align(1) JMP, @ptrCast(&ip[10])).* = .{
-                    .rm = 3, // ebx
+                    .rm = 2, // edx
                 };
             },
             .arm => {
