@@ -7,6 +7,7 @@ pub const Closure = struct {
         .x86_64 => 22,
         .aarch64 => 36,
         .riscv64 => 42,
+        .powerpc64le => 48,
         .x86 => 12,
         .arm => 20,
         else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
@@ -26,6 +27,9 @@ pub const Closure = struct {
             ),
             .riscv64 => asm (""
                 : [ret] "={x5}" (-> usize),
+            ),
+            .powerpc64le => asm (""
+                : [ret] "={r11}" (-> usize),
             ),
             .x86 => asm (""
                 : [ret] "={eax}" (-> usize),
@@ -57,11 +61,11 @@ pub const Closure = struct {
                 const MOV = packed struct {
                     prefix: u8 = 0x48,
                     reg: u3,
-                    op: u5 = 0x17,
+                    opc: u5 = 0x17,
                     imm64: usize,
                 };
                 const JMP = packed struct {
-                    op: u8 = 0xff,
+                    opc: u8 = 0xff,
                     rm: u3,
                     ope: u3 = 0x4,
                     mod: u2 = 0x3,
@@ -83,13 +87,13 @@ pub const Closure = struct {
                     rd: u5,
                     imm16: u16,
                     hw: u2,
-                    op: u9 = 0x1a5,
+                    opc: u9 = 0x1a5,
                 };
                 const MOVK = packed struct {
                     rd: u5,
                     imm16: u16,
                     hw: u2,
-                    op: u9 = 0x1e5,
+                    opc: u9 = 0x1e5,
                 };
                 const BR = packed struct {
                     op4: u5 = 0,
@@ -97,7 +101,7 @@ pub const Closure = struct {
                     op3: u6 = 0,
                     op2: u5 = 0x1f,
                     opc: u4 = 0,
-                    op: u7 = 0x6b,
+                    ope: u7 = 0x6b,
                 };
                 @as(*align(1) MOVZ, @ptrCast(&ip[0])).* = .{
                     .imm16 = @as([*]const u16, @ptrCast(&self_addr))[0],
@@ -145,33 +149,33 @@ pub const Closure = struct {
             },
             .riscv64 => {
                 const LUI = packed struct {
-                    opcode: u7 = 0x37,
+                    opc: u7 = 0x37,
                     rd: u5,
                     imm20: u20,
                 };
                 const ADDI = packed struct {
-                    opcode: u7 = 0x1b,
+                    opc: u7 = 0x1b,
                     rd: u5,
                     func: u3 = 0,
                     rs: u5,
                     imm12: u12,
                 };
                 const C_SLLI = packed struct {
-                    opcode: u2 = 0x2,
+                    opc: u2 = 0x2,
                     imm5: u5,
                     rd: u5,
                     imm1: u1,
                     func: u3 = 0,
                 };
                 const C_ADD = packed struct {
-                    opcode: u2 = 0x2,
+                    opc: u2 = 0x2,
                     rs: u5,
                     rd: u5,
                     func1: u1 = 1,
                     func2: u3 = 0x4,
                 };
                 const C_JR = packed struct {
-                    opcode: u2 = 0x2,
+                    opc: u2 = 0x2,
                     rs2: u5 = 0,
                     rs: u5,
                     func1: u1 = 0,
@@ -243,14 +247,118 @@ pub const Closure = struct {
                     .rs = 6,
                 };
             },
+            .powerpc64le => {
+                const ADDI = packed struct {
+                    simm: u16,
+                    ra: u5,
+                    rt: u5,
+                    opc: u6 = 0x0e,
+                };
+                const ADDIS = packed struct {
+                    simm: u16,
+                    ra: u5,
+                    rt: u5,
+                    opc: u6 = 0x0f,
+                };
+                const RLDIC = packed struct {
+                    rc: u1 = 0,
+                    sh2: u1,
+                    _: u3 = 0,
+                    mb: u6 = 0,
+                    sh: u5,
+                    ra: u5,
+                    rs: u5,
+                    opc: u6 = 0x1e,
+                };
+                const MTCTR = packed struct {
+                    _: u1 = 0,
+                    func: u10 = 467,
+                    spr: u10 = 0x120,
+                    rs: u5,
+                    opc: u6 = 0x1f,
+                };
+                const BCTRL = packed struct {
+                    lk: u1 = 0,
+                    func: u10 = 528,
+                    bh: u2 = 0,
+                    _: u3 = 0,
+                    bi: u5 = 0,
+                    bo: u5 = 0x14,
+                    opc: u6 = 0x13,
+                };
+                const self_addr_16_0 = (self_addr >> 0 & 0xFFFF);
+                const self_addr_31_16 = (self_addr >> 16 & 0xFFFF) + (self_addr >> 15 & 1);
+                const self_addr_47_32 = (self_addr >> 32 & 0xFFFF) + (self_addr >> 31 & 1);
+                const self_addr_63_48 = (self_addr >> 48 & 0xFFFF) + (self_addr >> 47 & 1);
+                @as(*align(1) ADDI, @ptrCast(&ip[0])).* = .{
+                    .rt = 11,
+                    .ra = 0,
+                    .simm = @truncate(self_addr_47_32),
+                };
+                @as(*align(1) ADDIS, @ptrCast(&ip[4])).* = .{
+                    .rt = 11,
+                    .ra = 11,
+                    .simm = @truncate(self_addr_63_48),
+                };
+                @as(*align(1) RLDIC, @ptrCast(&ip[8])).* = .{
+                    .rs = 11,
+                    .ra = 11,
+                    .sh = 0,
+                    .sh2 = 1,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[12])).* = .{
+                    .rt = 11,
+                    .ra = 11,
+                    .simm = @truncate(self_addr_16_0),
+                };
+                @as(*align(1) ADDIS, @ptrCast(&ip[16])).* = .{
+                    .rt = 11,
+                    .ra = 11,
+                    .simm = @truncate(self_addr_31_16),
+                };
+                const fn_addr_16_0 = (fn_addr >> 0 & 0xFFFF);
+                const fn_addr_31_16 = (fn_addr >> 16 & 0xFFFF) + (fn_addr >> 15 & 1);
+                const fn_addr_47_32 = (fn_addr >> 32 & 0xFFFF) + (fn_addr >> 31 & 1);
+                const fn_addr_63_48 = (fn_addr >> 48 & 0xFFFF) + (fn_addr >> 47 & 1);
+                @as(*align(1) ADDI, @ptrCast(&ip[20])).* = .{
+                    .rt = 12,
+                    .ra = 0,
+                    .simm = @truncate(fn_addr_47_32),
+                };
+                @as(*align(1) ADDIS, @ptrCast(&ip[24])).* = .{
+                    .rt = 12,
+                    .ra = 12,
+                    .simm = @truncate(fn_addr_63_48),
+                };
+                @as(*align(1) RLDIC, @ptrCast(&ip[28])).* = .{
+                    .rs = 12,
+                    .ra = 12,
+                    .sh = 0,
+                    .sh2 = 1,
+                };
+                @as(*align(1) ADDI, @ptrCast(&ip[32])).* = .{
+                    .rt = 12,
+                    .ra = 0,
+                    .simm = @truncate(fn_addr_16_0),
+                };
+                @as(*align(1) ADDIS, @ptrCast(&ip[36])).* = .{
+                    .rt = 12,
+                    .ra = 12,
+                    .simm = @truncate(fn_addr_31_16),
+                };
+                @as(*align(1) MTCTR, @ptrCast(&ip[40])).* = .{
+                    .rs = 12,
+                };
+                @as(*align(1) BCTRL, @ptrCast(&ip[44])).* = .{};
+            },
             .x86 => {
                 const MOV = packed struct {
                     reg: u3,
-                    op: u5 = 0x17,
+                    opc: u5 = 0x17,
                     imm32: usize,
                 };
                 const JMP = packed struct {
-                    op: u8 = 0xff,
+                    opc: u8 = 0xff,
                     rm: u3,
                     ope: u3 = 0x4,
                     mod: u2 = 0x3,
@@ -272,21 +380,21 @@ pub const Closure = struct {
                     imm12: u12,
                     rd: u4,
                     imm4: u4,
-                    opcode: u8 = 0x30,
+                    opc: u8 = 0x30,
                     _: u4 = 0,
                 };
                 const MOVT = packed struct {
                     imm12: u12,
                     rd: u4,
                     imm4: u4,
-                    opcode: u8 = 0x34,
+                    opc: u8 = 0x34,
                     _: u4 = 0,
                 };
                 const BX = packed struct {
                     rm: u4,
                     flags: u4 = 0x1,
                     imm12: u12 = 0xfff,
-                    opcode: u8 = 0x12,
+                    opc: u8 = 0x12,
                     _: u4 = 0,
                 };
                 @as(*align(1) MOVW, @ptrCast(&ip[0])).* = .{
@@ -320,7 +428,7 @@ pub const Closure = struct {
 
 test "Closure" {
     const ns = struct {
-        fn check(number_ptr: *usize) i32 {
+        fn check(number_ptr: *usize) usize {
             const closure = Closure.get();
             number_ptr.* = @intFromPtr(closure.context_ptr) + closure.key;
             return 777;
@@ -336,7 +444,10 @@ test "Closure" {
     );
     defer std.posix.munmap(bytes);
     const closure: *Closure = @ptrCast(bytes);
-    const address = 0xABCD_0000;
+    const address = switch (@sizeOf(usize)) {
+        4 => 0xABCD_1230,
+        else => 0xAAAA_BBBB_CCCC_1230,
+    };
     const context_ptr: *const anyopaque = @ptrFromInt(address);
     const key: usize = 1234;
     closure.construct(&ns.check, context_ptr, key);
