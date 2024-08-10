@@ -8,6 +8,7 @@ pub const Closure = struct {
         .aarch64 => 36,
         .riscv64 => 42,
         .x86 => 12,
+        .arm => 20,
         else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
     };
 
@@ -28,6 +29,9 @@ pub const Closure = struct {
             ),
             .x86 => asm (""
                 : [ret] "={eax}" (-> usize),
+            ),
+            .arm => asm (""
+                : [ret] "={r4}" (-> usize),
             ),
             else => unreachable,
         };
@@ -261,6 +265,52 @@ pub const Closure = struct {
                 };
                 @as(*align(1) JMP, @ptrCast(&ip[10])).* = .{
                     .rm = 3, // ebx
+                };
+            },
+            .arm => {
+                const MOVW = packed struct {
+                    imm12: u12,
+                    rd: u4,
+                    imm4: u4,
+                    opcode: u8 = 0x30,
+                    _: u4 = 0,
+                };
+                const MOVT = packed struct {
+                    imm12: u12,
+                    rd: u4,
+                    imm4: u4,
+                    opcode: u8 = 0x34,
+                    _: u4 = 0,
+                };
+                const BX = packed struct {
+                    rm: u4,
+                    flags: u4 = 0x1,
+                    imm12: u12 = 0xfff,
+                    opcode: u8 = 0x12,
+                    _: u4 = 0,
+                };
+                @as(*align(1) MOVW, @ptrCast(&ip[0])).* = .{
+                    .imm12 = @truncate(self_addr >> 0 & 0xFFF),
+                    .imm4 = @truncate(self_addr >> 12 & 0xF),
+                    .rd = 4,
+                };
+                @as(*align(1) MOVT, @ptrCast(&ip[4])).* = .{
+                    .imm12 = @truncate(self_addr >> 16 & 0xFFF),
+                    .imm4 = @truncate(self_addr >> 28 & 0xF),
+                    .rd = 4,
+                };
+                @as(*align(1) MOVW, @ptrCast(&ip[8])).* = .{
+                    .imm12 = @truncate(fn_addr >> 0 & 0xFFF),
+                    .imm4 = @truncate(fn_addr >> 12 & 0xF),
+                    .rd = 5,
+                };
+                @as(*align(1) MOVT, @ptrCast(&ip[12])).* = .{
+                    .imm12 = @truncate(fn_addr >> 16 & 0xFFF),
+                    .imm4 = @truncate(fn_addr >> 28 & 0xF),
+                    .rd = 5,
+                };
+                @as(*align(1) BX, @ptrCast(&ip[16])).* = .{
+                    .rm = 5,
                 };
             },
             else => unreachable,
