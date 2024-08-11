@@ -36,14 +36,70 @@ const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &std.heap.WasmAllocator.vtable,
 };
-var sfa = std.heap.stackFallback(64 * 1024, allocator);
+const ScratchAllocator = struct {
+    const Self = @This();
+
+    fallback: std.mem.Allocator,
+    fixed: std.mem.Allocator,
+    fba: std.heap.FixedBufferAllocator,
+
+    pub fn init(fallback: std.mem.Allocator, size: usize) Self {
+        const buf = fallback.alloc(u8, size) catch unreachable;
+        var fba = std.heap.FixedBufferAllocator.init(buf);
+        return .{
+            .fallback = fallback,
+            .fixed = fba.allocator(),
+            .fba = fba,
+        };
+    }
+
+    pub fn allocator(self: *Self) std.mem.Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = resize,
+                .free = free,
+            },
+        };
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ra: usize) ?[*]u8 {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
+            return buf;
+        } else {
+            return self.fallback.rawAlloc(len, log2_ptr_align, ra);
+        }
+    }
+
+    fn resize(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, new_len: usize, ra: usize) bool {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fba.ownsPtr(buf.ptr)) {
+            return self.fixed.rawResize(buf, log2_buf_align, new_len, ra);
+        } else {
+            return self.fallback.rawResize(buf, log2_buf_align, new_len, ra);
+        }
+    }
+
+    fn free(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, ra: usize) void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fba.ownsPtr(buf.ptr)) {
+            return self.fixed.rawFree(buf, log2_buf_align, ra);
+        } else {
+            return self.fallback.rawFree(buf, log2_buf_align, ra);
+        }
+    }
+};
+var sfa: ?ScratchAllocator = null;
 var scratch_allocator: ?std.mem.Allocator = null;
 
 pub fn getAllocator(bin: MemoryType) std.mem.Allocator {
     return switch (bin) {
         .scratch => get: {
             if (scratch_allocator == null) {
-                scratch_allocator = sfa.get();
+                sfa = ScratchAllocator.init(allocator, 64 * 1024);
+                scratch_allocator = sfa.?.allocator();
             }
             break :get scratch_allocator.?;
         },
