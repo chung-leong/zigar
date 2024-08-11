@@ -40,16 +40,13 @@ const ScratchAllocator = struct {
     const Self = @This();
 
     fallback: std.mem.Allocator,
-    fixed: std.mem.Allocator,
     fba: std.heap.FixedBufferAllocator,
 
     pub fn init(fallback: std.mem.Allocator, size: usize) Self {
         const buf = fallback.alloc(u8, size) catch unreachable;
-        var fba = std.heap.FixedBufferAllocator.init(buf);
         return .{
             .fallback = fallback,
-            .fixed = fba.allocator(),
-            .fba = fba,
+            .fba = std.heap.FixedBufferAllocator.init(buf),
         };
     }
 
@@ -66,7 +63,8 @@ const ScratchAllocator = struct {
 
     fn alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ra: usize) ?[*]u8 {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        if (self.fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
+        const fixed = self.fba.allocator();
+        if (fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
             return buf;
         } else {
             return self.fallback.rawAlloc(len, log2_ptr_align, ra);
@@ -76,7 +74,8 @@ const ScratchAllocator = struct {
     fn resize(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, new_len: usize, ra: usize) bool {
         const self: *Self = @ptrCast(@alignCast(ctx));
         if (self.fba.ownsPtr(buf.ptr)) {
-            return self.fixed.rawResize(buf, log2_buf_align, new_len, ra);
+            const fixed = self.fba.allocator();
+            return fixed.rawResize(buf, log2_buf_align, new_len, ra);
         } else {
             return self.fallback.rawResize(buf, log2_buf_align, new_len, ra);
         }
@@ -85,7 +84,8 @@ const ScratchAllocator = struct {
     fn free(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, ra: usize) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         if (self.fba.ownsPtr(buf.ptr)) {
-            return self.fixed.rawFree(buf, log2_buf_align, ra);
+            const fixed = self.fba.allocator();
+            return fixed.rawFree(buf, log2_buf_align, ra);
         } else {
             return self.fallback.rawFree(buf, log2_buf_align, ra);
         }
