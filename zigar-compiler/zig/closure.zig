@@ -2,7 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
-pub const Closure = struct {
+pub const get = Instance.get;
+
+pub const Instance = struct {
     const code_size = switch (builtin.target.cpu.arch) {
         .x86_64 => 22,
         .aarch64 => 36,
@@ -13,7 +15,7 @@ pub const Closure = struct {
         else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
     };
 
-    context_ptr: *const anyopaque,
+    context_ptr: *allowzero const anyopaque,
     key: usize,
     bytes: [code_size]u8,
 
@@ -42,9 +44,13 @@ pub const Closure = struct {
         return @ptrFromInt(address);
     }
 
+    pub fn getInstance(fn_ptr: *const anyopaque) *@This() {
+        const bytes: *const [code_size]u8 = @ptrCast(fn_ptr);
+        return @fieldParentPtr("bytes", @constCast(bytes));
+    }
+
     fn construct(self: *@This(), fn_ptr: *const anyopaque, context_ptr: *const anyopaque, key: usize) void {
-        self.context_ptr = context_ptr;
-        self.key = key;
+        self.* = { .context_ptr = context_ptr, .key = key };
         self.createInstructions(fn_ptr);
     }
 
@@ -427,12 +433,21 @@ pub const Closure = struct {
     }
 };
 
-test "Closure" {
+test "Instance" {
     const ns = struct {
-        fn check(number_ptr: *usize) usize {
-            const closure = Closure.get();
+        fn check(
+            number_ptr: *usize,
+            a1: usize,
+            a2: usize,
+            a3: usize,
+            a4: usize,
+            a5: usize,
+            a6: usize,
+            a7: usize,
+        ) usize {
+            const closure = get();
             number_ptr.* = @intFromPtr(closure.context_ptr) + closure.key;
-            return 777;
+            return 777 + a1 + a2 + a3 + a4 + a5 + a6 + a7;
         }
     };
     const bytes = try std.posix.mmap(
@@ -444,7 +459,7 @@ test "Closure" {
         0,
     );
     defer std.posix.munmap(bytes);
-    const closure: *Closure = @ptrCast(bytes);
+    const closure: *Instance = @ptrCast(bytes);
     const address = switch (@sizeOf(usize)) {
         4 => 0xABCD_1230,
         else => 0xAAAA_BBBB_CCCC_1230,
@@ -454,7 +469,110 @@ test "Closure" {
     closure.construct(&ns.check, context_ptr, key);
     const f = closure.getFunction(@TypeOf(ns.check));
     var number: usize = undefined;
-    const result = f(&number);
-    try expect(result == 777);
+    const result = f(&number, 1, 2, 3, 4, 5, 6, 7);
+    try expect(result == 777 + 1 + 2 + 3 + 4 + 5 + 6 + 7);
     try expect(number == address + key);
 }
+
+const Chunk = struct {
+    bytes: []bytes,
+    instances: [*]Instance,
+    used: usize = 0,
+    freed: usize = 0,
+    capacity: usize = 0,
+    prev_chunk: ?*const @This() = null,
+    next_chunk: ?*const @This() = null,
+
+    fn use(bytes: []u8) *@This() {
+        const self: *@This() = @ptrCast(bytes);
+        const addr = @intFromPtr(bytes);
+        const instance_addr = std.mem.alignForward(usize, addr + @sizeOf(@This()), @alignOf(Instance));
+        self.* = .{
+            .bytes = bytes,
+            .instances = @ptrFromInt(instance_addr),
+            .capacity = bytes.len - (instance_addr - addr),
+        };
+        return self;
+    }
+
+    fn getInstance(self: *@This()) ?*Instance {
+        if (self.used < self.capacity) {
+            const index = self.used;
+            self.used += 1;
+            return &self.instance[index];
+        }
+        if (self.freed > 0) {
+            for (0..self.capacity) |index| {
+                const instance = &self.instance[index];
+                if (instance.context_ptr == null) {
+                    self.freed -= 1;
+                    return instance;
+                }
+            }
+        }
+        return null;
+    }
+
+    fn freeInstance(self: *@This(), instance: *Instance) bool {
+        const addr = @intFromPtr(instance);
+        const start = @intFromPtr(self.instances);
+        const end = start + self.bytes.len;
+        if (start <= addr && addr <= end) {
+            instance.context_ptr = null;
+            self.freed += 1;
+            return true;
+        }
+        return false;
+    }
+};
+
+const Factory = struct {
+    last_chunk: *Chunk = null,
+
+    fn alloc(self: *@This(), fn_ptr: *const anyopaque, context_ptr: *const anyopaque, key: usize) !*Instance {
+        var chunk = self.last_chunk;
+        const instance = while (chunk) : (chunk = chunk.prev_chunk) |c| {
+            if (c.getInstance()) |instance| {
+                break instance;
+            }
+        } else alloc: {
+            const byte_count = 1024 * 8;
+            const bytes = try std.posix.mmap(
+                null,
+                byte_count,
+                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+                -1,
+                0,
+            );
+            const new_chunk = Chunk.use(bytes);
+            self.last_chunk.next_chunk = new_chunk;
+            new_chunk.prev_chunk = self.last_chunk;
+            self.last_chunk = new_chunk;
+            break alloc: new_chunk.getInstance().?;
+        };
+        instance.construct(fn_ptr, context_ptr, key);
+        return instance;
+    }
+
+    fn free(fn_ptr: *Instance) bool {
+        var chunk = self.last_chunk;
+        return while (chunk) : (chunk = chunk.prev_chunk) |c| {
+            if (c.freeInstance(instance)) {
+                if (c.freed == c.used) {
+                    if (c.prev_chunk != null) {
+                        c.prev_chunk.?.next_chunk = c.next_chunk;
+                    }
+                    if (c.next_chunk != null) {
+                        c.next_chunk.?.prev_chunk = c.prev_chunk;
+                    }
+                    if (self.last_chunk == c) {
+                        self.last_chunk = c.prev_chunk;
+                    }
+                    munmap(c.bytes);
+                }
+                break true;
+            }
+        } else false;
+    }
+};
