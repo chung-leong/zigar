@@ -1,3 +1,7 @@
+## 0.13.2
+
+* Removed 64K of zeros from generated WASM files
+
 ## 0.13.1
 
 * Enhanced handling of multi-item and C pointers

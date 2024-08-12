@@ -23,7 +23,7 @@
     "eslint-plugin-react": "^7.34.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "rollup-plugin-zigar": "^0.13.1",
+    "rollup-plugin-zigar": "^0.13.2",
     "vite": "^5.1.6"
   }
 }
