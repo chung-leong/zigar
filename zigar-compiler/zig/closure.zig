@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
-pub const get = Instance.get;
+pub const get = Instance.fromBinding;
 
 pub const Instance = struct {
     const code_size = switch (builtin.target.cpu.arch) {
@@ -17,9 +17,9 @@ pub const Instance = struct {
 
     context_ptr: *allowzero const anyopaque,
     key: usize,
-    bytes: [code_size]u8,
+    bytes: [code_size]u8 = undefined,
 
-    pub inline fn get() *const @This() {
+    pub inline fn fromBinding() *const @This() {
         const address = switch (builtin.target.cpu.arch) {
             .x86_64 => asm (""
                 : [ret] "={r10}" (-> usize),
@@ -44,17 +44,17 @@ pub const Instance = struct {
         return @ptrFromInt(address);
     }
 
-    pub fn getInstance(fn_ptr: *const anyopaque) *@This() {
+    pub fn fromFunction(fn_ptr: *const anyopaque) *@This() {
         const bytes: *const [code_size]u8 = @ptrCast(fn_ptr);
-        return @fieldParentPtr("bytes", @constCast(bytes));
+        return @alignCast(@fieldParentPtr("bytes", @constCast(bytes)));
     }
 
     fn construct(self: *@This(), fn_ptr: *const anyopaque, context_ptr: *const anyopaque, key: usize) void {
-        self.* = { .context_ptr = context_ptr, .key = key };
+        self.* = .{ .context_ptr = context_ptr, .key = key };
         self.createInstructions(fn_ptr);
     }
 
-    pub fn getFunction(self: *const @This(), comptime FT: type) *const FT {
+    pub fn function(self: *const @This(), comptime FT: type) *const FT {
         return @ptrCast(@alignCast(&self.bytes));
     }
 
@@ -433,7 +433,7 @@ pub const Instance = struct {
     }
 };
 
-test "Instance" {
+test "Instance.construct" {
     const ns = struct {
         fn check(
             number_ptr: *usize,
@@ -467,44 +467,71 @@ test "Instance" {
     const context_ptr: *const anyopaque = @ptrFromInt(address);
     const key: usize = 1234;
     closure.construct(&ns.check, context_ptr, key);
-    const f = closure.getFunction(@TypeOf(ns.check));
+    const f = closure.function(@TypeOf(ns.check));
     var number: usize = undefined;
     const result = f(&number, 1, 2, 3, 4, 5, 6, 7);
     try expect(result == 777 + 1 + 2 + 3 + 4 + 5 + 6 + 7);
     try expect(number == address + key);
 }
 
+test "Instance.fromFunction()" {
+    const ns = struct {
+        fn check() usize {
+            return 777;
+        }
+    };
+    const bytes = try std.posix.mmap(
+        null,
+        1024 * 4,
+        std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+        .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+        -1,
+        0,
+    );
+    defer std.posix.munmap(bytes);
+    const closure: *Instance = @ptrCast(bytes);
+    const address = switch (@sizeOf(usize)) {
+        4 => 0xABCD_1230,
+        else => 0xAAAA_BBBB_CCCC_1230,
+    };
+    const context_ptr: *const anyopaque = @ptrFromInt(address);
+    const key: usize = 1234;
+    closure.construct(&ns.check, context_ptr, key);
+    const f = closure.function(@TypeOf(ns.check));
+    const result = Instance.fromFunction(f);
+    try expect(result == closure);
+}
+
 const Chunk = struct {
-    bytes: []bytes,
-    instances: [*]Instance,
+    bytes: []u8,
+    instances: []Instance,
     used: usize = 0,
     freed: usize = 0,
-    capacity: usize = 0,
-    prev_chunk: ?*const @This() = null,
-    next_chunk: ?*const @This() = null,
+    prev_chunk: ?*@This() = null,
+    next_chunk: ?*@This() = null,
 
     fn use(bytes: []u8) *@This() {
-        const self: *@This() = @ptrCast(bytes);
-        const addr = @intFromPtr(bytes);
+        const self: *@This() = @ptrCast(@alignCast(bytes));
+        const addr = @intFromPtr(bytes.ptr);
         const instance_addr = std.mem.alignForward(usize, addr + @sizeOf(@This()), @alignOf(Instance));
+        const capacity = (bytes.len - (instance_addr - addr)) / @sizeOf(Instance);
+        const instance_ptr: [*]Instance = @ptrFromInt(instance_addr);
         self.* = .{
             .bytes = bytes,
-            .instances = @ptrFromInt(instance_addr),
-            .capacity = bytes.len - (instance_addr - addr),
+            .instances = instance_ptr[0..capacity],
         };
         return self;
     }
 
     fn getInstance(self: *@This()) ?*Instance {
-        if (self.used < self.capacity) {
+        if (self.used < self.instances.len) {
             const index = self.used;
             self.used += 1;
-            return &self.instance[index];
+            return &self.instances[index];
         }
         if (self.freed > 0) {
-            for (0..self.capacity) |index| {
-                const instance = &self.instance[index];
-                if (instance.context_ptr == null) {
+            for (self.instances) |*instance| {
+                if (@intFromPtr(instance.context_ptr) == 0) {
                     self.freed -= 1;
                     return instance;
                 }
@@ -515,10 +542,10 @@ const Chunk = struct {
 
     fn freeInstance(self: *@This(), instance: *Instance) bool {
         const addr = @intFromPtr(instance);
-        const start = @intFromPtr(self.instances);
-        const end = start + self.bytes.len;
-        if (start <= addr && addr <= end) {
-            instance.context_ptr = null;
+        const start = @intFromPtr(self.instances.ptr);
+        const end = start + @sizeOf(Instance) * self.instances.len;
+        if (start <= addr and addr < end) {
+            instance.context_ptr = @ptrFromInt(0);
             self.freed += 1;
             return true;
         }
@@ -526,12 +553,46 @@ const Chunk = struct {
     }
 };
 
-const Factory = struct {
-    last_chunk: *Chunk = null,
+test "Chunk.use" {
+    var bytes: [512]u8 = undefined;
+    const chunk = Chunk.use(&bytes);
+    try expect(@intFromPtr(chunk) == @intFromPtr(&bytes));
+    try expect(chunk.instances.len > 0);
+}
 
-    fn alloc(self: *@This(), fn_ptr: *const anyopaque, context_ptr: *const anyopaque, key: usize) !*Instance {
+test "Chunk.getInstance" {
+    var bytes: [512]u8 = undefined;
+    const chunk = Chunk.use(&bytes);
+    while (chunk.getInstance()) |_| {}
+    try expect(chunk.used == chunk.instances.len);
+}
+
+test "Chunk.freeInstance" {
+    var bytes: [512]u8 = undefined;
+    const chunk = Chunk.use(&bytes);
+    const instance1 = chunk.getInstance().?;
+    const result1 = chunk.freeInstance(instance1);
+    try expect(result1);
+    try expect(chunk.freed == 1);
+    var instance2: *Instance = undefined;
+    while (chunk.getInstance()) |i| {
+        instance2 = i;
+    }
+    try expect(instance2 == instance1);
+    try expect(chunk.freed == 0);
+}
+
+pub const Factory = struct {
+    last_chunk: ?*Chunk = null,
+    chunk_count: usize = 0,
+
+    pub fn init() @This() {
+        return .{};
+    }
+
+    pub fn alloc(self: *@This(), fn_ptr: *const anyopaque, context_ptr: *const anyopaque, key: usize) !*Instance {
         var chunk = self.last_chunk;
-        const instance = while (chunk) : (chunk = chunk.prev_chunk) |c| {
+        const instance = while (chunk) |c| : (chunk = c.prev_chunk) {
             if (c.getInstance()) |instance| {
                 break instance;
             }
@@ -546,33 +607,76 @@ const Factory = struct {
                 0,
             );
             const new_chunk = Chunk.use(bytes);
-            self.last_chunk.next_chunk = new_chunk;
-            new_chunk.prev_chunk = self.last_chunk;
+            if (self.last_chunk) |lc| {
+                lc.next_chunk = new_chunk;
+                new_chunk.prev_chunk = lc;
+            }
             self.last_chunk = new_chunk;
-            break alloc: new_chunk.getInstance().?;
+            self.chunk_count += 1;
+            break :alloc new_chunk.getInstance().?;
         };
         instance.construct(fn_ptr, context_ptr, key);
         return instance;
     }
 
-    fn free(fn_ptr: *Instance) bool {
+    pub fn free(self: *@This(), instance: *Instance) bool {
         var chunk = self.last_chunk;
-        return while (chunk) : (chunk = chunk.prev_chunk) |c| {
+        return while (chunk) |c| : (chunk = c.prev_chunk) {
             if (c.freeInstance(instance)) {
                 if (c.freed == c.used) {
-                    if (c.prev_chunk != null) {
-                        c.prev_chunk.?.next_chunk = c.next_chunk;
+                    if (c.prev_chunk) |pc| {
+                        pc.next_chunk = c.next_chunk;
                     }
-                    if (c.next_chunk != null) {
-                        c.next_chunk.?.prev_chunk = c.prev_chunk;
+                    if (c.next_chunk) |nc| {
+                        nc.prev_chunk = c.prev_chunk;
                     }
-                    if (self.last_chunk == c) {
-                        self.last_chunk = c.prev_chunk;
+                    if (self.last_chunk) |lc| {
+                        if (lc == c) {
+                            self.last_chunk = c.prev_chunk;
+                        }
                     }
-                    munmap(c.bytes);
+                    std.posix.munmap(@alignCast(c.bytes));
+                    self.chunk_count -= 1;
                 }
                 break true;
             }
         } else false;
     }
 };
+
+test "Factory.alloc" {
+    const ns = struct {
+        fn check() usize {
+            const closure = get();
+            return 777 + closure.key;
+        }
+    };
+    var factory = Factory.init();
+    const context_ptr: *const anyopaque = @ptrFromInt(0xABCD);
+    for (0..1000) |index| {
+        const instance = try factory.alloc(&ns.check, context_ptr, index);
+        const f = instance.function(@TypeOf(ns.check));
+        const result = f();
+        try expect(result == 777 + index);
+    }
+    try expect(factory.chunk_count > 1);
+}
+
+test "Factory.free" {
+    const ns = struct {
+        fn check() usize {
+            return 777;
+        }
+    };
+    var factory = Factory.init();
+    const context_ptr: *const anyopaque = @ptrFromInt(0xABCD);
+    var instances: [1000]*Instance = undefined;
+    for (&instances, 0..) |*p, index| {
+        p.* = try factory.alloc(&ns.check, context_ptr, index);
+    }
+    for (instances) |instance| {
+        const result = factory.free(instance);
+        try expect(result);
+    }
+    try expect(factory.chunk_count == 0);
+}

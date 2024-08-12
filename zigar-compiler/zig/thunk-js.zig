@@ -84,5 +84,5 @@ pub fn createJSThunk(comptime FT: type, context_ptr: *const anyopaque, key: usiz
     }
     const caller = @field(ns, "call" ++ f.params.len);
     const instance = closure_factory.alloc(caller, context_ptr, key);
-    return instance.getFunction(FT);
+    return instance.function(FT);
 }
