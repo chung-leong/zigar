@@ -541,15 +541,19 @@ const Chunk = struct {
     }
 
     fn freeInstance(self: *@This(), instance: *Instance) bool {
-        const addr = @intFromPtr(instance);
-        const start = @intFromPtr(self.instances.ptr);
-        const end = start + @sizeOf(Instance) * self.instances.len;
-        if (start <= addr and addr < end) {
+        if (self.contains(instance)) {
             instance.context_ptr = @ptrFromInt(0);
             self.freed += 1;
             return true;
         }
         return false;
+    }
+
+    fn contains(self: *@This(), ptr: *const anyopaque) bool {
+        const addr = @intFromPtr(ptr);
+        const start = @intFromPtr(self.instances.ptr);
+        const end = start + @sizeOf(Instance) * self.instances.len;
+        return start <= addr and addr < end;
     }
 };
 
@@ -580,6 +584,16 @@ test "Chunk.freeInstance" {
     }
     try expect(instance2 == instance1);
     try expect(chunk.freed == 0);
+}
+
+test "Chunk.contains" {
+    var bytes: [512]u8 = undefined;
+    const chunk = Chunk.use(&bytes);
+    const instance = chunk.getInstance().?;
+    const f = instance.function(fn () void);
+    try expect(chunk.contains(instance));
+    try expect(chunk.contains(f));
+    try expect(!chunk.contains(@ptrFromInt(0xAAAA)));
 }
 
 pub const Factory = struct {
@@ -630,14 +644,21 @@ pub const Factory = struct {
                     if (c.next_chunk) |nc| {
                         nc.prev_chunk = c.prev_chunk;
                     }
-                    if (self.last_chunk) |lc| {
-                        if (lc == c) {
-                            self.last_chunk = c.prev_chunk;
-                        }
+                    if (self.last_chunk == c) {
+                        self.last_chunk = c.prev_chunk;
                     }
                     std.posix.munmap(@alignCast(c.bytes));
                     self.chunk_count -= 1;
                 }
+                break true;
+            }
+        } else false;
+    }
+
+    pub fn contains(self: *@This(), fn_ptr: *const anyopaque) bool {
+        var chunk = self.last_chunk;
+        return while (chunk) |c| : (chunk = c.prev_chunk) {
+            if (c.contains(fn_ptr)) {
                 break true;
             }
         } else false;
@@ -679,4 +700,18 @@ test "Factory.free" {
         try expect(result);
     }
     try expect(factory.chunk_count == 0);
+}
+
+test "Factory.contains" {
+    const ns = struct {
+        fn check() usize {
+            return 777;
+        }
+    };
+    var factory = Factory.init();
+    const context_ptr: *const anyopaque = @ptrFromInt(0xABCD);
+    const instance = try factory.alloc(&ns.check, context_ptr, 1234);
+    const f = instance.function(@TypeOf(ns.check));
+    try expect(factory.contains(f));
+    try expect(!factory.contains(&ns.check));
 }

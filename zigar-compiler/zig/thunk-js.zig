@@ -1,14 +1,15 @@
 const std = @import("std");
 const types = @import("./types.zig");
 const closure = @import("./closure.zig");
+const expect = std.testing.expect;
 
 var closure_factory = closure.Factory.init();
 
-pub fn createJSThunk(comptime FT: type, context_ptr: *const anyopaque, key: usize, handler: anytype) *const FT {
+pub fn createJSThunk(comptime FT: type, context_ptr: *const anyopaque, key: usize, comptime handler: fn (*const anyopaque, usize, *anyopaque) bool) !*const FT {
     const f = @typeInfo(FT).Fn;
-    const PT = extract: {
+    const PT = comptime extract: {
         var Types: [f.params.len]type = undefined;
-        inline for (f.params, 0..) |param, index| {
+        for (f.params, 0..) |param, index| {
             Types[index] = param.type orelse @compileError("Illegal argument type");
         }
         break :extract Types;
@@ -69,20 +70,53 @@ pub fn createJSThunk(comptime FT: type, context_ptr: *const anyopaque, key: usiz
             return call(closure.get(), .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 });
         }
 
-        fn call(c: *const closure.Closure, args: anytype) RT {
+        fn call(c: *const closure.Instance, args: anytype) RT {
             var arg_struct: ArgStruct = undefined;
             inline for (args, 0..) |value, index| {
                 const name = std.fmt.comptimePrint("{d}", .{index});
                 @field(arg_struct, name) = value;
             }
-            handler(c.context_ptr, c.key, &arg_struct);
+            if (!handler(c.context_ptr, c.key, &arg_struct)) {
+                // TODO: look check if RT is an error union whose error set contains unexpected
+                @panic("JavaScript function failed");
+            }
             return arg_struct.retval;
         }
     };
-    if (!@hasDecl(ns, "call" ++ f.params.len)) {
-        @compileError("Too many arguments: " ++ f.params.len);
+    const caller_name = std.fmt.comptimePrint("call{d}", .{f.params.len});
+    if (!@hasDecl(ns, caller_name)) {
+        @compileError("Too many arguments");
     }
-    const caller = @field(ns, "call" ++ f.params.len);
-    const instance = closure_factory.alloc(caller, context_ptr, key);
+    const caller = &@field(ns, caller_name);
+    const instance = try closure_factory.alloc(caller, context_ptr, key);
     return instance.function(FT);
+}
+
+test "createJSThunk" {
+    const FT = fn (i32, f64) usize;
+    const Args = types.ArgumentStruct(FT);
+    const ns = struct {
+        var context_ptr_received: ?*const anyopaque = null;
+        var key_received: ?usize = null;
+        var args_received: ?Args = null;
+
+        fn handleCall(context_ptr: *const anyopaque, key: usize, arg_ptr: *anyopaque) bool {
+            context_ptr_received = context_ptr;
+            key_received = key;
+            const args: Args = @ptrCast(@alignCast(arg_ptr));
+            args_received = args;
+            args.retval = 999;
+            return true;
+        }
+    };
+    const context_ptr: *const anyopaque = @ptrFromInt(0xABCD);
+    const key: usize = 1234;
+    const f = try createJSThunk(FT, context_ptr, key, ns.handleCall);
+    const result = f(777, 3.14);
+    try expect(ns.context_ptr_received == context_ptr);
+    try expect(ns.key_received == key);
+    try expect(ns.args_received != null);
+    try expect(ns.args_received.?.arg0 == 777);
+    try expect(ns.args_received.?.arg1 == 3.14);
+    try expect(result == 999);
 }
