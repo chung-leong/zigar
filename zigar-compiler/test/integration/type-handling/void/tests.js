@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { optimize } = options;
@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Void', function() {
     it('should handle void as static variables', async function() {
       this.timeout(300000);
@@ -31,7 +31,7 @@ export function addTests(importModule, options) {
     })
     it('should handle void in array', async function() {
       this.timeout(300000);
-      const { array, print } = await importTest('array-of');      
+      const { array, print } = await importTest('array-of');
       expect(array.length).to.equal(4);
       expect([ ...array ]).to.eql([ undefined, undefined, undefined, undefined ]);
       const [ line ] = await capture(() => print());
@@ -135,7 +135,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing void vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

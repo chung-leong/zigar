@@ -1,14 +1,14 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { target } = options;
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('No return', function() {
     it('should not compile code with no return as static variables', async function() {
       this.timeout(300000);

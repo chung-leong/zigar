@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { optimize } = options;
@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Error union', function() {
     it('should import error union as static variables', async function() {
       this.timeout(300000);
@@ -53,7 +53,7 @@ export function addTests(importModule, options) {
       });
       expect(lines).to.eql([
         '221',
-        'error.no_money' 
+        'error.no_money'
       ]);
     })
     it('should return error union', async function() {
@@ -65,7 +65,7 @@ export function addTests(importModule, options) {
     it('should handle error union in array', async function() {
       this.timeout(300000);
       const { default: module, Error, print } = await importTest('array-of');
-      expect(module.array).to.have.lengthOf(4);      
+      expect(module.array).to.have.lengthOf(4);
       expect(module.array[0]).to.equal(1);
       expect(module.array[1]).to.equal(2);
       expect(() => module.array[2]).to.throw(Error.no_money);

@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { optimize } = options;
@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Comptime int', function() {
     it('should import comptime int as variables', async function() {
       this.timeout(300000);
@@ -41,7 +41,7 @@ export function addTests(importModule, options) {
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 1, number2: 2 });
       expect(() => new StructA({ number1: 1 })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');        
+        .with.property('message').that.contains('Comptime');
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ line ] = await capture(() => print());

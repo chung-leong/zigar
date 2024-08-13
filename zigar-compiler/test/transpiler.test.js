@@ -1,9 +1,9 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { parse } from 'path';
 import { fileURLToPath } from 'url';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 import { writeFile } from 'fs/promises';
 import { transpile } from '../src/transpiler.js';

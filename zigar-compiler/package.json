@@ -39,7 +39,7 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "c8": "^10.1.2",
     "chai": "^5.1.1",
-    "chai-promised": "^1.0.7",
+    "chai-as-promised": "^8.0.0",
     "mocha": "^10.7.3",
     "mocha-skip-if": "^1.0.4",
     "rollup": "^4.20.0",

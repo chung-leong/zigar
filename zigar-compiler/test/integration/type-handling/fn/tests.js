@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {

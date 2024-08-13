@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { optimize } = options;
@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Type', function() {
     it('should import type as static variables', async function() {
       this.timeout(300000);
@@ -41,7 +41,7 @@ export function addTests(importModule, options) {
     })
     it('should handle type in array', async function() {
       this.timeout(300000);
-      const { array } = await importTest('array-of');      
+      const { array } = await importTest('array-of');
       expect(array.length).to.equal(4);
       for (const item of array) {
         expect(item).to.be.a('function');
@@ -53,10 +53,10 @@ export function addTests(importModule, options) {
       expect(module.struct_a.Type1).to.equal(Uint8);
       // expect(module.struct_a.Type2).to.equal(Uint16);
       expect(() => new StructA({ Type1: Uint8 })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');        
+        .with.property('message').that.contains('Comptime');
       const b = new StructA({});
       expect(b.Type1).to.equal(undefined);
-      expect(b.Type2).to.equal(undefined); 
+      expect(b.Type2).to.equal(undefined);
       const [ line ] = await capture(() => print());
       expect(line).to.equal('in-struct.StructA{ .Type1 = u8, .Type2 = u16 }');
     })

@@ -1,14 +1,14 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Enum literal', function() {
     it('should handle enum literal as static variables', async function() {
       this.timeout(300000);
@@ -39,7 +39,7 @@ export function addTests(importModule, options) {
     })
     it('should handle enum literal in array', async function() {
       this.timeout(300000);
-      const { default: module, array } = await importTest('array-of');      
+      const { default: module, array } = await importTest('array-of');
       expect(array.length).to.equal(4);
       expect([ ...array ]).to.eql([ 'hello', 'world', 'dog', 'cat' ]);
     })
@@ -88,7 +88,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing enum literal vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }

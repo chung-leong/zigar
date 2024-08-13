@@ -1,8 +1,8 @@
 import { expect, use } from 'chai';
-import { chaiPromised } from 'chai-promised';
+import chaiAsPromised from 'chai-as-promised';
 import { capture } from '../../capture.js';
 
-use(chaiPromised);
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { optimize, compilerVersion } = options;
@@ -10,12 +10,12 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Array', function() {
     it('should import array as static variables', async function() {
       this.timeout(300000);
-      const { 
-        default: module, 
+      const {
+        default: module,
         float64_array4x4,
         print,
       } = await importTest('as-static-variables');
@@ -60,12 +60,12 @@ export function addTests(importModule, options) {
     })
     it('should handle array in array', async function() {
       this.timeout(300000);
-      const { array, print } = await importTest('array-of');      
+      const { array, print } = await importTest('array-of');
       expect(array.length).to.equal(2);
-      expect([ 
+      expect([
         [ ...array[0] ],
         [ ...array[1] ],
-      ]).to.eql([ 
+      ]).to.eql([
         [ 1, 2, 3, 4 ],
         [ 2, 3, 4, 5 ]
       ]);
@@ -75,12 +75,12 @@ export function addTests(importModule, options) {
     it('should handle array in struct', async function() {
       this.timeout(300000);
       const { default: module, StructA, print } = await importTest('in-struct');
-      expect(module.struct_a.valueOf()).to.eql({ 
-        array1: [ 10, 20, 30, 40 ], 
-        array2: [ 11, 21, 31, 41 ], 
+      expect(module.struct_a.valueOf()).to.eql({
+        array1: [ 10, 20, 30, 40 ],
+        array2: [ 11, 21, 31, 41 ],
       });
       const b = new StructA({});
-      expect(b.valueOf()).to.eql({ 
+      expect(b.valueOf()).to.eql({
         array1: [ 1, 2, 3, 4 ],
         array2: [ 5, 6, 7, 8 ],
       });
@@ -169,7 +169,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing vector of arrays', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
 }
