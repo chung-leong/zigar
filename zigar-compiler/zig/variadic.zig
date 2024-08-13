@@ -9,13 +9,22 @@ pub const Error = error{
     invalid_argument_attributes,
 };
 
-pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, arg_count: usize) !void {
+pub fn call(
+    comptime FT: type,
+    fn_ptr: *const anyopaque,
+    arg_ptr: *anyopaque,
+    attr_ptr: *const anyopaque,
+    arg_count: usize,
+) !void {
     const is_wasm = switch (builtin.target.cpu.arch) {
         .wasm32, .wasm64 => true,
         else => false,
     };
-    const f = @typeInfo(@TypeOf(function)).Fn;
-    const arg_bytes: [*]u8 = @ptrCast(arg_struct);
+    const function: *const FT = @ptrCast(fn_ptr);
+    const f = @typeInfo(FT).Fn;
+    const Args = types.ArgumentStruct(FT);
+    const arg_struct: *Args = @ptrCast(@alignCast(arg_ptr));
+    const arg_bytes: [*]u8 = @ptrCast(arg_ptr);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime is_wasm) {
         const param_count = f.params.len + 1;
@@ -41,8 +50,7 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
                 .params = &params,
             },
         });
-        const Args = std.meta.ArgsTuple(F);
-        var args: Args = undefined;
+        var args: std.meta.ArgsTuple(F) = undefined;
         // use a variable here, so that Zig doesn't try to call it as a vararg function
         // despite the cast to a non-vararg one
         const vararg_offset = switch (arg_count > f.params.len) {
@@ -65,7 +73,7 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
         arg_struct.retval = @call(.auto, function_ptr, args);
     } else {
         const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
-        const Alloc = ArgAllocation(abi, function);
+        const Alloc = ArgAllocation(abi, FT);
         const alloc = try Alloc.init(arg_bytes, arg_attrs);
         const fixed_ints = alloc.getFixedInts();
         const fixed_floats = alloc.getFixedFloats();
@@ -92,8 +100,8 @@ pub fn call(function: anytype, arg_struct: anytype, attr_ptr: *const anyopaque, 
 }
 
 fn createTest(RT: type, tuple: anytype) type {
-    const ArgStruct = types.ArgumentStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
-    comptime var current_offset: u16 = @sizeOf(ArgStruct);
+    const Args = types.ArgumentStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
+    comptime var current_offset: u16 = @sizeOf(Args);
     comptime var offsets: [tuple.len]u16 = undefined;
     inline for (tuple, 0..) |value, index| {
         const T = @TypeOf(value);
@@ -126,7 +134,7 @@ fn createTest(RT: type, tuple: anytype) type {
         }
 
         pub fn run() !void {
-            var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
+            var arg_bytes: [arg_size]u8 align(@alignOf(Args)) = undefined;
             var attrs: [tuple.len]ArgAttributes = undefined;
             inline for (&attrs, 0..) |*p, index| {
                 const offset = offsets[index];
@@ -142,9 +150,9 @@ fn createTest(RT: type, tuple: anytype) type {
                 const bytes = std.mem.toBytes(value);
                 @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
             }
-            const argStruct = @as(*ArgStruct, @ptrCast(@alignCast(&arg_bytes)));
-            try call(check, argStruct, @ptrCast(&attrs), attrs.len);
-            if (argStruct.retval != 777) {
+            try call(@TypeOf(check), &check, &arg_bytes, @ptrCast(&attrs), attrs.len);
+            const arg_struct = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
+            if (arg_struct.retval != 777) {
                 return error.TestUnexpectedResult;
             }
         }
@@ -831,8 +839,8 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     });
     const FT = @TypeOf(c.sprintf);
     const f = @typeInfo(FT).Fn;
-    const ArgStruct = types.ArgumentStruct(FT);
-    comptime var current_offset: u16 = @sizeOf(ArgStruct);
+    const Args = types.ArgumentStruct(FT);
+    comptime var current_offset: u16 = @sizeOf(Args);
     comptime var offsets: [f.params.len + tuple.len]u16 = undefined;
     inline for (f.params, 0..) |param, index| {
         const offset = std.mem.alignForward(usize, current_offset, @alignOf(param.type.?));
@@ -848,7 +856,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     const arg_size = current_offset;
     return struct {
         pub fn run() !void {
-            var arg_bytes: [arg_size]u8 align(@alignOf(ArgStruct)) = undefined;
+            var arg_bytes: [arg_size]u8 align(@alignOf(Args)) = undefined;
             var attrs: [f.params.len + tuple.len]ArgAttributes = undefined;
             var buffer1 = std.mem.zeroes([1024]u8);
             inline for (&attrs, 0..) |*p, index| {
@@ -869,9 +877,9 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
                 const bytes = std.mem.toBytes(value);
                 @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
             }
-            const argStruct = @as(*ArgStruct, @ptrCast(@alignCast(&arg_bytes)));
-            try call(c.sprintf, argStruct, @ptrCast(&attrs), attrs.len);
-            if (argStruct.retval < 0) {
+            try call(@TypeOf(c.sprintf), &c.sprintf, &arg_bytes, @ptrCast(&attrs), attrs.len);
+            const arg_struct = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
+            if (arg_struct.retval < 0) {
                 return error.SprintfFailed;
             }
             // call sprintf() directly
@@ -896,7 +904,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
             if (retval2 < 0) {
                 return error.SprintfFailed;
             }
-            const len1: usize = @intCast(argStruct.retval);
+            const len1: usize = @intCast(arg_struct.retval);
             const len2: usize = @intCast(retval2);
             const s1 = buffer1[0..len1];
             const s2 = buffer2[0..len2];
@@ -1842,8 +1850,8 @@ const ArgAttributes = extern struct {
     }
 };
 
-fn ArgAllocation(comptime abi: Abi, comptime function: anytype) type {
-    const f = @typeInfo(@TypeOf(function)).Fn;
+fn ArgAllocation(comptime abi: Abi, comptime FT: type) type {
+    const f = @typeInfo(FT).Fn;
     return struct {
         const Destination = enum { int, float };
         const Int = abi.int.type;
@@ -2058,7 +2066,7 @@ test "ArgAllocation(x86) (i8...i8)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 1);
     try expect(fixed_ints[0] == 256 - 88); // unsigned here, as callee extends sign
@@ -2081,7 +2089,7 @@ test "ArgAllocation(x86) (i8...i8, i8, i8)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 1);
     try expect(fixed_ints[0] == 256 - 88);
@@ -2106,7 +2114,7 @@ test "ArgAllocation(x86) (i64...i64)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 2);
     try expect(fixed_ints[0] == -88);
@@ -2133,7 +2141,7 @@ test "ArgAllocation(riscv64) (i64, i64...i8, i8)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 2);
     try expect(fixed_ints[0] == 1000);
@@ -2160,7 +2168,7 @@ test "ArgAllocation(riscv64) (i64, i64...i16, i16)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 2);
     try expect(fixed_ints[0] == 1000);
@@ -2185,7 +2193,7 @@ test "ArgAllocation(powerpc64le) (i8...i8)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     const variadic_ints = alloc.getVariadicInts(1);
     try expect(fixed_ints.len == 1);
@@ -2209,7 +2217,7 @@ test "ArgAllocation(arm) (i32, i32...i64, i32, f64)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 2);
     try expect(fixed_ints[0] == 1000);
@@ -2243,7 +2251,7 @@ test "ArgAllocation(arm) (i32, i32...i32, f64)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     try expect(fixed_ints.len == 2);
     try expect(fixed_ints[0] == 1000);
@@ -2269,7 +2277,7 @@ test "ArgAllocation(x86_64) (f64...f64)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
     try expect(fixed_floats.len == 1);
     const float_bytes1 = std.mem.toBytes(fixed_floats[0]);
@@ -2296,7 +2304,7 @@ test "ArgAllocation(x86_64) (f80...f80)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
     try expect(fixed_floats.len == 1);
     const float_bytes1 = std.mem.toBytes(fixed_floats[0]);
@@ -2331,7 +2339,7 @@ test "ArgAllocation(x86_64) (f64...f64, f64, f64, f64, f64, f64, f64, i64)" {
     const args: Args = .{};
     const bytes = std.mem.toBytes(args);
     const attrs = ArgAttributes.init(Args);
-    const alloc = try ArgAllocation(abi, ns.f).init(&bytes, &attrs);
+    const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
     try expect(fixed_floats.len == 1);
     const variadic_float_count = alloc.getVariadicFloatCount();

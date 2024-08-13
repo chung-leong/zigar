@@ -621,6 +621,7 @@ const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 const MORE = Symbol('more');
 const PRIMITIVE = Symbol('primitive');
+const METHOD = Symbol('method');
 
 function getDestructor(env) {
   return function() {
@@ -3984,6 +3985,44 @@ function defineErrorUnion(structure, env) {
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
 }
 
+function defineFunction(structure, env) {
+  const {
+    instance: { members: [ member ], template },
+  } = structure;
+  const cache = new ObjectCache();
+  const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
+  const constructor = structure.constructor = function(arg) {
+    const dv = requireDataView(structure, arg, env);
+    let self;
+    if (self = cache.find(dv)) {
+      return self;
+    }
+    self = function(...args) {
+      const thunkAddr = env.getViewAddress(template[MEMORY]);
+      const funcAddr = env.getViewAddress(self[MEMORY]);
+      return env.invokeThunk(thunkAddr, funcAddr, new Arg(args, self.name, 0));
+    };
+    self[MEMORY] = dv;
+    defineProperties(self, {
+      constructor: { value: constructor },
+      length: { value: argMembers.length - 1 },
+    });
+    const method = self[METHOD] = function(...args) {
+      const thunkAddr = env.getViewAddress(template[MEMORY]);
+      const funcAddr = env.getViewAddress(self[MEMORY]);
+      return env.invokeThunk(thunkAddr, funcAddr, new Arg([ this, ...args ], method.name, 1));
+    };
+    method[MEMORY] = dv;
+    defineProperties(method, {
+      constructor: { value: constructor },
+      length: { value: argMembers.length - 2 },
+      name: { get: () => self.name },
+    });
+    return self;
+  };
+  return constructor;
+}
+
 function defineOpaque(structure, env) {
   const {
     byteSize,
@@ -4789,6 +4828,10 @@ function useOpaque() {
   factories[StructureType.Opaque] = defineOpaque;
 }
 
+function useFunction() {
+  factories[StructureType.Function] = defineFunction;
+}
+
 function getStructureFactory(type) {
   const f = factories[type];
   return f;
@@ -4914,6 +4957,7 @@ function useAllStructureTypes() {
   useSlice();
   useVector();
   useOpaque();
+  useFunction();
 }
 
 function generateCode(definition, params) {
@@ -5003,12 +5047,10 @@ function addStructureDefinitions(lines, definition) {
     hasPointer: false,
     instance: {
       members: [],
-      methods: [],
       template: null,
     },
     static: {
       members: [],
-      methods: [],
       template: null,
     },
   };
@@ -5143,32 +5185,6 @@ function addStructureDefinitions(lines, definition) {
       add(`});`);
     }
   }
-  const methods = [];
-  for (const structure of structures) {
-    // add static members; instance methods are also static methods, so
-    // we don't need to add them separately
-    methods.push(...structure.static.methods);
-  }
-  const methodNames = new Map();
-  if (methods.length > 0) {
-    add(`\n// define functions`);
-    for (const [ index, method ] of methods.entries()) {
-      const varname = `f${index}`;
-      methodNames.set(method, varname);
-      add(`const ${varname} = {`);
-      for (const [ name, value ] of Object.entries(method)) {
-        switch (name) {
-          case 'argStruct':
-          case 'iteratorOf':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-      add(`};`);
-    }
-  }
   add('\n// define structures');
   for (const structure of structures) {
     const varname = structureNames.get(structure);
@@ -5204,11 +5220,6 @@ function addStructureDefinitions(lines, definition) {
               add(`},`);
             }
             add(`],`);
-            add(`methods: [`);
-            for (const slice of chunk(methods, 10)) {
-              add(slice.map(m => methodNames.get(m)).join(', ') + ',');
-            }
-            add(`],`);
             if (template) {
               add(`template: ${objectNames.get(template)}`);
             }
@@ -5242,11 +5253,6 @@ function getExports(structures) {
   const exportables = [];
   // export only members whose names are legal JS identifiers
   const legal = /^[$\w]+$/;
-  for (const method of root.static.methods) {
-    if (legal.test(method.name)) {
-      exportables.push(method.name);
-    }
-  }
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member) && legal.test(member.name)) {
@@ -6031,41 +6037,6 @@ function findSourceFile(modulePath, options) {
   return sourceFiles?.[modulePath];
 }
 
-function addMethods(s, env) {
-  const add = (target, { methods }, pushThis) => {
-    const descriptors = {};
-    const re = /^(get|set)\s+([\s\S]+)/;
-    for (const method of methods) {
-      const f = env.createCaller(method, pushThis);
-      const m = re.exec(f.name);
-      if (m) {
-        // getter/setter
-        const type = m[1], propName = m[2];
-        const argRequired = (type === 'get') ? 0 : 1;
-        const argCount = getArgumentCount(method, pushThis);
-        // need to match arg count, since instance methods also show up as static methods
-        if (argCount === argRequired) {
-          let descriptor = descriptors[propName];
-          if (!descriptor) {
-            descriptor = descriptors[propName] = { configurable: true, enumerable: true };
-          }
-          descriptor[type] = f;
-        }
-      } else {
-        descriptors[f.name] = { value: f, configurable: true, writable: true };
-      }
-    }
-    defineProperties(target, descriptors);
-  };
-  add(s.constructor, s.static, false);
-  add(s.constructor.prototype, s.instance, true);
-}
-
-function getArgumentCount(method, pushThis) {
-  const { argStruct: { instance: { members } } } = method;
-  return members.length - (pushThis ? 2 : 1);
-}
-
 function addStaticMembers(structure, env) {
   const {
     type,
@@ -6073,8 +6044,18 @@ function addStaticMembers(structure, env) {
     static: { members, template },
   } = structure;
   const descriptors = {};
+  const instanceDescriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
+    const { name, slot, structure: { type } } = member;
+    descriptors[name] = getDescriptor(member, env);
+    if (type === StructureType.Function) {
+      const f = template[SLOTS][slot];
+      defineProperties(f, { value: name });
+      const m = f[METHOD];
+      if (m) {
+        instanceDescriptors[name] = { get: () => m };
+      }
+    }
   }
   defineProperties(constructor, {
     valueOf: { value: getValueOf },
@@ -6087,6 +6068,7 @@ function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
+  defineProperties(constructor.prototype, instanceDescriptors);
   if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);
@@ -6381,12 +6363,10 @@ class Environment {
       hasPointer,
       instance: {
         members: [],
-        methods: [],
         template: null,
       },
       static: {
         members: [],
-        methods: [],
         template: null,
       },
     };
@@ -6395,13 +6375,6 @@ class Environment {
   attachMember(structure, member, isStatic = false) {
     const target = (isStatic) ? structure.static : structure.instance;
     target.members.push(member);
-  }
-
-  attachMethod(structure, method, isStaticOnly = false) {
-    structure.static.methods.push(method);
-    if (!isStaticOnly) {
-      structure.instance.methods.push(method);
-    }
   }
 
   attachTemplate(structure, template, isStatic = false) {
@@ -6471,11 +6444,11 @@ class Environment {
       omitVariables = isElectron(),
     } = options;
     resetGlobalErrorSet();
-    const thunkId = this.getFactoryThunk();
+    const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
     this.comptime = true;
-    this.invokeThunk(thunkId, args);
+    this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
   }
 
@@ -6485,8 +6458,7 @@ class Environment {
   }
 
   hasMethods() {
-    // all methods are static, so there's no need to check instance methods
-    return !!this.structures.find(s => s.static.methods.length > 0);
+    return !!this.structures.find(s => s.type === StructureType.Function);
   }
 
   exportStructures() {
@@ -6571,25 +6543,6 @@ class Environment {
 
   finalizeStructure(structure) {
     addStaticMembers(structure, this);
-    addMethods(structure, this);
-  }
-
-  createCaller(method, useThis) {
-    const { name, argStruct, thunkId } = method;
-    const { constructor } = argStruct;
-    const self = this;
-    let f;
-    if (useThis) {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
-      };
-    } else {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args, name, 0));
-      };
-    }
-    Object.defineProperty(f, 'name', { value: name });
-    return f;
   }
 
 
@@ -6621,9 +6574,6 @@ class Environment {
     let { shadowMap } = this.context;
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
-    }
-    if (!shadow[MEMORY][FIXED]) {
-      debugger;
     }
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);

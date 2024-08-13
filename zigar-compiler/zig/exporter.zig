@@ -35,7 +35,6 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
         // finalize the shape so that static members can be instances of the structure
         try ctx.host.finalizeShape(structure);
         try addStaticMembers(ctx, structure, td);
-        try addMethods(ctx, structure, td);
         try ctx.host.endStructure(structure);
         break :create structure;
     };
@@ -67,6 +66,7 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
         .error_union => try addErrorUnionMembers(ctx, structure, td),
         .optional => try addOptionalMembers(ctx, structure, td),
         .vector => try addVectorMember(ctx, structure, td),
+        .function => try addFunctionMember(ctx, structure, td),
         else => {},
     }
 }
@@ -301,6 +301,23 @@ fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !
     }, false);
 }
 
+fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
+    const arg_td = ctx.tdb.get(types.ArgumentStruct(td.Type));
+    try ctx.host.attachMember(structure, .{
+        .name = "args",
+        .member_type = arg_td.getMemberType(false),
+        .bit_size = arg_td.getBitSize(),
+        .byte_size = arg_td.getByteSize(),
+        .structure = try getStructure(ctx, arg_td.Type),
+    }, false);
+    // store thunk as instance template
+    const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), td.Type);
+    const memory = Memory.from(thunk, false);
+    const dv = try ctx.host.captureView(memory);
+    const template = try ctx.host.createTemplate(dv);
+    try ctx.host.attachTemplate(structure, template, false);
+}
+
 fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     var template_maybe: ?Value = null;
     // add declared static members
@@ -313,31 +330,27 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                 if (comptime decl_ptr_td.isSupported()) {
                     const decl_value = decl_ptr.*;
                     const DT = @TypeOf(decl_value);
-                    const is_supported = comptime check: {
-                        if (DT == type) {
-                            // export type only if it's supported
-                            // not sure why the following line is necessary
-                            const tdb = ctx.tdb;
-                            const target_td = tdb.get(decl_value);
-                            if (!target_td.isSupported()) {
-                                break :check false;
-                            }
-                        }
-                        break :check true;
-                    };
-                    if (is_supported) {
-                        // always export constants while variables can optionally be switch off
+                    // export type only if it's supported
+                    const is_value_supported = if (DT == type)
+                        ctx.tdb.get(decl_value).isSupported()
+                    else
+                        true;
+                    if (is_value_supported) {
+                        // always export constants while variables can be optionally switched off
                         if (decl_ptr_td.isConst() or !ctx.host.options.omit_variables) {
-                            const slot = index;
                             try ctx.host.attachMember(structure, .{
                                 .name = decl.name,
                                 .member_type = if (decl_ptr_td.isConst()) .@"comptime" else .static,
-                                .slot = slot,
+                                .slot = index,
                                 .structure = try getStructure(ctx, DT),
                             }, true);
-                            const value_obj = try exportPointerTarget(ctx, decl_ptr, decl_ptr_td.isConst());
+                            const is_comptime = comptime switch (@typeInfo(DT)) {
+                                .Fn => false,
+                                else => decl_ptr_td.isConst(),
+                            };
+                            const value_obj = try exportPointerTarget(ctx, decl_ptr, is_comptime);
                             template_maybe = template_maybe orelse try ctx.host.createTemplate(null);
-                            try ctx.host.writeSlot(template_maybe.?, slot, value_obj);
+                            try ctx.host.writeSlot(template_maybe.?, index, value_obj);
                         }
                     }
                 }
@@ -393,75 +406,6 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
     if (template_maybe) |template| {
         try ctx.host.attachTemplate(structure, template, true);
     }
-}
-
-fn addMethods(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    if (ctx.host.options.omit_methods) {
-        return;
-    }
-    return switch (@typeInfo(td.Type)) {
-        inline .Struct, .Union, .Enum, .Opaque => |st| {
-            inline for (st.decls) |decl| {
-                const decl_value = @field(td.Type, decl.name);
-                const DT = @TypeOf(decl_value);
-                switch (@typeInfo(DT)) {
-                    .Fn => |f| {
-                        const is_callable = check: {
-                            if (f.is_generic) {
-                                break :check false;
-                            }
-                            inline for (f.params) |param| {
-                                if (param.type) |PT| {
-                                    if (PT != std.mem.Allocator) {
-                                        const param_td = ctx.tdb.get(PT);
-                                        if (param_td.hasUnsupported() or param_td.isComptimeOnly()) {
-                                            break :check false;
-                                        }
-                                    }
-                                } else {
-                                    // anytype is unsupported
-                                    break :check false;
-                                }
-                            } else {
-                                if (f.return_type) |RT| {
-                                    const reval_td = ctx.tdb.get(RT);
-                                    if (reval_td.hasUnsupported() or reval_td.isComptimeOnly()) {
-                                        break :check false;
-                                    }
-                                } else {
-                                    // comptime generated return value
-                                    break :check false;
-                                }
-                                break :check true;
-                            }
-                        };
-                        if (is_callable) {
-                            // see if the first param is an instance of the type in question or
-                            // a pointer to one
-                            const is_static_only = check: {
-                                if (f.params.len > 0) {
-                                    const ParamT = f.params[0].type.?;
-                                    if (ParamT == td.Type or ParamT == *const td.Type or ParamT == *td.Type) {
-                                        break :check false;
-                                    }
-                                }
-                                break :check true;
-                            };
-                            const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), decl_value);
-                            const thunk_id = @intFromPtr(thunk);
-                            try ctx.host.attachMethod(structure, .{
-                                .name = @ptrCast(decl.name),
-                                .thunk_id = thunk_id,
-                                .structure = try getStructure(ctx, types.ArgumentStruct(DT)),
-                            }, is_static_only);
-                        }
-                    },
-                    else => {},
-                }
-            }
-        },
-        else => {},
-    };
 }
 
 fn exportPointerTarget(ctx: anytype, comptime ptr: anytype, comptime is_comptime: bool) !Value {
@@ -665,7 +609,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) types.Thunk {
     comptime tdc.scan(T);
     const tdb = comptime tdc.createDatabase();
     const RootFactory = struct {
-        fn exportStructure(ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
+        fn exportStructure(ptr: ?*anyopaque, _: *const anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             @setEvalBranchQuota(2000000);
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();

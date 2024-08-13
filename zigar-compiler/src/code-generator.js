@@ -89,12 +89,10 @@ function addStructureDefinitions(lines, definition) {
     hasPointer: false,
     instance: {
       members: [],
-      methods: [],
       template: null,
     },
     static: {
       members: [],
-      methods: [],
       template: null,
     },
   };
@@ -229,32 +227,6 @@ function addStructureDefinitions(lines, definition) {
       add(`});`);
     }
   }
-  const methods = [];
-  for (const structure of structures) {
-    // add static members; instance methods are also static methods, so
-    // we don't need to add them separately
-    methods.push(...structure.static.methods);
-  }
-  const methodNames = new Map();
-  if (methods.length > 0) {
-    add(`\n// define functions`);
-    for (const [ index, method ] of methods.entries()) {
-      const varname = `f${index}`;
-      methodNames.set(method, varname);
-      add(`const ${varname} = {`);
-      for (const [ name, value ] of Object.entries(method)) {
-        switch (name) {
-          case 'argStruct':
-          case 'iteratorOf':
-            add(`${name}: ${structureNames.get(value)},`);
-            break;
-          default:
-            add(`${name}: ${JSON.stringify(value)},`);
-        }
-      }
-      add(`};`);
-    }
-  }
   add('\n// define structures');
   for (const structure of structures) {
     const varname = structureNames.get(structure);
@@ -290,11 +262,6 @@ function addStructureDefinitions(lines, definition) {
               add(`},`);
             }
             add(`],`);
-            add(`methods: [`);
-            for (const slice of chunk(methods, 10)) {
-              add(slice.map(m => methodNames.get(m)).join(', ') + ',');
-            }
-            add(`],`);
             if (template) {
               add(`template: ${objectNames.get(template)}`);
             }
@@ -328,11 +295,6 @@ function getExports(structures) {
   const exportables = [];
   // export only members whose names are legal JS identifiers
   const legal = /^[$\w]+$/;
-  for (const method of root.static.methods) {
-    if (legal.test(method.name)) {
-      exportables.push(method.name);
-    }
-  }
   for (const member of root.static.members) {
     // only read-only properties are exportable
     if (isReadOnly(member) && legal.test(member.name)) {

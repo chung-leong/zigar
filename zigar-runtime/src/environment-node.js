@@ -102,27 +102,24 @@ export class NodeEnvironment extends Environment {
     // need shadowing
   }
 
-  invokeThunk(thunkId, args) {
-    let err;
+  invokeThunk(thunkAddress, fnAddress, args) {
     // create an object where information concerning pointers can be stored
     this.startContext();
+    const hasPointers = args[POINTER_VISITOR];
     const attrs = args[ATTRIBUTES];
-    if (args[POINTER_VISITOR]) {
+    if (hasPointers) {
       // copy addresses of garbage-collectible objects into memory
       this.updatePointerAddresses(args);
       this.updateShadows();
-      err = (attrs)
-      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs[MEMORY])
-      : this.runThunk(thunkId, args[MEMORY]);
+    }
+    const err = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, args[MEMORY], attrs[MEMORY])
+    : this.runThunk(thunkAddress, fnAddress, args[MEMORY]);
+    if (hasPointers) {
       // create objects that pointers point to
       this.updateShadowTargets();
       this.updatePointerTargets(args);
       this.releaseShadows();
-    } else {
-      // don't need to do any of that if there're no pointers
-      err = (attrs)
-      ? this.runVariadicThunk(thunkId, args[MEMORY], attrs[MEMORY])
-      : this.runThunk(thunkId, args[MEMORY]);
     }
     // restore the previous context if there's one
     this.endContext();

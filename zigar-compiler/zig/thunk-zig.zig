@@ -1,21 +1,24 @@
 const std = @import("std");
 const types = @import("./types.zig");
+const variadic = @import("./variadic.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
 const Memory = types.Memory;
 
-pub fn createThunk(comptime HostT: type, comptime function: anytype) types.ThunkType(function) {
-    const FT = @TypeOf(function);
+pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) {
     const f = @typeInfo(FT).Fn;
     const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
-        fn tryFunction(host: HostT, arg_ptr: *anyopaque) !void {
+        fn tryFunction(
+            host: HostT,
+            fn_ptr: *const anyopaque,
+            arg_ptr: *anyopaque,
+        ) !void {
             // extract arguments from argument struct
             const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
-            const Args = std.meta.ArgsTuple(FT);
-            var args: Args = undefined;
-            const fields = @typeInfo(Args).Struct.fields;
+            var args: std.meta.ArgsTuple(FT) = undefined;
+            const fields = @typeInfo(@TypeOf(args)).Struct.fields;
             comptime var index = 0;
             inline for (fields, 0..) |field, i| {
                 if (field.type == std.mem.Allocator) {
@@ -34,31 +37,47 @@ pub fn createThunk(comptime HostT: type, comptime function: anytype) types.Thunk
                 .Inline => .auto,
                 else => .never_inline,
             };
+            const function: *const FT = @ptrCast(fn_ptr);
             const retval = @call(modifier, function, args);
             if (comptime @TypeOf(retval) != noreturn) {
                 arg_struct.retval = retval;
             }
         }
 
-        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
+        fn invokeFunction(
+            ptr: ?*anyopaque,
+            fn_ptr: *const anyopaque,
+            arg_ptr: *anyopaque,
+        ) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            tryFunction(host, arg_ptr) catch |err| {
+            tryFunction(host, fn_ptr, arg_ptr) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
             return null;
         }
     };
     const ns_variadic = struct {
-        fn tryFunction(_: HostT, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) !void {
-            const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
-            return @import("./variadic.zig").call(function, arg_struct, attr_ptr, arg_count);
+        fn tryFunction(
+            _: HostT,
+            fn_ptr: *const anyopaque,
+            arg_ptr: *anyopaque,
+            attr_ptr: *const anyopaque,
+            arg_count: usize,
+        ) !void {
+            return variadic.call(FT, fn_ptr, arg_ptr, attr_ptr, arg_count);
         }
 
-        fn invokeFunction(ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) callconv(.C) ?Value {
+        fn invokeFunction(
+            ptr: ?*anyopaque,
+            fn_ptr: *const anyopaque,
+            arg_ptr: *anyopaque,
+            attr_ptr: *const anyopaque,
+            arg_count: usize,
+        ) callconv(.C) ?Value {
             const host = HostT.init(ptr, arg_ptr);
             defer host.release();
-            tryFunction(host, arg_ptr, attr_ptr, arg_count) catch |err| {
+            tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
             return null;
@@ -72,24 +91,40 @@ pub fn createThunk(comptime HostT: type, comptime function: anytype) types.Thunk
 }
 
 test "createThunk" {
-    const Test = struct {
-        fn A(a: i32, b: bool) bool {
-            return if (a > 10 and b) true else false;
-        }
-    };
     const Host = struct {
         pub fn init(_: ?*anyopaque, _: *anyopaque) @This() {
             return .{};
         }
 
         pub fn release(_: @This()) void {}
+
+        pub fn captureString(_: @This(), _: types.Memory) !Value {
+            return error.unable_to_create_object;
+        }
     };
-    const thunk = createThunk(Host, Test.A);
-    switch (@typeInfo(@TypeOf(thunk))) {
+    const thunk1 = createThunk(Host, fn (i32, bool) bool);
+    switch (@typeInfo(@TypeOf(thunk1))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .Fn => |f| {
-                    try expect(f.params.len == 2);
+                    try expect(f.params.len == 3);
+                    try expect(f.calling_convention == .C);
+                },
+                else => {
+                    try expect(false);
+                },
+            }
+        },
+        else => {
+            try expect(false);
+        },
+    }
+    const thunk2 = createThunk(Host, fn (i32, bool, ...) callconv(.C) bool);
+    switch (@typeInfo(@TypeOf(thunk2))) {
+        .Pointer => |pt| {
+            switch (@typeInfo(pt.child)) {
+                .Fn => |f| {
+                    try expect(f.params.len == 5);
                     try expect(f.calling_convention == .C);
                 },
                 else => {

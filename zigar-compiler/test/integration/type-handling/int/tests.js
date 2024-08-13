@@ -39,14 +39,14 @@ export function addTests(importModule, options) {
     })
     it('should print int arguments', async function() {
       this.timeout(300000);
-      const { default: module, print1, print2 } = await importTest('as-function-parameters');
+      const { print1, print2 } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print1(221, -1234);
         print2(0x1FFF_FFFF_FFFF_FFFFn, 0xAAAA_AAAA_AAAA_AAAA_AAAA_AAABn);
       });
       expect(lines).to.eql([
         '221 -1234',
-        '1fffffffffffffff aaaaaaaaaaaaaaaaaaaaaaab' 
+        '1fffffffffffffff aaaaaaaaaaaaaaaaaaaaaaab'
       ]);
     })
     it('should return int', async function() {

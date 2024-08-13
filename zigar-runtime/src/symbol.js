@@ -45,3 +45,4 @@ export const ENVIRONMENT = Symbol('environment');
 export const ATTRIBUTES = Symbol('attributes');
 export const MORE = Symbol('more');
 export const PRIMITIVE = Symbol('primitive');
+export const METHOD = Symbol('method');

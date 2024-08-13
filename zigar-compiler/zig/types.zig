@@ -71,8 +71,8 @@ pub const MemberType = enum(u32) {
 };
 
 pub const Value = *opaque {};
-pub const Thunk = *const fn (ptr: ?*anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value;
-pub const VariadicThunk = *const fn (ptr: ?*anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) callconv(.C) ?Value;
+pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) ?Value;
+pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) ?Value;
 
 pub const Structure = struct {
     name: ?[]const u8 = null,
@@ -95,12 +95,6 @@ pub const Member = struct {
     byte_size: ?usize = null,
     slot: ?usize = null,
     structure: ?Value,
-};
-
-pub const Method = struct {
-    name: ?[]const u8 = null,
-    thunk_id: usize,
-    structure: Value,
 };
 
 pub const MemoryAttributes = packed struct {
@@ -140,9 +134,13 @@ pub const Memory = struct {
                 },
             };
         }
+        const child_size = switch (@typeInfo(pt.child)) {
+            .Fn => 0,
+            else => @sizeOf(pt.child),
+        };
         const len: usize = switch (pt.size) {
-            .One => @sizeOf(pt.child),
-            .Slice => @sizeOf(pt.child) * ptr.len,
+            .One => child_size,
+            .Slice => child_size * ptr.len,
             .Many, .C => get: {
                 if (address != 0) {
                     if (pt.sentinel) |opaque_ptr| {
@@ -151,7 +149,7 @@ pub const Memory = struct {
                         while (ptr[len] != sentinel_ptr.*) {
                             len += 1;
                         }
-                        break :get (len + 1) * @sizeOf(pt.child);
+                        break :get (len + 1) * child_size;
                     } else {
                         break :get 1;
                     }
@@ -381,6 +379,7 @@ pub const TypeData = struct {
             },
             .Vector => .vector,
             .Opaque => .@"opaque",
+            .Fn => .function,
             else => @compileError("Unsupported type: " ++ @typeName(self.Type)),
         };
     }
@@ -403,6 +402,7 @@ pub const TypeData = struct {
                     .Optional,
                     .Pointer,
                     .Vector,
+                    .Fn,
                     => .object,
                     .Type => .type,
                     .EnumLiteral => .literal,
@@ -449,8 +449,8 @@ pub const TypeData = struct {
             return null;
         }
         return switch (@typeInfo(self.Type)) {
-            .Null, .Undefined => 0,
-            .Fn, .Opaque => null,
+            .Null, .Undefined, .Fn => 0,
+            .Opaque => null,
             .ErrorSet => @sizeOf(anyerror),
             else => return @sizeOf(self.Type),
         };
@@ -458,8 +458,8 @@ pub const TypeData = struct {
 
     pub fn getBitSize(comptime self: @This()) ?usize {
         return switch (@typeInfo(self.Type)) {
-            .Null, .Undefined => 0,
-            .Fn, .Opaque => null,
+            .Null, .Undefined, .Fn => 0,
+            .Opaque => null,
             .ErrorSet => @bitSizeOf(anyerror),
             else => return @bitSizeOf(self.Type),
         };
@@ -471,7 +471,7 @@ pub const TypeData = struct {
             return null;
         }
         return switch (@typeInfo(self.Type)) {
-            .Null, .Undefined => 0,
+            .Null, .Undefined, .Fn => 0,
             .Opaque => null,
             .ErrorSet => @alignOf(anyerror),
             else => return @alignOf(self.Type),
@@ -1121,6 +1121,37 @@ pub const TypeDataCollector = struct {
                     }
                 }
             },
+            .Fn => |f| {
+                td.attrs.is_supported = true;
+                inline for (f.params) |param| {
+                    if (comptime !param.is_generic) {
+                        if (param.type) |PT| {
+                            const field_attrs = self.getAttributes(PT);
+                            if (field_attrs.is_comptime_only) {
+                                td.attrs.is_supported = false;
+                            }
+                            if (field_attrs.has_pointer) {
+                                td.attrs.has_pointer = true;
+                            }
+                        } else {
+                            td.attrs.is_supported = false;
+                        }
+                    } else {
+                        td.attrs.is_supported = false;
+                    }
+                }
+                if (f.return_type) |RT| {
+                    const field_attrs = self.getAttributes(RT);
+                    if (field_attrs.is_comptime_only) {
+                        td.attrs.is_supported = false;
+                    }
+                    if (field_attrs.has_pointer) {
+                        td.attrs.has_pointer = true;
+                    }
+                } else {
+                    td.attrs.is_supported = false;
+                }
+            },
             else => {},
         }
     }
@@ -1168,6 +1199,7 @@ pub const TypeDataCollector = struct {
                 const prefix = switch (@typeInfo(T)) {
                     .Struct => "Struct",
                     .ErrorSet => "ErrorSet",
+                    .Fn => "Fn",
                     else => "Type",
                 };
                 break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, self.getSlot(T) });
@@ -1187,20 +1219,20 @@ pub const TypeDataCollector = struct {
 
 test "TypeDataCollector.scan" {
     @setEvalBranchQuota(10000);
-    const Test = struct {
+    const ns = struct {
         pub const StructA = struct {
             number: i32,
             string: []const u8,
         };
     };
     comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(Test);
-    try expectCT(tdc.find(Test.StructA) == true);
+    comptime tdc.scan(ns);
+    try expectCT(tdc.find(ns.StructA) == true);
 }
 
 test "TypeDataCollector.setAttributes" {
     @setEvalBranchQuota(10000);
-    const Test = struct {
+    const ns = struct {
         pub const StructA = struct {
             number: i32,
             string: []const u8,
@@ -1263,18 +1295,28 @@ test "TypeDataCollector.setAttributes" {
 
         pub var slice_of_slices: [][]u8 = undefined;
         pub var array_of_pointers: [5]*u8 = undefined;
+
+        pub fn normal() void {}
+
+        pub fn generic1(comptime T: type) void {
+            _ = T;
+        }
+
+        pub fn generic2(arg: anytype) @TypeOf(arg) {}
     };
     comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(Test);
+    comptime tdc.scan(ns);
     // is_supported
-    try expectCT(tdc.get(Test.StructA).isSupported() == true);
-    try expectCT(tdc.get(Test.StructB).isSupported() == true);
-    try expectCT(tdc.get(Thunk).isSupported() == false);
-    try expectCT(tdc.get(*Test.StructA).isSupported() == true);
-    try expectCT(tdc.get(*Test.StructB).isSupported() == true);
-    try expectCT(tdc.get(Test.StructC).isSupported() == true);
-    try expectCT(tdc.get(Test.StructD).isSupported() == true);
-    try expectCT(tdc.get(Test.UnionA).isSupported() == true);
+    try expectCT(tdc.get(ns.StructA).isSupported() == true);
+    try expectCT(tdc.get(ns.StructB).isSupported() == true);
+    try expectCT(tdc.get(@TypeOf(ns.normal)).isSupported() == true);
+    try expectCT(tdc.get(@TypeOf(ns.generic1)).isSupported() == false);
+    try expectCT(tdc.get(@TypeOf(ns.generic2)).isSupported() == false);
+    try expectCT(tdc.get(*ns.StructA).isSupported() == true);
+    try expectCT(tdc.get(*ns.StructB).isSupported() == true);
+    try expectCT(tdc.get(ns.StructC).isSupported() == true);
+    try expectCT(tdc.get(ns.StructD).isSupported() == true);
+    try expectCT(tdc.get(ns.UnionA).isSupported() == true);
     try expectCT(tdc.get(@TypeOf(null)).isSupported() == true);
     try expectCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
     try expectCT(tdc.get(noreturn).isSupported() == true);
@@ -1293,27 +1335,27 @@ test "TypeDataCollector.setAttributes" {
     try expectCT(tdc.get([]const u8).hasPointer() == true);
     try expectCT(tdc.get([5]*u8).hasPointer() == true);
     try expectCT(tdc.get([][]u8).hasPointer() == true);
-    try expectCT(tdc.get(Test.A).hasPointer() == false);
-    try expectCT(tdc.get(Test.B).hasPointer() == false);
-    try expectCT(tdc.get(Test.C).hasPointer() == true);
+    try expectCT(tdc.get(ns.A).hasPointer() == false);
+    try expectCT(tdc.get(ns.B).hasPointer() == false);
+    try expectCT(tdc.get(ns.C).hasPointer() == true);
     // pointers in union are inaccessible
-    try expectCT(tdc.get(Test.D).hasPointer() == false);
+    try expectCT(tdc.get(ns.D).hasPointer() == false);
     // // comptime fields should be ignored
-    try expectCT(tdc.get(Test.E).hasPointer() == false);
+    try expectCT(tdc.get(ns.E).hasPointer() == false);
 }
 
 test "TypeDataCollector.setNames" {
     @setEvalBranchQuota(10000);
-    const Test = struct {
+    const ns = struct {
         pub const tuple = .{.tuple};
         pub const Error = error{ a, b, c };
     };
     comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(Test);
-    const s_td = tdc.get(@TypeOf(Test.tuple));
+    comptime tdc.scan(ns);
+    const s_td = tdc.get(@TypeOf(ns.tuple));
     const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
     try expectCT(std.mem.eql(u8, s_td.getName(), s_name));
-    const e_td = tdc.get(Test.Error);
+    const e_td = tdc.get(ns.Error);
     const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
     try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
 }
@@ -1336,7 +1378,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
 
 test "TypeDatabase.get" {
     @setEvalBranchQuota(10000);
-    const Test = struct {
+    const ns = struct {
         pub const StructA = struct {
             number: i32,
             string: []const u8,
@@ -1359,18 +1401,28 @@ test "TypeDatabase.get" {
 
         pub const a1: StructA = .{ .number = 123, .string = "Hello" };
         pub var a2: StructA = .{ .number = 123, .string = "Hello" };
+
+        pub fn normal() void {}
+
+        pub fn generic1(comptime T: type) void {
+            _ = T;
+        }
+
+        pub fn generic2(arg: anytype) @TypeOf(arg) {}
     };
     comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(Test);
+    comptime tdc.scan(ns);
     const tdb = comptime tdc.createDatabase();
-    try expectCT(tdb.get(Test.StructA).isSupported() == true);
-    try expectCT(tdb.get(Test.StructB).isSupported() == true);
-    try expectCT(tdb.get(Thunk).isSupported() == false);
-    try expectCT(tdb.get(*Test.StructA).isSupported() == true);
-    try expectCT(tdb.get(*const Test.StructA).isSupported() == true);
-    try expectCT(tdb.get(Test.StructC).isSupported() == true);
-    try expectCT(tdb.get(Test.StructD).isSupported() == true);
-    try expectCT(tdb.get(Test.UnionA).isSupported() == true);
+    try expectCT(tdb.get(ns.StructA).isSupported() == true);
+    try expectCT(tdb.get(ns.StructB).isSupported() == true);
+    try expectCT(tdb.get(@TypeOf(ns.normal)).isSupported() == true);
+    try expectCT(tdb.get(@TypeOf(ns.generic1)).isSupported() == false);
+    try expectCT(tdb.get(@TypeOf(ns.generic2)).isSupported() == false);
+    try expectCT(tdb.get(*ns.StructA).isSupported() == true);
+    try expectCT(tdb.get(*const ns.StructA).isSupported() == true);
+    try expectCT(tdb.get(ns.StructC).isSupported() == true);
+    try expectCT(tdb.get(ns.StructD).isSupported() == true);
+    try expectCT(tdb.get(ns.UnionA).isSupported() == true);
 }
 
 fn Sentinel(comptime T: type) type {
@@ -1454,7 +1506,7 @@ pub fn ArgumentStruct(comptime T: type) type {
 }
 
 test "ArgumentStruct" {
-    const Test = struct {
+    const ns = struct {
         fn A(a: i32, b: bool) bool {
             return if (a > 10 and b) true else false;
         }
@@ -1468,27 +1520,32 @@ test "ArgumentStruct" {
             return arg1 < arg2;
         }
     };
-    const ArgA = ArgumentStruct(@TypeOf(Test.A));
+    const ArgA = ArgumentStruct(@TypeOf(ns.A));
     const fieldsA = std.meta.fields(ArgA);
     try expect(fieldsA.len == 3);
     try expect(fieldsA[0].name[0] == 'r');
     try expect(fieldsA[1].name[0] == '0');
     try expect(fieldsA[2].name[0] == '1');
-    const ArgB = ArgumentStruct(@TypeOf(Test.B));
+    const ArgB = ArgumentStruct(@TypeOf(ns.B));
     const fieldsB = std.meta.fields(ArgB);
     try expect(fieldsB.len == 2);
     try expect(fieldsB[0].name[0] == 'r');
     try expect(fieldsB[1].name[0] == '0');
-    const ArgC = ArgumentStruct(@TypeOf(Test.C));
+    const ArgC = ArgumentStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
     try expect(fieldsC.len == 3);
 }
 
-pub fn ThunkType(comptime function: anytype) type {
-    return switch (@typeInfo(@TypeOf(function)).Fn.is_var_args) {
+pub fn ThunkType(comptime FT: type) type {
+    return switch (@typeInfo(FT).Fn.is_var_args) {
         false => Thunk,
         true => VariadicThunk,
     };
+}
+
+test "ThunkType" {
+    try expectCT(ThunkType(fn (usize) void) == Thunk);
+    try expectCT(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
 }
 
 fn expectCT(comptime value: bool) !void {

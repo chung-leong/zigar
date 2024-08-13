@@ -4,7 +4,7 @@ import { getDescriptor } from './member.js';
 import { defineProperties } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { getStructEntries, getStructIterator } from './struct.js';
-import { ENTRIES_GETTER, PROPS, SLOTS } from './symbol.js';
+import { ENTRIES_GETTER, METHOD, PROPS, SLOTS } from './symbol.js';
 import { StructureType } from './types.js';
 
 export function addStaticMembers(structure, env) {
@@ -14,8 +14,18 @@ export function addStaticMembers(structure, env) {
     static: { members, template },
   } = structure;
   const descriptors = {};
+  const instanceDescriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
+    const { name, slot, structure: { type } } = member;
+    descriptors[name] = getDescriptor(member, env);
+    if (type === StructureType.Function) {
+      const f = template[SLOTS][slot];
+      defineProperties(f, { value: name });
+      const m = f[METHOD];
+      if (m) {
+        instanceDescriptors[name] = { get: () => m };
+      }
+    }
   }
   defineProperties(constructor, {
     valueOf: { value: getValueOf },
@@ -28,6 +38,7 @@ export function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
+  defineProperties(constructor.prototype, instanceDescriptors);
   if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);

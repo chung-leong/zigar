@@ -103,13 +103,6 @@ typedef struct {
 typedef struct call_context* call;
 
 typedef struct {
-    const char* name;
-    size_t thunk_id;
-    napi_value structure;
-    bool is_variadic;
-} method;
-
-typedef struct {
     result (__cdecl *allocate_host_memory)(call, size_t, uint16_t, memory*);
     result (__cdecl *free_host_memory)(call, const memory*);
     result (__cdecl *capture_string)(call, const memory*, napi_value*);
@@ -119,7 +112,6 @@ typedef struct {
     result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
     result (__cdecl *begin_structure)(call, const structure*, napi_value*);
     result (__cdecl *attach_member)(call, napi_value, const member*, bool);
-    result (__cdecl *attach_method)(call, napi_value, const method*, bool);
     result (__cdecl *attach_template)(call, napi_value, napi_value, bool);
     result (__cdecl *finalize_shape)(call, napi_value);
     result (__cdecl *end_structure)(call, napi_value);
@@ -131,8 +123,8 @@ typedef struct {
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);
-    result (__cdecl *run_thunk)(call, size_t, void*, napi_value*);
-    result (__cdecl *run_variadic_thunk)(call, size_t, void*, void*, size_t, napi_value*);
+    result (__cdecl *run_thunk)(call, size_t, size_t, void*, napi_value*);
+    result (__cdecl *run_variadic_thunk)(call, size_t, size_t, void*, void*, size_t, napi_value*);
     result (__cdecl *override_write)(const void*, size_t);
 } import_table;
 

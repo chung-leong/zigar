@@ -166,17 +166,6 @@ pub const Host = struct {
         }
     }
 
-    pub fn attachMethod(self: Host, structure: Value, method: types.Method, is_static_only: bool) !void {
-        const method_c: MethodC = .{
-            .name = if (method.name) |p| @ptrCast(p) else null,
-            .thunk_id = method.thunk_id,
-            .structure = method.structure,
-        };
-        if (imports.attach_method(self.context, structure, &method_c, is_static_only) != .ok) {
-            return Error.unable_to_add_method;
-        }
-    }
-
     pub fn attachTemplate(self: Host, structure: Value, template: Value, is_static: bool) !void {
         if (imports.attach_template(self.context, structure, template, is_static) != .ok) {
             return Error.unable_to_add_structure_template;
@@ -289,9 +278,15 @@ pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     return .failure;
 }
 
-pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Value) callconv(.C) Result {
+pub fn runThunk(
+    call: Call,
+    thunk_address: usize,
+    fn_address: usize,
+    args: *anyopaque,
+    dest: *?Value,
+) callconv(.C) Result {
     const thunk: types.Thunk = @ptrFromInt(thunk_address);
-    if (thunk(@ptrCast(call), args)) |result| {
+    if (thunk(@ptrCast(call), @ptrFromInt(fn_address), args)) |result| {
         dest.* = result;
     } else {
         dest.* = null;
@@ -299,9 +294,17 @@ pub fn runThunk(call: Call, thunk_address: usize, args: *anyopaque, dest: *?Valu
     return .ok;
 }
 
-pub fn runVariadicThunk(call: Call, thunk_address: usize, args: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize, dest: *?Value) callconv(.C) Result {
+pub fn runVariadicThunk(
+    call: Call,
+    thunk_address: usize,
+    fn_address: usize,
+    args: *anyopaque,
+    attr_ptr: *const anyopaque,
+    arg_count: usize,
+    dest: *?Value,
+) callconv(.C) Result {
     const thunk: types.VariadicThunk = @ptrFromInt(thunk_address);
-    if (thunk(@ptrCast(call), args, attr_ptr, arg_count)) |result| {
+    if (thunk(@ptrCast(call), @ptrFromInt(fn_address), args, attr_ptr, arg_count)) |result| {
         dest.* = result;
     } else {
         dest.* = null;
@@ -320,7 +323,6 @@ const Imports = extern struct {
     write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (Call, *const StructureC, *Value) callconv(.C) Result,
     attach_member: *const fn (Call, Value, *const MemberC, bool) callconv(.C) Result,
-    attach_method: *const fn (Call, Value, *const MethodC, bool) callconv(.C) Result,
     attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
     finalize_shape: *const fn (Call, Value) callconv(.C) Result,
     end_structure: *const fn (Call, Value) callconv(.C) Result,
@@ -334,8 +336,8 @@ const Exports = extern struct {
     allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (Call, usize, *anyopaque, *?Value) callconv(.C) Result,
-    run_variadic_thunk: *const fn (Call, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
+    run_thunk: *const fn (Call, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
+    run_variadic_thunk: *const fn (Call, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
 };
 

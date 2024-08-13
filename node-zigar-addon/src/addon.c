@@ -246,29 +246,6 @@ result attach_member(call ctx,
      return FAILURE;
 }
 
-result attach_method(call ctx,
-                     napi_value structure,
-                     const method* m,
-                     bool is_static_only) {
-    napi_env env = ctx->env;
-    napi_value args[3] = { structure };
-    napi_value result;
-    napi_value name, thunk_id;
-    // thunk_id from Zig is the function's address--make it relative to the base address
-    size_t adjusted_thunk_id = m->thunk_id - ctx->mod_data->base_address;
-    if (napi_create_object(env, &args[1]) == napi_ok
-     && napi_get_boolean(env, is_static_only, &args[2]) == napi_ok
-     && napi_set_named_property(env, args[1], "argStruct", m->structure) == napi_ok
-     && napi_create_double(env, adjusted_thunk_id, &thunk_id) == napi_ok
-     && napi_set_named_property(env, args[1], "thunkId", thunk_id) == napi_ok
-     && (!m->name || napi_create_string_utf8(env, m->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
-     && (!m->name || napi_set_named_property(env, args[1], "name", name) == napi_ok)
-     && call_js_function(ctx, "attachMethod", 3, args, &result)) {
-        return OK;
-     }
-     return FAILURE;
-}
-
 result attach_template(call ctx,
                        napi_value structure,
                        napi_value template_obj,
@@ -480,7 +457,6 @@ napi_value find_sentinel(napi_env env,
     void* sentinel_data;
     size_t sentinel_len;
     uintptr_t address;
-    double len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
      || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
         return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
@@ -491,10 +467,10 @@ napi_value find_sentinel(napi_env env,
         if (address) {
             uint8_t* sentinel_bytes = (uint8_t*) sentinel_data;
             uint8_t* src_bytes = (uint8_t*) address;
-            for (int i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
+            for (size_t i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
                 if (memcmp(src_bytes + i, sentinel_bytes, sentinel_len) == 0) {
                     napi_value offset;
-                    if (napi_create_uint32(env, j, &offset) != napi_ok) {
+                    if (napi_create_uintptr(env, j, &offset) != napi_ok) {
                         return throw_last_error(env);
                     }
                     return offset;
@@ -517,41 +493,42 @@ napi_value get_factory_thunk(napi_env env,
     if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &md) != napi_ok) {
         return throw_last_error(env);
     }
-    size_t thunk_address;
+    uintptr_t thunk_address;
     if (md->mod->imports->get_factory_thunk(&thunk_address) != OK) {
         return throw_error(env, "Unable to define structures");
     }
-    size_t adjusted_thunk_id = thunk_address - md->base_address;
-    napi_value thunk_id;
-    if (napi_create_double(env, adjusted_thunk_id, &thunk_id) != napi_ok) {
+    napi_value result;
+    if (napi_create_uintptr(env, thunk_address, &result) != napi_ok) {
         return throw_last_error(env);
     }
-    return thunk_id;
+    return result;
 }
 
 napi_value run_thunk(napi_env env,
                      napi_callback_info info) {
     module_data* md;
-    size_t argc = 2;
-    napi_value args[2];
+    size_t argc = 3;
+    napi_value args[3];
     napi_value js_env;
-    double thunk_id;
+    uintptr_t thunk_address;
+    uintptr_t fn_address;
     void* args_ptr;
     size_t args_len;
     if (napi_get_cb_info(env, info, &argc, args, &js_env, (void*) &md) != napi_ok
-     || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
-        return throw_error(env, "Thunk id must be a number");
-    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
+     || napi_get_value_uintptr(env, args[0], &thunk_address) != napi_ok) {
+        return throw_error(env, "Thunk address must be a number");
+    } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
+        return throw_error(env, "Function address must be a number");
+    } else if (napi_get_dataview_info(env, args[2], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
     }
     call_context ctx = { env, js_env, md };
-    size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
     if (args_len == 0) {
         // pointer might not be valid when length is zero
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_thunk(&ctx, thunk_address, args_ptr, &result) != OK) {
+    if (md->mod->imports->run_thunk(&ctx, thunk_address, fn_address, args_ptr, &result) != OK) {
         return throw_error(env, "Unable to execute function");
     }
     if (!result) {
@@ -563,30 +540,32 @@ napi_value run_thunk(napi_env env,
 napi_value run_variadic_thunk(napi_env env,
                               napi_callback_info info) {
     module_data* md;
-    size_t argc = 3;
-    napi_value args[3];
+    size_t argc = 4;
+    napi_value args[4];
     napi_value js_env;
-    double thunk_id;
+    uintptr_t thunk_address;
+    uintptr_t fn_address;
     void* args_ptr;
     size_t args_len;
     void* args_attrs_ptr;
     size_t args_attrs_len;
     if (napi_get_cb_info(env, info, &argc, args, &js_env, (void*) &md) != napi_ok
-     || napi_get_value_double(env, args[0], &thunk_id) != napi_ok) {
-        return throw_error(env, "Thunk id must be a number");
-    } else if (napi_get_dataview_info(env, args[1], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
+     || napi_get_value_uintptr(env, args[0], &thunk_address) != napi_ok) {
+        return throw_error(env, "Thunk address must be a number");
+    } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
+        return throw_error(env, "Function address must be a number");
+    } else if (napi_get_dataview_info(env, args[2], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
-    } else if (napi_get_dataview_info(env, args[2], &args_attrs_len, &args_attrs_ptr, NULL, NULL) != napi_ok) {
+    } else if (napi_get_dataview_info(env, args[3], &args_attrs_len, &args_attrs_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Attributes must be a DataView");
     }
     size_t arg_count = args_attrs_len / 8;
     call_context ctx = { env, js_env, md };
-    size_t thunk_address = md->base_address + thunk_id;
     napi_value result;
     if (args_len == 0) {
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, args_ptr, args_attrs_ptr, arg_count, &result) != OK) {
+    if (md->mod->imports->run_variadic_thunk(&ctx, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count, &result) != OK) {
         return throw_error(env, "Unable to execute function");
     }
     if (!result) {
@@ -742,7 +721,6 @@ napi_value load_module(napi_env env,
     exports->write_slot = write_slot;
     exports->begin_structure = begin_structure;
     exports->attach_member = attach_member;
-    exports->attach_method = attach_method;
     exports->attach_template = attach_template;
     exports->finalize_shape = finalize_shape;
     exports->end_structure = end_structure;

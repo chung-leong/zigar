@@ -3,6 +3,7 @@ import { defineArray } from './array.js';
 import { defineEnumerationShape } from './enumeration.js';
 import { defineErrorSet } from './error-set.js';
 import { defineErrorUnion } from './error-union.js';
+import { defineFunction } from './function.js';
 import { useEnumerationTransform, useErrorSetTransform, useUint } from './member.js';
 import { defineOpaque } from './opaque.js';
 import { defineOptional } from './optional.js';
@@ -107,6 +108,10 @@ export function useVector() {
 
 export function useOpaque() {
   factories[StructureType.Opaque] = defineOpaque;
+}
+
+export function useFunction() {
+  factories[StructureType.Function] = defineFunction;
 }
 
 export function getStructureFactory(type) {
@@ -241,4 +246,5 @@ export function useAllStructureTypes() {
   useSlice();
   useVector();
   useOpaque();
+  useFunction();
 }

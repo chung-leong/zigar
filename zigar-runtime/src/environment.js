@@ -2,15 +2,13 @@ import { resetGlobalErrorSet } from './error-set.js';
 import { AlignmentConflict, MustBeOverridden } from './error.js';
 import { useBool, useObject } from './member.js';
 import { getMemoryCopier } from './memory.js';
-import { addMethods } from './method.js';
 import { defineProperties, getMemoryRestorer } from './object.js';
 import { addStaticMembers } from './static.js';
 import { findAllObjects, getStructureFactory, useArgStruct } from './structure.js';
 import {
-  ADDRESS_SETTER, ALIGN,
-  CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
-  MEMORY_RESTORER,
-  POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE, WRITE_DISABLER
+  ADDRESS_SETTER, ALIGN, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, LENGTH_SETTER, MEMORY,
+  MEMORY_RESTORER, POINTER, POINTER_VISITOR, SIZE, SLOTS, TARGET_GETTER, TARGET_UPDATER, TYPE,
+  WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
 import { MemberType, MemoryType, StructureType, getStructureName } from './types.js';
@@ -374,12 +372,10 @@ export class Environment {
       hasPointer,
       instance: {
         members: [],
-        methods: [],
         template: null,
       },
       static: {
         members: [],
-        methods: [],
         template: null,
       },
     };
@@ -388,13 +384,6 @@ export class Environment {
   attachMember(structure, member, isStatic = false) {
     const target = (isStatic) ? structure.static : structure.instance;
     target.members.push(member);
-  }
-
-  attachMethod(structure, method, isStaticOnly = false) {
-    structure.static.methods.push(method);
-    if (!isStaticOnly) {
-      structure.instance.methods.push(method);
-    }
   }
 
   attachTemplate(structure, template, isStatic = false) {
@@ -464,11 +453,11 @@ export class Environment {
       omitVariables = isElectron(),
     } = options;
     resetGlobalErrorSet();
-    const thunkId = this.getFactoryThunk();
+    const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
     this.comptime = true;
-    this.invokeThunk(thunkId, args);
+    this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
   }
 
@@ -478,8 +467,7 @@ export class Environment {
   }
 
   hasMethods() {
-    // all methods are static, so there's no need to check instance methods
-    return !!this.structures.find(s => s.static.methods.length > 0);
+    return !!this.structures.find(s => s.type === StructureType.Function);
   }
 
   exportStructures() {
@@ -564,25 +552,6 @@ export class Environment {
 
   finalizeStructure(structure) {
     addStaticMembers(structure, this);
-    addMethods(structure, this);
-  }
-
-  createCaller(method, useThis) {
-    const { name, argStruct, thunkId } = method;
-    const { constructor } = argStruct;
-    const self = this;
-    let f;
-    if (useThis) {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
-      }
-    } else {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args, name, 0));
-      }
-    }
-    Object.defineProperty(f, 'name', { value: name });
-    return f;
   }
 
   /* RUNTIME-ONLY */
@@ -602,9 +571,11 @@ export class Environment {
         } else {
           const { array, offset, length } = memory;
           const dv = this.obtainView(array.buffer, offset, length);
-          const { constructor } = structure;
           const { reloc, const: isConst } = placeholder;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          const constructor = structure?.constructor;
+          const object = placeholder.actual = (constructor)
+          ? constructor.call(ENVIRONMENT, dv)
+          : { [MEMORY]: dv };
           if (isConst) {
             object[WRITE_DISABLER]?.();
           }
@@ -628,16 +599,19 @@ export class Environment {
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
-          const placeholder = scope.template;
-          const template = scope.template = {};
-          if (placeholder.memory) {
-            const { array, offset, length } = placeholder.memory;
-            template[MEMORY] = this.obtainView(array.buffer, offset, length);
+          const { slots, memory, reloc } = scope.template;
+          const object = scope.template = {};
+          if (memory) {
+            const { array, offset, length } = memory;
+            object[MEMORY] = this.obtainView(array.buffer, offset, length);
+            if (reloc) {
+              this.variables.push({ reloc, object });
+            }
           }
-          if (placeholder.slots) {
+          if (slots) {
             // defer creation of objects until shapes of structures are finalized
-            const slots = template[SLOTS] = {};
-            objectPlaceholders.set(slots, placeholder.slots);
+            const realSlots = object[SLOTS] = {};
+            objectPlaceholders.set(realSlots, slots);
           }
         }
       }
@@ -716,9 +690,11 @@ export class Environment {
     /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
-    const dest = Object.create(object.constructor.prototype);
-    dest[MEMORY] = relocDV;
-    dest[COPIER](object);
+    if (object[COPIER]) {
+      const dest = Object.create(object.constructor.prototype);
+      dest[MEMORY] = relocDV;
+      dest[COPIER](object);
+    }
     object[MEMORY] = relocDV;
   }
 
@@ -932,9 +908,6 @@ export class Environment {
     let { shadowMap } = this.context;
     if (!shadowMap) {
       shadowMap = this.context.shadowMap = new Map();
-    }
-    if (!shadow[MEMORY][FIXED]) {
-      debugger;
     }
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);

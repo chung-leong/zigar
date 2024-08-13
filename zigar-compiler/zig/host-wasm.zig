@@ -262,14 +262,6 @@ pub const Host = struct {
         _finalizeShape(structure);
     }
 
-    pub fn attachMethod(_: Host, structure: Value, method: types.Method, is_static_only: bool) !void {
-        const def = beginDefinition();
-        try insertProperty(def, "argStruct", method.structure);
-        try insertProperty(def, "thunkId", method.thunk_id);
-        try insertProperty(def, "name", method.name);
-        _attachMethod(structure, def, is_static_only);
-    }
-
     pub fn attachTemplate(_: Host, structure: Value, template: Value, is_static: bool) !void {
         _attachTemplate(structure, template, is_static);
     }
