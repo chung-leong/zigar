@@ -988,10 +988,12 @@ pub const TypeDataCollector = struct {
             },
             .ErrorSet => self.add(ErrorIntType()),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
-            .Fn => |f| if (f.calling_convention == .Inline) {
-                const UFT = Uninlined(T);
-                self.add(*const UFT);
-                self.add(UFT);
+            .Fn => |f| if (!f.is_generic) {
+                if (f.calling_convention == .Inline) {
+                    const UFT = Uninlined(T);
+                    self.add(*const UFT);
+                    self.add(UFT);
+                }
             },
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
                 self.add(ST);
@@ -1150,30 +1152,32 @@ pub const TypeDataCollector = struct {
                 }
             },
             .Fn => |f| {
-                td.attrs.is_supported = true;
-                inline for (f.params) |param| {
-                    if (comptime !param.is_generic) {
-                        if (param.type) |PT| {
-                            if (PT != std.mem.Allocator) {
-                                const field_attrs = self.getAttributes(PT);
-                                if (field_attrs.is_comptime_only) {
-                                    td.attrs.is_supported = false;
+                if (!f.is_generic) {
+                    td.attrs.is_supported = true;
+                    inline for (f.params) |param| {
+                        if (comptime !param.is_generic) {
+                            if (param.type) |PT| {
+                                if (PT != std.mem.Allocator) {
+                                    const field_attrs = self.getAttributes(PT);
+                                    if (field_attrs.is_comptime_only) {
+                                        td.attrs.is_supported = false;
+                                    }
                                 }
+                            } else {
+                                td.attrs.is_supported = false;
                             }
                         } else {
+                            td.attrs.is_supported = false;
+                        }
+                    }
+                    if (f.return_type) |RT| {
+                        const field_attrs = self.getAttributes(RT);
+                        if (field_attrs.is_comptime_only) {
                             td.attrs.is_supported = false;
                         }
                     } else {
                         td.attrs.is_supported = false;
                     }
-                }
-                if (f.return_type) |RT| {
-                    const field_attrs = self.getAttributes(RT);
-                    if (field_attrs.is_comptime_only) {
-                        td.attrs.is_supported = false;
-                    }
-                } else {
-                    td.attrs.is_supported = false;
                 }
             },
             else => {},

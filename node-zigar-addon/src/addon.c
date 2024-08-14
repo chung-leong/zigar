@@ -470,7 +470,7 @@ napi_value find_sentinel(napi_env env,
             for (size_t i = 0, j = 0; i < INT32_MAX; i += sentinel_len, j++) {
                 if (memcmp(src_bytes + i, sentinel_bytes, sentinel_len) == 0) {
                     napi_value offset;
-                    if (napi_create_uintptr(env, j, &offset) != napi_ok) {
+                    if (napi_create_uint32(env, j, &offset) != napi_ok) {
                         return throw_last_error(env);
                     }
                     return offset;

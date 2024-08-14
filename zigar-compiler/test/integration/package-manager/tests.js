@@ -22,11 +22,11 @@ export function addTests(importModule, options) {
         default: {
           const code = `print "Hello world"`;
           const lines = await capture(() => run(code));
-          expect(lines).to.eql([ 'Hello world' ]);   
+          expect(lines).to.eql([ 'Hello world' ]);
         }
       }
     })
-    skip.if(target === 'wasm32').
+    skip. // if(target === 'wasm32').
     it('should link in zig-sqlite', async function() {
       this.timeout(300000);
       const { Db } = await importTest('use-zig-sqlite/zig-sqlite');

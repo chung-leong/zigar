@@ -536,13 +536,14 @@ export class Environment {
   /* COMPTIME-ONLY-END */
 
   finalizeShape(structure) {
-    const f = getStructureFactory(structure.type);
+    const { type, name } = structure;
+    const f = getStructureFactory(type);
     const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
       defineProperties(constructor, {
-        name: { value: structure.name, configurable: true },
+        name: { value: name, configurable: true },
       });
-      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+      if (type !== StructureType.Function && !constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
           [Symbol.toStringTag]: { value: structure.name, configurable: true },
         });

@@ -1,42 +1,56 @@
-import { requireDataView } from './data-view';
 import { defineProperties, ObjectCache } from './object';
-import { MEMORY, METHOD } from './symbol';
+import { MEMORY, VARIANT_CREATOR } from './symbol';
 
 export function defineFunction(structure, env) {
   const {
+    name,
     instance: { members: [ member ], template },
   } = structure;
   const cache = new ObjectCache();
   const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
-  const constructor = structure.constructor = function(arg) {
-    const dv = requireDataView(structure, arg, env);
+  const constructor = structure.constructor = function(dv) {
     let self;
     if (self = cache.find(dv)) {
       return self;
     }
-    self = function(...args) {
+    const invoke = function(argStruct) {
       const thunkAddr = env.getViewAddress(template[MEMORY]);
       const funcAddr = env.getViewAddress(self[MEMORY]);
-      return env.invokeThunk(thunkAddr, funcAddr, new Arg(args, self.name, 0));
+      return env.invokeThunk(thunkAddr, funcAddr, argStruct);
     };
+    self = anonymous(function (...args) {
+      return invoke(new Arg(args, self.name, 0));
+    })
+    Object.setPrototypeOf(self, constructor.prototype);
     self[MEMORY] = dv;
-    defineProperties(self, {
-      constructor: { value: constructor },
-      length: { value: argMembers.length - 1 },
-    });
-    // TODO: check argument
-    const method = self[METHOD] = function(...args) {
-      const thunkAddr = env.getViewAddress(template[MEMORY]);
-      const funcAddr = env.getViewAddress(self[MEMORY]);
-      return env.invokeThunk(thunkAddr, funcAddr, new Arg([ this, ...args ], method.name, 1));
+    const variantCreator = function (type) {
+      let variant, argCount;
+      if (type === 'method') {
+        variant = function(...args) {
+          return invoke(new Arg([ this, ...args ], variant.name, 1));
+        };
+        argCount = argMembers.length - 2;
+      }
+      defineProperties(variant, {
+        length: { value: argCount, writable: false },
+      });
+      return variant;
     };
-    method[MEMORY] = dv;
-    defineProperties(method, {
-      constructor: { value: constructor },
-      length: { value: argMembers.length - 2 },
-      name: { get: () => self.name },
+    defineProperties(self, {
+      length: { value: argMembers.length - 1, writable: false },
+      [VARIANT_CREATOR]: { value: variantCreator },
     });
+    cache.save(dv, self);
     return self;
   };
+  constructor.prototype = Object.create(Function.prototype);
+  defineProperties(constructor.prototype, {
+    constructor: { value: constructor },
+  });
   return constructor;
 }
+
+function anonymous(f) {
+  return f
+};
+

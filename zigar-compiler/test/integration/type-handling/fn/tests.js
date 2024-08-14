@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const { default: module, hello, hello2, hello3 } = await importTest('as-static-variables');
       // no support for function pointer currently
-      expect(module.func).to.be.undefined;
+      expect(module.func['*']).to.be.a('function');
       expect(hello).to.be.a('function');
       expect(hello2).to.be.a('function');
       expect(hello3).to.be.a('function');
@@ -26,10 +26,14 @@ export function addTests(importModule, options) {
       expect(hello.valueOf()).to.equal(hello);
       expect(JSON.stringify(hello)).to.equal(undefined);
     })
-    it('should ignore function accepting function as arguments', async function() {
+    it('should call functions passed as arguments', async function() {
       this.timeout(300000);
-      const { print } = await importTest('as-function-parameters');
-      expect(print).to.be.undefined;
+      const { call1, hello, world } = await importTest('as-function-parameters');
+      const lines = await capture(() => {
+        call1(hello);
+        call1(world);
+      });
+      expect(lines).to.eql([ 'hello', 'world' ]);
     })
     it('should ignore function returning function', async function() {
       this.timeout(300000);

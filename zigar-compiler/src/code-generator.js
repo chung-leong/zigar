@@ -242,7 +242,7 @@ function addStructureDefinitions(lines, definition) {
             break;
           case 'instance':
           case 'static': {
-            const { methods, members, template } = value;
+            const { members, template } = value;
             add(`${name}: {`);
             add(`members: [`);
             for (const member of members) {

@@ -1,7 +1,13 @@
 const std = @import("std");
 
-pub const Fn = *const fn () void;
+pub fn hello() void {
+    std.debug.print("hello\n", .{});
+}
 
-pub fn print(value: Fn) void {
-    std.debug.print("{any}\n", .{value});
+pub fn world() void {
+    std.debug.print("world\n", .{});
+}
+
+pub fn call1(cb: *const fn () void) void {
+    cb();
 }
