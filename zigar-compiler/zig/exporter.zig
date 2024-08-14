@@ -302,7 +302,8 @@ fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !
 }
 
 fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const arg_td = ctx.tdb.get(types.ArgumentStruct(td.Type));
+    const FT = types.Uninlined(td.Type);
+    const arg_td = ctx.tdb.get(types.ArgumentStruct(FT));
     try ctx.host.attachMember(structure, .{
         .name = "args",
         .member_type = arg_td.getMemberType(false),
@@ -311,7 +312,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
         .structure = try getStructure(ctx, arg_td.Type),
     }, false);
     // store thunk as instance template
-    const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), td.Type);
+    const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), FT);
     const memory = Memory.from(thunk, false);
     const dv = try ctx.host.captureView(memory);
     const template = try ctx.host.createTemplate(dv);
@@ -348,7 +349,12 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                                 .Fn => false,
                                 else => decl_ptr_td.isConst(),
                             };
-                            const value_obj = try exportPointerTarget(ctx, decl_ptr, is_comptime);
+                            // deal with inline functions
+                            const target_ptr = switch (@typeInfo(DT)) {
+                                .Fn => &thunk_zig.uninline(decl_value),
+                                else => decl_ptr,
+                            };
+                            const value_obj = try exportPointerTarget(ctx, target_ptr, is_comptime);
                             template_maybe = template_maybe orelse try ctx.host.createTemplate(null);
                             try ctx.host.writeSlot(template_maybe.?, index, value_obj);
                         }

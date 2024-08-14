@@ -24,6 +24,7 @@ export function defineFunction(structure, env) {
       constructor: { value: constructor },
       length: { value: argMembers.length - 1 },
     });
+    // TODO: check argument
     const method = self[METHOD] = function(...args) {
       const thunkAddr = env.getViewAddress(template[MEMORY]);
       const funcAddr = env.getViewAddress(self[MEMORY]);

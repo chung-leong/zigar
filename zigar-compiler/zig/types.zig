@@ -264,6 +264,29 @@ test "ErrorIntType" {
     try expectCT(ErrorIntType() == u16);
 }
 
+pub fn Uninlined(comptime FT: type) type {
+    return switch (@typeInfo(FT)) {
+        .Fn => |f| @Type(.{
+            .Fn = .{
+                .calling_convention = switch (f.calling_convention) {
+                    .Inline => .Unspecified,
+                    else => |cc| cc,
+                },
+                .is_generic = f.is_generic,
+                .is_var_args = f.is_var_args,
+                .return_type = f.return_type,
+                .params = f.params,
+            },
+        }),
+        else => @compileError("Not a function"),
+    };
+}
+
+test "Uninlined" {
+    try expect(Uninlined(fn () callconv(.Inline) void) == fn () void);
+    try expect(Uninlined(fn () void) == fn () void);
+}
+
 fn ComptimeList(comptime T: type) type {
     return struct {
         entries: []T,
@@ -965,6 +988,11 @@ pub const TypeDataCollector = struct {
             },
             .ErrorSet => self.add(ErrorIntType()),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
+            .Fn => |f| if (f.calling_convention == .Inline) {
+                const UFT = Uninlined(T);
+                self.add(*const UFT);
+                self.add(UFT);
+            },
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
                 self.add(ST);
             },
@@ -1126,12 +1154,11 @@ pub const TypeDataCollector = struct {
                 inline for (f.params) |param| {
                     if (comptime !param.is_generic) {
                         if (param.type) |PT| {
-                            const field_attrs = self.getAttributes(PT);
-                            if (field_attrs.is_comptime_only) {
-                                td.attrs.is_supported = false;
-                            }
-                            if (field_attrs.has_pointer) {
-                                td.attrs.has_pointer = true;
+                            if (PT != std.mem.Allocator) {
+                                const field_attrs = self.getAttributes(PT);
+                                if (field_attrs.is_comptime_only) {
+                                    td.attrs.is_supported = false;
+                                }
                             }
                         } else {
                             td.attrs.is_supported = false;
@@ -1144,9 +1171,6 @@ pub const TypeDataCollector = struct {
                     const field_attrs = self.getAttributes(RT);
                     if (field_attrs.is_comptime_only) {
                         td.attrs.is_supported = false;
-                    }
-                    if (field_attrs.has_pointer) {
-                        td.attrs.has_pointer = true;
                     }
                 } else {
                     td.attrs.is_supported = false;

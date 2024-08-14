@@ -179,3 +179,94 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
         .vtable = &VTable.instance,
     };
 }
+
+pub fn uninline(comptime function: anytype) types.Uninlined(@TypeOf(function)) {
+    const FT = types.Uninlined(@TypeOf(function));
+    if (comptime FT == @TypeOf(function)) {
+        return function;
+    }
+    const f = @typeInfo(FT).Fn;
+    const PT = comptime extract: {
+        var Types: [f.params.len]type = undefined;
+        for (f.params, 0..) |param, index| {
+            Types[index] = param.type orelse @compileError("Illegal argument type");
+        }
+        break :extract Types;
+    };
+    const RT = f.return_type orelse @compileError("Illegal return type");
+    const cc = f.calling_convention;
+    const ns = struct {
+        fn call0() callconv(cc) RT {
+            return @call(.auto, function, .{});
+        }
+
+        fn call1(a0: PT[0]) callconv(cc) RT {
+            return @call(.auto, function, .{a0});
+        }
+
+        fn call2(a0: PT[0], a1: PT[1]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1 });
+        }
+
+        fn call3(a0: PT[0], a1: PT[1], a2: PT[2]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2 });
+        }
+
+        fn call4(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3 });
+        }
+
+        fn call5(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4 });
+        }
+
+        fn call6(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5 });
+        }
+
+        fn call7(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6 });
+        }
+
+        fn call8(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7 });
+        }
+
+        fn call9(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8 });
+        }
+
+        fn call10(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 });
+        }
+
+        fn call11(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 });
+        }
+
+        fn call12(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 });
+        }
+
+        fn call13(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 });
+        }
+
+        fn call14(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13 });
+        }
+
+        fn call15(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13], a14: PT[14]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14 });
+        }
+
+        fn call16(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13], a14: PT[14], a15: PT[15]) callconv(cc) RT {
+            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 });
+        }
+    };
+    const caller_name = std.fmt.comptimePrint("call{d}", .{f.params.len});
+    if (!@hasDecl(ns, caller_name)) {
+        @compileError("Too many arguments");
+    }
+    return @field(ns, caller_name);
+}

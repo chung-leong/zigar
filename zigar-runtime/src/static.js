@@ -1,7 +1,7 @@
 import { appendEnumeration } from './enumeration.js';
 import { appendErrorSet } from './error-set.js';
 import { getDescriptor } from './member.js';
-import { defineProperties } from './object.js';
+import { defineProperties, defineProperty } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { getStructEntries, getStructIterator } from './struct.js';
 import { ENTRIES_GETTER, METHOD, PROPS, SLOTS } from './symbol.js';
@@ -13,24 +13,39 @@ export function addStaticMembers(structure, env) {
     constructor,
     static: { members, template },
   } = structure;
-  const descriptors = {};
+  const staticDescriptors = {};
   const instanceDescriptors = {};
   for (const member of members) {
     const { name, slot, structure: { type } } = member;
-    descriptors[name] = getDescriptor(member, env);
+    staticDescriptors[name] = getDescriptor(member, env);
     if (type === StructureType.Function) {
-      const f = template[SLOTS][slot];
-      defineProperties(f, { value: name });
-      const m = f[METHOD];
+      const fn = template[SLOTS][slot];
+      defineProperty(fn, 'name', { value: name });
+      const method = fn[METHOD];
+      if (method) {
+        instanceDescriptors[name] = { get: () => method };
+      }
+      // see if it's a getter or setter
+      const m = /^(get|set)\s+([\s\S]+)/.exec(name);
       if (m) {
-        instanceDescriptors[name] = { get: () => m };
+        const type = m[1], propName = m[2];
+        const argRequired = (type === 'get') ? 0 : 1;
+        // need to match arg count, since instance methods also show up as static methods
+        if (method?.length === argRequired) {
+          const descriptor = instanceDescriptors[propName] ??= {};
+          descriptor[type] = method;
+        }
+        if (fn.length === argRequired) {
+          const descriptor = staticDescriptors[propName] ??= {};
+          descriptor[type] = fn;
+        }
       }
     }
   }
   defineProperties(constructor, {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
-    ...descriptors,
+    ...staticDescriptors,
     [Symbol.iterator]: { value: getStructIterator },
     [ENTRIES_GETTER]: { value: getStructEntries },
     // static variables are objects stored in the static template's slots
