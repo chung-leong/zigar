@@ -895,19 +895,6 @@ pub const TypeDataCollector = struct {
                 self.setName(td);
             }
         }
-        // add arg structs once we can determine which functions are callable
-        inline for (self.functions.slice()) |FT| {
-            const f = @typeInfo(FT).Fn;
-            if (!f.is_generic) {
-                const index = self.append(ArgumentStruct(FT));
-                const td = self.at(index);
-                self.setAttributes(td);
-                self.setSlot(td);
-                td.attrs.is_arguments = true;
-                td.attrs.is_variadic = f.is_var_args;
-                td.name = std.fmt.comptimePrint("Arg{d:0>4}", .{td.getSlot()});
-            }
-        }
     }
 
     pub fn createDatabase(comptime self: *const @This()) TypeDatabase(self.types.len) {
@@ -918,12 +905,13 @@ pub const TypeDataCollector = struct {
         return tdb;
     }
 
-    fn append(comptime self: *@This(), comptime T: type) usize {
-        if (self.indexOf(T)) |index| {
-            return index;
+    fn append(comptime self: *@This(), comptime td: TypeData) void {
+        const T = td.Type;
+        if (self.indexOf(T)) |_| {
+            return;
         }
         const index = self.types.len;
-        self.types = self.types.concat(.{ .Type = T });
+        self.types = self.types.concat(td);
         // add fields and function args/retval
         switch (@typeInfo(T)) {
             .ErrorUnion => |eu| {
@@ -942,7 +930,9 @@ pub const TypeDataCollector = struct {
                     if (f.return_type) |RT| self.add(RT);
                 }
             },
-            inline .Array, .Vector, .Optional, .Pointer => |ar| self.add(ar.child),
+            inline .Array, .Vector, .Optional, .Pointer => |ar| {
+                self.add(ar.child);
+            },
             inline .Struct, .Union => |st, Tag| {
                 inline for (st.fields) |field| {
                     self.add(field.type);
@@ -973,16 +963,12 @@ pub const TypeDataCollector = struct {
         switch (@typeInfo(T)) {
             .NoReturn => self.add(void),
             .Pointer => |pt| {
-                const td = self.at(index);
-                const TT = td.getTargetType();
+                const TT = TypeData.getTargetType(.{ .Type = T });
                 if (TT != pt.child) {
-                    const slice_index = self.append(TT);
-                    const slice_td = self.at(slice_index);
-                    slice_td.attrs.is_slice = true;
-                    slice_td.name = if (slice_td.getSentinel()) |s|
-                        std.fmt.comptimePrint("[_:{d}]{s}", .{ s.value, @typeName(pt.child) })
-                    else
-                        std.fmt.comptimePrint("[_]{s}", .{@typeName(pt.child)});
+                    self.append(.{
+                        .Type = TT,
+                        .attrs = .{ .is_slice = true },
+                    });
                 }
                 self.add(usize);
             },
@@ -993,6 +979,15 @@ pub const TypeDataCollector = struct {
                     const UFT = Uninlined(T);
                     self.add(*const UFT);
                     self.add(UFT);
+                } else {
+                    const ArgT = ArgumentStruct(T);
+                    self.append(.{
+                        .Type = ArgT,
+                        .attrs = .{
+                            .is_arguments = true,
+                            .is_variadic = f.is_var_args,
+                        },
+                    });
                 }
             },
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
@@ -1000,11 +995,10 @@ pub const TypeDataCollector = struct {
             },
             else => {},
         }
-        return index;
     }
 
     fn add(comptime self: *@This(), comptime T: type) void {
-        _ = self.append(T);
+        self.append(.{ .Type = T });
     }
 
     fn addTypeOf(comptime self: *@This(), comptime value: anytype) void {
@@ -1056,8 +1050,7 @@ pub const TypeDataCollector = struct {
         } else null;
     }
 
-    fn getSlot(comptime self: *@This(), comptime T: type) usize {
-        const td = self.get(T);
+    fn getSlot(comptime self: *@This(), comptime td: *TypeData) usize {
         self.setSlot(td);
         return td.slot.?;
     }
@@ -1194,22 +1187,14 @@ pub const TypeDataCollector = struct {
         if (td.name != null) {
             return;
         }
-        const name = @typeName(td.Type);
-        td.name = if (isCryptic(name)) self.getGenericName(td.Type) else name;
-    }
-
-    fn getGenericName(comptime self: *@This(), comptime T: type) [:0]const u8 {
-        return switch (@typeInfo(T)) {
-            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{ self.getName(eu.error_set), self.getName(eu.payload) }),
-            .Optional => |op| std.fmt.comptimePrint("?{s}", .{self.getName(op.child)}),
-            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{ ar.len, self.getName(ar.child) }),
+        const type_name = @typeName(td.Type);
+        td.name = switch (@typeInfo(td.Type)) {
             .Pointer => |pt| format: {
-                const name = @typeName(T);
                 const size_end_index = find: {
                     comptime var index = 0;
                     comptime var in_brackets = false;
-                    inline while (index < @min(25, name.len)) : (index += 1) {
-                        switch (name[index]) {
+                    inline while (index < @min(25, type_name.len)) : (index += 1) {
+                        switch (type_name[index]) {
                             '*' => if (!in_brackets) break :find index + 1,
                             '[' => in_brackets = true,
                             ']' => break :find index + 1,
@@ -1219,29 +1204,23 @@ pub const TypeDataCollector = struct {
                         break :find 0;
                     }
                 };
-                const size = name[0..size_end_index];
+                const size = type_name[0..size_end_index];
                 const modifier = if (pt.is_const) "const " else if (pt.is_volatile) "volatile " else "";
                 break :format std.fmt.comptimePrint("{s}{s}{s}", .{ size, modifier, self.getName(pt.child) });
             },
-            else => format: {
-                const prefix = switch (@typeInfo(T)) {
-                    .Struct => "Struct",
-                    .ErrorSet => "ErrorSet",
-                    .Fn => "Fn",
-                    else => "Type",
-                };
-                break :format std.fmt.comptimePrint("{s}{d:0>4}", .{ prefix, self.getSlot(T) });
+            .Optional => |op| std.fmt.comptimePrint("?{s}", .{self.getName(op.child)}),
+            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{ ar.len, self.getName(ar.child) }),
+            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{ self.getName(eu.error_set), self.getName(eu.payload) }),
+            .ErrorSet => std.fmt.comptimePrint("ErrorSet{d:0>4}", .{self.getSlot(td)}),
+            .Struct => get: {
+                if (std.mem.endsWith(u8, type_name, "}")) {
+                    break :get std.fmt.comptimePrint("Struct{d:0>4}", .{self.getSlot(td)});
+                } else {
+                    break :get type_name;
+                }
             },
+            else => type_name,
         };
-    }
-
-    fn isCryptic(comptime name: []const u8) bool {
-        return if (name.len > 50)
-            true
-        else if (name[name.len - 1] == '}')
-            true
-        else
-            false;
     }
 };
 
