@@ -133,6 +133,5 @@ export class NodeEnvironment extends Environment {
     if (err) {
       throw new ZigError(err);
     }
-    return args.retval;
   }
 }

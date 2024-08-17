@@ -1211,7 +1211,10 @@ pub const TypeDataCollector = struct {
             .Optional => |op| std.fmt.comptimePrint("?{s}", .{self.getName(op.child)}),
             .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{ ar.len, self.getName(ar.child) }),
             .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{ self.getName(eu.error_set), self.getName(eu.payload) }),
-            .ErrorSet => std.fmt.comptimePrint("ErrorSet{d:0>4}", .{self.getSlot(td)}),
+            .ErrorSet => switch (td.Type) {
+                anyerror => type_name,
+                else => std.fmt.comptimePrint("ErrorSet{d:0>4}", .{self.getSlot(td)}),
+            },
             .Struct => get: {
                 if (std.mem.endsWith(u8, type_name, "}")) {
                     break :get std.fmt.comptimePrint("Struct{d:0>4}", .{self.getSlot(td)});
@@ -1356,6 +1359,7 @@ test "TypeDataCollector.setNames" {
     const ns = struct {
         pub const tuple = .{.tuple};
         pub const Error = error{ a, b, c };
+        pub const AnyError = anyerror;
     };
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(ns);
@@ -1365,6 +1369,8 @@ test "TypeDataCollector.setNames" {
     const e_td = tdc.get(ns.Error);
     const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
     try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
+    const ae_td = tdc.get(ns.AnyError);
+    try expectCT(std.mem.eql(u8, ae_td.getName(), "anyerror"));
 }
 
 fn TypeDatabase(comptime len: comptime_int) type {

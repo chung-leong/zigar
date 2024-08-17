@@ -614,6 +614,41 @@ napi_value recreate_address(napi_env env,
     return address;
 }
 
+void js_queue_callback(napi_env env,
+                       napi_value js_callback,
+                       void* context,
+                       void* data) {
+    module_data* md = (module_data*) context;
+    deferred_js_call* call = (deferred_js_call*) data;
+    size_t argc = 3;
+    napi_value buffer;
+    napi_value recv;
+    napi_value args[3];
+    size_t result = FAILURE;
+    void* copy;
+    if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
+     || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
+     || !memcpy(copy, call->arg_ptr, call->arg_size) != napi_ok
+     || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1] != napi_ok
+     || napi_create_uint32(env, call->futex_handle, &args[2]) != napi_ok
+     || napi_get_null(env, &recv) != napi_ok
+     || napi_call_function(env, recv, js_callback, argc, argv, &result) != napi_ok) {
+        call->wake_caller(call->futex_ptr, result);
+
+    }
+}
+
+
+uint32_t perform_js_call(module_data* md,
+                         deferred_js_call* call) {
+
+}
+
+uint32_t queue_js_call(module_data* md,
+                       deferred_js_call* call) {
+    napi_call_threadsafe_function()
+}
+
 void finalize_function(napi_env env,
                        void* finalize_data,
                        void* finalize_hint) {

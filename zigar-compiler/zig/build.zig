@@ -10,6 +10,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const zigar = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_path },
+    });
+    lib.root_module.addImport("zigar", zigar);
     const imports = .{};
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },

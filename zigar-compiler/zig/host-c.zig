@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
+const thunk_js = @import("./thunk_js.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
@@ -43,9 +44,13 @@ pub fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-pub const Result = enum(u32) { ok, failure };
+pub const Result = enum(u32) {
+    ok,
+    failure,
+};
 
 threadlocal var initial_context: ?Call = null;
+threadlocal var main_thread: bool = false;
 
 // host interface
 pub const Host = struct {
@@ -207,6 +212,21 @@ pub const Host = struct {
         const dv = try self.captureView(memory);
         try self.writeToConsole(dv);
     }
+
+    pub fn runJsFunction(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, wait: bool) Result {
+        if (main_thread) {
+            return imports.perform_js_call(ctx.env, ctx.id, arg_ptr, arg_size, wait);
+        } else {
+            var futex: Futex = .{
+                .value = std.atomic.Value.init(0),
+                .handle = @intFromPtr(&futex),
+            };
+            const futex_handle = @intFromPtr(&futex);
+            imports.queue_js_call(ctx.mod_ptr, ctx.id, arg_ptr, arg_size, futex_handle, wait);
+            std.Thread.Futex.wait(&futex.value, 0);
+            return futex.value == 0;
+        }
+    }
 };
 
 // allocator for fixed memory
@@ -312,6 +332,20 @@ pub fn runVariadicThunk(
     return .ok;
 }
 
+const Futex = struct {
+    value: std.atomic.Value(u32),
+    token: u32,
+};
+
+pub fn wakeCaller(futex_handle: usize, value: u32) void {
+    // make sure futex address is valid
+    const ptr: *Futex = @ptrFromInt(futex_handle);
+    if (ptr.token == @as(u32, @truncate(futex_handle))) {
+        ptr.value.store(value, .release);
+        std.Thread.Futex.wake(ptr.value, 1);
+    }
+}
+
 // pointer table that's filled on the C side
 const Imports = extern struct {
     allocate_host_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
@@ -328,6 +362,9 @@ const Imports = extern struct {
     end_structure: *const fn (Call, Value) callconv(.C) Result,
     create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (Call, Value) callconv(.C) Result,
+
+    perform_js_call: *const fn (*anyopaque, usize, *anyopaque, usize, bool) callconv(.C) JsCallResult,
+    queue_js_call: *const fn (*anyopaque, usize, *anyopaque, usize, usize, bool) callconv(.C) JsCallResult,
 };
 var imports: Imports = undefined;
 
@@ -339,6 +376,7 @@ const Exports = extern struct {
     run_thunk: *const fn (Call, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
     run_variadic_thunk: *const fn (Call, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
+    wake_caller: *const fn (usize, u32) void,
 };
 
 const ModuleAttributes = packed struct(u32) {
@@ -362,6 +400,7 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
             return .ok;
         }
     };
+    main_thread = true;
     return ns.getFactoryThunk;
 }
 
@@ -383,6 +422,7 @@ pub fn createModule(comptime T: type) Module {
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,
             .override_write = overrideWrite,
+            .wake_caller = wakeCaller,
         },
     };
 }

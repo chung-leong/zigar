@@ -53,6 +53,7 @@ typedef uint32_t result;
 enum {
     OK,
     FAILURE,
+    DEADLOCK,
 };
 
 typedef uint32_t structure_type;
@@ -151,6 +152,7 @@ typedef struct {
     void* so_handle;
     uintptr_t base_address;
     napi_ref js_env;
+    napi_threadsafe_function ts_fn;
 } module_data;
 
 typedef struct call_context {
@@ -162,5 +164,20 @@ typedef struct call_context {
 typedef struct {
     napi_ref env_constructor;
 } addon_data;
+
+
+typedef struct {
+    size_t id;
+    void* arg_ptr;
+    size_t arg_size;
+} js_call;
+
+typedef struct {
+    size_t id;
+    void* arg_ptr;
+    size_t arg_size;
+    void* futex_ptr;
+    void (__cdecl *wake_caller)(void*, usize);
+} deferred_js_call;
 
 #endif

@@ -127,6 +127,7 @@ export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
+    'zigarPath',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -242,6 +243,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
+  const zigarPath = absolute(`../zig/zigar.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
   return {
     platform,
@@ -252,6 +254,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     moduleDir,
     moduleBuildDir,
     stubPath,
+    zigarPath,
     buildDir,
     buildDirSize,
     buildFilePath,

@@ -39,6 +39,7 @@ export function addTests(importModule, options) {
         call1(world);
       });
       expect(lines).to.eql([ 'hello', 'world' ]);
+      call1(() => {});
     })
     it('should return callable function', async function() {
       this.timeout(300000);

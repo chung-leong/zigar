@@ -32,6 +32,9 @@ export class Environment {
   /* COMPTIME-ONLY-END */
   /* RUNTIME-ONLY */
   variables = [];
+  jsFunctionMap = null;
+  jsFunctionIdMap = null;
+  jsFunctionNextId = 1;
   /* RUNTIME-ONLY-END */
   imports;
   console = globalThis.console;
@@ -107,7 +110,12 @@ export class Environment {
     // return the address of target's buffer if correctly aligned
     throw new MustBeOverridden();
   }
-  /* c8 ignore end ??? */
+
+  createFunctionThunk(funcId) {
+    // return the address of JS function thunk
+    throw new MustBeOverridden();
+  }
+  /* c8 ignore end */
   /* OVERRIDDEN-END */
 
   startContext() {
@@ -556,6 +564,23 @@ export class Environment {
   }
 
   /* RUNTIME-ONLY */
+  getFunctionThunk(f, caller) {
+    if (!this.jsFunctionIdMap) {
+      this.jsFunctionIdMap = new WeakMap();
+      this.jsFunctionMap = new Map();
+    }
+    let id = this.jsFunctionIdMap.get(f);
+    if (id !== undefined) {
+      const fnExisting = this.jsFunctionMap.get(id);
+      return fnExisting[MEMORY];
+    }
+    id = this.jsFunctionNextId++;
+    const dv = this.createFunctionThunk(id);
+    this.jsFunctionMap.set(id, fn);
+    this.jsFunctionIdMap.set(fn, id);
+    return dv;
+  }
+
   recreateStructures(structures, options) {
     Object.assign(this, options);
     const insertObjects = (dest, placeholders) => {
