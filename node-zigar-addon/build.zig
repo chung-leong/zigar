@@ -13,11 +13,12 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    const clang_flags = &.{ "-std=gnu11", "-Wno-trigraphs" };
     lib.addIncludePath(b.path("../node-api-headers/include"));
     lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
-    lib.addCSourceFile(.{ .file = b.path("./src/addon-node.c"), .flags = &.{} });
-    lib.addCSourceFile(.{ .file = b.path("./src/addon.c"), .flags = &.{} });
-    lib.addCSourceFile(.{ .file = b.path("./src/redirect.c"), .flags = &.{} });
+    lib.addCSourceFile(.{ .file = b.path("./src/addon-node.c"), .flags = clang_flags });
+    lib.addCSourceFile(.{ .file = b.path("./src/addon.c"), .flags = clang_flags });
+    lib.addCSourceFile(.{ .file = b.path("./src/redirect.c"), .flags = clang_flags });
     switch (os) {
         .windows => {
             lib.addCSourceFile(.{ .file = b.path("./src/win32-shim.c"), .flags = &.{} });

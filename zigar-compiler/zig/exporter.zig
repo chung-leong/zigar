@@ -338,7 +338,7 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                         true;
                     if (is_value_supported) {
                         // always export constants while variables can be optionally switched off
-                        if (decl_ptr_td.isConst() or !ctx.host.options.omit_variables) {
+                        if (decl_ptr_td.isConst() or !ctx.options.omit_variables) {
                             try ctx.host.attachMember(structure, .{
                                 .name = decl.name,
                                 .member_type = if (decl_ptr_td.isConst()) .@"comptime" else .static,
@@ -617,9 +617,9 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) types.Thunk {
     const RootFactory = struct {
         fn exportStructure(ptr: ?*anyopaque, _: *const anyopaque, arg_ptr: *anyopaque) callconv(.C) ?Value {
             @setEvalBranchQuota(2000000);
-            const host = HostT.init(ptr, arg_ptr);
-            defer host.release();
-            const ctx = .{ .host = host, .tdb = tdb };
+            const host = HostT.init(ptr);
+            const options: *const types.HostOptions = @ptrCast(arg_ptr);
+            const ctx = .{ .host = host, .options = options, .tdb = tdb };
             if (getStructure(ctx, T)) |_| {
                 return null;
             } else |err| {

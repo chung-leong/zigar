@@ -134,4 +134,19 @@ export class NodeEnvironment extends Environment {
       throw new ZigError(err);
     }
   }
+
+  exportFunctions() {
+    const imports = {};
+    for (const [ name, alias ] of Object.entries(this.exports)) {
+      const fn = this[alias ?? name];
+      imports[name] = fn.bind(this);
+    }
+    return imports;
+  }
+
+  importFunctions(exports) {
+    for (const [ name, fn ] of Object.entries(exports)) {
+      this[name] = fn;
+    }
+  }
 }

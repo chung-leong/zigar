@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
-const thunk_js = @import("./thunk_js.zig");
+const thunk_js = @import("./thunk-js.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
@@ -10,7 +10,8 @@ const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 
-const Call = *anyopaque;
+const ModuleData = opaque {};
+const CallResult = thunk_js.CallResult;
 
 // struct for C
 const StructureC = extern struct {
@@ -49,27 +50,12 @@ pub const Result = enum(u32) {
     failure,
 };
 
-threadlocal var initial_context: ?Call = null;
-threadlocal var main_thread: bool = false;
-
 // host interface
 pub const Host = struct {
-    context: Call,
-    options: types.HostOptions,
+    context: *ModuleData,
 
-    pub fn init(call_ptr: ?*anyopaque, arg_ptr: ?*anyopaque) Host {
-        const context: Call = @ptrCast(@alignCast(call_ptr.?));
-        const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
-        if (initial_context == null) {
-            initial_context = context;
-        }
-        return .{ .context = context, .options = if (options_ptr) |ptr| ptr.* else .{} };
-    }
-
-    pub fn release(self: Host) void {
-        if (initial_context == self.context) {
-            initial_context = null;
-        }
+    pub fn init(ptr: ?*anyopaque) Host {
+        return .{ .context = @ptrCast(ptr.?) };
     }
 
     pub fn allocateMemory(self: Host, size: usize, alignment: u16) !Memory {
@@ -213,21 +199,29 @@ pub const Host = struct {
         try self.writeToConsole(dv);
     }
 
-    pub fn runJsFunction(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, wait: bool) Result {
+    pub fn runJsFunction(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, wait: bool) CallResult {
         if (main_thread) {
             return imports.perform_js_call(ctx.env, ctx.id, arg_ptr, arg_size, wait);
         } else {
-            var futex: Futex = .{
-                .value = std.atomic.Value.init(0),
-                .handle = @intFromPtr(&futex),
-            };
-            const futex_handle = @intFromPtr(&futex);
-            imports.queue_js_call(ctx.mod_ptr, ctx.id, arg_ptr, arg_size, futex_handle, wait);
+            var futex: Futex = .{ .value = std.atomic.Value.init(0) };
+            futex.handle = @intFromPtr(&futex);
+            if (imports.queue_js_call(ctx.mod_ptr, ctx.id, arg_ptr, arg_size, futex.handle, wait) != .ok) {
+                return .failure;
+            }
             std.Thread.Futex.wait(&futex.value, 0);
-            return futex.value == 0;
+            return @enumFromInt(futex.value);
         }
     }
 };
+
+threadlocal var module_data: ?*ModuleData = null;
+threadlocal var main_thread: bool = false;
+
+fn initialize(md: *ModuleData) callconv(.C) Result {
+    module_data = md;
+    main_thread = true;
+    return .ok;
+}
 
 // allocator for fixed memory
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -289,8 +283,8 @@ fn freeExternMemory(_: MemoryType, memory: *const Memory) callconv(.C) Result {
 }
 
 pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
-    if (initial_context) |context| {
-        const host = Host.init(context, null);
+    if (module_data) |mod| {
+        const host = Host.init(mod);
         if (host.writeBytesToConsole(bytes, len)) {
             return .ok;
         } else |_| {}
@@ -299,14 +293,14 @@ pub fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
 }
 
 pub fn runThunk(
-    call: Call,
+    md: *ModuleData,
     thunk_address: usize,
     fn_address: usize,
     args: *anyopaque,
     dest: *?Value,
 ) callconv(.C) Result {
     const thunk: types.Thunk = @ptrFromInt(thunk_address);
-    if (thunk(@ptrCast(call), @ptrFromInt(fn_address), args)) |result| {
+    if (thunk(md, @ptrFromInt(fn_address), args)) |result| {
         dest.* = result;
     } else {
         dest.* = null;
@@ -315,7 +309,7 @@ pub fn runThunk(
 }
 
 pub fn runVariadicThunk(
-    call: Call,
+    md: *ModuleData,
     thunk_address: usize,
     fn_address: usize,
     args: *anyopaque,
@@ -324,7 +318,7 @@ pub fn runVariadicThunk(
     dest: *?Value,
 ) callconv(.C) Result {
     const thunk: types.VariadicThunk = @ptrFromInt(thunk_address);
-    if (thunk(@ptrCast(call), @ptrFromInt(fn_address), args, attr_ptr, arg_count)) |result| {
+    if (thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count)) |result| {
         dest.* = result;
     } else {
         dest.* = null;
@@ -334,49 +328,52 @@ pub fn runVariadicThunk(
 
 const Futex = struct {
     value: std.atomic.Value(u32),
-    token: u32,
+    handle: usize = undefined,
 };
 
-pub fn wakeCaller(futex_handle: usize, value: u32) void {
+pub fn wakeCaller(futex_handle: usize, value: u32) callconv(.C) Result {
     // make sure futex address is valid
     const ptr: *Futex = @ptrFromInt(futex_handle);
-    if (ptr.token == @as(u32, @truncate(futex_handle))) {
+    if (ptr.handle == futex_handle) {
         ptr.value.store(value, .release);
-        std.Thread.Futex.wake(ptr.value, 1);
+        std.Thread.Futex.wake(&ptr.value, 1);
+        return .ok;
     }
+    return .failure;
 }
 
 // pointer table that's filled on the C side
 const Imports = extern struct {
-    allocate_host_memory: *const fn (Call, usize, u16, *Memory) callconv(.C) Result,
-    free_host_memory: *const fn (Call, *const Memory) callconv(.C) Result,
-    capture_string: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    capture_view: *const fn (Call, *const Memory, *Value) callconv(.C) Result,
-    cast_view: *const fn (Call, *const Memory, Value, *Value) callconv(.C) Result,
-    read_slot: *const fn (Call, ?Value, usize, *Value) callconv(.C) Result,
-    write_slot: *const fn (Call, ?Value, usize, ?Value) callconv(.C) Result,
-    begin_structure: *const fn (Call, *const StructureC, *Value) callconv(.C) Result,
-    attach_member: *const fn (Call, Value, *const MemberC, bool) callconv(.C) Result,
-    attach_template: *const fn (Call, Value, Value, bool) callconv(.C) Result,
-    finalize_shape: *const fn (Call, Value) callconv(.C) Result,
-    end_structure: *const fn (Call, Value) callconv(.C) Result,
-    create_template: *const fn (Call, ?Value, *Value) callconv(.C) Result,
-    write_to_console: *const fn (Call, Value) callconv(.C) Result,
+    allocate_host_memory: *const fn (*ModuleData, usize, u16, *Memory) callconv(.C) Result,
+    free_host_memory: *const fn (*ModuleData, *const Memory) callconv(.C) Result,
+    capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
+    capture_view: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
+    cast_view: *const fn (*ModuleData, *const Memory, Value, *Value) callconv(.C) Result,
+    read_slot: *const fn (*ModuleData, ?Value, usize, *Value) callconv(.C) Result,
+    write_slot: *const fn (*ModuleData, ?Value, usize, ?Value) callconv(.C) Result,
+    begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) Result,
+    attach_member: *const fn (*ModuleData, Value, *const MemberC, bool) callconv(.C) Result,
+    attach_template: *const fn (*ModuleData, Value, Value, bool) callconv(.C) Result,
+    finalize_shape: *const fn (*ModuleData, Value) callconv(.C) Result,
+    end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
+    create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
+    write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
 
-    perform_js_call: *const fn (*anyopaque, usize, *anyopaque, usize, bool) callconv(.C) JsCallResult,
-    queue_js_call: *const fn (*anyopaque, usize, *anyopaque, usize, usize, bool) callconv(.C) JsCallResult,
+    perform_js_call: *const fn (*ModuleData, usize, *anyopaque, usize, bool) callconv(.C) CallResult,
+    queue_js_call: *const fn (*ModuleData, usize, *anyopaque, usize, usize, bool) callconv(.C) CallResult,
 };
 var imports: Imports = undefined;
 
 // pointer table that's used on the C side
 const Exports = extern struct {
+    initialize: *const fn (*ModuleData) callconv(.C) Result,
     allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (Call, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
-    run_variadic_thunk: *const fn (Call, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
+    run_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
+    run_variadic_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
-    wake_caller: *const fn (usize, u32) void,
+    wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };
 
 const ModuleAttributes = packed struct(u32) {
@@ -400,7 +397,6 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
             return .ok;
         }
     };
-    main_thread = true;
     return ns.getFactoryThunk;
 }
 
@@ -416,6 +412,7 @@ pub fn createModule(comptime T: type) Module {
         },
         .imports = &imports,
         .exports = &.{
+            .initialize = initialize,
             .allocate_fixed_memory = allocateExternMemory,
             .free_fixed_memory = freeExternMemory,
             .get_factory_thunk = createGetFactoryThunk(T),

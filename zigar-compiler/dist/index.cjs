@@ -153,12 +153,12 @@ class Unsupported extends TypeError {
   }
 }
 
-class NoInitializer extends TypeError {
+let NoInitializer$1 = class NoInitializer extends TypeError {
   constructor(structure) {
     const { name } = structure;
     super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
   }
-}
+};
 
 class BufferSizeMismatch extends TypeError {
   constructor(structure, dv, target = null) {
@@ -2148,7 +2148,7 @@ function createConstructor(structure, handlers, env) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throw new NoInitializer(structure);
+        throw new NoInitializer$1(structure);
       }
       self = this;
       if (hasSlots) {
@@ -3992,26 +3992,58 @@ function defineFunction(structure, env) {
   } = structure;
   const cache = new ObjectCache();
   const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
-  const constructor = structure.constructor = function(dv) {
-    let self;
+  const argCount = argMembers.length - 1;
+  const constructor = structure.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, dv, caller;
+    if (creating) {
+      if (arguments.length === 0) {
+        throw new NoInitializer(structure);
+      }
+      if (typeof(arg) !== 'function') {
+        throw new TypeMismatch('function', arg);
+      }
+      dv = env.getFunctionThunk(arg);
+    } else {
+      dv = arg;
+    }
     if (self = cache.find(dv)) {
       return self;
     }
-    const invoke = function(argStruct) {
-      const thunkAddr = env.getViewAddress(template[MEMORY]);
-      const funcAddr = env.getViewAddress(self[MEMORY]);
-      return env.invokeThunk(thunkAddr, funcAddr, argStruct);
-    };
-    self = anonymous(function (...args) {
-      return invoke(new Arg(args, self.name, 0));
-    });
+    if (creating) {
+      const f = arg;
+      caller = function(argStruct) {
+        const args = [];
+        for (let i = 0; i < argCount; i++) {
+          args.push(argStruct[i]);
+        }
+        argStruct.retval = f(...args);
+      };
+      self = anonymous(function(...args) {
+        return arg(...args);
+      });
+      env.attachThunkCaller(dv, caller);
+    } else {
+      caller = function(argStruct) {
+        const thunkAddr = env.getViewAddress(template[MEMORY]);
+        const funcAddr = env.getViewAddress(self[MEMORY]);
+        env.invokeThunk(thunkAddr, funcAddr, argStruct);
+      };
+      self = anonymous(function (...args) {
+        const argStruct = new Arg(args, self.name, 0);
+        caller(argStruct);
+        return argStruct.retval;
+      });
+    }
     Object.setPrototypeOf(self, constructor.prototype);
     self[MEMORY] = dv;
-    const variantCreator = function (type) {
+    const creator = function (type) {
       let variant, argCount;
       if (type === 'method') {
         variant = function(...args) {
-          return invoke(new Arg([ this, ...args ], variant.name, 1));
+          const argStruct = new Arg([ this, ...args ], variant.name, 1);
+          caller(argStruct);
+          return argStruct.retval;
         };
         argCount = argMembers.length - 2;
       }
@@ -4021,8 +4053,8 @@ function defineFunction(structure, env) {
       return variant;
     };
     defineProperties(self, {
-      length: { value: argMembers.length - 1, writable: false },
-      [VARIANT_CREATOR]: { value: variantCreator },
+      length: { value: argCount, writable: false },
+      [VARIANT_CREATOR]: { value: creator },
     });
     cache.save(dv, self);
     return self;
@@ -5646,6 +5678,7 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
+    'zigarPath',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5759,6 +5792,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
+  const zigarPath = absolute(`../zig/zigar.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
   return {
     platform,
@@ -5769,6 +5803,7 @@ function createConfig(srcPath, modPath, options = {}) {
     moduleDir,
     moduleBuildDir,
     stubPath,
+    zigarPath,
     buildDir,
     buildDirSize,
     buildFilePath,

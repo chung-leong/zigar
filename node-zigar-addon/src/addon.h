@@ -20,6 +20,9 @@
 
 #define MISSING(T)                      ((T) -1)
 
+#define EXPORT_COUNT    13
+#define IMPORT_COUNT    15
+
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
 #else
@@ -101,33 +104,8 @@ typedef struct {
     memory_attributes attributes;
 } memory;
 
-typedef struct call_context* call;
-
-typedef struct {
-    result (__cdecl *allocate_host_memory)(call, size_t, uint16_t, memory*);
-    result (__cdecl *free_host_memory)(call, const memory*);
-    result (__cdecl *capture_string)(call, const memory*, napi_value*);
-    result (__cdecl *capture_view)(call, const memory*, napi_value*);
-    result (__cdecl *cast_view)(call, const memory*, napi_value, napi_value*);
-    result (__cdecl *read_slot)(call, napi_value, size_t, napi_value*);
-    result (__cdecl *write_slot)(call, napi_value, size_t, napi_value);
-    result (__cdecl *begin_structure)(call, const structure*, napi_value*);
-    result (__cdecl *attach_member)(call, napi_value, const member*, bool);
-    result (__cdecl *attach_template)(call, napi_value, napi_value, bool);
-    result (__cdecl *finalize_shape)(call, napi_value);
-    result (__cdecl *end_structure)(call, napi_value);
-    result (__cdecl *create_template)(call, napi_value, napi_value*);
-    result (__cdecl *write_to_console)(call, napi_value);
-} export_table;
-
-typedef struct {
-    result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
-    result (__cdecl *free_extern_memory)(uint32_t, const memory*);
-    result (__cdecl *get_factory_thunk)(size_t*);
-    result (__cdecl *run_thunk)(call, size_t, size_t, void*, napi_value*);
-    result (__cdecl *run_variadic_thunk)(call, size_t, size_t, void*, void*, size_t, napi_value*);
-    result (__cdecl *override_write)(const void*, size_t);
-} import_table;
+typedef struct export_table export_table;
+typedef struct import_table import_table;
 
 typedef struct {
     union {
@@ -151,15 +129,11 @@ typedef struct {
     module *mod;
     void* so_handle;
     uintptr_t base_address;
+    napi_env env;
     napi_ref js_env;
+    napi_ref js_fns[IMPORT_COUNT];
     napi_threadsafe_function ts_fn;
 } module_data;
-
-typedef struct call_context {
-    napi_env env;
-    napi_value js_env;
-    module_data *mod_data;
-} call_context;
 
 typedef struct {
     napi_ref env_constructor;
@@ -176,8 +150,34 @@ typedef struct {
     size_t id;
     void* arg_ptr;
     size_t arg_size;
-    void* futex_ptr;
-    void (__cdecl *wake_caller)(void*, usize);
+    size_t futex_handle;
 } deferred_js_call;
+
+typedef struct export_table {
+    result (__cdecl *allocate_host_memory)(module_data*, size_t, uint16_t, memory*);
+    result (__cdecl *free_host_memory)(module_data*, const memory*);
+    result (__cdecl *capture_string)(module_data*, const memory*, napi_value*);
+    result (__cdecl *capture_view)(module_data*, const memory*, napi_value*);
+    result (__cdecl *cast_view)(module_data*, const memory*, napi_value, napi_value*);
+    result (__cdecl *read_slot)(module_data*, napi_value, size_t, napi_value*);
+    result (__cdecl *write_slot)(module_data*, napi_value, size_t, napi_value);
+    result (__cdecl *begin_structure)(module_data*, const structure*, napi_value*);
+    result (__cdecl *attach_member)(module_data*, napi_value, const member*, bool);
+    result (__cdecl *attach_template)(module_data*, napi_value, napi_value, bool);
+    result (__cdecl *finalize_shape)(module_data*, napi_value);
+    result (__cdecl *end_structure)(module_data*, napi_value);
+    result (__cdecl *create_template)(module_data*, napi_value, napi_value*);
+    result (__cdecl *write_to_console)(module_data*, napi_value);
+} export_table;
+
+typedef struct import_table {
+    result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
+    result (__cdecl *free_extern_memory)(uint32_t, const memory*);
+    result (__cdecl *get_factory_thunk)(size_t*);
+    result (__cdecl *run_thunk)(module_data*, size_t, size_t, void*, napi_value*);
+    result (__cdecl *run_variadic_thunk)(module_data*, size_t, size_t, void*, void*, size_t, napi_value*);
+    result (__cdecl *override_write)(const void*, size_t);
+    result (__cdecl *wake_caller)(size_t, uint32_t);
+} import_table;
 
 #endif

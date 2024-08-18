@@ -11,7 +11,7 @@ pub const Closure = closure.Instance(Context);
 
 pub const NoWait = struct {};
 
-const CallResult = enum(u32) {
+pub const CallResult = enum(u32) {
     ok,
     failure,
     deadlock,

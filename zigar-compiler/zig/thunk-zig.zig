@@ -22,7 +22,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) 
             comptime var index = 0;
             inline for (fields, 0..) |field, i| {
                 if (field.type == std.mem.Allocator) {
-                    args[i] = createAllocator(&host);
+                    args[i] = createAllocator(host);
                 } else {
                     const name = std.fmt.comptimePrint("{d}", .{index});
                     // get the argument only if it isn't empty
@@ -49,8 +49,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) 
             fn_ptr: *const anyopaque,
             arg_ptr: *anyopaque,
         ) callconv(.C) ?Value {
-            const host = HostT.init(ptr, arg_ptr);
-            defer host.release();
+            const host = HostT.init(ptr);
             tryFunction(host, fn_ptr, arg_ptr) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
@@ -75,8 +74,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) 
             attr_ptr: *const anyopaque,
             arg_count: usize,
         ) callconv(.C) ?Value {
-            const host = HostT.init(ptr, arg_ptr);
-            defer host.release();
+            const host = HostT.init(ptr);
             tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count) catch |err| {
                 return createErrorMessage(host, err) catch null;
             };
@@ -95,8 +93,6 @@ test "createThunk" {
         pub fn init(_: ?*anyopaque, _: *anyopaque) @This() {
             return .{};
         }
-
-        pub fn release(_: @This()) void {}
 
         pub fn captureString(_: @This(), _: types.Memory) !Value {
             return error.unable_to_create_object;
@@ -144,11 +140,11 @@ pub fn createErrorMessage(host: anytype, err: anyerror) !Value {
     return host.captureString(memory);
 }
 
-fn createAllocator(host_ptr: anytype) std.mem.Allocator {
-    const HostPtrT = @TypeOf(host_ptr);
+fn createAllocator(host: anytype) std.mem.Allocator {
+    const HostT = @TypeOf(host);
     const VTable = struct {
         fn alloc(p: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
-            const h: HostPtrT = @alignCast(@ptrCast(p));
+            const h = HostT.init(p);
             const alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align));
             return if (h.allocateMemory(size, alignment)) |m| m.bytes else |_| null;
         }
@@ -158,7 +154,7 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
         }
 
         fn free(p: *anyopaque, bytes: []u8, ptr_align: u8, _: usize) void {
-            const h: HostPtrT = @alignCast(@ptrCast(p));
+            const h = HostT.init(p);
             h.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
@@ -175,7 +171,7 @@ fn createAllocator(host_ptr: anytype) std.mem.Allocator {
         };
     };
     return .{
-        .ptr = @ptrCast(@constCast(host_ptr)),
+        .ptr = host.context,
         .vtable = &VTable.instance,
     };
 }
