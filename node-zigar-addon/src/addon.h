@@ -21,7 +21,7 @@
 #define MISSING(T)                      ((T) -1)
 
 #define EXPORT_COUNT    13
-#define IMPORT_COUNT    15
+#define IMPORT_COUNT    14
 
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
@@ -171,6 +171,7 @@ typedef struct export_table {
 } export_table;
 
 typedef struct import_table {
+    result (__cdecl *initialize)(module_data*);
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);

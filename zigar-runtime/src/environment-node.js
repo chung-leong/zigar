@@ -19,6 +19,22 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
   };
+  exports = {
+    allocateHostMemory: null,
+    freeHostMemory: null,
+    captureView: null,
+    castView: null,
+    readSlot: null,
+    writeSlot: null,
+    beginStructure: null,
+    attachMember: null,
+    attachTemplate: null,
+    finalizeShape: null,
+    endStructure: null,
+    createTemplate: null,
+    writeToConsole: null,
+    runFunction: null,
+  };
   wordSize = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 8 : /* c8 ignore next */ 4;
 
   async init() {
@@ -133,6 +149,10 @@ export class NodeEnvironment extends Environment {
     if (err) {
       throw new ZigError(err);
     }
+  }
+
+  runFunction() {
+    // TODO
   }
 
   exportFunctions() {

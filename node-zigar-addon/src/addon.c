@@ -1,5 +1,7 @@
 #include "addon.h"
 
+#include <stdio.h>
+
 int module_count = 0;
 int buffer_count = 0;
 int function_count = 0;
@@ -12,7 +14,7 @@ module_data* new_module(napi_env env, napi_ref js_env_ref) {
     module_data* md = (module_data*) calloc(1, sizeof(module_data));
     md->env = env;
     md->js_env = js_env_ref;
-    md->ref_count = 0;
+    md->ref_count = 1;
     module_count++;
     return md;
 }
@@ -48,7 +50,6 @@ enum {
     freeHostMemory,
     captureView,
     castView,
-    getSlotNumber,
     readSlot,
     writeSlot,
     beginStructure,
@@ -68,8 +69,10 @@ bool call_js_function(module_data* md,
                       napi_value* dest) {
     napi_env env = md->env;
     napi_value fn;
+    napi_value null;
     return napi_get_reference_value(env, md->js_fns[index], &fn) == napi_ok
-        && napi_call_function(env, NULL, fn, argc, argv, dest) == napi_ok;
+        && napi_get_null(env, &null) == napi_ok
+        && napi_call_function(env, null, fn, argc, argv, dest) == napi_ok;
 }
 
 result allocate_host_memory(module_data* md,
@@ -144,22 +147,6 @@ result cast_view(module_data* md,
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
      && call_js_function(md, castView, 4, args, dest)) {
-        return OK;
-    }
-    return FAILURE;
-}
-
-result get_slot_number(module_data* md,
-                       uint32_t scope,
-                       uint32_t key,
-                       uint32_t* dest) {
-    napi_env env = md->env;
-    napi_value args[2];
-    napi_value result;
-    if (napi_create_uint32(env, scope, &args[0]) == napi_ok
-     && napi_create_uint32(env, key, &args[1]) == napi_ok
-     && call_js_function(md, getSlotNumber, 2, args, &result)
-     && napi_get_value_uint32(env, result, dest) == napi_ok) {
         return OK;
     }
     return FAILURE;
@@ -716,8 +703,8 @@ struct {
     const char* name;
     napi_callback cb;
 } exports[EXPORT_COUNT] = {
-    { "load_module", load_module },
-    { "get_buffer_address", get_buffer_address },
+    { "loadModule", load_module },
+    { "getBufferAddress", get_buffer_address },
     { "allocateExternMemory", allocate_external_memory },
     { "freeExternMemory", free_external_memory },
     { "obtainExternBuffer", obtain_external_buffer },
@@ -739,7 +726,6 @@ struct {
     { "freeHostMemory", freeHostMemory },
     { "captureView", captureView },
     { "castView", castView },
-    { "getSlotNumber", getSlotNumber },
     { "readSlot", readSlot },
     { "writeSlot", writeSlot },
     { "beginStructure", beginStructure },
@@ -749,6 +735,7 @@ struct {
     { "endStructure", endStructure },
     { "createTemplate", createTemplate },
     { "writeToConsole", writeToConsole },
+    { "runFunction", runFunction },
 };
 
 bool export_functions(module_data* md,
@@ -783,14 +770,15 @@ bool import_functions(module_data* md,
     napi_value exports;
     napi_value export_fn;
     napi_value key;
+    napi_value args[0];
     if (napi_get_named_property(env, js_env, "exportFunctions", &export_fn) != napi_ok
-     || napi_call_function(env, js_env, export_fn, 0, NULL, &exports) != napi_ok) {
+     || napi_call_function(env, js_env, export_fn, 0, args, &exports) != napi_ok) {
         return false;
     }
-    napi_value run_fn;
+    napi_value run_fn = NULL;
     for (int i = 0; i < IMPORT_COUNT; i++) {
         napi_value function;
-        if (napi_get_named_property(env, js_env, imports[i].name, &function) != napi_ok
+        if (napi_get_named_property(env, exports, imports[i].name, &function) != napi_ok
          || napi_create_reference(env, function, 0, &md->js_fns[i]) != napi_ok) {
             return false;
         }
@@ -798,11 +786,16 @@ bool import_functions(module_data* md,
             run_fn = function;
         }
     }
-    if (napi_create_threadsafe_function(env, run_fn, NULL, NULL, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
+    napi_value resource_name;
+    napi_status status;
+    if (!run_fn
+     || napi_create_string_utf8(env, "call", 4, &resource_name) != napi_ok
+     || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
         return false;
     }
     return true;
 }
+
 
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
@@ -860,6 +853,11 @@ napi_value load_module(napi_env env,
     exports->end_structure = end_structure;
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;
+
+    // run initializer
+    if (mod->imports->initialize(md) != OK) {
+        return throw_error(env, "Initialization failed");
+    }
 
     // add module attributess to environment
     module_attributes attributes = md->mod->attributes;
@@ -924,12 +922,12 @@ napi_value create_environment(napi_env env,
      || napi_create_reference(env, js_env, 0, &js_env_ref) != napi_ok) {
         return throw_error(env, "Unable to create runtime environment");
     }
-
     // export functions to the environment and import functions from it
     module_data* md = new_module(env, js_env_ref);
-    if (!export_functions(md, js_env) || !import_functions(md, js_env)) {
-        free(md);
-        return throw_error(env, "Unable to create runtime environment");
+    bool success = export_functions(md, js_env) && import_functions(md, js_env);
+    release_module(env, md);
+    if (!success) {
+        return throw_error(env, "Unable to export/import functions");
     }
     return js_env;
 }
