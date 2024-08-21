@@ -274,6 +274,12 @@ pub const Host = struct {
         return _createTemplate(dv) orelse
             Error.unable_to_create_structure_template;
     }
+
+    pub fn createErrorMessage(self: Host, err: anyerror) !Value {
+        const err_name = @errorName(err);
+        const memory = Memory.from(err_name, true);
+        return self.captureString(memory);
+    }
 };
 
 pub fn runThunk(thunk_id: usize, arg_ptr: *anyopaque) ?Value {

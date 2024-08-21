@@ -20,7 +20,7 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#define EXPORT_COUNT    13
+#define EXPORT_COUNT    15
 #define IMPORT_COUNT    14
 
 #if UINTPTR_MAX == UINT64_MAX
@@ -57,6 +57,7 @@ enum {
     OK,
     FAILURE,
     DEADLOCK,
+    DISABLED,
 };
 
 typedef uint32_t structure_type;
@@ -139,19 +140,12 @@ typedef struct {
     napi_ref env_constructor;
 } addon_data;
 
-
-typedef struct {
-    size_t id;
-    void* arg_ptr;
-    size_t arg_size;
-} js_call;
-
 typedef struct {
     size_t id;
     void* arg_ptr;
     size_t arg_size;
     size_t futex_handle;
-} deferred_js_call;
+} js_call;
 
 typedef struct export_table {
     result (__cdecl *allocate_host_memory)(module_data*, size_t, uint16_t, memory*);
@@ -168,6 +162,10 @@ typedef struct export_table {
     result (__cdecl *end_structure)(module_data*, napi_value);
     result (__cdecl *create_template)(module_data*, napi_value, napi_value*);
     result (__cdecl *write_to_console)(module_data*, napi_value);
+    result (__cdecl *enable_multithread)(module_data*);
+    result (__cdecl *disable_multithread)(module_data*);
+    result (__cdecl *queue_js_call)(module_data*, js_call*);
+    result (__cdecl *perform_js_call)(module_data*, js_call*);
 } export_table;
 
 typedef struct import_table {
@@ -177,6 +175,7 @@ typedef struct import_table {
     result (__cdecl *get_factory_thunk)(size_t*);
     result (__cdecl *run_thunk)(module_data*, size_t, size_t, void*, napi_value*);
     result (__cdecl *run_variadic_thunk)(module_data*, size_t, size_t, void*, void*, size_t, napi_value*);
+    result (__cdecl *run_js_thunk_constructor)(module_data*, size_t, size_t, napi_value*);
     result (__cdecl *override_write)(const void*, size_t);
     result (__cdecl *wake_caller)(size_t, uint32_t);
 } import_table;

@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const exporter = @import("./exporter.zig");
 const types = @import("./types.zig");
+const thunk_zig = @import("./thunk-zig.zig");
 const thunk_js = @import("./thunk-js.zig");
 const expect = std.testing.expect;
 
@@ -11,7 +12,6 @@ const Memory = types.Memory;
 const Error = types.Error;
 
 const ModuleData = opaque {};
-const CallResult = thunk_js.CallResult;
 
 // struct for C
 const StructureC = extern struct {
@@ -39,6 +39,12 @@ const MethodC = extern struct {
     name: ?[*:0]const u8,
     thunk_id: usize,
     structure: Value,
+};
+const JsCall = extern struct {
+    id: usize,
+    arg_ptr: *anyopaque,
+    arg_size: usize,
+    futex_handle: usize = 0,
 };
 
 pub fn missing(comptime T: type) comptime_int {
@@ -183,6 +189,12 @@ pub const Host = struct {
         return value;
     }
 
+    pub fn createErrorMessage(self: Host, err: anyerror) !Value {
+        const err_name = @errorName(err);
+        const memory = Memory.from(err_name, true);
+        return self.captureString(memory);
+    }
+
     pub fn writeToConsole(self: Host, dv: Value) !void {
         if (imports.write_to_console(self.context, dv) != .ok) {
             return Error.unable_to_write_to_console;
@@ -199,17 +211,27 @@ pub const Host = struct {
         try self.writeToConsole(dv);
     }
 
-    pub fn runJsFunction(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, wait: bool) CallResult {
+    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, wait: bool) thunk_js.CallResult {
+        var call: JsCall = .{ .id = ctx.id, .arg_ptr = arg_ptr, .arg_size = arg_size };
+        const md: *ModuleData = @ptrCast(ctx.ptr);
         if (main_thread) {
-            return imports.perform_js_call(ctx.env, ctx.id, arg_ptr, arg_size, wait);
+            return imports.perform_js_call(md, &call);
         } else {
-            var futex: Futex = .{ .value = std.atomic.Value.init(0) };
-            futex.handle = @intFromPtr(&futex);
-            if (imports.queue_js_call(ctx.mod_ptr, ctx.id, arg_ptr, arg_size, futex.handle, wait) != .ok) {
+            var futex: Futex = undefined;
+            if (wait) {
+                futex.value = std.atomic.Value(u32).init(0);
+                futex.handle = @intFromPtr(&futex);
+                call.futex_handle = futex.handle;
+            }
+            if (imports.queue_js_call(md, &call) != .ok) {
                 return .failure;
             }
-            std.Thread.Futex.wait(&futex.value, 0);
-            return @enumFromInt(futex.value);
+            if (wait) {
+                std.Thread.Futex.wait(&futex.value, 0);
+                return @enumFromInt(futex.value.load(.acquire));
+            } else {
+                return .ok;
+            }
         }
     }
 };
@@ -299,12 +321,8 @@ pub fn runThunk(
     args: *anyopaque,
     dest: *?Value,
 ) callconv(.C) Result {
-    const thunk: types.Thunk = @ptrFromInt(thunk_address);
-    if (thunk(md, @ptrFromInt(fn_address), args)) |result| {
-        dest.* = result;
-    } else {
-        dest.* = null;
-    }
+    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
+    dest.* = thunk(md, @ptrFromInt(fn_address), args);
     return .ok;
 }
 
@@ -317,12 +335,19 @@ pub fn runVariadicThunk(
     arg_count: usize,
     dest: *?Value,
 ) callconv(.C) Result {
-    const thunk: types.VariadicThunk = @ptrFromInt(thunk_address);
-    if (thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count)) |result| {
-        dest.* = result;
-    } else {
-        dest.* = null;
-    }
+    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
+    dest.* = thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count);
+    return .ok;
+}
+
+pub fn runJsThunkCnstructor(
+    md: *ModuleData,
+    thunk_address: usize,
+    func_id: usize,
+    dest: *?Value,
+) callconv(.C) Result {
+    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(thunk_address);
+    dest.* = constructor(md, func_id);
     return .ok;
 }
 
@@ -358,9 +383,8 @@ const Imports = extern struct {
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
-
-    perform_js_call: *const fn (*ModuleData, usize, *anyopaque, usize, bool) callconv(.C) CallResult,
-    queue_js_call: *const fn (*ModuleData, usize, *anyopaque, usize, usize, bool) callconv(.C) CallResult,
+    queue_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
+    perform_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
 };
 var imports: Imports = undefined;
 
@@ -372,6 +396,7 @@ const Exports = extern struct {
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
     run_variadic_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
+    run_js_thunk_constructor: *const fn (*ModuleData, usize, usize, *?Value) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };
@@ -418,6 +443,7 @@ pub fn createModule(comptime T: type) Module {
             .get_factory_thunk = createGetFactoryThunk(T),
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,
+            .run_js_thunk_constructor = runJsThunkCnstructor,
             .override_write = overrideWrite,
             .wake_caller = wakeCaller,
         },

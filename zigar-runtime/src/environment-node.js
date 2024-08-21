@@ -3,7 +3,6 @@ import { InvalidDeallocation, ZigError } from './error.js';
 import { ALIGN, ATTRIBUTES, FIXED, MEMORY, POINTER_VISITOR } from './symbol.js';
 
 export class NodeEnvironment extends Environment {
-  // C code will patch in these functions:
   imports = {
     loadModule: null,
     getBufferAddress: null,
@@ -16,8 +15,12 @@ export class NodeEnvironment extends Environment {
     getFactoryThunk: null,
     runThunk: null,
     runVariadicThunk: null,
+    runJsThunkConstructor: null,
     getMemoryOffset: null,
     recreateAddress: null,
+    setMultithread: null,
+    createFunctionThunk: null,
+    wakeCaller: null,
   };
   exports = {
     allocateHostMemory: null,
@@ -149,10 +152,6 @@ export class NodeEnvironment extends Environment {
     if (err) {
       throw new ZigError(err);
     }
-  }
-
-  runFunction() {
-    // TODO
   }
 
   exportFunctions() {

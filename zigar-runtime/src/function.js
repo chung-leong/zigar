@@ -5,14 +5,15 @@ import { MEMORY, VARIANT_CREATOR } from './symbol';
 export function defineFunction(structure, env) {
   const {
     name,
-    instance: { members: [ member ], template },
+    instance: { members: [ member ], template: thunk },
+    static: { template: jsThunkConstructor },
   } = structure;
   const cache = new ObjectCache();
   const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
   const argCount = argMembers.length - 1;
   const constructor = structure.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, caller;
+    let self, dv, method, direct, funcId;
     if (creating) {
       if (arguments.length === 0) {
         throw new NoInitializer(structure);
@@ -20,7 +21,9 @@ export function defineFunction(structure, env) {
       if (typeof(arg) !== 'function') {
         throw new TypeMismatch('function', arg);
       }
-      dv = env.getFunctionThunk(arg);
+      const constuctorAddr = env.getViewAddress(jsThunkConstructor[MEMORY]);
+      funcId = env.getFunctionId(arg);
+      dv = env.getFunctionThunk(constuctorAddr, funcId);
     } else {
       dv = arg;
     }
@@ -28,44 +31,56 @@ export function defineFunction(structure, env) {
       return self;
     }
     if (creating) {
-      const f = arg;
-      caller = function(argStruct) {
+      const fn = arg;
+      self = anonymous(function(...args) {
+        return fn(...args);
+      });
+      method = function(...args) {
+        return fn([ this, ...args]);
+      }
+      direct = function(dv) {
+        const argStruct = Arg(dv);
         const args = [];
         for (let i = 0; i < argCount; i++) {
           args.push(argStruct[i]);
         }
-        argStruct.retval = f(...args);
+        argStruct.retval = fn(...args);
       };
-      self = anonymous(function(...args) {
-        return arg(...args);
-      });
-      env.attachThunkCaller(dv, caller);
+      env.setFunctionCaller(dv, direct);
     } else {
-      caller = function(argStruct) {
-        const thunkAddr = env.getViewAddress(template[MEMORY]);
+      const invoke = function(argStruct) {
+        const thunkAddr = env.getViewAddress(thunk[MEMORY]);
         const funcAddr = env.getViewAddress(self[MEMORY]);
         env.invokeThunk(thunkAddr, funcAddr, argStruct);
       };
       self = anonymous(function (...args) {
         const argStruct = new Arg(args, self.name, 0);
-        caller(argStruct);
+        invoke(argStruct);
         return argStruct.retval;
       });
+      method = function(...args) {
+        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        invoke(argStruct);
+        return argStruct.retval;
+      };
+      direct = function(dv) {
+        invoke(Arg(dv));
+      };
     }
     Object.setPrototypeOf(self, constructor.prototype);
     self[MEMORY] = dv;
     const creator = function (type) {
       let variant, argCount;
       if (type === 'method') {
-        variant = function(...args) {
-          const argStruct = new Arg([ this, ...args ], variant.name, 1);
-          caller(argStruct);
-          return argStruct.retval;
-        };
+        variant = method;
         argCount = argMembers.length - 2;
+      } else if (type === 'direct') {
+        variant = direct;
+        argCount = 1;
       }
       defineProperties(variant, {
         length: { value: argCount, writable: false },
+        name: { get: () => self.name },
       });
       return variant;
     };

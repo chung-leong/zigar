@@ -313,10 +313,18 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
     }, false);
     // store thunk as instance template
     const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), FT);
-    const memory = Memory.from(thunk, false);
-    const dv = try ctx.host.captureView(memory);
-    const template = try ctx.host.createTemplate(dv);
-    try ctx.host.attachTemplate(structure, template, false);
+    const thunk_memory = Memory.from(thunk, false);
+    const thunk_dv = try ctx.host.captureView(thunk_memory);
+    const instance_template = try ctx.host.createTemplate(thunk_dv);
+    try ctx.host.attachTemplate(structure, instance_template, false);
+    if (ctx.tdb.isInUse(*const FT)) {
+        // store JS thunk as static template
+        const js_thunk_constructor = thunk_js.createThunkConstructor(@TypeOf(ctx.host), FT);
+        const js_thunk_constructor_memory = Memory.from(js_thunk_constructor, false);
+        const js_thunk_constructor_dv = try ctx.host.captureView(js_thunk_constructor_memory);
+        const static_template = try ctx.host.createTemplate(js_thunk_constructor_dv);
+        try ctx.host.attachTemplate(structure, static_template, true);
+    }
 }
 
 fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
@@ -609,7 +617,7 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
     return result;
 }
 
-pub fn createRootFactory(comptime HostT: type, comptime T: type) types.Thunk {
+pub fn createRootFactory(comptime HostT: type, comptime T: type) thunk_zig.Thunk {
     @setEvalBranchQuota(2000000);
     comptime var tdc = types.TypeDataCollector.init(256);
     comptime tdc.scan(T);
@@ -623,7 +631,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) types.Thunk {
             if (getStructure(ctx, T)) |_| {
                 return null;
             } else |err| {
-                return thunk_zig.createErrorMessage(host, err) catch null;
+                return host.createErrorMessage(err) catch null;
             }
             return null;
         }

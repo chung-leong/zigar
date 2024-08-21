@@ -71,8 +71,6 @@ pub const MemberType = enum(u32) {
 };
 
 pub const Value = *opaque {};
-pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) ?Value;
-pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) ?Value;
 
 pub const Structure = struct {
     name: ?[]const u8 = null,
@@ -341,6 +339,7 @@ pub const TypeAttributes = packed struct {
     is_arguments: bool = false,
     is_variadic: bool = false,
     is_slice: bool = false,
+    is_in_use: bool = true,
     has_pointer: bool = false,
     has_unsupported: bool = false,
     known: bool = false,
@@ -647,6 +646,10 @@ pub const TypeData = struct {
         return self.attrs.is_comptime_only;
     }
 
+    pub fn isInUse(comptime self: @This()) bool {
+        return self.attrs.is_in_use;
+    }
+
     pub fn hasPointer(comptime self: @This()) bool {
         return self.attrs.has_pointer;
     }
@@ -907,7 +910,13 @@ pub const TypeDataCollector = struct {
 
     fn append(comptime self: *@This(), comptime td: TypeData) void {
         const T = td.Type;
-        if (self.indexOf(T)) |_| {
+        if (self.indexOf(T)) |index| {
+            if (td.attrs.is_in_use) {
+                const existing_td = self.at(index);
+                if (!existing_td.attrs.is_in_use) {
+                    existing_td.attrs.is_in_use = true;
+                }
+            }
             return;
         }
         const index = self.types.len;
@@ -951,7 +960,7 @@ pub const TypeDataCollector = struct {
                 inline for (st.decls) |decl| {
                     // decls are accessed through pointers
                     const PT = @TypeOf(&@field(T, decl.name));
-                    self.add(PT);
+                    _ = self.append(.{ .Type = PT, .attrs = .{ .is_in_use = false } });
                     if (@typeInfo(PT).Pointer.is_const) {
                         self.addTypeOf(@field(T, decl.name));
                     }
@@ -1027,10 +1036,6 @@ pub const TypeDataCollector = struct {
             .Fn => self.functions = self.functions.concat(T),
             else => {},
         }
-    }
-
-    fn find(comptime self: *@This(), comptime T: type) bool {
-        return self.indexOf(T) != null;
     }
 
     fn get(comptime self: *@This(), comptime T: type) *TypeData {
@@ -1237,7 +1242,7 @@ test "TypeDataCollector.scan" {
     };
     comptime var tdc = TypeDataCollector.init(0);
     comptime tdc.scan(ns);
-    try expectCT(tdc.find(ns.StructA) == true);
+    try expectCT(tdc.indexOf(ns.StructA) != null);
 }
 
 test "TypeDataCollector.setAttributes" {
@@ -1248,15 +1253,15 @@ test "TypeDataCollector.setAttributes" {
             string: []const u8,
         };
         pub const StructB = struct {
-            comptime Type: type = Thunk,
-            thunk: Thunk,
+            comptime Type: type = fn () void,
+            function: fn () void,
         };
         pub const StructC = struct {
             number: i32 = 0,
             ptr: ?*@This(),
         };
         pub const StructD = struct {
-            thunk: Thunk,
+            function: fn () void,
             ptr: *@This(),
         };
         pub const UnionA = union(enum) {
@@ -1378,13 +1383,21 @@ fn TypeDatabase(comptime len: comptime_int) type {
         entries: [len]TypeData,
 
         pub fn get(comptime self: @This(), comptime T: type) TypeData {
-            for (self.entries) |entry| {
+            inline for (self.entries) |entry| {
                 if (entry.Type == T) {
                     return entry;
                 }
             } else {
                 @compileError("No type data for " ++ @typeName(T));
             }
+        }
+
+        pub fn isInUse(comptime self: @This(), comptime T: type) bool {
+            return inline for (self.entries) |entry| {
+                if (entry.Type == T) {
+                    break entry.isInUse();
+                }
+            } else false;
         }
     };
 }
@@ -1397,14 +1410,14 @@ test "TypeDatabase.get" {
             string: []const u8,
         };
         pub const StructB = struct {
-            thunk: Thunk,
+            function: fn () void,
         };
         pub const StructC = struct {
             number: i32 = 0,
             ptr: *@This(),
         };
         pub const StructD = struct {
-            thunk: Thunk,
+            function: fn () void,
             ptr: *@This(),
         };
         pub const UnionA = union(enum) {
@@ -1547,18 +1560,6 @@ test "ArgumentStruct" {
     const ArgC = ArgumentStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
     try expect(fieldsC.len == 3);
-}
-
-pub fn ThunkType(comptime FT: type) type {
-    return switch (@typeInfo(FT).Fn.is_var_args) {
-        false => Thunk,
-        true => VariadicThunk,
-    };
-}
-
-test "ThunkType" {
-    try expectCT(ThunkType(fn (usize) void) == Thunk);
-    try expectCT(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
 }
 
 fn expectCT(comptime value: bool) !void {

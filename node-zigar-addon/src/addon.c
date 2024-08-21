@@ -30,6 +30,9 @@ void release_module(napi_env env,
             // indicate to the environment that the shared lib has been released
             napi_set_named_property(env, js_env, "released", released);
         }
+        for (int i = 0; i < IMPORT_COUNT; i++) {
+            napi_reference_unref(env, md->js_fns[i], NULL);
+        }
         if (md->so_handle) {
             dlclose(md->so_handle);
         }
@@ -311,6 +314,52 @@ result write_to_console(module_data* md,
     return FAILURE;
 }
 
+void js_queue_callback(napi_env env,
+                       napi_value js_callback,
+                       void* context,
+                       void* data) {
+    module_data* md = (module_data*) context;
+    js_call* call = (js_call*) data;
+    size_t argc = 3;
+    napi_value buffer;
+    napi_value recv;
+    napi_value args[3];
+    napi_value result;
+    void* copy;
+    if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
+     || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
+     || !memcpy(copy, call->arg_ptr, call->arg_size)
+     || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
+     || napi_create_uintptr(env, call->futex_handle, &args[2]) != napi_ok
+     || napi_get_null(env, &recv) != napi_ok
+     || napi_call_function(env, recv, js_callback, argc, args, &result) != napi_ok) {
+        // need to wake the thread here since the JS function won't do it
+        md->mod->imports->wake_caller(call->futex_handle, FAILURE);
+    }
+}
+
+result enable_multithread(module_data* md) {
+    if (!md->ts_fn) {
+        napi_env env = md->env;
+        napi_value resource_name;
+        napi_value run_fn;
+        if (napi_get_reference_value(env, md->js_fns[runFunction], &run_fn) != napi_ok
+         || napi_create_string_utf8(env, "call", 4, &resource_name) != napi_ok
+         || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
+            return FAILURE;
+        }
+    }
+    return OK;
+}
+
+result disable_multithread(module_data* md) {
+    if (md->ts_fn) {
+        napi_release_threadsafe_function(md->ts_fn, napi_tsfn_release);
+        md->ts_fn = NULL;
+    }
+    return OK;
+}
+
 napi_value throw_error(napi_env env,
                        const char *err_message) {
     napi_value last;
@@ -576,6 +625,29 @@ napi_value run_variadic_thunk(napi_env env,
     return result;
 }
 
+napi_value run_js_thunk_constructor(napi_env env,
+                                    napi_callback_info info) {
+    module_data* md;
+    size_t argc = 2;
+    napi_value args[2];
+    uintptr_t constructor_address;
+    uint32_t fn_id;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
+     || napi_get_value_uintptr(env, args[0], &constructor_address) != napi_ok) {
+        return throw_error(env, "Thunk address must be a number");
+    } else if (napi_get_value_uint32(env, args[1], &fn_id) != napi_ok) {
+        return throw_error(env, "Function id must be a number");
+    }
+    napi_value result;
+    if (md->mod->imports->run_js_thunk_constructor(md, constructor_address, fn_id, &result) != OK) {
+        return throw_error(env, "Unable to create thunk");
+    }
+    if (!result) {
+        napi_get_null(env, &result);
+    }
+    return result;
+}
+
 napi_value get_memory_offset(napi_env env,
                              napi_callback_info info) {
     module_data* md;
@@ -632,33 +704,32 @@ napi_value wake_caller(napi_env env,
     return NULL;
 }
 
-void js_queue_callback(napi_env env,
-                       napi_value js_callback,
-                       void* context,
-                       void* data) {
-    module_data* md = (module_data*) context;
-    deferred_js_call* call = (deferred_js_call*) data;
-    size_t argc = 3;
-    napi_value buffer;
-    napi_value recv;
-    napi_value args[3];
-    napi_value result;
-    void* copy;
-    if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
-     || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
-     || !memcpy(copy, call->arg_ptr, call->arg_size)
-     || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
-     || napi_create_uintptr(env, call->futex_handle, &args[2]) != napi_ok
-     || napi_get_null(env, &recv) != napi_ok
-     || napi_call_function(env, recv, js_callback, argc, args, &result) != napi_ok) {
-        // need to wake the thread here since the JS function won't do it
-        md->mod->imports->wake_caller(call->futex_handle, FAILURE);
+napi_value set_multithread(napi_env env,
+                           napi_callback_info info) {
+    module_data* md;
+    size_t argc = 1;
+    napi_value args[1];
+    bool enable;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
+     || napi_get_value_bool(env, args[0], &enable) != napi_ok) {
+        return throw_error(env, "Argument must be true/false");
     }
+    if (enable) {
+        if (enable_multithread(md) != OK) {
+            return throw_error(env, "Unable to enable multithreading");
+        }
+    } else {
+        disable_multithread(md);
+    }
+    return NULL;
 }
 
 result queue_js_call(module_data* md,
-                     deferred_js_call* call) {
-    if (napi_call_threadsafe_function(md->ts_fn, call, napi_tsfn_blocking) != napi_ok) {
+                     js_call* call) {
+    if (!md->ts_fn) {
+        return DISABLED;
+    }
+    if (napi_call_threadsafe_function(md->ts_fn, call, napi_tsfn_nonblocking) != napi_ok) {
         return FAILURE;
     }
     return OK;
@@ -673,6 +744,7 @@ result perform_js_call(module_data* md,
     napi_value args[3];
     napi_value result;
     void* copy;
+    uint32_t status;
     napi_value fn;
     if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
      || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
@@ -680,10 +752,11 @@ result perform_js_call(module_data* md,
      || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
      || napi_create_uintptr(env, 0, &args[2]) != napi_ok
      || napi_get_null(env, &recv) != napi_ok
-     || !call_js_function(md, runFunction, argc, args, &result)) {
+     || !call_js_function(md, runFunction, argc, args, &result)
+     || napi_get_value_uint32(env, result, &status) != napi_ok) {
         return FAILURE;
     }
-    return OK;
+    return status;
 }
 
 void finalize_function(napi_env env,
@@ -713,8 +786,10 @@ struct {
     { "getFactoryThunk", get_factory_thunk },
     { "runThunk", run_thunk },
     { "runVariadicThunk", run_variadic_thunk },
+    { "runJsThunkConstructor", run_js_thunk_constructor },
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
+    { "setMultithread", set_multithread },
     { "wakeCaller", wake_caller },
 };
 
@@ -779,23 +854,15 @@ bool import_functions(module_data* md,
     for (int i = 0; i < IMPORT_COUNT; i++) {
         napi_value function;
         if (napi_get_named_property(env, exports, imports[i].name, &function) != napi_ok
-         || napi_create_reference(env, function, 0, &md->js_fns[i]) != napi_ok) {
+         || napi_create_reference(env, function, 1, &md->js_fns[i]) != napi_ok) {
             return false;
         }
         if (i == runFunction) {
             run_fn = function;
         }
     }
-    napi_value resource_name;
-    napi_status status;
-    if (!run_fn
-     || napi_create_string_utf8(env, "call", 4, &resource_name) != napi_ok
-     || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
-        return false;
-    }
     return true;
 }
-
 
 napi_value load_module(napi_env env,
                        napi_callback_info info) {
@@ -853,6 +920,8 @@ napi_value load_module(napi_env env,
     exports->end_structure = end_structure;
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;
+    exports->enable_multithread = enable_multithread;
+    exports->disable_multithread = disable_multithread;
 
     // run initializer
     if (mod->imports->initialize(md) != OK) {

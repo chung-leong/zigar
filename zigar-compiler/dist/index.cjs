@@ -6400,8 +6400,7 @@ class Environment {
   }
 
   /* COMPTIME-ONLY */
-  readSlot(target, slot, f) {
-    console.log({ self: this, f });
+  readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
   }

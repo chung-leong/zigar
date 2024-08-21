@@ -3,23 +3,48 @@ const types = @import("./types.zig");
 const closure = @import("./closure.zig");
 const expect = std.testing.expect;
 
+threadlocal var closure_factory = closure.Factory(Context).init();
+
+const Value = types.Value;
+const Memory = types.Memory;
+
 pub const Context = struct {
-    mod_ptr: *const anyopaque,
+    ptr: *anyopaque,
     id: usize,
 };
 pub const Closure = closure.Instance(Context);
-
-pub const NoWait = struct {};
 
 pub const CallResult = enum(u32) {
     ok,
     failure,
     deadlock,
+    disabled,
 };
+pub const CallHandler = fn (Context, *anyopaque, usize, bool) CallResult;
 
-threadlocal var closure_factory = closure.Factory(Context).init();
+pub const ThunkConstructor = *const fn (*anyopaque, usize) callconv(.C) ?Value;
 
-pub fn createJsThunk(comptime FT: type, context: Context, comptime handler: fn (Context, *anyopaque, usize, bool) CallResult) !*const FT {
+pub fn createThunkConstructor(comptime HostT: type, comptime FT: type) ThunkConstructor {
+    const ns = struct {
+        fn tryConstruction(host: HostT, id: usize) !Value {
+            const thunk = try createThunk(FT, .{ .ptr = host.context, .id = id }, HostT.handleJsCall);
+            const thunk_memory = Memory.from(thunk, false);
+            return try host.captureView(thunk_memory);
+        }
+
+        fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) ?Value {
+            const host = HostT.init(ptr);
+            if (tryConstruction(host, id)) |value| {
+                return value;
+            } else |err| {
+                return host.createErrorMessage(err) catch null;
+            }
+        }
+    };
+    return ns.construct;
+}
+
+pub fn createThunk(comptime FT: type, context: Context, comptime handler: CallHandler) !*const FT {
     const f = @typeInfo(FT).Fn;
     const PT = comptime extract: {
         var Types: [f.params.len]type = undefined;
@@ -106,7 +131,7 @@ pub fn createJsThunk(comptime FT: type, context: Context, comptime handler: fn (
                 const name = std.fmt.comptimePrint("{d}", .{index});
                 @field(arg_struct, name) = value;
             }
-            switch (handler(cxt, &arg_struct, @sizeOf(ArgStruct), RT == NoWait)) {
+            switch (handler(cxt, &arg_struct, @sizeOf(ArgStruct), isNoWait(RT))) {
                 .failure => {
                     if (comptime hasError(RT, "unexpected")) {
                         return error.unexpected;
@@ -131,17 +156,17 @@ pub fn createJsThunk(comptime FT: type, context: Context, comptime handler: fn (
     return instance.function(FT);
 }
 
-test "createJsThunk" {
+test "createThunk" {
     const FT = fn (i32, f64) usize;
     const Args = types.ArgumentStruct(FT);
     const ns = struct {
-        var mod_ptr_received: ?*const anyopaque = null;
+        var ptr_received: ?*const anyopaque = null;
         var id_received: ?usize = null;
         var args_received: ?Args = null;
         var wait_received: ?bool = null;
 
         fn handleCall(ctx: Context, arg_ptr: *anyopaque, _: usize, wait: bool) CallResult {
-            mod_ptr_received = ctx.mod_ptr;
+            ptr_received = ctx.ptr;
             id_received = ctx.id;
             const args: *Args = @ptrCast(@alignCast(arg_ptr));
             args_received = args.*;
@@ -154,12 +179,12 @@ test "createJsThunk" {
         }
     };
     const context: Context = .{
-        .mod_ptr = @ptrFromInt(0xABCD),
+        .ptr = @ptrFromInt(0xABCD),
         .id = 1000,
     };
-    const f = try createJsThunk(FT, context, ns.handleCall);
+    const f = try createThunk(FT, context, ns.handleCall);
     const result = f(777, 3.14);
-    try expect(ns.mod_ptr_received.? == context.mod_ptr);
+    try expect(ns.ptr_received.? == context.ptr);
     try expect(ns.id_received.? == context.id);
     try expect(ns.args_received != null);
     try expect(ns.args_received.?.@"0" == 777);
@@ -167,28 +192,28 @@ test "createJsThunk" {
     try expect(result == 999);
 }
 
-test "createJsThunk (error handling)" {
+test "createThunk (error handling)" {
     const ns = struct {
         fn handleCall(_: Context, _: *anyopaque, _: usize, _: bool) CallResult {
             return .failure;
         }
     };
     const context: Context = .{
-        .mod_ptr = @ptrFromInt(0xABCD),
+        .ptr = @ptrFromInt(0xABCD),
         .id = 1000,
     };
     const ES1 = error{ Unexpected, Cow };
     const FT1 = fn (i32, f64) ES1!usize;
-    const f1 = try createJsThunk(FT1, context, ns.handleCall);
+    const f1 = try createThunk(FT1, context, ns.handleCall);
     const result1 = f1(777, 3.14);
     try expect(result1 == ES1.Unexpected);
     const ES2 = error{ unexpected, cow };
     const FT2 = fn (i32, f64) ES2!usize;
-    const f2 = try createJsThunk(FT2, context, ns.handleCall);
+    const f2 = try createThunk(FT2, context, ns.handleCall);
     const result2 = f2(777, 3.14);
     try expect(result2 == ES2.unexpected);
     const FT3 = fn (i32, f64) anyerror!usize;
-    const f3 = try createJsThunk(FT3, context, ns.handleCall);
+    const f3 = try createThunk(FT3, context, ns.handleCall);
     const result3 = f3(777, 3.14);
     try expect(result3 == ES2.unexpected);
 }
@@ -216,4 +241,23 @@ test "hasError" {
     try expect(hasError(error{ hello, world }!i32, "hello"));
     try expect(hasError(anyerror!i32, "cow"));
     try expect(!hasError(error{ hello, world }!i32, "cow"));
+}
+
+fn isNoWait(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Enum => |en| check: {
+            if (en.fields.len == 1 and en.is_exhaustive) {
+                break :check std.mem.eql(u8, en.fields[0].name, "no_wait");
+            } else {
+                break :check false;
+            }
+        },
+        else => false,
+    };
+}
+
+test "isNoWait" {
+    try expect(isNoWait(enum { no_wait }));
+    try expect(!isNoWait(enum {}));
+    try expect(!isNoWait(enum { no_wait, hello }));
 }

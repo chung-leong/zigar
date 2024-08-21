@@ -564,21 +564,63 @@ export class Environment {
   }
 
   /* RUNTIME-ONLY */
-  getFunctionThunk(f, caller) {
+  getFunctionId(fn) {
     if (!this.jsFunctionIdMap) {
       this.jsFunctionIdMap = new WeakMap();
-      this.jsFunctionMap = new Map();
     }
-    let id = this.jsFunctionIdMap.get(f);
-    if (id !== undefined) {
-      const fnExisting = this.jsFunctionMap.get(id);
-      return fnExisting[MEMORY];
+    let id = this.jsFunctionIdMap.get(fn);
+    if (id === undefined) {
+      id = this.jsFunctionNextId++;
+      this.jsFunctionIdMap.set(fn, id);
     }
-    id = this.jsFunctionNextId++;
-    const dv = this.createFunctionThunk(id);
-    this.jsFunctionMap.set(id, fn);
-    this.jsFunctionIdMap.set(fn, id);
+    return id;
+  }
+
+  getFunctionThunk(constructorAddr, funcId) {
+    if (!this.jsFunctionThunkMap) {
+      this.jsFunctionThunkMap = new Map();
+    }
+    let dv = this.jsFunctionThunkMap.get(funcId);
+    if (dv === undefined) {
+      dv = this.runJsThunkConstructor(constructorAddr, funcId);
+      if (typeof(dv) === 'string') {
+        throw new ZigError(dv);
+      }
+      this.jsFunctionThunkMap.set(funcId, dv);
+    }
     return dv;
+  }
+
+  setFunctionCaller(id, caller) {
+    if (!this.jsFunctionCallerMap) {
+      this.jsFunctionCallerMap = new Map();
+    }
+    this.jsFunctionCallerMap.set(id, caller);
+  }
+
+  runFunction(id, dv, futexHandle) {
+    try {
+      const caller = this.jsFunctionCallerMap.get(id);
+      const result = caller(dv);
+      if (result[Symbol.toStringTag] === 'Promise') {
+        if (futexHandle) {
+          result.then(
+            () => this.wakeCaller(futexHandle, 0),
+            () => this.wakeCaller(futexHandle, 1)
+          );
+        } else {
+          return 2;
+        }
+      } else {
+        if (futexHandle) {
+          this.wakeCaller(futexHandle, 0);
+        } else {
+          return 0;
+        }
+      }
+    } catch (err) {
+      this.wakeCaller(futexHandle, 1);
+    }
   }
 
   recreateStructures(structures, options) {
@@ -742,7 +784,8 @@ export class Environment {
       init: (...args) => this.init(...args),
       abandon: () => this.abandon(),
       released: () => this.released,
-      connect: (c) => this.console = c,
+      connect: (console) => this.console = console,
+      multithread: (enable) => this.setMultithread(enable),
       sizeOf: (T) => check(T[SIZE]),
       alignOf: (T) => check(T[ALIGN]),
       typeOf: (T) => getStructureName(check(T[TYPE])),
@@ -751,6 +794,7 @@ export class Environment {
 
   abandon() {
     if (!this.abandoned) {
+      this.setMultithread(false);
       this.releaseFunctions();
       this.unlinkVariables();
       this.abandoned = true;

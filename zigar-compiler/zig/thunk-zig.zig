@@ -6,7 +6,22 @@ const expect = std.testing.expect;
 const Value = types.Value;
 const Memory = types.Memory;
 
-pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) {
+pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) ?Value;
+pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) ?Value;
+
+pub fn ThunkType(comptime FT: type) type {
+    return switch (@typeInfo(FT).Fn.is_var_args) {
+        false => Thunk,
+        true => VariadicThunk,
+    };
+}
+
+test "ThunkType" {
+    try expect(ThunkType(fn (usize) void) == Thunk);
+    try expect(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
+}
+
+pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
     const f = @typeInfo(FT).Fn;
     const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
@@ -51,7 +66,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) 
         ) callconv(.C) ?Value {
             const host = HostT.init(ptr);
             tryFunction(host, fn_ptr, arg_ptr) catch |err| {
-                return createErrorMessage(host, err) catch null;
+                return host.createErrorMessage(err) catch null;
             };
             return null;
         }
@@ -76,7 +91,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) types.ThunkType(FT) 
         ) callconv(.C) ?Value {
             const host = HostT.init(ptr);
             tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count) catch |err| {
-                return createErrorMessage(host, err) catch null;
+                return host.createErrorMessage(err) catch null;
             };
             return null;
         }
