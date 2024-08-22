@@ -44,6 +44,13 @@ export const MemoryType = {
   Scratch: 1,
 };
 
+export const CallResult = {
+  OK: 0,
+  Failure: 1,
+  Deadlock: 2,
+  Disabled: 3,
+};
+
 export function getTypeName(member) {
   const { type, bitSize, byteSize } = member;
   if (type === MemberType.Int) {

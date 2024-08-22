@@ -138,6 +138,7 @@ pub fn createThunk(comptime FT: type, context: Context, comptime handler: CallHa
                     } else if (comptime hasError(RT, "Unexpected")) {
                         return error.Unexpected;
                     } else {
+                        std.debug.print("RT = {any}\n", .{RT});
                         @panic("JavaScript function failed");
                     }
                 },

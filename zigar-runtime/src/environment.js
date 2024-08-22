@@ -11,7 +11,7 @@ import {
   WRITE_DISABLER
 } from './symbol.js';
 import { decodeText } from './text.js';
-import { MemberType, MemoryType, StructureType, getStructureName } from './types.js';
+import { CallResult, MemberType, MemoryType, StructureType, getStructureName } from './types.js';
 
 export class Environment {
   context;
@@ -599,28 +599,8 @@ export class Environment {
   }
 
   runFunction(id, dv, futexHandle) {
-    try {
-      const caller = this.jsFunctionCallerMap.get(id);
-      const result = caller(dv);
-      if (result[Symbol.toStringTag] === 'Promise') {
-        if (futexHandle) {
-          result.then(
-            () => this.wakeCaller(futexHandle, 0),
-            () => this.wakeCaller(futexHandle, 1)
-          );
-        } else {
-          return 2;
-        }
-      } else {
-        if (futexHandle) {
-          this.wakeCaller(futexHandle, 0);
-        } else {
-          return 0;
-        }
-      }
-    } catch (err) {
-      this.wakeCaller(futexHandle, 1);
-    }
+    const caller = this.jsFunctionCallerMap.get(id);
+    return caller?.(dv, futexHandle) ?? CallResult.Failure;
   }
 
   recreateStructures(structures, options) {
@@ -975,10 +955,7 @@ export class Environment {
   }
 
   addShadow(shadow, object, align) {
-    let { shadowMap } = this.context;
-    if (!shadowMap) {
-      shadowMap = this.context.shadowMap = new Map();
-    }
+    const shadowMap = this.context.shadowMap ??= new Map();
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
     /* WASM-ONLY-END */

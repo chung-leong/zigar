@@ -33,13 +33,32 @@ export function addTests(importModule, options) {
     })
     it('should call functions passed as arguments', async function() {
       this.timeout(300000);
-      const { call1, hello, world } = await importTest('as-function-parameters');
-      const lines = await capture(() => {
+      const { call1, call2, call3, hello, world } = await importTest('as-function-parameters');
+      const lines1 = await capture(() => {
         call1(hello);
         call1(world);
       });
-      expect(lines).to.eql([ 'hello', 'world' ]);
-      call1(() => {});
+      expect(lines1).to.eql([ 'hello', 'world' ]);
+      const jsFn1 = () => {
+        console.log('hello');
+        console.log('world');
+      };
+      const lines2 = await capture(() => {
+        call1(jsFn1);
+      });
+      expect(lines2).to.eql([ 'hello', 'world' ]);
+      expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
+        .with.property('message').that.equal('Unexpected');
+      const jsFn2 = (number) => {
+        console.log(`number = ${number}`);
+        return number * 2;
+      };
+      let result;
+      const lines3 = await capture(() => {
+        result = call3(jsFn2);
+      });
+      expect(lines3).to.eql([ 'number = 1234' ]);
+      expect(result).to.equal(1234 * 2);
     })
     it('should return callable function', async function() {
       this.timeout(300000);

@@ -19,20 +19,32 @@ export function defineArgStruct(structure, env) {
   const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
-    const dv = env.allocateMemory(byteSize, align);
-    this[MEMORY] = dv;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      self = this;
+      dv = env.allocateMemory(byteSize, align);
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = args;
+    }
+    self[MEMORY] = dv;
     if (hasObject) {
-      this[SLOTS] = {};
+      self[SLOTS] = {};
     }
-    if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
-    }
-    for (const [ index, key ] of argKeys.entries()) {
-      try {
-        this[key] = args[index];
-      } catch (err) {
-        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+    if (creating) {
+      if (args.length !== argCount) {
+        throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
       }
+      for (const [ index, key ] of argKeys.entries()) {
+        try {
+          this[key] = args[index];
+        } catch (err) {
+          throw adjustArgumentError(name, index - offset, argCount - offset, err);
+        }
+      }
+    } else {
+      return self;
     }
   };
   const memberDescriptors = {};

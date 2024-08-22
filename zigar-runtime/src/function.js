@@ -1,6 +1,7 @@
 import { TypeMismatch } from './error';
 import { defineProperties, ObjectCache } from './object';
-import { MEMORY, VARIANT_CREATOR } from './symbol';
+import { MEMORY, VARIANTS } from './symbol';
+import { CallResult } from './types';
 
 export function defineFunction(structure, env) {
   const {
@@ -13,7 +14,8 @@ export function defineFunction(structure, env) {
   const argCount = argMembers.length - 1;
   const constructor = structure.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, method, direct, funcId;
+    let self, method, binary;
+    let dv, funcId;
     if (creating) {
       if (arguments.length === 0) {
         throw new NoInitializer(structure);
@@ -38,15 +40,41 @@ export function defineFunction(structure, env) {
       method = function(...args) {
         return fn([ this, ...args]);
       }
-      direct = function(dv) {
-        const argStruct = Arg(dv);
-        const args = [];
-        for (let i = 0; i < argCount; i++) {
-          args.push(argStruct[i]);
+      binary = function(dv, futexHandle) {
+        let result = CallResult.OK;
+        try {
+          const argStruct = Arg(dv);
+          const args = [];
+          for (let i = 0; i < argCount; i++) {
+            args.push(argStruct[i]);
+          }
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (futexHandle) {
+              retval.then((value) => {
+                argStruct.retval = value;
+              }).catch((err) => {
+                console.error(err);
+                result = CallResult.Failure;
+              }).then(() => {
+                env.wakeCaller(futexHandle, result);
+              });
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          console.error(err);
+          result = CallResult.Failure;
         }
-        argStruct.retval = fn(...args);
+        if (futexHandle) {
+          env.wakeCaller(futexHandle, result);
+        }
+        return result;
       };
-      env.setFunctionCaller(dv, direct);
+      env.setFunctionCaller(funcId, binary);
     } else {
       const invoke = function(argStruct) {
         const thunkAddr = env.getViewAddress(thunk[MEMORY]);
@@ -63,30 +91,19 @@ export function defineFunction(structure, env) {
         invoke(argStruct);
         return argStruct.retval;
       };
-      direct = function(dv) {
+      binary = function(dv) {
         invoke(Arg(dv));
       };
     }
     Object.setPrototypeOf(self, constructor.prototype);
     self[MEMORY] = dv;
-    const creator = function (type) {
-      let variant, argCount;
-      if (type === 'method') {
-        variant = method;
-        argCount = argMembers.length - 2;
-      } else if (type === 'direct') {
-        variant = direct;
-        argCount = 1;
-      }
-      defineProperties(variant, {
-        length: { value: argCount, writable: false },
-        name: { get: () => self.name },
-      });
-      return variant;
-    };
     defineProperties(self, {
       length: { value: argCount, writable: false },
-      [VARIANT_CREATOR]: { value: creator },
+      [VARIANTS]: { value: { method, binary } },
+    });
+    defineProperties(method, {
+      length: { value: argCount - 1, writable: false },
+      name: { get: () => self.name },
     });
     cache.save(dv, self);
     return self;

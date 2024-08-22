@@ -4,7 +4,7 @@ import { getDescriptor } from './member.js';
 import { defineProperties, defineProperty } from './object.js';
 import { convertToJSON, getValueOf } from './special.js';
 import { getStructEntries, getStructIterator } from './struct.js';
-import { ENTRIES_GETTER, PROPS, SLOTS, VARIANT_CREATOR } from './symbol.js';
+import { ENTRIES_GETTER, PROPS, SLOTS, VARIANTS } from './symbol.js';
 import { StructureType } from './types.js';
 
 export function addStaticMembers(structure, env) {
@@ -33,11 +33,8 @@ export function addStaticMembers(structure, env) {
       }
       // see if it's a method
       if (startsWithSelf(fnMember.structure, structure)) {
-        const method = fn[VARIANT_CREATOR]('method');
-        if (!method.name) {
-          defineProperty(method, 'name', { value: name });
-        }
-        instanceDescriptors[name] = { get: () => method };
+        const method = fn[VARIANTS].method;
+        instanceDescriptors[name] = { value: method };
         if (accessorType && method.length  === argRequired) {
           const descriptor = instanceDescriptors[propName] ??= {};
           descriptor[accessorType] = method;

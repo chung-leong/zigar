@@ -383,6 +383,8 @@ const Imports = extern struct {
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
+    enable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.CallResult,
+    disable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.CallResult,
     queue_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
     perform_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
 };

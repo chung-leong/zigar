@@ -156,10 +156,7 @@ export function definePointer(structure, env) {
     let max;
     if (!fixed) {
       if (hasLengthInMemory) {
-        max = this[MAX_LENGTH];
-        if (max === undefined) {
-          max = this[MAX_LENGTH] = target.length;
-        }
+        max = this[MAX_LENGTH] ??= target.length;
       } else {
         max = (bytesAvailable / elementSize) | 0;
       }

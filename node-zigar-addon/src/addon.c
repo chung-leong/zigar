@@ -748,14 +748,17 @@ result perform_js_call(module_data* md,
     napi_value fn;
     if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
      || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
-     || !memcpy(copy, call->arg_ptr, call->arg_size)
      || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
      || napi_create_uintptr(env, 0, &args[2]) != napi_ok
-     || napi_get_null(env, &recv) != napi_ok
-     || !call_js_function(md, runFunction, argc, args, &result)
+     || napi_get_null(env, &recv) != napi_ok) {
+        return FAILURE;
+    }
+    memcpy(copy, call->arg_ptr, call->arg_size);
+    if (!call_js_function(md, runFunction, argc, args, &result)
      || napi_get_value_uint32(env, result, &status) != napi_ok) {
         return FAILURE;
     }
+    memcpy(call->arg_ptr, copy, call->arg_size);
     return status;
 }
 
@@ -922,6 +925,8 @@ napi_value load_module(napi_env env,
     exports->write_to_console = write_to_console;
     exports->enable_multithread = enable_multithread;
     exports->disable_multithread = disable_multithread;
+    exports->perform_js_call = perform_js_call;
+    exports->queue_js_call = queue_js_call;
 
     // run initializer
     if (mod->imports->initialize(md) != OK) {
