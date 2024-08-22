@@ -325,17 +325,25 @@ void js_queue_callback(napi_env env,
     napi_value recv;
     napi_value args[3];
     napi_value result;
-    void* copy;
-    if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
-     || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
-     || !memcpy(copy, call->arg_ptr, call->arg_size)
-     || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
-     || napi_create_uintptr(env, call->futex_handle, &args[2]) != napi_ok
-     || napi_get_null(env, &recv) != napi_ok
-     || napi_call_function(env, recv, js_callback, argc, args, &result) != napi_ok) {
-        // need to wake the thread here since the JS function won't do it
-        md->mod->imports->wake_caller(call->futex_handle, FAILURE);
+    char* dest;
+    char* src = (char*) call->arg_ptr;
+    uintptr_t call_address = (call->futex_handle) ? (size_t) call : 0;
+    if (napi_create_uint32(env, call->id, &args[0]) == napi_ok
+     && napi_create_arraybuffer(env, call->arg_size, (void**) &dest, &buffer) == napi_ok
+     && napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) == napi_ok
+     && napi_create_uintptr(env, call_address, &args[2]) == napi_ok
+     && napi_get_null(env, &recv) == napi_ok) {
+        memcpy(dest + call->retval_size, src + call->retval_size, call->arg_size - call->retval_size);
+        if (call->retval_size > 0) {
+            napi_create_reference(env, buffer, 1, &call->arg_buf);
+        }
+        if (napi_call_function(env, recv, js_callback, argc, args, &result) == napi_ok) {
+            // JS code will wake the caller
+            return;
+        }
     }
+    // need to wake caller since JS code won't do it
+    md->mod->imports->wake_caller(call->futex_handle, FAILURE);
 }
 
 result enable_multithread(module_data* md) {
@@ -688,17 +696,32 @@ napi_value recreate_address(napi_env env,
     return address;
 }
 
-napi_value wake_caller(napi_env env,
-                       napi_callback_info info) {
+napi_value finalize_async_call(napi_env env,
+                               napi_callback_info info) {
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    size_t futex_handle;
-    uint32_t value;
+    size_t call_address;
+    uint32_t result;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &futex_handle) != napi_ok
-     || napi_get_value_uint32(env, args[1], &value) != napi_ok
-     || md->mod->imports->wake_caller(futex_handle, value) != OK) {
+     || napi_get_value_uintptr(env, args[0], &call_address) != napi_ok) {
+        return throw_error(env, "Call address must be a number");
+    } else if (napi_get_value_uint32(env, args[1], &result) != napi_ok) {
+        return throw_error(env, "Result must be a number");
+    }
+    js_call* call = (js_call*) call_address;
+    if (call->retval_size > 0) {
+        napi_value buffer;
+        size_t buffer_size;
+        char* dest;
+        char* src = (char*) call->arg_ptr;
+        if (napi_get_reference_value(env, call->arg_buf, &buffer) == napi_ok
+         && napi_reference_unref(env, call->arg_buf, NULL) == napi_ok
+         && napi_get_arraybuffer_info(env, buffer, (void**) &dest, &buffer_size) == napi_ok) {
+            memcpy(src, dest, call->retval_size);
+        }
+    }
+    if (md->mod->imports->wake_caller(call->futex_handle, result) != OK) {
         return throw_error(env, "Unable to wake caller");
     }
     return NULL;
@@ -716,7 +739,7 @@ napi_value set_multithread(napi_env env,
     }
     if (enable) {
         if (enable_multithread(md) != OK) {
-            return throw_error(env, "Unable to enable multithreading");
+            return throw_error(env, "Unable to activate multithreading");
         }
     } else {
         disable_multithread(md);
@@ -743,23 +766,26 @@ result perform_js_call(module_data* md,
     napi_value recv;
     napi_value args[3];
     napi_value result;
-    void* copy;
     uint32_t status;
     napi_value fn;
-    if (napi_create_uint32(env, call->id, &args[0]) != napi_ok
-     || napi_create_arraybuffer(env, call->arg_size, &copy, &buffer) != napi_ok
-     || napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) != napi_ok
-     || napi_create_uintptr(env, 0, &args[2]) != napi_ok
-     || napi_get_null(env, &recv) != napi_ok) {
-        return FAILURE;
+    char* dest;
+    char* src = (char*) call->arg_ptr;
+    if (napi_create_uint32(env, call->id, &args[0]) == napi_ok
+     && napi_create_arraybuffer(env, call->arg_size, (void**) &dest, &buffer) == napi_ok
+     && napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) == napi_ok
+     && napi_create_uintptr(env, 0, &args[2]) == napi_ok
+     && napi_get_null(env, &recv) == napi_ok) {
+        memcpy(dest + call->retval_size, src + call->retval_size, call->arg_size - call->retval_size);
+        if (call_js_function(md, runFunction, argc, args, &result)
+         && napi_get_value_uint32(env, result, &status) == napi_ok) {
+            if (status == OK) {
+                memcpy(src, dest, call->retval_size);
+            }
+            return status;
+        }
+
     }
-    memcpy(copy, call->arg_ptr, call->arg_size);
-    if (!call_js_function(md, runFunction, argc, args, &result)
-     || napi_get_value_uint32(env, result, &status) != napi_ok) {
-        return FAILURE;
-    }
-    memcpy(call->arg_ptr, copy, call->arg_size);
-    return status;
+    return FAILURE;
 }
 
 void finalize_function(napi_env env,
@@ -793,7 +819,7 @@ struct {
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
     { "setMultithread", set_multithread },
-    { "wakeCaller", wake_caller },
+    { "finalizeAsyncCall", finalize_async_call },
 };
 
 struct {

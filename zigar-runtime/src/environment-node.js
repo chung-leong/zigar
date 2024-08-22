@@ -19,8 +19,7 @@ export class NodeEnvironment extends Environment {
     getMemoryOffset: null,
     recreateAddress: null,
     setMultithread: null,
-    createFunctionThunk: null,
-    wakeCaller: null,
+    finalizeAsyncCall: null,
   };
   exports = {
     allocateHostMemory: null,

@@ -19,3 +19,14 @@ pub fn call2(cb: *const fn () error{unexpected}!void) !void {
 pub fn call3(cb: *const fn (i32) i32) i32 {
     return cb(1234);
 }
+
+pub var call4_result: i32 = 0;
+
+pub fn call4(cb: *const fn (i32) i32) !void {
+    const ns = struct {
+        fn run(f: *const fn (i32) i32) void {
+            call4_result = f(1234);
+        }
+    };
+    _ = try std.Thread.spawn(.{}, ns.run, .{cb});
+}

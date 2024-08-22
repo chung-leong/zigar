@@ -40,8 +40,9 @@ export function defineFunction(structure, env) {
       method = function(...args) {
         return fn([ this, ...args]);
       }
-      binary = function(dv, futexHandle) {
+      binary = function(dv, asyncCallHandle) {
         let result = CallResult.OK;
+        let awaiting = false;
         try {
           const argStruct = Arg(dv);
           const args = [];
@@ -50,15 +51,16 @@ export function defineFunction(structure, env) {
           }
           const retval = fn(...args);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle) {
+            if (asyncCallHandle) {
               retval.then((value) => {
                 argStruct.retval = value;
               }).catch((err) => {
                 console.error(err);
                 result = CallResult.Failure;
               }).then(() => {
-                env.wakeCaller(futexHandle, result);
+                env.finalizeAsyncCall(asyncCallHandle, result);
               });
+              awaiting = true;
             } else {
               result = CallResult.Deadlock;
             }
@@ -69,8 +71,8 @@ export function defineFunction(structure, env) {
           console.error(err);
           result = CallResult.Failure;
         }
-        if (futexHandle) {
-          env.wakeCaller(futexHandle, result);
+        if (!awaiting && asyncCallHandle) {
+          env.finalizeAsyncCall(asyncCallHandle, result);
         }
         return result;
       };

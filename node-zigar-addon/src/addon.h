@@ -143,7 +143,9 @@ typedef struct {
 typedef struct {
     size_t id;
     void* arg_ptr;
+    napi_ref arg_buf;
     size_t arg_size;
+    size_t retval_size;
     size_t futex_handle;
 } js_call;
 
@@ -164,8 +166,8 @@ typedef struct export_table {
     result (__cdecl *write_to_console)(module_data*, napi_value);
     result (__cdecl *enable_multithread)(module_data*);
     result (__cdecl *disable_multithread)(module_data*);
-    result (__cdecl *queue_js_call)(module_data*, js_call*);
     result (__cdecl *perform_js_call)(module_data*, js_call*);
+    result (__cdecl *queue_js_call)(module_data*, js_call*);
 } export_table;
 
 typedef struct import_table {

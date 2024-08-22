@@ -20,7 +20,7 @@ pub const CallResult = enum(u32) {
     deadlock,
     disabled,
 };
-pub const CallHandler = fn (Context, *anyopaque, usize, bool) CallResult;
+pub const CallHandler = fn (Context, *anyopaque, usize, usize, bool) CallResult;
 
 pub const ThunkConstructor = *const fn (*anyopaque, usize) callconv(.C) ?Value;
 
@@ -131,18 +131,18 @@ pub fn createThunk(comptime FT: type, context: Context, comptime handler: CallHa
                 const name = std.fmt.comptimePrint("{d}", .{index});
                 @field(arg_struct, name) = value;
             }
-            switch (handler(cxt, &arg_struct, @sizeOf(ArgStruct), isNoWait(RT))) {
+            switch (handler(cxt, &arg_struct, @sizeOf(ArgStruct), @sizeOf(RT), !isNoWait(RT))) {
+                .deadlock => @panic("Promise encountered in main thread"),
+                .disabled => @panic("Multithreading not enabled"),
                 .failure => {
                     if (comptime hasError(RT, "unexpected")) {
                         return error.unexpected;
                     } else if (comptime hasError(RT, "Unexpected")) {
                         return error.Unexpected;
                     } else {
-                        std.debug.print("RT = {any}\n", .{RT});
                         @panic("JavaScript function failed");
                     }
                 },
-                .deadlock => @panic("Promise encountered in main thread"),
                 else => {},
             }
             return arg_struct.retval;
