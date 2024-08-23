@@ -1,5 +1,6 @@
-import childProcess, { execFileSync } from 'child_process';
+import childProcess from 'child_process';
 import { createHash } from 'crypto';
+import { closeSync, openSync, readSync } from 'fs';
 import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
@@ -151,13 +152,8 @@ export function getPlatform() {
       if (process.versions?.electron || process.__nwjs) {
         isGNU = true;
       } else {
-        try {
-          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
-          isGNU = true;
-          /* c8 ignore next 3 */
-        } catch (err) {
-          isGNU = false;
-        }
+        const libs = findElfDependencies(process.argv[0]);
+        isGNU = libs.indexOf('libc.so.6') != -1;
       }
     }
     /* c8 ignore next 3 */
@@ -166,6 +162,76 @@ export function getPlatform() {
     }
   }
   return platform;
+}
+
+function findElfDependencies(path) {
+  const list = [];
+  try {
+    const fd = openSync(path, 'r');
+    const sig = new Uint8Array(8);
+    readSync(fd, sig);
+    for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
+      if (sig[index] !== value.charCodeAt(0)) {
+        throw new Error('Incorrect magic number');
+      }
+    }
+    const bits = sig[4] * 32;
+    const le = sig[5] === 1;
+    const Ehdr = (bits === 64)
+    ? { size: 64, e_shoff: 40, e_shnum: 60 }
+    : { size: 52, e_shoff: 32, e_shnum: 48 };
+    const Shdr = (bits === 64)
+    ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
+    : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
+    const Dyn = (bits === 64)
+    ? { size: 16, d_tag: 0, d_val: 8 }
+    : { size: 8, d_tag: 0, d_val: 4 };
+    const Usize = (bits === 64) ? BigInt : Number;
+    const read = (position, size) => {
+      const buf = new DataView(new ArrayBuffer(Number(size)));
+      readSync(fd, buf, { position });
+      buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
+      return buf;
+    };
+    const SHT_DYNAMIC = 6;
+    const DT_NEEDED = 1;
+    const ehdr = read(0, Ehdr.size);
+    let position = ehdr.getUsize(Ehdr.e_shoff, le);
+    const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
+    const shdrs = [];
+    for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
+      shdrs.push(read(position, Shdr.size));
+    }
+    const decoder = new TextDecoder();
+    for (const shdr of shdrs) {
+      const sectionType = shdr.getUint32(Shdr.sh_type, le)
+      if (sectionType == SHT_DYNAMIC) {
+        const link = shdr.getUint32(Shdr.sh_link, le);
+        const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
+        const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
+        const strTable = read(strTableOffset, strTableSize);
+        const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
+        const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
+        const entryCount = Number(dynamicSize / Usize(Shdr.size));
+        position = dynamicOffset;
+        for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
+          const entry = read(position, Dyn.size);
+          const tag = entry.getUsize(Dyn.d_tag, le);
+          if (tag === Usize(DT_NEEDED)) {
+            let offset = entry.getUsize(Dyn.d_val, le);
+            let name = '', c;
+            while (c = strTable.getUint8(Number(offset++))) {
+              name += String.fromCharCode(c);
+            }
+            list.push(name);
+          }
+        }
+      }
+    }
+    closeSync(fd);
+  } catch (err) {
+  }
+  return list;
 }
 
 export function getArch() {

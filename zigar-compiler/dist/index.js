@@ -1,5 +1,5 @@
-import childProcess, { execFileSync } from 'child_process';
-import { writeFileSync } from 'fs';
+import childProcess from 'child_process';
+import { openSync, readSync, closeSync, writeFileSync } from 'fs';
 import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, resolve, isAbsolute } from 'path';
@@ -51,6 +51,13 @@ const StructureType = {
 const MemoryType = {
   Normal: 0,
   Scratch: 1,
+};
+
+const CallResult = {
+  OK: 0,
+  Failure: 1,
+  Deadlock: 2,
+  Disabled: 3,
 };
 
 function getTypeName(member) {
@@ -618,7 +625,7 @@ const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 const MORE = Symbol('more');
 const PRIMITIVE = Symbol('primitive');
-const VARIANT_CREATOR = Symbol('variantCreator');
+const VARIANTS = Symbol('variants');
 
 function getDestructor(env) {
   return function() {
@@ -2327,10 +2334,7 @@ const decoders = {};
 const encoders = {};
 
 function decodeText(arrays, encoding = 'utf-8') {
-  let decoder = decoders[encoding];
-  if (!decoder) {
-    decoder = decoders[encoding] = new TextDecoder(encoding);
-  }
+  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -2365,10 +2369,7 @@ function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      let encoder = encoders[encoding];
-      if (!encoder) {
-        encoder = encoders[encoding] = new TextEncoder();
-      }
+      const encoder = encoders[encoding] ??= new TextEncoder();
       return encoder.encode(text);
     }
   }
@@ -2705,10 +2706,7 @@ function definePointer(structure, env) {
     let max;
     if (!fixed) {
       if (hasLengthInMemory) {
-        max = this[MAX_LENGTH];
-        if (max === undefined) {
-          max = this[MAX_LENGTH] = target.length;
-        }
+        max = this[MAX_LENGTH] ??= target.length;
       } else {
         max = (bytesAvailable / elementSize) | 0;
       }
@@ -3343,20 +3341,32 @@ function defineArgStruct(structure, env) {
   const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
-    const dv = env.allocateMemory(byteSize, align);
-    this[MEMORY] = dv;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      self = this;
+      dv = env.allocateMemory(byteSize, align);
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = args;
+    }
+    self[MEMORY] = dv;
     if (hasObject) {
-      this[SLOTS] = {};
+      self[SLOTS] = {};
     }
-    if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
-    }
-    for (const [ index, key ] of argKeys.entries()) {
-      try {
-        this[key] = args[index];
-      } catch (err) {
-        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+    if (creating) {
+      if (args.length !== argCount) {
+        throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
       }
+      for (const [ index, key ] of argKeys.entries()) {
+        try {
+          this[key] = args[index];
+        } catch (err) {
+          throw adjustArgumentError(name, index - offset, argCount - offset, err);
+        }
+      }
+    } else {
+      return self;
     }
   };
   const memberDescriptors = {};
@@ -3985,14 +3995,16 @@ function defineErrorUnion(structure, env) {
 function defineFunction(structure, env) {
   const {
     name,
-    instance: { members: [ member ], template },
+    instance: { members: [ member ], template: thunk },
+    static: { template: jsThunkConstructor },
   } = structure;
   const cache = new ObjectCache();
   const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
   const argCount = argMembers.length - 1;
   const constructor = structure.constructor = function(arg) {
     const creating = this instanceof constructor;
-    let self, dv, caller;
+    let self, method, binary;
+    let dv, funcId;
     if (creating) {
       if (arguments.length === 0) {
         throw new NoInitializer(structure);
@@ -4000,7 +4012,9 @@ function defineFunction(structure, env) {
       if (typeof(arg) !== 'function') {
         throw new TypeMismatch('function', arg);
       }
-      dv = env.getFunctionThunk(arg);
+      const constuctorAddr = env.getViewAddress(jsThunkConstructor[MEMORY]);
+      funcId = env.getFunctionId(arg);
+      dv = env.getFunctionThunk(constuctorAddr, funcId);
     } else {
       dv = arg;
     }
@@ -4008,50 +4022,79 @@ function defineFunction(structure, env) {
       return self;
     }
     if (creating) {
-      const f = arg;
-      caller = function(argStruct) {
-        const args = [];
-        for (let i = 0; i < argCount; i++) {
-          args.push(argStruct[i]);
-        }
-        argStruct.retval = f(...args);
-      };
+      const fn = arg;
       self = anonymous(function(...args) {
-        return arg(...args);
+        return fn(...args);
       });
-      env.attachThunkCaller(dv, caller);
+      method = function(...args) {
+        return fn([ this, ...args]);
+      };
+      binary = function(dv, asyncCallHandle) {
+        let result = CallResult.OK;
+        let awaiting = false;
+        try {
+          const argStruct = Arg(dv);
+          const args = [];
+          for (let i = 0; i < argCount; i++) {
+            args.push(argStruct[i]);
+          }
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (asyncCallHandle) {
+              retval.then((value) => {
+                argStruct.retval = value;
+              }).catch((err) => {
+                console.error(err);
+                result = CallResult.Failure;
+              }).then(() => {
+                env.finalizeAsyncCall(asyncCallHandle, result);
+              });
+              awaiting = true;
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          console.error(err);
+          result = CallResult.Failure;
+        }
+        if (!awaiting && asyncCallHandle) {
+          env.finalizeAsyncCall(asyncCallHandle, result);
+        }
+        return result;
+      };
+      env.setFunctionCaller(funcId, binary);
     } else {
-      caller = function(argStruct) {
-        const thunkAddr = env.getViewAddress(template[MEMORY]);
+      const invoke = function(argStruct) {
+        const thunkAddr = env.getViewAddress(thunk[MEMORY]);
         const funcAddr = env.getViewAddress(self[MEMORY]);
         env.invokeThunk(thunkAddr, funcAddr, argStruct);
       };
       self = anonymous(function (...args) {
         const argStruct = new Arg(args, self.name, 0);
-        caller(argStruct);
+        invoke(argStruct);
         return argStruct.retval;
       });
+      method = function(...args) {
+        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        invoke(argStruct);
+        return argStruct.retval;
+      };
+      binary = function(dv) {
+        invoke(Arg(dv));
+      };
     }
     Object.setPrototypeOf(self, constructor.prototype);
     self[MEMORY] = dv;
-    const creator = function (type) {
-      let variant, argCount;
-      if (type === 'method') {
-        variant = function(...args) {
-          const argStruct = new Arg([ this, ...args ], variant.name, 1);
-          caller(argStruct);
-          return argStruct.retval;
-        };
-        argCount = argMembers.length - 2;
-      }
-      defineProperties(variant, {
-        length: { value: argCount, writable: false },
-      });
-      return variant;
-    };
     defineProperties(self, {
       length: { value: argCount, writable: false },
-      [VARIANT_CREATOR]: { value: creator },
+      [VARIANTS]: { value: { method, binary } },
+    });
+    defineProperties(method, {
+      length: { value: argCount - 1, writable: false },
+      name: { get: () => self.name },
     });
     cache.save(dv, self);
     return self;
@@ -5505,13 +5548,8 @@ function getPlatform() {
       if (process.versions?.electron || process.__nwjs) {
         isGNU = true;
       } else {
-        try {
-          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
-          isGNU = true;
-          /* c8 ignore next 3 */
-        } catch (err) {
-          isGNU = false;
-        }
+        const libs = findElfDependencies(process.argv[0]);
+        isGNU = libs.indexOf('libc.so.6') != -1;
       }
     }
     /* c8 ignore next 3 */
@@ -5520,6 +5558,76 @@ function getPlatform() {
     }
   }
   return platform;
+}
+
+function findElfDependencies(path) {
+  const list = [];
+  try {
+    const fd = openSync(path, 'r');
+    const sig = new Uint8Array(8);
+    readSync(fd, sig);
+    for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
+      if (sig[index] !== value.charCodeAt(0)) {
+        throw new Error('Incorrect magic number');
+      }
+    }
+    const bits = sig[4] * 32;
+    const le = sig[5] === 1;
+    const Ehdr = (bits === 64)
+    ? { size: 64, e_shoff: 40, e_shnum: 60 }
+    : { size: 52, e_shoff: 32, e_shnum: 48 };
+    const Shdr = (bits === 64)
+    ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
+    : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
+    const Dyn = (bits === 64)
+    ? { size: 16, d_tag: 0, d_val: 8 }
+    : { size: 8, d_tag: 0, d_val: 4 };
+    const Usize = (bits === 64) ? BigInt : Number;
+    const read = (position, size) => {
+      const buf = new DataView(new ArrayBuffer(Number(size)));
+      readSync(fd, buf, { position });
+      buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
+      return buf;
+    };
+    const SHT_DYNAMIC = 6;
+    const DT_NEEDED = 1;
+    const ehdr = read(0, Ehdr.size);
+    let position = ehdr.getUsize(Ehdr.e_shoff, le);
+    const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
+    const shdrs = [];
+    for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
+      shdrs.push(read(position, Shdr.size));
+    }
+    const decoder = new TextDecoder();
+    for (const shdr of shdrs) {
+      const sectionType = shdr.getUint32(Shdr.sh_type, le);
+      if (sectionType == SHT_DYNAMIC) {
+        const link = shdr.getUint32(Shdr.sh_link, le);
+        const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
+        const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
+        const strTable = read(strTableOffset, strTableSize);
+        const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
+        const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
+        const entryCount = Number(dynamicSize / Usize(Shdr.size));
+        position = dynamicOffset;
+        for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
+          const entry = read(position, Dyn.size);
+          const tag = entry.getUsize(Dyn.d_tag, le);
+          if (tag === Usize(DT_NEEDED)) {
+            let offset = entry.getUsize(Dyn.d_val, le);
+            let name = '', c;
+            while (c = strTable.getUint8(Number(offset++))) {
+              name += String.fromCharCode(c);
+            }
+            list.push(name);
+          }
+        }
+      }
+    }
+    closeSync(fd);
+  } catch (err) {
+  }
+  return list;
 }
 
 function getArch() {
@@ -6110,11 +6218,8 @@ function addStaticMembers(structure, env) {
       }
       // see if it's a method
       if (startsWithSelf(fnMember.structure, structure)) {
-        const method = fn[VARIANT_CREATOR]('method');
-        if (!method.name) {
-          defineProperty(method, 'name', { value: name });
-        }
-        instanceDescriptors[name] = { get: () => method };
+        const method = fn[VARIANTS].method;
+        instanceDescriptors[name] = { value: method };
         if (accessorType && method.length  === argRequired) {
           const descriptor = instanceDescriptors[propName] ??= {};
           descriptor[accessorType] = method;
@@ -6651,10 +6756,7 @@ class Environment {
   }
 
   addShadow(shadow, object, align) {
-    let { shadowMap } = this.context;
-    if (!shadowMap) {
-      shadowMap = this.context.shadowMap = new Map();
-    }
+    const shadowMap = this.context.shadowMap ??= new Map();
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
     /* WASM-ONLY-END */
