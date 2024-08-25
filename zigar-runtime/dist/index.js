@@ -44,6 +44,13 @@ const MemoryType = {
   Scratch: 1,
 };
 
+const CallResult = {
+  OK: 0,
+  Failure: 1,
+  Deadlock: 2,
+  Disabled: 3,
+};
+
 function getTypeName(member) {
   const { type, bitSize, byteSize } = member;
   if (type === MemberType.Int) {
@@ -141,12 +148,12 @@ class Unsupported extends TypeError {
   }
 }
 
-class NoInitializer extends TypeError {
+let NoInitializer$1 = class NoInitializer extends TypeError {
   constructor(structure) {
     const { name } = structure;
     super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
   }
-}
+};
 
 class BufferSizeMismatch extends TypeError {
   constructor(structure, dv, target = null) {
@@ -477,13 +484,13 @@ class InvalidVariadicArgument extends TypeError {
   }
 }
 
-class ZigError extends Error {
+let ZigError$1 = class ZigError extends Error {
   constructor(name) {
     super(deanimalizeErrorName(name));
   }
-}
+};
 
-class Exit extends ZigError {
+class Exit extends ZigError$1 {
   constructor(code) {
     super('Program exited');
     this.code = code;
@@ -615,6 +622,7 @@ const ENVIRONMENT = Symbol('environment');
 const ATTRIBUTES = Symbol('attributes');
 const MORE = Symbol('more');
 const PRIMITIVE = Symbol('primitive');
+const VARIANTS = Symbol('variants');
 
 function getDestructor(env) {
   return function() {
@@ -2114,7 +2122,7 @@ function createConstructor(structure, handlers, env) {
     let self, dv;
     if (creating) {
       if (arguments.length === 0) {
-        throw new NoInitializer(structure);
+        throw new NoInitializer$1(structure);
       }
       self = this;
       if (hasSlots) {
@@ -2296,10 +2304,7 @@ const decoders = {};
 const encoders = {};
 
 function decodeText(arrays, encoding = 'utf-8') {
-  let decoder = decoders[encoding];
-  if (!decoder) {
-    decoder = decoders[encoding] = new TextDecoder(encoding);
-  }
+  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -2334,10 +2339,7 @@ function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      let encoder = encoders[encoding];
-      if (!encoder) {
-        encoder = encoders[encoding] = new TextEncoder();
-      }
+      const encoder = encoders[encoding] ??= new TextEncoder();
       return encoder.encode(text);
     }
   }
@@ -2654,41 +2656,6 @@ class ZigErrorBase extends Error {
   }
 }
 
-function addMethods(s, env) {
-  const add = (target, { methods }, pushThis) => {
-    const descriptors = {};
-    const re = /^(get|set)\s+([\s\S]+)/;
-    for (const method of methods) {
-      const f = env.createCaller(method, pushThis);
-      const m = re.exec(f.name);
-      if (m) {
-        // getter/setter
-        const type = m[1], propName = m[2];
-        const argRequired = (type === 'get') ? 0 : 1;
-        const argCount = getArgumentCount(method, pushThis);
-        // need to match arg count, since instance methods also show up as static methods
-        if (argCount === argRequired) {
-          let descriptor = descriptors[propName];
-          if (!descriptor) {
-            descriptor = descriptors[propName] = { configurable: true, enumerable: true };
-          }
-          descriptor[type] = f;
-        }
-      } else {
-        descriptors[f.name] = { value: f, configurable: true, writable: true };
-      }
-    }
-    defineProperties(target, descriptors);
-  };
-  add(s.constructor, s.static, false);
-  add(s.constructor.prototype, s.instance, true);
-}
-
-function getArgumentCount(method, pushThis) {
-  const { argStruct: { instance: { members } } } = method;
-  return members.length - (pushThis ? 2 : 1);
-}
-
 function defineEnumerationShape(structure, env) {
   const {
     byteSize,
@@ -2922,10 +2889,7 @@ function definePointer(structure, env) {
     let max;
     if (!fixed) {
       if (hasLengthInMemory) {
-        max = this[MAX_LENGTH];
-        if (max === undefined) {
-          max = this[MAX_LENGTH] = target.length;
-        }
+        max = this[MAX_LENGTH] ??= target.length;
       } else {
         max = (bytesAvailable / elementSize) | 0;
       }
@@ -3555,14 +3519,39 @@ function addStaticMembers(structure, env) {
     constructor,
     static: { members, template },
   } = structure;
-  const descriptors = {};
+  const staticDescriptors = {};
+  const instanceDescriptors = {};
   for (const member of members) {
-    descriptors[member.name] = getDescriptor(member, env);
+    const { name, slot, structure: { type, instance: { members: [ fnMember ] } } } = member;
+    staticDescriptors[name] = getDescriptor(member, env);
+    if (type === StructureType.Function) {
+      const fn = template[SLOTS][slot];
+      // provide a name if one isn't assigned yet
+      if (!fn.name) {
+        defineProperty(fn, 'name', { value: name });
+      }
+      // see if it's a getter or setter
+      const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
+      const argRequired = (accessorType === 'get') ? 0 : 1;
+      if (accessorType && fn.length  === argRequired) {
+        const descriptor = staticDescriptors[propName] ??= {};
+        descriptor[accessorType] = fn;
+      }
+      // see if it's a method
+      if (startsWithSelf(fnMember.structure, structure)) {
+        const method = fn[VARIANTS].method;
+        instanceDescriptors[name] = { value: method };
+        if (accessorType && method.length  === argRequired) {
+          const descriptor = instanceDescriptors[propName] ??= {};
+          descriptor[accessorType] = method;
+        }
+      }
+    }
   }
   defineProperties(constructor, {
     valueOf: { value: getValueOf },
     toJSON: { value: convertToJSON },
-    ...descriptors,
+    ...staticDescriptors,
     [Symbol.iterator]: { value: getStructIterator },
     [ENTRIES_GETTER]: { value: getStructEntries },
     // static variables are objects stored in the static template's slots
@@ -3570,6 +3559,7 @@ function addStaticMembers(structure, env) {
     // anyerror would have props already
     [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
   });
+  defineProperties(constructor.prototype, instanceDescriptors);
   if (type === StructureType.Enum) {
     for (const { name, slot } of members) {
       appendEnumeration(constructor, name, constructor[SLOTS][slot]);
@@ -3579,6 +3569,20 @@ function addStaticMembers(structure, env) {
       appendErrorSet(constructor, name, constructor[SLOTS][slot]);
     }
   }
+}
+
+function startsWithSelf(argStructure, structure) {
+  // get structure of first argument (members[0] is retval)
+  const arg0Structure = argStructure.instance.members[1]?.structure;
+  if (arg0Structure === structure) {
+    return true;
+  } else if (arg0Structure?.type === StructureType.SinglePointer) {
+    const targetStructure = arg0Structure.instance.members[0].structure;
+    if (targetStructure === structure) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function defineArgStruct(structure, env) {
@@ -3592,20 +3596,32 @@ function defineArgStruct(structure, env) {
   const argKeys = members.slice(1).map(m => m.name);
   const argCount = argKeys.length;
   const constructor = structure.constructor = function(args, name, offset) {
-    const dv = env.allocateMemory(byteSize, align);
-    this[MEMORY] = dv;
+    const creating = this instanceof constructor;
+    let self, dv;
+    if (creating) {
+      self = this;
+      dv = env.allocateMemory(byteSize, align);
+    } else {
+      self = Object.create(constructor.prototype);
+      dv = args;
+    }
+    self[MEMORY] = dv;
     if (hasObject) {
-      this[SLOTS] = {};
+      self[SLOTS] = {};
     }
-    if (args.length !== argCount) {
-      throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
-    }
-    for (const [ index, key ] of argKeys.entries()) {
-      try {
-        this[key] = args[index];
-      } catch (err) {
-        throw adjustArgumentError(name, index - offset, argCount - offset, err);
+    if (creating) {
+      if (args.length !== argCount) {
+        throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
       }
+      for (const [ index, key ] of argKeys.entries()) {
+        try {
+          this[key] = args[index];
+        } catch (err) {
+          throw adjustArgumentError(name, index - offset, argCount - offset, err);
+        }
+      }
+    } else {
+      return self;
     }
   };
   const memberDescriptors = {};
@@ -4016,6 +4032,127 @@ function defineErrorUnion(structure, env) {
     [TYPE]: { value: structure.type },
   };
   return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
+}
+
+function defineFunction(structure, env) {
+  const {
+    name,
+    instance: { members: [ member ], template: thunk },
+    static: { template: jsThunkConstructor },
+  } = structure;
+  const cache = new ObjectCache();
+  const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
+  const argCount = argMembers.length - 1;
+  const constructor = structure.constructor = function(arg) {
+    const creating = this instanceof constructor;
+    let self, method, binary;
+    let dv, funcId;
+    if (creating) {
+      if (arguments.length === 0) {
+        throw new NoInitializer(structure);
+      }
+      if (typeof(arg) !== 'function') {
+        throw new TypeMismatch('function', arg);
+      }
+      const constuctorAddr = env.getViewAddress(jsThunkConstructor[MEMORY]);
+      funcId = env.getFunctionId(arg);
+      dv = env.getFunctionThunk(constuctorAddr, funcId);
+    } else {
+      dv = arg;
+    }
+    if (self = cache.find(dv)) {
+      return self;
+    }
+    if (creating) {
+      const fn = arg;
+      self = anonymous(function(...args) {
+        return fn(...args);
+      });
+      method = function(...args) {
+        return fn([ this, ...args]);
+      };
+      binary = function(dv, asyncCallHandle) {
+        let result = CallResult.OK;
+        let awaiting = false;
+        try {
+          const argStruct = Arg(dv);
+          const args = [];
+          for (let i = 0; i < argCount; i++) {
+            args.push(argStruct[i]);
+          }
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (asyncCallHandle) {
+              retval.then((value) => {
+                argStruct.retval = value;
+              }).catch((err) => {
+                console.error(err);
+                result = CallResult.Failure;
+              }).then(() => {
+                env.finalizeAsyncCall(asyncCallHandle, result);
+              });
+              awaiting = true;
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          console.error(err);
+          result = CallResult.Failure;
+        }
+        if (!awaiting && asyncCallHandle) {
+          env.finalizeAsyncCall(asyncCallHandle, result);
+        }
+        return result;
+      };
+      env.setFunctionCaller(funcId, binary);
+    } else {
+      const invoke = function(argStruct) {
+        const thunkAddr = env.getViewAddress(thunk[MEMORY]);
+        const funcAddr = env.getViewAddress(self[MEMORY]);
+        env.invokeThunk(thunkAddr, funcAddr, argStruct);
+      };
+      self = anonymous(function (...args) {
+        const argStruct = new Arg(args, self.name, 0);
+        invoke(argStruct);
+        return argStruct.retval;
+      });
+      method = function(...args) {
+        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        invoke(argStruct);
+        return argStruct.retval;
+      };
+      binary = function(dv) {
+        invoke(Arg(dv));
+      };
+    }
+    Object.setPrototypeOf(self, constructor.prototype);
+    self[MEMORY] = dv;
+    defineProperties(self, {
+      length: { value: argCount, writable: false },
+      [VARIANTS]: { value: { method, binary } },
+    });
+    defineProperties(method, {
+      length: { value: argCount - 1, writable: false },
+      name: { get: () => self.name },
+    });
+    cache.save(dv, self);
+    return self;
+  };
+  constructor.prototype = Object.create(Function.prototype);
+  defineProperties(constructor.prototype, {
+    constructor: { value: constructor },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: 1 },
+  });
+  return constructor;
+}
+
+function anonymous(f) {
+  return f
 }
 
 function defineOpaque(structure, env) {
@@ -4823,6 +4960,10 @@ function useOpaque() {
   factories[StructureType.Opaque] = defineOpaque;
 }
 
+function useFunction() {
+  factories[StructureType.Function] = defineFunction;
+}
+
 function getStructureFactory(type) {
   const f = factories[type];
   return f;
@@ -4843,6 +4984,9 @@ class Environment {
   comptime = false;
   /* RUNTIME-ONLY */
   variables = [];
+  jsFunctionMap = null;
+  jsFunctionIdMap = null;
+  jsFunctionNextId = 1;
   /* RUNTIME-ONLY-END */
   imports;
   console = globalThis.console;
@@ -5066,13 +5210,14 @@ class Environment {
 
 
   finalizeShape(structure) {
-    const f = getStructureFactory(structure.type);
+    const { type, name } = structure;
+    const f = getStructureFactory(type);
     const constructor = f(structure, this);
     if (typeof(constructor) === 'function') {
       defineProperties(constructor, {
-        name: { value: structure.name, configurable: true },
+        name: { value: name, configurable: true },
       });
-      if (!constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
+      if (type !== StructureType.Function && !constructor.prototype.hasOwnProperty(Symbol.toStringTag)) {
         defineProperties(constructor.prototype, {
           [Symbol.toStringTag]: { value: structure.name, configurable: true },
         });
@@ -5082,28 +5227,48 @@ class Environment {
 
   finalizeStructure(structure) {
     addStaticMembers(structure, this);
-    addMethods(structure, this);
-  }
-
-  createCaller(method, useThis) {
-    const { name, argStruct, thunkId } = method;
-    const { constructor } = argStruct;
-    const self = this;
-    let f;
-    if (useThis) {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor([ this, ...args ], name, 1));
-      };
-    } else {
-      f = function(...args) {
-        return self.invokeThunk(thunkId, new constructor(args, name, 0));
-      };
-    }
-    Object.defineProperty(f, 'name', { value: name });
-    return f;
   }
 
   /* RUNTIME-ONLY */
+  getFunctionId(fn) {
+    if (!this.jsFunctionIdMap) {
+      this.jsFunctionIdMap = new WeakMap();
+    }
+    let id = this.jsFunctionIdMap.get(fn);
+    if (id === undefined) {
+      id = this.jsFunctionNextId++;
+      this.jsFunctionIdMap.set(fn, id);
+    }
+    return id;
+  }
+
+  getFunctionThunk(constructorAddr, funcId) {
+    if (!this.jsFunctionThunkMap) {
+      this.jsFunctionThunkMap = new Map();
+    }
+    let dv = this.jsFunctionThunkMap.get(funcId);
+    if (dv === undefined) {
+      dv = this.runJsThunkConstructor(constructorAddr, funcId);
+      if (typeof(dv) === 'string') {
+        throw new ZigError(dv);
+      }
+      this.jsFunctionThunkMap.set(funcId, dv);
+    }
+    return dv;
+  }
+
+  setFunctionCaller(id, caller) {
+    if (!this.jsFunctionCallerMap) {
+      this.jsFunctionCallerMap = new Map();
+    }
+    this.jsFunctionCallerMap.set(id, caller);
+  }
+
+  runFunction(id, dv, futexHandle) {
+    const caller = this.jsFunctionCallerMap.get(id);
+    return caller?.(dv, futexHandle) ?? CallResult.Failure;
+  }
+
   recreateStructures(structures, options) {
     Object.assign(this, options);
     const insertObjects = (dest, placeholders) => {
@@ -5120,9 +5285,11 @@ class Environment {
         } else {
           const { array, offset, length } = memory;
           const dv = this.obtainView(array.buffer, offset, length);
-          const { constructor } = structure;
           const { reloc, const: isConst } = placeholder;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          const constructor = structure?.constructor;
+          const object = placeholder.actual = (constructor)
+          ? constructor.call(ENVIRONMENT, dv)
+          : { [MEMORY]: dv };
           if (isConst) {
             object[WRITE_DISABLER]?.();
           }
@@ -5146,16 +5313,19 @@ class Environment {
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
-          const placeholder = scope.template;
-          const template = scope.template = {};
-          if (placeholder.memory) {
-            const { array, offset, length } = placeholder.memory;
-            template[MEMORY] = this.obtainView(array.buffer, offset, length);
+          const { slots, memory, reloc } = scope.template;
+          const object = scope.template = {};
+          if (memory) {
+            const { array, offset, length } = memory;
+            object[MEMORY] = this.obtainView(array.buffer, offset, length);
+            if (reloc) {
+              this.variables.push({ reloc, object });
+            }
           }
-          if (placeholder.slots) {
+          if (slots) {
             // defer creation of objects until shapes of structures are finalized
-            const slots = template[SLOTS] = {};
-            objectPlaceholders.set(slots, placeholder.slots);
+            const realSlots = object[SLOTS] = {};
+            objectPlaceholders.set(realSlots, slots);
           }
         }
       }
@@ -5230,13 +5400,15 @@ class Environment {
       return;
     }
     /* WASM-ONLY */
-    object[MEMORY_RESTORER]();
+    object[MEMORY_RESTORER]?.();
     /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
-    const dest = Object.create(object.constructor.prototype);
-    dest[MEMORY] = relocDV;
-    dest[COPIER](object);
+    if (object[COPIER]) {
+      const dest = Object.create(object.constructor.prototype);
+      dest[MEMORY] = relocDV;
+      dest[COPIER](object);
+    }
     object[MEMORY] = relocDV;
   }
 
@@ -5258,7 +5430,8 @@ class Environment {
       init: (...args) => this.init(...args),
       abandon: () => this.abandon(),
       released: () => this.released,
-      connect: (c) => this.console = c,
+      connect: (console) => this.console = console,
+      multithread: (enable) => this.setMultithread(enable),
       sizeOf: (T) => check(T[SIZE]),
       alignOf: (T) => check(T[ALIGN]),
       typeOf: (T) => getStructureName(check(T[TYPE])),
@@ -5267,6 +5440,7 @@ class Environment {
 
   abandon() {
     if (!this.abandoned) {
+      this.setMultithread(false);
       this.releaseFunctions();
       this.unlinkVariables();
       this.abandoned = true;
@@ -5446,13 +5620,7 @@ class Environment {
   }
 
   addShadow(shadow, object, align) {
-    let { shadowMap } = this.context;
-    if (!shadowMap) {
-      shadowMap = this.context.shadowMap = new Map();
-    }
-    if (!shadow[MEMORY][FIXED]) {
-      debugger;
-    }
+    const shadowMap = this.context.shadowMap ??= new Map();
     /* WASM-ONLY */
     shadow[MEMORY_RESTORER] = getMemoryRestorer(null, this);
     /* WASM-ONLY-END */
@@ -5634,8 +5802,8 @@ class WebAssemblyEnvironment extends Environment {
   imports = {
     allocateExternMemory: { argType: 'iii', returnType: 'i' },
     freeExternMemory: { argType: 'iiii' },
-    runThunk: { argType: 'ii', returnType: 'v' },
-    runVariadicThunk: { argType: 'iiii', returnType: 'v' },
+    runThunk: { argType: 'iii', returnType: 'v' },
+    runVariadicThunk: { argType: 'iiiii', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
     flushStdout: { argType: '', returnType: '' },
   };
@@ -5896,18 +6064,18 @@ class WebAssemblyEnvironment extends Environment {
     return reloc;
   }
 
-  invokeThunk(thunkId, args) {
+  invokeThunk(thunkAddress, fnAddress, args) {
     // runThunk will be present only after WASM has compiled
     if (this.runThunk) {
-      return this.invokeThunkForReal(thunkId, args);
+      return this.invokeThunkForReal(thunkAddress, fnAddress, args);
     } else {
       return this.initPromise.then(() => {
-        return this.invokeThunkForReal(thunkId, args);
+        return this.invokeThunkForReal(thunkAddress, fnAddress, args);
       });
     }
   }
 
-  invokeThunkForReal(thunkId, args) {
+  invokeThunkForReal(thunkAddress, fnAddress, args) {
     try {
       this.startContext();
       if (args[POINTER_VISITOR]) {
@@ -5920,8 +6088,8 @@ class WebAssemblyEnvironment extends Environment {
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)
-      ? this.runVariadicThunk(thunkId, address, attrAddress, attrs.length)
-      : this.runThunk(thunkId, address, );
+      ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
+      : this.runThunk(thunkAddress, fnAddress, address);
       // create objects that pointers point to
       this.updateShadowTargets();
       if (args[POINTER_VISITOR]) {
@@ -5939,7 +6107,7 @@ class WebAssemblyEnvironment extends Environment {
       // error strings returned by the thunk are due to problems in the thunking process
       // (i.e. bugs in export.zig)
       if (err) {
-        throw new ZigError(err);
+        throw new ZigError$1(err);
       }
       return args.retval;
     } catch (err) {
@@ -5948,6 +6116,9 @@ class WebAssemblyEnvironment extends Environment {
         throw err;
       }
     }
+  }
+
+  setMultithread() {
   }
 
   getWASIImport() {
@@ -6039,4 +6210,4 @@ function createEnvironment(source) {
 }
 /* RUNTIME-ONLY-END */
 
-export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useCPointer, useComptime, useEnum, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternStruct, useExternUnion, useFloat, useInt, useLiteral, useMultiPointer, useNull, useObject, useOpaque, useOptional, usePackedStruct, usePrimitive, useSinglePointer, useSlice, useSlicePointer, useStatic, useStruct, useTaggedUnion, useType, useUint, useUndefined, useUnsupported, useVariadicStruct, useVector, useVoid };
+export { createEnvironment, useArgStruct, useArray, useBareUnion, useBool, useCPointer, useComptime, useEnum, useErrorSet, useErrorUnion, useExtendedBool, useExtendedFloat, useExtendedInt, useExtendedUint, useExternStruct, useExternUnion, useFloat, useFunction, useInt, useLiteral, useMultiPointer, useNull, useObject, useOpaque, useOptional, usePackedStruct, usePrimitive, useSinglePointer, useSlice, useSlicePointer, useStatic, useStruct, useTaggedUnion, useType, useUint, useUndefined, useUnsupported, useVariadicStruct, useVector, useVoid };

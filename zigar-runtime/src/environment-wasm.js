@@ -12,8 +12,8 @@ export class WebAssemblyEnvironment extends Environment {
     /* COMPTIME-ONLY-END */
     allocateExternMemory: { argType: 'iii', returnType: 'i' },
     freeExternMemory: { argType: 'iiii' },
-    runThunk: { argType: 'ii', returnType: 'v' },
-    runVariadicThunk: { argType: 'iiii', returnType: 'v' },
+    runThunk: { argType: 'iii', returnType: 'v' },
+    runVariadicThunk: { argType: 'iiiii', returnType: 'v' },
     isRuntimeSafetyActive: { argType: '', returnType: 'b' },
     flushStdout: { argType: '', returnType: '' },
   };
@@ -288,18 +288,18 @@ export class WebAssemblyEnvironment extends Environment {
     return reloc;
   }
 
-  invokeThunk(thunkId, args) {
+  invokeThunk(thunkAddress, fnAddress, args) {
     // runThunk will be present only after WASM has compiled
     if (this.runThunk) {
-      return this.invokeThunkForReal(thunkId, args);
+      return this.invokeThunkForReal(thunkAddress, fnAddress, args);
     } else {
       return this.initPromise.then(() => {
-        return this.invokeThunkForReal(thunkId, args);
+        return this.invokeThunkForReal(thunkAddress, fnAddress, args);
       });
     }
   }
 
-  invokeThunkForReal(thunkId, args) {
+  invokeThunkForReal(thunkAddress, fnAddress, args) {
     try {
       this.startContext();
       if (args[POINTER_VISITOR]) {
@@ -312,8 +312,8 @@ export class WebAssemblyEnvironment extends Environment {
       const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
       this.updateShadows();
       const err = (attrs)
-      ? this.runVariadicThunk(thunkId, address, attrAddress, attrs.length)
-      : this.runThunk(thunkId, address, );
+      ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
+      : this.runThunk(thunkAddress, fnAddress, address);
       // create objects that pointers point to
       this.updateShadowTargets();
       if (args[POINTER_VISITOR]) {
@@ -340,6 +340,9 @@ export class WebAssemblyEnvironment extends Environment {
         throw err;
       }
     }
+  }
+
+  setMultithread() {
   }
 
   getWASIImport() {

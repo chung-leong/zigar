@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const exporter = @import("./exporter.zig");
+const thunk_zig = @import("./thunk-zig.zig");
+const thunk_js = @import("./thunk-js.zig");
 const types = @import("./types.zig");
 
 pub const Value = types.Value;
@@ -25,7 +27,6 @@ extern fn _insertString(container: Value, key: Value, value: Value) void;
 extern fn _insertObject(container: Value, key: Value, value: ?Value) void;
 extern fn _beginStructure(def: Value) ?Value;
 extern fn _attachMember(structure: Value, def: Value, is_static: bool) void;
-extern fn _attachMethod(structure: Value, def: Value, is_static_only: bool) void;
 extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
 extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
@@ -146,14 +147,11 @@ pub fn getPtrAlign(alignment: u16) u8 {
 }
 
 pub const Host = struct {
-    options: types.HostOptions,
+    comptime context: void = {},
 
-    pub fn init(_: ?*anyopaque, arg_ptr: ?*anyopaque) Host {
-        const options_ptr: ?*types.HostOptions = @ptrCast(@alignCast(arg_ptr));
-        return .{ .options = if (options_ptr) |ptr| ptr.* else .{} };
+    pub fn init(_: ?*anyopaque) Host {
+        return .{};
     }
-
-    pub fn release(_: Host) void {}
 
     pub fn allocateMemory(_: Host, size: usize, alignment: u16) !Memory {
         if (_allocateHostMemory(size, alignment)) |dv| {
@@ -280,18 +278,37 @@ pub const Host = struct {
         const memory = Memory.from(err_name, true);
         return self.captureString(memory);
     }
+
+    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.CallResult {
+        _ = ctx;
+        _ = arg_ptr;
+        _ = arg_size;
+        _ = retval_size;
+        _ = wait;
+        return .ok;
+    }
 };
 
-pub fn runThunk(thunk_id: usize, arg_ptr: *anyopaque) ?Value {
+pub fn runThunk(
+    thunk_address: usize,
+    fn_address: usize,
+    arg_ptr: *anyopaque,
+) ?Value {
     // function pointers in WASM are indices into function table 0
     // so the thunk_id is really the thunk itself
-    const thunk: types.Thunk = @ptrFromInt(thunk_id);
-    return thunk(null, arg_ptr);
+    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
+    return thunk(null, @ptrFromInt(fn_address), arg_ptr);
 }
 
-pub fn runVariadicThunk(thunk_id: usize, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
-    const thunk: types.VariadicThunk = @ptrFromInt(thunk_id);
-    return thunk(null, arg_ptr, attr_ptr, arg_count);
+pub fn runVariadicThunk(
+    thunk_address: usize,
+    fn_address: usize,
+    arg_ptr: *anyopaque,
+    attr_ptr: *const anyopaque,
+    arg_count: usize,
+) ?Value {
+    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
+    return thunk(null, @ptrFromInt(fn_address), arg_ptr, attr_ptr, arg_count);
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {

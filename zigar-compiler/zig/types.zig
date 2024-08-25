@@ -1253,8 +1253,8 @@ test "TypeDataCollector.setAttributes" {
             string: []const u8,
         };
         pub const StructB = struct {
-            comptime Type: type = fn () void,
-            function: fn () void,
+            comptime Type: type = *const fn () void,
+            function: *const fn () void,
         };
         pub const StructC = struct {
             number: i32 = 0,
@@ -1391,14 +1391,6 @@ fn TypeDatabase(comptime len: comptime_int) type {
                 @compileError("No type data for " ++ @typeName(T));
             }
         }
-
-        pub fn isInUse(comptime self: @This(), comptime T: type) bool {
-            return inline for (self.entries) |entry| {
-                if (entry.Type == T) {
-                    break entry.isInUse();
-                }
-            } else false;
-        }
     };
 }
 
@@ -1410,7 +1402,7 @@ test "TypeDatabase.get" {
             string: []const u8,
         };
         pub const StructB = struct {
-            function: fn () void,
+            function: *const fn () void,
         };
         pub const StructC = struct {
             number: i32 = 0,

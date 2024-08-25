@@ -734,7 +734,7 @@ export class Environment {
       return;
     }
     /* WASM-ONLY */
-    object[MEMORY_RESTORER]();
+    object[MEMORY_RESTORER]?.();
     /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);

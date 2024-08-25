@@ -2,6 +2,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
+const is_wasm = switch (builtin.target.cpu.arch) {
+    .wasm32, .wasm64 => true,
+    else => false,
+};
+
 pub fn Instance(comptime T: type) type {
     return struct {
         const code_size = switch (builtin.target.cpu.arch) {

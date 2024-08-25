@@ -1,6 +1,6 @@
 import { TypeMismatch } from './error';
 import { defineProperties, ObjectCache } from './object';
-import { MEMORY, VARIANTS } from './symbol';
+import { ALIGN, MEMORY, VARIANTS } from './symbol';
 import { CallResult } from './types';
 
 export function defineFunction(structure, env) {
@@ -113,6 +113,9 @@ export function defineFunction(structure, env) {
   constructor.prototype = Object.create(Function.prototype);
   defineProperties(constructor.prototype, {
     constructor: { value: constructor },
+  });
+  defineProperties(constructor, {
+    [ALIGN]: { value: 1 },
   });
   return constructor;
 }

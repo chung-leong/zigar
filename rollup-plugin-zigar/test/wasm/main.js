@@ -94,6 +94,7 @@ const auxImport = {
 };
 const { instance: auxInstance } = await WebAssembly.instantiate(auxCode, auxImport);
 const { run } = instance.exports;
+console.log(instance.exports);
 const { hello, world } = auxInstance.exports;
 console.log({ hello, world });
 table.set(2, hello);
