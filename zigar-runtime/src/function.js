@@ -89,7 +89,7 @@ export function defineFunction(structure, env) {
         return argStruct.retval;
       });
       method = function(...args) {
-        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        const argStruct = new Arg([ this, ...args ], self.name, 1);
         invoke(argStruct);
         return argStruct.retval;
       };

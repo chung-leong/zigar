@@ -65,10 +65,11 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
             arg_ptr: *anyopaque,
         ) callconv(.C) ?Value {
             const host = HostT.init(ptr);
-            tryFunction(host, fn_ptr, arg_ptr) catch |err| {
-                return host.createErrorMessage(err) catch null;
-            };
-            return null;
+            if (tryFunction(host, fn_ptr, arg_ptr)) {
+                return null;
+            } else |err| {
+                return host.createMessage(err);
+            }
         }
     };
     const ns_variadic = struct {
@@ -90,10 +91,11 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
             arg_count: usize,
         ) callconv(.C) ?Value {
             const host = HostT.init(ptr);
-            tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count) catch |err| {
-                return host.createErrorMessage(err) catch null;
-            };
-            return null;
+            if (tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count)) {
+                return null;
+            } else |err| {
+                return host.createMessage(err);
+            }
         }
     };
     const ns = switch (f.is_var_args) {
@@ -147,12 +149,6 @@ test "createThunk" {
             try expect(false);
         },
     }
-}
-
-pub fn createErrorMessage(host: anytype, err: anyerror) !Value {
-    const err_name = @errorName(err);
-    const memory = Memory.from(err_name, true);
-    return host.captureString(memory);
 }
 
 fn createAllocator(host: anytype) std.mem.Allocator {

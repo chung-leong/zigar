@@ -38,6 +38,8 @@ export class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
+    allocateJsThunk: { argType: 'i', returnType: 'i' },
+    performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -343,6 +345,15 @@ export class WebAssemblyEnvironment extends Environment {
   }
 
   setMultithread() {
+  }
+
+  allocateJsThunk(slot) {
+
+  }
+
+  performJsCall(id, address, size) {
+    const dv = this.captureView(address, size, false)
+    return this.runFunction(id, dv, 0);
   }
 
   getWASIImport() {

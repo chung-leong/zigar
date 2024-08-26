@@ -632,9 +632,8 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) thunk_zig.Thunk
             if (getStructure(ctx, T)) |_| {
                 return null;
             } else |err| {
-                return host.createErrorMessage(err) catch null;
+                return host.createMessage(err);
             }
-            return null;
         }
     };
     return RootFactory.exportStructure;

@@ -31,6 +31,8 @@ extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
 extern fn _finalizeShape(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
+extern fn _allocateJsThunk(slot: usize) ?*const anyopaque;
+extern fn _performJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.CallResult;
 extern fn _getArgAttributes() *anyopaque;
 
 const allocator: std.mem.Allocator = .{
@@ -147,7 +149,7 @@ pub fn getPtrAlign(alignment: u16) u8 {
 }
 
 pub const Host = struct {
-    comptime context: void = {},
+    comptime context: *anyopaque = @ptrFromInt(0x1000), // dummy pointer
 
     pub fn init(_: ?*anyopaque) Host {
         return .{};
@@ -273,19 +275,19 @@ pub const Host = struct {
             Error.unable_to_create_structure_template;
     }
 
-    pub fn createErrorMessage(self: Host, err: anyerror) !Value {
+    pub fn createMessage(self: Host, err: anyerror) ?Value {
         const err_name = @errorName(err);
         const memory = Memory.from(err_name, true);
-        return self.captureString(memory);
+        return self.captureString(memory) catch null;
     }
 
-    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.CallResult {
-        _ = ctx;
-        _ = arg_ptr;
-        _ = arg_size;
-        _ = retval_size;
-        _ = wait;
-        return .ok;
+    pub fn allocateJsThunk(_: Host, slot: usize) !*const anyopaque {
+        return _allocateJsThunk(slot) orelse
+            Error.unable_to_create_function;
+    }
+
+    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) thunk_js.CallResult {
+        return _performJsCall(ctx.id, arg_ptr, arg_size);
     }
 };
 

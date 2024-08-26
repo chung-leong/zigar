@@ -4120,7 +4120,7 @@ function defineFunction(structure, env) {
         return argStruct.retval;
       });
       method = function(...args) {
-        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        const argStruct = new Arg([ this, ...args ], self.name, 1);
         invoke(argStruct);
         return argStruct.retval;
       };
@@ -5828,6 +5828,8 @@ class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
+    allocateJsThunk: { argType: 'i', returnType: 'i' },
+    performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -6119,6 +6121,15 @@ class WebAssemblyEnvironment extends Environment {
   }
 
   setMultithread() {
+  }
+
+  allocateJsThunk(slot) {
+
+  }
+
+  performJsCall(id, address, size) {
+    const dv = this.captureView(address, size, false);
+    return this.runFunction(id, dv, 0);
   }
 
   getWASIImport() {

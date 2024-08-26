@@ -21,6 +21,7 @@ pub const Error = error{
     unable_to_add_structure_template,
     unable_to_define_structure,
     unable_to_write_to_console,
+    unable_to_create_function,
     too_many_arguments,
 };
 

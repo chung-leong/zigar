@@ -191,10 +191,10 @@ pub const Host = struct {
         return value;
     }
 
-    pub fn createErrorMessage(self: Host, err: anyerror) !Value {
+    pub fn createMessage(self: Host, err: anyerror) ?Value {
         const err_name = @errorName(err);
         const memory = Memory.from(err_name, true);
-        return self.captureString(memory);
+        return self.captureString(memory) catch null;
     }
 
     pub fn writeToConsole(self: Host, dv: Value) !void {
