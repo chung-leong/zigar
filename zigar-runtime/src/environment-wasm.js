@@ -231,13 +231,27 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async instantiateWebAssembly(source) {
+  async instantiateWebAssembly(source, options = {}) {
+    const {
+      memoryInitial,
+      memoryMax,
+      tableInitial,
+      multithreaded,
+    } = options;
     const res = await source;
     this.hasCodeSource = true;
-    const imports = {
-      env: this.exportFunctions(),
-      wasi_snapshot_preview1: this.getWASIImport(),
-    };
+    const wasi = this.getWASIImport();
+    const env = this.exportFunctions();
+    env.memory = this.memory = new WebAssembly.Memory({
+      initial: memoryInitial,
+      maximum: memoryMax,
+      shared: multithreaded,
+    });
+    env.table = this.table = new WebAssembly.Table({
+      initial: tableInitial,
+      element: anyfunc,
+    });
+    const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
     } else {
@@ -245,15 +259,14 @@ export class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  loadModule(source) {
+  loadModule(source, options) {
     return this.initPromise = (async () => {
-      const { instance } = await this.instantiateWebAssembly(source);
-      const { memory, _initialize } = instance.exports;
-      this.importFunctions(instance.exports);
+      const { instance } = await this.instantiateWebAssembly(source, options);
+      const { exports } = instance;
+      this.importFunctions(exports);
       this.trackInstance(instance);
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
-      this.memory = memory;
     })();
   }
 

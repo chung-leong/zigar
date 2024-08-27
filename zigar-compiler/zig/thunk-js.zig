@@ -32,7 +32,7 @@ const native = struct {
     pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkConstructor {
         const ft_ns = struct {
             fn tryConstruction(host: HostT, id: usize) !Value {
-                const caller = createCaller(FT, Context, Closure.get, HostT.handleJsCall);
+                const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
                 const instance = try closure_factory.alloc(caller, .{
                     .ptr = host.context,
                     .id = id,
@@ -67,7 +67,7 @@ const wasm = struct {
                 var array: [count]*const FT = undefined;
                 for (&array, 0..) |*ptr, index| {
                     const caller_ns = struct {
-                        fn retrieveContext() Context {
+                        inline fn retrieveContext() Context {
                             return contexts[index];
                         }
                     };
@@ -175,7 +175,7 @@ fn CallHandler(comptime CT: type) type {
 }
 
 fn ContextRetriever(comptime CT: type) type {
-    return fn () CT;
+    return fn () callconv(.Inline) CT;
 }
 
 fn createCaller(comptime FT: type, comptime CT: type, comptime retriever: ContextRetriever(CT), comptime handler: CallHandler(CT)) *const FT {
@@ -347,7 +347,7 @@ test "createThunk (error handling)" {
             return .failure;
         }
 
-        fn retrieveContext() CT {
+        inline fn retrieveContext() CT {
             return context;
         }
     };

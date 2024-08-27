@@ -9,7 +9,7 @@ useAllStructureTypes();
 useAllExtendedTypes();
 /* COMPTIME-ONLY-END */
 
-export function createEnvironment(source) {
+export function createEnvironment() {
   return new WebAssemblyEnvironment();
 }
 

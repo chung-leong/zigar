@@ -28,6 +28,7 @@ export async function transpile(path, options) {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
+  console.log({ outputPath });
   const content = await readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);

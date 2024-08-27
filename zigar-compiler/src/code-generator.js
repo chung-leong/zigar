@@ -10,7 +10,7 @@ export function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    envOptions,
+    moduleOptions,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -32,13 +32,13 @@ export function generateCode(definition, params) {
   // write out the structures as object literals
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
+  add(`const env = createEnvironment();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source)`);
+    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
     // if top level await is used, we don't need to write changes into fixed memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
   }

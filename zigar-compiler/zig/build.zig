@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .cwd_relative = cfg.stub_path },
         .target = target,
         .optimize = optimize,
+        .single_threaded = !cfg.multithreaded,
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_path },
@@ -28,6 +29,8 @@ pub fn build(b: *std.Build) void {
         lib.entry = .disabled;
         lib.rdynamic = true;
         lib.wasi_exec_model = .reactor;
+        lib.import_memory = true;
+        lib.import_table = true;
     }
     if (cfg.use_libc) {
         lib.linkLibC();

@@ -230,7 +230,7 @@ export function definePointer(structure, env) {
     }
     if (arg instanceof Target) {
       /* WASM-ONLY */
-      arg[MEMORY_RESTORER]();
+      arg[MEMORY_RESTORER]?.();
       /* WASM-ONLY-END */
       const constTarget = arg[CONST_TARGET];
       if (constTarget) {
