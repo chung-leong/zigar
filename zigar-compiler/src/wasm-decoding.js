@@ -329,6 +329,7 @@ export function parseBinary(binary) {
     readArray,
     readU32Leb128,
     readExpression,
+    readLimits,
     readCustom,
   } = createReader(binary);
   const magic = readU32();
@@ -378,8 +379,9 @@ export function parseBinary(binary) {
               return { module, name, type, valtype, mut };
             }
             /* c8 ignore next 2 */
-            default:
+            default: {
               throw new Error(`Unknown object type: ${type}`);
+            }
           }
         });
         return { type, imports };
@@ -463,21 +465,72 @@ export function parseBinary(binary) {
     }
     /* c8 ignore next -- unreachable */
   }
+}
 
-  function readLimits() {
-    const flag = readU8();
-    const min = readU32Leb128();
-    switch (flag) {
-      case 0:
-        return { flag, min };
-      case 1:
-        const max = readU32Leb128();
-        return { flag, min, max };
-      /* c8 ignore next 4 */
-      default:
-        throw new Error(`Unknown limit flag: ${flag}`);
+export function extractLimits(binary) {
+  const {
+    eof,
+    skip,
+    readU8,
+    readU32,
+    readString,
+    readU32Leb128,
+    readLimits,
+  } = createReader(binary);
+  const magic = readU32();
+  if (magic !== MagicNumber) {
+    throw new Error(`Incorrect magic number: ${magic.toString(16)}`);
+  }
+  const version = readU32();
+  if (version !== Version) {
+    throw new Error(`Incorrect version: ${version}`);
+  }
+  let memoryInitial, memoryMax, tableInitial;
+  loop:
+  while(!eof()) {
+    const type = readU8();
+    const len = readU32Leb128();
+    if (type === SectionType.Import) {
+      const count = readU32Leb128();
+      for (let i = 0; i < count; i++) {
+        const module = readString();
+        const name = readString();
+        const type = readU8();
+        switch (type) {
+          case ObjectType.Function: {
+            readU32Leb128();
+          } break;
+          case ObjectType.Table: {
+            readU8();
+            const { min } = readLimits();
+            if (module === 'env' && name === '__indirect_function_table') {
+              tableInitial = min;
+              if (memoryInitial !== undefined) break loop;
+            }
+          } break;
+          case ObjectType.Memory: {
+            const { min, max } = readLimits();
+            if (module === 'env' && name === 'memory') {
+              memoryInitial = min;
+              memoryMax = max;
+              if (tableInitial !== undefined) break loop;
+            }
+          } break;
+          case ObjectType.Global: {
+            readU8();
+            readU8();
+          } break;
+          /* c8 ignore next 2 */
+          default: {
+            throw new Error(`Unknown object type: ${type}`);
+          }
+        }
+      }
+    } else {
+      skip(len);
     }
   }
+  return { memoryMax, memoryInitial, tableInitial };
 }
 
 export function repackBinary(module) {
@@ -491,6 +544,7 @@ export function repackBinary(module) {
     writeArray,
     writeU32Leb128,
     writeExpression,
+    writeLimits,
     writeCustom,
   } = createWriter(module.size);
   writeU32(MagicNumber);
@@ -595,16 +649,6 @@ export function repackBinary(module) {
       }
     });
   }
-
-  function writeLimits(limits) {
-    writeU8(limits.flag);
-    writeU32Leb128(limits.min);
-    switch (limits.flag) {
-      case 1: {
-        writeU32Leb128(limits.max);
-      } break;
-    }
-  }
 }
 
 function createReader(dv) {
@@ -613,6 +657,10 @@ function createReader(dv) {
 
   function eof() {
     return (offset >= dv.byteLength);
+  }
+
+  function skip(len) {
+    offset += len;
   }
 
   function readBytes(len) {
@@ -714,6 +762,20 @@ function createReader(dv) {
     return new DataView(dv.buffer, dv.byteOffset + start, len);
   }
 
+  function readLimits() {
+    const flags = readU8();
+    const min = readU32Leb128();
+    let max = undefined
+    let shared = undefined;
+    if (flags & 0x01) {
+      max = readU32Leb128();
+    }
+    if (flags & 0x02) {
+      shared = true;
+    }
+    return { flags, min, max, shared };
+  }
+
   function readCustom(len) {
     const offsetBefore = offset;
     const name = readString();
@@ -724,6 +786,7 @@ function createReader(dv) {
 
   const self = {
     eof,
+    skip,
     readBytes,
     readU8,
     readU32,
@@ -734,6 +797,7 @@ function createReader(dv) {
     readI32Leb128,
     readI64Leb128,
     readExpression,
+    readLimits,
     readCustom,
   };
   return self;
@@ -841,6 +905,14 @@ function createWriter(maxSize) {
     writeBytes(code);
   }
 
+  function writeLimits(limits) {
+    writeU8(limits.flags);
+    writeU32Leb128(limits.min);
+    if (limits.max !== undefined) {
+      writeU32Leb128(limits.max);
+    }
+  }
+
   function writeCustom({ name, data }) {
     writeString(name);
     writeBytes(data);
@@ -858,6 +930,7 @@ function createWriter(maxSize) {
     writeI32Leb128,
     writeI64Leb128,
     writeExpression,
+    writeLimits,
     writeCustom,
     writeLength,
   };

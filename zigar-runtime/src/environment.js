@@ -25,6 +25,7 @@ export class Environment {
   littleEndian = true;
   wordSize = 4;
   runtimeSafety = true;
+  multithreaded = false;
   comptime = false;
   /* COMPTIME-ONLY */
   slots = {};

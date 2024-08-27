@@ -961,13 +961,15 @@ napi_value load_module(napi_env env,
 
     // add module attributess to environment
     module_attributes attributes = md->mod->attributes;
-    napi_value little_endian, runtime_safety;
+    napi_value little_endian, runtime_safety, multithreaded;
     napi_value js_env;
     if (napi_get_reference_value(env, md->js_env, &js_env) != napi_ok
      || napi_get_boolean(env, attributes.little_endian, &little_endian) != napi_ok
      || napi_set_named_property(env, js_env, "littleEndian", little_endian) != napi_ok
      || napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) != napi_ok
-     || napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) != napi_ok) {
+     || napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) != napi_ok
+     || napi_get_boolean(env, attributes.multithreaded, &runtime_safety) != napi_ok
+     || napi_set_named_property(env, js_env, "multithreaded", multithreaded) != napi_ok) {
         return throw_error(env, "Unable to modify runtime environment");
     }
     return NULL;

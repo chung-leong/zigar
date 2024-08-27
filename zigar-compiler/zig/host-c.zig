@@ -406,7 +406,8 @@ const Exports = extern struct {
 const ModuleAttributes = packed struct(u32) {
     little_endian: bool,
     runtime_safety: bool,
-    _: u30 = 0,
+    multithreaded: bool,
+    _: u29 = 0,
 };
 
 pub const Module = extern struct {
@@ -436,6 +437,7 @@ pub fn createModule(comptime T: type) Module {
                 .Debug, .ReleaseSafe => true,
                 else => false,
             },
+            .multithreaded = !builtin.single_threaded,
         },
         .imports = &imports,
         .exports = &.{

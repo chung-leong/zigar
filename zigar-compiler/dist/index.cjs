@@ -5789,7 +5789,7 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
-    'zigarPath', 'multithreaded',
+    'zigarPath', 'multithreaded', 'maxMemory',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5844,7 +5844,8 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
-    multithreaded = isWASM ? true : false,
+    multithreaded = isWASM ? false : true,
+    maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
   } = options;
   const src = path.parse(srcPath ?? '');
   const mod = path.parse(modPath ?? '');
@@ -5903,7 +5904,12 @@ function createConfig(srcPath, modPath, options = {}) {
     const osTag = osTags[platform] ?? platform;
     zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
-  if (isWASM && !zigArgs.find(s => /^\-Dcpu=/.test(s))) ;
+  if (isWASM && !zigArgs.find(s => /^\-Dcpu=/.test(s))) {
+    if (multithreaded) {
+      // we need support for atomic operations
+      zigArgs.push(`-Dcpu=bleeding_edge`);
+    }
+  }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const zigarPath = absolute(`../zig/zigar.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
@@ -5928,6 +5934,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     isWASM,
     multithreaded,
+    maxMemory,
   };
 }
 
@@ -6052,6 +6059,10 @@ const optionsForCompile = {
     type: 'boolean',
     title: 'Use top-level await to load WASM file',
   },
+  multithreaded: {
+    type: 'boolean',
+    title: 'Enable multithreading',
+  },
   buildDir: {
     type: 'string',
     title: 'Root directory where temporary build directories are placed',
@@ -6094,6 +6105,10 @@ const optionsForTranspile = {
   stripWASM: {
     type: 'boolean',
     title: 'Remove unnecessary code from WASM file',
+  },
+  maxMemory: {
+    type: 'number',
+    title: 'Maximum amount of shared memory in bytes',
   },
   keepNames: {
     type: 'boolean',
@@ -6285,6 +6300,7 @@ class Environment {
   littleEndian = true;
   wordSize = 4;
   runtimeSafety = true;
+  multithreaded = false;
   comptime = false;
   /* COMPTIME-ONLY */
   slots = {};
@@ -6978,9 +6994,11 @@ class WebAssemblyEnvironment extends Environment {
     performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
+  nextTableIndex = 0;
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  table = null;
   initPromise = null;
   customWASI = null;
   hasCodeSource = false;
@@ -7166,17 +7184,24 @@ class WebAssemblyEnvironment extends Environment {
     const {
       memoryInitial,
       memoryMax,
+      tableInitial,
       multithreaded,
     } = options;
     const res = await source;
     this.hasCodeSource = true;
     const wasi = this.getWASIImport();
     const env = this.exportFunctions();
-    env.memory = this.memory = new WebAssembly.Memory({
+    this.memory = env.memory = new WebAssembly.Memory({
       initial: memoryInitial,
       maximum: memoryMax,
       shared: multithreaded,
     });
+    this.table = env.__indirect_function_table = new WebAssembly.Table({
+      initial: tableInitial,
+      element: 'anyfunc',
+    });
+    this.multithreaded = multithreaded;
+    this.nextTableIndex = tableInitial;
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
@@ -7719,6 +7744,7 @@ function parseBinary(binary) {
     readArray,
     readU32Leb128,
     readExpression,
+    readLimits,
     readCustom,
   } = createReader(binary);
   const magic = readU32();
@@ -7768,8 +7794,9 @@ function parseBinary(binary) {
               return { module, name, type, valtype, mut };
             }
             /* c8 ignore next 2 */
-            default:
+            default: {
               throw new Error(`Unknown object type: ${type}`);
+            }
           }
         });
         return { type, imports };
@@ -7853,21 +7880,72 @@ function parseBinary(binary) {
     }
     /* c8 ignore next -- unreachable */
   }
+}
 
-  function readLimits() {
-    const flag = readU8();
-    const min = readU32Leb128();
-    switch (flag) {
-      case 0:
-        return { flag, min };
-      case 1:
-        const max = readU32Leb128();
-        return { flag, min, max };
-      /* c8 ignore next 4 */
-      default:
-        throw new Error(`Unknown limit flag: ${flag}`);
+function extractLimits(binary) {
+  const {
+    eof,
+    skip,
+    readU8,
+    readU32,
+    readString,
+    readU32Leb128,
+    readLimits,
+  } = createReader(binary);
+  const magic = readU32();
+  if (magic !== MagicNumber) {
+    throw new Error(`Incorrect magic number: ${magic.toString(16)}`);
+  }
+  const version = readU32();
+  if (version !== Version) {
+    throw new Error(`Incorrect version: ${version}`);
+  }
+  let memoryInitial, memoryMax, tableInitial;
+  loop:
+  while(!eof()) {
+    const type = readU8();
+    const len = readU32Leb128();
+    if (type === SectionType.Import) {
+      const count = readU32Leb128();
+      for (let i = 0; i < count; i++) {
+        const module = readString();
+        const name = readString();
+        const type = readU8();
+        switch (type) {
+          case ObjectType.Function: {
+            readU32Leb128();
+          } break;
+          case ObjectType.Table: {
+            readU8();
+            const { min } = readLimits();
+            if (module === 'env' && name === '__indirect_function_table') {
+              tableInitial = min;
+              if (memoryInitial !== undefined) break loop;
+            }
+          } break;
+          case ObjectType.Memory: {
+            const { min, max } = readLimits();
+            if (module === 'env' && name === 'memory') {
+              memoryInitial = min;
+              memoryMax = max;
+              if (tableInitial !== undefined) break loop;
+            }
+          } break;
+          case ObjectType.Global: {
+            readU8();
+            readU8();
+          } break;
+          /* c8 ignore next 2 */
+          default: {
+            throw new Error(`Unknown object type: ${type}`);
+          }
+        }
+      }
+    } else {
+      skip(len);
     }
   }
+  return { memoryMax, memoryInitial, tableInitial };
 }
 
 function repackBinary(module) {
@@ -7881,6 +7959,7 @@ function repackBinary(module) {
     writeArray,
     writeU32Leb128,
     writeExpression,
+    writeLimits,
     writeCustom,
   } = createWriter(module.size);
   writeU32(MagicNumber);
@@ -7985,16 +8064,6 @@ function repackBinary(module) {
       }
     });
   }
-
-  function writeLimits(limits) {
-    writeU8(limits.flag);
-    writeU32Leb128(limits.min);
-    switch (limits.flag) {
-      case 1: {
-        writeU32Leb128(limits.max);
-      } break;
-    }
-  }
 }
 
 function createReader(dv) {
@@ -8003,6 +8072,10 @@ function createReader(dv) {
 
   function eof() {
     return (offset >= dv.byteLength);
+  }
+
+  function skip(len) {
+    offset += len;
   }
 
   function readBytes(len) {
@@ -8104,6 +8177,20 @@ function createReader(dv) {
     return new DataView(dv.buffer, dv.byteOffset + start, len);
   }
 
+  function readLimits() {
+    const flags = readU8();
+    const min = readU32Leb128();
+    let max = undefined;
+    let shared = undefined;
+    if (flags & 0x01) {
+      max = readU32Leb128();
+    }
+    if (flags & 0x02) {
+      shared = true;
+    }
+    return { flags, min, max, shared };
+  }
+
   function readCustom(len) {
     const offsetBefore = offset;
     const name = readString();
@@ -8114,6 +8201,7 @@ function createReader(dv) {
 
   const self = {
     eof,
+    skip,
     readBytes,
     readU8,
     readU32,
@@ -8124,6 +8212,7 @@ function createReader(dv) {
     readI32Leb128,
     readI64Leb128,
     readExpression,
+    readLimits,
     readCustom,
   };
   return self;
@@ -8231,6 +8320,14 @@ function createWriter(maxSize) {
     writeBytes(code);
   }
 
+  function writeLimits(limits) {
+    writeU8(limits.flags);
+    writeU32Leb128(limits.min);
+    if (limits.max !== undefined) {
+      writeU32Leb128(limits.max);
+    }
+  }
+
   function writeCustom({ name, data }) {
     writeString(name);
     writeBytes(data);
@@ -8248,6 +8345,7 @@ function createWriter(maxSize) {
     writeI32Leb128,
     writeI64Leb128,
     writeExpression,
+    writeLimits,
     writeCustom,
     writeLength,
   };
@@ -8678,10 +8776,16 @@ async function transpile(path, options) {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
-  console.log({ outputPath });
   const content = await promises.readFile(outputPath);
+  const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
+  const moduleOptions = {
+    memoryMax,
+    memoryInitial,
+    tableInitial,
+    multithreaded: compileOptions.multithreaded ?? false,
+  };
   const env = createEnvironment();
-  env.loadModule(content);
+  env.loadModule(content, moduleOptions);
   await env.initPromise;
   env.acquireStructures(compileOptions);
   const definition = env.exportStructures();
@@ -8704,6 +8808,7 @@ async function transpile(path, options) {
     binarySource,
     topLevelAwait,
     omitExports,
+    moduleOptions,
   });
   return { code, exports, structures, sourcePaths };
 }

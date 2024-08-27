@@ -4981,6 +4981,7 @@ class Environment {
   littleEndian = true;
   wordSize = 4;
   runtimeSafety = true;
+  multithreaded = false;
   comptime = false;
   /* RUNTIME-ONLY */
   variables = [];
@@ -5832,9 +5833,11 @@ class WebAssemblyEnvironment extends Environment {
     performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
+  nextTableIndex = 0;
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  table = null;
   initPromise = null;
   customWASI = null;
   hasCodeSource = false;
@@ -6016,13 +6019,29 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async instantiateWebAssembly(source) {
+  async instantiateWebAssembly(source, options = {}) {
+    const {
+      memoryInitial,
+      memoryMax,
+      tableInitial,
+      multithreaded,
+    } = options;
     const res = await source;
     this.hasCodeSource = true;
-    const imports = {
-      env: this.exportFunctions(),
-      wasi_snapshot_preview1: this.getWASIImport(),
-    };
+    const wasi = this.getWASIImport();
+    const env = this.exportFunctions();
+    this.memory = env.memory = new WebAssembly.Memory({
+      initial: memoryInitial,
+      maximum: memoryMax,
+      shared: multithreaded,
+    });
+    this.table = env.__indirect_function_table = new WebAssembly.Table({
+      initial: tableInitial,
+      element: 'anyfunc',
+    });
+    this.multithreaded = multithreaded;
+    this.nextTableIndex = tableInitial;
+    const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
     } else {
@@ -6030,17 +6049,14 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  loadModule(source) {
+  loadModule(source, options) {
     return this.initPromise = (async () => {
-      const { instance } = await this.instantiateWebAssembly(source);
+      const { instance } = await this.instantiateWebAssembly(source, options);
       const { exports } = instance;
-      const { memory } = exports;
-      this.console.log({ size: memory.buffer.byteLength });
       this.importFunctions(exports);
       this.trackInstance(instance);
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
-      this.memory = memory;
     })();
   }
 
@@ -6218,7 +6234,7 @@ class WebAssemblyEnvironment extends Environment {
   }
 }
 
-function createEnvironment(source) {
+function createEnvironment() {
   return new WebAssemblyEnvironment();
 }
 /* RUNTIME-ONLY-END */

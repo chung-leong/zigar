@@ -27,7 +27,8 @@ async function importModule(url, options) {
     optimize,
     embedWASM = false,
     useLibc = false,
-    topLevelAwait = true
+    topLevelAwait = true,
+    multithreaded = false,
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -51,6 +52,7 @@ async function importModule(url, options) {
         useReadFile: true,
         keepNames: optimize === 'ReleaseSafe',
         topLevelAwait,
+        multithreaded,
         useLibc,
         embedWASM,
       }),

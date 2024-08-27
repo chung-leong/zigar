@@ -42,9 +42,11 @@ export class WebAssemblyEnvironment extends Environment {
     performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
+  nextTableIndex = 0;
   valueTable = { 0: null };
   valueIndices = new Map;
   memory = null;
+  table = null;
   initPromise = null;
   customWASI = null;
   hasCodeSource = false;
@@ -242,15 +244,17 @@ export class WebAssemblyEnvironment extends Environment {
     this.hasCodeSource = true;
     const wasi = this.getWASIImport();
     const env = this.exportFunctions();
-    env.memory = this.memory = new WebAssembly.Memory({
+    this.memory = env.memory = new WebAssembly.Memory({
       initial: memoryInitial,
       maximum: memoryMax,
       shared: multithreaded,
     });
-    env.table = this.table = new WebAssembly.Table({
+    this.table = env.__indirect_function_table = new WebAssembly.Table({
       initial: tableInitial,
-      element: anyfunc,
+      element: 'anyfunc',
     });
+    this.multithreaded = multithreaded;
+    this.nextTableIndex = tableInitial;
     const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);

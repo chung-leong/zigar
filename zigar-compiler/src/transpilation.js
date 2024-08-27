@@ -4,7 +4,7 @@ import { createEnvironment } from '../../zigar-runtime/src/index.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
 import { findSourceFile, getAbsoluteMapping } from './configuration.js';
-import { stripUnused } from './wasm-encoding.js';
+import { extractLimits, stripUnused } from './wasm-decoding.js';
 
 export async function transpile(path, options) {
   const {
@@ -28,10 +28,16 @@ export async function transpile(path, options) {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
-  console.log({ outputPath });
   const content = await readFile(outputPath);
+  const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
+  const moduleOptions = {
+    memoryMax,
+    memoryInitial,
+    tableInitial,
+    multithreaded: compileOptions.multithreaded ?? false,
+  };
   const env = createEnvironment();
-  env.loadModule(content);
+  env.loadModule(content, moduleOptions);
   await env.initPromise;
   env.acquireStructures(compileOptions);
   const definition = env.exportStructures();
@@ -54,6 +60,7 @@ export async function transpile(path, options) {
     binarySource,
     topLevelAwait,
     omitExports,
+    moduleOptions,
   });
   return { code, exports, structures, sourcePaths };
 }

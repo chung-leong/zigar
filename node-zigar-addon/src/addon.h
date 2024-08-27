@@ -113,6 +113,7 @@ typedef struct {
         struct {
             bool little_endian: 1;
             bool runtime_safety: 1;
+            bool multithreaded: 1;
         };
         uint32_t _;
     };

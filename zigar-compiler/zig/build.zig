@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
         lib.wasi_exec_model = .reactor;
         lib.import_memory = true;
         lib.import_table = true;
+        lib.max_memory = cfg.max_memory;
     }
     if (cfg.use_libc) {
         lib.linkLibC();

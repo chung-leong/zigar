@@ -5,9 +5,9 @@ import { capture } from '../../capture.js';
 use(chaiAsPromised);
 
 export function addTests(importModule, options) {
-  const importTest = async (name) => {
+  const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
-      return importModule(url);
+      return importModule(url, options);
   };
   describe('Function', function() {
     it('should handle function as static variables', async function() {
@@ -33,7 +33,12 @@ export function addTests(importModule, options) {
     })
     it('should call functions passed as arguments', async function() {
       this.timeout(300000);
-      const { default: module, __zigar, call1, call2, call3, call4, hello, world } = await importTest('as-function-parameters');
+      const {
+        default: module,
+        __zigar,
+        call1, call2, call3, call4,
+        hello, world
+      } = await importTest('as-function-parameters', { multithreaded: true });
       const lines1 = await capture(() => {
         call1(hello);
         call1(world);

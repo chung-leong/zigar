@@ -127,7 +127,7 @@ export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
-    'zigarPath', 'multithreaded',
+    'zigarPath', 'multithreaded', 'maxMemory',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -184,7 +184,8 @@ export function createConfig(srcPath, modPath, options = {}) {
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
-    multithreaded = isWASM ? true : false,
+    multithreaded = isWASM ? false : true,
+    maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -244,7 +245,10 @@ export function createConfig(srcPath, modPath, options = {}) {
     zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
   if (isWASM && !zigArgs.find(s => /^\-Dcpu=/.test(s))) {
-    // zigArgs.push(`-Dcpu=bleeding_edge`);
+    if (multithreaded) {
+      // we need support for atomic operations
+      zigArgs.push(`-Dcpu=bleeding_edge`);
+    }
   }
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const zigarPath = absolute(`../zig/zigar.zig`);
@@ -270,6 +274,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     isWASM,
     multithreaded,
+    maxMemory,
   };
 }
 

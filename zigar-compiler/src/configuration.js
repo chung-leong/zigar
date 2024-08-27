@@ -28,6 +28,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Use top-level await to load WASM file',
   },
+  multithreaded: {
+    type: 'boolean',
+    title: 'Enable multithreading',
+  },
   buildDir: {
     type: 'string',
     title: 'Root directory where temporary build directories are placed',
@@ -70,6 +74,10 @@ export const optionsForTranspile = {
   stripWASM: {
     type: 'boolean',
     title: 'Remove unnecessary code from WASM file',
+  },
+  maxMemory: {
+    type: 'number',
+    title: 'Maximum amount of shared memory in bytes',
   },
   keepNames: {
     type: 'boolean',

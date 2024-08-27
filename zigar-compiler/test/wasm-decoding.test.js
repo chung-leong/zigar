@@ -12,7 +12,7 @@ import {
   repackFunction,
   repackNames,
   stripUnused,
-} from '../src/wasm-encoding.js';
+} from '../src/wasm-decoding.js';
 
 const littleEndian = true;
 
