@@ -1,7 +1,7 @@
-import { TypeMismatch } from './error';
-import { defineProperties, ObjectCache } from './object';
-import { ALIGN, MEMORY, VARIANTS } from './symbol';
-import { CallResult } from './types';
+import { TypeMismatch } from './error.js';
+import { defineProperties, ObjectCache } from './object.js';
+import { ALIGN, MEMORY, VARIANTS } from './symbol.js';
+import { CallResult } from './types.js';
 
 export function defineFunction(structure, env) {
   const {

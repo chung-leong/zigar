@@ -12,7 +12,7 @@ import {
   createConfig,
   getModuleCachePath,
   runCompiler
-} from '../src/compiler.js';
+} from '../src/compilation.js';
 import { delay } from '../src/utility-functions.js';
 
 describe('Compilation', function() {

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
 import { MemberType, StructureType, hasStandardFloatSize } from '../../zigar-runtime/src/types.js';
-import { generateCode } from '../src/code-generator.js';
+import { generateCode } from '../src/code-generation.js';
 
 describe('Code generation', function() {
   const options = {

@@ -2783,7 +2783,7 @@ function definePointer(structure, env) {
     }
     if (arg instanceof Target) {
       /* WASM-ONLY */
-      arg[MEMORY_RESTORER]();
+      arg[MEMORY_RESTORER]?.();
       /* WASM-ONLY-END */
       const constTarget = arg[CONST_TARGET];
       if (constTarget) {
@@ -4081,7 +4081,7 @@ function defineFunction(structure, env) {
         return argStruct.retval;
       });
       method = function(...args) {
-        const argStruct = new Arg([ this, ...args ], variant.name, 1);
+        const argStruct = new Arg([ this, ...args ], self.name, 1);
         invoke(argStruct);
         return argStruct.retval;
       };
@@ -5061,7 +5061,7 @@ function generateCode(definition, params) {
     topLevelAwait = true,
     omitExports = false,
     declareFeatures = false,
-    envOptions,
+    moduleOptions,
   } = params;
   const features = (declareFeatures) ? getFeaturesUsed(structures) : [];
   const exports = getExports(structures);
@@ -5083,13 +5083,13 @@ function generateCode(definition, params) {
   // write out the structures as object literals
   addStructureDefinitions(lines, definition);
   add(`\n// create runtime environment`);
-  add(`const env = createEnvironment(${envOptions ? JSON.stringify(envOptions) : ''});`);
+  add(`const env = createEnvironment();`);
   add(`\n// recreate structures`);
   add(`env.recreateStructures(structures, options);`);
   if (binarySource) {
     add(`\n// initiate loading and compilation of WASM bytecodes`);
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source)`);
+    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
     // if top level await is used, we don't need to write changes into fixed memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
   }
@@ -5789,7 +5789,7 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
-    'zigarPath',
+    'zigarPath', 'multithreaded',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -5844,6 +5844,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
+    multithreaded = isWASM ? true : false,
   } = options;
   const src = path.parse(srcPath ?? '');
   const mod = path.parse(modPath ?? '');
@@ -5902,6 +5903,7 @@ function createConfig(srcPath, modPath, options = {}) {
     const osTag = osTags[platform] ?? platform;
     zigArgs.push(`-Dtarget=${cpuArch}-${osTag}`);
   }
+  if (isWASM && !zigArgs.find(s => /^\-Dcpu=/.test(s))) ;
   const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
   const zigarPath = absolute(`../zig/zigar.zig`);
   const buildFilePath = absolute(`../zig/build.zig`);
@@ -5925,6 +5927,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigArgs,
     useLibc,
     isWASM,
+    multithreaded,
   };
 }
 
@@ -6971,6 +6974,8 @@ class WebAssemblyEnvironment extends Environment {
     attachTemplate: { argType: 'vvb' },
     finalizeShape: { argType: 'v' },
     endStructure: { argType: 'v' },
+    allocateJsThunk: { argType: 'i', returnType: 'i' },
+    performJsCall: { argType: 'iii', returnType: 'i' },
   };
   nextValueIndex = 1;
   valueTable = { 0: null };
@@ -7157,13 +7162,22 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  async instantiateWebAssembly(source) {
+  async instantiateWebAssembly(source, options = {}) {
+    const {
+      memoryInitial,
+      memoryMax,
+      multithreaded,
+    } = options;
     const res = await source;
     this.hasCodeSource = true;
-    const imports = {
-      env: this.exportFunctions(),
-      wasi_snapshot_preview1: this.getWASIImport(),
-    };
+    const wasi = this.getWASIImport();
+    const env = this.exportFunctions();
+    env.memory = this.memory = new WebAssembly.Memory({
+      initial: memoryInitial,
+      maximum: memoryMax,
+      shared: multithreaded,
+    });
+    const imports = { env, wasi_snapshot_preview1: wasi };
     if (res[Symbol.toStringTag] === 'Response') {
       return WebAssembly.instantiateStreaming(res, imports);
     } else {
@@ -7171,15 +7185,14 @@ class WebAssemblyEnvironment extends Environment {
     }
   }
 
-  loadModule(source) {
+  loadModule(source, options) {
     return this.initPromise = (async () => {
-      const { instance } = await this.instantiateWebAssembly(source);
-      const { memory, _initialize } = instance.exports;
-      this.importFunctions(instance.exports);
+      const { instance } = await this.instantiateWebAssembly(source, options);
+      const { exports } = instance;
+      this.importFunctions(exports);
       this.trackInstance(instance);
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();
-      this.memory = memory;
     })();
   }
 
@@ -7273,6 +7286,15 @@ class WebAssemblyEnvironment extends Environment {
   setMultithread() {
   }
 
+  allocateJsThunk(slot) {
+
+  }
+
+  performJsCall(id, address, size) {
+    const dv = this.captureView(address, size, false);
+    return this.runFunction(id, dv, 0);
+  }
+
   getWASIImport() {
     if (this.customWASI) {
       return this.customWASI.wasiImport;
@@ -7362,7 +7384,7 @@ useAllStructureTypes();
 useAllExtendedTypes();
 /* COMPTIME-ONLY-END */
 
-function createEnvironment(source) {
+function createEnvironment() {
   return new WebAssemblyEnvironment();
 }
 
@@ -8656,6 +8678,7 @@ async function transpile(path, options) {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
+  console.log({ outputPath });
   const content = await promises.readFile(outputPath);
   const env = createEnvironment();
   env.loadModule(content);

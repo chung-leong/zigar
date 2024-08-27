@@ -1,10 +1,10 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { createEnvironment } from '../../zigar-runtime/src/index.js';
-import { generateCode } from './code-generator.js';
-import { compile } from './compiler.js';
+import { generateCode } from './code-generation.js';
+import { compile } from './compilation.js';
 import { findSourceFile, getAbsoluteMapping } from './configuration.js';
-import { stripUnused } from './wasm-stripper.js';
+import { stripUnused } from './wasm-encoding.js';
 
 export async function transpile(path, options) {
   const {

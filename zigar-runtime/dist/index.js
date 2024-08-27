@@ -2963,7 +2963,7 @@ function definePointer(structure, env) {
     }
     if (arg instanceof Target) {
       /* WASM-ONLY */
-      arg[MEMORY_RESTORER]();
+      arg[MEMORY_RESTORER]?.();
       /* WASM-ONLY-END */
       const constTarget = arg[CONST_TARGET];
       if (constTarget) {
@@ -6033,8 +6033,10 @@ class WebAssemblyEnvironment extends Environment {
   loadModule(source) {
     return this.initPromise = (async () => {
       const { instance } = await this.instantiateWebAssembly(source);
-      const { memory, _initialize } = instance.exports;
-      this.importFunctions(instance.exports);
+      const { exports } = instance;
+      const { memory } = exports;
+      this.console.log({ size: memory.buffer.byteLength });
+      this.importFunctions(exports);
       this.trackInstance(instance);
       this.customWASI?.initialize?.(instance);
       this.runtimeSafety = this.isRuntimeSafetyActive();

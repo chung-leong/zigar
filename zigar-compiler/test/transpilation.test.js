@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 use(chaiAsPromised);
 
 import { writeFile } from 'fs/promises';
-import { transpile } from '../src/transpiler.js';
+import { transpile } from '../src/transpilation.js';
 
 describe('Transpilation', function() {
   const getSamplePath = (name) => {

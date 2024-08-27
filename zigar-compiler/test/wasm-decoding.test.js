@@ -12,11 +12,11 @@ import {
   repackFunction,
   repackNames,
   stripUnused,
-} from '../src/wasm-stripper.js';
+} from '../src/wasm-encoding.js';
 
 const littleEndian = true;
 
-describe('WASM stripper', function() {
+describe('WASM decoding', function() {
   describe('parseBinary', function() {
     it('should parse WASM files', async function() {
       const wasmFiles = [
@@ -177,7 +177,7 @@ describe('WASM stripper', function() {
     it('should retain names when keepNames is true', async function() {
       const path = absolute(`./wasm-samples/simple-with-names.wasm`);
       const content = await readFile(path);
-      const binary = new DataView(content.buffer);      
+      const binary = new DataView(content.buffer);
       const newBinary = stripUnused(binary, { keepNames: true });
       const module = parseBinary(newBinary);
       const nameSection = module.sections.find(s => s.type === SectionType.Custom);
