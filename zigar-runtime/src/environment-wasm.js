@@ -116,27 +116,6 @@ export class WebAssemblyEnvironment extends Environment {
     copy(dst, src);
   }
 
-  findSentinel(address, bytes) {
-    const { memory } = this;
-    const len = bytes.byteLength;
-    const end = memory.buffer.byteLength - len + 1;
-    for (let i = address; i < end; i += len) {
-      const dv = new DataView(memory.buffer, i, len);
-      let match = true;
-      for (let j = 0; j < len; j++) {
-        const a = dv.getUint8(j);
-        const b = bytes.getUint8(j);
-        if (a !== b) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        return (i - address) / len;
-      }
-    }
-  }
-
   captureString(address, len) {
     const { buffer } = this.memory;
     const ta = new Uint8Array(buffer, address, len);

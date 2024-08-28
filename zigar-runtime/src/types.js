@@ -1,44 +1,3 @@
-export const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
-  Static: 8,
-  Literal: 9,
-  Null: 10,
-  Undefined: 11,
-  Unsupported: 12,
-};
-
-export const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ExternStruct: 3,
-  PackedStruct: 4,
-  ArgStruct: 5,
-  VariadicStruct: 6,
-  ExternUnion: 7,
-  BareUnion: 8,
-  TaggedUnion: 9,
-  ErrorUnion: 10,
-  ErrorSet: 11,
-  Enum: 12,
-  Optional: 13,
-  SinglePointer: 14,
-  SlicePointer: 15,
-  MultiPointer: 16,
-  CPointer: 17,
-  Slice: 18,
-  Vector: 19,
-  Opaque: 20,
-  Function: 21,
-};
-
 export const MemoryType = {
   Normal: 0,
   Scratch: 1,
@@ -64,14 +23,6 @@ export function getTypeName(member) {
     return `Bool${boolSize}`;
   } else if (type === MemberType.Void) {
     return `Null`;
-  }
-}
-
-export function getStructureName(n) {
-  for (const [ name, value ] of Object.entries(StructureType)) {
-    if (value === n) {
-      return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
-    }
   }
 }
 
