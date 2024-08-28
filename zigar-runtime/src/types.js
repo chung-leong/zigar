@@ -10,21 +10,7 @@ export const CallResult = {
   Disabled: 3,
 };
 
-export function getTypeName(member) {
-  const { type, bitSize, byteSize } = member;
-  if (type === MemberType.Int) {
-    return `${bitSize <= 32 ? '' : 'Big' }Int${bitSize}`;
-  } else if (type === MemberType.Uint) {
-    return `${bitSize <= 32 ? '' : 'Big' }Uint${bitSize}`;
-  } else if (type === MemberType.Float) {
-    return `Float${bitSize}`;
-  } else if (type === MemberType.Bool) {
-    const boolSize = (byteSize !== undefined) ? byteSize * 8 : 1;
-    return `Bool${boolSize}`;
-  } else if (type === MemberType.Void) {
-    return `Null`;
-  }
-}
+
 
 export function getIntRange(member) {
   const { type, bitSize } = member;

@@ -31,7 +31,7 @@ export const MemberType = {
   Undefined: 11,
   Unsupported: 12,
 };
-const memberNames = Object.keys(MemberType);
+export const memberNames = Object.keys(MemberType);
 
 export function isRequiredByMember(member) {
   return true;

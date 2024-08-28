@@ -1,178 +1,16 @@
-import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch, TypeMismatch } from './error.js';
+import { BufferSizeMismatch, TypeMismatch } from './error.js';
 import { getBitAlignFunction } from './memory.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
 import {
-  MemberType, StructureType, getPrimitiveClass, getTypeName, isArrayLike, isByteAligned,
+  MemberType, StructureType,
+  getTypeName
 } from './types.js';
-
-export function getBoolAccessor(access, member) {
-  return cacheMethod(access, member, () => {
-    if (isByteAligned(member)) {
-      const { byteSize } = member;
-      const typeName = getTypeName({ type: MemberType.Int, bitSize: byteSize * 8 });
-      const f = DataView.prototype[typeName];
-      if (access === 'get') {
-        const get = DataView.prototype[`get${typeName}`];
-        return function(offset, littleEndian) {
-          return !!get.call(this, offset, littleEndian);
-        };
-      } else {
-        const set = DataView.prototype[`set${typeName}`];
-        const T = (byteSize > 4) ? 1n : 1;
-        const F = (byteSize > 4) ? 0n : 0;
-        return function(offset, value, littleEndian) {
-          set.call(this, offset, value ? T : F, littleEndian);
-        };
-      }
-    } else {
-      return getExtendedTypeAccessor(access, member);
-    }
-  });
-}
-
-export function getNumericAccessor(access, member) {
-  return cacheMethod(access, member, (name) => {
-    if (DataView.prototype[name]) {
-      return DataView.prototype[name];
-    } else {
-      return getExtendedTypeAccessor(access, member);
-    }
-  });
-}
-
-const factories = {};
-
-export function useExtendedBool() {
-  factories[MemberType.Bool] = getExtendedBoolAccessor;
-}
-
-export function useExtendedInt() {
-  factories[MemberType.Int] = getExtendedIntAccessor;
-}
-
-export function useExtendedUint() {
-  factories[MemberType.Uint] = getExtendedUintAccessor;
-}
-
-export function useExtendedFloat() {
-  factories[MemberType.Float] = getExtendedFloatAccessor;
-}
-
-function getExtendedTypeAccessor(access, member) {
-  const f = factories[member.type];
-  /* DEV-TEST */
-  /* c8 ignore next 4 */
-  if (typeof(f) !== 'function') {
-    const [ name ] = Object.entries(MemberType).find(a => a[1] === member.type);
-    throw new Error(`No factory for ${name} (extended): ${member.name}`);
-  }
-  /* DEV-TEST-END */
-  return f(access, member);
-}
-
-export function getExtendedBoolAccessor(access, member) {
-  const { bitOffset } = member;
-  const bitPos = bitOffset & 0x07;
-  const mask = 1 << bitPos;
-  const get = DataView.prototype.getInt8;
-  if (access === 'get') {
-    return function(offset) {
-      const n = get.call(this, offset);
-      return !!(n & mask);
-    };
-  } else {
-    const set = DataView.prototype.setInt8;
-    return function(offset, value) {
-      const n = get.call(this, offset);
-      const b = (value) ? n | mask : n & ~mask;
-      set.call(this, offset, b);
-    };
-  }
-}
-
-export function getExtendedIntAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedIntAccessor(access, member)
-  } else {
-    return getUnalignedIntAccessor(access, member);
-  }
-}
-
-export function getExtendedUintAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedUintAccessor(access, member)
-  } else {
-    return getUnalignedUintAccessor(access, member);
-  }
-}
-
-export function getExtendedFloatAccessor(access, member) {
-  if (isByteAligned(member)) {
-    return getAlignedFloatAccessor(access, member)
-  } else {
-    return getUnalignedFloatAccessor(access, member);
-  }
-}
-
-export function getDataView(structure, arg, env) {
-  const { type, byteSize, typedArray } = structure;
-  let dv;
-  // not using instanceof just in case we're getting objects created in other contexts
-  const tag = arg?.[Symbol.toStringTag];
-  if (tag === 'DataView') {
-    // capture relationship between the view and its buffer
-    dv = env.registerView(arg);
-  } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-    dv = env.obtainView(arg, 0, arg.byteLength);
-  } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
-    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-  } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
-    dv = env.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-  } else {
-    const memory = arg?.[MEMORY];
-    if (memory) {
-      // arg a Zig data object
-      const { constructor, instance: { members: [ member ] } } = structure;
-      if (arg instanceof constructor) {
-        // same type, no problem
-        return memory;
-      } else {
-        if (isArrayLike(type)) {
-          // make sure the arg has the same type of elements
-          const { byteSize: elementSize, structure: { constructor: Child } } = member;
-          const number = findElements(arg, Child);
-          if (number !== undefined) {
-            if (type === StructureType.Slice || number * elementSize === byteSize) {
-              return memory;
-            } else {
-              throw new ArrayLengthMismatch(structure, null, arg);
-            }
-          }
-        }
-      }
-    }
-  }
-  if (dv && byteSize !== undefined) {
-    checkDataViewSize(dv, structure);
-  }
-  return dv;
-}
 
 export function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {
     throw new TypeMismatch('a DataView', dv);
   }
   return dv;
-}
-
-export function checkDataViewSize(dv, structure) {
-  const { byteSize, type } = structure;
-  const isSizeMatching = type === StructureType.Slice
-  ? dv.byteLength % byteSize === 0
-  : dv.byteLength === byteSize;
-  if (!isSizeMatching) {
-    throw new BufferSizeMismatch(structure, dv);
-  }
 }
 
 export function setDataView(dv, structure, copy, fixed, handlers) {
@@ -203,26 +41,6 @@ export function setDataView(dv, structure, copy, fixed, handlers) {
     sentinel?.validateData(source, this.length);
     this[COPIER](source);
   }
-}
-
-function findElements(arg, Child) {
-  // casting to a array/slice
-  const { constructor: Arg } = arg;
-  if (Arg === Child) {
-    // matching object
-    return 1;
-  } else if (Arg.child === Child) {
-    // matching slice/array
-    return arg.length;
-  }
-}
-
-export function requireDataView(structure, arg, env) {
-  const dv = getDataView(structure, arg, env);
-  if (!dv) {
-    throw new BufferExpected(structure);
-  }
-  return dv;
 }
 
 export function getTypedArrayClass(member) {
@@ -656,61 +474,4 @@ function getUnalignedNumericAccessor(access, member) {
       applyBits(this, buf, offset);
     };
   }
-}
-
-const methodCache = {};
-
-function cacheMethod(access, member, cb) {
-  const { type, bitOffset, bitSize, structure } = member;
-  const bitPos = bitOffset & 0x07;
-  const typeName = getTypeName(member);
-  const suffix = isByteAligned(member) ? `` : `Bit${bitPos}`;
-  const isInt = type === MemberType.Int || type === MemberType.Uint;
-  let name = `${access}${typeName}${suffix}`;
-  let isSize = false, originalName = name;
-  if (isInt && bitSize === 64) {
-    const zigTypeName = structure?.name;
-    if (zigTypeName === 'usize' || zigTypeName === 'isize') {
-      name += 'Size';
-      isSize = true;
-    }
-  }
-  let fn = methodCache[name];
-  if (!fn) {
-    if (isInt && access === 'set') {
-      // add auto-conversion between number and bigint
-      const Primitive = getPrimitiveClass(member);
-      const set = cb(originalName);
-      fn = function(offset, value, littleEndian) {
-        set.call(this, offset, Primitive(value), littleEndian);
-      };
-    } else if (isSize && access === 'get') {
-      // use number instead of bigint where possible
-      const get = cb(originalName);
-      const min = BigInt(Number.MIN_SAFE_INTEGER);
-      const max = BigInt(Number.MAX_SAFE_INTEGER);
-      fn = function(offset, littleEndian) {
-        const value = get.call(this, offset, littleEndian);
-        if (min <= value && value <= max) {
-          return Number(value);
-        } else {
-          return value;
-        }
-      };
-    } else {
-      fn = cb(name);
-    }
-    if (fn && fn.name !== name) {
-      Object.defineProperty(fn, 'name', { value: name, configurable: true, writable: false });
-    }
-    methodCache[name] = fn;
-  }
-  return fn;
-}
-
-export function useAllExtendedTypes() {
-  useExtendedBool();
-  useExtendedInt();
-  useExtendedUint();
-  useExtendedFloat();
 }

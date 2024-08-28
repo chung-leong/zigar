@@ -1,11 +1,10 @@
 import { mixin } from '../class.js';
-import { MemberType } from '../members/all.js';
+import { MemberType } from './all.js';
 
 mixin({
-  getDescriptorBool(member, env) {
-    const getAccessor = isByteAligned(member) ? this.getAccessorBool : this.getAccessorBoolMisaligned;
-    return this.getDescriptorUsing(member, env, getAccessor);
-  }
+  getDescriptorBool(member) {
+    return this.getDescriptorUsing(member, this.getAccessor);
+  },
 });
 
 export function isRequiredByMember(member) {

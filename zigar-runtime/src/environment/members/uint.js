@@ -1,13 +1,16 @@
 import { mixin } from '../class.js';
+import { MemberType } from './all.js';
 
 mixin({
-  getUintDescriptor(member, env) {
-    let getAccessor = this.getNumericAccessor;
+  getDescriptorUint(member) {
+    let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
-      getAccessor = this.addRuntimeCheck(env, getNumericAccessor);
+      getAccessor = this.addRuntimeCheck(env, getAccessor);
     }
-    const descriptor = this.getDescriptorUsing(member, getAccessor);
-    return this.transformDescriptor(descriptor, member);
+    return this.getDescriptorUsing(member, getAccessor);
   },
 });
 
+export function isRequiredByMember(member) {
+  return member.type === MemberType.Uint;
+}
