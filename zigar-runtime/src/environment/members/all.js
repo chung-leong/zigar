@@ -33,7 +33,7 @@ export const MemberType = {
 };
 export const memberNames = Object.keys(MemberType);
 
-export function isRequiredByMember(member) {
+export function isNeededByMember(member) {
   return true;
 }
 

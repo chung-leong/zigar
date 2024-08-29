@@ -1,6 +1,4 @@
-import {
-  MisplacedSentinel, MissingSentinel
-} from '../../error.js';
+import { MisplacedSentinel, MissingSentinel } from '../../error.js';
 import { MEMORY } from '../../symbol.js';
 import { mixin } from "../class";
 import { StructureType } from '../structures/all.js';
@@ -97,7 +95,7 @@ if (process.dev.WASM) {
   });
 }
 
-export function isRequiredByStructure(structure) {
+export function isNeededByStructure(structure) {
   if (structure.type === StructureType.Slice) {
     return !!this.getSentinel(structure);
   }

@@ -1,27 +1,37 @@
-import { mixin } from '../class.js';
+import { defineProperty, mixin } from '../class.js';
 import { memberNames, MemberType } from '../members/all.js';
 
-const cache = new Map();
+// handle retrieval of accessors
 
 mixin({
   getAccessor(access, member) {
     const typeName = getTypeName(member)
     const accessorName = access + typeName;
+    // see if it's a built-in method of DataView
     let accessor = DataView.prototype[accessorName];
     if (accessor) {
       return accessor;
     }
+    // check cache
     accessor = cache.get(accessorName);
     if (accessor) {
       return accessor;
     }
-    console.log({ member, typeName });
     accessor = this[`getAccessor${typeName}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/\d+/, '')}`](access, member);
-    cache.set(accessorName)
+            ?? this[`getAccessor${typeName.replace(/\d+/, '')}`]?.(access, member)
+            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '')}`]?.(access, member);
+    /* c8 ignore start */
+    if (!accessor) {
+      throw new Error(`No accessor available: ${typeName}`);
+    }
+    /* c8 ignore end */
+    defineProperty(accessor, 'name', { value: accessorName });
+    cache.set(accessorName, accessor);
     return accessor;
   }
 });
+
+const cache = new Map();
 
 export function isNeededByMember(member) {
   switch (member.type) {
@@ -42,17 +52,9 @@ export function getTypeName(member) {
   if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
     name = `Big${name}`;
   }
-  if (!isByteAligned(member)) {
+  if (byteSize === undefined) {
     name += 'Unaligned';
   }
   return name;
 }
 
-export function isByteAligned(member) {
-  const { bitSize, bitOffset, byteSize } = member;
-  if (byteSize !== undefined) {
-    return true;
-  } else {
-    return (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
-  }
-}

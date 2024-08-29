@@ -128,7 +128,7 @@ mixin({
   ...platformSpecific,
 });
 
-export function isRequiredByMember(member) {
+export function isNeededByMember(member) {
   switch (member.type) {
     case MemberType.Bool:
     case MemberType.Int:

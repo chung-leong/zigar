@@ -1,5 +1,7 @@
 import { mixin } from '../class.js';
-import { getTypeName } from './all.js';
+import { MemberType } from '../members/all.js';
+
+// handle bools in packed structs
 
 mixin({
   getAccessorBool1Unaligned(access, member) {
@@ -13,7 +15,7 @@ mixin({
       };
     } else {
       return function(offset, value) {
-        const n = this.getInt8(this, offset);
+        const n = this.getInt8(offset);
         const b = (value) ? n | mask : n & ~mask;
         this.setInt8(offset, b);
       };
@@ -21,6 +23,7 @@ mixin({
   },
 });
 
-export function isRequiredByMember(member) {
-  return getTypeName(member) === 'Bool1Unaligned';
+export function isNeededByMember(member) {
+  const { type, byteSize } = member;
+  return type === MemberType.Bool && byteSize === undefined;
 }

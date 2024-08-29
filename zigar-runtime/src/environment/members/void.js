@@ -27,6 +27,6 @@ mixin({
   }
 });
 
-export function isRequiredByMember(member) {
+export function isNeededByMember(member) {
   return member.type === MemberType.Void;
 }

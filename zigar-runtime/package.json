@@ -8,9 +8,9 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha --parallel --no-warnings 'test/**/*.test.js'",
-    "debug": "mocha --reporter spec --inspect-brk 'test/**/*.test.js'",
-    "coverage": "c8 mocha --parallel -- test/**/*.test.js",
+    "test": "DEV=1 mocha --parallel --no-warnings 'test/**/*.test.js'",
+    "debug": "DEV=1 mocha --reporter spec --inspect-brk 'test/**/*.test.js'",
+    "coverage": "DEV=1 c8 mocha --parallel -- test/**/*.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [

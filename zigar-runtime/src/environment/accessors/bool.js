@@ -1,6 +1,8 @@
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
-import { isByteAligned } from './all.js';
+
+// handles bools, including implicit ones in optional pointers, where an address
+// of zero would be treated as boolean false
 
 mixin({
   getAccessorBool(access, member) {
@@ -21,5 +23,6 @@ mixin({
 });
 
 export function isNeededByMember(member) {
-  return member.type === MemberType.Bool && isByteAligned(member);
+  const { type, byteSize } = member;
+  return type === MemberType.Bool && byteSize !== undefined;
 }

@@ -60,6 +60,6 @@ mixin({
   }
 });
 
-export function isRequiredByStructure(structure) {
+export function isNeededByStructure(structure) {
   return structure.type === StructureType.Primitive;
 }

@@ -99,7 +99,7 @@ mixin({
   }
 });
 
-export function isRequiredByStructure(structure) {
+export function isNeededByStructure(structure) {
   switch (structure.type) {
     case StructureType.ExternStruct:
     case StructureType.Struct:

@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment, reset } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
+import '../../../src/environment/accessors/all.js?dep=bool';
 import {
   isNeededByMember
 } from '../../../src/environment/accessors/bool.js';

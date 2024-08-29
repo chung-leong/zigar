@@ -4,7 +4,6 @@ import { MemberType } from '../../../src/environment/members/all.js';
 
 import {
   getTypeName,
-  isByteAligned,
   isNeededByMember,
 } from '../../../src/environment/accessors/all.js';
 
@@ -34,27 +33,6 @@ describe('Accessor: all', function() {
       ];
       for (const member of members) {
         expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
-  describe('isByteAligned', function() {
-    it('should return true when member is byte-aligned', function() {
-      const members = [
-        { type: MemberType.Void, bitSize: 0, byteSize: 0, bitOffset: 0 },
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 32, byteSize: 1 },
-        { type: MemberType.Int, bitSize: 8, bitOffset: 8 },
-      ];
-      for (const member of members) {
-        expect(isByteAligned(member)).to.be.true;
-      }
-    })
-    it('should return false when member is not byte-aligned', function() {
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 32 },
-        { type: MemberType.Int, bitSize: 8, bitOffset: 9 },
-      ];
-      for (const member of members) {
-        expect(isByteAligned(member)).to.be.false;
       }
     })
   })
@@ -104,15 +82,9 @@ describe('Accessor: all', function() {
       const name2 = getTypeName({
         type: MemberType.Uint,
         bitSize: 8,
-        bitOffset: 0,
-      });
-      expect(name2).to.equal('Uint8');
-      const name3 = getTypeName({
-        type: MemberType.Uint,
-        bitSize: 8,
         bitOffset: 2,
       });
-      expect(name3).to.equal('Uint8Unaligned');
+      expect(name2).to.equal('Uint8Unaligned');
     })
   })
   describe('getAccessor', function() {
@@ -121,16 +93,31 @@ describe('Accessor: all', function() {
       const method1 = env.getAccessor('get', {
         type: MemberType.Uint,
         bitSize: 8,
+        byteSize: 1,
         bitOffset: 0,
       });
       expect(method1).to.equal(DataView.prototype.getUint8);
       const method2 = env.getAccessor('set', {
         type: MemberType.Uint,
         bitSize: 8,
+        byteSize: 1,
         bitOffset: 0,
       });
       expect(method2).to.equal(DataView.prototype.setUint8);
-
+      const method3 = env.getAccessor('get', {
+        type: MemberType.Int,
+        bitSize: 64,
+        byteSize: 8,
+        bitOffset: 0,
+      });
+      expect(method3).to.equal(DataView.prototype.getBigInt64);
+      const method4 = env.getAccessor('set', {
+        type: MemberType.Int,
+        bitSize: 64,
+        byteSize: 8,
+        bitOffset: 0,
+      });
+      expect(method4).to.equal(DataView.prototype.setBigInt64);
     })
   })
 })
