@@ -8,11 +8,9 @@ import {
 } from '../../../src/environment/accessors/all.js';
 
 const Env = defineEnvironment();
+reset();
 
 describe('Accessor: all', function() {
-  after(function() {
-    reset();
-  })
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const members = [

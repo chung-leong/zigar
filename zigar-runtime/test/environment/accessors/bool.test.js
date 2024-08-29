@@ -8,11 +8,9 @@ import {
 } from '../../../src/environment/accessors/bool.js';
 
 const Env = defineEnvironment();
+reset();
 
 describe('Accessor: bool', function() {
-  after(function() {
-    reset();
-  })
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const members = [

@@ -50,7 +50,11 @@ export function getTypeName(member) {
   const suffix = (type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize;
   let name = memberNames[type] + suffix;
   if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
-    name = `Big${name}`;
+    if (bitSize <= 64) {
+      name = `Big${name}`;
+    } else {
+      name = `Jumbo${name}`;
+    }
   }
   if (byteSize === undefined) {
     name += 'Unaligned';

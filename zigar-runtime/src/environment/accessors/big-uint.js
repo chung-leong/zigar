@@ -1,61 +1,25 @@
 import { mixin } from '../class.js';
+import { MemberType } from '../members/all.js';
 
 mixin({
   getAccessorBigUint(access, member) {
     const { bitSize, byteSize } = member;
-    if (bitSize & 0x3f === 0) {
-      const wordCount = bitSize >> 6;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          let n = 0n;
-          if (littleEndian) {
-            for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
-              const w = this.getBigUint64(j, littleEndian);
-              n = (n << 64n) | w;
-            }
-          } else {
-            for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
-              const w = this.getBigUint64(j, littleEndian);
-              n = (n << 64n) | w;
-            }
-          }
-          return n;
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          let n = value;
-          const mask = 0xFFFFFFFFFFFFFFFFn;
-          if (littleEndian) {
-            for (let i = 0, j = offset; i < wordCount; i++, j += 8) {
-              const w = n & mask;
-              this.setBigUint64(j, w, littleEndian);
-              n >>= 64n;
-            }
-          } else {
-            n <<= BigInt(wordCount * 64 - bitSize);
-            for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
-              const w = n & mask;
-              this.setBigUint64(j, w, littleEndian);
-              n >>= 64n;
-            }
-          }
-          return n;
-        };
-      }
+    const valueMask = (2 ** bitSize) - 1;
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        const n = this.getBigInt64(offset, littleEndian);
+        return (n & valueMask) - (n & signMask);
+      };
     } else {
-      const valueMask = (2 ** bitSize) - 1;
-      const f = this.getAccessor(access, { ...member, bitSize: byteSize * 8 });
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = f.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          f.call(this, offset, n, littleEndian);
-        };
-      }
+      return function(offset, value, littleEndian) {
+        const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+        this.setBigUint64(offset, n, littleEndian);
+      };
     }
   },
 });
+
+export function isNeededByMember(member) {
+  const { type, bitSize } = member;
+  return type === MemberType.Uint && bitSize > 32 && bitSize < 64;
+}

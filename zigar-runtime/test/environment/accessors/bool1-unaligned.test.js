@@ -7,11 +7,9 @@ import {
 } from '../../../src/environment/accessors/bool1-unaligned.js';
 
 const Env = defineEnvironment();
+reset();
 
 describe('Accessor: bool1-unaligned', function() {
-  after(function() {
-    reset();
-  })
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const members = [

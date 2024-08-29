@@ -6,7 +6,7 @@ import { MemberType } from '../members/all.js';
 mixin({
   getAccessorInt(access, member) {
     const { bitSize, byteSize } = member;
-    const f = this.getAccessor(access, { ...member, bitSize: byteSize * 8 });
+    const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize });
     const signMask = 2 ** (bitSize - 1);
     const valueMask = signMask - 1;
     if (access === 'get') {

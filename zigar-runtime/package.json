@@ -10,7 +10,7 @@
   "scripts": {
     "test": "DEV=1 mocha --parallel --no-warnings 'test/**/*.test.js'",
     "debug": "DEV=1 mocha --reporter spec --inspect-brk 'test/**/*.test.js'",
-    "coverage": "DEV=1 c8 mocha --parallel -- test/**/*.test.js",
+    "coverage": "DEV=1 c8 mocha --parallel -- 'test/**/*.test.js'",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [
