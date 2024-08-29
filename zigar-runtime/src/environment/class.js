@@ -14,6 +14,12 @@ export function mixin(object) {
   }
 }
 
+export function reset() {
+  cls.name = '';
+  cls.mixins = [];
+  cls.constructor = null;
+}
+
 export function defineEnvironment() {
   const props = {};
   if (!cls.constructor) {
@@ -21,12 +27,22 @@ export function defineEnvironment() {
       Object.assign(this, props);
     };
     defineProperty(constructor, 'name', { value: cls.name });
+    const { prototype } = constructor;
     for (const mixin of cls.mixins) {
       for (const [ name, object ] of Object.entries(mixin)) {
         if (typeof(object) === 'function') {
-          defineProperty(name, { value: object });
+          defineProperty(prototype, name, { value: object });
         } else {
-          props[name] = object;
+          let current = props[name];
+          if (current !== undefined) {
+            if (typeof(current) === 'object') {
+              Object.assign(current, object);
+            } else if (current !== object) {
+              throw new Error(`Duplicate property: ${name}`);
+            }
+          } else {
+            props[name] = object;
+          }
         }
       }
     }
