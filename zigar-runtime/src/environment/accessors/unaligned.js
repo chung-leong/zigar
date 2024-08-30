@@ -5,7 +5,7 @@ import { MemberType } from '../members/all.js';
 // handle unaligned ints and floats by copying the bits into a
 // temporary buffer, aligning them
 
-mixin({
+export default mixin({
   getAccessorUnaligned(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;

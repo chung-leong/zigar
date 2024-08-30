@@ -1,14 +1,13 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import '../../../src/environment/accessors/all.js?dep=int-unaligned';
-import {
+import All from '../../../src/environment/accessors/all.js';
+import IntUnaligned, {
   isNeededByMember
 } from '../../../src/environment/accessors/int-unaligned.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ All, IntUnaligned ]);
 
 describe('Accessor: int-unaligned', function() {
   describe('isNeededByMember', function() {

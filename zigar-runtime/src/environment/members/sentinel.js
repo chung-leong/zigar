@@ -3,7 +3,7 @@ import { MEMORY } from '../../symbol.js';
 import { mixin } from "../class";
 import { StructureType } from '../structures/all.js';
 
-mixin({
+export default mixin({
   getSentinel(structure) {
     const {
       byteSize,

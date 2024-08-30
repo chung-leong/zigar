@@ -10,7 +10,7 @@ import {
 } from '../../symbol.js';
 import { defineProperties, defineProperty, mixin } from '../class.js';
 
-mixin({
+export default mixin({
   defineStructure(structure) {
     const { type } = structure;
     const name = `define${structureNames[type]}`;

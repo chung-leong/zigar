@@ -3,7 +3,7 @@ import { MemberType } from '../members/all.js';
 
 // handle non-standard ints 32-bit or smaller
 
-mixin({
+export default mixin({
   getAccessorInt(access, member) {
     const { bitSize, byteSize } = member;
     const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize });

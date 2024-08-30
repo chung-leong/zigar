@@ -1,15 +1,14 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import '../../../src/environment/accessors/all.js?dep=unaligned';
-import {
+import All from '../../../src/environment/accessors/all.js';
+import Unaligned, {
   getBitAlignFunction,
   isNeededByMember,
 } from '../../../src/environment/accessors/unaligned.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ All, Unaligned ]);
 
 describe('Accessor: unaligned', function() {
   describe('isNeededByMember', function() {

@@ -1,7 +1,7 @@
 import { mixin } from '../class.js';
 import { bindSlot, getObject, getValue, MemberType, setValue } from './all.js';
 
-mixin({
+export default mixin({
   getDescriptorObject(member) {
     const { structure, slot } = member;
     return bindSlot(slot, {

@@ -1,13 +1,12 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import {
+import BoolUnaligned, {
   isNeededByMember
 } from '../../../src/environment/accessors/bool1-unaligned.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ BoolUnaligned ]);
 
 describe('Accessor: bool1-unaligned', function() {
   describe('isNeededByMember', function() {

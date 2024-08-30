@@ -1,14 +1,13 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import '../../../src/environment/accessors/all.js?dep=int';
-import {
+import All from '../../../src/environment/accessors/all.js';
+import Int, {
   isNeededByMember
 } from '../../../src/environment/accessors/int.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ All, Int ]);
 
 describe('Accessor: int', function() {
   describe('isNeededByMember', function() {

@@ -3,7 +3,7 @@ import { MemberType } from '../members/all.js';
 
 // handles f16
 
-mixin({
+export default mixin({
   getAccessorFloat16(access, member) {
     const buf = new DataView(new ArrayBuffer(4));
     const set = DataView.prototype.setUint16;

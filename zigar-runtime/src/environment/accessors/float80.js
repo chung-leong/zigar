@@ -3,7 +3,7 @@ import { MemberType } from '../members/all.js';
 
 // handles f80
 
-mixin({
+export default mixin({
   getAccessorFloat80(access, member) {
     const { byteSize } = member;
     const buf = new DataView(new ArrayBuffer(8));

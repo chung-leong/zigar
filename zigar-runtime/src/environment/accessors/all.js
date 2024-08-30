@@ -3,7 +3,7 @@ import { memberNames, MemberType } from '../members/all.js';
 
 // handle retrieval of accessors
 
-mixin({
+export default mixin({
   getAccessor(access, member) {
     const typeName = getTypeName(member)
     const accessorName = access + typeName;

@@ -1,6 +1,6 @@
 import { mixin } from '../class.js';
 
-mixin({
+export default mixin({
   getDescriptor(member) {
     const { type } = member;
     const name = `getDescriptor${memberNames[type]}`;

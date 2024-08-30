@@ -1,37 +1,34 @@
 import { expect } from 'chai';
 
 import {
+  defineClass,
   defineEnvironment,
   mixin,
   name,
-  reset
 } from '../../src/environment/class.js';
 
 describe('Environment class', function() {
-  afterEach(function() {
-    reset();
-  })
-  describe('defineEnvironment', function() {
+  describe('defineClass', function() {
     it('should set name of constructor', function() {
-      name('Hello');
-      const Env = defineEnvironment();
+      const Env = defineClass('Hello', []);
       expect(Env).to.have.property('name', 'Hello');
     })
     it('should attach methods from mixins', function() {
-      name('HelloWorld');
       const log = [];
-      mixin({
-        hello() {
-          log.push('hello');
-        }
-      })
-      mixin({
-        world() {
-          log.push('world');
-        }
-      })
-      const Env = defineEnvironment();
-      expect(Env).to.have.property('name', 'HelloWorld');
+      const mixins = [
+        {
+          hello() {
+            log.push('hello');
+          }
+        },
+        {
+          world() {
+            log.push('world');
+          }
+        },
+      ];
+      const Env = defineClass('Hello', mixins);
+      expect(Env).to.have.property('name', 'Hello');
       const env = new Env();
       env.hello();
       env.world();
@@ -39,19 +36,21 @@ describe('Environment class', function() {
     })
     it('should attach properties to instance', function() {
       const log = [];
-      mixin({
-        value1: 'hello',
-        hello() {
-          log.push(this.value1);
-        }
-      })
-      mixin({
-        value2: 'world',
-        world() {
-          log.push(this.value2);
-        }
-      })
-      const Env = defineEnvironment();
+      const mixins = [
+        {
+          value1: 'hello',
+          hello() {
+            log.push(this.value1);
+          }
+        },
+        {
+          value2: 'world',
+          world() {
+            log.push(this.value2);
+          }
+        },
+      ];
+      const Env = defineClass('Hello', mixins);
       const env = new Env();
       env.hello();
       env.world();
@@ -59,19 +58,21 @@ describe('Environment class', function() {
     })
     it('should merge conflicted properties when they are objects', function() {
       const log = [];
-      mixin({
-        value: { prop1: 'hello' },
-        hello() {
-          log.push(this.value);
-        }
-      })
-      mixin({
-        value: { prop2: 'world' },
-        world() {
-          log.push(this.value);
-        }
-      })
-      const Env = defineEnvironment();
+      const mixins = [
+        {
+          value: { prop1: 'hello' },
+          hello() {
+            log.push(this.value);
+          }
+        },
+        {
+          value: { prop2: 'world' },
+          world() {
+            log.push(this.value);
+          }
+        },
+      ];
+      const Env = defineClass('Hello', mixins);
       const env = new Env();
       env.hello();
       env.world();
@@ -81,34 +82,66 @@ describe('Environment class', function() {
       ]);
     })
     it('should throw when conflicted properties cannot be merged', function() {
-      mixin({
-        value: 1234,
-        hello() {
-          log.push(this.value);
-        }
-      })
-      mixin({
-        value: 456,
-        world() {
-          log.push(this.value);
-        }
-      })
-      expect(defineEnvironment).to.throw();
+      const mixins = [
+        {
+          value: 1234,
+          hello() {
+            log.push(this.value);
+          }
+        },
+        {
+          value: 456,
+          world() {
+            log.push(this.value);
+          }
+        },
+      ];
+      expect(() => defineClass('Hello', mixins)).to.throw();
     })
     it('should not throw when conflicted properties have the same value', function() {
+      const mixins = [
+        {
+          value: 1234,
+          hello() {
+            log.push(this.value);
+          }
+        },
+        {
+          value: 1234,
+          world() {
+            log.push(this.value);
+          }
+        },
+      ];
+      expect(() => defineClass('Hello', mixins)).to.not.throw();
+    })
+  })
+  describe('defineEnvironment', function() {
+    it('should define a class using collected info', function() {
+      name('Hello');
+      const log = [];
       mixin({
-        value: 1234,
         hello() {
-          log.push(this.value);
+          log.push('hello');
         }
-      })
+      });
       mixin({
-        value: 1234,
         world() {
-          log.push(this.value);
+          log.push('world');
         }
-      })
-      expect(defineEnvironment).to.not.throw();
+      });
+      const Env = defineEnvironment();
+      expect(Env).to.have.property('name', 'Hello');
+      const env = new Env();
+      env.hello();
+      env.world();
+      expect(log).to.eql([ 'hello', 'world' ]);
+    })
+  })
+  describe('mixin', function() {
+    it('should return object given', function() {
+      const object = {};
+      expect(mixin(object)).to.equal(object);
     })
   })
 })

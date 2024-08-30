@@ -1,14 +1,14 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import '../../../src/environment/accessors/all.js?dep=jumbo-int';
-import {
+import All from '../../../src/environment/accessors/all.js';
+import JumboInt, {
   isNeededByMember
 } from '../../../src/environment/accessors/jumbo-int.js';
+import Jumbo from '../../../src/environment/accessors/jumbo.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ All, Jumbo, JumboInt ]);
 
 describe('Accessor: jumbo-int', function() {
   describe('isNeededByMember', function() {

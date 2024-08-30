@@ -4,7 +4,7 @@ import { MemberType } from '../members/all.js';
 // handles bools, including implicit ones in optional pointers, where an address
 // of zero would be treated as boolean false
 
-mixin({
+export default mixin({
   getAccessorBool(access, member) {
     const { bitSize, byteSize } = member;
     const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize: byteSize });

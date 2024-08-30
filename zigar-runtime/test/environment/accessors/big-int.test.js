@@ -1,14 +1,13 @@
 import { expect } from 'chai';
-import { defineEnvironment, reset } from '../../../src/environment/class.js';
+import { defineClass } from '../../../src/environment/class.js';
 import { MemberType } from '../../../src/environment/members/all.js';
 
-import '../../../src/environment/accessors/all.js?dep=big-int';
-import {
+import All from '../../../src/environment/accessors/all.js';
+import BigInt, {
   isNeededByMember
 } from '../../../src/environment/accessors/big-int.js';
 
-const Env = defineEnvironment();
-reset();
+const Env = defineClass('AccessorTest', [ All, BigInt ]);
 
 describe('Accessor: big-int', function() {
   describe('isNeededByMember', function() {

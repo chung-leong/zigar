@@ -10,7 +10,7 @@ import {
 } from '../../symbol.js';
 import { mixin } from '../class.js';
 
-mixin({
+export default mixin({
   defineVector(structure) {
     const {
       length,

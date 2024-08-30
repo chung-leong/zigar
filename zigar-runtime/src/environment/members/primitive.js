@@ -108,7 +108,7 @@ const platformSpecific = (process.env.WASM) ? {
   },
 };
 
-mixin({
+export default mixin({
   getDescriptorBool(member) {
     return this.getDescriptorUsing(member, this.getAccessor);
   },

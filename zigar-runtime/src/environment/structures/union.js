@@ -18,7 +18,7 @@ import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
 import { StructureType } from './all.js';
 
-mixin({
+export default mixin({
   defineUnion(structure) {
     const {
       type,

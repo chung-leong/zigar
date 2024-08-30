@@ -3,7 +3,7 @@ import { MemberType } from '../members/all.js';
 
 // handles f128
 
-mixin({
+export default mixin({
   getAccessorFloat128(access, member) {
     const { byteSize } = member;
     const buf = new DataView(new ArrayBuffer(8));
@@ -16,9 +16,9 @@ mixin({
     };
     const set = function(offset, value, littleEndian) {
       const w1 = value & 0xffff_ffffn;
-      const w2 = (value >> 32n) & 0xffff_ffff;
-      const w3 = (value >> 64n) & 0xffff_ffff;
-      const w4 = (value >> 96n) & 0xffff_ffff;
+      const w2 = (value >> 32n) & 0xffff_ffffn;
+      const w3 = (value >> 64n) & 0xffff_ffffn;
+      const w4 = (value >> 96n) & 0xffff_ffffn;
       this.setUint32(offset + (littleEndian ? 0 : byteSize - 4), Number(w1), littleEndian);
       this.setUint32(offset + (littleEndian ? 4 : byteSize - 8), Number(w2), littleEndian);
       this.setUint32(offset + (littleEndian ? 8 : byteSize - 12), Number(w3), littleEndian);

@@ -11,7 +11,7 @@ import {
 import { getPrimitiveType, StructureType } from '../../types.js';
 import { mixin } from '../class.js';
 
-mixin({
+export default mixin({
   definePrimitive(structure) {
     const {
       byteSize,

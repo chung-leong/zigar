@@ -1,36 +1,34 @@
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
 
-// handle ints 7-bit or smaller in packed structs that are stored in a single byte
+// handle uints 7-bit or smaller in packed structs that are stored in a single byte
 // other unaligned ints are handled by the mixin "unaligned"
 
 export default mixin({
-  getAccessorIntUnaligned(access, member) {
+  getAccessorUintUnaligned(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     if (bitPos + bitSize <= 8) {
-      const signMask = 2 ** (bitSize - 1);
-      const valueMask = signMask - 1;
+      const valueMask = (2 ** bitSize - 1);
       if (access === 'get') {
         return function(offset) {
           const n = this.getUint8(offset);
           const s = n >>> bitPos;
-          return (s & valueMask) - (s & signMask);
+          return s & valueMask;
         };
       } else {
-        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+        const outsideMask = 0xFF ^ (valueMask << bitPos);
         return function(offset, value) {
-          let b = this.getUint8(offset);
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          b = (b & outsideMask) | (n << bitPos);
+          const n = this.getUint8(offset);
+          const b = (n & outsideMask) | ((value & valueMask) << bitPos);
           this.setUint8(offset, b);
         };
       }
     }
-  }
+  },
 });
 
 export function isNeededByMember(member) {
   const { type, bitSize, bitOffset, byteSize } = member;
-  return type === MemberType.Int && byteSize === undefined && (bitOffset & 0x07) + bitSize <= 8;
+  return type === MemberType.Uint && byteSize === undefined && (bitOffset & 0x07) + bitSize <= 8;
 }

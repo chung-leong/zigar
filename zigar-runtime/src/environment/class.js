@@ -12,42 +12,44 @@ export function mixin(object) {
   if (!cls.constructor) {
     cls.mixins.push(object);
   }
-}
-
-export function reset() {
-  cls.name = '';
-  cls.mixins = [];
-  cls.constructor = null;
+  return object;
 }
 
 export function defineEnvironment() {
-  const props = {};
   if (!cls.constructor) {
-    const constructor = cls.constructor = function() {
-      Object.assign(this, props);
-    };
-    defineProperty(constructor, 'name', { value: cls.name });
-    const { prototype } = constructor;
-    for (const mixin of cls.mixins) {
-      for (const [ name, object ] of Object.entries(mixin)) {
-        if (typeof(object) === 'function') {
-          defineProperty(prototype, name, { value: object });
-        } else {
-          let current = props[name];
-          if (current !== undefined) {
-            if (typeof(current) === 'object') {
-              Object.assign(current, object);
-            } else if (current !== object) {
-              throw new Error(`Duplicate property: ${name}`);
-            }
-          } else {
-            props[name] = object;
+    cls.constructor = defineClass(cls.name, cls.mixins);
+    cls.name = '';
+    cls.mixins = [];
+  }
+  return cls.constructor;
+}
+
+export function defineClass(name, mixins) {
+  const props = {};
+  const constructor = function() {
+    Object.assign(this, props);
+  };
+  const { prototype } = constructor;
+  defineProperty(constructor, 'name', { value: name });
+  for (const mixin of mixins) {
+    for (const [ name, object ] of Object.entries(mixin)) {
+      if (typeof(object) === 'function') {
+        defineProperty(prototype, name, { value: object });
+      } else {
+        let current = props[name];
+        if (current !== undefined) {
+          if (typeof(current) === 'object') {
+            Object.assign(current, object);
+          } else if (current !== object) {
+            throw new Error(`Duplicate property: ${name}`);
           }
+        } else {
+          props[name] = object;
         }
       }
     }
   }
-  return cls.constructor;
+  return constructor;
 }
 
 export function defineProperty(object, name, descriptor) {

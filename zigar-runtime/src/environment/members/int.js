@@ -1,7 +1,7 @@
 import { mixin } from '../class.js';
 import { MemberType } from './all.js';
 
-mixin({
+export default mixin({
   getDescriptorInt(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {

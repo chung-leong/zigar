@@ -1,7 +1,7 @@
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
 
-mixin({
+export default mixin({
   getAccessorBigInt(access, member) {
     const { bitSize } = member;
     const signMask = 2n ** BigInt(bitSize - 1);

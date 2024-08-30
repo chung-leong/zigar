@@ -3,7 +3,7 @@ import { MemberType } from '../members/all.js';
 
 // handle bools in packed structs
 
-mixin({
+export default mixin({
   getAccessorBool1Unaligned(access, member) {
     const { bitOffset } = member;
     const bitPos = bitOffset & 0x07;

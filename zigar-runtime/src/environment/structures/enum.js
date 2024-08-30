@@ -8,7 +8,7 @@ import {
 import { ALIGN, COPIER, MORE, NAME, SIZE, TAG, TYPE, WRITE_DISABLER } from '../../symbol.js';
 import { defineProperties, mixin } from '../class.js';
 
-mixin({
+export default mixin({
   defineEnumeration(structure) {
     const {
       byteSize,

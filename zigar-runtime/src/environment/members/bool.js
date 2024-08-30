@@ -1,7 +1,7 @@
 import { mixin } from '../class.js';
 import { MemberType } from './all.js';
 
-mixin({
+export default mixin({
   getDescriptorBool(member) {
     return this.getDescriptorUsing(member, this.getAccessor);
   },

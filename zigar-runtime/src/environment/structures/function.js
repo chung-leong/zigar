@@ -5,7 +5,7 @@ import { CallResult } from '../../types.js';
 import { mixin } from '../class.js';
 import { StructureType } from './all.js';
 
-mixin({
+export default mixin({
   defineFunction(structure) {
     const {
       name,
