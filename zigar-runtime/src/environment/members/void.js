@@ -1,6 +1,6 @@
+import { NotUndefined, OutOfBound } from '../../error.js';
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
-import { NotUndefined, OutOfBound } from './error.js';
 
 export default mixin({
   getDescriptorVoid(member, env) {

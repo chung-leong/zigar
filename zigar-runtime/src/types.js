@@ -10,8 +10,6 @@ export const CallResult = {
   Disabled: 3,
 };
 
-
-
 export function getIntRange(member) {
   const { type, bitSize } = member;
   const signed = (type === MemberType.Int);

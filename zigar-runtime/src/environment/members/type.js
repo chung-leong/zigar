@@ -1,3 +1,4 @@
+import { SLOTS } from '../../symbol.js';
 import { mixin } from '../class.js';
 import { bindSlot, MemberType } from './all.js';
 
@@ -9,7 +10,7 @@ export default mixin({
 });
 
 export function isNeededByMember(member) {
-  return member.type === MemberType.Literal;
+  return member.type === MemberType.Type;
 }
 
 function getType(slot) {

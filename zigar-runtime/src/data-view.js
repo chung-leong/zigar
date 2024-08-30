@@ -1,6 +1,7 @@
+import { MemberType } from './environment/members/all.js';
+import { StructureType } from './environment/structures/all.js';
 import { BufferSizeMismatch, TypeMismatch } from './error.js';
 import { COMPAT, COPIER, MEMORY } from './symbol.js';
-import { MemberType, StructureType } from './types.js';
 
 export function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {

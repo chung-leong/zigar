@@ -1,4 +1,6 @@
-import { StructureType, getPrimitiveType, getTypeName, isErrorJSON } from './types.js';
+import { getTypeName } from './environment/accessors/all.js';
+import { StructureType } from './environment/structures/all.js';
+import { getPrimitiveType, isErrorJSON } from './types.js';
 
 export class MustBeOverridden extends Error {
   constructor() {

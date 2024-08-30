@@ -1,14 +1,14 @@
-import { requireDataView, setDataView } from '../../data-view.js';
+import { setDataView } from '../../data-view.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch, MissingInitializers, NoInitializer,
   NoProperty
 } from '../../error.js';
-import { isReadOnly } from '../../member.js';
 import {
   ALL_KEYS, CACHE, CONST_TARGET, COPIER, GETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR,
   PROP_SETTERS, SETTER, SLOTS
 } from '../../symbol.js';
 import { defineProperties, defineProperty, mixin } from '../class.js';
+import { isReadOnly } from '../members/all.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -105,7 +105,7 @@ export default mixin({
           }
         }
         // look for buffer
-        dv = requireDataView(structure, arg, env);
+        dv = this.requireDataView(structure, arg, env);
         if (self = cache.find(dv)) {
           return self;
         }

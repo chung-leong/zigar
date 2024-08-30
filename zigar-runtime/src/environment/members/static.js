@@ -13,5 +13,5 @@ export default mixin({
 });
 
 export function isNeededByMember(member) {
-  return member.type === MemberType.Null;
+  return member.type === MemberType.Static;
 }

@@ -1,7 +1,9 @@
-import { Overflow } from '../error';
-import { mixin } from './class.js';
+import { Overflow } from '../../error.js';
+import { mixin } from '../class.js';
 
 export default mixin({
+  runtimeSafety: true,
+
   addRuntimeCheck(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor(access, member);

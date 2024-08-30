@@ -1,3 +1,4 @@
+import { SLOTS } from '../../symbol.js';
 import { mixin } from '../class.js';
 
 export default mixin({
@@ -16,6 +17,10 @@ export default mixin({
   },
 });
 
+export function isNeededByMember(member) {
+  return true;
+}
+
 export const MemberType = {
   Void: 0,
   Bool: 1,
@@ -33,7 +38,46 @@ export const MemberType = {
 };
 export const memberNames = Object.keys(MemberType);
 
-export function isNeededByMember(member) {
-  return true;
+export function isReadOnly({ type }) {
+  switch (type) {
+    case MemberType.Type:
+    case MemberType.Comptime:
+    case MemberType.Literal:
+      return true;
+    default:
+      return false;
+  }
+};
+
+export function bindSlot(slot, { get, set }) {
+  if (slot !== undefined) {
+    return {
+      get: function() {
+        return get.call(this, slot);
+      },
+      set: (set)
+      ? function(arg) {
+          return set.call(this, slot, arg);
+        }
+      : undefined,
+    };
+  } else {
+    // array accessors
+    return { get, set };
+  }
 }
 
+export function getValue(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object[GETTER]();
+}
+
+export function getObject(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  return object;
+}
+
+export function setValue(slot, value) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
+  object[SETTER](value);
+}

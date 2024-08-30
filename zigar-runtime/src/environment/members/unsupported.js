@@ -1,3 +1,4 @@
+import { Unsupported } from '../../error.js';
 import { mixin } from '../class.js';
 import { MemberType } from './all.js';
 

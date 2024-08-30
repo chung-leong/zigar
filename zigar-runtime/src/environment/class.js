@@ -25,7 +25,9 @@ export function defineEnvironment() {
 }
 
 export function defineClass(name, mixins) {
-  const props = {};
+  const props = {
+    littleEndian: true,
+  };
   const constructor = function() {
     Object.assign(this, props);
   };
