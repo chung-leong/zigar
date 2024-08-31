@@ -1,14 +1,14 @@
-import { setDataView } from '../../data-view.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch, MissingInitializers, NoInitializer,
   NoProperty
 } from '../../error.js';
+import { getMemoryCopier } from '../../memory.js';
 import {
-  ALL_KEYS, CACHE, CONST_TARGET, COPIER, GETTER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR,
-  PROP_SETTERS, SETTER, SLOTS
+  ALIGN, ALL_KEYS, CACHE, COMPAT, CONST_TARGET, COPIER, FIXED, GETTER, MEMORY, POINTER_VISITOR,
+  PROP_SETTERS, SETTER, SIZE, SLOTS, TYPE, WRITE_DISABLER,
 } from '../../symbol.js';
 import { defineProperties, defineProperty, mixin } from '../class.js';
-import { isReadOnly } from '../members/all.js';
+import { isReadOnly, MemberType } from '../members/all.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -22,9 +22,10 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    f.call(this, structure);
+    return f.call(this, structure);
   },
-  attachDescriptors(constructor, instanceDescriptors, staticDescriptors) {
+  attachDescriptors(structure, instanceDescriptors, staticDescriptors, handlers) {
+    const { byteSize, type, constructor, align } = structure;
     // create prototype for read-only objects
     const propSetters = {};
     for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
@@ -35,18 +36,38 @@ export default mixin({
         }
       }
     }
+    const thisEnv = this;
+    const destructor = function() {
+      const dv = this[MEMORY];
+      this[MEMORY] = null;
+      if (this[SLOTS]) {
+        this[SLOTS] = {};
+      }
+      thisEnv.releaseFixedView(dv);
+    };
+    const copier = getMemoryCopier(byteSize);
     const { get, set } = instanceDescriptors.$;
     instanceDescriptors = {
+      delete: { value: destructor },
       [ALL_KEYS]: { value: Object.keys(propSetters) },
       [SETTER]: { value: set },
       [GETTER]: { value: get },
+      [COPIER]: { value: copier },
+      [WRITE_DISABLER]: { value: makeReadOnly },
       [PROP_SETTERS]: { value: propSetters },
       [CONST_TARGET]: { value: null },
+      ...this.getSpecialMethodDescriptors?.(),
+      ...this.getSpecialPropertyDescriptors?.(structure, handlers),
+      //...(process.env.WASM ? this.getWebAssemblyDescriptors(structure) : {}),
       ...instanceDescriptors,
     };
-    if (process.env.WASM) {
-      instanceDescriptors[MEMORY_RESTORER] = { value: this.getMemoryRestorer(constructor[CACHE]) };
-    }
+    staticDescriptors = {
+      [COMPAT]: { value: getCompatibleTags(structure) },
+      [ALIGN]: { value: align },
+      [SIZE]: { value: byteSize },
+      [TYPE]: { value: type },
+      ...staticDescriptors,
+    };
     defineProperties(constructor.prototype, instanceDescriptors);
     defineProperties(constructor, staticDescriptors);
     return constructor;
@@ -74,6 +95,7 @@ export default mixin({
       }
     }
     const cache = new ObjectCache();
+    const thisEnv = this;
     const constructor = function(arg, options = {}) {
       const {
         fixed = false,
@@ -105,13 +127,13 @@ export default mixin({
           }
         }
         // look for buffer
-        dv = this.requireDataView(structure, arg, env);
+        dv = thisEnv.extractView(structure, arg);
         if (self = cache.find(dv)) {
           return self;
         }
         self = Object.create(constructor.prototype);
         if (shapeDefiner) {
-          setDataView.call(self, dv, structure, false, false, { shapeDefiner });
+          thisEnv.assignView(self, dv, structure, false, false, { shapeDefiner });
         } else {
           self[MEMORY] = dv;
         }
@@ -141,15 +163,12 @@ export default mixin({
     defineProperty(constructor, CACHE, { value: cache });
     return constructor;
   },
-  createDestructor() {
-    return function() {
-      const dv = this[MEMORY];
-      this[MEMORY] = null;
-      if (this[SLOTS]) {
-        this[SLOTS] = {};
-      }
-      this.releaseFixedView(dv);
-    };
+  getCopierDescriptor(size, multiple) {
+    const value = getMemoryCopier(size, multiple);
+    return { value };
+  },
+  getWriteDisablerDescriptor() {
+
   },
   createPropertyApplier(structure) {
     const { instance: { template } } = structure;
@@ -213,7 +232,7 @@ export default mixin({
       return argKeys.length;
     };
   },
-  getDataView(structure, arg) {
+  extractView(structure, arg, required = true) {
     const { type, byteSize, typedArray } = structure;
     let dv;
     // not using instanceof just in case we're getting objects created in other contexts
@@ -254,19 +273,99 @@ export default mixin({
     if (dv && byteSize !== undefined) {
       checkDataViewSize(dv, structure);
     }
+    if (required && !dv) {
+      throw new BufferExpected(structure);
+    }
     return dv;
   },
-  requireDataView(structure, arg) {
-    const dv = this.getDataView(structure, arg);
-    if (!dv) {
-      throw new BufferExpected(structure);
+  assignView(target, dv, structure, copy, fixed, handlers) {
+    const { byteSize, type, sentinel } = structure;
+    const elementSize = byteSize ?? 1;
+    if (!target[MEMORY]) {
+      const { shapeDefiner } = handlers;
+      if (byteSize !== undefined) {
+        checkDataViewSize(dv, structure);
+      }
+      const len = dv.byteLength / elementSize;
+      const source = { [MEMORY]: dv };
+      sentinel?.validateData(source, len);
+      if (fixed) {
+        // need to copy when target object is in fixed memory
+        copy = true;
+      }
+      shapeDefiner.call(target, copy ? null : dv, len, fixed);
+      if (copy) {
+        target[COPIER](source);
+      }
+    } else {
+      const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
+      if (dv.byteLength !== byteLength) {
+        throw new BufferSizeMismatch(structure, dv, target);
+      }
+      const source = { [MEMORY]: dv };
+      sentinel?.validateData(source, target.length);
+      target[COPIER](source);
+    }
+  },
+  viewMap: new Map(),
+  findViewAt(buffer, offset, len) {
+    let entry = this.viewMap.get(buffer);
+    let existing;
+    if (entry) {
+      if (entry instanceof DataView) {
+        // only one view created thus far--see if that's the matching one
+        if (entry.byteOffset === offset && entry.byteLength === len) {
+          existing = entry;
+        } else {
+          // no, need to replace the entry with a hash keyed by `offset:len`
+          const prev = entry;
+          const prevKey = `${prev.byteOffset}:${prev.byteLength}`;
+          entry = { [prevKey]: prev };
+          this.viewMap.set(buffer, entry);
+        }
+      } else {
+        existing = entry[`${offset}:${len}`];
+      }
+    }
+    return { existing, entry };
+  },
+  obtainView(buffer, offset, len) {
+    const { existing, entry } = this.findViewAt(buffer, offset, len);
+    let dv;
+    if (existing) {
+      return existing;
+    } else if (entry) {
+      dv = entry[`${offset}:${len}`] = new DataView(buffer, offset, len);
+    } else {
+      // just one view of this buffer for now
+      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+    }
+    const fixed = buffer[FIXED];
+    if (fixed) {
+      // attach address to view of fixed buffer
+      dv[FIXED] = { address: add(fixed.address, offset), len };
+    }
+    return dv;
+  },
+  registerView(dv) {
+    if (!dv[FIXED]) {
+      const { buffer, byteOffset, byteLength } = dv;
+      const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
+      if (existing) {
+        // return existing view instead of this one
+        return existing;
+      } else if (entry) {
+        entry[`${byteOffset}:${byteLength}`] = dv;
+      } else {
+        this.viewMap.set(buffer, dv);
+      }
     }
     return dv;
   },
 });
 
-export function isNeeded() {
-  return this.structures.length > 0;
+export function isNeededByStructure(structure) {
+  return true;
 }
 
 export const StructureType = {
@@ -338,6 +437,35 @@ function findElements(arg, Child) {
   }
 }
 
+function isArrayLike(type) {
+  return type === StructureType.Array || type === StructureType.Vector || type === StructureType.Slice;
+}
+
+function needSlots(members) {
+  for (const { type } of members) {
+    switch (type) {
+      case MemberType.Object:
+      case MemberType.Comptime:
+      case MemberType.Type:
+      case MemberType.Literal:
+        return true;
+    }
+  }
+  return false;
+}
+
+function makeReadOnly() {
+  const descriptors = Object.getOwnPropertyDescriptors(this.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor.set) {
+      descriptor.set = throwReadOnly;
+      Object.defineProperty(this, name, descriptor);
+    }
+  }
+  Object.defineProperty(this, SETTER, { value: throwReadOnly });
+  Object.defineProperty(this, CONST_TARGET, { value: this });
+}
+
 export class ObjectCache {
   map = new WeakMap();
 
@@ -349,4 +477,21 @@ export class ObjectCache {
     this.map.set(dv, object);
     return object;
   }
+}
+
+function getCompatibleTags(structure) {
+  const { typedArray } = structure;
+  const tags = [];
+  if (typedArray) {
+    tags.push(typedArray.name);
+    tags.push('DataView');
+    if (typedArray === Uint8Array || typedArray === Int8Array) {
+      tags.push('ArrayBuffer');
+      tags.push('SharedArrayBuffer');
+      if (typedArray === Uint8Array) {
+        tags.push('Uint8ClampedArray');
+      }
+    }
+  }
+  return tags;
 }

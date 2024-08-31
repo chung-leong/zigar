@@ -141,9 +141,6 @@ export default mixin({
       [COPIER]: { value: getMemoryCopier(undefined, true) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
       [POINTER_VISITOR]: { value: visitPointers },
-      /* WASM-ONLY */
-      [MEMORY_RESTORER]: { value: this.getMemoryRestorer(null) },
-      /* WASM-ONLY-END */
     });
     defineProperties(constructor, {
       [SIZE]: { value: byteSize },

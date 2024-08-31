@@ -5,11 +5,11 @@ import {
   warnImplicitArrayCreation
 } from '../../error.js';
 import { getDescriptor, isValueExpected } from '../../member.js';
-import { getMemoryCopier } from '../../memory.js';
 import { createConstructor, defineProperties } from '../../object.js';
-import { convertToJSON, getValueOf } from '../../special.js';
 import {
-  ADDRESS, ADDRESS_SETTER, ALIGN, CONST_PROXY, CONST_TARGET, COPIER, ENVIRONMENT, FIXED, GETTER,
+  ADDRESS, ADDRESS_SETTER,
+  CONST_PROXY, CONST_TARGET,
+  ENVIRONMENT, FIXED, GETTER,
   LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
   PROP_SETTERS, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE,
   WRITE_DISABLER
@@ -314,8 +314,6 @@ export default mixin({
       '*': { get: getTarget, set: setTarget },
       '$': { get: getProxy, set: initializer },
       length: { get: getTargetLength, set: setTargetLength },
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
       delete: { value: deleteTarget },
       slice: getSliceOf && { value: getSliceOf },
       subarray: getSubarrayOf && { value: getSubarrayOf },
@@ -326,7 +324,6 @@ export default mixin({
       [ADDRESS_SETTER]: { value: setAddress },
       [LENGTH_SETTER]: setLength && { value: setLength },
       [POINTER_VISITOR]: { value: visitPointer },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       [WRITE_DISABLER]: { value: makePointerReadOnly },
       [ADDRESS]: { value: undefined, writable: true },
       [LENGTH]: setLength && { value: undefined, writable: true },
@@ -334,11 +331,8 @@ export default mixin({
     const staticDescriptors = {
       child: { get: () => targetStructure.constructor },
       const: { value: isConst },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
     };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
 });
 

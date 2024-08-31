@@ -27,10 +27,6 @@ describe('Object functions', function() {
       expect(object).to.not.have.property('universe');
     })
   })
-  describe('attachDescriptors', function() {
-    it('should attach descriptors to a constructor', function() {
-    })
-  })
   describe('needSlots', function() {
     it('should return true when a structure has object members', function() {
       const structure = {

@@ -2,20 +2,15 @@ import {
   canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
   getPointerVisitor, makeArrayReadOnly, transformIterable
 } from '../../array.js';
-import { getCompatibleTags, getTypedArrayClass } from '../../data-view.js';
+import { getTypedArrayClass } from '../../data-view.js';
 import {
   ArrayLengthMismatch, InvalidArrayInitializer
 } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
 import { createPropertyApplier } from '../../object.js';
 import { copyPointer, getProxy } from '../../pointer.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
-  getTypedArrayDescriptor, getValueOf
-} from '../../special.js';
-import {
-  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, LENGTH,
-  MEMORY, POINTER_VISITOR, SIZE, TYPE,
+  COPIER, ENTRIES_GETTER, LENGTH,
+  MEMORY, POINTER_VISITOR,
   VIVIFICATOR, WRITE_DISABLER
 } from '../../symbol.js';
 import { mixin } from '../class.js';
@@ -45,7 +40,8 @@ export default mixin({
     /* c8 ignore end */
     const { get, set } = this.getDescriptor(member);
     const { byteSize: elementSize, structure: elementStructure } = member;
-    const sentinel = this.getSentinel(structure);
+    // method will not exist when there're no sentinels
+    const sentinel = this.getSentinel?.(structure);
     if (sentinel) {
       // zero-terminated strings aren't expected to be commonly used
       // so we're not putting this prop into the standard structure
@@ -146,41 +142,28 @@ export default mixin({
       return slice;
     };
     const finalizer = createArrayProxy;
-    const copier = getMemoryCopier(elementSize, true);
     const constructor = structure.constructor = this.createConstructor(structure, { initializer, shapeDefiner, finalizer });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
     const hasObject = member.type === MemberType.Object;
     const shapeHandlers = { shapeDefiner };
     const instanceDescriptors = {
       $: { get: getProxy, set: initializer },
       length: { get: getLength },
-      dataView: getDataViewDescriptor(structure, shapeHandlers),
-      base64: getBase64Descriptor(structure, shapeHandlers),
-      string: hasStringProp && getStringDescriptor(structure, shapeHandlers),
-      typedArray: typedArray && getTypedArrayDescriptor(structure, shapeHandlers),
       get: { value: get },
       set: { value: set },
       entries: { value: getArrayEntries },
       slice: { value: getSliceOf },
       subarray: { value: getSubarrayOf },
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
       [Symbol.iterator]: { value: getArrayIterator },
       [ENTRIES_GETTER]: { value: getArrayEntries },
-      [COPIER]: { value: copier },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this, true) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
       [WRITE_DISABLER]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => elementStructure.constructor },
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
     };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    structure.TypedArray = getTypedArrayClass(member);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors, shapeHandlers);
   },
 });
 

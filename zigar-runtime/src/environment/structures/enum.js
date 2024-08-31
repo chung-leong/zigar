@@ -1,11 +1,6 @@
 import { getTypedArrayClass } from '../../data-view.js';
 import { EnumExpected, InvalidInitializer } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
-import { makeReadOnly } from '../../object.js';
-import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
-} from '../../special.js';
-import { ALIGN, COPIER, MORE, NAME, SIZE, TAG, TYPE, WRITE_DISABLER } from '../../symbol.js';
+import { MORE, NAME, TAG } from '../../symbol.js';
 import { defineProperties, mixin } from '../class.js';
 
 export default mixin({
@@ -66,23 +61,11 @@ export default mixin({
     };
     const instanceDescriptors = {
       $: { get, set },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      typedArray: typedArray && getTypedArrayDescriptor(structure),
-      valueOf: { value: getValueOf },
-      toString: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
+      toString: this.getValueOfDescriptor?.(),
       [Symbol.toPrimitive]: { value: toPrimitive },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
-    const staticDescriptors = {
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
-    };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    const staticDescriptors = {};
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
   transformEnumerationDescriptor(int, structure) {
     const findEnum = function(value) {
@@ -123,8 +106,6 @@ export default mixin({
     };
   },
 });
-
-
 
 export function appendEnumeration(enumeration, name, item) {
   if (name !== undefined) {

@@ -1,6 +1,6 @@
 import { MisplacedSentinel, MissingSentinel } from '../../error.js';
 import { MEMORY } from '../../symbol.js';
-import { mixin } from "../class";
+import { mixin } from '../class.js';
 import { StructureType } from '../structures/all.js';
 
 export default mixin({
@@ -62,10 +62,7 @@ export default mixin({
     const bytes = template[MEMORY];
     return { value, bytes, validateValue, validateData, isRequired };
   },
-});
-
-if (process.dev.WASM) {
-  mixin({
+  ...(process.env.WASM ? {
     findSentinel(address, bytes) {
       const { memory } = this;
       const len = bytes.byteLength;
@@ -86,14 +83,12 @@ if (process.dev.WASM) {
         }
       }
     },
-  });
-} else if (process.dev.NATIVE) {
-  mixin({
-    imports = {
+  } : {
+    imports: {
       findSentinel: null,
     },
-  });
-}
+  })
+});
 
 export function isNeededByStructure(structure) {
   if (structure.type === StructureType.Slice) {

@@ -1,18 +1,18 @@
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
 } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
 import {
-  getSelf, makeReadOnly
+  getSelf
 } from '../../object.js';
 import { copyPointer, disablePointer, never, resetPointer } from '../../pointer.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
+  handleError
 } from '../../special.js';
 import { getChildVivificator, getIteratorIterator, getPointerVisitor } from '../../struct.js';
 import {
-  ALIGN, COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS, SIZE,
-  TAG, TYPE, VIVIFICATOR, WRITE_DISABLER
+  COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS,
+  TAG,
+  VIVIFICATOR
 } from '../../symbol.js';
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
@@ -165,30 +165,20 @@ export default mixin({
     const hasObject = !!members.find(m => m?.type === MemberType.Object);
     const instanceDescriptors = {
       $: { get: getSelf, set: initializer, configurable: true },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
       ...memberDescriptors,
       [Symbol.iterator]: { value: getIterator },
       [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
       [ENTRIES_GETTER]: { value: getUnionEntries },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       [TAG]: isTagged && { get: getSelector, configurable: true },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
       [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
       [PROP_GETTERS]: { value: memberValueGetters },
-      [WRITE_DISABLER]: { value: makeReadOnly },
       [PROPS]: fieldDescriptor,
     };
     const staticDescriptors = {
       tag: isTagged && { get: getTagClass },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
     };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
     // replace regular setters with ones that change the active field
     const setters = constructor.prototype[PROP_SETTERS];
     for (const [ name, init ] of Object.entries(memberInitializers)) {
@@ -196,6 +186,7 @@ export default mixin({
         setters[name] = init;
       }
     }
+    return constructor;
   },
 });
 

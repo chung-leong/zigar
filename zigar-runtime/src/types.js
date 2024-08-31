@@ -73,10 +73,6 @@ export function isPointer(type) {
   }
 }
 
-export function isArrayLike(type) {
-  return type === StructureType.Array || type === StructureType.Vector || type === StructureType.Slice;
-}
-
 export function isByteAligned({ bitOffset, bitSize, byteSize }) {
   return byteSize !== undefined || (!(bitOffset & 0x07) && !(bitSize & 0x07)) || bitSize === 0;
 }

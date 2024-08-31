@@ -1,17 +1,18 @@
-import { getCompatibleTags, getTypedArrayClass } from '../../data-view.js';
+import { getTypedArrayClass } from '../../data-view.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer, throwReadOnly } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
 import {
   makeReadOnly
 } from '../../object.js';
 import { always, copyPointer, getProxy } from '../../pointer.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getStringDescriptor,
-  getTypedArrayDescriptor, getValueOf, handleError
+  handleError
 } from '../../special.js';
 import {
-  ALIGN, ARRAY, COMPAT, CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
-  MEMORY, PARENT, POINTER_VISITOR, PROXY, SIZE, SLOTS, TYPE, VIVIFICATOR, WRITE_DISABLER
+  ARRAY,
+  CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
+  MEMORY, PARENT, POINTER_VISITOR, PROXY,
+  SLOTS,
+  VIVIFICATOR, WRITE_DISABLER
 } from '../../symbol.js';
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
@@ -74,31 +75,19 @@ export default mixin({
     const instanceDescriptors = {
       $: { get: getProxy, set: initializer },
       length: { value: length },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      string: hasStringProp && getStringDescriptor(structure),
-      typedArray: typedArray && getTypedArrayDescriptor(structure),
       get: { value: get },
       set: { value: set },
       entries: { value: getArrayEntries },
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
       [Symbol.iterator]: { value: getArrayIterator },
       [ENTRIES_GETTER]: { value: getArrayEntries },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       [VIVIFICATOR]: hasObject && { value: this.getChildVivificator(structure) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
       [WRITE_DISABLER]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => member.structure.constructor },
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
     };
-    return this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   }
 });
 

@@ -1,22 +1,18 @@
-import { getCompatibleTags, getTypedArrayClass } from './data-view.js';
+import { getTypedArrayClass } from './data-view.js';
 import { InvalidInitializer } from './error.js';
 import { getDescriptor } from './member.js';
-import { getDestructor, getMemoryCopier } from './memory.js';
 import {
-  attachDescriptors, createConstructor, createPropertyApplier, makeReadOnly
+  attachDescriptors, createConstructor, createPropertyApplier
 } from './object.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
-} from './special.js';
-import {
-  ALIGN, BIT_SIZE, COMPAT, COPIER, PRIMITIVE, SIZE, TYPE, WRITE_DISABLER,
+  BIT_SIZE,
+  COPIER, PRIMITIVE
 } from './symbol.js';
 import { getPrimitiveType } from './types.js';
 
 export function definePrimitive(structure, env) {
   const {
     byteSize,
-    align,
     instance: { members: [ member ] },
   } = structure;
   const { get, set } = getDescriptor(member, env);
@@ -36,26 +32,15 @@ export function definePrimitive(structure, env) {
     }
   };
   const constructor = structure.constructor = createConstructor(structure, { initializer }, env);
-  const typedArray = structure.typedArray = getTypedArrayClass(member);
   const instanceDescriptors = {
     $: { get, set },
-    dataView: getDataViewDescriptor(structure),
-    base64: getBase64Descriptor(structure),
-    typedArray: typedArray && getTypedArrayDescriptor(structure),
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
-    delete: { value: getDestructor(env) },
     [Symbol.toPrimitive]: { value: get },
-    [COPIER]: { value: getMemoryCopier(byteSize) },
-    [WRITE_DISABLER]: { value: makeReadOnly },
+    [COPIER]: this.getCopierDescriptor(byteSize),
   };
   const staticDescriptors = {
-    [COMPAT]: { value: getCompatibleTags(structure) },
-    [ALIGN]: { value: align },
-    [SIZE]: { value: byteSize },
     [BIT_SIZE]: { value: member.bitSize },
-    [TYPE]: { value: structure.type },
     [PRIMITIVE]: { value: member.type },
   };
-  return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
+  structure.TypedArray = getTypedArrayClass(member);
+  return attachDescriptors(structure, instanceDescriptors, staticDescriptors, env);
 };

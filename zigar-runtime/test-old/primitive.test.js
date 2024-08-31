@@ -16,37 +16,6 @@ describe('Primitive functions', function() {
       useAllStructureTypes();
       useAllExtendedTypes();
     })
-    it('should define a structure for holding a integer', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Hello',
-        byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(Hello).to.be.a('function');
-      const dv = new DataView(new ArrayBuffer(8));
-      dv.setBigUint64(0, 0x7FFFFFFFFFFFFFFFn, true);
-      const object = Hello(dv);
-      expect(object.$).to.equal(0x7FFFFFFFFFFFFFFFn);      
-      expect(object.valueOf()).to.equal(0x7FFFFFFFFFFFFFFFn);
-      expect(BigInt(object)).to.equal(0x7FFFFFFFFFFFFFFFn);
-      object.$ = BigInt(Number.MAX_SAFE_INTEGER);
-      expect(JSON.stringify(object)).to.equal(`${Number.MAX_SAFE_INTEGER}`);
-      object.$ = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-      expect(() => JSON.stringify(object)).to.throw(TypeError);
-      object.$ = BigInt(Number.MIN_SAFE_INTEGER);
-      expect(JSON.stringify(object)).to.equal(`${Number.MIN_SAFE_INTEGER}`);
-      object.$ = BigInt(Number.MIN_SAFE_INTEGER) - 1n;
-      expect(() => JSON.stringify(object)).to.throw(TypeError);
-    })
     it('should define a structure for holding a type', function() {
       const structure = env.beginStructure({
         type: StructureType.Primitive,

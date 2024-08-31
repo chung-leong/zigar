@@ -1,12 +1,8 @@
-import { getCompatibleTags, getTypedArrayClass } from '../../data-view.js';
+import { getTypedArrayClass } from '../../data-view.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
-import { getSelf, makeReadOnly } from '../../object.js';
+import { getSelf } from '../../object.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
-} from '../../special.js';
-import {
-  ALIGN, COMPAT, COPIER, ENTRIES_GETTER, PROP_SETTERS, SIZE, TYPE, WRITE_DISABLER
+  COPIER, ENTRIES_GETTER, PROP_SETTERS
 } from '../../symbol.js';
 import { mixin } from '../class.js';
 
@@ -60,31 +56,19 @@ export default mixin({
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure, { initializer });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
     const instanceDescriptors = {
       ...elementDescriptors,
       $: { get: getSelf, set: initializer },
       length: { value: length },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      typedArray: typedArray && getTypedArrayDescriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
       entries: { value: getVectorEntries },
-      delete: { value: this.getDestructor(structure) },
       [Symbol.iterator]: { value: getVectorIterator },
       [ENTRIES_GETTER]: { value: getVectorEntries },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => elementStructure.constructor },
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
     };
-    return this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    structure.TypedArray = getTypedArrayClass(member);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
 });
 

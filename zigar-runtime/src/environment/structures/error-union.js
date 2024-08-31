@@ -1,13 +1,10 @@
 import { NotInErrorSet } from '../../error.js';
-import { getMemoryCopier, getMemoryResetter } from '../../memory.js';
-import { makeReadOnly } from '../../object.js';
+import { getMemoryResetter } from '../../memory.js';
 import { copyPointer, resetPointer } from '../../pointer.js';
-import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf
-} from '../../special.js';
 import { getChildVivificator, getPointerVisitor } from '../../struct.js';
 import {
-  ALIGN, CLASS, COPIER, POINTER_VISITOR, RESETTER, SIZE, TYPE, VIVIFICATOR, WRITE_DISABLER
+  CLASS, COPIER, POINTER_VISITOR, RESETTER,
+  VIVIFICATOR
 } from '../../symbol.js';
 import { isErrorJSON } from '../../types.js';
 import { mixin } from '../class.js';
@@ -81,23 +78,12 @@ export default mixin({
     const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
     const instanceDescriptors = {
       '$': { get, set: initializer },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
-    const staticDescriptors = {
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
-    };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    const staticDescriptors = {};
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
 });
 

@@ -1,4 +1,4 @@
-import { SLOTS } from '../../symbol.js';
+import { GETTER, SETTER, SLOTS } from '../../symbol.js';
 import { mixin } from '../class.js';
 
 export default mixin({

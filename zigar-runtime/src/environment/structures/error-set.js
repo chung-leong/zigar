@@ -1,13 +1,9 @@
 import { getTypedArrayClass } from '../../data-view.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
 import {
-  createPropertyApplier, defineProperties, makeReadOnly
+  createPropertyApplier, defineProperties
 } from '../../object.js';
-import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
-} from '../../special.js';
-import { ALIGN, CLASS, COPIER, GETTER, PROPS, SIZE, TYPE, WRITE_DISABLER } from '../../symbol.js';
+import { CLASS, GETTER, PROPS } from '../../symbol.js';
 import { isErrorJSON } from '../../types.js';
 import { mixin } from '../class.js';
 import { StructureType } from './all.js';
@@ -68,25 +64,14 @@ export default mixin({
     const typedArray = structure.typedArray = getTypedArrayClass(member);
     const instanceDescriptors = {
       $: { get, set },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      typedArray: typedArray && getTypedArrayDescriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
     const staticDescriptors = {
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
       [CLASS]: { value: errorClass },
       // the PROPS array is normally set in static.js; it needs to be set here for anyerror
       // so we can add names to it as error sets are defined
       [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
-      [TYPE]: { value: structure.type },
     };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
   transformErrorSetDescriptor(int, structure) {
     const findError = function(value) {

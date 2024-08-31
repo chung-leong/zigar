@@ -1,44 +1,5 @@
 import { MemberType } from './environment/members/all.js';
-import { StructureType } from './environment/structures/all.js';
-import { BufferSizeMismatch, TypeMismatch } from './error.js';
-import { COMPAT, COPIER, MEMORY } from './symbol.js';
-
-export function checkDataView(dv) {
-  if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throw new TypeMismatch('a DataView', dv);
-  }
-  return dv;
-}
-
-export function setDataView(dv, structure, copy, fixed, handlers) {
-  const { byteSize, type, sentinel } = structure;
-  const elementSize = byteSize ?? 1;
-  if (!this[MEMORY]) {
-    const { shapeDefiner } = handlers;
-    if (byteSize !== undefined) {
-      checkDataViewSize(dv, structure);
-    }
-    const len = dv.byteLength / elementSize;
-    const source = { [MEMORY]: dv };
-    sentinel?.validateData(source, len);
-    if (fixed) {
-      // need to copy when target object is in fixed memory
-      copy = true;
-    }
-    shapeDefiner.call(this, copy ? null : dv, len, fixed);
-    if (copy) {
-      this[COPIER](source);
-    }
-  } else {
-    const byteLength = (type === StructureType.Slice) ? elementSize * this.length : elementSize;
-    if (dv.byteLength !== byteLength) {
-      throw new BufferSizeMismatch(structure, dv, this);
-    }
-    const source = { [MEMORY]: dv };
-    sentinel?.validateData(source, this.length);
-    this[COPIER](source);
-  }
-}
+import { COMPAT } from './symbol.js';
 
 export function getTypedArrayClass(member) {
   const { type: memberType, byteSize } = member;
@@ -90,20 +51,4 @@ export function isCompatibleBuffer(arg, constructor) {
   return false;
 }
 
-export function getCompatibleTags(structure) {
-  const { typedArray } = structure;
-  const tags = [];
-  if (typedArray) {
-    tags.push(typedArray.name);
-    tags.push('DataView');
-    if (typedArray === Uint8Array || typedArray === Int8Array) {
-      tags.push('ArrayBuffer');
-      tags.push('SharedArrayBuffer');
-      if (typedArray === Uint8Array) {
-        tags.push('Uint8ClampedArray');
-      }
-    }
-  }
-  return tags;
-}
 

@@ -2,7 +2,6 @@ import { appendEnumeration } from './enumeration.js';
 import { appendErrorSet } from './error-set.js';
 import { getDescriptor } from './member.js';
 import { defineProperties, defineProperty } from './object.js';
-import { convertToJSON, getValueOf } from './special.js';
 import { getStructEntries, getStructIterator } from './struct.js';
 import { ENTRIES_GETTER, PROPS, SLOTS, VARIANTS } from './symbol.js';
 import { StructureType } from './types.js';
@@ -43,8 +42,8 @@ export function addStaticMembers(structure, env) {
     }
   }
   defineProperties(constructor, {
-    valueOf: { value: getValueOf },
-    toJSON: { value: convertToJSON },
+    valueOf: this.getValueOfDescriptor?.(),
+    toJSON: this.getToJsonDescriptor?.(),
     ...staticDescriptors,
     [Symbol.iterator]: { value: getStructIterator },
     [ENTRIES_GETTER]: { value: getStructEntries },

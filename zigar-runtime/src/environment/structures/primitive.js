@@ -1,15 +1,12 @@
-import { getCompatibleTags, getTypedArrayClass } from '../../data-view.js';
+import { getTypedArrayClass } from '../../data-view.js';
 import { InvalidInitializer } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
-import { makeReadOnly } from '../../object.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getTypedArrayDescriptor, getValueOf
-} from '../../special.js';
-import {
-  ALIGN, BIT_SIZE, COMPAT, COPIER, PRIMITIVE, SIZE, TYPE, WRITE_DISABLER,
+  BIT_SIZE,
+  COPIER, PRIMITIVE
 } from '../../symbol.js';
-import { getPrimitiveType, StructureType } from '../../types.js';
+import { getPrimitiveType } from '../../types.js';
 import { mixin } from '../class.js';
+import { StructureType } from './all.js';
 
 export default mixin({
   definePrimitive(structure) {
@@ -35,28 +32,16 @@ export default mixin({
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure, { initializer });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
     const instanceDescriptors = {
       $: { get, set },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      typedArray: typedArray && getTypedArrayDescriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor(env) },
       [Symbol.toPrimitive]: { value: get },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
     const staticDescriptors = {
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
       [BIT_SIZE]: { value: member.bitSize },
-      [TYPE]: { value: structure.type },
       [PRIMITIVE]: { value: member.type },
     };
-    return this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    structure.TypedArray = getTypedArrayClass(member);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   }
 });
 

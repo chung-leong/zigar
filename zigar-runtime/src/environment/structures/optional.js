@@ -1,12 +1,9 @@
-import { getMemoryCopier, getMemoryResetter } from '../../memory.js';
-import { attachDescriptors, makeReadOnly } from '../../object.js';
+import { getMemoryResetter } from '../../memory.js';
 import { copyPointer, resetPointer } from '../../pointer.js';
-import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf
-} from '../../special.js';
 import { getChildVivificator, getPointerVisitor } from '../../struct.js';
 import {
-  ALIGN, COPIER, FIXED, MEMORY, POINTER_VISITOR, RESETTER, SIZE, TYPE, VIVIFICATOR, WRITE_DISABLER
+  COPIER, FIXED, MEMORY, POINTER_VISITOR, RESETTER,
+  VIVIFICATOR
 } from '../../symbol.js';
 import { mixin } from '../class.js';
 import { MemberType } from '../members/all.js';
@@ -67,24 +64,13 @@ export default mixin({
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const instanceDescriptors = {
       $: { get, set: initializer },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
       [RESETTER]: !hasPointer && { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
     };
-    const staticDescriptors = {
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
-    };
-    return attachDescriptors(constructor, instanceDescriptors, staticDescriptors, env);
+    const staticDescriptors = {};
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
 });
 

@@ -250,63 +250,6 @@ export class Environment {
     }
   }
 
-  findViewAt(buffer, offset, len) {
-    let entry = this.viewMap.get(buffer);
-    let existing;
-    if (entry) {
-      if (entry instanceof DataView) {
-        // only one view created thus far--see if that's the matching one
-        if (entry.byteOffset === offset && entry.byteLength === len) {
-          existing = entry;
-        } else {
-          // no, need to replace the entry with a hash keyed by `offset:len`
-          const prev = entry;
-          const prevKey = `${prev.byteOffset}:${prev.byteLength}`;
-          entry = { [prevKey]: prev };
-          this.viewMap.set(buffer, entry);
-        }
-      } else {
-        existing = entry[`${offset}:${len}`];
-      }
-    }
-    return { existing, entry };
-  }
-
-  obtainView(buffer, offset, len) {
-    const { existing, entry } = this.findViewAt(buffer, offset, len);
-    let dv;
-    if (existing) {
-      return existing;
-    } else if (entry) {
-      dv = entry[`${offset}:${len}`] = new DataView(buffer, offset, len);
-    } else {
-      // just one view of this buffer for now
-      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
-    }
-    const fixed = buffer[FIXED];
-    if (fixed) {
-      // attach address to view of fixed buffer
-      dv[FIXED] = { address: add(fixed.address, offset), len };
-    }
-    return dv;
-  }
-
-  registerView(dv) {
-    if (!dv[FIXED]) {
-      const { buffer, byteOffset, byteLength } = dv;
-      const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
-      if (existing) {
-        // return existing view instead of this one
-        return existing;
-      } else if (entry) {
-        entry[`${byteOffset}:${byteLength}`] = dv;
-      } else {
-        this.viewMap.set(buffer, dv);
-      }
-    }
-    return dv;
-  }
-
   captureView(address, len, copy) {
     if (copy) {
       // copy content into reloctable memory

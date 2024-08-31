@@ -1,6 +1,6 @@
 import { MEMORY, MEMORY_RESTORER, SLOTS } from './symbol.js';
 
-export function getDestructor(env) {
+export function createDestructor(env) {
   return function() {
     const dv = this[MEMORY];
     this[MEMORY] = null;

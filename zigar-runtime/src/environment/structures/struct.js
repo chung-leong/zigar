@@ -1,13 +1,12 @@
 import { InvalidInitializer, NotOnByteBoundary } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
-import { getSelf, makeReadOnly } from '../../object.js';
+import { getSelf } from '../../object.js';
 import { always, copyPointer } from '../../pointer.js';
 import {
-  convertToJSON, getBase64Descriptor, getDataViewDescriptor, getValueOf, handleError
+  handleError
 } from '../../special.js';
 import {
   ALIGN, COPIER, ENTRIES_GETTER, MEMORY, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, TUPLE, TYPE,
-  VIVIFICATOR, WRITE_DISABLER
+  VIVIFICATOR
 } from '../../symbol.js';
 import { getVectorEntries, getVectorIterator } from '../../vector.js';
 import { mixin } from '../class.js';
@@ -72,21 +71,14 @@ export default mixin({
       : getStructIterator;
     const instanceDescriptors = {
       $: { get: getSelf, set: initializer },
-      dataView: getDataViewDescriptor(structure),
-      base64: getBase64Descriptor(structure),
       length: isTuple && { value: length },
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: this.getDestructor() },
       entries: isTuple && { value: getVectorEntries },
       ...memberDescriptors,
       [Symbol.iterator]: { value: getIterator },
       [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
       [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this, true) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
-      [WRITE_DISABLER]: { value: makeReadOnly },
       [PROPS]: { value: fieldMembers.map(m => m.name) },
     };
     const staticDescriptors = {
@@ -95,7 +87,7 @@ export default mixin({
       [TYPE]: { value: structure.type },
       [TUPLE]: { value: isTuple },
     };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   }
 });
 

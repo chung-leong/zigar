@@ -1,9 +1,5 @@
-import { getCompatibleTags } from '../../data-view.js';
 import { AccessingOpaque, CreatingOpaque } from '../../error.js';
-import { getDestructor, getMemoryCopier } from '../../memory.js';
-import { convertToJSON, getDataViewDescriptor, getValueOf } from '../../special.js';
 import { getIteratorIterator } from '../../struct.js';
-import { ALIGN, COMPAT, COPIER, SIZE, TYPE } from '../../symbol.js';
 import { mixin } from '../class.js';
 import { StructureType } from './all.js';
 
@@ -28,21 +24,11 @@ export default mixin({
     const getIterator = (isIterator) ? getIteratorIterator : null;
     const instanceDescriptors = {
       $: { get: valueAccessor, set: valueAccessor },
-      dataView: getDataViewDescriptor(structure),
-      valueOf: { value: getValueOf },
-      toJSON: { value: convertToJSON },
-      delete: { value: getDestructor(env) },
       [Symbol.iterator]: getIterator && { value: getIterator },
       [Symbol.toPrimitive]: { value: toPrimitive },
-      [COPIER]: { value: getMemoryCopier(byteSize) },
     };
-    const staticDescriptors = {
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: structure.type },
-    };
-    this.attachDescriptors(constructor, instanceDescriptors, staticDescriptors);
+    const staticDescriptors = {};
+    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
 });
 

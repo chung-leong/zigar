@@ -1,5 +1,4 @@
 import { ArgumentCountMismatch, adjustArgumentError } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
 import { getChildVivificator, getPointerVisitor } from '../../struct.js';
 import {
   ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR
@@ -62,7 +61,7 @@ export default mixin({
     : function() { return false };
     defineProperties(constructor.prototype, {
       ...memberDescriptors,
-      [COPIER]: { value: getMemoryCopier(byteSize) },
+      [COPIER]: this.getCopierDescriptor(byteSize),
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
       [MEMORY_RESTORER]: process.env.WASM && { value: this.getMemoryRestorer(null) },
