@@ -1,12 +1,12 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
-} from '../error.js';
+} from '../errors.js';
 import { isReadOnly, MemberType } from '../members/all.js';
 import {
   ALIGN, ALL_KEYS, CACHE, COMPAT, CONST_TARGET, COPIER, ENTRIES_GETTER, GETTER, MEMORY,
   POINTER_VISITOR, PROP_SETTERS, PROPS, SETTER, SIZE, SLOTS, TYPE, VARIANTS, WRITE_DISABLER,
-} from '../symbol.js';
+} from '../symbols.js';
 import { defineProperties, defineProperty } from '../utils.js';
 
 export default mixin({
@@ -351,13 +351,6 @@ export function isValueExpected(structure) {
   }
 }
 
-export function copyPointer({ source }) {
-  const target = source[SLOTS][0];
-  if (target) {
-    this[TARGET_SETTER](target);
-  }
-}
-
 function needSlots(members) {
   for (const { type } of members) {
     switch (type) {
@@ -413,4 +406,3 @@ function startsWithSelf(argStructure, structure) {
   }
   return false;
 }
-

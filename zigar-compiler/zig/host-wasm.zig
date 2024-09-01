@@ -28,7 +28,7 @@ extern fn _insertObject(container: Value, key: Value, value: ?Value) void;
 extern fn _beginStructure(def: Value) ?Value;
 extern fn _attachMember(structure: Value, def: Value, is_static: bool) void;
 extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
-extern fn _finalizeShape(structure: Value) void;
+extern fn _defineStructure(structure: Value) void;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(slot: usize) ?*const anyopaque;
@@ -258,8 +258,8 @@ pub const Host = struct {
         _attachMember(structure, def, is_static);
     }
 
-    pub fn finalizeShape(_: Host, structure: Value) !void {
-        _finalizeShape(structure);
+    pub fn defineStructure(_: Host, structure: Value) !void {
+        _defineStructure(structure);
     }
 
     pub fn attachTemplate(_: Host, structure: Value, template: Value, is_static: bool) !void {

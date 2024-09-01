@@ -58,7 +58,7 @@ enum {
     beginStructure,
     attachMember,
     attachTemplate,
-    finalizeShape,
+    defineStructure,
     endStructure,
     createTemplate,
     writeToConsole,
@@ -270,12 +270,12 @@ result attach_template(module_data* md,
     return FAILURE;
 }
 
-result finalize_shape(module_data* md,
-                      napi_value structure) {
+result define_structure(module_data* md,
+                        napi_value structure) {
     napi_env env = md->env;
     napi_value args[1] = { structure };
     napi_value result;
-    if (call_js_function(md, finalizeShape, 1, args, &result)) {
+    if (call_js_function(md, defineStructure, 1, args, &result)) {
         return OK;
     }
     return FAILURE;
@@ -490,8 +490,8 @@ napi_value obtain_external_buffer(napi_env env,
     return buffer;
 }
 
-napi_value copy_bytes(napi_env env,
-                      napi_callback_info info) {
+napi_value copy_external_bytes(napi_env env,
+                               napi_callback_info info) {
     size_t argc = 3;
     napi_value args[3];
     void* dest;
@@ -810,7 +810,7 @@ struct {
     { "allocateExternMemory", allocate_external_memory },
     { "freeExternMemory", free_external_memory },
     { "obtainExternBuffer", obtain_external_buffer },
-    { "copyBytes", copy_bytes },
+    { "copyExternBytes", copy_external_bytes },
     { "findSentinel", find_sentinel },
     { "getFactoryThunk", get_factory_thunk },
     { "runThunk", run_thunk },
@@ -835,7 +835,7 @@ struct {
     { "beginStructure", beginStructure },
     { "attachMember", attachMember },
     { "attachTemplate", attachTemplate },
-    { "finalizeShape", finalizeShape },
+    { "defineStructure", defineStructure },
     { "endStructure", endStructure },
     { "createTemplate", createTemplate },
     { "writeToConsole", writeToConsole },
@@ -945,7 +945,7 @@ napi_value load_module(napi_env env,
     exports->begin_structure = begin_structure;
     exports->attach_member = attach_member;
     exports->attach_template = attach_template;
-    exports->finalize_shape = finalize_shape;
+    exports->define_structure = define_structure;
     exports->end_structure = end_structure;
     exports->create_template = create_template;
     exports->write_to_console = write_to_console;
