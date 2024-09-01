@@ -1,13 +1,14 @@
-import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../../error.js';
-import { getMemoryCopier } from '../../memory.js';
-import { always } from '../../pointer.js';
-import { getChildVivificator } from '../../struct.js';
+import { defineProperties, mixin } from '../environment.js';
+import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
+import { MemberType } from '../members/all.js';
+import { getMemoryCopier } from '../memory.js';
+import { always } from '../pointer.js';
+import { getChildVivificator } from '../struct.js';
 import {
   ALIGN, ATTRIBUTES, BIT_SIZE, COPIER, MEMORY, MEMORY_RESTORER, PARENT, POINTER_VISITOR, PRIMITIVE, SIZE,
   SLOTS, VIVIFICATOR
-} from '../../symbol.js';
-import { defineProperties, mixin } from '../class.js';
-import { MemberType } from '../members/all.js';
+} from '../symbols.js';
+import { alignForward } from '../utils.js';
 import { StructureType } from './all.js';
 
 export default mixin({
@@ -47,7 +48,7 @@ export default mixin({
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
         }
-        const byteOffset = offsets[index] = (totalByteSize + argAlign - 1) & ~(argAlign - 1);
+        const byteOffset = offsets[index] = alignForward(totalByteSize, argAlign);
         totalByteSize = byteOffset + dv.byteLength;
       }
       const attrs = new ArgAttributes(args.length);

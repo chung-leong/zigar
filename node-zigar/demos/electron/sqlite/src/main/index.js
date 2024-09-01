@@ -2,13 +2,13 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { copyFileSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
-import icon from '../../resources/icon.png?asset';
+import icon from '../resources/icon.png?asset';
 require ('node-zigar/cjs')
 const { openDb, closeDb, findAlbums, getTracks, addAlbum } = require('../lib/sqlite.zigar')
 
 const path = join(app.getPath('documents'), 'chinook.db')
 if (!existsSync(path)) {
-  const src = resolve(__dirname, '../../chinook.db')
+  const src = resolve(__dirname, '../chinook.db')
   copyFileSync(src, path)
 }
 const db = openDb(path)

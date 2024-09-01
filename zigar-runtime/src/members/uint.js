@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { MemberType } from './all.js';
 
 export default mixin({

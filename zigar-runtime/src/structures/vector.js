@@ -1,8 +1,8 @@
-import { getTypedArrayClass } from '../../data-view.js';
-import { ArrayLengthMismatch, InvalidArrayInitializer } from '../../error.js';
-import { getSelf } from '../../object.js';
-import { mixin } from '../class.js';
-import { COPIER, ENTRIES_GETTER, PROP_SETTERS } from '../symbol.js';
+import { mixin } from '../environment.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
+import { getSelf } from '../object.js';
+import { COPIER, ENTRIES_GETTER, PROP_SETTERS } from '../symbols.js';
+import { getTypedArrayClass } from './all.js';
 
 export default mixin({
   defineVector(structure) {

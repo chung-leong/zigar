@@ -1,7 +1,7 @@
-import { TypeMismatch } from '../../error.js';
-import { MEMORY, MEMORY_RESTORER } from '../../symbol.js';
-import { decodeBase64, decodeText, encodeBase64, encodeText } from '../../utils.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
+import { MEMORY, MEMORY_RESTORER } from '../symbols.js';
+import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
   getSpecialPropertyDescriptors(structure, handlers = {}) {

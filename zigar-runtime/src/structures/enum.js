@@ -1,7 +1,8 @@
-import { getTypedArrayClass } from '../../data-view.js';
-import { defineProperties, mixin } from '../class.js';
-import { EnumExpected, InvalidInitializer } from '../error.js';
-import { MORE, NAME, TAG } from '../symbol.js';
+import { } from '../data-view.js';
+import { defineProperties, mixin } from '../environment.js';
+import { EnumExpected, InvalidInitializer } from '../errors.js';
+import { MORE, NAME, TAG } from '../symbols.js';
+import { getTypedArrayClass } from './all.js';
 
 export default mixin({
   defineEnumeration(structure) {

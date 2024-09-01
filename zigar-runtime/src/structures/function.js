@@ -1,7 +1,7 @@
-import { defineProperties, ObjectCache } from '../../object.js';
-import { mixin } from '../class.js';
-import { TypeMismatch } from '../error.js';
-import { ALIGN, MEMORY, VARIANTS } from '../symbol.js';
+import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
+import { defineProperties, ObjectCache } from '../object.js';
+import { ALIGN, MEMORY, VARIANTS } from '../symbols.js';
 import { StructureType } from './all.js';
 
 export default mixin({

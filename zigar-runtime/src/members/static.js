@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { isValueExpected } from '../structures/all.js';
 import { bindSlot, getObject, getValue, MemberType, setValue } from './all.js';
 

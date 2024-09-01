@@ -1,6 +1,6 @@
-import { getIteratorIterator } from '../../struct.js';
-import { mixin } from '../class.js';
-import { AccessingOpaque, CreatingOpaque } from '../error.js';
+import { mixin } from '../environment.js';
+import { AccessingOpaque, CreatingOpaque } from '../errors.js';
+import { getIteratorIterator } from '../struct.js';
 import { StructureType } from './all.js';
 
 export default mixin({

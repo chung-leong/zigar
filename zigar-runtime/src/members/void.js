@@ -1,5 +1,5 @@
-import { NotUndefined, OutOfBound } from '../../error.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { NotUndefined, OutOfBound } from '../errors.js';
 import { MemberType } from '../members/all.js';
 
 export default mixin({

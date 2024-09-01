@@ -1,12 +1,12 @@
-import { getDescriptor, isValueExpected } from '../../member.js';
-import { createConstructor, defineProperties } from '../../object.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
   InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
   warnImplicitArrayCreation
-} from '../error.js';
+} from '../errors.js';
+import { getDescriptor, isValueExpected } from '../member.js';
 import { MemberType } from '../members/all.js';
+import { createConstructor, defineProperties } from '../object.js';
 import {
   ADDRESS, ADDRESS_SETTER,
   CONST_PROXY, CONST_TARGET,
@@ -14,7 +14,7 @@ import {
   LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
   PROP_SETTERS, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE,
   WRITE_DISABLER
-} from '../symbol.js';
+} from '../symbols.js';
 import { StructureType } from './all.js';
 
 export default mixin({

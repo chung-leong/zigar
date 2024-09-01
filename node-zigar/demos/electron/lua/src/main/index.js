@@ -1,7 +1,7 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { join } from 'path';
-import icon from '../../resources/icon.png?asset';
+import icon from '../resources/icon.png?asset';
 
 require('node-zigar/cjs')
 const { __zigar, createLua, freeLua, runLuaCode } = require('../lib/lua.zigar')

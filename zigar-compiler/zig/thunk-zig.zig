@@ -3,11 +3,10 @@ const types = @import("./types.zig");
 const variadic = @import("./variadic.zig");
 const expect = std.testing.expect;
 
-const Value = types.Value;
 const Memory = types.Memory;
 
-pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) ?Value;
-pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) ?Value;
+pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) bool;
+pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) bool;
 
 pub fn ThunkType(comptime FT: type) type {
     return switch (@typeInfo(FT).Fn.is_var_args) {
@@ -63,12 +62,12 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
             ptr: ?*anyopaque,
             fn_ptr: *const anyopaque,
             arg_ptr: *anyopaque,
-        ) callconv(.C) ?Value {
+        ) callconv(.C) bool {
             const host = HostT.init(ptr);
-            if (tryFunction(host, fn_ptr, arg_ptr)) {
-                return null;
-            } else |err| {
-                return host.createMessage(err);
+            if (tryFunction(host, fn_ptr, arg_ptr)) |_| {
+                return true;
+            } else |_| {
+                return false;
             }
         }
     };
@@ -89,12 +88,12 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
             arg_ptr: *anyopaque,
             attr_ptr: *const anyopaque,
             arg_count: usize,
-        ) callconv(.C) ?Value {
+        ) callconv(.C) bool {
             const host = HostT.init(ptr);
-            if (tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count)) {
-                return null;
-            } else |err| {
-                return host.createMessage(err);
+            if (tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count)) |_| {
+                return true;
+            } else |_| {
+                return false;
             }
         }
     };
@@ -109,10 +108,6 @@ test "createThunk" {
     const Host = struct {
         pub fn init(_: ?*anyopaque, _: *anyopaque) @This() {
             return .{};
-        }
-
-        pub fn captureString(_: @This(), _: types.Memory) !Value {
-            return error.unable_to_create_object;
         }
     };
     const thunk1 = createThunk(Host, fn (i32, bool) bool);

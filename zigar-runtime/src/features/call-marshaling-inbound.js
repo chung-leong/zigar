@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 
 export default mixin({
   jsFunctionMap: null,

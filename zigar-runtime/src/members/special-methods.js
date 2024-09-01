@@ -1,6 +1,6 @@
-import { ENTRIES_GETTER, TUPLE, TYPE } from '../../symbol.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { StructureType } from '../structures/all.js';
+import { ENTRIES_GETTER, TUPLE, TYPE } from '../symbols.js';
 
 export default mixin({
   getSpecialMethodDescriptors() {

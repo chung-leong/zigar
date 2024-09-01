@@ -1,21 +1,18 @@
 import {
   canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
   getPointerVisitor, makeArrayReadOnly, transformIterable
-} from '../../array.js';
-import { getTypedArrayClass } from '../../data-view.js';
+} from '../array.js';
+import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, InvalidArrayInitializer
-} from '../../error.js';
-import { createPropertyApplier } from '../../object.js';
-import { copyPointer, getProxy } from '../../pointer.js';
-import {
-  COPIER, ENTRIES_GETTER, LENGTH,
-  MEMORY, POINTER_VISITOR,
-  VIVIFICATOR, WRITE_DISABLER
-} from '../../symbol.js';
-import { mixin } from '../class.js';
+} from '../errors.js';
 import { MemberType } from '../members/all.js';
-import { StructureType } from './all.js';
+import { createPropertyApplier } from '../object.js';
+import { copyPointer, getProxy } from '../pointer.js';
+import {
+  COPIER, ENTRIES_GETTER, LENGTH, MEMORY, POINTER_VISITOR, VIVIFICATOR, WRITE_DISABLER,
+} from '../symbols.js';
+import { getTypedArrayClass, StructureType } from './all.js';
 
 export default mixin({
   defineSlice(structure) {

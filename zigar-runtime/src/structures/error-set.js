@@ -1,12 +1,8 @@
-import { getTypedArrayClass } from '../../data-view.js';
-import {
-  createPropertyApplier, defineProperties
-} from '../../object.js';
-import { isErrorJSON } from '../../types.js';
-import { mixin } from '../class.js';
-import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../error.js';
-import { CLASS, GETTER, PROPS } from '../symbol.js';
-import { StructureType } from './all.js';
+import { mixin } from '../environment.js';
+import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
+import { CLASS, GETTER, PROPS } from '../symbols.js';
+import { defineProperties } from '../utils.js';
+import { getTypedArrayClass, StructureType } from './all.js';
 
 export default mixin({
   currentGlobalSet: undefined,
@@ -33,7 +29,7 @@ export default mixin({
     const errorClass = this.currentErrorClass;
     const { get, set } = this.getDescriptor(member);
     const expected = [ 'string', 'number' ];
-    const propApplier = createPropertyApplier(structure);
+    const propApplier = this.createPropertyApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor[CLASS]) {
         set.call(this, arg);

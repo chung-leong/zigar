@@ -1,8 +1,7 @@
-import { getTypedArrayClass } from '../../data-view.js';
-import { mixin } from '../class.js';
-import { InvalidInitializer } from '../error.js';
-import { BIT_SIZE, COPIER, PRIMITIVE } from '../symbol.js';
-import { StructureType } from './all.js';
+import { mixin } from '../environment.js';
+import { InvalidInitializer } from '../errors.js';
+import { BIT_SIZE, COPIER, PRIMITIVE } from '../symbols.js';
+import { StructureType, getTypedArrayClass } from './all.js';
 
 export default mixin({
   definePrimitive(structure) {
@@ -43,25 +42,4 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Primitive;
-}
-
-export function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int || type === MemberType.Uint) {
-    if (bitSize <= 32) {
-      return Number;
-    } else {
-      return BigInt;
-    }
-  } else if (type === MemberType.Float) {
-    return Number;
-  } else if (type === MemberType.Bool) {
-    return Boolean;
-  }
-}
-
-export function getPrimitiveType(member) {
-  const Primitive = getPrimitiveClass(member);
-  if (Primitive) {
-    return typeof(Primitive(0));
-  }
 }

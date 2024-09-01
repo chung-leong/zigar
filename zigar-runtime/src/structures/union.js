@@ -1,21 +1,21 @@
-import {
-  getSelf
-} from '../../object.js';
-import { copyPointer, disablePointer, never, resetPointer } from '../../pointer.js';
-import {
-  handleError
-} from '../../special.js';
-import { getChildVivificator, getIteratorIterator, getPointerVisitor } from '../../struct.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
-} from '../error.js';
+} from '../errors.js';
 import { MemberType } from '../members/all.js';
+import {
+  getSelf
+} from '../object.js';
+import { copyPointer, disablePointer, never, resetPointer } from '../pointer.js';
+import {
+  handleError
+} from '../special.js';
+import { getChildVivificator, getIteratorIterator, getPointerVisitor } from '../struct.js';
 import {
   COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS,
   TAG,
   VIVIFICATOR
-} from '../symbol.js';
+} from '../symbols.js';
 import { StructureType } from './all.js';
 
 export default mixin({

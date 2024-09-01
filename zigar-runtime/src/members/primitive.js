@@ -1,6 +1,6 @@
-import { adjustRangeError } from '../../error.js';
-import { MEMORY, MEMORY_RESTORER } from '../../symbol.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { adjustRangeError } from '../errors.js';
+import { MEMORY, MEMORY_RESTORER } from '../symbols.js';
 
 export default mixin({
   getDescriptorBool(member) {

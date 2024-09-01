@@ -1,5 +1,5 @@
-import { SLOTS } from '../../symbol.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { SLOTS } from '../symbols.js';
 import { bindSlot, MemberType } from './all.js';
 
 export default mixin({

@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { MemberType } from '../members/all.js';
 
 // handle uints 7-bit or smaller in packed structs that are stored in a single byte

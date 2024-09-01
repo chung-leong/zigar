@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
@@ -6,9 +6,6 @@ export default mixin({
   consolePending: [],
   consoleTimeout: 0,
 
-  setConsole(console) {
-    this.console = console;
-  },
   writeToConsole(dv) {
     const { console } = this;
     try {
@@ -23,13 +20,17 @@ export default mixin({
         const remaining = array.subarray(index + 1);
         const list = [ ...this.consolePending, beginning ];
         console.log(decodeText(list));
-        this.consolePending = (remaining.length > 0) ? [ remaining ] : [];
+        this.consolePending.splice(0);
+        if (remaining.length > 0) {
+          this.consolePending.push(remaining);
+        }
       }
       clearTimeout(this.consoleTimeout);
+      this.consoleTimeout = 0;
       if (this.consolePending.length > 0) {
         this.consoleTimeout = setTimeout(() => {
           console.log(decodeText(this.consolePending));
-          this.consolePending = [];
+          this.consolePending.splice(0);
         }, 250);
       }
       /* c8 ignore next 3 */
@@ -40,7 +41,7 @@ export default mixin({
   flushConsole() {
     if (this.consolePending.length > 0) {
       console.log(decodeText(this.consolePending));
-      this.consolePending = [];
+      this.consolePending.splice(0);
       clearTimeout(this.consoleTimeout);
     }
   },
@@ -54,7 +55,3 @@ export default mixin({
     },
   } : undefined),
 });
-
-export function isNeeded() {
-  // TODO
-}

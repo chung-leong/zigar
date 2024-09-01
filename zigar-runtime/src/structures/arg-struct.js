@@ -1,10 +1,10 @@
-import { ArgumentCountMismatch, adjustArgumentError } from '../../error.js';
-import { getChildVivificator, getPointerVisitor } from '../../struct.js';
+import { defineProperties, mixin } from '../environment.js';
+import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
+import { MemberType } from '../members/all.js';
+import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
   ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR
-} from '../../symbol.js';
-import { defineProperties, mixin } from '../class.js';
-import { MemberType } from '../members/all.js';
+} from '../symbols.js';
 import { StructureType } from './all.js';
 
 export default mixin({

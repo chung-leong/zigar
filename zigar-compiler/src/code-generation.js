@@ -1,6 +1,6 @@
-import { isReadOnly } from '../../zigar-runtime/src/member.js';
-import { findAllObjects, getFeaturesUsed } from '../../zigar-runtime/src/structure.js';
-import { MemberType, StructureType } from '../../zigar-runtime/src/types.js';
+import { isReadOnly } from '../zigar-runtime/src/member.js';
+import { findAllObjects, getFeaturesUsed } from '../zigar-runtime/src/structure.js';
+import { MemberType, StructureType } from '../zigar-runtime/src/types.js';
 
 export function generateCode(definition, params) {
   const { structures } = definition;

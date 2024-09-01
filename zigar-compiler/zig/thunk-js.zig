@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const types = @import("./types.zig");
 const expect = std.testing.expect;
 
-const Value = types.Value;
 const Memory = types.Memory;
 
 pub const CallResult = enum(u32) {
@@ -13,7 +12,7 @@ pub const CallResult = enum(u32) {
     disabled,
 };
 
-pub const ThunkConstructor = *const fn (*anyopaque, usize) callconv(.C) ?Value;
+pub const ThunkConstructor = *const fn (*anyopaque, usize) callconv(.C) usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch) {
     .wasm32, .wasm64 => wasm,
@@ -31,20 +30,19 @@ const native = struct {
 
     pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkConstructor {
         const ft_ns = struct {
-            fn tryConstruction(host: HostT, id: usize) !Value {
+            fn tryConstruction(host: HostT, id: usize) !usize {
                 const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
                 const instance = try closure_factory.alloc(caller, .{
                     .ptr = host.context,
                     .id = id,
                 });
                 const thunk = instance.function(FT);
-                const thunk_memory = Memory.from(thunk, false);
-                return try host.captureView(thunk_memory);
+                return @intFromPtr(thunk);
             }
 
-            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) ?Value {
+            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) usize {
                 const host = HostT.init(ptr);
-                return tryConstruction(host, id) catch |err| host.createMessage(err);
+                return tryConstruction(host, id) catch |_| 0;
             }
         };
         return ft_ns.construct;
@@ -95,22 +93,21 @@ const wasm = struct {
                 } else false;
             }
 
-            fn tryConstruction(host: HostT, id: usize) !Value {
+            fn tryConstruction(host: HostT, id: usize) !usize {
                 // try to use the preallocated thunks first; if they've been used up,
                 // ask the host to create a new instance of this module and get a new
                 // thunk from that
                 const thunk_ptr = alloc(id) orelse try host.allocateJsThunk(slot);
                 const thunk: *const FT = @ptrCast(thunk_ptr);
-                const thunk_memory = Memory.from(thunk, false);
-                return try host.captureView(thunk_memory);
+                return @intFromPtr(thunk);
             }
 
-            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) ?Value {
+            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) ?usize {
                 // try to use the preallocated thunks first; if they've been used up,
                 // ask the host to create a new instance of this module and get a new
                 // thunk from that
                 const host = HostT.init(ptr);
-                return tryConstruction(host, id) catch |err| host.createMessage(err);
+                return tryConstruction(host, id) catch |_| 0;
             }
         };
         // export these functions so they can be called from the JS side

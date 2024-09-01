@@ -1,14 +1,13 @@
-import { getMemoryResetter } from '../../memory.js';
-import { copyPointer, resetPointer } from '../../pointer.js';
-import { getChildVivificator, getPointerVisitor } from '../../struct.js';
-import { isErrorJSON } from '../../types.js';
-import { mixin } from '../class.js';
-import { NotInErrorSet } from '../error.js';
+import { mixin } from '../environment.js';
+import { NotInErrorSet } from '../errors.js';
 import { MemberType } from '../members/all.js';
+import { copyPointer, resetPointer } from '../pointer.js';
+import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
   CLASS, COPIER, POINTER_VISITOR, RESETTER,
   VIVIFICATOR
-} from '../symbol.js';
+} from '../symbols.js';
+import { isErrorJSON } from '../types.js';
 import { StructureType } from './all.js';
 
 export default mixin({
@@ -78,7 +77,7 @@ export default mixin({
     const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
     const instanceDescriptors = {
       '$': { get, set: initializer },
-      [RESETTER]: { value: getMemoryResetter(valueBitOffset / 8, valueByteSize) },
+      [RESETTER]: this.getResetterDescriptor(valueBitOffset / 8, valueByteSize),  // from mixin "features/data-copying"
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
       [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     };

@@ -1,16 +1,16 @@
-import { InvalidInitializer, NotOnByteBoundary } from '../../error.js';
-import { getSelf } from '../../object.js';
-import { always, copyPointer } from '../../pointer.js';
+import { mixin } from '../environment.js';
+import { InvalidInitializer, NotOnByteBoundary } from '../errors.js';
+import { MemberType } from '../members/all.js';
+import { getSelf } from '../object.js';
+import { always, copyPointer } from '../pointer.js';
 import {
   handleError
-} from '../../special.js';
+} from '../special.js';
 import {
   ALIGN, COPIER, ENTRIES_GETTER, MEMORY, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, TUPLE, TYPE,
   VIVIFICATOR
-} from '../../symbol.js';
-import { getVectorEntries, getVectorIterator } from '../../vector.js';
-import { mixin } from '../class.js';
-import { MemberType } from '../members/all.js';
+} from '../symbols.js';
+import { getVectorEntries, getVectorIterator } from '../vector.js';
 import { StructureType } from './all.js';
 
 export default mixin({

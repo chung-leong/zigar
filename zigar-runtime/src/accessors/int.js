@@ -1,4 +1,4 @@
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { MemberType } from '../members/all.js';
 
 // handle non-standard ints 32-bit or smaller

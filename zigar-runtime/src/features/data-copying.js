@@ -1,6 +1,5 @@
 import { mixin } from '../environment.js';
-import { MEMORY, MEMORY_RESTORER } from './symbol.js';
-
+import { MEMORY, MEMORY_RESTORER } from '../symbols.js';
 
 export default mixin({
   getCopierDescriptor(size, multiple) {
@@ -13,6 +12,17 @@ export default mixin({
       const src = target[MEMORY];
       const dest = this[MEMORY];
       copy(dest, src);
+    };
+    return { value };
+  },
+  getResetterDescriptor(offset, size) {
+    const reset = getResetFunction(size);
+    const value = function() {
+      if (process.env.TARGET === 'wasm') {
+        this[MEMORY_RESTORER]?.();
+      }
+      const dest = this[MEMORY];
+      reset(dest, offset, size);
     };
     return { value };
   },
@@ -125,17 +135,6 @@ function copy32(dest, src) {
   dest.setInt32(28, src.getInt32(28, true), true);
 }
 
-export function getMemoryResetter(offset, size) {
-  const reset = getResetFunction(size);
-  return function() {
-    /* WASM-ONLY */
-    this[MEMORY_RESTORER]?.();
-    /* WASM-ONLY-END */
-    const dest = this[MEMORY];
-    reset(dest, offset, size);
-  };
-}
-
 export function getResetFunction(size) {
   const resetter = resetters[size];
   if (resetter) {
@@ -214,13 +213,4 @@ function reset32(dest, offset) {
   dest.setInt32(offset + 20, 0, true);
   dest.setInt32(offset + 24, 0, true);
   dest.setInt32(offset + 28, 0, true);
-}
-
-export function showBits(object) {
-  const bitObj = {};
-  for (const [ name, value ] of Object.entries(object)) {
-    const s = value.toString(2);
-    bitObj[name] = s.padStart(Math.ceil(s.length / 8) * 8, '0');
-  }
-  console.log(bitObj);
 }

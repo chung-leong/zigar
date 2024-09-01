@@ -95,3 +95,55 @@ export function decodeBase64(str) {
 
 const decoders = {};
 const encoders = {};
+
+export function findSortedIndex(array, value, cb) {
+  let low = 0;
+  let high = array.length;
+  if (high === 0) {
+    return 0;
+  }
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const value2 = cb(array[mid]);
+    if (value2 <= value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return high;
+}
+
+export function isMisaligned(address, align) {
+  if (align === undefined) {
+    return false;
+  }
+  if (typeof(address) === 'bigint') {
+    address = Number(address & 0xFFFFFFFFn);
+  }
+  const mask = align - 1;
+  return (address & mask) !== 0;
+}
+
+export function alignForward(address, align) {
+  let mask;
+  if (typeof(address) === 'bigint') {
+    align = BigInt(align);
+    mask = ~(align - 1n);
+  } else {
+    mask = ~(align - 1);
+  }
+  return (address & mask) + align;
+}
+
+export function isInvalidAddress(address) {
+  if (typeof(address) === 'bigint') {
+    return address === 0xaaaaaaaaaaaaaaaan;
+  } else {
+    return address === 0xaaaaaaaa;
+  }
+}
+
+export function add(arg1, arg2) {
+  return arg1 + ((typeof(arg1) === 'bigint') ? BigInt(arg2) : arg2);
+}

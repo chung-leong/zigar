@@ -1,5 +1,5 @@
 
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
 import { MemberType } from '../members/all.js';
 
 // handle unaligned ints and floats by copying the bits into a

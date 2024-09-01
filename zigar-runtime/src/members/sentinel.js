@@ -1,7 +1,7 @@
-import { MisplacedSentinel, MissingSentinel } from '../../error.js';
-import { MEMORY } from '../../symbol.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { MisplacedSentinel, MissingSentinel } from '../errors.js';
 import { StructureType } from '../structures/all.js';
+import { MEMORY } from '../symbols.js';
 
 export default mixin({
   getSentinel(structure) {

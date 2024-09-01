@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
-import { createEnvironment } from '../../zigar-runtime/src/index.js';
+import { createEnvironment } from '../zigar-runtime/src/index.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
 import { findSourceFile, getAbsoluteMapping } from './configuration.js';

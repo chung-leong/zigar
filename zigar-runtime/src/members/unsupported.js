@@ -1,5 +1,5 @@
-import { Unsupported } from '../../error.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { Unsupported } from '../errors.js';
 import { MemberType } from './all.js';
 
 export default mixin({

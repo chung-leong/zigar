@@ -1,5 +1,5 @@
-import { Overflow } from '../../error.js';
-import { mixin } from '../class.js';
+import { mixin } from '../environment.js';
+import { Overflow } from '../errors.js';
 
 export default mixin({
   imports: {

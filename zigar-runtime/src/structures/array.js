@@ -1,22 +1,21 @@
-import { getTypedArrayClass } from '../../data-view.js';
+import { mixin } from '../environment.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer, throwReadOnly } from '../errors.js';
+import { MemberType } from '../members/all.js';
 import {
   makeReadOnly
-} from '../../object.js';
-import { always, copyPointer, getProxy } from '../../pointer.js';
+} from '../object.js';
+import { always, copyPointer, getProxy } from '../pointer.js';
 import {
   handleError
-} from '../../special.js';
-import { mixin } from '../class.js';
-import { ArrayLengthMismatch, InvalidArrayInitializer, throwReadOnly } from '../error.js';
-import { MemberType } from '../members/all.js';
+} from '../special.js';
 import {
   ARRAY,
   CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
   MEMORY, PARENT, POINTER_VISITOR, PROXY,
   SLOTS,
   VIVIFICATOR, WRITE_DISABLER
-} from '../symbol.js';
-import { StructureType } from './all.js';
+} from '../symbols.js';
+import { StructureType, getTypedArrayClass } from './all.js';
 
 export default mixin({
   defineArray(structure) {

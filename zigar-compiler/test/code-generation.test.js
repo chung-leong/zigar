@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbol.js';
+import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
 import { MemberType, StructureType, hasStandardFloatSize } from '../../zigar-runtime/src/types.js';
 import { generateCode } from '../src/code-generation.js';
 
