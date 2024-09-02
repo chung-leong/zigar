@@ -1,8 +1,8 @@
 import { mixin } from '../environment.js';
 import {
   ADDRESS_SETTER, COPIER, FIXED,
-  LENGTH_SETTER, MEMORY, MEMORY_RESTORER, SLOTS,
-  TARGET_GETTER
+  LENGTH_SETTER, MEMORY, RESTORER, SLOTS,
+  TARGET
 } from '../symbols.js';
 
 export default mixin({
@@ -18,14 +18,13 @@ export default mixin({
     const pointers = [];
     for (const { object, reloc } of this.variables) {
       this.linkObject(object, reloc, writeBack);
-      const getter = object[TARGET_GETTER];
-      if (getter && object[SLOTS][0]) {
+      if (TARGET in object && object[SLOTS][0]) {
         pointers.push(object);
       }
     }
     // save locations of pointer targets
     for (const pointer of pointers) {
-      const target = pointer[TARGET_GETTER]();
+      const target = pointer[TARGET];
       const address = this.getViewAddress(target[MEMORY]);
       pointer[ADDRESS_SETTER](address);
       pointer[LENGTH_SETTER]?.(target.length);
@@ -70,7 +69,7 @@ export default mixin({
       return;
     }
     /* WASM-ONLY */
-    object[MEMORY_RESTORER]?.();
+    object[RESTORER]?.();
     /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);

@@ -6,12 +6,17 @@ import {
 } from '../object.js';
 import { always, copyPointer, getProxy } from '../pointer.js';
 import {
-  ARRAY,
-  CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
-  MEMORY, PARENT, POINTER_VISITOR, PROXY,
+  CONST_TARGET, COPIER,
+  ENTRIES,
+  MEMORY, PARENT,
+  PROTECTOR,
+  PROXY,
+  SELF,
   SLOTS,
-  VIVIFICATOR, WRITE_DISABLER
+  VISITOR,
+  VIVIFICATOR
 } from '../symbols.js';
+import { defineProperties } from '../utils.js';
 import { StructureType, getTypedArrayClass } from './all.js';
 
 export default mixin({
@@ -33,14 +38,13 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    const { get, set } = this.getDescriptor(member);
     const hasStringProp = canBeString(member);
     const propApplier = this.createPropertyApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPIER](arg);
         if (hasPointer) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       } else {
         if (typeof(arg) === 'string' && hasStringProp) {
@@ -64,38 +68,38 @@ export default mixin({
         }
       }
     };
-    const finalizer = createArrayProxy;
+    const elementDescriptor = this.getDescriptor(member);
+    const finalizer = () => this.finalizeArrayInstance(elementDescriptor);
     const constructor = structure.constructor = this.createConstructor(structure, { initializer, finalizer });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
+    structure.typedArray = getTypedArrayClass(member);
     const hasObject = member.type === MemberType.Object;
     const instanceDescriptors = {
       $: { get: getProxy, set: initializer },
       length: { value: length },
-      get: { value: get },
-      set: { value: set },
       entries: { value: getArrayEntries },
       [Symbol.iterator]: { value: getArrayIterator },
-      [ENTRIES_GETTER]: { value: getArrayEntries },
+      [ENTRIES]: { get: getArrayEntries },
       [VIVIFICATOR]: hasObject && { value: this.getChildVivificator(structure) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-      [WRITE_DISABLER]: { value: makeArrayReadOnly },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+      [PROTECTOR]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => member.structure.constructor },
     };
     return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
-  }
+  },
+  finalizeArrayInstance({ get, set }) {
+    defineProperties(this, {
+      [PROXY]: { value: new Proxy(this, proxyHandlers) },
+      get: { value: get },
+      set: { value: set },
+    });
+    return proxy;
+  },
 });
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Array;
-}
-
-export function createArrayProxy() {
-  const proxy = new Proxy(this, proxyHandlers);
-  // hide the proxy so console wouldn't display a recursive structure
-  Object.defineProperty(this, PROXY, { value: proxy });
-  return proxy;
 }
 
 export function makeArrayReadOnly() {
@@ -105,7 +109,7 @@ export function makeArrayReadOnly() {
   const getReadOnly = function(index) {
     const element = get.call(this, index);
     if (element?.[CONST_TARGET] === null) {
-      element[WRITE_DISABLER]?.();
+      element[PROTECTOR]?.();
     }
     return element;
   };
@@ -150,7 +154,7 @@ export function getPointerVisitor(structure) {
       }
       const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATOR](i) : null);
       if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
+        child[VISITOR](cb, childOptions);
       }
     }
   };
@@ -188,23 +192,10 @@ const proxyHandlers = {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
       return array.get(index);
+    } else if (name === SELF) {
+      return array;
     } else {
-      switch (name) {
-        case 'get':
-          if (!array[ELEMENT_GETTER]) {
-            array[ELEMENT_GETTER] = array.get.bind(array);
-          }
-          return array[ELEMENT_GETTER];
-        case 'set':
-          if (!array[ELEMENT_SETTER]) {
-            array[ELEMENT_SETTER] = array.set.bind(array);
-          }
-          return array[ELEMENT_SETTER];
-        case ARRAY:
-          return array;
-        default:
-          return array[name];
-      }
+      return array[name];
     }
   },
   set(array, name, value) {
@@ -212,16 +203,7 @@ const proxyHandlers = {
     if (index !== 0 || index == name) {
       array.set(index, value);
     } else {
-      switch (name) {
-        case 'get':
-          array[ELEMENT_GETTER] = value;
-          break;
-        case 'set':
-          array[ELEMENT_SETTER] = value;
-          break;
-        default:
-          array[name] = value;
-      }
+      array[name] = value;
     }
     return true;
   },
@@ -230,16 +212,7 @@ const proxyHandlers = {
     if (index !== 0 || index == name) {
       return false;
     } else {
-      switch (name) {
-        case 'get':
-          delete array[ELEMENT_GETTER];
-          break;
-        case 'set':
-          delete array[ELEMENT_SETTER];
-          break;
-        default:
-          delete array[name];
-      }
+      delete array[name];
       return true;
     }
   },

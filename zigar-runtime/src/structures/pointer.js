@@ -8,12 +8,19 @@ import { getDescriptor, isValueExpected } from '../member.js';
 import { MemberType } from '../members/all.js';
 import { createConstructor, defineProperties } from '../object.js';
 import {
-  ADDRESS, ADDRESS_SETTER,
+  ADDRESS,
   CONST_PROXY, CONST_TARGET,
-  ENVIRONMENT, FIXED, GETTER,
-  LENGTH, LENGTH_SETTER, MAX_LENGTH, MEMORY, MEMORY_RESTORER, PARENT, POINTER, POINTER_VISITOR,
-  PROP_SETTERS, PROXY, SETTER, SIZE, SLOTS, TARGET_GETTER, TARGET_SETTER, TARGET_UPDATER, TYPE,
-  WRITE_DISABLER
+  ENVIRONMENT, FIXED,
+  LENGTH,
+  MAX_LENGTH, MEMORY,
+  PARENT,
+  PROTECTOR,
+  PROXY,
+  RESTORER,
+  SELF,
+  SETTERS,
+  SIZE, SLOTS, TARGET, TARGET_UPDATER, TYPE,
+  VISITOR
 } from '../symbols.js';
 import { StructureType } from './all.js';
 
@@ -58,13 +65,13 @@ export default mixin({
           : (sentinel?.isRequired)
             ? thisEnv.findSentinel(address, sentinel.bytes) + 1
             : 1;
-          if (address !== this[ADDRESS] || length !== this[LENGTH]) {
+          if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
             const Target = targetStructure.constructor;
             const dv = thisEnv.findMemory(address, length, Target[SIZE]);
             const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
             this[SLOTS][0] = newTarget;
-            this[ADDRESS] = address;
-            this[LENGTH] = length;
+            this[LAST_ADDRESS] = address;
+            this[LAST_LENGTH] = length;
             if (hasLengthInMemory) {
               this[MAX_LENGTH] = undefined;
             }
@@ -78,16 +85,16 @@ export default mixin({
     };
     const setAddress = function(address) {
       setAddressInMemory.call(this, address);
-      this[ADDRESS] = address;
+      this[LAST_ADDRESS] = address;
     };
     const setLength = (hasLengthInMemory || sentinel)
     ? function(length) {
         setLengthInMemory?.call?.(this, length);
-        this[LENGTH] = length;
+        this[LAST_LENGTH] = length;
       }
     : null;
     const getTargetObject = function() {
-      const pointer = this[POINTER] ?? this;
+      const pointer = this[SELF] ?? this;
       const target = updateTarget.call(pointer, false);
       if (!target) {
         if (type === StructureType.CPointer) {
@@ -101,7 +108,7 @@ export default mixin({
       if (arg === undefined) {
         return;
       }
-      const pointer = this[POINTER] ?? this;
+      const pointer = this[SELF] ?? this;
       // the target sits in fixed memory--apply the change immediately
       if (arg) {
         if (arg[MEMORY][FIXED]) {
@@ -129,13 +136,13 @@ export default mixin({
     const getTarget = isValueExpected(targetStructure)
     ? function() {
         const target = getTargetObject.call(this);
-        return target[GETTER]();
+        return target[SELF];
       }
     : getTargetObject;
     const setTarget = !isConst
     ? function(value) {
         const target = getTargetObject.call(this);
-        return target[SETTER](value);
+        return target[SELF] = value;
       }
     : throwReadOnly;
     const getTargetLength = function() {
@@ -233,7 +240,7 @@ export default mixin({
       }
       if (arg instanceof Target) {
         /* WASM-ONLY */
-        arg[MEMORY_RESTORER]?.();
+        arg[RESTORER]?.();
         /* WASM-ONLY-END */
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
@@ -254,7 +261,7 @@ export default mixin({
           if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
             let single = true;
             // make sure the object doesn't contain special props for the slice
-            const propSetters = Target.prototype[PROP_SETTERS];
+            const propSetters = Target.prototype[SETTERS];
             for (const key of Object.keys(arg)) {
               const set = propSetters[key];
               if (set?.special) {
@@ -286,24 +293,24 @@ export default mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
       }
-      this[TARGET_SETTER](arg);
+      this[TARGET] = arg;
     };
     const getTargetPrimitive = (targetType === StructureType.Primitive)
     ? function(hint) {
-        const target = this[TARGET_GETTER]();
+        const target = this[TARGET];
         return target[Symbol.toPrimitive](hint);
       }
     : null;
     const getSliceOf = (targetType === StructureType.Slice)
     ? function(begin, end) {
-        const target = this[TARGET_GETTER]();
+        const target = this[TARGET];
         const newTarget = target.slice(begin, end);
         return new constructor(newTarget);
       }
     : null;
     const getSubarrayOf = (targetType === StructureType.Slice)
     ? function(begin, end, options) {
-        const target = this[TARGET_GETTER]();
+        const target = this[TARGET];
         const newTarget = target.subarray(begin, end, options);
         return new constructor(newTarget);
       }
@@ -317,15 +324,14 @@ export default mixin({
       slice: getSliceOf && { value: getSliceOf },
       subarray: getSubarrayOf && { value: getSubarrayOf },
       [Symbol.toPrimitive]: getTargetPrimitive && { value: getTargetPrimitive },
-      [TARGET_GETTER]: { value: getTargetObject },
-      [TARGET_SETTER]: { value: setTargetObject },
+      [TARGET]: { get: getTargetObject, set: setTargetObject },
       [TARGET_UPDATER]: { value: updateTarget },
-      [ADDRESS_SETTER]: { value: setAddress },
-      [LENGTH_SETTER]: setLength && { value: setLength },
-      [POINTER_VISITOR]: { value: visitPointer },
-      [WRITE_DISABLER]: { value: makePointerReadOnly },
-      [ADDRESS]: { value: undefined, writable: true },
-      [LENGTH]: setLength && { value: undefined, writable: true },
+      [ADDRESS]: { value: setAddress },
+      [LENGTH]: setLength && { value: setLength },
+      [VISITOR]: { value: visitPointer },
+      [PROTECTOR]: { value: makePointerReadOnly },
+      [LAST_ADDRESS]: { value: undefined, writable: true },
+      [LAST_LENGTH]: setLength && { value: undefined, writable: true },
     };
     const staticDescriptors = {
       child: { get: () => targetStructure.constructor },
@@ -348,7 +354,7 @@ export function isNeededByStructure(structure) {
 }
 
 function makePointerReadOnly() {
-  const pointer = this[POINTER];
+  const pointer = this[SELF];
   const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
   descriptor.set = throwReadOnly;
   Object.defineProperty(pointer, '$', descriptor);
@@ -356,7 +362,7 @@ function makePointerReadOnly() {
 }
 
 function deleteTarget() {
-  const target = this[TARGET_GETTER]();
+  const target = this[TARGET];
   target?.delete();
 }
 
@@ -376,13 +382,11 @@ export function resetPointer({ isActive }) {
 export function disablePointer() {
   const throwError = () => { throw new InaccessiblePointer() };
   const disabledProp = { get: throwError, set: throwError };
-  const disabledFunc = { value: throwError };
-  defineProperties(this[POINTER], {
+  defineProperties(this[SELF], {
     '*': disabledProp,
     '$': disabledProp,
-    [GETTER]: disabledFunc,
-    [SETTER]: disabledFunc,
-    [TARGET_GETTER]: disabledFunc,
+    [SELF]: disabledProp,
+    [TARGET]: disabledProp,
   });
 }
 
@@ -422,12 +426,12 @@ function getConstProxy(target) {
 
 const proxyHandlers = {
   get(pointer, name) {
-    if (name === POINTER) {
+    if (name === SELF) {
       return pointer;
     } else if (name in pointer) {
       return pointer[name];
     } else {
-      const target = pointer[TARGET_GETTER]();
+      const target = pointer[TARGET];
       return target[name];
     }
   },
@@ -435,7 +439,7 @@ const proxyHandlers = {
     if (name in pointer) {
       pointer[name] = value;
     } else {
-      const target = pointer[TARGET_GETTER]();
+      const target = pointer[TARGET];
       target[name] = value;
     }
     return true;
@@ -444,7 +448,7 @@ const proxyHandlers = {
     if (name in pointer) {
       delete pointer[name];
     } else {
-      const target = pointer[TARGET_GETTER]();
+      const target = pointer[TARGET];
       delete target[name];
     }
     return true;
@@ -453,7 +457,7 @@ const proxyHandlers = {
     if (name in pointer) {
       return true;
     } else {
-      const target = pointer[TARGET_GETTER]();
+      const target = pointer[TARGET];
       return name in target;
     }
   },
@@ -472,7 +476,7 @@ const constTargetHandlers = {
     }
   },
   set(target, name, value) {
-    const ptr = target[POINTER];
+    const ptr = target[SELF];
     if (ptr && !(name in ptr)) {
       target[name] = value;
     } else {

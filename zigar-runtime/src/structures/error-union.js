@@ -4,7 +4,9 @@ import { MemberType } from '../members/all.js';
 import { copyPointer, resetPointer } from '../pointer.js';
 import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
-  CLASS, COPIER, POINTER_VISITOR, RESETTER,
+  CLASS, COPIER,
+  RESETTER,
+  VISITOR,
   VIVIFICATOR
 } from '../symbols.js';
 import { isErrorJSON } from '../types.js';
@@ -35,7 +37,7 @@ export default mixin({
     };
     const clearValue = function() {
       this[RESETTER]();
-      this[POINTER_VISITOR]?.(resetPointer);
+      this[VISITOR]?.(resetPointer);
     };
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const propApplier = this.createPropertyApplier(structure);
@@ -44,7 +46,7 @@ export default mixin({
         this[COPIER](arg);
         if (hasPointer) {
           if (isChildActive.call(this)) {
-            this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+            this[VISITOR](copyPointer, { vivificate: true, source: arg });
           }
         }
       } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
@@ -79,7 +81,7 @@ export default mixin({
       '$': { get, set: initializer },
       [RESETTER]: this.getResetterDescriptor(valueBitOffset / 8, valueByteSize),  // from mixin "features/data-copying"
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     };
     const staticDescriptors = {};
     return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);

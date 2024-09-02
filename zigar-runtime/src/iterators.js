@@ -1,3 +1,5 @@
+import { SELF } from "./symbols";
+
 export function getStructEntries(options) {
   return {
     [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
@@ -41,7 +43,7 @@ export function getStructEntriesIterator(options) {
 }
 
 export function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
+  const self = this[SELF] ?? this;
   const length = this.length;
   let index = 0;
   return {
@@ -60,7 +62,7 @@ export function getArrayIterator() {
 }
 
 export function getArrayEntriesIterator(options) {
-  const self = this[ARRAY] ?? this;
+  const self = this[SELF] ?? this;
   const length = this.length;
   let index = 0;
   return {

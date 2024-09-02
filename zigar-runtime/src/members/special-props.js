@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { MEMORY, MEMORY_RESTORER } from '../symbols.js';
+import { MEMORY, RESTORER } from '../symbols.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
@@ -9,7 +9,7 @@ export default mixin({
     const dataView = markAsSpecial({
       get() {
         if (process.env.TARGET === 'wasm') {
-          this[MEMORY_RESTORER]();
+          this[RESTORER]();
         }
         return this[MEMORY];
       },

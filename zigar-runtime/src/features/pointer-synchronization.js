@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { SELF } from '../symbols.js';
 
 export default mixin({
   updatePointerAddresses(args) {
@@ -10,7 +11,7 @@ export default mixin({
     const callback = function({ isActive }) {
       if (isActive(this)) {
         // bypass proxy
-        const pointer = this[POINTER];
+        const pointer = this[SELF];
         if (!pointerMap.get(pointer)) {
           const target = pointer[SLOTS][0];
           if (target) {
@@ -32,13 +33,13 @@ export default mixin({
                 bufferMap.set(dv.buffer, target);
               }
               // scan pointers in target
-              target[POINTER_VISITOR]?.(callback);
+              target[VISITOR]?.(callback);
             }
           }
         }
       }
     };
-    args[POINTER_VISITOR](callback);
+    args[VISITOR](callback);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -60,7 +61,7 @@ export default mixin({
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER] ?? this;
+      const pointer = this[SELF] ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;
@@ -69,14 +70,14 @@ export default mixin({
         ? pointer[TARGET_UPDATER](true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target (which could have been altered)
-        currentTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        currentTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         if (newTarget !== currentTarget) {
           // acquire targets of pointers in new target
-          newTarget?.[POINTER_VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+          newTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
         }
       }
     }
-    args[POINTER_VISITOR](callback, { vivificate: true });
+    args[VISITOR](callback, { vivificate: true });
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];

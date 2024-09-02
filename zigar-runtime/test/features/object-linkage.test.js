@@ -7,8 +7,11 @@ import ObjectLinkage from '../../src/features/object-linkage.js';
 import ViewManagement from '../../src/features/view-management.js';
 import StructureAll from '../../src/structures/all.js';
 import {
-  ADDRESS, ADDRESS_SETTER, COPIER, FIXED, LENGTH, LENGTH_SETTER, MEMORY, MEMORY_RESTORER, SLOTS,
-  TARGET_GETTER,
+  ADDRESS, COPIER, FIXED,
+  LAST_ADDRESS,
+  LAST_LENGTH,
+  MEMORY, RESTORER, SLOTS,
+  TARGET
 } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
@@ -65,30 +68,30 @@ describe('Feature: object-linkage', function() {
       };
       defineProperties(Test.prototype, {
         [COPIER]: env.getCopierDescriptor(32),
-        [TARGET_GETTER]: {
-          value: function() {
+        [TARGET]: {
+          get: function() {
             return {
               [MEMORY]: new DataView(new ArrayBuffer(32)),
               length: 4,
             };
           },
         },
-        [ADDRESS_SETTER]: {
-          value: function(address) {
-            object[ADDRESS] = address;
+        [ADDRESS]: {
+          set: function(address) {
+            object[LAST_ADDRESS] = address;
           },
         },
-        [LENGTH_SETTER]: {
+        [LENGTH]: {
           value: function(length) {
-            object[LENGTH] = length;
+            object[LAST_LENGTH] = length;
           },
         },
       });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       env.variables.push({ object, reloc: 128 });
       env.linkVariables(false);
-      expect(object[ADDRESS]).to.equal(0x4000);
-      expect(object[LENGTH]).to.equal(4);
+      expect(object[LAST_ADDRESS]).to.equal(0x4000);
+      expect(object[LAST_LENGTH]).to.equal(4);
     });
   })
   describe('linkObject', function() {
@@ -203,7 +206,7 @@ describe('Feature: object-linkage', function() {
       };
       defineProperties(Test.prototype, {
         [COPIER]: env.getCopierDescriptor(16),
-        [MEMORY_RESTORER]: {
+        [RESTORER]: {
           value: function() {},
         }
       });
@@ -235,7 +238,7 @@ describe('Feature: object-linkage', function() {
       };
       defineProperties(Test.prototype, {
         [COPIER]: env.getCopierDescriptor(16),
-        [MEMORY_RESTORER]: {
+        [RESTORER]: {
           value: function() {},
         }
       });

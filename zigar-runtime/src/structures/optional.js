@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import { MemberType } from '../members/all.js';
 import { copyPointer, resetPointer } from '../pointer.js';
 import { getChildVivificator, getPointerVisitor } from '../struct.js';
-import { COPIER, FIXED, MEMORY, POINTER_VISITOR, RESETTER, VIVIFICATOR } from '../symbols.js';
+import { COPIER, FIXED, MEMORY, RESETTER, VISITOR, VIVIFICATOR } from '../symbols.js';
 import { StructureType } from './all.js';
 
 export default mixin({
@@ -22,7 +22,7 @@ export default mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[POINTER_VISITOR]?.(resetPointer);
+        this[VISITOR]?.(resetPointer);
         return null;
       }
     };
@@ -36,14 +36,14 @@ export default mixin({
         if (hasPointer) {
           // don't bother copying pointers when it's empty
           if (isChildActive.call(arg)) {
-            this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+            this[VISITOR](copyPointer, { vivificate: true, source: arg });
           }
         }
       } else if (arg === null) {
         setPresent.call(this, 0);
         this[RESETTER]?.();
         // clear references so objects can be garbage-collected
-        this[POINTER_VISITOR]?.(resetPointer);
+        this[VISITOR]?.(resetPointer);
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
@@ -63,7 +63,7 @@ export default mixin({
       // no need to reset the value when it's a pointer, since setPresent() would null out memory used by the pointer
       [RESETTER]: !hasPointer && this.getResetterDescriptor(valueBitOffset / 8, valueByteSize),  // from mixin "features/data-copying"
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
     };
     const staticDescriptors = {};
     return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);

@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPIER, ENVIRONMENT, FIXED, MEMORY, WRITE_DISABLER } from '../symbols.js';
+import { COPIER, ENVIRONMENT, FIXED, MEMORY, PROTECTOR } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
@@ -168,7 +168,7 @@ export default mixin({
       this.updatePointerTargets(object);
     }
     if (copy) {
-      object[WRITE_DISABLER]();
+      object[PROTECTOR]();
     }
     return object;
   },

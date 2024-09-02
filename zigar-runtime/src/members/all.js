@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { GETTER, SETTER, SLOTS } from '../symbols.js';
+import { SELF, SLOTS } from '../symbols.js';
 
 export default mixin({
   getDescriptor(member) {
@@ -69,7 +69,7 @@ export function bindSlot(slot, { get, set }) {
 
 export function getValue(slot) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object[GETTER]();
+  return object[SELF];
 }
 
 export function getObject(slot) {
@@ -79,6 +79,6 @@ export function getObject(slot) {
 
 export function setValue(slot, value) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object[SETTER](value);
+  object[SELF] = value;
 }
 

@@ -12,8 +12,13 @@ import {
 } from '../special.js';
 import { getChildVivificator, getIteratorIterator, getPointerVisitor } from '../struct.js';
 import {
-  COPIER, ENTRIES_GETTER, NAME, POINTER_VISITOR, PROPS, PROP_GETTERS, PROP_SETTERS,
+  COPIER, ENTRIES,
+  GETTERS,
+  NAME,
+  PROPS,
+  SETTERS,
   TAG,
+  VISITOR,
   VIVIFICATOR
 } from '../symbols.js';
 import { StructureType } from './all.js';
@@ -70,7 +75,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[POINTER_VISITOR]?.(resetPointer);
+          this[VISITOR]?.(resetPointer);
           return getValue.call(this);
         }
       : getValue;
@@ -87,7 +92,7 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[POINTER_VISITOR]?.(resetPointer);
+          this[VISITOR]?.(resetPointer);
         }
       : setValue;
       memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
@@ -102,7 +107,7 @@ export default mixin({
         /* WASM-ONLY-END */
         this[COPIER](arg);
         if (hasPointer) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
@@ -128,7 +133,7 @@ export default mixin({
     const modifier = (hasInaccessiblePointer && !this.comptime)
     ? function() {
         // make pointer access throw
-        this[POINTER_VISITOR](disablePointer, { vivificate: true });
+        this[VISITOR](disablePointer, { vivificate: true });
       }
     : undefined;
     const constructor = structure.constructor = this.createConstructor(structure, { modifier, initializer });
@@ -168,11 +173,11 @@ export default mixin({
       ...memberDescriptors,
       [Symbol.iterator]: { value: getIterator },
       [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
-      [ENTRIES_GETTER]: { value: getUnionEntries },
+      [ENTRIES: { value: getUnionEntries },
       [TAG]: isTagged && { get: getSelector, configurable: true },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [POINTER_VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-      [PROP_GETTERS]: { value: memberValueGetters },
+      [VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
+      [GETTERS]: { value: memberValueGetters },
       [PROPS]: fieldDescriptor,
     };
     const staticDescriptors = {
@@ -180,7 +185,7 @@ export default mixin({
     };
     this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
     // replace regular setters with ones that change the active field
-    const setters = constructor.prototype[PROP_SETTERS];
+    const setters = constructor.prototype[SETTERS];
     for (const [ name, init ] of Object.entries(memberInitializers)) {
       if (init) {
         setters[name] = init;
@@ -216,7 +221,7 @@ export function getUnionIterator(options) {
 export function getUnionEntriesIterator(options) {
   const self = this;
   const props = this[PROPS];
-  const getters = this[PROP_GETTERS];
+  const getters = this[GETTERS];
   let index = 0;
   return {
     next() {

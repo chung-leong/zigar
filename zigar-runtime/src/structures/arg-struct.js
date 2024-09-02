@@ -3,7 +3,10 @@ import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
 import { MemberType } from '../members/all.js';
 import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
-  ALIGN, COPIER, MEMORY, MEMORY_RESTORER, POINTER_VISITOR, SIZE, SLOTS, VIVIFICATOR
+  ALIGN, COPIER, MEMORY, RESTORER,
+  SIZE, SLOTS,
+  VISITOR,
+  VIVIFICATOR
 } from '../symbols.js';
 import { StructureType } from './all.js';
 
@@ -63,8 +66,8 @@ export default mixin({
       ...memberDescriptors,
       [COPIER]: this.getCopierDescriptor(byteSize),
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
-      [MEMORY_RESTORER]: process.env.TARGET === 'wasm' && { value: this.getMemoryRestorer(null) },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
+      [RESTORER]: process.env.TARGET === 'wasm' && { value: this.getMemoryRestorer(null) },
     });
     defineProperties(constructor, {
       [ALIGN]: { value: align },

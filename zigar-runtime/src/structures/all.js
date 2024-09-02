@@ -5,8 +5,17 @@ import {
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import { isReadOnly, MemberType } from '../members/all.js';
 import {
-  ALIGN, ALL_KEYS, CACHE, COMPAT, CONST_TARGET, COPIER, ENTRIES_GETTER, GETTER, MEMORY,
-  POINTER_VISITOR, PROP_SETTERS, PROPS, SETTER, SIZE, SLOTS, TYPE, VARIANTS, WRITE_DISABLER,
+  ALIGN,
+  CACHE, COMPAT, CONST_TARGET, COPIER,
+  KEYS,
+  MEMORY,
+  PROPS,
+  PROTECTOR,
+  SELF,
+  SETTER,
+  SETTERS,
+  SIZE, SLOTS, TYPE, VARIANTS,
+  VISITOR
 } from '../symbols.js';
 import { defineProperties, defineProperty } from '../utils.js';
 
@@ -36,16 +45,15 @@ export default mixin({
         }
       }
     }
-    const { get, set } = instanceDescriptors.$;
+    const { get, set } = ;
     instanceDescriptors = {
       delete: { value: this.createDestructor() },
       [Symbol.toStringTag]: { value: structure.name },
-      [ALL_KEYS]: { value: Object.keys(propSetters) },
-      [SETTER]: { value: set },
-      [GETTER]: { value: get },
+      [KEYS]: { value: Object.keys(propSetters) },
+      [SELF]: instanceDescriptors.$,
       [COPIER]: this.getCopierDescriptor(byteSize, type === StructureType.Slice), // from mixin "memory/copying"
-      [WRITE_DISABLER]: { value: makeReadOnly },
-      [PROP_SETTERS]: { value: propSetters },
+      [PROTECTOR]: { value: makeReadOnly },
+      [SETTERS]: { value: propSetters },
       [CONST_TARGET]: { value: null },
       ...this.getSpecialMethodDescriptors?.(), // from mixin "members/special-method"
       ...this.getSpecialPropertyDescriptors?.(structure, handlers), // from mixin "members/special-props"
@@ -170,8 +178,8 @@ export default mixin({
     const { instance: { template } } = structure;
     return function(arg, fixed) {
       const argKeys = Object.keys(arg);
-      const propSetters = this[PROP_SETTERS];
-      const allKeys = this[ALL_KEYS];
+      const propSetters = this[SETTERS];
+      const allKeys = this[KEYS];
       // don't accept unknown props
       for (const key of argKeys) {
         if (!(key in propSetters)) {
@@ -218,7 +226,7 @@ export default mixin({
           if (template[MEMORY]) {
             this[COPIER](template);
           }
-          this[POINTER_VISITOR]?.(copyPointer, { vivificate: true, source: template });
+          this[VISITOR]?.(copyPointer, { vivificate: true, source: template });
         }
       }
       for (const key of argKeys) {
@@ -268,7 +276,7 @@ export default mixin({
       toJSON: this.getToJsonDescriptor?.(),
       ...staticDescriptors,
       [Symbol.iterator]: { value: getStructIterator },
-      [ENTRIES_GETTER]: { value: getStructEntries },
+      [ENTRIES]: { get: getStructEntries },
       // static variables are objects stored in the static template's slots
       [SLOTS]: template && { value: template[SLOTS] },
       // anyerror would have props already

@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getSelf } from '../object.js';
-import { COPIER, ENTRIES_GETTER, PROP_SETTERS } from '../symbols.js';
+import { COPIER, ENTRIES, SETTERS } from '../symbols.js';
 import { getTypedArrayClass } from './all.js';
 
 export default mixin({
@@ -43,7 +43,7 @@ export default mixin({
         }
         let i = 0;
         for (const value of arg) {
-          this[PROP_SETTERS][i++].call(this, value);
+          this[SETTERS][i++].call(this, value);
         }
       } else if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
@@ -60,7 +60,7 @@ export default mixin({
       length: { value: length },
       entries: { value: getVectorEntries },
       [Symbol.iterator]: { value: getVectorIterator },
-      [ENTRIES_GETTER]: { value: getVectorEntries },
+      [ENTRIES]: { get: getVectorEntries },
     };
     const staticDescriptors = {
       child: { get: () => elementStructure.constructor },

@@ -1,7 +1,9 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import {
-  COPIER, ENVIRONMENT, MEMORY, POINTER_VISITOR, WRITE_DISABLER
+  COPIER, ENVIRONMENT, MEMORY,
+  PROTECTOR,
+  VISITOR
 } from '../../src/symbols.js';
 
 import DataCopying from '../../src/features/data-copying.js';
@@ -314,7 +316,7 @@ describe('Feature: view-management', function() {
           recv = this;
           arg = dv;
           return {
-            [WRITE_DISABLER]: () => {},
+            [PROTECTOR]: () => {},
           };
         }
       };
@@ -329,8 +331,8 @@ describe('Feature: view-management', function() {
       const structure = {
         constructor: function(dv) {
           return {
-            [POINTER_VISITOR]: function(f) { visitor = f },
-            [WRITE_DISABLER]: () => {},
+            [VISITOR]: function(f) { visitor = f },
+            [PROTECTOR]: () => {},
           };
         },
         hasPointer: true,

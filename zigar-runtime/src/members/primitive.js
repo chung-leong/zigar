@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { adjustRangeError } from '../errors.js';
-import { MEMORY, MEMORY_RESTORER } from '../symbols.js';
+import { MEMORY, RESTORER } from '../symbols.js';
 
 export default mixin({
   getDescriptorBool(member) {
@@ -39,7 +39,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], offset, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORER]()) {
                 return getter.call(this[MEMORY], offset, littleEndian);
               } else {
                 throw err;
@@ -50,7 +50,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], offset, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORER]()) {
                 return setter.call(this[MEMORY], offset, value, littleEndian);
               } else {
                 throw err;
@@ -64,7 +64,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], index * byteSize, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORER]()) {
                 return getter.call(this[MEMORY], index * byteSize, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);
@@ -75,7 +75,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[MEMORY_RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORER]()) {
                 return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);

@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
-import { CLASS, GETTER, PROPS } from '../symbols.js';
+import { CLASS, PROPS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 import { getTypedArrayClass, StructureType } from './all.js';
 
@@ -57,14 +57,14 @@ export default mixin({
     };
     // items are inserted when static members get attached in static.js
     const constructor = structure.constructor = this.createConstructor(structure, { initializer, alternateCaster });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
+    structure.typedArray = getTypedArrayClass(member);
     const instanceDescriptors = {
       $: { get, set },
     };
     const staticDescriptors = {
       [CLASS]: { value: errorClass },
-      // the PROPS array is normally set in static.js; it needs to be set here for anyerror
-      // so we can add names to it as error sets are defined
+      // the PROPS array is normally set in finalizeStructure.js; we need to set it here
+      // for anyerror so we can add names as error sets are defined
       [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
     };
     return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
@@ -84,19 +84,16 @@ export default mixin({
     };
     return {
       get: (int.get.length === 0)
-      ? function getError(hint) {
+      ? function getError() {
           const value = int.get.call(this);
-          if (hint === 'number') {
-            return value;
-          }
           return findError(value);
         }
       : function getErrorElement(index) {
           const value = int.get.call(this, index);
-          return findError(value, false);
+          return findError(value);
         },
       set: (int.set.length === 1)
-      ? function setError(value, hint) {
+      ? function setError(value) {
           if (hint !== 'number') {
             const item = findError(value);
             value = Number(item);
@@ -104,7 +101,7 @@ export default mixin({
           int.set.call(this, value);
         }
       : function setError(index, value) {
-          const item = findError(value, false);
+          const item = findError(value);
           value = Number(item);
           int.set.call(this, index, value);
         },
@@ -114,7 +111,7 @@ export default mixin({
     // our Zig export code places error set instance into the static template, which we can't
     // use since all errors need to have the same parent class; here we get the error number
     // and create the actual error object if hasn't been created already for an earlier set
-    const number = es[GETTER]('number');
+    const number = Number(es);
     let error = this.currentGlobalSet[number];
     if (!error) {
       const errorClass = errorSet[CLASS];

@@ -7,7 +7,10 @@ import { MemberType } from '../members/all.js';
 import { getSelf } from '../object.js';
 import { always, copyPointer } from '../pointer.js';
 import {
-  ALIGN, COPIER, ENTRIES_GETTER, MEMORY, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, TUPLE, TYPE,
+  ALIGN, COPIER, ENTRIES,
+  MEMORY, PARENT,
+  PROPS, SIZE, SLOTS, TUPLE, TYPE,
+  VISITOR,
   VIVIFICATOR
 } from '../symbols.js';
 import { StructureType } from './all.js';
@@ -39,7 +42,7 @@ export default mixin({
       if (arg instanceof constructor) {
         this[COPIER](arg);
         if (hasPointer) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
         propApplier.call(this, arg);
@@ -75,9 +78,9 @@ export default mixin({
       ...memberDescriptors,
       [Symbol.iterator]: { value: getIterator },
       [Symbol.toPrimitive]: backingInt && { value: toPrimitive },
-      [ENTRIES_GETTER]: { value: isTuple ? getVectorEntries : getStructEntries },
+      [ENTRIES]: { get: isTuple ? getVectorEntries : getStructEntries },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this, true) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, always) },
       [PROPS]: { value: fieldMembers.map(m => m.name) },
     };
     const staticDescriptors = {
@@ -161,7 +164,7 @@ export function getPointerVisitor(structure, visitorOptions = {}) {
       }
       const child = this[SLOTS][slot] ?? (vivificate ? this[VIVIFICATOR](slot) : null);
       if (child) {
-        child[POINTER_VISITOR](cb, childOptions);
+        child[VISITOR](cb, childOptions);
       }
     }
   };

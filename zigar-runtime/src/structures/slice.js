@@ -10,7 +10,10 @@ import { MemberType } from '../members/all.js';
 import { createPropertyApplier } from '../object.js';
 import { copyPointer, getProxy } from '../pointer.js';
 import {
-  COPIER, ENTRIES_GETTER, LENGTH, MEMORY, POINTER_VISITOR, VIVIFICATOR, WRITE_DISABLER,
+  COPIER, ENTRIES,
+  LENGTH, MEMORY,
+  PROTECTOR,
+  VISITOR, VIVIFICATOR
 } from '../symbols.js';
 import { getTypedArrayClass, StructureType } from './all.js';
 
@@ -69,7 +72,7 @@ export default mixin({
         }
         this[COPIER](arg);
         if (hasPointer) {
-          this[POINTER_VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISITOR](copyPointer, { vivificate: true, source: arg });
         }
       } else if (typeof(arg) === 'string' && hasStringProp) {
         initializer.call(this, { string: arg }, fixed);
@@ -151,10 +154,10 @@ export default mixin({
       slice: { value: getSliceOf },
       subarray: { value: getSubarrayOf },
       [Symbol.iterator]: { value: getArrayIterator },
-      [ENTRIES_GETTER]: { value: getArrayEntries },
+      [ENTRIES]: { get: getArrayEntries },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this, true) },
-      [POINTER_VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-      [WRITE_DISABLER]: { value: makeArrayReadOnly },
+      [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+      [PROTECTOR]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => elementStructure.constructor },

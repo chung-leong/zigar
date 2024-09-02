@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { StructureType } from '../structures/all.js';
-import { ENTRIES_GETTER, TUPLE, TYPE } from '../symbols.js';
+import { TUPLE, TYPE } from '../symbols.js';
 
 export default mixin({
   getSpecialMethodDescriptors() {
@@ -23,7 +23,15 @@ const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
 function normalizeObject(object, forJSON) {
-  const error = (forJSON) ? 'return' : 'throw';
+  const handleError = (forJSON)
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
   const resultMap = new Map();
   const process = function(value) {
     // handle type (i.e. constructor) like a struct
@@ -48,13 +56,13 @@ function normalizeObject(object, forJSON) {
         case StructureType.TaggedUnion:
         case StructureType.BareUnion:
         case StructureType.ExternUnion:
-          entries = value[ENTRIES_GETTER]?.({ error });
+          entries = value[ENTRIES];
           result = value.constructor[TUPLE] ? [] : {};
           break;
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
-          entries = value[ENTRIES_GETTER]?.({ error });
+          entries = value[ENTRIES];
           result = [];
           break;
         case StructureType.SinglePointer:
@@ -68,13 +76,13 @@ function normalizeObject(object, forJSON) {
           }
           break;
         case StructureType.Enum:
-          result = handleError(() => String(value), { error });
+          result = handleError(() => String(value));
           break;
         case StructureType.Opaque:
           result = {};
           break;
         default:
-          result = handleError(() => value.$, { error });
+          result = handleError(() => value.$);
       }
       result = process(result);
       resultMap.set(value, result);
@@ -89,16 +97,4 @@ function normalizeObject(object, forJSON) {
   return process(object);
 }
 
-function handleError(cb, options = {}) {
-  const { error = 'throw' } = options;
-  try {
-    return cb();
-  } catch (err) {
-    if (error === 'return') {
-      return err;
-    } else {
-      throw err;
-    }
-  }
-}
 

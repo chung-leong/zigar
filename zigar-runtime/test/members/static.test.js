@@ -6,7 +6,7 @@ import Static, {
   isNeededByMember,
 } from '../../src/members/static.js';
 import { StructureType } from '../../src/structures/all.js';
-import { GETTER, SETTER, SLOTS } from '../../src/symbols.js';
+import { SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('MemberTest', [ All, Static ]);
 
@@ -36,8 +36,7 @@ describe('Member: static', function() {
       const object = {
         [SLOTS]: {
           1: {
-            [GETTER]: () => 124,
-            [SETTER]: v => value = v,
+            [SELF]: { get: () => 124, set: v => value = v },
           }
         }
       };

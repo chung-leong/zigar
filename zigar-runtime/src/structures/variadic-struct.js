@@ -5,8 +5,14 @@ import { getMemoryCopier } from '../memory.js';
 import { always } from '../pointer.js';
 import { getChildVivificator } from '../struct.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPIER, MEMORY, MEMORY_RESTORER, PARENT, POINTER_VISITOR, PRIMITIVE, SIZE,
-  SLOTS, VIVIFICATOR
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPIER, MEMORY,
+  PARENT,
+  PRIMITIVE,
+  RESTORER,
+  SIZE,
+  SLOTS,
+  VISITOR,
+  VIVIFICATOR
 } from '../symbols.js';
 import { alignForward } from '../utils.js';
 import { StructureType } from './all.js';
@@ -110,7 +116,7 @@ export default mixin({
         this[VIVIFICATOR](retvalSlot);
       }
       for (const child of Object.values(this[SLOTS])) {
-        child?.[POINTER_VISITOR]?.(cb, childOptions);
+        child?.[VISITOR]?.(cb, childOptions);
       }
     };
     const ArgAttributes = function(length) {
@@ -134,14 +140,14 @@ export default mixin({
       set: { value: setAttributes },
       [COPIER]: { value: getMemoryCopier(4, true) },
       /* WASM-ONLY */
-      [MEMORY_RESTORER]: { value: this.getMemoryRestorer(null) },
+      [RESTORER]: { value: this.getMemoryRestorer(null) },
       /* WASM-ONLY-END */
     });
     defineProperties(constructor.prototype, {
       ...memberDescriptors,
       [COPIER]: { value: getMemoryCopier(undefined, true) },
       [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
-      [POINTER_VISITOR]: { value: visitPointers },
+      [VISITOR]: { value: visitPointers },
     });
     defineProperties(constructor, {
       [SIZE]: { value: byteSize },
