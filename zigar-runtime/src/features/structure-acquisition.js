@@ -1,6 +1,9 @@
+import { StructureType } from '../../src/structures/all.js';
+import { CONST_TARGET, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { mixin } from '../environment.js';
+import { MemberType } from '../members/all.js';
 
-mixin({
+export default mixin({
   comptime: false,
   slots: {},
   structures: [],
@@ -88,7 +91,7 @@ mixin({
       bitSize: 1,
       byteSize: 1,
     });
-    this.finalizeShape(options);
+    this.defineStructure(options);
     const structure = this.beginStructure({
       type: StructureType.ArgStruct,
       name: 'ArgFactory',
@@ -111,15 +114,14 @@ mixin({
       slot: 0,
       structure: options,
     });
-    this.finalizeShape(structure);
-    return structure.constructor;
+    return this.defineStructure(structure);
   },
   acquireStructures(options) {
     const {
       omitFunctions = false,
       omitVariables = isElectron(),
     } = options;
-    resetGlobalErrorSet();
+    this.resetGlobalErrorSet();
     const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);

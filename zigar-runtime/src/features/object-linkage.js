@@ -1,4 +1,9 @@
-import { mixin } from "../environment";
+import { mixin } from '../environment.js';
+import {
+  ADDRESS_SETTER, COPIER, FIXED,
+  LENGTH_SETTER, MEMORY, MEMORY_RESTORER, SLOTS,
+  TARGET_GETTER
+} from '../symbols.js';
 
 export default mixin({
   variables: [],

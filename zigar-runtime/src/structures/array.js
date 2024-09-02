@@ -6,9 +6,6 @@ import {
 } from '../object.js';
 import { always, copyPointer, getProxy } from '../pointer.js';
 import {
-  handleError
-} from '../special.js';
-import {
   ARRAY,
   CONST_TARGET, COPIER, ELEMENT_GETTER, ELEMENT_SETTER, ENTRIES_GETTER,
   MEMORY, PARENT, POINTER_VISITOR, PROXY,
@@ -117,51 +114,6 @@ export function makeArrayReadOnly() {
 
 export function canBeString(member) {
   return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
-}
-
-export function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self.get(current);
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-export function getArrayEntriesIterator(options) {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, handleError(() => self.get(current), options) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-export function getArrayEntries(options) {
-  return {
-    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
-    length: this.length,
-  };
 }
 
 export function getChildVivificator(structure, env) {

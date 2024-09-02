@@ -1,16 +1,15 @@
 import { mixin } from '../environment.js';
 import { InvalidInitializer, NotOnByteBoundary } from '../errors.js';
+import {
+  getStructEntries, getStructIterator, getVectorEntries, getVectorEntriesIterator, getZigIterator
+} from '../iterators.js';
 import { MemberType } from '../members/all.js';
 import { getSelf } from '../object.js';
 import { always, copyPointer } from '../pointer.js';
 import {
-  handleError
-} from '../special.js';
-import {
   ALIGN, COPIER, ENTRIES_GETTER, MEMORY, PARENT, POINTER_VISITOR, PROPS, SIZE, SLOTS, TUPLE, TYPE,
   VIVIFICATOR
 } from '../symbols.js';
-import { getVectorEntries, getVectorIterator } from '../vector.js';
 import { StructureType } from './all.js';
 
 export default mixin({
@@ -65,9 +64,9 @@ export default mixin({
     ? parseInt(members[members.length - 1].name) + 1
     : 0;
     const getIterator = (isIterator)
-    ? getIteratorIterator
+    ? getZigIterator
     : (isTuple)
-      ? getVectorIterator
+      ? getVectorEntriesIterator
       : getStructIterator;
     const instanceDescriptors = {
       $: { get: getSelf, set: initializer },
@@ -99,48 +98,6 @@ export function isNeededByStructure(structure) {
     default:
       return false;
   }
-}
-
-export function getStructEntries(options) {
-  return {
-    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
-export function getIteratorIterator() {
-  const self = this;
-  return {
-    next() {
-      const value = self.next();
-      const done = value === null;
-      return { value, done };
-    },
-  };
-}
-
-export function getStructIterator(options) {
-  const entries = getStructEntries.call(this, options);
-  return entries[Symbol.iterator]();
-}
-
-export function getStructEntriesIterator(options) {
-  const self = this;
-  const props = this[PROPS];
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        value = [ current, handleError(() => self[current], options) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
 }
 
 export function getChildVivificator(structure, env) {

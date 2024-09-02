@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPIER, FIXED, MEMORY } from '../symbols.js';
+import { COPIER, ENVIRONMENT, FIXED, MEMORY, WRITE_DISABLER } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
@@ -172,6 +172,13 @@ export default mixin({
     }
     return object;
   },
+  allocateMemory(len, align = 0, fixed = false) {
+    if (fixed) {
+      return this.allocateFixedMemory(len, align);
+    } else {
+      return this.allocateRelocMemory(len, align);
+    }
+  },
   ...(process.env.TARGET === 'wasm' ? {
     allocateRelocMemory(len, align) {
       // alignment doesn't matter since memory always needs to be shadowed
@@ -195,53 +202,6 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return true;
-}
-
-export const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ExternStruct: 3,
-  PackedStruct: 4,
-  ArgStruct: 5,
-  VariadicStruct: 6,
-  ExternUnion: 7,
-  BareUnion: 8,
-  TaggedUnion: 9,
-  ErrorUnion: 10,
-  ErrorSet: 11,
-  Enum: 12,
-  Optional: 13,
-  SinglePointer: 14,
-  SlicePointer: 15,
-  MultiPointer: 16,
-  CPointer: 17,
-  Slice: 18,
-  Vector: 19,
-  Opaque: 20,
-  Function: 21,
-};
-const structureNames = Object.keys(StructureType);
-
-export function getStructureName(type) {
-  const name = structureNames[type];
-  if (!name) {
-    return;
-  }
-  return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
-}
-
-export function isValueExpected(structure) {
-  switch (structure?.type) {
-    case StructureType.Primitive:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-    case StructureType.Enum:
-    case StructureType.ErrorSet:
-      return true;
-    default:
-      return false;
-  }
 }
 
 function checkDataViewSize(dv, structure) {

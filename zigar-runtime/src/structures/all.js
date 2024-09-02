@@ -2,6 +2,7 @@ import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
 } from '../errors.js';
+import { getStructEntries, getStructIterator } from '../iterators.js';
 import { isReadOnly, MemberType } from '../members/all.js';
 import {
   ALIGN, ALL_KEYS, CACHE, COMPAT, CONST_TARGET, COPIER, ENTRIES_GETTER, GETTER, MEMORY,

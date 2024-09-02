@@ -7,13 +7,10 @@ import {
   getNumericAccessor,
   getTypedArrayClass,
   isTypedArray,
-  setDataView,
   useAllExtendedTypes
 } from '../src/data-view.js';
 import { Environment } from '../src/environment.js';
-import { getMemoryCopier } from '../src/memory.js';
-import { COPIER, MEMORY } from '../src/symbol.js';
-import { MemberType, StructureType, getIntRange } from '../src/types.js';
+import { MemberType, getIntRange } from '../src/types.js';
 
 describe('Data view functions', function() {
   beforeEach(function() {
@@ -99,22 +96,6 @@ describe('Data view functions', function() {
       };
       const f = getTypedArrayClass(member);
       expect(f).to.equal(Float32Array);
-    })
-  })
-  describe('setDataView', function() {
-    it('should assume element size of one when structure has no shape', function() {
-      const structure = {
-        type: StructureType.Slice,
-        name: 'Opaque',
-        byteSize: undefined,
-      };
-      const target = {
-        [MEMORY]: new DataView(new ArrayBuffer(16)),
-        [COPIER]: getMemoryCopier(16),
-        length: 16,
-      };
-      const dv = new DataView(new ArrayBuffer(16));
-      setDataView.call(target, dv, structure, false, false, {});
     })
   })
   describe('getBoolAccessor', function() {

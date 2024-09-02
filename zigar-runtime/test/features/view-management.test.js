@@ -1,16 +1,20 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
-import { MEMORY } from '../../src/symbols.js';
+import {
+  COPIER, ENVIRONMENT, MEMORY, POINTER_VISITOR, WRITE_DISABLER
+} from '../../src/symbols.js';
 
+import DataCopying from '../../src/features/data-copying.js';
 import ViewManagement, {
   isNeededByStructure,
 } from '../../src/features/view-management.js';
 import { MemberType } from '../../src/members/all.js';
 import { StructureType } from '../../src/structures/all.js';
+import { defineProperties } from '../../src/utils.js';
 
-const Env = defineClass('FeatureTest', [ ViewManagement ]);
+const Env = defineClass('FeatureTest', [ ViewManagement, DataCopying ]);
 
-describe('Feature: data-view', function() {
+describe('Feature: view-management', function() {
   describe('isNeededByStructure', function() {
     it('should return true', function() {
       expect(isNeededByStructure()).to.be.true;
@@ -255,6 +259,105 @@ describe('Feature: data-view', function() {
       expect(dv3).to.equal(dv2);
       const dv4 = env.obtainView(buffer, 4, 8);
       expect(dv4).to.equal(dv1);
+    })
+  })
+  describe('assignView', function() {
+    it('should assume element size of one when structure has no shape', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Opaque',
+        byteSize: undefined,
+      };
+      const target = {
+      };
+      defineProperties(target, {
+        [MEMORY]: { value: new DataView(new ArrayBuffer(16)) },
+        [COPIER]: env.getCopierDescriptor(16),
+        length: { value: 16 },
+      });
+      const dv = new DataView(new ArrayBuffer(16));
+      env.assignView(target, dv, structure, false, false, {});
+    })
+  })
+  describe('captureView', function() {
+    it('should allocate new buffer and copy data using copyBytes', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {
+        dv.setInt32(0, address, true);
+        dv.setInt32(4, len, true);
+      };
+      const dv = env.captureView(1234, 32, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.getInt32(0, true)).to.equal(1234);
+      expect(dv.getInt32(4, true)).to.equal(32);
+    })
+    it('should get view of memory using obtainFixedView', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.obtainFixedView = (address, len) => {
+        return { address, len };
+      };
+      const result = env.captureView(1234, 32, false);
+      expect(result).to.eql({ address: 1234, len: 32 });
+    })
+  })
+  describe('castView', function() {
+    it('should call constructor without the use of the new operator', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
+      let recv, arg;
+      const structure = {
+        constructor: function(dv) {
+          recv = this;
+          arg = dv;
+          return {
+            [WRITE_DISABLER]: () => {},
+          };
+        }
+      };
+      const object = env.castView(1234, 0, true, structure);
+      expect(recv).to.equal(ENVIRONMENT);
+    })
+    it('should try to create targets of pointers', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
+      let visitor;
+      const structure = {
+        constructor: function(dv) {
+          return {
+            [POINTER_VISITOR]: function(f) { visitor = f },
+            [WRITE_DISABLER]: () => {},
+          };
+        },
+        hasPointer: true,
+      };
+      const object = env.castView(1234, 8, true, structure);
+    })
+  })
+  describe('allocateMemory', function() {
+    it('should return a data view of a newly created array buffer', function() {
+      const env = new Environment();
+      env.getBufferAddress = () => 0x10000;
+      const dv = env.allocateMemory(32, 4);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(32);
+      expect(dv.byteOffset).to.equal(0);
+    })
+    it('should try to create a buffer in fixed memory', function() {
+      const env = new Environment();
+      env.allocateFixedMemory = (len, align) => {
+        const buffer = new ArrayBuffer(len);
+        buffer.align = align;
+        return new DataView(buffer);
+      }
+      const dv = env.allocateMemory(32, 4, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.byteLength).to.equal(32);
+      expect(dv.buffer.align).to.equal(4);
     })
   })
 })

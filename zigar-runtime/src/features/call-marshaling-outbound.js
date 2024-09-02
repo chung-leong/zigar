@@ -1,7 +1,8 @@
 import { mixin } from '../environment.js';
+import { StructureType } from '../structures/all.js';
 
 export default mixin({
-  context,
+  context: undefined,
   contextStack: [],
 
   startContext() {
@@ -13,7 +14,6 @@ export default mixin({
   endContext() {
     this.context = this.contextStack.pop();
   },
-
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       runThunk: { argType: 'iii', returnType: 'v' },
@@ -121,7 +121,7 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
-  // TODO
+  return structure.type === StructureType.Function;
 }
 
 export class CallContext {
