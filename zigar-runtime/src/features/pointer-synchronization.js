@@ -33,13 +33,13 @@ export default mixin({
                 bufferMap.set(dv.buffer, target);
               }
               // scan pointers in target
-              target[VISITOR]?.(callback);
+              target[VISIT]?.(callback);
             }
           }
         }
       }
     };
-    args[VISITOR](callback);
+    args[VISIT](callback);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -70,14 +70,14 @@ export default mixin({
         ? pointer[TARGET_UPDATER](true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target (which could have been altered)
-        currentTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+        currentTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
         if (newTarget !== currentTarget) {
           // acquire targets of pointers in new target
-          newTarget?.[VISITOR]?.(callback, { vivificate: true, isMutable: () => writable });
+          newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
         }
       }
     }
-    args[VISITOR](callback, { vivificate: true });
+    args[VISIT](callback, { vivificate: true });
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];

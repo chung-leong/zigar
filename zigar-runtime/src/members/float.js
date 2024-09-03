@@ -2,8 +2,8 @@ import { mixin } from '../environment.js';
 import { MemberType } from './all.js';
 
 export default mixin({
-  getDescriptorFloat(member) {
-    return this.getDescriptorUsing(member, this.getAccessor);
+  defineMemberFloat(member) {
+    return this.defineMemberUsing(member, this.getAccessor);
   },
 });
 

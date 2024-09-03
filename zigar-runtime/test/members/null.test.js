@@ -19,23 +19,23 @@ describe('Member: comptime', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorNull', function() {
+  describe('defineMemberNull', function() {
     it('should return descriptor for comptime', function() {
       const env = new Env();
       const member = {
         type: MemberType.Null,
       };
-      const { get } = env.getDescriptorNull(member);
+      const { get } = env.defineMemberNull(member);
       const object = {};
       expect(get.call(object)).to.null;
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Null,
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

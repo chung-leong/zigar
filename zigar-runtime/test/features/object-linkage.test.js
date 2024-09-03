@@ -7,10 +7,10 @@ import ObjectLinkage from '../../src/features/object-linkage.js';
 import ViewManagement from '../../src/features/view-management.js';
 import StructureAll from '../../src/structures/all.js';
 import {
-  ADDRESS, COPIER, FIXED,
+  ADDRESS, COPY, FIXED,
   LAST_ADDRESS,
   LAST_LENGTH,
-  MEMORY, RESTORER, SLOTS,
+  MEMORY, RESTORE, SLOTS,
   TARGET
 } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
@@ -35,7 +35,7 @@ describe('Feature: object-linkage', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(4),
+        [COPY]: env.defineCopier(4),
       });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
@@ -67,7 +67,7 @@ describe('Feature: object-linkage', function() {
         };
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(32),
+        [COPY]: env.defineCopier(32),
         [TARGET]: {
           get: function() {
             return {
@@ -109,7 +109,7 @@ describe('Feature: object-linkage', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(4),
+        [COPY]: env.defineCopier(4),
       });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
@@ -132,7 +132,7 @@ describe('Feature: object-linkage', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(4),
+        [COPY]: env.defineCopier(4),
       });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
@@ -152,7 +152,7 @@ describe('Feature: object-linkage', function() {
         return dv;
       }
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(4),
+        [COPY]: env.defineCopier(4),
       });
       const object = new Test(fixed(0x1000, 4));
       const dv = object[MEMORY];
@@ -178,7 +178,7 @@ describe('Feature: object-linkage', function() {
         }
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(4),
+        [COPY]: env.defineCopier(4),
       });
       const object = new Test(new DataView(new ArrayBuffer(32)));
       const dv = object[MEMORY];
@@ -205,8 +205,8 @@ describe('Feature: object-linkage', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(16),
-        [RESTORER]: {
+        [COPY]: env.defineCopier(16),
+        [RESTORE]: {
           value: function() {},
         }
       });
@@ -237,8 +237,8 @@ describe('Feature: object-linkage', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPIER]: env.getCopierDescriptor(16),
-        [RESTORER]: {
+        [COPY]: env.defineCopier(16),
+        [RESTORE]: {
           value: function() {},
         }
       });

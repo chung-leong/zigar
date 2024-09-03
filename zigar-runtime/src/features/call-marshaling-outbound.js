@@ -37,7 +37,7 @@ export default mixin({
     invokeThunkNow(thunkAddress, fnAddress, args) {
       try {
         this.startContext();
-        if (args[VISITOR]) {
+        if (args[VISIT]) {
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
@@ -51,7 +51,7 @@ export default mixin({
         : this.runThunk(thunkAddress, fnAddress, address);
         // create objects that pointers point to
         this.updateShadowTargets();
-        if (args[VISITOR]) {
+        if (args[VISIT]) {
           this.updatePointerTargets(args);
         }
         this.releaseShadows();
@@ -88,7 +88,7 @@ export default mixin({
     invokeThunk(thunkAddress, fnAddress, args) {
       // create an object where information concerning pointers can be stored
       this.startContext();
-      const hasPointers = args[VISITOR];
+      const hasPointers = args[VISIT];
       const attrs = args[ATTRIBUTES];
       if (hasPointers) {
         // copy addresses of garbage-collectible objects into memory

@@ -1,29 +1,22 @@
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotInErrorSet } from '../errors.js';
-import { MemberType } from '../members/all.js';
 import { copyPointer, resetPointer } from '../pointer.js';
-import { getChildVivificator, getPointerVisitor } from '../struct.js';
-import {
-  CLASS, COPIER,
-  RESETTER,
-  VISITOR,
-  VIVIFICATOR
-} from '../symbols.js';
+import { CLASS, COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { isErrorJSON } from '../types.js';
-import { StructureType } from './all.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
-  defineErrorUnion(structure) {
+  defineErrorUnion(structure, descriptors) {
     const {
-      byteSize,
-      align,
       instance: { members },
-      hasPointer,
+      flags,
     } = structure;
-    const { get: getValue, set: setValue } = this.getDescriptor(members[0]);
-    const { get: getError, set: setError } = this.getDescriptor(members[1]);
+    const { get: getValue, set: setValue } = this.defineMember(members[0]);
+    const { get: getError, set: setError } = this.defineMember(members[1]);
+    const { get: getErrorNumber, set: setErrorNumber } = this.defineMember(members[1], false);
     const get = function() {
-      const errNum = getError.call(this, 'number');
+      const errNum = getErrorNumber.call(this);
       if (errNum) {
         throw getError.call(this);
       } else {
@@ -33,20 +26,19 @@ export default mixin({
     const isValueVoid = members[0].type === MemberType.Void;
     const errorSet = members[1].structure.constructor;
     const isChildActive = function() {
-      return !getError.call(this, 'number');
+      return !getErrorNumber.call(this);
     };
     const clearValue = function() {
-      this[RESETTER]();
-      this[VISITOR]?.(resetPointer);
+      this[RESET]();
+      this[VISIT]?.(resetPointer);
     };
-    const hasObject = !!members.find(m => m.type === MemberType.Object);
-    const propApplier = this.createPropertyApplier(structure);
+    const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
-        this[COPIER](arg);
+        this[COPY](arg);
         if (hasPointer) {
           if (isChildActive.call(this)) {
-            this[VISITOR](copyPointer, { vivificate: true, source: arg });
+            this[VISIT](copyPointer, { vivificate: true, source: arg });
           }
         }
       } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
@@ -56,17 +48,20 @@ export default mixin({
         try {
           // call setValue() first, in case it throws
           setValue.call(this, arg);
-          setError.call(this, 0, 'number');
+          setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            // we give setValue a chance to see if the error is actually an acceptable value
+            // we gave setValue a chance to see if the error is actually an acceptable value
             // now is time to throw an error
             throw new NotInErrorSet(structure);
           } else if (isErrorJSON(arg)) {
+            // setValue() failed because the argument actually is an error as JSON
             setError.call(this, arg);
             clearValue.call(this);
           } else if (arg && typeof(arg) === 'object') {
+            // maybe the argument contains a special property like `dataView` or `base64`
             if (propApplier.call(this, arg) === 0) {
+              // propApplier() found zero prop, so it's time to throw
               throw err;
             }
           } else {
@@ -75,16 +70,15 @@ export default mixin({
         }
       }
     };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer });
-    const { bitOffset: valueBitOffset, byteSize: valueByteSize } = members[0];
-    const instanceDescriptors = {
-      '$': { get, set: initializer },
-      [RESETTER]: this.getResetterDescriptor(valueBitOffset / 8, valueByteSize),  // from mixin "features/data-copying"
-      [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-    };
-    const staticDescriptors = {};
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    const constructor = this.createConstructor(structure, { initializer });
+    descriptors.$ = { get, set: initializer };
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    // for clear value after error union is set to an an error (from mixin "features/data-copying")
+    descriptors[RESET] = this.getResetterDescriptor(members[0].bitOffset / 8, members[0].byteSize);
+    // for operating on pointers contained in the error union
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
+    return constructor;
   },
 });
 

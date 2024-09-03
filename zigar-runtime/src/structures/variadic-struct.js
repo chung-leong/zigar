@@ -5,14 +5,14 @@ import { getMemoryCopier } from '../memory.js';
 import { always } from '../pointer.js';
 import { getChildVivificator } from '../struct.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPIER, MEMORY,
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY,
   PARENT,
   PRIMITIVE,
-  RESTORER,
+  RESTORE,
   SIZE,
   SLOTS,
-  VISITOR,
-  VIVIFICATOR
+  VISIT,
+  VIVIFICATE
 } from '../symbols.js';
 import { alignForward } from '../utils.js';
 import { StructureType } from './all.js';
@@ -92,12 +92,12 @@ export default mixin({
     };
     const memberDescriptors = {};
     for (const member of members) {
-      memberDescriptors[member.name] = this.getDescriptor(member);
+      memberDescriptors[member.name] = this.defineMember(member);
     }
     const { slot: retvalSlot, type: retvalType } = members[0];
     const isChildMutable = (retvalType === MemberType.Object)
     ? function(object) {
-        const child = this[VIVIFICATOR](retvalSlot);
+        const child = this[VIVIFICATE](retvalSlot);
         return object === child;
       }
     : function() { return false };
@@ -113,10 +113,10 @@ export default mixin({
         isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
       };
       if (vivificate && retvalType === MemberType.Object) {
-        this[VIVIFICATOR](retvalSlot);
+        this[VIVIFICATE](retvalSlot);
       }
       for (const child of Object.values(this[SLOTS])) {
-        child?.[VISITOR]?.(cb, childOptions);
+        child?.[VISIT]?.(cb, childOptions);
       }
     };
     const ArgAttributes = function(length) {
@@ -138,16 +138,16 @@ export default mixin({
     });
     defineProperties(ArgAttributes.prototype, {
       set: { value: setAttributes },
-      [COPIER]: { value: getMemoryCopier(4, true) },
+      [COPY]: { value: getMemoryCopier(4, true) },
       /* WASM-ONLY */
-      [RESTORER]: { value: this.getMemoryRestorer(null) },
+      [RESTORE]: { value: this.getMemoryRestorer(null) },
       /* WASM-ONLY-END */
     });
     defineProperties(constructor.prototype, {
       ...memberDescriptors,
-      [COPIER]: { value: getMemoryCopier(undefined, true) },
-      [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, env) },
-      [VISITOR]: { value: visitPointers },
+      [COPY]: { value: getMemoryCopier(undefined, true) },
+      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, env) },
+      [VISIT]: { value: visitPointers },
     });
     defineProperties(constructor, {
       [SIZE]: { value: byteSize },

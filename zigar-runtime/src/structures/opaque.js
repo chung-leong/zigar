@@ -1,34 +1,28 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { AccessingOpaque, CreatingOpaque } from '../errors.js';
-import { getIteratorIterator } from '../struct.js';
-import { StructureType } from './all.js';
+import { getZigIterator } from '../iterators.js';
+import { StructureType } from './constants.js';
 
 export default mixin({
-  defineOpaque(structure) {
+  defineOpaque(structure, descriptors) {
     const {
-      byteSize,
-      align,
-      isIterator,
+      flags,
     } = structure;
-    const initializer = function() {
-      throw new CreatingOpaque(structure);
+    const initializer = () => { throw new CreatingOpaque(structure) };
+    const valueAccessor = () => { throw new AccessingOpaque(structure) };
+    const constructor = this.createConstructor(structure);
+    descriptors.$ = { get: valueAccessor, set: valueAccessor };
+    descriptors[Symbol.iterator] = (flags & StructureFlag.IsIterator) && {
+      value: getZigIterator
     };
-    const valueAccessor = function() {
-      throw new AccessingOpaque(structure);
+    descriptors[Symbol.toPrimitive] = {
+      value(hint) {
+        const { name } = structure;
+        return `[opaque ${name}]`;
+      },
     };
-    const toPrimitive = function(hint) {
-      const { name } = structure;
-      return `[opaque ${name}]`;
-    };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer });
-    const getIterator = (isIterator) ? getIteratorIterator : null;
-    const instanceDescriptors = {
-      $: { get: valueAccessor, set: valueAccessor },
-      [Symbol.iterator]: getIterator && { value: getIterator },
-      [Symbol.toPrimitive]: { value: toPrimitive },
-    };
-    const staticDescriptors = {};
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    return constructor;
   },
 });
 

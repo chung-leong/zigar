@@ -21,7 +21,7 @@ describe('Member: static', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorStatic', function() {
+  describe('defineMemberStatic', function() {
     it('should return descriptor for static', function() {
       const env = new Env();
       const member = {
@@ -31,7 +31,7 @@ describe('Member: static', function() {
           type: StructureType.Primitive,
         },
       };
-      const { get, set } = env.getDescriptorStatic(member);
+      const { get, set } = env.defineMemberStatic(member);
       let value;
       const object = {
         [SLOTS]: {
@@ -44,7 +44,7 @@ describe('Member: static', function() {
       set.call(object, 777);
       expect(value).to.equal(777);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Static,
@@ -53,8 +53,8 @@ describe('Member: static', function() {
           type: StructureType.Primitive,
         },
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

@@ -1,12 +1,5 @@
 import { SELF } from "./symbols";
 
-export function getStructEntries(options) {
-  return {
-    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
 export function getZigIterator() {
   const self = this;
   return {
@@ -15,6 +8,13 @@ export function getZigIterator() {
       const done = value === null;
       return { value, done };
     },
+  };
+}
+
+export function getStructEntries(options) {
+  return {
+    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
   };
 }
 
@@ -106,7 +106,7 @@ export function getVectorIterator() {
   };
 }
 
-export function getVectorEntriesIterator() {
+export function getVectorIterator() {
   const self = this;
   const length = this.length;
   let index = 0;
@@ -127,7 +127,49 @@ export function getVectorEntriesIterator() {
 
 export function getVectorEntries() {
   return {
-    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
+    [Symbol.iterator]: getVectorIterator.bind(this),
     length: this.length,
+  };
+}
+
+export function getUnionEntries(options) {
+  return {
+    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+export function getUnionIterator(options) {
+  const entries = getUnionEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+export function getUnionEntriesIterator({ error }) {
+  const self = this;
+  const props = this[PROPS];
+  const getters = this[GETTERS];
+  const handleError = (error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < props.length) {
+        const current = props[index++];
+        // get value of prop with no check
+        value = [ current, handleError(() => getters[current].call(self), options) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
   };
 }

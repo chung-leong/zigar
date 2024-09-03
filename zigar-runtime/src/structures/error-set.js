@@ -1,18 +1,17 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
-import { CLASS, PROPS } from '../symbols.js';
+import { CAST, CLASS, INITIALIZE } from '../symbols.js';
 import { defineProperties } from '../utils.js';
-import { getTypedArrayClass, StructureType } from './all.js';
+import { getTypedArrayClass } from './all.js';
 
 export default mixin({
   currentGlobalSet: undefined,
   currentErrorClass: undefined,
 
-  defineErrorSet(structure) {
+  defineErrorSet(structure, descriptors) {
     const {
       name,
-      byteSize,
-      align,
       instance: { members: [ member ] },
     } = structure;
     if (!this.currentErrorClass) {
@@ -26,10 +25,10 @@ export default mixin({
       structure.typedArray = getTypedArrayClass(member);
       return this.currentGlobalSet;
     }
-    const errorClass = this.currentErrorClass;
-    const { get, set } = this.getDescriptor(member);
+    const descriptor = this.defineMember(member);
+    const { set } = descriptor;
     const expected = [ 'string', 'number' ];
-    const propApplier = this.createPropertyApplier(structure);
+    const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor[CLASS]) {
         set.call(this, arg);
@@ -41,35 +40,69 @@ export default mixin({
         set.call(this, arg);
       }
     };
-    const alternateCaster = function(arg) {
-      let dv;
-      if (typeof(arg) === 'number' || typeof(arg) === 'string') {
-        return constructor[arg];
-      } else if (arg instanceof constructor[CLASS]) {
-        return constructor[Number(arg)];
-      } else if (isErrorJSON(arg)) {
-        return constructor[`Error: ${arg.error}`];
-      } else if (!this.getDataView(structure, arg)) {
+    const constructor = this.createConstructor(structure, {
+      onCastError(structure, arg) {
         throw new InvalidInitializer(structure, expected, arg);
-      } else {
-        return false;
+      }
+    });
+    descriptors.$ = descriptor;
+    descriptors[INITIALIZE] = initializer;
+    return constructor;
+  },
+  finalizeErrorSet(structure, descriptors, staticDescriptors) {
+    const {
+      flags,
+      constructor,
+      instance: { members: [ member ] },
+      static: { members, template },
+    } = structure;
+    const items = template[SLOTS];
+    // obtain getter/setter for accessing int values directly
+    const { get } = this.defineMember(member, false);
+    for (const { name, slot } of members) {
+      const item = items[slot];
+      // unlike enums, error objects in an error-set aren't instances of the error-set class
+      // they're instance of a superclass of JavaScript's Error; here we need to extract the
+      // error number from the error-set instance and create the error object, if hasn't been
+      // created already for an earlier set
+      const number = get.call(item);
+      let error = this.currentGlobalSet[number], inGlobalSet = true;
+      if (!error) {
+        const errorClass = errorSet[CLASS];
+        error = new errorClass(name, number);
+        inGlobalSet = false;
+      }
+      // make the error object available by index, by name, and by error message
+      const descriptor = defineValue(error);
+      const string = String(error);
+      staticDescriptors[name] =
+      staticDescriptors[string] =
+      staticDescriptors[index] = descriptor;
+      if (!inGlobalSet) {
+        // add to global error set as well
+        defineProperties(this.currentGlobalSet, {
+          [number]: descriptor,
+          [string]: descriptor,
+          [name]: descriptor,
+        });
+      }
+    }
+    // add cast handler allowing strings, numbers, and JSON object to be casted into error set
+    staticDescriptors[CAST] = {
+      value(arg) {
+        if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+          return constructor[arg];
+        } else if (arg instanceof constructor[CLASS]) {
+          return constructor[Number(arg)];
+        } else if (isErrorJSON(arg)) {
+          return constructor[`Error: ${arg.error}`];
+        } else {
+          return false;
+        }
       }
     };
-    // items are inserted when static members get attached in static.js
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer, alternateCaster });
-    structure.typedArray = getTypedArrayClass(member);
-    const instanceDescriptors = {
-      $: { get, set },
-    };
-    const staticDescriptors = {
-      [CLASS]: { value: errorClass },
-      // the PROPS array is normally set in finalizeStructure.js; we need to set it here
-      // for anyerror so we can add names as error sets are defined
-      [PROPS]: (name === 'anyerror') ? { value: [] } : undefined,
-    };
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
   },
-  transformErrorSetDescriptor(int, structure) {
+  transformDescriptorErrorSet(int, structure) {
     const findError = function(value) {
       const { constructor } = structure;
       const item = constructor(value);
@@ -106,27 +139,6 @@ export default mixin({
           int.set.call(this, index, value);
         },
     };
-  },
-  appendErrorSet(errorSet, name, es) {
-    // our Zig export code places error set instance into the static template, which we can't
-    // use since all errors need to have the same parent class; here we get the error number
-    // and create the actual error object if hasn't been created already for an earlier set
-    const number = Number(es);
-    let error = this.currentGlobalSet[number];
-    if (!error) {
-      const errorClass = errorSet[CLASS];
-      error = new errorClass(name, number);
-    }
-    const string = String(error);
-    const descriptors = {
-      [number]: { value: error },
-      [string]: { value: error },
-      [name]: { value: error },
-    };
-    defineProperties(errorSet, descriptors);
-    defineProperties(this.currentGlobalSet, descriptors);
-    // add name to prop list
-    this.currentGlobalSet[PROPS].push(name);
   },
   resetGlobalErrorSet() {
     this.currentErrorClass = this.currentGlobalSet = undefined;

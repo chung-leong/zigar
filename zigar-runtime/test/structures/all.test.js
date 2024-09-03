@@ -71,7 +71,7 @@ describe('Structure: all', function() {
     it('should return define a primitive', function() {
     })
   })
-  describe('createPropertyApplier', function() {
+  describe('createApplier', function() {
     it('should return define a primitive', function() {
     })
   })

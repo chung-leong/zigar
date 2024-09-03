@@ -1,53 +1,39 @@
+import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ArrayLengthMismatch, InvalidArrayInitializer, throwReadOnly } from '../errors.js';
-import { MemberType } from '../members/all.js';
-import {
-  makeReadOnly
-} from '../object.js';
-import { always, copyPointer, getProxy } from '../pointer.js';
-import {
-  CONST_TARGET, COPIER,
-  ENTRIES,
-  MEMORY, PARENT,
-  PROTECTOR,
-  PROXY,
-  SELF,
-  SLOTS,
-  VISITOR,
-  VIVIFICATOR
-} from '../symbols.js';
-import { defineProperties } from '../utils.js';
-import { StructureType, getTypedArrayClass } from './all.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
+import { copyPointer, getProxy } from '../pointer.js';
+import { COPY, ENTRIES, FINALIZE, TYPED_ARRAY, VISIT, VIVIFICATE } from '../symbols.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
-  defineArray(structure) {
+  defineArray(structure, descriptors) {
     const {
       length,
-      byteSize,
-      align,
       instance: { members: [ member ] },
-      hasPointer,
+      flags,
     } = structure;
-    /* c8 ignore start */
     if (process.env.DEV) {
+      /* c8 ignore start */
       if (member.bitOffset !== undefined) {
         throw new Error(`bitOffset must be undefined for array member`);
       }
       if (member.slot !== undefined) {
         throw new Error(`slot must be undefined for array member`);
       }
+      /* c8 ignore end */
     }
-    /* c8 ignore end */
-    const hasStringProp = canBeString(member);
-    const propApplier = this.createPropertyApplier(structure);
+    const propApplier = this.createApplier(structure);
+    const descriptor = this.defineMember(member);
+    const { set } = descriptor;
+    const constructor = this.createConstructor(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
-        this[COPIER](arg);
-        if (hasPointer) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+        this[COPY](arg);
+        if (flags & StructureFlag.HasPointer) {
+          this[VISIT](copyPointer, { vivificate: true, source: arg });
         }
       } else {
-        if (typeof(arg) === 'string' && hasStringProp) {
+        if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
           arg = { string: arg };
         }
         if (arg?.[Symbol.iterator]) {
@@ -68,96 +54,27 @@ export default mixin({
         }
       }
     };
-    const elementDescriptor = this.getDescriptor(member);
-    const finalizer = () => this.finalizeArrayInstance(elementDescriptor);
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer, finalizer });
-    structure.typedArray = getTypedArrayClass(member);
-    const hasObject = member.type === MemberType.Object;
-    const instanceDescriptors = {
-      $: { get: getProxy, set: initializer },
-      length: { value: length },
-      entries: { value: getArrayEntries },
-      [Symbol.iterator]: { value: getArrayIterator },
-      [ENTRIES]: { get: getArrayEntries },
-      [VIVIFICATOR]: hasObject && { value: this.getChildVivificator(structure) },
-      [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
-      [PROTECTOR]: { value: makeArrayReadOnly },
-    };
-    const staticDescriptors = {
-      child: { get: () => member.structure.constructor },
-    };
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.length = defineValue(length);
+    descriptors.entries = defineValue(getArrayEntries);
+    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[FINALIZE] = this.defineFinalizer(descriptor);
+    descriptors[ENTRIES] = { get: getArrayEntries };
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    return constructor;
   },
-  finalizeArrayInstance({ get, set }) {
-    defineProperties(this, {
-      [PROXY]: { value: new Proxy(this, proxyHandlers) },
-      get: { value: get },
-      set: { value: set },
-    });
-    return proxy;
+  finalizeArray(structure, descriptors, staticDescriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    staticDescriptors[TYPED_ARRAY] = defineValue(member.structure.constructor[TYPED_ARRAY]);
   },
 });
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Array;
-}
-
-export function makeArrayReadOnly() {
-  makeReadOnly.call(this);
-  Object.defineProperty(this, 'set', { value: throwReadOnly });
-  const get = this.get;
-  const getReadOnly = function(index) {
-    const element = get.call(this, index);
-    if (element?.[CONST_TARGET] === null) {
-      element[PROTECTOR]?.();
-    }
-    return element;
-  };
-  Object.defineProperty(this, 'get', { value: getReadOnly });
-}
-
-export function canBeString(member) {
-  return member.type === MemberType.Uint && [ 8, 16 ].includes(member.bitSize);
-}
-
-export function getChildVivificator(structure, env) {
-  const { instance: { members: [ member ]} } = structure;
-  const { byteSize, structure: elementStructure } = member;
-  return function getChild(index) {
-    const { constructor } = elementStructure;
-    const dv = this[MEMORY];
-    const parentOffset = dv.byteOffset;
-    const offset = parentOffset + byteSize * index;
-    const childDV = env.obtainView(dv.buffer, offset, byteSize);
-    const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
-    return object;
-  };
-}
-
-export function getPointerVisitor(structure) {
-  return function visitPointers(cb, options = {}) {
-    const {
-      source,
-      vivificate = false,
-      isActive = always,
-      isMutable = always,
-    } = options;
-    const childOptions = {
-      ...options,
-      isActive: () => isActive(this),
-      isMutable: () => isMutable(this),
-    };
-    for (let i = 0, len = this.length; i < len; i++) {
-      // no need to check for empty slots, since that isn't possible
-      if (source) {
-        childOptions.source = source?.[SLOTS][i];
-      }
-      const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATOR](i) : null);
-      if (child) {
-        child[VISITOR](cb, childOptions);
-      }
-    }
-  };
 }
 
 export function transformIterable(arg) {
@@ -186,60 +103,3 @@ export function transformIterable(arg) {
     return array;
   }
 }
-
-const proxyHandlers = {
-  get(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return array.get(index);
-    } else if (name === SELF) {
-      return array;
-    } else {
-      return array[name];
-    }
-  },
-  set(array, name, value) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      array.set(index, value);
-    } else {
-      array[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return false;
-    } else {
-      delete array[name];
-      return true;
-    }
-  },
-  has(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return (index >= 0 && index < array.length);
-    } else {
-      return array[name];
-    }
-  },
-  ownKeys(array) {
-    const keys = [];
-    for (let i = 0, len = array.length; i < len; i++) {
-      keys.push(`${i}`);
-    }
-    keys.push('length', PROXY);
-    return keys;
-  },
-  getOwnPropertyDescriptor(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      if (index >= 0 && index < array.length) {
-        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
-      }
-    } else {
-      return Object.getOwnPropertyDescriptor(array, name);
-    }
-  },
-};

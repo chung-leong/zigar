@@ -1,13 +1,13 @@
 import { mixin } from '../environment.js';
-import { MEMORY, RESTORER } from '../symbols.js';
+import { MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
-  getCopierDescriptor(size, multiple) {
+  defineCopier(size, multiple) {
     const copy = getCopyFunction(size, multiple);
     const value = function(target) {
       if (process.env.TARGET === 'wasm') {
-        this[RESTORER]?.();
-        target[RESTORER]?.();
+        this[RESTORE]?.();
+        target[RESTORE]?.();
       }
       const src = target[MEMORY];
       const dest = this[MEMORY];
@@ -19,7 +19,7 @@ export default mixin({
     const reset = getResetFunction(size);
     const value = function() {
       if (process.env.TARGET === 'wasm') {
-        this[RESTORER]?.();
+        this[RESTORE]?.();
       }
       const dest = this[MEMORY];
       reset(dest, offset, size);

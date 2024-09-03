@@ -1,22 +1,21 @@
+import { StructureFlag } from '../constants.js';
 import { } from '../data-view.js';
-import { defineProperties, mixin } from '../environment.js';
+import { mixin } from '../environment.js';
 import { EnumExpected, InvalidInitializer } from '../errors.js';
-import { MORE, NAME, TAG } from '../symbols.js';
-import { getTypedArrayClass } from './all.js';
+import { CAST, INITIALIZE, NAME, SLOTS, TAG } from '../symbols.js';
+import { defineProperty } from '../utils.js';
 
 export default mixin({
-  defineEnumeration(structure) {
+  defineEnumeration(structure, descriptors) {
     const {
-      byteSize,
-      align,
       instance: {
         members: [ member ],
       },
     } = structure;
-    const thisEnv = this;
-    const { get, set } = this.getDescriptor(member);
+    const descriptor = this.defineMember(member);
+    const { get, set } = descriptor;
+    const propApplier = this.createApplier(structure);
     const expected = [ 'string', 'number', 'tagged union' ];
-    const propApplier = this.createPropertyApplier(structure);
     const initializer = function(arg) {
       if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
@@ -26,49 +25,77 @@ export default mixin({
         set.call(this, arg);
       }
     };
-    const alternateCaster = function(arg) {
-      if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-        let item = constructor[arg];
-        if (!item) {
-          if (constructor[MORE] && typeof(arg) !== 'string') {
-            // create the item on-the-fly when enum is non-exhaustive
-            item = new constructor(undefined);
-            set.call(item, arg, 'number');
-            appendEnumeration(constructor, `${arg}`, item);
-          }
-        }
-        return item;
-      } else if (arg instanceof constructor) {
-        return arg;
-      } else if (arg?.[TAG] instanceof constructor) {
-        // a tagged union, return the active tag
-        return arg[TAG];
-      } else if (!thisEnv.getDataView(structure, arg)) {
+    const constructor = this.createConstructor(structure, {
+      onCastError(structure, arg) {
         throw new InvalidInitializer(structure, expected, arg);
-      } else {
-        return false;
       }
+    });
+    descriptors.$ = descriptor;
+    descriptors.toString = this.getValueOfDescriptor?.();
+    descriptors[Symbol.toPrimitive] = {
+      value(hint)  {
+        switch (hint) {
+          case 'string':
+          case 'default':
+            return this.$[NAME];
+          default:
+            return get.call(this, 'number');
+        }
+      },
     };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer, alternateCaster });
-    const typedArray = structure.typedArray = getTypedArrayClass(member);
-    const toPrimitive = function(hint) {
-      switch (hint) {
-        case 'string':
-        case 'default':
-          return this.$[NAME];
-        default:
-          return get.call(this, 'number');
-      }
-    };
-    const instanceDescriptors = {
-      $: { get, set },
-      toString: this.getValueOfDescriptor?.(),
-      [Symbol.toPrimitive]: { value: toPrimitive },
-    };
-    const staticDescriptors = {};
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    descriptors[INITIALIZE] = defineValue(initializer);
+    return constructor;
   },
-  transformEnumerationDescriptor(int, structure) {
+  finalizeEnum(structure, descriptors, staticDescriptors) {
+    const {
+      flags,
+      constructor,
+      instance: { members: [ member ] },
+      static: { members, template },
+    } = structure;
+    const items = template[SLOTS];
+    // obtain getter/setter for accessing int values directly
+    const { get, set } = this.defineMember(member, false);
+    for (const { name, slot } of members) {
+      const item = items[slot];
+      // enum can have static variables, so not every member is a enum item
+      if (item instanceof constructor) {
+        // attach name to item so tagged union code can quickly find it
+        defineProperty(item, NAME, defineValue(name));
+        const index = get.call(item);
+        // make item available by name and by index
+        staticDescriptors[name] = staticDescriptors[index] = { value: item };
+      }
+    }
+    // add cast handler allowing strings, numbers, and tagged union to be casted into enums
+    staticDescriptors[CAST] = {
+      value(arg) {
+        if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+          let item = constructor[arg];
+          if (!item) {
+            if (flags & StructureFlag.IsOpenEnded && typeof(arg) !== 'string') {
+              // create the item on-the-fly when enum is non-exhaustive
+              item = new constructor(undefined);
+              // write the value into memory
+              set.call(item, arg);
+              // attach the new item to the enum set
+              defineProperty(item, NAME, defineValue(arg));
+              defineProperty(constructor, arg, defineValue(item));
+            }
+          }
+          return item;
+        } else if (arg instanceof constructor) {
+          return arg;
+        } else if (arg?.[TAG] instanceof constructor) {
+          // a tagged union, return the active tag
+          return arg[TAG];
+        } else {
+          return false;
+        }
+      }
+    };
+  },
+  transformDescriptorEnum(int, structure) {
     const findEnum = function(value) {
       const { constructor } = structure;
       // the enumeration constructor returns the object for the int value
@@ -80,11 +107,8 @@ export default mixin({
     };
     return {
       get: (int.get.length === 0)
-      ? function getEnum(hint) {
+      ? function getEnum() {
           const value = int.get.call(this);
-          if (hint === 'number') {
-            return value;
-          }
           return findEnum(value);
         }
       : function getEnumElement(index) {
@@ -92,12 +116,10 @@ export default mixin({
           return findEnum(value);
         },
       set: (int.set.length === 1)
-      ? function setEnum(value, hint) {
-          if (hint !== 'number') {
-            const item = findEnum(value);
-            // call Symbol.toPrimitive directly as enum can be bigint or number
-            value = item[Symbol.toPrimitive]();
-          }
+      ? function setEnum(value) {
+          const item = findEnum(value);
+          // call Symbol.toPrimitive directly as enum can be bigint or number
+          value = item[Symbol.toPrimitive]();
           int.set.call(this, value);
         }
       : function setEnumElement(index, value) {
@@ -108,21 +130,3 @@ export default mixin({
   },
 });
 
-export function appendEnumeration(enumeration, name, item) {
-  if (name !== undefined) {
-    // enum can have static variables
-    if (item instanceof enumeration) {
-      // attach name to item so tagged union code can quickly find it
-      defineProperties(item, { [NAME]: { value: name } });
-      // call toPrimitive directly since enum can be bigint or number
-      const index = item[Symbol.toPrimitive]();
-      defineProperties(enumeration, {
-        [index]: { value: item },
-        [name]: { value: item },
-      });
-    }
-  } else {
-    // non-exhaustive enum
-    defineProperties(enumeration, { [MORE]: { value: true } });
-  }
-}

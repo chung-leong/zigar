@@ -1,91 +1,63 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
 } from '../errors.js';
-import { getStructEntries, getStructIterator } from '../iterators.js';
-import { isReadOnly, MemberType } from '../members/all.js';
+import { isReadOnly } from '../members/all.js';
 import {
   ALIGN,
-  CACHE, COMPAT, CONST_TARGET, COPIER,
+  CACHE, COMPAT, CONST_TARGET, COPY,
+  INITIALIZE,
   KEYS,
   MEMORY,
-  PROPS,
-  PROTECTOR,
-  SELF,
-  SETTER,
   SETTERS,
   SIZE, SLOTS, TYPE, VARIANTS,
-  VISITOR
+  VISIT
 } from '../symbols.js';
 import { defineProperties, defineProperty } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
-    const { type } = structure;
-    const name = `define${structureNames[type]}`;
-    const f = this[name];
-    /* c8 ignore start */
+    const { type, name } = structure;
+    const handlerName = `define${structureNames[type]}`;
+    const f = this[handlerName];
     if (process.env.DEV) {
+      /* c8 ignore start */
       if (!f) {
-        throw new Error(`Missing method: ${name}`);
+        throw new Error(`Missing method: ${handlerName}`);
       }
+      /* c8 ignore end */
     }
-    /* c8 ignore end */
-    return f.call(this, structure);
-  },
-  attachDescriptors(structure, instanceDescriptors, staticDescriptors, handlers) {
-    const { byteSize, type, constructor, align, name } = structure;
-    // create prototype for read-only objects
-    const propSetters = {};
-    for (const [ name, descriptor ] of Object.entries(instanceDescriptors)) {
-      if (descriptor?.set) {
-        // save the setters so we can initialize read-only objects
-        if (name !== '$') {
-          propSetters[name] = descriptor.set;
-        }
-      }
-    }
-    const { get, set } = ;
-    instanceDescriptors = {
-      delete: { value: this.createDestructor() },
-      [Symbol.toStringTag]: { value: structure.name },
-      [KEYS]: { value: Object.keys(propSetters) },
-      [SELF]: instanceDescriptors.$,
-      [COPIER]: this.getCopierDescriptor(byteSize, type === StructureType.Slice), // from mixin "memory/copying"
-      [PROTECTOR]: { value: makeReadOnly },
-      [SETTERS]: { value: propSetters },
+    // default discriptors
+    const keys = [];
+    descriptors = {
+      delete: this.defineDestructor(),
+      [Symbol.toStringTag]: defineValue(name),
+      [KEYS]: defineValue(keys),
+      // (from mixin "memory/copying")
+      [COPY]: this.defineCopier(byteSize, type === StructureType.Slice),
       [CONST_TARGET]: { value: null },
-      ...this.getSpecialMethodDescriptors?.(), // from mixin "members/special-method"
-      ...this.getSpecialPropertyDescriptors?.(structure, handlers), // from mixin "members/special-props"
-      //...(process.env.TARGET === 'wasm' ? this.getWebAssemblyDescriptors(structure) : {}),
-      ...instanceDescriptors,
+      // (from mixin "members/special-method")
+      ...this.defineSpecialMethods?.(),
+      // (from mixin "members/special-props")
+      ...this.defineSpecialProperties?.(structure, handlers),
+      ...(process.env.TARGET === 'wasm' ? {
+
+      } : undefined),
     };
-    staticDescriptors = {
-      name: { value: name },
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: type },
-      ...staticDescriptors,
-    };
-    defineProperties(constructor.prototype, instanceDescriptors);
-    defineProperties(constructor, staticDescriptors);
+    const constructor = f.call(this, structure, descriptors);
+    descriptors[SELF] = descriptors.$;
+    defineProperties(constructor.prototype, descriptors);
     return constructor;
   },
-  createConstructor(structure, handlers) {
+  createConstructor(structure, handlers = {}) {
     const {
       byteSize,
       align,
+      flags,
       instance: { members, template },
     } = structure;
-    const {
-      modifier,
-      initializer,
-      finalizer,
-      alternateCaster,
-      shapeDefiner,
-    } = handlers;
-    const hasSlots = needSlots(members);
+    const { onCastError } = handlers;
     // comptime fields are stored in the instance template's slots
     let comptimeFieldSlots;
     if (template?.[SLOTS]) {
@@ -107,37 +79,38 @@ export default mixin({
           throw new NoInitializer(structure);
         }
         self = this;
-        if (hasSlots) {
+        if (flags & StructureFlag.HasSlots) {
           self[SLOTS] = {};
         }
-        if (shapeDefiner) {
-          // provided by defineSlice(); the slice is different from other structures as it does not have
-          // a fixed size; memory is allocated by the slice initializer based on the argument given
-          initializer.call(self, arg, fixed);
+        if (SHAPE in self) {
+          // provided by defineStructureSlice(); the slice is different from other structures
+          // as it does not have a fixed size; memory is allocated by the slice initializer
+          // based on the argument given
+          self[INITIALIZE](arg, fixed);
           dv = self[MEMORY];
         } else {
           self[MEMORY] = dv = this.allocateMemory(byteSize, align, fixed);
         }
       } else {
-        if (alternateCaster) {
+        if (CAST in constructor) {
           // casting from number, string, etc.
-          self = alternateCaster.call(this, arg, options);
+          self = constructor[CAST](arg, options);
           if (self !== false) {
             return self;
           }
         }
         // look for buffer
-        dv = thisEnv.extractView(structure, arg);
+        dv = thisEnv.extractView(structure, arg, onCastError);
         if (self = cache.find(dv)) {
           return self;
         }
         self = Object.create(constructor.prototype);
-        if (shapeDefiner) {
-          thisEnv.assignView(self, dv, structure, false, false, { shapeDefiner });
+        if (SHAPE in self) {
+          thisEnv.assignView(self, dv, structure, false, false);
         } else {
           self[MEMORY] = dv;
         }
-        if (hasSlots) {
+        if (flags & StructureFlag.HasSlots) {
           self[SLOTS] = {};
         }
       }
@@ -146,17 +119,17 @@ export default mixin({
           self[SLOTS][slot] = template[SLOTS][slot];
         }
       }
-      if (modifier) {
-        modifier.call(self);
+      if (MODIFY in self) {
+        self[MODIFY]();
       }
       if (creating) {
-        // initialize object unless it's been done already
-        if (!shapeDefiner) {
-          initializer.call(self, arg);
+        // initialize object unless that's done already
+        if (!(SHAPE in self)) {
+          self[INITIALIZE](arg);
         }
       }
-      if (finalizer) {
-        self = finalizer.call(self);
+      if (FINALIZE in self) {
+        self = self[FINALIZE]();
       }
       return cache.save(dv, self);
     };
@@ -174,7 +147,7 @@ export default mixin({
       thisEnv.releaseFixedView(dv);
     };
   },
-  createPropertyApplier(structure) {
+  createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, fixed) {
       const argKeys = Object.keys(arg);
@@ -224,9 +197,9 @@ export default mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            this[COPIER](template);
+            this[COPY](template);
           }
-          this[VISITOR]?.(copyPointer, { vivificate: true, source: template });
+          this[VISIT]?.(copyPointer, { vivificate: true, source: template });
         }
       }
       for (const key of argKeys) {
@@ -242,11 +215,17 @@ export default mixin({
       constructor,
       static: { members, template },
     } = structure;
-    const staticDescriptors = {};
-    const instanceDescriptors = {};
+    const staticDescriptors = {
+      name: { value: name },
+      [COMPAT]: { value: getCompatibleTags(structure) },
+      [ALIGN]: { value: align },
+      [SIZE]: { value: byteSize },
+      [TYPE]: { value: type },
+    };
+    const descriptors = {};
     for (const member of members) {
       const { name, slot, structure: { type, instance: { members: [ fnMember ] } } } = member;
-      staticDescriptors[name] = this.getDescriptor(member);
+      staticDescriptors[name] = this.defineMember(member);
       if (type === StructureType.Function) {
         const fn = template[SLOTS][slot];
         // provide a name if one isn't assigned yet
@@ -263,35 +242,19 @@ export default mixin({
         // see if it's a method
         if (startsWithSelf(fnMember.structure, structure)) {
           const method = fn[VARIANTS].method;
-          instanceDescriptors[name] = { value: method };
+          descriptors[name] = { value: method };
           if (accessorType && method.length  === argRequired) {
-            const descriptor = instanceDescriptors[propName] ??= {};
+            const descriptor = descriptors[propName] ??= {};
             descriptor[accessorType] = method;
           }
         }
       }
     }
-    defineProperties(constructor, {
-      valueOf: this.getValueOfDescriptor?.(),
-      toJSON: this.getToJsonDescriptor?.(),
-      ...staticDescriptors,
-      [Symbol.iterator]: { value: getStructIterator },
-      [ENTRIES]: { get: getStructEntries },
-      // static variables are objects stored in the static template's slots
-      [SLOTS]: template && { value: template[SLOTS] },
-      // anyerror would have props already
-      [PROPS]: !constructor[PROPS] && { value: members.map(m => m.name) },
-    });
-    defineProperties(constructor.prototype, instanceDescriptors);
-    if (type === StructureType.Enum) {
-      for (const { name, slot } of members) {
-        appendEnumeration(constructor, name, constructor[SLOTS][slot]);
-      }
-    } else if (type === StructureType.ErrorSet) {
-      for (const { name, slot } of members) {
-        appendErrorSet(constructor, name, constructor[SLOTS][slot]);
-      }
-    }
+    const handlerName = `finalize${structureNames[type]}`;
+    const f = this[handlerName];
+    f?.(structure, descriptors, staticDescriptors);
+    defineProperties(constructor.prototype, descriptors);
+    defineProperties(constructor, staticDescriptors);
   },
 });
 
@@ -299,32 +262,6 @@ export function isNeededByStructure(structure) {
   return true;
 }
 
-export const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  ExternStruct: 3,
-  PackedStruct: 4,
-  ArgStruct: 5,
-  VariadicStruct: 6,
-  ExternUnion: 7,
-  BareUnion: 8,
-  TaggedUnion: 9,
-  ErrorUnion: 10,
-  ErrorSet: 11,
-  Enum: 12,
-  Optional: 13,
-  SinglePointer: 14,
-  SlicePointer: 15,
-  MultiPointer: 16,
-  CPointer: 17,
-  Slice: 18,
-  Vector: 19,
-  Opaque: 20,
-  Function: 21,
-};
-
-export const structureNames = Object.keys(StructureType);
 
 export function getStructureName(type) {
   const name = structureNames[type];
@@ -332,71 +269,6 @@ export function getStructureName(type) {
     return;
   }
   return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
-}
-
-export function getPrimitiveClass({ type, bitSize }) {
-  if (type === MemberType.Int || type === MemberType.Uint) {
-    if (bitSize <= 32) {
-      return Number;
-    } else {
-      return BigInt;
-    }
-  } else if (type === MemberType.Float) {
-    return Number;
-  } else if (type === MemberType.Bool) {
-    return Boolean;
-  }
-}
-
-export function getPrimitiveType(member) {
-  const Primitive = getPrimitiveClass(member);
-  if (Primitive) {
-    return typeof(Primitive(0));
-  }
-}
-
-export function getTypedArrayClass(member) {
-  const { type: memberType, byteSize } = member;
-  if (memberType === MemberType.Int) {
-    switch (byteSize) {
-      case 1: return Int8Array;
-      case 2: return Int16Array;
-      case 4: return Int32Array;
-      case 8: return BigInt64Array;
-    }
-  } else if (memberType === MemberType.Uint) {
-    switch (byteSize) {
-      case 1: return Uint8Array;
-      case 2: return Uint16Array;
-      case 4: return Uint32Array;
-      case 8: return BigUint64Array;
-    }
-  } else if (memberType === MemberType.Float) {
-    switch (byteSize) {
-      case 4: return Float32Array;
-      case 8: return Float64Array;
-    }
-  } else if (memberType === MemberType.Object) {
-    return member.structure.typedArray;
-  }
-  return null;
-}
-
-export function getSelf() {
-  return this;
-}
-
-export function isValueExpected(structure) {
-  switch (structure?.type) {
-    case StructureType.Primitive:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-    case StructureType.Enum:
-    case StructureType.ErrorSet:
-      return true;
-    default:
-      return false;
-  }
 }
 
 export class ObjectCache {
@@ -410,31 +282,6 @@ export class ObjectCache {
     this.map.set(dv, object);
     return object;
   }
-}
-
-function needSlots(members) {
-  for (const { type } of members) {
-    switch (type) {
-      case MemberType.Object:
-      case MemberType.Comptime:
-      case MemberType.Type:
-      case MemberType.Literal:
-        return true;
-    }
-  }
-  return false;
-}
-
-function makeReadOnly() {
-  const descriptors = Object.getOwnPropertyDescriptors(this.constructor.prototype);
-  for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor.set) {
-      descriptor.set = throwReadOnly;
-      Object.defineProperty(this, name, descriptor);
-    }
-  }
-  Object.defineProperty(this, SETTER, { value: throwReadOnly });
-  Object.defineProperty(this, CONST_TARGET, { value: this });
 }
 
 function getCompatibleTags(structure) {

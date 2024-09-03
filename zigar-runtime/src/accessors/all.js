@@ -26,10 +26,15 @@ export default mixin({
       throw new Error(`No accessor available: ${typeName}`);
     }
     /* c8 ignore end */
-    defineProperty(accessor, 'name', { value: accessorName });
+    defineProperty(accessor, 'name', defineValue(accessorName));
     cache.set(accessorName, accessor);
     return accessor;
-  }
+  },
+  getTypedArrayClass(member) {
+    const typeName = getTypeName(member)
+    const arrayName = typeName + 'Array';
+    return globalThis[arrayName];
+  },
 });
 
 const cache = new Map();

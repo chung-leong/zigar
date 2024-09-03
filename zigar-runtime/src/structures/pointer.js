@@ -1,10 +1,11 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
   InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
   warnImplicitArrayCreation
 } from '../errors.js';
-import { getDescriptor, isValueExpected } from '../member.js';
+import { defineMember } from '../member.js';
 import { MemberType } from '../members/all.js';
 import { createConstructor, defineProperties } from '../object.js';
 import {
@@ -16,11 +17,11 @@ import {
   PARENT,
   PROTECTOR,
   PROXY,
-  RESTORER,
+  RESTORE,
   SELF,
   SETTERS,
   SIZE, SLOTS, TARGET, TARGET_UPDATER, TYPE,
-  VISITOR
+  VISIT
 } from '../symbols.js';
 import { StructureType } from './all.js';
 
@@ -29,8 +30,8 @@ export default mixin({
     const {
       name,
       type,
+      flags,
       byteSize,
-      align,
       instance: { members: [ member ] },
       isConst,
     } = structure;
@@ -42,14 +43,14 @@ export default mixin({
     // length for slice can be zero or undefined
     const hasLengthInMemory = type === StructureType.SlicePointer;
     const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
-    const { get: getAddressInMemory, set: setAddressInMemory } = getDescriptor({
+    const { get: getAddressInMemory, set: setAddressInMemory } = defineMember({
       type: MemberType.Uint,
       bitOffset: 0,
       bitSize: addressSize * 8,
       byteSize: addressSize,
       structure: { byteSize: addressSize },
     }, env);
-    const { get: getLengthInMemory, set: setLengthInMemory } = (hasLengthInMemory) ? getDescriptor({
+    const { get: getLengthInMemory, set: setLengthInMemory } = (hasLengthInMemory) ? defineMember({
       type: MemberType.Uint,
       bitOffset: addressSize * 8,
       bitSize: addressSize * 8,
@@ -133,7 +134,7 @@ export default mixin({
         pointer[MAX_LENGTH] = undefined;
       }
     };
-    const getTarget = isValueExpected(targetStructure)
+    const getTarget = (flags & StructureFlag.HasValue)
     ? function() {
         const target = getTargetObject.call(this);
         return target[SELF];
@@ -240,7 +241,7 @@ export default mixin({
       }
       if (arg instanceof Target) {
         /* WASM-ONLY */
-        arg[RESTORER]?.();
+        arg[RESTORE]?.();
         /* WASM-ONLY-END */
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
@@ -328,7 +329,7 @@ export default mixin({
       [TARGET_UPDATER]: { value: updateTarget },
       [ADDRESS]: { value: setAddress },
       [LENGTH]: setLength && { value: setLength },
-      [VISITOR]: { value: visitPointer },
+      [VISIT]: { value: visitPointer },
       [PROTECTOR]: { value: makePointerReadOnly },
       [LAST_ADDRESS]: { value: undefined, writable: true },
       [LAST_LENGTH]: setLength && { value: undefined, writable: true },
@@ -351,14 +352,6 @@ export function isNeededByStructure(structure) {
     default:
       return false;
   }
-}
-
-function makePointerReadOnly() {
-  const pointer = this[SELF];
-  const descriptor = Object.getOwnPropertyDescriptor(pointer.constructor.prototype, '$');
-  descriptor.set = throwReadOnly;
-  Object.defineProperty(pointer, '$', descriptor);
-  Object.defineProperty(pointer, CONST_TARGET, { value: pointer });
 }
 
 function deleteTarget() {

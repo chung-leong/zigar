@@ -19,24 +19,24 @@ describe('Member: comptime', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorUndefined', function() {
+  describe('defineMemberUndefined', function() {
     it('should return descriptor for comptime', function() {
       const env = new Env();
       const member = {
         type: MemberType.Unsupported,
       };
-      const { get } = env.getDescriptorUnsupported(member);
+      const { get } = env.defineMemberUnsupported(member);
       const object = {};
       expect(() => get.call(object)).to.throw(TypeError)
         .with.property('message').that.contains('Unsupported');
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Unsupported,
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

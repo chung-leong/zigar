@@ -18,7 +18,7 @@ describe('Member: all', function() {
       expect(isNeededByMember()).to.be.true;
     })
   })
-  describe('getDescriptor', function() {
+  describe('defineMember', function() {
     it('should invoke the correct descriptor mixin', function() {
       const env = new Env();
       const member = {
@@ -28,8 +28,8 @@ describe('Member: all', function() {
         bitOffset: 0,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

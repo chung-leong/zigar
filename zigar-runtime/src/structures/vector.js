@@ -1,37 +1,29 @@
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
+import { getVectorEntries, getVectorIterator } from '../iterators.js';
 import { getSelf } from '../object.js';
-import { COPIER, ENTRIES, SETTERS } from '../symbols.js';
-import { getTypedArrayClass } from './all.js';
+import { COPY, ENTRIES } from '../symbols.js';
 
 export default mixin({
-  defineVector(structure) {
+  defineVector(structure, descriptors) {
     const {
       length,
-      byteSize,
-      align,
       instance: { members: [ member ] },
     } = structure;
-    /* c8 ignore start */
     if (process.env.DEV) {
+      /* c8 ignore start */
       if (member.bitOffset !== undefined) {
         throw new Error(`bitOffset must be undefined for vector member`);
       }
       if (member.slot !== undefined) {
         throw new Error(`slot must be undefined for vector member`);
       }
+      /* c8 ignore end */
     }
-    /* c8 ignore end */
-    const { bitSize: elementBitSize, structure: elementStructure } = member;
-    const elementDescriptors = {};
-    for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-      const { get, set } = this.getDescriptor({ ...member, bitOffset });
-      elementDescriptors[i] = { get, set, configurable: true };
-    }
-    const propApplier = this.createPropertyApplier(structure);
+    const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
-        this[COPIER](arg);
+        this[COPY](arg);
       } else if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
         if (typeof(argLen) !== 'number') {
@@ -43,7 +35,7 @@ export default mixin({
         }
         let i = 0;
         for (const value of arg) {
-          this[SETTERS][i++].call(this, value);
+          this[i++] = value;
         }
       } else if (arg && typeof(arg) === 'object') {
         if (propApplier.call(this, arg) === 0) {
@@ -53,20 +45,17 @@ export default mixin({
         throw new InvalidArrayInitializer(structure, arg);
       }
     };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer });
-    const instanceDescriptors = {
-      ...elementDescriptors,
-      $: { get: getSelf, set: initializer },
-      length: { value: length },
-      entries: { value: getVectorEntries },
-      [Symbol.iterator]: { value: getVectorIterator },
-      [ENTRIES]: { get: getVectorEntries },
-    };
-    const staticDescriptors = {
-      child: { get: () => elementStructure.constructor },
-    };
-    structure.TypedArray = getTypedArrayClass(member);
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    const constructor = this.createConstructor(structure, { initializer });
+    const { bitSize: elementBitSize } = member;
+    for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
+      descriptors[i] = this.defineMember({ ...member, bitOffset });
+    }
+    descriptors.$ = { get: getSelf, set: initializer };
+    descriptors.length = { value: length };
+    descriptors.entries = { value: getVectorEntries };
+    descriptors[Symbol.iterator] = { value: getVectorIterator };
+    descriptors[ENTRIES] = { get: getVectorEntries };
+    return constructor;
   },
 });
 

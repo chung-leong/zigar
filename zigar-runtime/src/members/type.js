@@ -3,7 +3,7 @@ import { SLOTS } from '../symbols.js';
 import { bindSlot, MemberType } from './all.js';
 
 export default mixin({
-  getDescriptorType(member, env) {
+  defineMemberType(member, env) {
     const { slot } = member;
     return bindSlot(slot, { get: getType });
   }

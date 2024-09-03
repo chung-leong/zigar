@@ -25,6 +25,10 @@ export function defineProperties(object, descriptors) {
   }
 }
 
+export function defineValue(value) {
+  return (value !== undefined) ? { value } : undefined;
+}
+
 export function decodeText(arrays, encoding = 'utf-8') {
   const decoder = decoders[encoding] ??= new TextDecoder(encoding);
   let array;
@@ -147,3 +151,4 @@ export function isInvalidAddress(address) {
 export function add(arg1, arg2) {
   return arg1 + ((typeof(arg1) === 'bigint') ? BigInt(arg2) : arg2);
 }
+

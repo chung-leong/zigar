@@ -23,7 +23,7 @@ describe('Member: bool', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorBool', function() {
+  describe('defineMemberBool', function() {
     it('should return descriptor for bool', function() {
       const env = new Env();
       const member = {
@@ -33,12 +33,12 @@ describe('Member: bool', function() {
         bitOffset: 8,
         structure: {},
       };
-      const { get, set } = env.getDescriptorBool(member);
+      const { get, set } = env.defineMemberBool(member);
       const object = { [MEMORY]: new DataView(new ArrayBuffer(2)) };
       set.call(object, true);
       expect(get.call(object)).to.equal(true);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Bool,
@@ -47,8 +47,8 @@ describe('Member: bool', function() {
         bitOffset: 0,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

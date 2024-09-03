@@ -1,13 +1,12 @@
+import { MemberType, StructureFlags } from '../constants.js';
 import { mixin } from '../environment.js';
-import { isValueExpected } from '../structures/all.js';
-import { bindSlot, getObject, getValue, MemberType, setValue } from './all.js';
+import { bindSlot } from './all.js';
 
 export default mixin({
-  getDescriptorObject(member) {
-    const { structure, slot } = member;
-    return bindSlot(slot, {
-      get: isValueExpected(structure) ? getValue : getObject,
-      set: setValue,
+  defineMemberObject(member) {
+    return bindSlot(member.slot, {
+      get: (member.structure.flags & StructureFlags.HasValue) ? getValue : getObject,
+      set: (member.flags & MemberFlags.IsReadOnly) ? null : setValue,
     });
   }
 });
@@ -15,3 +14,19 @@ export default mixin({
 export function isNeededByMember(member) {
   return member.type === MemberType.Object;
 }
+
+function getValue(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
+  return object[SELF];
+}
+
+function getObject(slot) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
+  return object;
+}
+
+function setValue(slot, value) {
+  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
+  object[SELF] = value;
+}
+

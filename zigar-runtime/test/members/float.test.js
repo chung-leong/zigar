@@ -23,7 +23,7 @@ describe('Member: float', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorFloat', function() {
+  describe('defineMemberFloat', function() {
     it('should return descriptor for float', function() {
       const env = new Env();
       const member = {
@@ -33,12 +33,12 @@ describe('Member: float', function() {
         bitOffset: 8,
         structure: {},
       };
-      const { get, set } = env.getDescriptorFloat(member);
+      const { get, set } = env.defineMemberFloat(member);
       const object = { [MEMORY]: new DataView(new ArrayBuffer(3)) };
       set.call(object, 3.25);
       expect(get.call(object)).to.equal(3.25);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Float,
@@ -47,8 +47,8 @@ describe('Member: float', function() {
         bitOffset: 8,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

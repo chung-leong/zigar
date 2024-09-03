@@ -3,7 +3,7 @@ import { Unsupported } from '../errors.js';
 import { MemberType } from './all.js';
 
 export default mixin({
-  getDescriptorUnsupported(member) {
+  defineMemberUnsupported(member) {
     const throwUnsupported = function() {
       throw new Unsupported();
     };

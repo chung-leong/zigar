@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ALIGN, FIXED, MEMORY, RESTORER } from '../symbols.js';
+import { ALIGN, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import { add, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
 export default mixin({
@@ -30,7 +30,7 @@ export default mixin({
   addShadow(shadow, object, align) {
     const shadowMap = this.context.shadowMap ??= new Map();
     if (process.env.TARGET === 'wasm') {
-      shadow[RESTORER] = this.getMemoryRestorer(null, this);
+      shadow[RESTORE] = this.getMemoryRestorer(null, this);
     }
     shadowMap.set(shadow, object);
     this.registerMemory(shadow[MEMORY], object[MEMORY], align);
@@ -81,7 +81,7 @@ export default mixin({
     }
     // placeholder object type
     const prototype = {
-      [COPIER]: getMemoryCopier(len)
+      [COPY]: getMemoryCopier(len)
     };
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
@@ -99,7 +99,7 @@ export default mixin({
       return;
     }
     for (const [ shadow, object ] of shadowMap) {
-      shadow[COPIER](object);
+      shadow[COPY](object);
     }
   },
   updateShadowTargets() {
@@ -108,7 +108,7 @@ export default mixin({
       return;
     }
     for (const [ shadow, object ] of shadowMap) {
-      object[COPIER](shadow);
+      object[COPY](shadow);
     }
   },
   releaseShadows() {
@@ -228,8 +228,8 @@ export default mixin({
       const dv = this.allocateRelocMemory(len, align);
       const shadowDV = this.allocateShadowMemory(len, align);
       // create a shadow for the relocatable memory
-      const object = { constructor, [MEMORY]: dv, [COPIER]: copier };
-      const shadow = { constructor, [MEMORY]: shadowDV, [COPIER]: copier };
+      const object = { constructor, [MEMORY]: dv, [COPY]: copier };
+      const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
       this.addShadow(shadow, object, align);
       return shadowDV;
     },

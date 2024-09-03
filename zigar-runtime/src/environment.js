@@ -34,11 +34,11 @@ export function defineClass(name, mixins) {
     Object.assign(this, props);
   };
   const { prototype } = constructor;
-  defineProperty(constructor, 'name', { value: name });
+  defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
     for (const [ name, object ] of Object.entries(mixin)) {
       if (typeof(object) === 'function') {
-        defineProperty(prototype, name, { value: object });
+        defineProperty(prototype, name, defineValue(object));
       } else {
         let current = props[name];
         if (current !== undefined) {

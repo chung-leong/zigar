@@ -1,15 +1,15 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { MEMORY, RESTORER } from '../symbols.js';
+import { MEMORY, RESTORE } from '../symbols.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
-  getSpecialPropertyDescriptors(structure, handlers = {}) {
+  defineSpecialProperties(structure, handlers = {}) {
     const thisEnv = this;
     const dataView = markAsSpecial({
       get() {
         if (process.env.TARGET === 'wasm') {
-          this[RESTORER]();
+          this[RESTORE]();
         }
         return this[MEMORY];
       },

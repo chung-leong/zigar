@@ -1,11 +1,14 @@
+import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SELF, SLOTS } from '../symbols.js';
 
 export default mixin({
-  getDescriptor(member) {
-    const { type } = member;
-    const name = `getDescriptor${memberNames[type]}`;
-    const f = this[name];
+  defineMember(member, applyTransform = true) {
+    if (!member) {
+      return {};
+    }
+    const { type, structure } = member;
+    const handleName = `defineMember${memberNames[type]}`;
+    const f = this[handleName];
     /* c8 ignore start */
     if (process.env.DEV) {
       if (!f) {
@@ -13,41 +16,25 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    return f.call(this, member);
+    const descriptor = f.call(this, member);
+    if (applyTransform) {
+      // we use int/uint getters to access underlying values of enums and error sets;
+      // the transform functions put wrapper functions around the accessors that
+      // perform item lookup
+      const { type } = structure;
+      const handleName = `transformDescriptor${structureNames[type]}`;
+      const f = this[handleName];
+      if (f) {
+        return f(descriptor, structure);
+      }
+    }
+    return descriptor;
   },
 });
 
 export function isNeededByMember(member) {
   return true;
 }
-
-export const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  Object: 5,
-  Type: 6,
-  Comptime: 7,
-  Static: 8,
-  Literal: 9,
-  Null: 10,
-  Undefined: 11,
-  Unsupported: 12,
-};
-export const memberNames = Object.keys(MemberType);
-
-export function isReadOnly({ type }) {
-  switch (type) {
-    case MemberType.Type:
-    case MemberType.Comptime:
-    case MemberType.Literal:
-      return true;
-    default:
-      return false;
-  }
-};
 
 export function bindSlot(slot, { get, set }) {
   if (slot !== undefined) {
@@ -65,20 +52,5 @@ export function bindSlot(slot, { get, set }) {
     // array accessors
     return { get, set };
   }
-}
-
-export function getValue(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object[SELF];
-}
-
-export function getObject(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  return object;
-}
-
-export function setValue(slot, value) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATOR](slot);
-  object[SELF] = value;
 }
 

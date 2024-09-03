@@ -1,19 +1,16 @@
 import {
-  canBeString, createArrayProxy, getArrayEntries, getArrayIterator, getChildVivificator,
+  canBeString, getArrayEntries, getArrayIterator, getChildVivificator,
   getPointerVisitor, makeArrayReadOnly, transformIterable
 } from '../array.js';
 import { mixin } from '../environment.js';
-import {
-  ArrayLengthMismatch, InvalidArrayInitializer
-} from '../errors.js';
+import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { MemberType } from '../members/all.js';
-import { createPropertyApplier } from '../object.js';
 import { copyPointer, getProxy } from '../pointer.js';
 import {
-  COPIER, ENTRIES,
+  COPY, ENTRIES,
   LENGTH, MEMORY,
   PROTECTOR,
-  VISITOR, VIVIFICATOR
+  VISIT, VIVIFICATE
 } from '../symbols.js';
 import { getTypedArrayClass, StructureType } from './all.js';
 
@@ -27,7 +24,6 @@ export default mixin({
       byteSize,
       hasPointer,
     } = structure;
-    const thisEnv = this;
     /* c8 ignore start */
     if (process.env.DEV) {
       if (member.bitOffset !== undefined) {
@@ -38,7 +34,6 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    const { get, set } = this.getDescriptor(member);
     const { byteSize: elementSize, structure: elementStructure } = member;
     // method will not exist when there're no sentinels
     const sentinel = this.getSentinel?.(structure);
@@ -48,6 +43,7 @@ export default mixin({
       structure.sentinel = sentinel;
     }
     const hasStringProp = canBeString(member);
+    const thisEnv = this;
     const shapeDefiner = function(dv, length, fixed = false) {
       if (!dv) {
         dv = thisEnv.allocateMemory(length * elementSize, align, fixed);
@@ -62,7 +58,7 @@ export default mixin({
     };
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
-    const propApplier = createPropertyApplier(structure);
+    const propApplier = this.createApplier(structure);
     const initializer = function(arg, fixed = false) {
       if (arg instanceof constructor) {
         if (!this[MEMORY]) {
@@ -70,9 +66,9 @@ export default mixin({
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
-        this[COPIER](arg);
+        this[COPY](arg);
         if (hasPointer) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+          this[VISIT](copyPointer, { vivificate: true, source: arg });
         }
       } else if (typeof(arg) === 'string' && hasStringProp) {
         initializer.call(this, { string: arg }, fixed);
@@ -141,22 +137,23 @@ export default mixin({
       copier.call(slice, { [MEMORY]: dv1 });
       return slice;
     };
-    const finalizer = createArrayProxy;
+    const descriptor = this.defineMember(member);
+    const finalizer = function() {
+      return thisEnv.finalizeArray(this, descriptor);
+    };
     const constructor = structure.constructor = this.createConstructor(structure, { initializer, shapeDefiner, finalizer });
     const hasObject = member.type === MemberType.Object;
     const shapeHandlers = { shapeDefiner };
     const instanceDescriptors = {
       $: { get: getProxy, set: initializer },
       length: { get: getLength },
-      get: { value: get },
-      set: { value: set },
       entries: { value: getArrayEntries },
       slice: { value: getSliceOf },
       subarray: { value: getSubarrayOf },
       [Symbol.iterator]: { value: getArrayIterator },
       [ENTRIES]: { get: getArrayEntries },
-      [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this, true) },
-      [VISITOR]: hasPointer && { value: getPointerVisitor(structure) },
+      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this, true) },
+      [VISIT]: hasPointer && { value: getPointerVisitor(structure) },
       [PROTECTOR]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {

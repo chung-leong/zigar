@@ -1,12 +1,13 @@
 import { mixin } from '../environment.js';
 import { StructureType } from '../structures/all.js';
 import { TUPLE, TYPE } from '../symbols.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
-  getSpecialMethodDescriptors() {
+  defineSpecialMethods() {
     return {
-      toJSON: { value: convertToJSON },
-      valueOf: { value: convertToJS },
+      toJSON: defineValue(convertToJSON),
+      valueOf: defineValue(convertToJS),
     };
   },
 });

@@ -20,7 +20,7 @@ describe('Member: literal', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorLiteral', function() {
+  describe('defineMemberLiteral', function() {
     it('should return descriptor for literal', function() {
       const env = new Env();
       const member = {
@@ -28,7 +28,7 @@ describe('Member: literal', function() {
         slot: 1,
         structure: {},
       };
-      const { get } = env.getDescriptorLiteral(member);
+      const { get } = env.defineMemberLiteral(member);
       const object = {
         [SLOTS]: {
           1: { string: 'hello' }
@@ -36,15 +36,15 @@ describe('Member: literal', function() {
       };
       expect(get.call(object)).to.equal('hello');
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Literal,
         slot: 1,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

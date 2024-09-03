@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import {
-  ADDRESS_SETTER, COPIER, FIXED,
-  LENGTH_SETTER, MEMORY, RESTORER, SLOTS,
+  ADDRESS_SETTER, COPY, FIXED,
+  LENGTH_SETTER, MEMORY, RESTORE, SLOTS,
   TARGET
 } from '../symbols.js';
 
@@ -40,7 +40,7 @@ export default mixin({
     if (writeBack) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = fixedDV;
-      dest[COPIER](object);
+      dest[COPY](object);
     }
     object[MEMORY] = fixedDV;
     const linkChildren = (object) => {
@@ -69,14 +69,14 @@ export default mixin({
       return;
     }
     /* WASM-ONLY */
-    object[RESTORER]?.();
+    object[RESTORE]?.();
     /* WASM-ONLY-END */
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
-    if (object[COPIER]) {
+    if (object[COPY]) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = relocDV;
-      dest[COPIER](object);
+      dest[COPY](object);
     }
     object[MEMORY] = relocDV;
   },

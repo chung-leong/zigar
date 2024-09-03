@@ -3,7 +3,7 @@ import { defineClass } from '../../src/environment.js';
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
-import { ALIGN, COPIER, MEMORY } from '../../src/symbols.js';
+import { ALIGN, COPY, MEMORY } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [ MemoryMapping, DataCopying, CallMarshalingOutbound ]);
@@ -16,7 +16,7 @@ describe('Feature: memory-mapping', function() {
         const Test = function(dv) {
           this[MEMORY] = dv;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         const object = new Test(new DataView(new ArrayBuffer(8)));
         env.allocateShadowMemory = function(len, align) {
           return new DataView(new ArrayBuffer(len));
@@ -33,7 +33,7 @@ describe('Feature: memory-mapping', function() {
         const Test = function(dv) {
           this[MEMORY] = dv;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         Test[ALIGN] = 4;
         const buffer = new ArrayBuffer(16);
         const object1 = new Test(new DataView(buffer, 0, 8));
@@ -63,7 +63,7 @@ describe('Feature: memory-mapping', function() {
         const Test = function(dv) {
           this[MEMORY] = dv;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         const object = new Test(new DataView(new ArrayBuffer(8)));
         env.allocateShadowMemory = function(len, align) {
           return new DataView(new ArrayBuffer(len));
@@ -89,7 +89,7 @@ describe('Feature: memory-mapping', function() {
         const Test = function(dv) {
           this[MEMORY] = dv;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         Test[ALIGN] = 4;
         const buffer = new ArrayBuffer(32);
         const object1 = new Test(new DataView(buffer, 3, 8));
@@ -120,7 +120,7 @@ describe('Feature: memory-mapping', function() {
           this[MEMORY] = dv;
           dv[ALIGN] = 4;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         Test[ALIGN] = undefined;
         const buffer = new ArrayBuffer(32);
         const object1 = new Test(new DataView(buffer, 3, 8));
@@ -151,7 +151,7 @@ describe('Feature: memory-mapping', function() {
         const Test = function(dv) {
           this[MEMORY] = dv;
         };
-        defineProperty(Test.prototype, COPIER, env.getCopierDescriptor(8))
+        defineProperty(Test.prototype, COPY, env.defineCopier(8))
         Test[ALIGN] = 4;
         const buffer = new ArrayBuffer(32);
         const object1 = new Test(new DataView(buffer, 4, 8));
@@ -216,7 +216,7 @@ describe('Feature: memory-mapping', function() {
         const shadow = {};
         defineProperties(shadow, {
           [MEMORY]: { value: new DataView(new ArrayBuffer(4)) },
-          [COPIER]: this.getCopierDescriptor(),
+          [COPY]: this.defineCopier(),
         });
         env.getBufferAddress = function() {
           return 0x1000;
@@ -239,7 +239,7 @@ describe('Feature: memory-mapping', function() {
         const object = {};
         defineProperties(object, {
           [MEMORY]: { value: new DataView(new ArrayBuffer(4)) },
-          [COPIER]: env.getCopierDescriptor(8),
+          [COPY]: env.defineCopier(8),
         });
         const shadow = {
           [MEMORY]: new DataView(new ArrayBuffer(4)),

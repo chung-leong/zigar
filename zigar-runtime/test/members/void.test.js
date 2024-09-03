@@ -20,7 +20,7 @@ describe('Member: void', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorVoid', function() {
+  describe('defineMemberVoid', function() {
     it('should return descriptor for void', function() {
       const env = new Env();
       const member = {
@@ -30,12 +30,12 @@ describe('Member: void', function() {
         bitOffset: 0,
         structure: {},
       };
-      const { get, set } = env.getDescriptorVoid(member);
+      const { get, set } = env.defineMemberVoid(member);
       const object = { [MEMORY]: new DataView(new ArrayBuffer(2)) };
       set.call(object, undefined);
       expect(get.call(object)).to.be.undefined;
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Void,
@@ -44,8 +44,8 @@ describe('Member: void', function() {
         bitOffset: 0,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

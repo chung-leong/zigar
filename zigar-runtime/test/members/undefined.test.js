@@ -19,23 +19,23 @@ describe('Member: undefined', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorUndefined', function() {
+  describe('defineMemberUndefined', function() {
     it('should return descriptor for undefined', function() {
       const env = new Env();
       const member = {
         type: MemberType.Undefined,
       };
-      const { get } = env.getDescriptorUndefined(member);
+      const { get } = env.defineMemberUndefined(member);
       const object = {};
       expect(get.call(object)).to.be.undefined;
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Undefined,
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

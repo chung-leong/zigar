@@ -21,7 +21,7 @@ describe('Member: object', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorObject', function() {
+  describe('defineMemberObject', function() {
     it('should return descriptor for object', function() {
       const env = new Env();
       const member = {
@@ -31,7 +31,7 @@ describe('Member: object', function() {
           type: StructureType.Struct,
         },
       };
-      const { get, set } = env.getDescriptorObject(member);
+      const { get, set } = env.defineMemberObject(member);
       const struct = {
         value: 1,
         [SETTER]: function(arg) {
@@ -47,7 +47,7 @@ describe('Member: object', function() {
       set.call(object, { value: 2 });
       expect(struct.value).to.equal(2);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Object,
@@ -56,8 +56,8 @@ describe('Member: object', function() {
           type: StructureType.Primitive,
         },
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

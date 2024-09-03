@@ -20,7 +20,7 @@ describe('Member: type', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorType', function() {
+  describe('defineMemberType', function() {
     it('should return descriptor for type', function() {
       const env = new Env();
       const member = {
@@ -28,7 +28,7 @@ describe('Member: type', function() {
         slot: 1,
         structure: {},
       };
-      const { get } = env.getDescriptorType(member);
+      const { get } = env.defineMemberType(member);
       const constructor = function() {};
       const object = {
         [SLOTS]: {
@@ -37,15 +37,15 @@ describe('Member: type', function() {
       };
       expect(get.call(object)).to.equal(constructor);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Type,
         slot: 1,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

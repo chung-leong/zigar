@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import { MemberType } from './all.js';
 
 export default mixin({
-  getDescriptorUndefined(member) {
+  defineMemberUndefined(member) {
     return {
       get: function() {
         return undefined;

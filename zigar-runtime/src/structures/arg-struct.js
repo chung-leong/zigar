@@ -3,10 +3,10 @@ import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
 import { MemberType } from '../members/all.js';
 import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
-  ALIGN, COPIER, MEMORY, RESTORER,
+  ALIGN, COPY, MEMORY, RESTORE,
   SIZE, SLOTS,
-  VISITOR,
-  VIVIFICATOR
+  VISIT,
+  VIVIFICATE
 } from '../symbols.js';
 import { StructureType } from './all.js';
 
@@ -53,21 +53,21 @@ export default mixin({
     };
     const memberDescriptors = {};
     for (const member of members) {
-      memberDescriptors[member.name] = this.getDescriptor(member);
+      memberDescriptors[member.name] = this.defineMember(member);
     }
     const { slot: retvalSlot, type: retvalType } = members[0];
     const isChildMutable = (retvalType === MemberType.Object)
     ? function(object) {
-        const child = this[VIVIFICATOR](retvalSlot);
+        const child = this[VIVIFICATE](retvalSlot);
         return object === child;
       }
     : function() { return false };
     defineProperties(constructor.prototype, {
       ...memberDescriptors,
-      [COPIER]: this.getCopierDescriptor(byteSize),
-      [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [VISITOR]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
-      [RESTORER]: process.env.TARGET === 'wasm' && { value: this.getMemoryRestorer(null) },
+      [COPY]: this.defineCopier(byteSize),
+      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this) },
+      [VISIT]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
+      [RESTORE]: process.env.TARGET === 'wasm' && { value: this.getMemoryRestorer(null) },
     });
     defineProperties(constructor, {
       [ALIGN]: { value: align },

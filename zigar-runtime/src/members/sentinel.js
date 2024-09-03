@@ -19,9 +19,9 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    const { get: getSentinelValue } = this.getDescriptor(sentinel);
+    const { get: getSentinelValue } = this.defineMember(sentinel);
     const value = getSentinelValue.call(template, 0);
-    const { get } = this.getDescriptor(member);
+    const { get } = this.defineMember(member);
     const { isRequired } = sentinel;
     const validateValue = (isRequired)
     ? (this.runtimeSafety)

@@ -1,47 +1,31 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
 } from '../errors.js';
-import { MemberType } from '../members/all.js';
+import { getZigIterator } from '../iterators.js';
+import { copyPointer, disablePointer, resetPointer } from '../pointer.js';
 import {
-  getSelf
-} from '../object.js';
-import { copyPointer, disablePointer, never, resetPointer } from '../pointer.js';
-import {
-  handleError
-} from '../special.js';
-import { getChildVivificator, getIteratorIterator, getPointerVisitor } from '../struct.js';
-import {
-  COPIER, ENTRIES,
-  GETTERS,
-  NAME,
-  PROPS,
-  SETTERS,
-  TAG,
-  VISITOR,
-  VIVIFICATOR
+  COPY, ENTRIES, INITIALIZE, MODIFY, NAME, TAG, VISIT, VIVIFICATE
 } from '../symbols.js';
+import { defineValue } from '../utils.js';
 import { StructureType } from './all.js';
 
 export default mixin({
-  defineUnion(structure) {
+  defineUnion(structure, descriptors) {
     const {
       type,
-      byteSize,
-      align,
-      instance: { members, template },
-      isIterator,
-      hasPointer,
+      flags,
+      instance: { members,  },
     } = structure;
-    const isTagged = (type === StructureType.TaggedUnion);
-    const exclusion = (isTagged || (type === StructureType.BareUnion && this.runtimeSafety));
-    const memberDescriptors = {};
     const memberInitializers = {};
     const memberValueGetters = {};
-    const valueMembers = (exclusion) ? members.slice(0, -1) : members;
-    const selectorMember = (exclusion) ? members[members.length - 1] : null;
-    const { get: getSelector, set: setSelector } = (exclusion) ? this.getDescriptor(selectorMember) : {};
-    const getActiveField = (isTagged)
+    const valueMembers = (flags & StructureFlag.HasSelector) ? members.slice(0, -1) : members;
+    const selectorMember = (flags & StructureFlag.HasSelector) ? members[members.length - 1] : null;
+    const { get: getSelector, set: setSelector } = this.defineMember(selectorMember);
+    const { get: getSelectorNumber, set: setSelectorNumber } = this.defineMember(selectorMember);
+
+    const getActiveField = (flags & StructureFlag.HasTag)
     ? function() {
         const item = getSelector.call(this);
         return item[NAME];
@@ -50,7 +34,7 @@ export default mixin({
         const index = getSelector.call(this);
         return valueMembers[index].name;
       };
-    const setActiveField = (isTagged)
+    const setActiveField = (flags & StructureFlag.HasTag)
     ? function(name) {
         const { constructor } = selectorMember.structure;
         setSelector.call(this, constructor[name]);
@@ -59,14 +43,41 @@ export default mixin({
         const index = valueMembers.findIndex(m => m.name === name);
         setSelector.call(this, index);
       };
+    const memberKeys = Object.keys(memberDescriptors);
+    const propApplier = this.createApplier(structure);
+    const initializer = function(arg) {
+      if (arg instanceof constructor) {
+        /* WASM-ONLY-END */
+        this[COPY](arg);
+        if (hasPointer) {
+          this[VISIT](copyPointer, { vivificate: true, source: arg });
+        }
+      } else if (arg && typeof(arg) === 'object') {
+        let found = 0;
+        for (const key of memberKeys) {
+          if (key in arg) {
+            found++;
+          }
+        }
+        if (found > 1) {
+          throw new MultipleUnionInitializers(structure);
+        }
+        if (propApplier.call(this, arg) === 0) {
+          throw new MissingUnionInitializer(structure, arg, exclusion);
+        }
+      } else if (arg !== undefined) {
+        throw new InvalidInitializer(structure, 'object with a single property', arg);
+      }
+    };
+    const constructor = this.createConstructor(structure);
     for (const member of valueMembers) {
       const { name } = member;
-      const { get: getValue, set: setValue } = this.getDescriptor(member);
+      const { get: getValue, set: setValue } = this.defineMember(member);
       const get = (exclusion)
       ? function() {
           const currentName = getActiveField.call(this);
           if (name !== currentName) {
-            if (isTagged) {
+            if (flags & StructureFlag.HasTag) {
               // tagged union allows inactive member to be queried
               return null;
             } else {
@@ -75,7 +86,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISITOR]?.(resetPointer);
+          this[VISIT]?.(resetPointer);
           return getValue.call(this);
         }
       : getValue;
@@ -92,149 +103,51 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISITOR]?.(resetPointer);
+          this[VISIT]?.(resetPointer);
         }
       : setValue;
-      memberDescriptors[name] = { get, set, configurable: true, enumerable: true };
+      descriptors[name] = { get, set };
       memberInitializers[name] = init;
       memberValueGetters[name] = getValue;
     }
-    const hasDefaultMember = !!valueMembers.find(m => !m.isRequired);
-    const memberKeys = Object.keys(memberDescriptors);
-    const propApplier = this.createPropertyApplier(structure);
-    const initializer = function(arg) {
-      if (arg instanceof constructor) {
-        /* WASM-ONLY-END */
-        this[COPIER](arg);
-        if (hasPointer) {
-          this[VISITOR](copyPointer, { vivificate: true, source: arg });
+    descriptors.$ = { get: function() { return this }, set: initializer };
+    descriptors[Symbol.iterator] = {
+      value: (flags & StructureFlag.IsIterator) ? getZigIterator : getUnionIterator,
+    };
+    descriptors[Symbol.toPrimitive] = (flags & StructureFlag.HasTag) && {
+      value(hint) {
+        switch (hint) {
+          case 'string':
+          case 'default':
+            return getActiveField.call(this);
+          default:
+            return getSelectorNumber(this);
         }
-      } else if (arg && typeof(arg) === 'object') {
-        let found = 0;
-        for (const key of memberKeys) {
-          if (key in arg) {
-            found++;
-          }
-        }
-        if (found > 1) {
-          throw new MultipleUnionInitializers(structure);
-        }
-        if (propApplier.call(this, arg) === 0 && !hasDefaultMember) {
-          throw new MissingUnionInitializer(structure, arg, exclusion);
-        }
-      } else if (arg !== undefined) {
-        throw new InvalidInitializer(structure, 'object with a single property', arg);
       }
     };
-    // non-tagged union as marked as not having pointers--if there're actually
-    // members with pointers, we need to disable them
-    const pointerMembers = members.filter(m => m.structure?.hasPointer);
-    const hasInaccessiblePointer = !hasPointer && (pointerMembers.length > 0);
-    const modifier = (hasInaccessiblePointer && !this.comptime)
-    ? function() {
-        // make pointer access throw
-        this[VISITOR](disablePointer, { vivificate: true });
+    descriptors[MODIFY] = (flags & StructureFlag.HasInaccessible && !this.comptime) && {
+      value() {
+        // pointers in non-tagged union are not accessible--we need to disable them
+        this[VISIT](disablePointer, { vivificate: true });
       }
-    : undefined;
-    const constructor = structure.constructor = this.createConstructor(structure, { modifier, initializer });
-    const fieldDescriptor = (isTagged)
-    ? {
-        // for tagged union,  only the active field
-        get() { return [ getActiveField.call(this) ] }
-      }
-    : {
-        // for bare and extern union, all members are included
-        value: valueMembers.map(m => m.name)
-      };
-    const isChildActive = (isTagged)
-    ? function(child) {
-        const name = getActiveField.call(this);
-        const active = memberValueGetters[name].call(this);
-        return child === active;
-      }
-    : never;
-    const toPrimitive = (isTagged)
-    ? function(hint) {
-      switch (hint) {
-        case 'string':
-        case 'default':
-          return getActiveField.call(this);
-        default:
-          return getSelector.call(this, 'number');
-      }
-    }
-    : null;
-    const getTagClass = function() { return selectorMember.structure.constructor };
-    const getIterator = (isIterator) ? getIteratorIterator : getUnionIterator;
-    const hasAnyPointer = hasPointer || hasInaccessiblePointer;
-    const hasObject = !!members.find(m => m?.type === MemberType.Object);
-    const instanceDescriptors = {
-      $: { get: getSelf, set: initializer, configurable: true },
-      ...memberDescriptors,
-      [Symbol.iterator]: { value: getIterator },
-      [Symbol.toPrimitive]: isTagged && { value: toPrimitive },
-      [ENTRIES: { value: getUnionEntries },
-      [TAG]: isTagged && { get: getSelector, configurable: true },
-      [VIVIFICATOR]: hasObject && { value: getChildVivificator(structure, this) },
-      [VISITOR]: hasAnyPointer && { value: getPointerVisitor(structure, { isChildActive }) },
-      [GETTERS]: { value: memberValueGetters },
-      [PROPS]: fieldDescriptor,
     };
-    const staticDescriptors = {
-      tag: isTagged && { get: getTagClass },
-    };
-    this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
-    // replace regular setters with ones that change the active field
-    const setters = constructor.prototype[SETTERS];
-    for (const [ name, init ] of Object.entries(memberInitializers)) {
-      if (init) {
-        setters[name] = init;
-      }
-    }
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[ENTRIES] = { get: getUnionEntries };
+    descriptors[TAG] = (flags & StructureFlag.HasTag) && { get: getSelector, set : setSelector };
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
+      isChildActive: (flags & StructureFlag.HasTag)
+      ? function(child) {
+          const name = getActiveField.call(this);
+          const active = memberValueGetters[name].call(this);
+          return child === active;
+        }
+      : () => false,
+    });
     return constructor;
   },
 });
 
 export function isNeededByStructure(structure) {
-  switch (structure.type) {
-    case StructureType.TaggedUnion:
-    case StructureType.BareUnion:
-    case StructureType.ExternUnion:
-      return true;
-    default:
-      return false;
-  }
-}
-
-export function getUnionEntries(options) {
-  return {
-    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
-export function getUnionIterator(options) {
-  const entries = getUnionEntries.call(this, options);
-  return entries[Symbol.iterator]();
-}
-
-export function getUnionEntriesIterator(options) {
-  const self = this;
-  const props = this[PROPS];
-  const getters = this[GETTERS];
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        // get value of prop with no check
-        value = [ current, handleError(() => getters[current].call(self), options) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
+  return structure.type === StructureType.Union;
 }

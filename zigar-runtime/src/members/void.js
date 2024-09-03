@@ -3,7 +3,7 @@ import { NotUndefined, OutOfBound } from '../errors.js';
 import { MemberType } from '../members/all.js';
 
 export default mixin({
-  getDescriptorVoid(member, env) {
+  defineMemberVoid(member, env) {
     const { bitOffset } = member;
     return {
       get() {

@@ -2,13 +2,13 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPIER, ENVIRONMENT, FIXED, MEMORY, PROTECTOR } from '../symbols.js';
+import { COPY, ENVIRONMENT, FIXED, MEMORY, PROTECTOR, SHAPE } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
 
-  extractView(structure, arg, required = true) {
+  extractView(structure, arg, onError = throwError) {
     const { type, byteSize, typedArray } = structure;
     let dv;
     // not using instanceof just in case we're getting objects created in other contexts
@@ -49,16 +49,15 @@ export default mixin({
     if (dv && byteSize !== undefined) {
       checkDataViewSize(dv, structure);
     }
-    if (required && !dv) {
-      throw new BufferExpected(structure);
+    if (dv) {
+      onError?.(structure, arg);
     }
     return dv;
   },
-  assignView(target, dv, structure, copy, fixed, handlers) {
+  assignView(target, dv, structure, copy, fixed) {
     const { byteSize, type, sentinel } = structure;
     const elementSize = byteSize ?? 1;
     if (!target[MEMORY]) {
-      const { shapeDefiner } = handlers;
       if (byteSize !== undefined) {
         checkDataViewSize(dv, structure);
       }
@@ -69,9 +68,9 @@ export default mixin({
         // need to copy when target object is in fixed memory
         copy = true;
       }
-      shapeDefiner.call(target, copy ? null : dv, len, fixed);
+      target[SHAPE](copy ? null : dv, len, fixed);
       if (copy) {
-        target[COPIER](source);
+        target[COPY](source);
       }
     } else {
       const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
@@ -80,7 +79,7 @@ export default mixin({
       }
       const source = { [MEMORY]: dv };
       sentinel?.validateData(source, target.length);
-      target[COPIER](source);
+      target[COPY](source);
     }
   },
   findViewAt(buffer, offset, len) {
@@ -228,6 +227,10 @@ function findElements(arg, Child) {
 
 function isArrayLike(type) {
   return type === StructureType.Array || type === StructureType.Vector || type === StructureType.Slice;
+}
+
+function throwError(structure) {
+  throw new BufferExpected(structure);
 }
 
 const defaultAlign = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : /* c8 ignore next */ 8;

@@ -20,7 +20,7 @@ describe('Member: comptime', function() {
       expect(isNeededByMember(member)).to.be.false;
     })
   })
-  describe('getDescriptorComptime', function() {
+  describe('defineMemberComptime', function() {
     it('should return descriptor for comptime', function() {
       const env = new Env();
       const member = {
@@ -28,7 +28,7 @@ describe('Member: comptime', function() {
         slot: 1,
         structure: {},
       };
-      const { get } = env.getDescriptorComptime(member);
+      const { get } = env.defineMemberComptime(member);
       const object = {
         [SLOTS]: {
           1: 1234
@@ -36,15 +36,15 @@ describe('Member: comptime', function() {
       };
       expect(get.call(object)).to.equal(1234);
     })
-    it('should be invokable through getDescriptor', function() {
+    it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {
         type: MemberType.Comptime,
         slot: 1,
         structure: {},
       };
-      env.getDescriptor(member);
-      expect(() => env.getDescriptor(member)).to.not.throw();
+      env.defineMember(member);
+      expect(() => env.defineMember(member)).to.not.throw();
     })
   })
 })

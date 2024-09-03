@@ -1,26 +1,26 @@
 import { mixin } from '../environment.js';
 import { adjustRangeError } from '../errors.js';
-import { MEMORY, RESTORER } from '../symbols.js';
+import { MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
-  getDescriptorBool(member) {
-    return this.getDescriptorUsing(member, this.getAccessor);
+  defineMemberBool(member) {
+    return this.defineMemberUsing(member, this.getAccessor);
   },
-  getDescriptorFloat(member) {
-    return this.getDescriptorUsing(member, this.getAccessor);
+  defineMemberFloat(member) {
+    return this.defineMemberUsing(member, this.getAccessor);
   },
-  getDescriptorInt(member) {
+  defineMemberInt(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
       getAccessor = this.addRuntimeCheck(env, getAccessor);
     }
-    return this.getDescriptorUsing(member, getAccessor);
+    return this.defineMemberUsing(member, getAccessor);
   },
-  getDescriptorUint(member) {
-    return this.getDescriptorInt(member);
+  defineMemberUint(member) {
+    return this.defineMemberInt(member);
   },
   ...(process.env.TARGET === 'wasm' ? {
-    getDescriptorUsing(member, getAccessor) {
+    defineMemberUsing(member, getAccessor) {
       const { littleEndian } = this;
       const { bitOffset, byteSize } = member;
       const getter = getAccessor.call(this, 'get', member);
@@ -39,7 +39,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], offset, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORE]()) {
                 return getter.call(this[MEMORY], offset, littleEndian);
               } else {
                 throw err;
@@ -50,7 +50,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], offset, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORE]()) {
                 return setter.call(this[MEMORY], offset, value, littleEndian);
               } else {
                 throw err;
@@ -64,7 +64,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], index * byteSize, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORE]()) {
                 return getter.call(this[MEMORY], index * byteSize, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);
@@ -75,7 +75,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORER]()) {
+              if (err instanceof TypeError && this[RESTORE]()) {
                 return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);
@@ -86,7 +86,7 @@ export default mixin({
       }
     },
   } : {
-    getDescriptorUsing(member, getAccessor) {
+    defineMemberUsing(member, getAccessor) {
       const { littleEndian } = this;
       const { bitOffset, byteSize } = member;
       const getter = getAccessor.call(this, 'get', member);

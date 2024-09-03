@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import {
-  COPIER, ENVIRONMENT, MEMORY,
+  COPY, ENVIRONMENT, MEMORY,
   PROTECTOR,
-  VISITOR
+  VISIT
 } from '../../src/symbols.js';
 
 import DataCopying from '../../src/features/data-copying.js';
@@ -275,7 +275,7 @@ describe('Feature: view-management', function() {
       };
       defineProperties(target, {
         [MEMORY]: { value: new DataView(new ArrayBuffer(16)) },
-        [COPIER]: env.getCopierDescriptor(16),
+        [COPY]: env.defineCopier(16),
         length: { value: 16 },
       });
       const dv = new DataView(new ArrayBuffer(16));
@@ -331,7 +331,7 @@ describe('Feature: view-management', function() {
       const structure = {
         constructor: function(dv) {
           return {
-            [VISITOR]: function(f) { visitor = f },
+            [VISIT]: function(f) { visitor = f },
             [PROTECTOR]: () => {},
           };
         },

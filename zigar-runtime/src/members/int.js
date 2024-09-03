@@ -2,12 +2,12 @@ import { mixin } from '../environment.js';
 import { MemberType } from './all.js';
 
 export default mixin({
-  getDescriptorInt(member) {
+  defineMemberInt(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
       getAccessor = this.addRuntimeCheck(env, getAccessor);
     }
-    return this.getDescriptorUsing(member, getAccessor);
+    return this.defineMemberUsing(member, getAccessor);
   },
 });
 
