@@ -1,7 +1,6 @@
-import { StructureType } from '../../src/structures/all.js';
 import { CONST_TARGET, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MemberType } from '../members/all.js';
 
 export default mixin({
   comptime: false,

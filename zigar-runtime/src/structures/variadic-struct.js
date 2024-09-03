@@ -1,6 +1,6 @@
+import { MemberType, StructureType } from '../constants.js';
 import { defineProperties, mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { MemberType } from '../members/all.js';
 import { getMemoryCopier } from '../memory.js';
 import { always } from '../pointer.js';
 import { getChildVivificator } from '../struct.js';
@@ -15,7 +15,6 @@ import {
   VIVIFICATE
 } from '../symbols.js';
 import { alignForward } from '../utils.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineVariadicStruct(structure) {

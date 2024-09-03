@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { ALIGN, FIXED, MEMORY, RESTORE } from '../symbols.js';
-import { add, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
+import { add, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
@@ -30,7 +30,7 @@ export default mixin({
   addShadow(shadow, object, align) {
     const shadowMap = this.context.shadowMap ??= new Map();
     if (process.env.TARGET === 'wasm') {
-      shadow[RESTORE] = this.getMemoryRestorer(null, this);
+      defineProperty(shadow, RESTORE, this.defineRestorer(false));
     }
     shadowMap.set(shadow, object);
     this.registerMemory(shadow[MEMORY], object[MEMORY], align);

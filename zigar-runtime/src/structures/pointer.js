@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
@@ -6,7 +6,6 @@ import {
   warnImplicitArrayCreation
 } from '../errors.js';
 import { defineMember } from '../member.js';
-import { MemberType } from '../members/all.js';
 import { createConstructor, defineProperties } from '../object.js';
 import {
   ADDRESS,
@@ -15,7 +14,6 @@ import {
   LENGTH,
   MAX_LENGTH, MEMORY,
   PARENT,
-  PROTECTOR,
   PROXY,
   RESTORE,
   SELF,
@@ -23,7 +21,6 @@ import {
   SIZE, SLOTS, TARGET, TARGET_UPDATER, TYPE,
   VISIT
 } from '../symbols.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   definePointer(structure, env) {
@@ -33,7 +30,6 @@ export default mixin({
       flags,
       byteSize,
       instance: { members: [ member ] },
-      isConst,
     } = structure;
     const {
       runtimeSafety = true,
@@ -98,12 +94,12 @@ export default mixin({
       const pointer = this[SELF] ?? this;
       const target = updateTarget.call(pointer, false);
       if (!target) {
-        if (type === StructureType.CPointer) {
+        if (flags & StructureFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (isConst) ? getConstProxy(target) : target;
+      return (flags & StructureFlag.IsConst) ? getConstProxy(target) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
@@ -221,7 +217,7 @@ export default mixin({
           throw new ConstantConstraint(structure, arg);
         }
         arg = arg[SLOTS][0];
-      } else if (type != StructureType.SinglePointer) {
+      } else if (flags & StructureFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, type)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
@@ -330,7 +326,6 @@ export default mixin({
       [ADDRESS]: { value: setAddress },
       [LENGTH]: setLength && { value: setLength },
       [VISIT]: { value: visitPointer },
-      [PROTECTOR]: { value: makePointerReadOnly },
       [LAST_ADDRESS]: { value: undefined, writable: true },
       [LAST_LENGTH]: setLength && { value: undefined, writable: true },
     };
@@ -343,15 +338,7 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
-  switch (structure.type) {
-    case StructureType.CPointer:
-    case StructureType.MultiPointer:
-    case StructureType.SinglePointer:
-    case StructureType.SlicePointer:
-      return true;
-    default:
-      return false;
-  }
+  return structure.type === StructureType.Pointer:
 }
 
 function deleteTarget() {
@@ -367,28 +354,57 @@ export function getProxy() {
 export { copyPointer } from '.../../src/object.js';
 
 export function resetPointer({ isActive }) {
-  if (this[SLOTS][0] && !isActive(this)) {
-    this[SLOTS][0] = undefined;
-  }
 }
 
-export function disablePointer() {
-  const throwError = () => { throw new InaccessiblePointer() };
-  const disabledProp = { get: throwError, set: throwError };
-  defineProperties(this[SELF], {
-    '*': disabledProp,
-    '$': disabledProp,
-    [SELF]: disabledProp,
-    [TARGET]: disabledProp,
-  });
-}
+function throwInaccessible() {
+  throw new InaccessiblePointer();
+};
 
-function visitPointer(fn, options = {}) {
+const builtinVisitors = {
+  copy({ source }) {
+    const target = source[SLOTS][0];
+    if (target) {
+      this[TARGET_SETTER](target);
+    }
+  },
+  reset({ isActive }) {
+    if (this[SLOTS][0] && !isActive(this)) {
+      this[SLOTS][0] = undefined;
+    }
+  },
+  disable() {
+    const disabledProp = { get: throwInaccessible, set: throwInaccessible };
+    defineProperties(this[SELF], {
+      '*': disabledProp,
+      '$': disabledProp,
+      [SELF]: disabledProp,
+      [TARGET]: disabledProp,
+    });
+  },
+};
+
+function visitPointer(visitor, options = {}) {
   const {
     source,
     isActive = always,
     isMutable = always,
   } = options;
+  let fn;
+  if (typeof(visitor) === 'string') {
+    fn = builtinVisitors[visitor];
+    if (process.env.DEV) {
+      if (!fn) {
+        throw new Error(`Unrecognized visitor: ${visitor}`);
+      }
+    }
+  } else {
+    fn = visitor;
+    if (process.env.DEV) {
+      if (typeof(fn) !== 'function') {
+        throw new Error(`Invalid visitor: ${visitor}`);
+      }
+    }
+  }
   fn.call(this, { source, isActive, isMutable });
 }
 
@@ -397,6 +413,7 @@ function isPointerOf(arg, Target) {
 }
 
 function isCompatiblePointer(arg, Target, type) {
+  // FIXME
   if (type !== StructureType.SinglePointer) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;

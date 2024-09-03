@@ -1,3 +1,4 @@
+import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';

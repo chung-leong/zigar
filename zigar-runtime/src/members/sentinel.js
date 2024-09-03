@@ -1,6 +1,6 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MisplacedSentinel, MissingSentinel } from '../errors.js';
-import { StructureType } from '../structures/all.js';
 import { MEMORY } from '../symbols.js';
 
 export default mixin({

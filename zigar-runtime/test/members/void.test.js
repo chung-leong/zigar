@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Void, {
   isNeededByMember,
 } from '../../src/members/void.js';

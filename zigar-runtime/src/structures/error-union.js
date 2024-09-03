@@ -1,7 +1,7 @@
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotInErrorSet } from '../errors.js';
-import { copyPointer, resetPointer } from '../pointer.js';
+import { resetPointer } from '../pointer.js';
 import { CLASS, COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { isErrorJSON } from '../types.js';
 import { defineValue } from '../utils.js';
@@ -38,7 +38,7 @@ export default mixin({
         this[COPY](arg);
         if (hasPointer) {
           if (isChildActive.call(this)) {
-            this[VISIT](copyPointer, { vivificate: true, source: arg });
+            this[VISIT]('copy', { vivificate: true, source: arg });
           }
         }
       } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {

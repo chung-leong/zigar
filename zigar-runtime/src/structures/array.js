@@ -1,7 +1,7 @@
 import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { copyPointer, getProxy } from '../pointer.js';
+import { getProxy } from '../pointer.js';
 import { COPY, ENTRIES, FINALIZE, TYPED_ARRAY, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
@@ -30,7 +30,7 @@ export default mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT](copyPointer, { vivificate: true, source: arg });
+          this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else {
         if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {

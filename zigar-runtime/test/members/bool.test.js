@@ -3,7 +3,8 @@ import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Bool, {
   isNeededByMember,
 } from '../../src/members/bool.js';

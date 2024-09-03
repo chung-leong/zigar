@@ -2,14 +2,14 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
+import { MemberType, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
 import ViewManagement from '../../src/features/view-management.js';
-import MemberAll, { MemberType } from '../../src/members/all.js';
+import MemberAll from '../../src/members/all.js';
 import MemberInt from '../../src/members/int.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import All, {
   isNeededByStructure,
-  StructureType,
 } from '../../src/structures/all.js';
 import Primitive from '../../src/structures/primitive.js';
 

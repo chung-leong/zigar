@@ -53,8 +53,10 @@ export default mixin({
       const cluster = clusterMap.get(target);
       const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
       // update the pointer
-      pointer[ADDRESS_SETTER](address);
-      pointer[LENGTH_SETTER]?.(target.length);
+      pointer[ADDRESS] = address;
+      if (LENGTH in pointer) {
+        pointer[LENGTH] = target.length;
+      }
     }
   },
   updatePointerTargets(args) {

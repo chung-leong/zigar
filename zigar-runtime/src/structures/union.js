@@ -1,15 +1,14 @@
-import { StructureFlag } from '../constants.js';
+import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
 } from '../errors.js';
 import { getZigIterator } from '../iterators.js';
-import { copyPointer, disablePointer, resetPointer } from '../pointer.js';
+import { resetPointer } from '../pointer.js';
 import {
   COPY, ENTRIES, INITIALIZE, MODIFY, NAME, TAG, VISIT, VIVIFICATE
 } from '../symbols.js';
 import { defineValue } from '../utils.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineUnion(structure, descriptors) {
@@ -50,7 +49,7 @@ export default mixin({
         /* WASM-ONLY-END */
         this[COPY](arg);
         if (hasPointer) {
-          this[VISIT](copyPointer, { vivificate: true, source: arg });
+          this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
@@ -128,7 +127,7 @@ export default mixin({
     descriptors[MODIFY] = (flags & StructureFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT](disablePointer, { vivificate: true });
+        this[VISIT]('disable', { vivificate: true });
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);

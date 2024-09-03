@@ -1,8 +1,6 @@
 import { mixin } from '../environment.js';
 import {
-  ADDRESS_SETTER, COPY, FIXED,
-  LENGTH_SETTER, MEMORY, RESTORE, SLOTS,
-  TARGET
+  ADDRESS, COPY, FIXED, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../symbols.js';
 
 export default mixin({
@@ -26,8 +24,10 @@ export default mixin({
     for (const pointer of pointers) {
       const target = pointer[TARGET];
       const address = this.getViewAddress(target[MEMORY]);
-      pointer[ADDRESS_SETTER](address);
-      pointer[LENGTH_SETTER]?.(target.length);
+      pointer[ADDRESS] = address;
+      if (LENGTH in pointer) {
+        pointer[LENGTH] = target.length;
+      }
     }
   },
   linkObject(object, reloc, writeBack) {

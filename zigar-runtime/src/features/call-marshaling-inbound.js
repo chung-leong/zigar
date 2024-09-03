@@ -1,5 +1,5 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { StructureType } from '../structures/all.js';
 
 export default mixin({
   jsFunctionMap: null,
@@ -58,7 +58,7 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   const { type, instance: { members } } = structure;
-  if (type === StructureType.SinglePointer) {
+  if (type === StructureType.Pointer) {
     const { type: targetType } = members[0].structure;
     return targetType === StructureType.Function;
   }

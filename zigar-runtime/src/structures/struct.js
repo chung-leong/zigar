@@ -4,8 +4,9 @@ import { InvalidInitializer } from '../errors.js';
 import {
   getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
 } from '../iterators.js';
-import { always, copyPointer } from '../pointer.js';
+import { always } from '../pointer.js';
 import { COPY, ENTRIES, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
+import { defineValue } from '../utils.js';
 import { getSelf } from './all.js';
 
 export default mixin({
@@ -21,7 +22,7 @@ export default mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (hasPointer) {
-          this[VISIT](copyPointer, { vivificate: true, source: arg });
+          this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
         propApplier.call(this, arg);

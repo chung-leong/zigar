@@ -1,11 +1,11 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
+import { StructureType } from '../../src/constants.js';
 import CallMarshalingOutbound, {
   CallContext,
   isNeededByStructure,
 } from '../../src/features/call-marshaling-outbound.js';
-import { StructureType } from '../../src/structures/all.js';
 
 const Env = defineClass('FeatureTest', [ CallMarshalingOutbound ]);
 

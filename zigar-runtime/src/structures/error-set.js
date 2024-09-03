@@ -2,8 +2,7 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
 import { CAST, CLASS, INITIALIZE } from '../symbols.js';
-import { defineProperties } from '../utils.js';
-import { getTypedArrayClass } from './all.js';
+import { defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
   currentGlobalSet: undefined,
@@ -22,7 +21,6 @@ export default mixin({
     }
     if (this.currentGlobalSet && name === 'anyerror') {
       structure.constructor = this.currentGlobalSet;
-      structure.typedArray = getTypedArrayClass(member);
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);

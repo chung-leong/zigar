@@ -1,7 +1,6 @@
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MemberType } from '../members/all.js';
 import { MEMORY, PARENT, PROXY, SLOTS } from '../symbols.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineFinalizerArray({ get, set }) {

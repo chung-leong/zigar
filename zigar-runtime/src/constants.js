@@ -16,24 +16,26 @@ export const StructureType = {
   Function: 13,
 };
 export const StructureFlag = {
-  HasPointer:     0x0000_0001,
-  HasObject:      0x0000_0002,
-  HasLength:      0x0000_0004,
-  HasSlots:       0x0000_0008,
-  HasTag:         0x0000_0010,
-  HasSelector:    0x0000_0020,
-  HasValue:       0x0000_0040,
-  HasInaccessible 0x0000_0080,
+  HasPointer:       0x0000_0001,
+  HasObject:        0x0000_0002,
+  HasLength:        0x0000_0004,
+  HasSlots:         0x0000_0008,
+  HasTag:           0x0000_0010,
+  HasSelector:      0x0000_0020,
+  HasValue:         0x0000_0040,
+  HasInaccessible:  0x0000_0080,
 
-  IsMultiple:     0x0000_0100,
-  IsSingle:       0x0000_0200,
-  IsPacked:       0x0000_0400,
-  IsExtern:       0x0000_0800,
-  IsString:       0x0000_1000,
-  IsIterator:     0x0000_2000,
-  IsTuple:        0x0000_4000,
-  IsOpenEnded:    0x0000_8000,
-  IsVariandic:    0x0001_0000,
+  IsConst:          0x0000_0100,
+  IsMultiple:       0x0000_0200,
+  IsSingle:         0x0000_0400,
+  IsNullable:       0x0000_0800,
+  IsPacked:         0x0000_1000,
+  IsExtern:         0x0000_2000,
+  IsString:         0x0000_4000,
+  IsIterator:       0x0000_8000,
+  IsTuple:          0x0001_0000,
+  IsOpenEnded:      0x0002_0000,
+  IsVariandic:      0x0004_0000,
 };
 export const structureNames = Object.keys(StructureType);
 
@@ -52,9 +54,9 @@ export const MemberType = {
 };
 export const memberNames = Object.keys(MemberType);
 export const MemberFlag = {
-  IsRequired:   0x0000_0001,
-  IsReadOnly:   0x0000_0002,
-  IsSentinel:   0x0000_0004,
-  IsSelector:   0x0000_0008,
-  IsBackingInt: 0x0000_0010,
+  IsRequired:       0x0000_0001,
+  IsReadOnly:       0x0000_0002,
+  IsSentinel:       0x0000_0004,
+  IsSelector:       0x0000_0008,
+  IsBackingInt:     0x0000_0010,
 };

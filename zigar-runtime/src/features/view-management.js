@@ -1,8 +1,9 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPY, ENVIRONMENT, FIXED, MEMORY, PROTECTOR, SHAPE } from '../symbols.js';
+import { COPY, ENVIRONMENT, FIXED, MEMORY, SHAPE } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
@@ -167,7 +168,8 @@ export default mixin({
       this.updatePointerTargets(object);
     }
     if (copy) {
-      object[PROTECTOR]();
+      // FIXME
+      // object[PROTECTOR]();
     }
     return object;
   },

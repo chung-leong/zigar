@@ -7,11 +7,7 @@ import ObjectLinkage from '../../src/features/object-linkage.js';
 import ViewManagement from '../../src/features/view-management.js';
 import StructureAll from '../../src/structures/all.js';
 import {
-  ADDRESS, COPY, FIXED,
-  LAST_ADDRESS,
-  LAST_LENGTH,
-  MEMORY, RESTORE, SLOTS,
-  TARGET
+  ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 

@@ -1,9 +1,7 @@
-import { StructureFlag } from '../constants.js';
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MemberType } from '../members/all.js';
-import { copyPointer, resetPointer } from '../pointer.js';
+import { resetPointer } from '../pointer.js';
 import { COPY, FIXED, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineOptional(structure, descriptors) {
@@ -32,7 +30,7 @@ export default mixin({
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
           if (isChildActive.call(arg)) {
-            this[VISIT](copyPointer, { vivificate: true, source: arg });
+            this[VISIT]('copy', { vivificate: true, source: arg });
           }
         }
       } else if (arg === null) {

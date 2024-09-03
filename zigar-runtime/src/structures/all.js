@@ -1,24 +1,20 @@
-import { StructureFlag } from '../constants.js';
+import { MemberFlag, StructureFlag, StructureType, structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
 } from '../errors.js';
-import { isReadOnly } from '../members/all.js';
 import {
-  ALIGN,
-  CACHE, COMPAT, CONST_TARGET, COPY,
-  INITIALIZE,
-  KEYS,
-  MEMORY,
-  SETTERS,
-  SIZE, SLOTS, TYPE, VARIANTS,
-  VISIT
+  ALIGN, CACHE, COMPAT, CONST_TARGET, COPY, INITIALIZE, KEYS, MEMORY, RESTORE, SIZE, SLOTS, TYPE, VARIANTS, VISIT
 } from '../symbols.js';
-import { defineProperties, defineProperty } from '../utils.js';
+import { defineProperties, defineProperty, defineValue } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
-    const { type, name } = structure;
+    const {
+      type,
+      name,
+      byteSize,
+    } = structure;
     const handlerName = `define${structureNames[type]}`;
     const f = this[handlerName];
     if (process.env.DEV) {
@@ -30,7 +26,7 @@ export default mixin({
     }
     // default discriptors
     const keys = [];
-    descriptors = {
+    const descriptors = {
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [KEYS]: defineValue(keys),
@@ -42,7 +38,7 @@ export default mixin({
       // (from mixin "members/special-props")
       ...this.defineSpecialProperties?.(structure, handlers),
       ...(process.env.TARGET === 'wasm' ? {
-
+        [RESTORE]: this.defineRestorer(),
       } : undefined),
     };
     const constructor = f.call(this, structure, descriptors);
@@ -61,7 +57,7 @@ export default mixin({
     // comptime fields are stored in the instance template's slots
     let comptimeFieldSlots;
     if (template?.[SLOTS]) {
-      const comptimeMembers = members.filter(m => isReadOnly(m));
+      const comptimeMembers = members.filter(m => m.flags & MemberFlag.IsReadOnly);
       if (comptimeMembers.length > 0) {
         comptimeFieldSlots = comptimeMembers.map(m => m.slot);
       }
@@ -133,25 +129,26 @@ export default mixin({
       }
       return cache.save(dv, self);
     };
-    defineProperty(constructor, CACHE, { value: cache });
+    defineProperty(constructor, CACHE, defineValue(cache));
     return constructor;
   },
-  createDestructor() {
+  defineDestructor() {
     const thisEnv = this;
-    return function() {
-      const dv = this[MEMORY];
-      this[MEMORY] = null;
-      if (this[SLOTS]) {
-        this[SLOTS] = {};
+    return {
+      value() {
+        const dv = this[MEMORY];
+        this[MEMORY] = null;
+        if (this[SLOTS]) {
+          this[SLOTS] = {};
+        }
+        thisEnv.releaseFixedView(dv);
       }
-      thisEnv.releaseFixedView(dv);
     };
   },
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, fixed) {
       const argKeys = Object.keys(arg);
-      const propSetters = this[SETTERS];
       const allKeys = this[KEYS];
       // don't accept unknown props
       for (const key of argKeys) {
@@ -211,8 +208,11 @@ export default mixin({
   },
   finalizeStructure(structure) {
     const {
+      name,
       type,
       constructor,
+      align,
+      byteSize,
       static: { members, template },
     } = structure;
     const staticDescriptors = {
@@ -304,13 +304,16 @@ function getCompatibleTags(structure) {
 function startsWithSelf(argStructure, structure) {
   // get structure of first argument (members[0] is retval)
   const arg0Structure = argStructure.instance.members[1]?.structure;
-  if (arg0Structure === structure) {
-    return true;
-  } else if (arg0Structure?.type === StructureType.SinglePointer) {
-    const targetStructure = arg0Structure.instance.members[0].structure;
-    if (targetStructure === structure) {
+  if (arg0Structure) {
+    if (arg0Structure === structure) {
       return true;
+    } else if (arg0Structure.type === StructureType.Pointer) {
+      const targetStructure = arg0Structure.instance.members[0].structure;
+      if (targetStructure === structure) {
+        return true;
+      }
     }
+
   }
   return false;
 }

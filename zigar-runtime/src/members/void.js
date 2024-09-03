@@ -1,6 +1,6 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotUndefined, OutOfBound } from '../errors.js';
-import { MemberType } from '../members/all.js';
 
 export default mixin({
   defineMemberVoid(member, env) {

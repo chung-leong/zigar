@@ -34,25 +34,40 @@ pub const StructureType = enum(u32) {
     primitive = 0,
     array,
     @"struct",
-    extern_struct,
-    packed_struct,
-    arg_struct,
-    variadic_struct,
-    extern_union,
-    bare_union,
-    tagged_union,
+    @"union",
     error_union,
     error_set,
     @"enum",
     optional,
-    single_pointer,
-    slice_pointer,
-    multi_pointer,
-    c_pointer,
+    pointer,
     slice,
     vector,
     @"opaque",
+    arg_struct,
     function,
+};
+
+pub const StructureFlags = packed struct(u32) {
+    has_pointer: bool = false,
+    has_object: bool = false,
+    has_length: bool = false,
+    has_slots: bool = false,
+    has_tag: bool = false,
+    has_selector: bool = false,
+    has_value: bool = false,
+    has_inaccessible: bool = false,
+
+    is_const: bool = false,
+    is_multiple: bool = false,
+    is_single: bool = false,
+    is_nullable: bool = false,
+    is_packed: bool = false,
+    is_extern: bool = false,
+    is_string: bool = false,
+    is_iterator: bool = false,
+    is_tuple: bool = false,
+    is_open_ended: bool = false,
+    is_variandic: bool = false,
 };
 
 pub const MemberType = enum(u32) {
@@ -63,12 +78,18 @@ pub const MemberType = enum(u32) {
     float,
     object,
     type,
-    @"comptime",
-    static,
     literal,
     null,
     undefined,
     unsupported,
+};
+
+pub const MemberFlags = packed struct(u32) {
+    is_required: bool = false,
+    is_read_only: bool = false,
+    is_sentinel: bool = false,
+    is_selector: bool = false,
+    is_backing_int: bool = false,
 };
 
 pub const Value = *opaque {};

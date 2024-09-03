@@ -1,14 +1,15 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Unsupported, {
   isNeededByMember,
 } from '../../src/members/unsupported.js';
 
 const Env = defineClass('MemberTest', [ All, Unsupported ]);
 
-describe('Member: comptime', function() {
+describe('Member: unsupported', function() {
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const member = { type: MemberType.Unsupported };
@@ -20,10 +21,11 @@ describe('Member: comptime', function() {
     })
   })
   describe('defineMemberUndefined', function() {
-    it('should return descriptor for comptime', function() {
+    it('should return descriptor for unsupported', function() {
       const env = new Env();
       const member = {
         type: MemberType.Unsupported,
+        structure: {},
       };
       const { get } = env.defineMemberUnsupported(member);
       const object = {};
@@ -34,6 +36,7 @@ describe('Member: comptime', function() {
       const env = new Env();
       const member = {
         type: MemberType.Unsupported,
+        structure: {},
       };
       env.defineMember(member);
       expect(() => env.defineMember(member)).to.not.throw();

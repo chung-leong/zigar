@@ -1,6 +1,6 @@
 import { expect } from 'chai';
+import { MemberType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { MemberType } from '../../src/members/all.js';
 
 import BoolUnaligned, {
   isNeededByMember

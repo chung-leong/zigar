@@ -3,9 +3,9 @@ import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
+import { MemberType } from '../../src/constants.js';
 import All, {
   isNeededByMember,
-  MemberType
 } from '../../src/members/all.js';
 import Bool from '../../src/members/bool.js';
 import Primitive from '../../src/members/primitive.js';

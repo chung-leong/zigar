@@ -3,7 +3,8 @@ import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorUint from '../../src/accessors/uint.js';
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Primitive from '../../src/members/primitive.js';
 import Uint, {
   isNeededByMember,

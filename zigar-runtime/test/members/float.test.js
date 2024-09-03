@@ -3,7 +3,8 @@ import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorFloat16 from '../../src/accessors/float16.js';
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Float, {
   isNeededByMember,
 } from '../../src/members/float.js';

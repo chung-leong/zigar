@@ -1,5 +1,5 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { StructureType } from '../structures/all.js';
 
 export default mixin({
   context: undefined,

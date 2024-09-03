@@ -1,14 +1,13 @@
+import { MemberType, StructureType } from '../constants.js';
 import { defineProperties, mixin } from '../environment.js';
 import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
-import { MemberType } from '../members/all.js';
 import { getChildVivificator, getPointerVisitor } from '../struct.js';
 import {
-  ALIGN, COPY, MEMORY, RESTORE,
+  ALIGN, COPY, MEMORY,
   SIZE, SLOTS,
   VISIT,
   VIVIFICATE
 } from '../symbols.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineArgStruct(structure) {
@@ -67,7 +66,6 @@ export default mixin({
       [COPY]: this.defineCopier(byteSize),
       [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this) },
       [VISIT]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
-      [RESTORE]: process.env.TARGET === 'wasm' && { value: this.getMemoryRestorer(null) },
     });
     defineProperties(constructor, {
       [ALIGN]: { value: align },

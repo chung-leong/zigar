@@ -1,6 +1,6 @@
+import { memberNames, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { memberNames, MemberType } from '../members/all.js';
-import { defineProperty } from '../utils.js';
+import { defineProperty, defineValue } from '../utils.js';
 
 // handle retrieval of accessors
 

@@ -1,5 +1,5 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MemberType } from '../members/all.js';
 
 // handles f16
 

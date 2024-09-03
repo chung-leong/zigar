@@ -1,5 +1,5 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MemberType } from '../members/all.js';
 
 // handle ints 7-bit or smaller in packed structs that are stored in a single byte
 // other unaligned ints are handled by the mixin "unaligned"

@@ -1,17 +1,14 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import {
-  COPY, ENVIRONMENT, MEMORY,
-  PROTECTOR,
-  VISIT
+  COPY, ENVIRONMENT, MEMORY, VISIT
 } from '../../src/symbols.js';
 
+import { MemberType, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
 import ViewManagement, {
   isNeededByStructure,
 } from '../../src/features/view-management.js';
-import { MemberType } from '../../src/members/all.js';
-import { StructureType } from '../../src/structures/all.js';
 import { defineProperties } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [ ViewManagement, DataCopying ]);
@@ -128,8 +125,8 @@ describe('Feature: view-management', function() {
       const env = new Env();
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
       const ta2 = new Int32Array([ 1, 2, 3 ]);
-      const dv1 = env.extractView(structure, ta1, false);
-      const dv2 = env.extractView(structure, ta2, false);
+      const dv1 = env.extractView(structure, ta1);
+      const dv2 = env.extractView(structure, ta2);
       expect(dv1).to.be.an.instanceOf(DataView);
       expect(dv2).to.be.undefined;
     })
@@ -316,7 +313,7 @@ describe('Feature: view-management', function() {
           recv = this;
           arg = dv;
           return {
-            [PROTECTOR]: () => {},
+            // [PROTECTOR]: () => {},
           };
         }
       };
@@ -332,7 +329,7 @@ describe('Feature: view-management', function() {
         constructor: function(dv) {
           return {
             [VISIT]: function(f) { visitor = f },
-            [PROTECTOR]: () => {},
+            // [PROTECTOR]: () => {},
           };
         },
         hasPointer: true,
@@ -342,7 +339,7 @@ describe('Feature: view-management', function() {
   })
   describe('allocateMemory', function() {
     it('should return a data view of a newly created array buffer', function() {
-      const env = new Environment();
+      const env = new Env();
       env.getBufferAddress = () => 0x10000;
       const dv = env.allocateMemory(32, 4);
       expect(dv).to.be.instanceOf(DataView);
@@ -350,7 +347,7 @@ describe('Feature: view-management', function() {
       expect(dv.byteOffset).to.equal(0);
     })
     it('should try to create a buffer in fixed memory', function() {
-      const env = new Environment();
+      const env = new Env();
       env.allocateFixedMemory = (len, align) => {
         const buffer = new ArrayBuffer(len);
         buffer.align = align;

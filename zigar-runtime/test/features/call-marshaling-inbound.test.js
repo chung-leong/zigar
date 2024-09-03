@@ -1,11 +1,10 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
+import { MemberType, StructureType } from '../../src/constants.js';
 import CallMarshalingInbound, {
   isNeededByStructure,
 } from '../../src/features/call-marshaling-inbound.js';
-import { MemberType } from '../../src/members/all.js';
-import { StructureType } from '../../src/structures/all.js';
 
 const Env = defineClass('FeatureTest', [ CallMarshalingInbound ]);
 
@@ -13,7 +12,7 @@ describe('Feature: call-marshaling-outbound', function() {
   describe('isNeededByStructure', function() {
     it('should return true when structure is a function pointer', function() {
       const structure = {
-        type: StructureType.SinglePointer,
+        type: StructureType.Pointer,
         instance: {
           members: [
             {

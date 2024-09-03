@@ -30,6 +30,7 @@ export const ENVIRONMENT = Symbol('environment');
 export const ATTRIBUTES = Symbol('attributes');
 export const PRIMITIVE = Symbol('primitive');
 export const VARIANTS = Symbol('variants');
+export const SETTERS = Symbol('setters');
 export const TYPED_ARRAY = Symbol('typedArray');
 
 export const UPDATE = Symbol('update');
@@ -38,7 +39,6 @@ export const RESET = Symbol('resetter');
 export const VIVIFICATE = Symbol('vivificate');
 export const VISIT = Symbol('visit');
 export const COPY = Symbol('copy');
-
 export const SHAPE = Symbol('shape');
 export const MODIFY = Symbol('modify');
 export const INITIALIZE = Symbol('initialize');

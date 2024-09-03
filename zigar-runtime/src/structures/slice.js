@@ -1,15 +1,15 @@
 import {
   canBeString, getArrayEntries, getArrayIterator, getChildVivificator,
-  getPointerVisitor, makeArrayReadOnly, transformIterable
+  getPointerVisitor,
+  transformIterable
 } from '../array.js';
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { MemberType } from '../members/all.js';
-import { copyPointer, getProxy } from '../pointer.js';
+import { getProxy } from '../pointer.js';
 import {
   COPY, ENTRIES,
   LENGTH, MEMORY,
-  PROTECTOR,
   VISIT, VIVIFICATE
 } from '../symbols.js';
 import { getTypedArrayClass, StructureType } from './all.js';
@@ -68,7 +68,7 @@ export default mixin({
         }
         this[COPY](arg);
         if (hasPointer) {
-          this[VISIT](copyPointer, { vivificate: true, source: arg });
+          this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (typeof(arg) === 'string' && hasStringProp) {
         initializer.call(this, { string: arg }, fixed);
@@ -154,7 +154,6 @@ export default mixin({
       [ENTRIES]: { get: getArrayEntries },
       [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this, true) },
       [VISIT]: hasPointer && { value: getPointerVisitor(structure) },
-      [PROTECTOR]: { value: makeArrayReadOnly },
     };
     const staticDescriptors = {
       child: { get: () => elementStructure.constructor },

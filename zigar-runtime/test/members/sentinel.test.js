@@ -2,13 +2,13 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
-import MemberAll, { MemberType } from '../../src/members/all.js';
+import { MemberType, StructureType } from '../../src/constants.js';
+import MemberAll from '../../src/members/all.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import Sentinel, {
   isNeededByStructure,
 } from '../../src/members/sentinel.js';
 import MemberUint from '../../src/members/uint.js';
-import { StructureType } from '../../src/structures/all.js';
 import { MEMORY } from '../../src/symbols.js';
 
 const Env = defineClass('MemberTest', [ AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel ]);
@@ -24,6 +24,7 @@ describe('Member: sentinel', function() {
               type: MemberType.Uint,
               bitSize: 8,
               byteSize: 8,
+              structure: {},
             },
             {
               name: 'sentinel',
@@ -31,6 +32,7 @@ describe('Member: sentinel', function() {
               bitSize: 8,
               byteSize: 8,
               bitOffset: 0,
+              structure: {},
             }
           ],
           template: {
@@ -50,6 +52,7 @@ describe('Member: sentinel', function() {
               type: MemberType.Uint,
               bitSize: 8,
               byteSize: 8,
+              structure: {},
             },
           ],
         },
@@ -71,6 +74,7 @@ describe('Member: sentinel', function() {
               type: MemberType.Uint,
               bitSize: 8,
               byteSize: 8,
+              structure: {},
             },
             {
               name: 'sentinel',
@@ -79,6 +83,7 @@ describe('Member: sentinel', function() {
               byteSize: 8,
               bitOffset: 0,
               isRequired: true,
+              structure: {},
             }
           ],
           template: {

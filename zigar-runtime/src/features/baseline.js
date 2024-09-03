@@ -38,7 +38,8 @@ mixin({
           ? constructor.call(ENVIRONMENT, dv)
           : { [MEMORY]: dv };
           if (isConst) {
-            object[PROTECTOR]?.();
+            // FIXME
+            // object[PROTECTOR]?.();
           }
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);

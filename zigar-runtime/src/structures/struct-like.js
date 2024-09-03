@@ -1,7 +1,7 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
 import { MEMORY, PARENT } from '../symbols.js';
-import { StructureType } from './all.js';
 
 export default mixin({
   defineVivificatorStruct(structure) {
@@ -35,11 +35,7 @@ export function isNeededByStructure(structure) {
   const { type, instance: { members } } = structure;
   switch (type) {
     case StructureType.Struct:
-    case StructureType.ExternStruct:
-    case StructureType.PackedStruct:
-    case StructureType.TaggedUnion:
-    case StructureType.BareUnion:
-    case StructureType.ExternUnion:
+    case StructureType.Union:
     case StructureType.ErrorUnion:
     case StructureType.Optional: {
       for (const { type } of members) {

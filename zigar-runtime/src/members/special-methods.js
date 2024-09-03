@@ -1,5 +1,5 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { StructureType } from '../structures/all.js';
 import { TUPLE, TYPE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
@@ -52,11 +52,7 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-        case StructureType.PackedStruct:
-        case StructureType.ExternStruct:
-        case StructureType.TaggedUnion:
-        case StructureType.BareUnion:
-        case StructureType.ExternUnion:
+        case StructureType.Union:
           entries = value[ENTRIES];
           result = value.constructor[TUPLE] ? [] : {};
           break;
@@ -66,10 +62,7 @@ function normalizeObject(object, forJSON) {
           entries = value[ENTRIES];
           result = [];
           break;
-        case StructureType.SinglePointer:
-        case StructureType.SlicePointer:
-        case StructureType.MultiPointer:
-        case StructureType.CPointer:
+        case StructureType.Pointer:
           try {
             result = value['*'];
           } catch (err) {

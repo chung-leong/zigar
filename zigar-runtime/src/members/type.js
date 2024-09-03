@@ -1,6 +1,7 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS } from '../symbols.js';
-import { bindSlot, MemberType } from './all.js';
+import { bindSlot } from './all.js';
 
 export default mixin({
   defineMemberType(member, env) {

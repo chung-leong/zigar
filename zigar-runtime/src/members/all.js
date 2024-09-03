@@ -1,4 +1,4 @@
-import { structureNames } from '../constants.js';
+import { memberNames, structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({

@@ -2,9 +2,9 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 // import DataCopying from '../../src/features/data-copying.js';
+import { MemberType, StructureType } from '../../src/constants.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import { MemberType } from '../../src/members/all.js';
-import StructureAll, { StructureType } from '../../src/structures/all.js';
+import StructureAll from '../../src/structures/all.js';
 import { FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 // import ViewManagement from '../../src/features/view-management.js';
 

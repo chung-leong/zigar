@@ -1,32 +1,57 @@
 import { mixin } from '../environment.js';
-import { MEMORY, RESTORE } from '../symbols.js';
+import { FIXED, MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
   defineCopier(size, multiple) {
     const copy = getCopyFunction(size, multiple);
-    const value = function(target) {
-      if (process.env.TARGET === 'wasm') {
-        this[RESTORE]?.();
-        target[RESTORE]?.();
-      }
-      const src = target[MEMORY];
-      const dest = this[MEMORY];
-      copy(dest, src);
+    return {
+      value(target) {
+        if (process.env.TARGET === 'wasm') {
+          this[RESTORE]?.();
+          target[RESTORE]?.();
+        }
+        const src = target[MEMORY];
+        const dest = this[MEMORY];
+        copy(dest, src);
+      },
     };
     return { value };
   },
-  getResetterDescriptor(offset, size) {
+  defineResetter(offset, size) {
     const reset = getResetFunction(size);
-    const value = function() {
-      if (process.env.TARGET === 'wasm') {
-        this[RESTORE]?.();
+    return {
+      value() {
+        if (process.env.TARGET === 'wasm') {
+          this[RESTORE]?.();
+        }
+        const dest = this[MEMORY];
+        reset(dest, offset, size);
       }
-      const dest = this[MEMORY];
-      reset(dest, offset, size);
     };
-    return { value };
   },
   ...(process.env.TARGET === 'wasm' ? {
+    defineRestorer(updateCache = true) {
+      const thisEnv = this;
+      return {
+        value() {
+          const dv = this[MEMORY];
+          const fixed = dv[FIXED];
+          if (fixed && dv.buffer.byteLength === 0) {
+            const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
+            if (fixed.align) {
+              newDV[FIXED].align = fixed.align;
+            }
+            this[MEMORY] = newDV;
+            if (updateCache) {
+              this.constructor[CACHE].save(newDV, this);
+            }
+            return true;
+          } else {
+            return false;
+          }
+        },
+      }
+    },
     copyExternBytes(dst, address, len) {
       const { memory } = this;
       const src = new DataView(memory.buffer, address, len);

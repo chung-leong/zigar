@@ -1,7 +1,8 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { COPY } from '../symbols.js';
-import { StructureType } from './all.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
   definePrimitive(structure, descriptors) {

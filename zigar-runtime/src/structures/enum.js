@@ -3,7 +3,7 @@ import { } from '../data-view.js';
 import { mixin } from '../environment.js';
 import { EnumExpected, InvalidInitializer } from '../errors.js';
 import { CAST, INITIALIZE, NAME, SLOTS, TAG } from '../symbols.js';
-import { defineProperty } from '../utils.js';
+import { defineProperty, defineValue } from '../utils.js';
 
 export default mixin({
   defineEnumeration(structure, descriptors) {

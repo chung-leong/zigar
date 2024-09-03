@@ -1,12 +1,13 @@
-import { MemberType, StructureFlags } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
+import { SELF, SLOTS } from '../symbols.js';
 import { bindSlot } from './all.js';
 
 export default mixin({
   defineMemberObject(member) {
     return bindSlot(member.slot, {
-      get: (member.structure.flags & StructureFlags.HasValue) ? getValue : getObject,
-      set: (member.flags & MemberFlags.IsReadOnly) ? null : setValue,
+      get: (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
+      set: (member.flags & MemberFlag.IsReadOnly) ? null : setValue,
     });
   }
 });

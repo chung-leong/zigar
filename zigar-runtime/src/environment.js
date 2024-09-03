@@ -1,4 +1,4 @@
-import { defineProperty } from './utils.js';
+import { defineProperty, defineValue } from './utils.js';
 
 const cls = {
   name: '',

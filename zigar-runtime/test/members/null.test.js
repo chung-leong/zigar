@@ -1,14 +1,15 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Null, {
   isNeededByMember,
 } from '../../src/members/null.js';
 
 const Env = defineClass('MemberTest', [ All, Null ]);
 
-describe('Member: comptime', function() {
+describe('Member: null', function() {
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const member = { type: MemberType.Null };
@@ -24,6 +25,7 @@ describe('Member: comptime', function() {
       const env = new Env();
       const member = {
         type: MemberType.Null,
+        structure: {},
       };
       const { get } = env.defineMemberNull(member);
       const object = {};
@@ -33,6 +35,7 @@ describe('Member: comptime', function() {
       const env = new Env();
       const member = {
         type: MemberType.Null,
+        structure: {},
       };
       env.defineMember(member);
       expect(() => env.defineMember(member)).to.not.throw();

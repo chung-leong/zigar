@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
-import All, { MemberType } from '../../src/members/all.js';
+import { MemberType, StructureType } from '../../src/constants.js';
+import All from '../../src/members/all.js';
 import Obj, {
   isNeededByMember,
 } from '../../src/members/object.js';
-import { StructureType } from '../../src/structures/all.js';
-import { SETTER, SLOTS } from '../../src/symbols.js';
+import { SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('MemberTest', [ All, Obj ]);
 
@@ -34,9 +34,6 @@ describe('Member: object', function() {
       const { get, set } = env.defineMemberObject(member);
       const struct = {
         value: 1,
-        [SETTER]: function(arg) {
-          Object.assign(this, arg);
-        }
       };
       const object = {
         [SLOTS]: {

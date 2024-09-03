@@ -50,11 +50,7 @@ export function isNeededByStructure(structure) {
   const { type, hasPointer } = structure;
   switch (type) {
     case StructureType.Struct:
-    case StructureType.ExternStruct:
-    case StructureType.PackedStruct:
-    case StructureType.TaggedUnion:
-    case StructureType.BareUnion:
-    case StructureType.ExternUnion:
+    case StructureType.Union:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
       return hasPointer;
