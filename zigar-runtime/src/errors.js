@@ -1,6 +1,7 @@
 import { getTypeName } from './accessors/all.js';
 import { StructureType } from './constants.js';
 import { isErrorJSON } from './structures/error-set.js';
+import { TYPED_ARRAY } from './symbols.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -407,7 +408,7 @@ export function throwReadOnly() {
 }
 
 export function warnImplicitArrayCreation(structure, arg) {
-  const created = addArticle(structure.typedArray.name);
+  const created = addArticle(structure.constructor[TYPED_ARRAY].name);
   const source = addArticle(arg.constructor.name);
   console.warn(`Implicitly creating ${created} from ${source}`);
 }

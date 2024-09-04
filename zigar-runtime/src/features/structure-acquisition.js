@@ -1,4 +1,4 @@
-import { CONST_TARGET, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
+import { CONST_TARGET, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 
@@ -68,6 +68,45 @@ export default mixin({
   endStructure(structure) {
     this.structures.push(structure);
     this.finalizeStructure(structure);
+  },
+  captureView(address, len, copy) {
+    if (copy) {
+      // copy content into reloctable memory
+      const dv = this.allocateRelocMemory(len, 0);
+      if (len > 0) {
+        this.copyBytes(dv, address, len);
+      }
+      return dv;
+    } else {
+      // link into fixed memory
+      return this.obtainFixedView(address, len);
+    }
+  },
+  castView(address, len, copy, structure) {
+    const { constructor, hasPointer } = structure;
+    const dv = this.captureView(address, len, copy);
+    const object = constructor.call(ENVIRONMENT, dv);
+    if (hasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(object);
+    }
+    if (copy) {
+      // FIXME
+      // object[PROTECTOR]();
+    }
+    return object;
+  },
+  acquireDefaultPointers() {
+    for (const structure of this.structures) {
+      const { constructor, hasPointer, instance: { template } } = structure;
+      if (hasPointer && template && template[MEMORY]) {
+        // create a placeholder for retrieving default pointers
+        const placeholder = Object.create(constructor.prototype);
+        placeholder[MEMORY] = template[MEMORY];
+        placeholder[SLOTS] = template[SLOTS];
+        this.updatePointerTargets(placeholder);
+      }
+    }
   },
   defineFactoryArgStruct() {
     const options = this.beginStructure({
@@ -195,18 +234,6 @@ export default mixin({
     this.structures = [];
     module.__zigar = this.getSpecialExports();
     return module;
-  },
-  acquireDefaultPointers() {
-    for (const structure of this.structures) {
-      const { constructor, hasPointer, instance: { template } } = structure;
-      if (hasPointer && template && template[MEMORY]) {
-        // create a placeholder for retrieving default pointers
-        const placeholder = Object.create(constructor.prototype);
-        placeholder[MEMORY] = template[MEMORY];
-        placeholder[SLOTS] = template[SLOTS];
-        this.updatePointerTargets(placeholder);
-      }
-    }
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {

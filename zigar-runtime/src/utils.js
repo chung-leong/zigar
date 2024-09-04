@@ -8,11 +8,12 @@ export function defineProperty(object, name, descriptor) {
       configurable = true,
       writable = true,
     } = descriptor;
-    Object.defineProperty(object, name, (get)
+    Object.defineProperty(object, name, (get || set)
       ? { get, set, configurable, enumerable }
       : { value, configurable, enumerable, writable }
     );
   }
+  return object;
 }
 
 export function defineProperties(object, descriptors) {
@@ -23,6 +24,7 @@ export function defineProperties(object, descriptors) {
     const descriptor = descriptors[symbol];
     defineProperty(object, symbol, descriptor);
   }
+  return object;
 }
 
 export function defineValue(value) {

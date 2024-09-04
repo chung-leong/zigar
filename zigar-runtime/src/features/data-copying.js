@@ -15,7 +15,6 @@ export default mixin({
         copy(dest, src);
       },
     };
-    return { value };
   },
   defineResetter(offset, size) {
     const reset = getResetFunction(size);

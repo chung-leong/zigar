@@ -65,7 +65,7 @@ describe('Feature: object-linkage', function() {
       defineProperties(Test.prototype, {
         [COPY]: env.defineCopier(32),
         [TARGET]: {
-          get: function() {
+          get() {
             return {
               [MEMORY]: new DataView(new ArrayBuffer(32)),
               length: 4,
@@ -73,12 +73,12 @@ describe('Feature: object-linkage', function() {
           },
         },
         [ADDRESS]: {
-          set: function(address) {
+          set(address) {
             object[LAST_ADDRESS] = address;
           },
         },
         [LENGTH]: {
-          value: function(length) {
+          set(length) {
             object[LAST_LENGTH] = length;
           },
         },

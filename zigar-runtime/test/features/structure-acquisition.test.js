@@ -3,12 +3,15 @@ import { defineClass } from '../../src/environment.js';
 
 // import DataCopying from '../../src/features/data-copying.js';
 import { MemberType, StructureType } from '../../src/constants.js';
+import PointerSynchronization from '../../src/features/pointer-synchronization.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
+import ViewManagement from '../../src/features/view-management.js';
 import StructureAll from '../../src/structures/all.js';
-import { FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
-// import ViewManagement from '../../src/features/view-management.js';
+import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
 
-const Env = defineClass('FeatureTest', [ StructureAcquisition, StructureAll ]);
+const Env = defineClass('FeatureTest', [
+  StructureAcquisition, StructureAll, ViewManagement, PointerSynchronization
+]);
 
 describe('Feature: structure-acquisition', function() {
   describe('readSlot', function() {
@@ -186,6 +189,64 @@ describe('Feature: structure-acquisition', function() {
       };
       env.endStructure(s);
       expect(env.structures[0]).to.equal(s);
+    })
+  })
+  describe('captureView', function() {
+    it('should allocate new buffer and copy data using copyBytes', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {
+        dv.setInt32(0, address, true);
+        dv.setInt32(4, len, true);
+      };
+      const dv = env.captureView(1234, 32, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.getInt32(0, true)).to.equal(1234);
+      expect(dv.getInt32(4, true)).to.equal(32);
+    })
+    it('should get view of memory using obtainFixedView', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.obtainFixedView = (address, len) => {
+        return { address, len };
+      };
+      const result = env.captureView(1234, 32, false);
+      expect(result).to.eql({ address: 1234, len: 32 });
+    })
+  })
+  describe('castView', function() {
+    it('should call constructor without the use of the new operator', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
+      let recv, arg;
+      const structure = {
+        constructor: function(dv) {
+          recv = this;
+          arg = dv;
+          return {
+            // [PROTECTOR]: () => {},
+          };
+        }
+      };
+      const object = env.castView(1234, 0, true, structure);
+      expect(recv).to.equal(ENVIRONMENT);
+    })
+    it('should try to create targets of pointers', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.copyBytes = (dv, address, len) => {};
+      let visitor;
+      const structure = {
+        constructor: function(dv) {
+          return {
+            [VISIT]: function(f) { visitor = f },
+            // [PROTECTOR]: () => {},
+          };
+        },
+        hasPointer: true,
+      };
+      const object = env.castView(1234, 8, true, structure);
     })
   })
   describe('defineFactoryArgStruct', function() {

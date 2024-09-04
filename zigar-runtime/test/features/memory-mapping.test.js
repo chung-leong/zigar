@@ -211,13 +211,13 @@ describe('Feature: memory-mapping', function() {
       })
       it('should copy data from targets to shadows', function() {
         const env = new Env();
+        const size = 4;
         const object = {
-          [MEMORY]: new DataView(new ArrayBuffer(4)),
+          [MEMORY]: new DataView(new ArrayBuffer(size)),
         };
-        const shadow = {};
-        defineProperties(shadow, {
-          [MEMORY]: { value: new DataView(new ArrayBuffer(4)) },
-          [COPY]: this.defineCopier(),
+        const shadow = defineProperties({}, {
+          [MEMORY]: { value: new DataView(new ArrayBuffer(size)) },
+          [COPY]: env.defineCopier(size),
         });
         env.getBufferAddress = function() {
           return 0x1000;
@@ -237,13 +237,13 @@ describe('Feature: memory-mapping', function() {
       })
       it('should copy data from shadows to targets', function() {
         const env = new Env();
-        const object = {};
-        defineProperties(object, {
-          [MEMORY]: { value: new DataView(new ArrayBuffer(4)) },
-          [COPY]: env.defineCopier(8),
+        const size = 4;
+        const object = defineProperties({}, {
+          [MEMORY]: { value: new DataView(new ArrayBuffer(size)) },
+          [COPY]: env.defineCopier(size),
         });
         const shadow = {
-          [MEMORY]: new DataView(new ArrayBuffer(4)),
+          [MEMORY]: new DataView(new ArrayBuffer(size)),
         };
         env.getBufferAddress = function() {
           return 0x1000;
@@ -263,11 +263,12 @@ describe('Feature: memory-mapping', function() {
       })
       it('should free the memory of shadows', function() {
         const env = new Env();
+        const size = 4;
         const object = {
-          [MEMORY]: new DataView(new ArrayBuffer(4)),
+          [MEMORY]: new DataView(new ArrayBuffer(size)),
         };
         const shadow = {
-          [MEMORY]: new DataView(new ArrayBuffer(4)),
+          [MEMORY]: new DataView(new ArrayBuffer(size)),
         };
         env.getBufferAddress = function() {
           return 0x1000;

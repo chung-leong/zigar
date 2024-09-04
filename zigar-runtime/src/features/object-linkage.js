@@ -11,6 +11,7 @@ export default mixin({
       // linkage occurs when WASM compilation is complete and functions have been imported
       if (this.initPromise) {
         this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
+        return;
       }
     }
     const pointers = [];
@@ -21,6 +22,7 @@ export default mixin({
       }
     }
     // save locations of pointer targets
+    debugger;
     for (const pointer of pointers) {
       const target = pointer[TARGET];
       const address = this.getViewAddress(target[MEMORY]);

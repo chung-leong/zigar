@@ -19,6 +19,7 @@ import {
   SELF,
   SETTERS,
   SIZE, SLOTS, TARGET, TARGET_UPDATER, TYPE,
+  TYPED_ARRAY,
   VISIT
 } from '../symbols.js';
 
@@ -277,7 +278,7 @@ export default mixin({
           // creation of a new slice using a typed array is probably
           // not what the user wants; it's more likely that the intention
           // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (targetStructure.typedArray) {
+          if (TYPED_ARRAY in Target) {
             const tag = arg?.buffer?.[Symbol.toStringTag];
             if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
               warnImplicitArrayCreation(targetStructure, arg);
@@ -496,25 +497,21 @@ const constTargetHandlers = {
   }
 };
 
-export function isPointer(type) {
-  switch (type) {
-    case StructureType.SinglePointer:
-    case StructureType.SlicePointer:
-    case StructureType.MultiPointer:
-    case StructureType.CPointer:
-      return true;
-    default:
-      return false;
-  }
-}
-
 export function isCompatibleBuffer(arg, constructor) {
-  if (arg) {
-    const tags = constructor[COMPAT];
-    if (tags) {
-      const tag = arg?.[Symbol.toStringTag];
-      if (tags.includes(tag)) {
-        return true;
+  // TODO: merge this with extractView in mixin "view-management"
+  const tag = arg?.[Symbol.toStringTag];
+  if (tag) {
+    const typedArray = constructor[TYPED_ARRAY];
+    if (typedArray) {
+      switch (tag) {
+        case typedArray.name:
+        case 'DataView':
+          return true;
+        case 'ArrayBuffer':
+        case 'SharedArrayBuffer':
+          return typedArray === Uint8Array || typedArray === Int8Array;
+        case 'Uint8ClampedArray':
+          return typedArray === Uint8Array;
       }
     }
     if (constructor.child) {

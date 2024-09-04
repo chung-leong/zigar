@@ -4,7 +4,7 @@ import { MEMORY, RESTORE } from '../symbols.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
-  defineSpecialProperties(structure, handlers = {}) {
+  defineSpecialProperties(structure) {
     const thisEnv = this;
     const dataView = markAsSpecial({
       get() {
@@ -15,7 +15,7 @@ export default mixin({
       },
       set(dv, fixed) {
         checkDataView(dv);
-        thisEnv.assignView(this, dv, structure, true, fixed, handlers);
+        thisEnv.assignView(this, dv, structure, true, fixed);
       },
     });
     const base64 = markAsSpecial({
@@ -27,7 +27,7 @@ export default mixin({
           throw new TypeMismatch('string', str);
         }
         const dv = decodeBase64(str);
-        thisEnv.assignView(this, dv, structure, false, fixed, handlers);
+        thisEnv.assignView(this, dv, structure, false, fixed);
       }
     });
     const { TypedArray } = structure;
@@ -42,7 +42,7 @@ export default mixin({
           throw new TypeMismatch(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-        thisEnv.assignView(this, dv, structure, true, fixed, handlers);
+        thisEnv.assignView(this, dv, structure, true, fixed);
       },
     });
     const { sentinel, instance: { members }} = structure;
@@ -71,7 +71,7 @@ export default mixin({
         }
         const ta = encodeText(str, `utf-${charSize * 8}`);
         const dv = new DataView(ta.buffer);
-        thisEnv.assignView(this, dv, structure, false, fixed, handlers);
+        thisEnv.assignView(this, dv, structure, false, fixed);
       },
     });
     return { dataView, base64, typedArray, string };

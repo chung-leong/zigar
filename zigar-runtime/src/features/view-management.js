@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPY, ENVIRONMENT, FIXED, MEMORY, SHAPE } from '../symbols.js';
+import { COPY, FIXED, MEMORY, SHAPE } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
@@ -47,10 +47,11 @@ export default mixin({
         }
       }
     }
-    if (dv && byteSize !== undefined) {
-      checkDataViewSize(dv, structure);
-    }
     if (dv) {
+      if (byteSize !== undefined) {
+        checkDataViewSize(dv, structure);
+      }
+    } else {
       onError?.(structure, arg);
     }
     return dv;
@@ -136,42 +137,6 @@ export default mixin({
       }
     }
     return dv;
-  },
-  getViewAddress(dv) {
-    const fixed = dv[FIXED];
-    if (fixed) {
-      return fixed.address;
-    } else {
-      const address = this.getBufferAddress(dv.buffer);
-      return add(address, dv.byteOffset);
-    }
-  },
-  captureView(address, len, copy) {
-    if (copy) {
-      // copy content into reloctable memory
-      const dv = this.allocateRelocMemory(len, 0);
-      if (len > 0) {
-        this.copyBytes(dv, address, len);
-      }
-      return dv;
-    } else {
-      // link into fixed memory
-      return this.obtainFixedView(address, len);
-    }
-  },
-  castView(address, len, copy, structure) {
-    const { constructor, hasPointer } = structure;
-    const dv = this.captureView(address, len, copy);
-    const object = constructor.call(ENVIRONMENT, dv);
-    if (hasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(object);
-    }
-    if (copy) {
-      // FIXME
-      // object[PROTECTOR]();
-    }
-    return object;
   },
   allocateMemory(len, align = 0, fixed = false) {
     if (fixed) {

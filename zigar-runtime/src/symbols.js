@@ -19,7 +19,6 @@ export const LENGTH = Symbol('length');
 export const LAST_ADDRESS = Symbol('lastAddress');
 export const LAST_LENGTH = Symbol('lastLength');
 export const PROXY = Symbol('proxy');
-export const COMPAT = Symbol('compat');
 export const CACHE = Symbol('cache');
 export const SIZE = Symbol('size');
 export const BIT_SIZE = Symbol('bitSize');

@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { COPY } from '../symbols.js';
+import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE, TYPED_ARRAY } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -10,6 +10,7 @@ export default mixin({
       instance: { members: [ member ] },
     } = structure;
     const propApplier = this.createApplier(structure);
+    const { get, set } = this.defineMember(member);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
@@ -24,16 +25,22 @@ export default mixin({
         }
       }
     };
-    const constructor = this.createConstructor(structure, { initializer });
-    descriptors.$ = this.defineMember(member);
-    descriptors[Symbol.toPrimitive] = { value: get };
+    const constructor = this.createConstructor(structure);
+    descriptors.$ = { get, set: initializer };
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[Symbol.toPrimitive] = defineValue(get);
     return constructor;
   },
   finalizePrimitive(structure, descriptors, staticDescriptors) {
     const {
       instance: { members: [ member ] },
     } = structure;
-    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(member));
+    const typedArray = this.getTypedArray(member);
+    if (typedArray) {
+      staticDescriptors[TYPED_ARRAY] = defineValue(typedArray);
+    }
+    staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
+    staticDescriptors[PRIMITIVE] = defineValue(member.type);
   },
 });
 

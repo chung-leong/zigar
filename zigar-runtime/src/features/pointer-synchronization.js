@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { SELF } from '../symbols.js';
+import { SELF, VISIT } from '../symbols.js';
 
 export default mixin({
   updatePointerAddresses(args) {

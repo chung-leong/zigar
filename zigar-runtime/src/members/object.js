@@ -1,6 +1,6 @@
 import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SELF, SLOTS } from '../symbols.js';
+import { SLOTS } from '../symbols.js';
 import { bindSlot } from './all.js';
 
 export default mixin({
@@ -18,7 +18,7 @@ export function isNeededByMember(member) {
 
 function getValue(slot) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  return object[SELF];
+  return object.$;
 }
 
 function getObject(slot) {
@@ -28,6 +28,6 @@ function getObject(slot) {
 
 function setValue(slot, value) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  object[SELF] = value;
+  object.$ = value;
 }
 

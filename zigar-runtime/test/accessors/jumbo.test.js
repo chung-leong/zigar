@@ -36,20 +36,16 @@ describe('Accessor: jumbo', function() {
   describe('getJumboAccessor', function() {
     it('should return methods for serializing/deserializing extra large big-ints', function() {
       const env = new Env();
-      const members = [
-        { type: MemberType.Int, bitSize: 72, byteSize: 16, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 128, byteSize: 16, bitOffset: 0 },
-      ];
       const dv1 = new DataView(new ArrayBuffer(16))
-      const set1 = env.getAccessorJumboInt('set', members[0]);
-      const get1 = env.getAccessorJumboInt('get', members[0]);
-      set1.call(dv1, 0, 2 ** 72 - 1, true);
-      expect(get1.call(dv1, 0, true)).to.equal(2 ** 72 - 1);
+      const set1 = env.getJumboAccessor('set', 72);
+      const get1 = env.getJumboAccessor('get', 72);
+      set1.call(dv1, 0, 2n ** 72n - 1n, true);
+      expect(get1.call(dv1, 0, true)).to.equal(2n ** 72n - 1n);
       const dv2 = new DataView(new ArrayBuffer(16))
-      const set2 = env.getAccessorJumboInt('set', members[1]);
-      const get2 = env.getAccessorJumboInt('get', members[1]);
-      set2.call(dv2, 0, 2 ** 128 - 1, true);
-      expect(get2.call(dv2, 0, true)).to.equal(2 ** 128 - 1);
+      const set2 = env.getJumboAccessor('set', 128);
+      const get2 = env.getJumboAccessor('get', 128);
+      set2.call(dv2, 0, 2n ** 128n - 1n, true);
+      expect(get2.call(dv2, 0, true)).to.equal(2n ** 128n - 1n);
     })
   })
 })

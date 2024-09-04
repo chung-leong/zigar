@@ -4,7 +4,10 @@ import {
   MissingInitializers, NoInitializer, NoProperty
 } from '../errors.js';
 import {
-  ALIGN, CACHE, COMPAT, CONST_TARGET, COPY, INITIALIZE, KEYS, MEMORY, RESTORE, SIZE, SLOTS, TYPE, VARIANTS, VISIT
+  ALIGN, CACHE, CAST,
+  CONST_TARGET, COPY, FINALIZE, INITIALIZE, KEYS, MEMORY, MODIFY,
+  RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE,
+  VARIANTS, VISIT
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue } from '../utils.js';
 
@@ -30,20 +33,30 @@ export default mixin({
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [KEYS]: defineValue(keys),
-      // (from mixin "memory/copying")
+      // add memory copier (from mixin "memory/copying")
       [COPY]: this.defineCopier(byteSize, type === StructureType.Slice),
       [CONST_TARGET]: { value: null },
-      // (from mixin "members/special-method")
+      // add special methods like toJSON() (from mixin "members/special-method")
       ...this.defineSpecialMethods?.(),
-      // (from mixin "members/special-props")
-      ...this.defineSpecialProperties?.(structure, handlers),
+      // add special properties like dataView (from mixin "members/special-props")
+      ...this.defineSpecialProperties?.(structure),
       ...(process.env.TARGET === 'wasm' ? {
+        // add method for recovering from buffer detachment
         [RESTORE]: this.defineRestorer(),
       } : undefined),
     };
     const constructor = f.call(this, structure, descriptors);
-    descriptors[SELF] = descriptors.$;
+    // find all the
+    const setters = {};
+    for (const [ name, descriptor ] of Object.entries(descriptors)) {
+      if (descriptor?.set && name !== '$' && name !== '*') {
+        setters[name] = descriptor.set;
+      }
+    }
+    descriptors[SETTERS] = defineValue(setters);
+    descriptors[KEYS] = defineValue(Object.keys(setters));
     defineProperties(constructor.prototype, descriptors);
+    structure.constructor = constructor;
     return constructor;
   },
   createConstructor(structure, handlers = {}) {
@@ -85,7 +98,7 @@ export default mixin({
           self[INITIALIZE](arg, fixed);
           dv = self[MEMORY];
         } else {
-          self[MEMORY] = dv = this.allocateMemory(byteSize, align, fixed);
+          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, fixed);
         }
       } else {
         if (CAST in constructor) {
@@ -149,10 +162,11 @@ export default mixin({
     const { instance: { template } } = structure;
     return function(arg, fixed) {
       const argKeys = Object.keys(arg);
-      const allKeys = this[KEYS];
+      const keys = this[KEYS];
+      const setters = this[SETTERS];
       // don't accept unknown props
       for (const key of argKeys) {
-        if (!(key in propSetters)) {
+        if (!(key in setters)) {
           throw new NoProperty(structure, key);
         }
       }
@@ -161,8 +175,8 @@ export default mixin({
       let normalFound = 0;
       let normalMissing = 0;
       let specialFound = 0;
-      for (const key of allKeys) {
-        const set = propSetters[key];
+      for (const key of keys) {
+        const set = setters[key];
         if (set.special) {
           if (key in arg) {
             specialFound++;
@@ -177,12 +191,12 @@ export default mixin({
         }
       }
       if (normalMissing !== 0 && specialFound === 0) {
-        const missing = allKeys.filter(k => propSetters[k].required && !(k in arg));
+        const missing = keys.filter(k => setters[k].required && !(k in arg));
         throw new MissingInitializers(structure, missing);
       }
       if (specialFound + normalFound > argKeys.length) {
         // some props aren't enumerable
-        for (const key of allKeys) {
+        for (const key of keys) {
           if (key in arg) {
             if (!argKeys.includes(key)) {
               argKeys.push(key)
@@ -200,7 +214,7 @@ export default mixin({
         }
       }
       for (const key of argKeys) {
-        const set = propSetters[key];
+        const set = setters[key];
         set.call(this, arg[key], fixed);
       }
       return argKeys.length;
@@ -216,11 +230,10 @@ export default mixin({
       static: { members, template },
     } = structure;
     const staticDescriptors = {
-      name: { value: name },
-      [COMPAT]: { value: getCompatibleTags(structure) },
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-      [TYPE]: { value: type },
+      name: defineValue(name),
+      [ALIGN]: defineValue(align),
+      [SIZE]: defineValue(byteSize),
+      [TYPE]: defineValue(type),
     };
     const descriptors = {};
     for (const member of members) {
@@ -252,7 +265,7 @@ export default mixin({
     }
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    f?.(structure, descriptors, staticDescriptors);
+    f?.call(this, structure, descriptors, staticDescriptors);
     defineProperties(constructor.prototype, descriptors);
     defineProperties(constructor, staticDescriptors);
   },
@@ -282,23 +295,6 @@ export class ObjectCache {
     this.map.set(dv, object);
     return object;
   }
-}
-
-function getCompatibleTags(structure) {
-  const { typedArray } = structure;
-  const tags = [];
-  if (typedArray) {
-    tags.push(typedArray.name);
-    tags.push('DataView');
-    if (typedArray === Uint8Array || typedArray === Int8Array) {
-      tags.push('ArrayBuffer');
-      tags.push('SharedArrayBuffer');
-      if (typedArray === Uint8Array) {
-        tags.push('Uint8ClampedArray');
-      }
-    }
-  }
-  return tags;
 }
 
 function startsWithSelf(argStructure, structure) {

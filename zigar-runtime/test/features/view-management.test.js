@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import {
-  COPY, ENVIRONMENT, MEMORY, VISIT
+  COPY,
+  MEMORY
 } from '../../src/symbols.js';
 
 import { MemberType, StructureType } from '../../src/constants.js';
@@ -94,7 +95,7 @@ describe('Feature: view-management', function() {
       };
       const arg = {};
       const env = new Env();
-      const dv = env.extractView(structure, arg, false);
+      const dv = env.extractView(structure, arg, null);
       expect(dv).to.be.undefined;
     })
     it('should throw when there is a size mismatch', function() {
@@ -125,8 +126,8 @@ describe('Feature: view-management', function() {
       const env = new Env();
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
       const ta2 = new Int32Array([ 1, 2, 3 ]);
-      const dv1 = env.extractView(structure, ta1);
-      const dv2 = env.extractView(structure, ta2);
+      const dv1 = env.extractView(structure, ta1, null);
+      const dv2 = env.extractView(structure, ta2, null);
       expect(dv1).to.be.an.instanceOf(DataView);
       expect(dv2).to.be.undefined;
     })
@@ -277,64 +278,6 @@ describe('Feature: view-management', function() {
       });
       const dv = new DataView(new ArrayBuffer(16));
       env.assignView(target, dv, structure, false, false, {});
-    })
-  })
-  describe('captureView', function() {
-    it('should allocate new buffer and copy data using copyBytes', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {
-        dv.setInt32(0, address, true);
-        dv.setInt32(4, len, true);
-      };
-      const dv = env.captureView(1234, 32, true);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.getInt32(0, true)).to.equal(1234);
-      expect(dv.getInt32(4, true)).to.equal(32);
-    })
-    it('should get view of memory using obtainFixedView', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.obtainFixedView = (address, len) => {
-        return { address, len };
-      };
-      const result = env.captureView(1234, 32, false);
-      expect(result).to.eql({ address: 1234, len: 32 });
-    })
-  })
-  describe('castView', function() {
-    it('should call constructor without the use of the new operator', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {};
-      let recv, arg;
-      const structure = {
-        constructor: function(dv) {
-          recv = this;
-          arg = dv;
-          return {
-            // [PROTECTOR]: () => {},
-          };
-        }
-      };
-      const object = env.castView(1234, 0, true, structure);
-      expect(recv).to.equal(ENVIRONMENT);
-    })
-    it('should try to create targets of pointers', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {};
-      let visitor;
-      const structure = {
-        constructor: function(dv) {
-          return {
-            [VISIT]: function(f) { visitor = f },
-            // [PROTECTOR]: () => {},
-          };
-        },
-        hasPointer: true,
-      };
-      const object = env.castView(1234, 8, true, structure);
     })
   })
   describe('allocateMemory', function() {

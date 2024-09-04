@@ -30,7 +30,7 @@ export default mixin({
     cache.set(accessorName, accessor);
     return accessor;
   },
-  getTypedArrayClass(member) {
+  getTypedArray(member) {
     const typeName = getTypeName(member)
     const arrayName = typeName + 'Array';
     return globalThis[arrayName];

@@ -1,6 +1,7 @@
 import { mixin } from '../environment.js';
-import { ALIGN, FIXED, MEMORY, RESTORE } from '../symbols.js';
-import { add, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
+import { AlignmentConflict } from '../errors.js';
+import { ALIGN, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { add, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
@@ -64,7 +65,7 @@ export default mixin({
     const len = end - start;
     const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
     const unalignedAddress = this.getViewAddress(unalignedShadowDV);
-    const maxAlignAddress = getAlignedAddress(add(unalignedAddress, maxAlignOffset - start), maxAlign);
+    const maxAlignAddress = alignForward(add(unalignedAddress, maxAlignOffset - start), maxAlign);
     const shadowAddress = add(maxAlignAddress, start - maxAlignOffset);
     const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
     const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
@@ -80,9 +81,7 @@ export default mixin({
       }
     }
     // placeholder object type
-    const prototype = {
-      [COPY]: getMemoryCopier(len)
-    };
+    const prototype = defineProperty({}, COPY, this.defineCopier(len, false));
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
@@ -211,6 +210,15 @@ export default mixin({
       dv[FIXED] = null;
     }
   },
+  getViewAddress(dv) {
+    const fixed = dv[FIXED];
+    if (fixed) {
+      return fixed.address;
+    } else {
+      const address = this.getBufferAddress(dv.buffer);
+      return add(address, dv.byteOffset);
+    }
+  },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       allocateExternMemory: { argType: 'iii', returnType: 'i' },
@@ -272,10 +280,19 @@ export default mixin({
     recreateAddress(reloc) {
       return reloc;
     },
+    getBufferAddress(buffer) {
+      if (process.env.DEV) {
+        if (buffer !== this.memory.buffer) {
+          throw new Error('Cannot obtain address of relocatable buffer');
+        }
+      }
+      return 0;
+    },
   } : process.env.TARGET === 'node' ? {
     imports: {
       allocateExternMemory: null,
       freeExternMemory: null,
+      getBufferAddress: null,
     },
     exports: {
       allocateHostMemory: null,
@@ -339,14 +356,6 @@ export default mixin({
         }
       }
       // need shadowing
-    },
-    getBufferAddress(buffer) {
-      if (process.env.DEV) {
-        if (buffer !== this.memory.buffer) {
-          throw new Error('Cannot obtain address of relocatable buffer');
-        }
-      }
-      return 0;
     },
   } : undefined),
 });

@@ -35,6 +35,7 @@ function normalizeObject(object, forJSON) {
   : (cb) => cb();
   const resultMap = new Map();
   const process = function(value) {
+    debugger;
     // handle type (i.e. constructor) like a struct
     const type = (typeof(value) === 'function') ? StructureType.Struct : value?.constructor?.[TYPE];
     if (type === undefined) {
