@@ -29,6 +29,9 @@ export default mixin({
     };
   },
   ...(process.env.TARGET === 'wasm' ? {
+    addRestorer(structurer, staticDescriptors, descriptors) {
+      descriptors[RESTORE] = this.defineRestorer();
+    },
     defineRestorer(updateCache = true) {
       const thisEnv = this;
       return {

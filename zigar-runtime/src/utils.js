@@ -1,3 +1,5 @@
+import { memberNames, MemberType } from './constants.js';
+
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
     const {
@@ -29,6 +31,23 @@ export function defineProperties(object, descriptors) {
 
 export function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
+}
+
+export function getTypeName(member) {
+  const { type, bitSize, byteSize } = member;
+  const suffix = (type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize;
+  let name = memberNames[type] + suffix;
+  if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
+    if (bitSize <= 64) {
+      name = `Big${name}`;
+    } else {
+      name = `Jumbo${name}`;
+    }
+  }
+  if (byteSize === undefined) {
+    name += 'Unaligned';
+  }
+  return name;
 }
 
 export function decodeText(arrays, encoding = 'utf-8') {

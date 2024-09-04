@@ -6,10 +6,11 @@ import {
 import {
   ALIGN, CACHE, CAST,
   CONST_TARGET, COPY, FINALIZE, INITIALIZE, KEYS, MEMORY, MODIFY,
-  RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE,
+  RESTORE,
+  SETTERS, SHAPE, SIZE, SLOTS, TYPE,
   VARIANTS, VISIT
 } from '../symbols.js';
-import { defineProperties, defineProperty, defineValue } from '../utils.js';
+import { defineProperties, defineProperty, defineValue, getTypeName } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -32,18 +33,17 @@ export default mixin({
     const descriptors = {
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
+      [CONST_TARGET]: { value: null },
       [KEYS]: defineValue(keys),
       // add memory copier (from mixin "memory/copying")
       [COPY]: this.defineCopier(byteSize, type === StructureType.Slice),
-      [CONST_TARGET]: { value: null },
       // add special methods like toJSON() (from mixin "members/special-method")
       ...this.defineSpecialMethods?.(),
       // add special properties like dataView (from mixin "members/special-props")
       ...this.defineSpecialProperties?.(structure),
-      ...(process.env.TARGET === 'wasm' ? {
-        // add method for recovering from buffer detachment
+      ...(process.env.TARGET === 'wasm' && {
         [RESTORE]: this.defineRestorer(),
-      } : undefined),
+      }),
     };
     const constructor = f.call(this, structure, descriptors);
     // find all the
@@ -265,9 +265,26 @@ export default mixin({
     }
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    f?.call(this, structure, descriptors, staticDescriptors);
+    f?.call(this, structure, staticDescriptors, descriptors);
     defineProperties(constructor.prototype, descriptors);
     defineProperties(constructor, staticDescriptors);
+  },
+  getTypedArray(structure) {
+    const { type, instance } = structure;
+    if (type && instance) {
+      const [ member ] = instance.members;
+      switch (type) {
+        case StructureType.Primitive: {
+          const typeName = getTypeName(member)
+          const arrayName = typeName + 'Array';
+          return globalThis[arrayName];
+        }
+        case StructureType.Array:
+        case StructureType.Slice:
+          return getTypedArray(member.structure);
+      }
+
+    }
   },
 });
 

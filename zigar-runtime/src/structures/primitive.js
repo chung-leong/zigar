@@ -31,7 +31,7 @@ export default mixin({
     descriptors[Symbol.toPrimitive] = defineValue(get);
     return constructor;
   },
-  finalizePrimitive(structure, descriptors, staticDescriptors) {
+  finalizePrimitive(structure, staticDescriptors) {
     const {
       instance: { members: [ member ] },
     } = structure;

@@ -12,7 +12,7 @@ export default mixin({
     /* c8 ignore start */
     if (process.env.DEV) {
       if (!f) {
-        throw new Error(`Missing method: ${name}`);
+        throw new Error(`Missing method: ${handleName}`);
       }
     }
     /* c8 ignore end */

@@ -1,3 +1,4 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { MEMORY, RESTORE } from '../symbols.js';
@@ -30,7 +31,7 @@ export default mixin({
         thisEnv.assignView(this, dv, structure, false, fixed);
       }
     });
-    const { TypedArray } = structure;
+    const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
     const typedArray = TypedArray && markAsSpecial({
       get() {
         const dv = this.dataView;
@@ -45,14 +46,18 @@ export default mixin({
         thisEnv.assignView(this, dv, structure, true, fixed);
       },
     });
-    const { sentinel, instance: { members }} = structure;
-    const { byteSize: charSize } = members[0];
-    const string = (TypedArray === Uint8Array || TypedArray === Uint16Array) && markAsSpecial({
+    const {
+      sentinel,
+      instance: { members: [ member ] }
+    } = structure;
+    // check member type so we don't attach string property to multi-dimensional arrays
+    const isString = [ Uint8Array, Uint16Array ].includes(TypedArray) && member?.type === MemberType.Uint;
+    const encoding = `utf-${member?.bitSize}`;
+    const string = isString && markAsSpecial({
       get() {
         const dv = this.dataView;
-        const TypedArray = (charSize === 1) ? Int8Array : Int16Array;
         const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-        let str = decodeText(ta, `utf-${charSize * 8}`);
+        let str = decodeText(ta, encoding);
         if (sentinel?.value !== undefined) {
           if (str.charCodeAt(str.length - 1) === sentinel.value) {
             str = str.slice(0, -1);
@@ -69,7 +74,7 @@ export default mixin({
             str = str + String.fromCharCode(sentinel.value);
           }
         }
-        const ta = encodeText(str, `utf-${charSize * 8}`);
+        const ta = encodeText(str, encoding);
         const dv = new DataView(ta.buffer);
         thisEnv.assignView(this, dv, structure, false, fixed);
       },

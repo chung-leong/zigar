@@ -1,7 +1,7 @@
-import { getTypeName } from './accessors/all.js';
 import { StructureType } from './constants.js';
 import { isErrorJSON } from './structures/error-set.js';
 import { TYPED_ARRAY } from './symbols.js';
+import { getTypeName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
