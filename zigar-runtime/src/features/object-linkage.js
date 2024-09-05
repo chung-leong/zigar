@@ -22,7 +22,6 @@ export default mixin({
       }
     }
     // save locations of pointer targets
-    debugger;
     for (const pointer of pointers) {
       const target = pointer[TARGET];
       const address = this.getViewAddress(target[MEMORY]);

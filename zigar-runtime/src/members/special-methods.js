@@ -1,6 +1,6 @@
-import { StructureType } from '../constants.js';
+import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { TUPLE, TYPE } from '../symbols.js';
+import { ENTRIES, FLAGS, TYPE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -35,7 +35,6 @@ function normalizeObject(object, forJSON) {
   : (cb) => cb();
   const resultMap = new Map();
   const process = function(value) {
-    debugger;
     // handle type (i.e. constructor) like a struct
     const type = (typeof(value) === 'function') ? StructureType.Struct : value?.constructor?.[TYPE];
     if (type === undefined) {
@@ -55,7 +54,7 @@ function normalizeObject(object, forJSON) {
         case StructureType.Struct:
         case StructureType.Union:
           entries = value[ENTRIES];
-          result = value.constructor[TUPLE] ? [] : {};
+          result = (value.constructor[FLAGS] & StructureFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Array:
         case StructureType.Vector:

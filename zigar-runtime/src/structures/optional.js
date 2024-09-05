@@ -1,7 +1,7 @@
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { resetPointer } from '../pointer.js';
-import { COPY, FIXED, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, FIXED, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
   defineOptional(structure, descriptors) {
@@ -16,7 +16,7 @@ export default mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[VISIT]?.(resetPointer);
+        this[VISIT]?.('reset');
         return null;
       }
     };
@@ -37,7 +37,7 @@ export default mixin({
         setPresent.call(this, 0);
         this[RESET]?.();
         // clear references so objects can be garbage-collected
-        this[VISIT]?.(resetPointer);
+        this[VISIT]?.('reset');
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
@@ -49,12 +49,14 @@ export default mixin({
         }
       }
     };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer });
+    const constructor = structure.constructor = this.createConstructor(structure);
+    const { bitOffset, byteSize } = members[0];
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
     // it to false automatically clears the address
-    descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.getResetterDescriptor(members[0].bitOffset / 8, members[0].byteSize);
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVisitor(structure, { isChildActive });
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
     return constructor;

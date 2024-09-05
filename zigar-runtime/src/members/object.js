@@ -1,6 +1,6 @@
 import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS } from '../symbols.js';
+import { SLOTS, VIVIFICATE } from '../symbols.js';
 import { bindSlot } from './all.js';
 
 export default mixin({

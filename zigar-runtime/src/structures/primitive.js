@@ -1,4 +1,4 @@
-import { StructureType } from '../constants.js';
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE, TYPED_ARRAY } from '../symbols.js';
@@ -35,10 +35,8 @@ export default mixin({
     const {
       instance: { members: [ member ] },
     } = structure;
-    const typedArray = this.getTypedArray(member);
-    if (typedArray) {
-      staticDescriptors[TYPED_ARRAY] = defineValue(typedArray);
-    }
+    const typedArray = this.getTypedArray(structure);
+    staticDescriptors[TYPED_ARRAY] = defineValue(typedArray);
     staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
     staticDescriptors[PRIMITIVE] = defineValue(member.type);
   },

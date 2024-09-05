@@ -5,7 +5,7 @@ export default mixin({
   defineMemberUint(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
-      getAccessor = this.addRuntimeCheck(env, getAccessor);
+      getAccessor = this.addRuntimeCheck(getAccessor);
     }
     return this.defineMemberUsing(member, getAccessor);
   },

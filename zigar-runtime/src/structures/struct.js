@@ -4,10 +4,8 @@ import { InvalidInitializer } from '../errors.js';
 import {
   getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
 } from '../iterators.js';
-import { always } from '../pointer.js';
-import { COPY, ENTRIES, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, ENTRIES, INITIALIZE, PROPS, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
-import { getSelf } from './all.js';
 
 export default mixin({
   defineStruct(structure, descriptors) {
@@ -34,16 +32,18 @@ export default mixin({
     };
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
+    const props = [];
     for (const member of members.filter(m => !!m.name)) {
       const { set } = descriptors[member.name] = this.defineMember(member);
       if (set && member.flags & MemberFlag.IsRequired) {
         set.required = true;
       }
+      props.push(member.name);
     }
-    descriptors.$ = { get: getSelf, set: initializer };
+    descriptors.$ = { get() { return this }, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = (flags & StructureFlag.IsTuple) && {
-      value: parseInt(members[members.length - 1].name) + 1,
+      value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
     };
     descriptors.entries = (flags & StructureFlag.IsTuple) && {
       value: getVectorEntries,
@@ -58,18 +58,19 @@ export default mixin({
     };
     // add iterator
     descriptors[Symbol.iterator] = defineValue(
-      (isIterator)
+      (flags & StructureFlag.IsIterator)
       ? getZigIterator
-      : (isTuple)
+      : (flags & StructureFlag.IsTuple)
         ? getVectorIterator
         : getStructIterator
     );
     descriptors[INITIALIZE] = defineValue(initializer);
     // for creating complex fields on access
-    descriptors[VIVIFICATE] = (flags & MemberFlag.HasObject) && this.defineVivificatorStruct(structure, true);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure, true);
     // for operating on pointers contained in the struct
-    descriptors[VISIT] = (flags & MemberFlag.HasPointer) && this.defineVisitorStruct(structure, always);
-    descriptors[ENTRIES] = { get: isTuple ? getVectorEntries : getStructEntries };
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive: () => true });
+    descriptors[ENTRIES] = { get: (flags & StructureFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[PROPS] = defineValue(props);
     return constructor;
   }
 });

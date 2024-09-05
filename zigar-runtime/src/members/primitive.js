@@ -3,22 +3,6 @@ import { adjustRangeError } from '../errors.js';
 import { MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
-  defineMemberBool(member) {
-    return this.defineMemberUsing(member, this.getAccessor);
-  },
-  defineMemberFloat(member) {
-    return this.defineMemberUsing(member, this.getAccessor);
-  },
-  defineMemberInt(member) {
-    let getAccessor = this.getAccessor;
-    if (this.runtimeSafety) {
-      getAccessor = this.addRuntimeCheck(env, getAccessor);
-    }
-    return this.defineMemberUsing(member, getAccessor);
-  },
-  defineMemberUint(member) {
-    return this.defineMemberInt(member);
-  },
   ...(process.env.TARGET === 'wasm' ? {
     defineMemberUsing(member, getAccessor) {
       const { littleEndian } = this;

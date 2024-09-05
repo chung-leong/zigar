@@ -1930,7 +1930,6 @@ describe('Pointer functions', function() {
       env.obtainExternBuffer = function(address, len) {
         return bufferMap.get(address);
       };
-      debugger;
       const dv1 = env.allocateFixedMemory(sliceStructure.byteSize * 4, 0);
       const dv2 = env.allocateFixedMemory(structure.byteSize, 0);
       const dv3 = env.allocateFixedMemory(structure.byteSize, 0);

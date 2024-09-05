@@ -19,7 +19,7 @@ export const StructureFlag = {
   HasPointer:       0x0000_0001,
   HasObject:        0x0000_0002,
   HasLength:        0x0000_0004,
-  HasSlots:         0x0000_0008,
+  HasSlot:          0x0000_0008,
   HasTag:           0x0000_0010,
   HasSelector:      0x0000_0020,
   HasValue:         0x0000_0040,

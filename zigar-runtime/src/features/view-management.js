@@ -3,14 +3,14 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPY, FIXED, MEMORY, SHAPE } from '../symbols.js';
+import { COPY, FIXED, MEMORY, SHAPE, TYPED_ARRAY } from '../symbols.js';
 import { add } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
 
   extractView(structure, arg, onError = throwError) {
-    const { type, byteSize, typedArray } = structure;
+    const { type, byteSize, constructor } = structure;
     let dv;
     // not using instanceof just in case we're getting objects created in other contexts
     const tag = arg?.[Symbol.toStringTag];
@@ -19,7 +19,7 @@ export default mixin({
       dv = this.registerView(arg);
     } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
       dv = this.obtainView(arg, 0, arg.byteLength);
-    } else if (typedArray && tag === typedArray.name || (tag === 'Uint8ClampedArray' && typedArray === Uint8Array)) {
+    } else if (tag === constructor[TYPED_ARRAY]?.name || (tag === 'Uint8ClampedArray' && constructor[TYPED_ARRAY] === Uint8Array)) {
       dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
     } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
       dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);

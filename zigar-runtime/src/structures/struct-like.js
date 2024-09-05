@@ -1,7 +1,7 @@
-import { StructureType } from '../constants.js';
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
-import { MEMORY, PARENT } from '../symbols.js';
+import { MEMORY, PARENT, SLOTS } from '../symbols.js';
 
 export default mixin({
   defineVivificatorStruct(structure) {
@@ -11,23 +11,25 @@ export default mixin({
       objectMembers[member.slot] = member;
     }
     const thisEnv = this;
-    return function vivificateChild(slot) {
-      const member = objectMembers[slot];
-      const { bitOffset, byteSize, structure: { constructor } } = member;
-      const dv = this[MEMORY];
-      const parentOffset = dv.byteOffset;
-      const offset = parentOffset + (bitOffset >> 3);
-      let len = byteSize;
-      if (len === undefined) {
-        if (bitOffset & 7) {
-          throw new NotOnByteBoundary(member);
+    return {
+      value(slot) {
+        const member = objectMembers[slot];
+        const { bitOffset, byteSize, structure: { constructor } } = member;
+        const dv = this[MEMORY];
+        const parentOffset = dv.byteOffset;
+        const offset = parentOffset + (bitOffset >> 3);
+        let len = byteSize;
+        if (len === undefined) {
+          if (bitOffset & 7) {
+            throw new NotOnByteBoundary(member);
+          }
+          len = member.bitSize >> 3;
         }
-        len = member.bitSize >> 3;
+        const childDV = thisEnv.obtainView(dv.buffer, offset, len);
+        const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
+        return object;
       }
-      const childDV = thisEnv.obtainView(dv.buffer, offset, len);
-      const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
-      return object;
-    }
+    };
   },
 });
 

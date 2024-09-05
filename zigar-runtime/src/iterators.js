@@ -1,4 +1,4 @@
-import { SELF } from "./symbols";
+import { PROPS, SELF } from './symbols.js';
 
 export function getZigIterator() {
   const self = this;
@@ -23,7 +23,17 @@ export function getStructIterator(options) {
   return entries[Symbol.iterator]();
 }
 
-export function getStructEntriesIterator(options) {
+export function getStructEntriesIterator(options = {}) {
+  const { error } = options;
+  const handleError = (error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
   const self = this;
   const props = this[PROPS];
   let index = 0;
@@ -106,7 +116,7 @@ export function getVectorIterator() {
   };
 }
 
-export function getVectorIterator() {
+export function getVectorEntriesIterator() {
   const self = this;
   const length = this.length;
   let index = 0;
@@ -127,7 +137,7 @@ export function getVectorIterator() {
 
 export function getVectorEntries() {
   return {
-    [Symbol.iterator]: getVectorIterator.bind(this),
+    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
     length: this.length,
   };
 }

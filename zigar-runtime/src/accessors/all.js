@@ -6,8 +6,9 @@ import { defineProperty, defineValue, getTypeName } from '../utils.js';
 
 export default mixin({
   getAccessor(access, member) {
+    const { bitOffset, byteSize } = member;
     const typeName = getTypeName(member)
-    const accessorName = access + typeName;
+    const accessorName = access + typeName + ((byteSize === undefined) ? `${bitOffset}` : '');
     // see if it's a built-in method of DataView
     let accessor = DataView.prototype[accessorName];
     if (accessor) {

@@ -15,219 +15,6 @@ describe('Optional functions', function() {
       useAllStructureTypes();
       useAllExtendedTypes();
     })
-    it('should define a structure for storing an optional value', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(18));
-      expect(object.$).to.equal(null);
-      object.$ = 3.14;
-      expect(object.$).to.equal(3.14);
-      expect(object.valueOf()).to.equal(3.14);
-      object.$ = null;
-      expect(object.$).to.equal(null);
-      expect(object.valueOf()).to.equal(null);
-    })
-    it('should cast the same buffer to the same object', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const buffer = new ArrayBuffer(18);
-      const object1 = Hello(buffer);
-      const object2 = Hello(buffer);
-      expect(object2).to.equal(object1);
-    })
-    it('should throw when no initializer is provided', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(() => new Hello).to.throw(TypeError);
-    })
-    it('should initialize an optional value based on argument given', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello(null);
-      expect(object.$).to.equal(null);
-      object.$ = 3.14;
-      expect(object.$).to.equal(3.14);
-    })
-    it('should initialize an optional value from object of same type', function() {
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello({});
-      object.$ = 3.14;
-      const object2 = new Hello(object);
-      expect(object2.$).to.equal(3.14);
-    })
-    it('should define a structure for storing an optional struct', function() {
-      const structStructure = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Animal',
-        byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-      });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const { constructor: Animal } = structStructure;
-      const structure = env.beginStructure({
-        type: StructureType.Optional,
-        name: 'Hello',
-        byteSize: 18,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-      });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(18));
-      expect(object.$).to.equal(null);
-      object.$ = { dog: 1, cat: 2 };
-      expect(object.$).to.be.instanceOf(Animal);
-      object.$ = null;
-      expect(object.valueOf()).to.equal(null);
-      expect(object.$).to.equal(null);
-      object.$ = new Hello({ dog: 3, cat: 3 });
-      expect(object.valueOf()).to.eql({ dog: 3, cat: 3 });
-    })
     it('should define a structure for storing an optional pointer', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -240,8 +27,8 @@ describe('Optional functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.SinglePointer,
@@ -257,8 +44,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -282,8 +69,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(8));
       expect(object.$).to.equal(null);
@@ -303,8 +90,8 @@ describe('Optional functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      env.finalizeShape(sliceStructure);
-      env.finalizeStructure(sliceStructure);
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.SlicePointer,
         name: '[]Uint8',
@@ -319,8 +106,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -344,8 +131,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
@@ -369,8 +156,8 @@ describe('Optional functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array },
       });
-      env.finalizeShape(sliceStructure);
-      env.finalizeStructure(sliceStructure);
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.SlicePointer,
         name: '[]Uint8',
@@ -385,8 +172,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -410,8 +197,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
@@ -432,8 +219,8 @@ describe('Optional functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.SinglePointer,
@@ -449,8 +236,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -492,8 +279,8 @@ describe('Optional functions', function() {
           1: intPtr2,
         }
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -517,8 +304,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello({});
       const ptr = object.$.cat;
@@ -541,8 +328,8 @@ describe('Optional functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.SinglePointer,
@@ -558,8 +345,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -601,8 +388,8 @@ describe('Optional functions', function() {
           1: intPtr2,
         }
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         name: 'Hello',
@@ -626,8 +413,8 @@ describe('Optional functions', function() {
         byteSize: 1,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello({});
       const ptr = object.$.cat;
@@ -649,8 +436,8 @@ describe('Optional functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.SinglePointer,
@@ -666,8 +453,8 @@ describe('Optional functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Hello',
@@ -681,8 +468,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: ptrStructure,
       });
-      env.finalizeShape(arrayStructure);
-      env.finalizeStructure(arrayStructure);
+      env.defineStructure(arrayStructure);
+      env.endStructure(arrayStructure);
       const { constructor: Int32PtrArray } = arrayStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
@@ -707,8 +494,8 @@ describe('Optional functions', function() {
         byteSize: 8,
         structure: {},
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array = object.$;
@@ -743,8 +530,8 @@ describe('Optional functions', function() {
         bitSize: 1,
         byteSize: 1,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(3.14);
       expect(object.$).to.equal(3.14);
@@ -774,8 +561,8 @@ describe('Optional functions', function() {
         bitSize: 1,
         byteSize: 1,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(1));
       expect(object.$).to.equal(null);

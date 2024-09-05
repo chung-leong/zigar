@@ -5,7 +5,7 @@ import {
 } from '../errors.js';
 import {
   ALIGN, CACHE, CAST,
-  CONST_TARGET, COPY, FINALIZE, INITIALIZE, KEYS, MEMORY, MODIFY,
+  CONST_TARGET, COPY, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, MODIFY,
   RESTORE,
   SETTERS, SHAPE, SIZE, SLOTS, TYPE,
   VARIANTS, VISIT
@@ -88,7 +88,7 @@ export default mixin({
           throw new NoInitializer(structure);
         }
         self = this;
-        if (flags & StructureFlag.HasSlots) {
+        if (flags & StructureFlag.HasSlot) {
           self[SLOTS] = {};
         }
         if (SHAPE in self) {
@@ -119,7 +119,7 @@ export default mixin({
         } else {
           self[MEMORY] = dv;
         }
-        if (flags & StructureFlag.HasSlots) {
+        if (flags & StructureFlag.HasSlot) {
           self[SLOTS] = {};
         }
       }
@@ -227,6 +227,7 @@ export default mixin({
       constructor,
       align,
       byteSize,
+      flags,
       static: { members, template },
     } = structure;
     const staticDescriptors = {
@@ -234,6 +235,7 @@ export default mixin({
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
+      [FLAGS]: defineValue(flags),
     };
     const descriptors = {};
     for (const member of members) {
@@ -265,13 +267,13 @@ export default mixin({
     }
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    f?.call(this, structure, staticDescriptors, descriptors);
+    f?.call(this, structure, staticDescriptors);
     defineProperties(constructor.prototype, descriptors);
     defineProperties(constructor, staticDescriptors);
   },
   getTypedArray(structure) {
     const { type, instance } = structure;
-    if (type && instance) {
+    if (type !== undefined && instance) {
       const [ member ] = instance.members;
       switch (type) {
         case StructureType.Primitive: {
@@ -283,7 +285,6 @@ export default mixin({
         case StructureType.Slice:
           return getTypedArray(member.structure);
       }
-
     }
   },
 });

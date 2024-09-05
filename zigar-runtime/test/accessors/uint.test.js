@@ -40,7 +40,7 @@ describe('Accessor: int', function() {
       const members = [
         { type: MemberType.Uint, bitSize: 7, byteSize: 1, bitOffset: 0 },
         { type: MemberType.Uint, bitSize: 15, byteSize: 2, bitOffset: 0 },
-        { type: MemberType.Uint, bitSize: 30, byteSize: 4, bitOffset: 0 },
+        { type: MemberType.Uint, bitSize: 30, bitOffset: 0 },
       ];
       const dv1 = new DataView(new ArrayBuffer(1 + 1))
       const get1 = env.getAccessorUint('get', members[0]);

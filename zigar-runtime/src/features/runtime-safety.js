@@ -1,3 +1,4 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { Overflow } from '../errors.js';
 
@@ -8,7 +9,7 @@ export default mixin({
 
   addRuntimeCheck(getAccessor) {
     return function (access, member) {
-      const accessor = getAccessor(access, member);
+      const accessor = getAccessor.call(this, access, member);
       if (access === 'set') {
         const { min, max } = getIntRange(member);
         return function(offset, value, littleEndian) {
