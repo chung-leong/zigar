@@ -1,19 +1,183 @@
 import { expect } from 'chai';
+import { defineClass } from '../../src/environment.js';
 
-import { NodeEnvironment } from '../src/environment-node.js';
-import { useAllMemberTypes } from '../src/member.js';
-import { useAllStructureTypes } from '../src/structure.js';
-import { ENVIRONMENT, SLOTS, WRITE_DISABLER } from '../src/symbol.js';
-import { MemberType, StructureType } from '../src/types.js';
+import AccessorAll from '../../src/accessors/all.js';
+import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
+import AccessorJumbo from '../../src/accessors/jumbo.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import DataCopying from '../../src/features/data-copying.js';
+import StructureAcquisition from '../../src/features/structure-acquisition.js';
+import ViewManagement from '../../src/features/view-management.js';
+import MemberAll from '../../src/members/all.js';
+import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
+import MemberPrimitive from '../../src/members/primitive.js';
+import SpecialMethods from '../../src/members/special-methods.js';
+import SpecialProps from '../../src/members/special-props.js';
+import MemberTyp from '../../src/members/type.js';
+import MemberUint from '../../src/members/uint.js';
+import All from '../../src/structures/all.js';
+import Enum, {
+  isNeededByStructure,
+} from '../../src/structures/enum.js';
+import Primitive from '../../src/structures/primitive.js';
+import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
-describe('Enum functions', function() {
-  const env = new NodeEnvironment();
-  describe('defineEnumerationShape', function() {
-    beforeEach(function() {
-      useAllMemberTypes();
-      useAllStructureTypes();
+const Env = defineClass('StructureTest', [
+  AccessorAll, MemberInt, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
+  SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo,
+  AccessorJumboInt, Enum, MemberObject
+]);
+
+describe('Structure: enum', function() {
+  describe('isNeededByStructure', function() {
+    it('should return true when mixin is needed by a structure', function() {
+      const structure = {
+        type: StructureType.Enum,
+      };
+      expect(isNeededByStructure(structure)).to.be.true;
     })
+    it('should return false when mixin is needed by a structure', function() {
+      const structure = {
+        type: StructureType.Struct
+      };
+      expect(isNeededByStructure(structure)).to.be.false;
+    })
+  })
+  describe('defineEnum', function() {
+    it('should return a function', function() {
+      const structure = {
+        type: StructureType.Enum,
+        name: 'Hello',
+        byteSize: 1,
+        instance: {},
+        static: { members: [] },
+        flags: StructureFlag.HasSelector,
+      };
+      structure.instance.members = [
+        {
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 0,
+          byteSize: 1,
+          structure,
+        },
+      ];
+      const env = new Env();
+      const descriptors = {};
+      const constructor = env.defineEnum(structure, descriptors);
+      expect(constructor).to.be.a('function');
+    })
+    it('should add descriptors to the given object', function() {
+      const structure = {
+        type: StructureType.Enum,
+        name: 'Hello',
+        byteSize: 8,
+        instance: {},
+        static: { members: [] },
+      };
+      structure.instance.members = [
+        {
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 0,
+          byteSize: 1,
+          structure,
+        },
+      ];
+      const env = new Env();
+      const descriptors = {};
+      env.defineEnum(structure, descriptors);
+      expect(descriptors.$?.get).to.be.a('function');
+      expect(descriptors.$?.set).to.be.a('function');
+      expect(descriptors[INITIALIZE]?.value).to.be.a('function');
+    })
+  })
+  describe('finalizeEnum', function() {
+    it('should add static descriptors to the given object', function() {
+      const structure = {
+        type: StructureType.Enum,
+        name: 'Hello',
+        byteSize: 1,
+        instance: {},
+        static: {
+          members: [],
+          template: {
+            [SLOTS]: {},
+          }
+        },
+        flags: StructureFlag.HasSelector,
+      };
+      structure.instance.members = [
+        {
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 0,
+          byteSize: 1,
+          structure,
+        },
+      ];
+      const env = new Env();
+      const descriptors = {};
+      env.finalizeEnum(structure, descriptors);
+      expect(descriptors[CAST]?.value).to.be.a('function');
+    })
+    it('should add descriptors for items in enum set', function() {
+      const structure = {
+        type: StructureType.Enum,
+        name: 'Hello',
+        byteSize: 1,
+        instance: {},
+        static: {},
+        flags: StructureFlag.HasSelector,
+      };
+      structure.instance.members = [
+        {
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 0,
+          byteSize: 1,
+          structure,
+        },
+      ];
+      structure.static.members = [
+        {
+          name: 'dog',
+          type: MemberType.Object,
+          flags: MemberFlag.IsPartOfSet,
+          slot: 0,
+        },
+        {
+          name: 'cat',
+          type: MemberType.Object,
+          flags: MemberFlag.IsPartOfSet,
+          slot: 1,
+        },
+      ];
+      const Item = function(number) {
+        this[MEMORY] = new DataView(new ArrayBuffer(1));
+        this[MEMORY].setInt8(0, number);
+      };
+      const dog = new Item(77);
+      const cat = new Item(88);
+      structure.static.template = {
+        [SLOTS]: {
+          0: dog,
+          1: cat
+        },
+      };
+      const env = new Env();
+      const descriptors = {};
+      env.finalizeEnum(structure, descriptors);
+      expect(descriptors[77]?.value).to.be.an('object');
+      expect(descriptors[88]?.value).to.be.an('object');
+      expect(descriptors.dog?.value).to.be.an('object');
+      expect(descriptors.cat?.value).to.be.an('object');
+    })
+  })
+  describe('defineStructure', function() {
     it('should define an enum class', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -26,17 +190,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -46,7 +211,7 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       expect(`${Hello.Dog}`).to.equal('Dog');
@@ -62,8 +227,10 @@ describe('Enum functions', function() {
       expect(e.$).to.equal(Hello.Dog);
     })
     it('should define a non-exhaustive enum class', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
+        flags: StructureFlag.IsOpenEnded,
         name: 'Hello',
         byteSize: 4,
       });
@@ -74,22 +241,23 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
       env.attachMember(structure, {
-        type: MemberType.Comptime,
+        type: MemberType.Object,
         structure,
       }, true);
       env.attachTemplate(structure, {
@@ -98,7 +266,7 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       const e1 = new Hello(3);
@@ -110,6 +278,7 @@ describe('Enum functions', function() {
       expect(String(e1)).to.equal('2');
     })
     it('should cast the same buffer to the same object', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -122,17 +291,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -142,13 +312,14 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       const buffer = new ArrayBuffer(4);
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
       expect(object2).to.equal(object1);
     })
     it('should look up the correct enum object', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -161,17 +332,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -181,11 +353,12 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
     it('should look up the correct enum object by name', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -198,17 +371,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -218,11 +392,12 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello('Dog')).to.equal(Hello.Dog);
       expect(Hello('Cat')).to.equal(Hello.Cat);
     })
     it('should throw when given incompatible input', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -235,17 +410,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -255,12 +431,13 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(() => Hello({})).to.throw(TypeError);
       expect(() => Hello(undefined)).to.throw(TypeError);
       expect(() => Hello(Symbol.asyncIterator)).to.throw(TypeError);
     })
     it('should look up the correct enum object when values are not sequential', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -273,17 +450,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -293,13 +471,14 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 456 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello(123)).to.equal(Hello.Dog);
       expect(Hello(456)).to.equal(Hello.Cat);
       expect(Number(Hello(123))).to.equal(123);
       expect(Number(Hello(456))).to.equal(456);
     })
     it('should look up the correct enum object when they represent bigInts', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -312,17 +491,18 @@ describe('Enum functions', function() {
         byteSize: 8,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -332,12 +512,13 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new BigUint64Array([ 4567n ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello(1234n)).to.equal(Hello.Dog);
       // BigInt suffix missing on purpose
       expect(Hello(4567)).to.equal(Hello.Cat);
     })
     it('should produce the expected output when JSON.stringify() is used', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -350,17 +531,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -370,7 +552,7 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('"Dog"');
       expect(JSON.stringify(Hello.Cat)).to.equal('"Cat"');
       const object = new Hello(undefined);
@@ -380,6 +562,7 @@ describe('Enum functions', function() {
       expect(JSON.stringify(object)).to.contain("error");
     })
     it('should return undefined when look-up of enum item fails', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -392,17 +575,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -412,11 +596,12 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello(1)).to.be.instanceOf(Hello);
       expect(Hello(5)).to.be.undefined;
     })
     it('should return undefined when look-up of enum item fails', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -429,17 +614,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -449,11 +635,12 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello(1)).to.be.instanceOf(Hello);
       expect(Hello(5)).to.be.undefined;
     })
     it('should have correct string tag', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'zig.Hello',
@@ -466,17 +653,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -486,12 +674,13 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(Hello.name).to.equal('zig.Hello');
       const desc = Object.prototype.toString.call(Hello.Dog);
       expect(desc).to.equal('[object zig.Hello]');
     })
     it('should throw when no initializer is provided', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -504,12 +693,15 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
-      env.finalizeStructure(structure);
+      const Hello = env.defineStructure(structure);
+      env.attachTemplate(structure, {
+        [SLOTS]: {},
+      }, true);
+      env.endStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
     it('should throw when initializer is not one of the expected types', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -522,12 +714,15 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
-      env.finalizeStructure(structure);
+      const Hello = env.defineStructure(structure);
+      env.attachTemplate(structure, {
+        [SLOTS]: {},
+      }, true);
+      env.endStructure(structure);
       expect(() => new Hello(false)).to.throw(TypeError);
     })
     it('should accept special initializers', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -540,17 +735,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -560,11 +756,12 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 123 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       const object = new Hello({ typedArray: new Uint32Array([ 123 ])});
       expect(object.$).to.equal(Hello.Cat);
     })
     it('should throw when initializer is empty', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -577,17 +774,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -597,10 +795,11 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 123 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError);
     })
     it('should throw when invalid indices are encountered', function() {
+      const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
         name: 'Hello',
@@ -613,17 +812,18 @@ describe('Enum functions', function() {
         byteSize: 4,
         structure,
       });
-      env.finalizeShape(structure);
-      const { constructor: Hello } = structure;
+      const Hello = env.defineStructure(structure);
       env.attachMember(structure, {
         name: 'Dog',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -633,7 +833,7 @@ describe('Enum functions', function() {
           1: instanceOf(structure, new Uint32Array([ 123 ])),
         },
       }, true);
-      env.finalizeStructure(structure);
+      env.endStructure(structure);
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       dv.setUint32(0, 1234, true);
       const object = Hello(dv);
@@ -653,6 +853,5 @@ function instanceOf(structure, ta) {
   const { constructor } = structure;
   const dv = new DataView(ta.buffer);
   const object = constructor.call(ENVIRONMENT, dv);
-  object[WRITE_DISABLER]();
   return object;
 }

@@ -25,7 +25,7 @@ export default mixin({
       const handleName = `transformDescriptor${structureNames[type]}`;
       const f = this[handleName];
       if (f) {
-        return f(descriptor, structure);
+        return f(descriptor, member);
       }
     }
     return descriptor;

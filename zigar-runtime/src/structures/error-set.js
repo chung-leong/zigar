@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
-import { CAST, CLASS, INITIALIZE } from '../symbols.js';
+import { CAST, CLASS, INITIALIZE, TYPED_ARRAY } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
@@ -47,7 +47,7 @@ export default mixin({
     descriptors[INITIALIZE] = initializer;
     return constructor;
   },
-  finalizeErrorSet(structure, descriptors, staticDescriptors) {
+  finalizeErrorSet(structure, staticDescriptors) {
     const {
       flags,
       constructor,
@@ -99,6 +99,7 @@ export default mixin({
         }
       }
     };
+    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
   },
   transformDescriptorErrorSet(int, structure) {
     const findError = function(value) {

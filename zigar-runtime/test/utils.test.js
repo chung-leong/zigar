@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 
+import { MemberType } from '../src/constants.js';
 import {
   add,
   alignForward,
@@ -11,6 +12,7 @@ import {
   getTypeName,
   isInvalidAddress,
   isMisaligned,
+  transformIterable,
 } from '../src/utils.js';
 
 describe('Utility functions', function() {
@@ -231,6 +233,36 @@ describe('Utility functions', function() {
     })
     it(`should add a bigint to a bigint`, function() {
       expect(add(5n, 5n)).to.equal(10n);
+    })
+  })
+  describe('transformIterable', function() {
+    it('should return array as is when given one', function() {
+      const array = [];
+      const result = transformIterable(array);
+      expect(result).to.equal(array);
+    })
+    it('should return items from generator in an array', function() {
+      const generate = function*() {
+        for (let i = 0; i < 5; i++) {
+          yield i;
+        }
+      };
+      const result = transformIterable(generate());
+      expect(result).to.be.an('array');
+      expect(result).to.eql([ 0, 1, 2, 3, 4 ]);
+    })
+    it('should return new generator with length', function() {
+      const generate = function*() {
+        yield { length: 5 };
+        for (let i = 0; i < 5; i++) {
+          yield i;
+        }
+      };
+      const result = transformIterable(generate());
+      expect(result).to.not.be.an('array');
+      expect(result).to.be.a('generator');
+      expect(result).to.have.lengthOf(5);
+      expect([ ...result ]).to.eql([ 0, 1, 2, 3, 4 ]);
     })
   })
 })

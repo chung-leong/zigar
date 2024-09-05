@@ -173,3 +173,45 @@ export function add(arg1, arg2) {
   return arg1 + ((typeof(arg1) === 'bigint') ? BigInt(arg2) : arg2);
 }
 
+export function transformIterable(arg) {
+  if (typeof(arg.length) === 'number') {
+    // it's an array of sort
+    return arg;
+  }
+  const iterator = arg[Symbol.iterator]();
+  const first = iterator.next();
+  const length = first.value?.length;
+  if (typeof(length) === 'number' && Object.keys(first.value).join() === 'length') {
+    // return generator with length attached
+    return Object.assign((function*() {
+      let result;
+      while (!(result = iterator.next()).done) {
+        yield result.value;
+      }
+    })(), { length });
+  } else {
+    const array = [];
+    let result = first;
+    while (!result.done) {
+      array.push(result.value);
+      result = iterator.next();
+    }
+    return array;
+  }
+}
+
+export function getSelf() {
+  return this;
+}
+
+export function toString() {
+  return String(this);
+}
+
+export function always() {
+  return true;
+}
+
+export function never() {
+  return false;
+}

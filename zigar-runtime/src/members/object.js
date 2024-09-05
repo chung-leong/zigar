@@ -7,7 +7,7 @@ export default mixin({
   defineMemberObject(member) {
     return bindSlot(member.slot, {
       get: (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
-      set: (member.flags & MemberFlag.IsReadOnly) ? null : setValue,
+      set: (member.flags & MemberFlag.IsReadOnly) ? undefined : setValue,
     });
   }
 });

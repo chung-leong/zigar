@@ -57,7 +57,7 @@ export default mixin({
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
-    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVisitor(structure, { isChildActive });
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure, { isChildActive });
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
     return constructor;
   },

@@ -6,6 +6,7 @@ import {
 import {
   ALIGN, CACHE, CAST,
   CONST_TARGET, COPY, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, MODIFY,
+  PROPS,
   RESTORE,
   SETTERS, SHAPE, SIZE, SLOTS, TYPE,
   VARIANTS, VISIT
@@ -58,6 +59,61 @@ export default mixin({
     defineProperties(constructor.prototype, descriptors);
     structure.constructor = constructor;
     return constructor;
+  },
+  finalizeStructure(structure) {
+    const {
+      name,
+      type,
+      constructor,
+      align,
+      byteSize,
+      flags,
+      static: { members, template },
+    } = structure;
+    const props = [];
+    const staticDescriptors = {
+      name: defineValue(name),
+      [ALIGN]: defineValue(align),
+      [SIZE]: defineValue(byteSize),
+      [TYPE]: defineValue(type),
+      [FLAGS]: defineValue(flags),
+      [PROPS]: defineValue(props),
+    };
+    const descriptors = {};
+    for (const member of members) {
+      const { name, slot, structure: { type, instance: { members: [ fnMember ] } } } = member;
+      staticDescriptors[name] = this.defineMember(member);
+      if (type === StructureType.Function) {
+        const fn = template[SLOTS][slot];
+        // provide a name if one isn't assigned yet
+        if (!fn.name) {
+          defineProperty(fn, 'name', { value: name });
+        }
+        // see if it's a getter or setter
+        const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
+        const argRequired = (accessorType === 'get') ? 0 : 1;
+        if (accessorType && fn.length  === argRequired) {
+          const descriptor = staticDescriptors[propName] ??= {};
+          descriptor[accessorType] = fn;
+        }
+        // see if it's a method
+        if (startsWithSelf(fnMember.structure, structure)) {
+          const method = fn[VARIANTS].method;
+          descriptors[name] = { value: method };
+          if (accessorType && method.length  === argRequired) {
+            const descriptor = descriptors[propName] ??= {};
+            descriptor[accessorType] = method;
+          }
+        }
+      } else {
+        props.push(name);
+      }
+    }
+    const handlerName = `finalize${structureNames[type]}`;
+    const f = this[handlerName];
+    f?.call(this, structure, staticDescriptors);
+    defineProperties(constructor.prototype, descriptors);
+    defineProperties(constructor, staticDescriptors);
   },
   createConstructor(structure, handlers = {}) {
     const {
@@ -220,62 +276,13 @@ export default mixin({
       return argKeys.length;
     };
   },
-  finalizeStructure(structure) {
-    const {
-      name,
-      type,
-      constructor,
-      align,
-      byteSize,
-      flags,
-      static: { members, template },
-    } = structure;
-    const staticDescriptors = {
-      name: defineValue(name),
-      [ALIGN]: defineValue(align),
-      [SIZE]: defineValue(byteSize),
-      [TYPE]: defineValue(type),
-      [FLAGS]: defineValue(flags),
-    };
-    const descriptors = {};
-    for (const member of members) {
-      const { name, slot, structure: { type, instance: { members: [ fnMember ] } } } = member;
-      staticDescriptors[name] = this.defineMember(member);
-      if (type === StructureType.Function) {
-        const fn = template[SLOTS][slot];
-        // provide a name if one isn't assigned yet
-        if (!fn.name) {
-          defineProperty(fn, 'name', { value: name });
-        }
-        // see if it's a getter or setter
-        const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
-        const argRequired = (accessorType === 'get') ? 0 : 1;
-        if (accessorType && fn.length  === argRequired) {
-          const descriptor = staticDescriptors[propName] ??= {};
-          descriptor[accessorType] = fn;
-        }
-        // see if it's a method
-        if (startsWithSelf(fnMember.structure, structure)) {
-          const method = fn[VARIANTS].method;
-          descriptors[name] = { value: method };
-          if (accessorType && method.length  === argRequired) {
-            const descriptor = descriptors[propName] ??= {};
-            descriptor[accessorType] = method;
-          }
-        }
-      }
-    }
-    const handlerName = `finalize${structureNames[type]}`;
-    const f = this[handlerName];
-    f?.call(this, structure, staticDescriptors);
-    defineProperties(constructor.prototype, descriptors);
-    defineProperties(constructor, staticDescriptors);
-  },
   getTypedArray(structure) {
     const { type, instance } = structure;
     if (type !== undefined && instance) {
       const [ member ] = instance.members;
       switch (type) {
+        case StructureType.Enum:
+        case StructureType.ErrorSet:
         case StructureType.Primitive: {
           const typeName = getTypeName(member)
           const arrayName = typeName + 'Array';
@@ -283,7 +290,7 @@ export default mixin({
         }
         case StructureType.Array:
         case StructureType.Slice:
-          return getTypedArray(member.structure);
+          return this.getTypedArray(member.structure);
       }
     }
   },

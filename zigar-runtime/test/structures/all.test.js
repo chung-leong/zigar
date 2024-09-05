@@ -240,5 +240,112 @@ describe('Structure: all', function() {
       expect(Hello[TYPED_ARRAY]).to.equal(BigInt64Array);
     })
   })
+  describe('getTypedArray', function() {
+    it('should return typed array constructor for integer primitive', function() {
+      let index = 0;
+      const types = [
+        Int8Array,
+        Uint8Array,
+        Int16Array,
+        Uint16Array,
+        Int32Array,
+        Uint32Array,
+        BigInt64Array,
+        BigUint64Array,
+      ];
+      const env = new Env;
+      for (const byteSize of [ 1, 2, 4, 8 ]) {
+        for (const type of [ MemberType.Int, MemberType.Uint ]) {
+          const structure = {
+            type: StructureType.Primitive,
+            instance: {
+              members: [
+                {
+                  type,
+                  bitSize: byteSize * 8,
+                  byteSize,
+                }
+              ]
+            }
+          };
+          const f = env.getTypedArray(structure);
+          expect(f).to.be.a('function');
+          expect(f).to.equal(types[index++]);
+        }
+      }
+    })
+    it('should return a typed array constructor for non-standard integer', function() {
+      const structure = {
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 36,
+              byteSize: 8,
+            }
+          ]
+        }
+      };
+      const env = new Env;
+      const f = env.getTypedArray(structure);
+      expect(f).to.equal(BigUint64Array);
+    })
+    it('should return typed array constructor for floating point', function() {
+      let index = 0;
+      const types = [
+        undefined,
+        Float32Array,
+        Float64Array,
+        undefined,
+      ];
+      const env = new Env;
+      for (const byteSize of [ 2, 4, 8, 16 ]) {
+        const structure = {
+          type: StructureType.Primitive,
+          instance: {
+            members: [
+              {
+                type: MemberType.Float,
+                bitSize: byteSize * 8,
+                byteSize,
+              }
+            ]
+          }
+        };
+        const f = env.getTypedArray(structure);
+        expect(f).to.equal(types[index++]);
+      }
+    })
+    it('should return type array constructor of child elements', function() {
+      const structure = {
+        type: StructureType.Array,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32 * 4,
+              byteSize: 4 * 4,
+              structure: {
+                type: StructureType.Primitive,
+                instance: {
+                  members: [
+                    {
+                      type: MemberType.Float,
+                      bitSize: 32,
+                      byteSize: 4,
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      };
+      const env = new Env;
+      const f = env.getTypedArray(structure);
+      expect(f).to.equal(Float32Array);
+    })
+  })
 })
 

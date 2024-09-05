@@ -1,8 +1,8 @@
 import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getProxy } from '../pointer.js';
-import { COPY, ENTRIES, FINALIZE, TYPED_ARRAY, VISIT, VIVIFICATE } from '../symbols.js';
+import { getArrayEntries, getArrayIterator } from '../iterators.js';
+import { COPY, ENTRIES, FINALIZE, INITIALIZE, PROXY, TYPED_ARRAY, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -54,52 +54,26 @@ export default mixin({
         }
       }
     };
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { get() { return this[PROXY] }, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = defineValue(getArrayEntries);
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = this.defineFinalizer(descriptor);
+    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
     return constructor;
   },
-  finalizeArray(structure, descriptors, staticDescriptors) {
+  finalizeArray(structure, staticDescriptors) {
     const {
       instance: { members: [ member ] },
     } = structure;
-    staticDescriptors[TYPED_ARRAY] = defineValue(member.structure.constructor[TYPED_ARRAY]);
+    staticDescriptors.child = defineValue(member.structure.constructor);
+    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
   },
 });
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Array;
-}
-
-export function transformIterable(arg) {
-  if (typeof(arg.length) === 'number') {
-    // it's an array of sort
-    return arg;
-  }
-  const iterator = arg[Symbol.iterator]();
-  const first = iterator.next();
-  const length = first.value?.length;
-  if (typeof(length) === 'number' && Object.keys(first.value).join() === 'length') {
-    // return generator with length attached
-    return Object.assign((function*() {
-      let result;
-      while (!(result = iterator.next()).done) {
-        yield result.value;
-      }
-    })(), { length });
-  } else {
-    const array = [];
-    let result = first;
-    while (!result.done) {
-      array.push(result.value);
-      result = iterator.next();
-    }
-    return array;
-  }
 }

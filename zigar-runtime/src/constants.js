@@ -56,7 +56,8 @@ export const memberNames = Object.keys(MemberType);
 export const MemberFlag = {
   IsRequired:       0x0000_0001,
   IsReadOnly:       0x0000_0002,
-  IsSentinel:       0x0000_0004,
+  IsPartOfSet:      0x0000_0004,
   IsSelector:       0x0000_0008,
-  IsBackingInt:     0x0000_0010,
+  IsSentinel:       0x0000_0010,
+  IsBackingInt:     0x0000_0020,
 };

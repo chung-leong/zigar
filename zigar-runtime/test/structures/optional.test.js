@@ -11,7 +11,10 @@ import DataCopying from '../../src/features/data-copying.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
+import MemberBool from '../../src/members/bool.js';
+import MemberFloat from '../../src/members/float.js';
 import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
@@ -21,12 +24,15 @@ import Optional, {
   isNeededByStructure,
 } from '../../src/structures/optional.js';
 import Primitive from '../../src/structures/primitive.js';
+import StructLike from '../../src/structures/struct-like.js';
+import Struct from '../../src/structures/struct.js';
 import { INITIALIZE } from '../../src/symbols.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt,
-  Optional, AccessorBool, AccessorFloat128,
+  Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat, MemberObject, Struct,
+  StructLike,
 ]);
 
 describe('Structure: optional', function() {
@@ -289,6 +295,7 @@ describe('Structure: optional', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.attachMember(structStructure, {
         name: 'cat',
@@ -296,6 +303,7 @@ describe('Structure: optional', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
@@ -304,7 +312,7 @@ describe('Structure: optional', function() {
         type: StructureType.Optional,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(structure, {
         type: MemberType.Object,

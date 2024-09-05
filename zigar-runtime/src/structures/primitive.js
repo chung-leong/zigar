@@ -35,8 +35,7 @@ export default mixin({
     const {
       instance: { members: [ member ] },
     } = structure;
-    const typedArray = this.getTypedArray(structure);
-    staticDescriptors[TYPED_ARRAY] = defineValue(typedArray);
+    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
     staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
     staticDescriptors[PRIMITIVE] = defineValue(member.type);
   },

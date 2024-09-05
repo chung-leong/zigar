@@ -23,17 +23,8 @@ export function getStructIterator(options) {
   return entries[Symbol.iterator]();
 }
 
-export function getStructEntriesIterator(options = {}) {
-  const { error } = options;
-  const handleError = (error === 'return')
-  ? (cb) => {
-      try {
-        return cb();
-      } catch (err) {
-        return err;
-      }
-    }
-  : (cb) => cb();
+export function getStructEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
   const self = this;
   const props = this[PROPS];
   let index = 0;
@@ -42,7 +33,7 @@ export function getStructEntriesIterator(options = {}) {
       let value, done;
       if (index < props.length) {
         const current = props[index++];
-        value = [ current, handleError(() => self[current], options) ];
+        value = [ current, handleError(() => self[current]) ];
         done = false;
       } else {
         done = true;
@@ -72,6 +63,7 @@ export function getArrayIterator() {
 }
 
 export function getArrayEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
   const self = this[SELF] ?? this;
   const length = this.length;
   let index = 0;
@@ -80,7 +72,7 @@ export function getArrayEntriesIterator(options) {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = [ current, handleError(() => self.get(current), options) ];
+        value = [ current, handleError(() => self.get(current)) ];
         done = false;
       } else {
         done = true;
@@ -154,11 +146,30 @@ export function getUnionIterator(options) {
   return entries[Symbol.iterator]();
 }
 
-export function getUnionEntriesIterator({ error }) {
+export function getUnionEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
   const self = this;
   const props = this[PROPS];
   const getters = this[GETTERS];
-  const handleError = (error === 'return')
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < props.length) {
+        const current = props[index++];
+        // get value of prop with no check
+        value = [ current, handleError(() => getters[current].call(self)) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+export function getErrorHandler(options) {
+  return (options?.error === 'return')
   ? (cb) => {
       try {
         return cb();
@@ -167,19 +178,4 @@ export function getUnionEntriesIterator({ error }) {
       }
     }
   : (cb) => cb();
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        // get value of prop with no check
-        value = [ current, handleError(() => getters[current].call(self), options) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
 }

@@ -1,17 +1,19 @@
 import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, PARENT, PROXY, SLOTS } from '../symbols.js';
+import { MEMORY, PARENT, PROXY, SELF, SLOTS } from '../symbols.js';
+import { defineProperties } from '../utils.js';
 
 export default mixin({
   defineFinalizerArray({ get, set }) {
     return {
       value() {
+        const value = new Proxy(this, proxyHandlers);
         defineProperties(this, {
-          [PROXY]: { value: new Proxy(this, proxyHandlers) },
+          [PROXY]: { value },
           get: { value: get },
           set: { value: set },
         });
-        return proxy;
+        return value;
       },
     };
   },
