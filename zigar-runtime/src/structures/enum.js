@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { EnumExpected, InvalidInitializer } from '../errors.js';
 import { CAST, INITIALIZE, NAME, SLOTS, TAG, TYPED_ARRAY } from '../symbols.js';
@@ -56,10 +56,9 @@ export default mixin({
     const items = template[SLOTS];
     // obtain getter/setter for accessing int values directly
     const { get, set } = this.defineMember(member, false);
-    for (const { name, slot } of members) {
-      const item = items[slot];
-      // enum can have static variables, so not every member is a enum item
-      if (item instanceof constructor) {
+    for (const { name, flags, slot } of members) {
+      if (flags & MemberFlag.IsPartOfSet) {
+        const item = items[slot];
         // attach name to item so tagged union code can quickly find it
         defineProperty(item, NAME, defineValue(name));
         const index = get.call(item);

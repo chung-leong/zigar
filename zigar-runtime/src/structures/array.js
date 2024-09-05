@@ -2,8 +2,8 @@ import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
-import { COPY, ENTRIES, FINALIZE, INITIALIZE, PROXY, TYPED_ARRAY, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { COPY, ENTRIES, FINALIZE, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
+import { defineValue, getProxy, transformIterable } from '../utils.js';
 
 export default mixin({
   defineArray(structure, descriptors) {
@@ -54,7 +54,7 @@ export default mixin({
         }
       }
     };
-    descriptors.$ = { get() { return this[PROXY] }, set: initializer };
+    descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = defineValue(getArrayEntries);
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
@@ -70,7 +70,6 @@ export default mixin({
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
-    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
   },
 });
 

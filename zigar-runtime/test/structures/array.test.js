@@ -35,7 +35,7 @@ import Struct from '../../src/structures/struct.js';
 import { ENTRIES, FINALIZE, INITIALIZE } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 
-const Env = defineClass('StructureTest', [
+const Env = defineClass('ArrayTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
@@ -106,6 +106,34 @@ describe('Structure: array', function() {
       expect(descriptors[INITIALIZE]?.value).to.be.a('function');
       expect(descriptors[FINALIZE]?.value).to.be.a('function');
       expect(descriptors[ENTRIES]?.get).to.be.a('function');
+    })
+  })
+  describe('finalizeArray', function() {
+    it('should add static descriptors to the given object', function() {
+      const structure = {
+        type: StructureType.Array,
+        name: 'Array',
+        byteSize: 2,
+        instance: {},
+        static: {
+          members: [],
+          template: {
+            [SLOTS]: {},
+          }
+        },
+      };
+      structure.instance.members = [
+        {
+          type: MemberType.Uint,
+          bitSize: 16,
+          byteSize: 2,
+          structure,
+        },
+      ];
+      const env = new Env();
+      const descriptors = {};
+      env.finalizeArray(structure, descriptors);
+      expect(descriptors.child?.value).to.be.a('function');
     })
   })
   describe('defineStructure', function() {

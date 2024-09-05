@@ -1,4 +1,5 @@
 import { memberNames, MemberType } from './constants.js';
+import { PROXY } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -204,6 +205,14 @@ export function getSelf() {
   return this;
 }
 
+export function getLength() {
+  return this[LENGTH];
+}
+
+export function getProxy() {
+  return this[PROXY];
+}
+
 export function toString() {
   return String(this);
 }
@@ -215,3 +224,43 @@ export function always() {
 export function never() {
   return false;
 }
+
+function adjustIndex(index, len) {
+  index = index | 0;
+  if (index < 0) {
+    index = len + index;
+    if (index < 0) {
+      index = 0;
+    }
+  } else {
+    if (index > len) {
+      index = len;
+    }
+  }
+  return index;
+}
+
+function getSubArrayView(begin, end) {
+  begin = (begin === undefined) ? 0 : adjustIndex(begin, this.length);
+  end = (end === undefined) ? this.length : adjustIndex(end, this.length);
+  const dv = this[MEMORY];
+  const offset = begin * elementSize;
+  const len = (end * elementSize) - offset;
+  return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
+}
+
+function getSubarrayOf(begin, end) {
+  const dv = getSubArrayView.call(this, begin, end);
+  return constructor(dv);
+};
+
+function getSliceOf(begin, end, options = {}) {
+  const {
+    fixed = false
+  } = options;
+  const dv1 = getSubArrayView.call(this, begin, end);
+  const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
+  const slice = constructor(dv2);
+  copier.call(slice, { [MEMORY]: dv1 });
+  return slice;
+};

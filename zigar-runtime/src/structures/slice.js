@@ -1,28 +1,20 @@
-import {
-  canBeString, getArrayEntries, getArrayIterator, getChildVivificator,
-  getPointerVisitor,
-  transformIterable
-} from '../array.js';
-import { MemberType } from '../constants.js';
+import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getProxy } from '../pointer.js';
+import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import {
-  COPY, ENTRIES,
-  LENGTH, MEMORY,
-  VISIT, VIVIFICATE
+  COPY, ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SHAPE, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { getTypedArrayClass, StructureType } from './all.js';
+import { defineValue, getProxy, transformIterable } from '../utils.js';
 
 export default mixin({
-  defineSlice(structure) {
+  defineSlice(structure, descriptors) {
     const {
       align,
       instance: {
         members: [ member ],
       },
-      byteSize,
-      hasPointer,
+      flags,
     } = structure;
     /* c8 ignore start */
     if (process.env.DEV) {
@@ -42,7 +34,6 @@ export default mixin({
       // so we're not putting this prop into the standard structure
       structure.sentinel = sentinel;
     }
-    const hasStringProp = canBeString(member);
     const thisEnv = this;
     const shapeDefiner = function(dv, length, fixed = false) {
       if (!dv) {
@@ -67,10 +58,10 @@ export default mixin({
           shapeChecker.call(this, arg, arg.length);
         }
         this[COPY](arg);
-        if (hasPointer) {
+        if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
-      } else if (typeof(arg) === 'string' && hasStringProp) {
+      } else if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
         initializer.call(this, { string: arg }, fixed);
       } else if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
@@ -98,68 +89,26 @@ export default mixin({
         throw new InvalidArrayInitializer(structure, arg);
       }
     };
-    const getLength = function() {
-      return this[LENGTH];
-    };
-    const adjustIndex = function(index, len) {
-      index = index | 0;
-      if (index < 0) {
-        index = len + index;
-        if (index < 0) {
-          index = 0;
-        }
-      } else {
-        if (index > len) {
-          index = len;
-        }
-      }
-      return index;
-    };
-    function getSubArrayView(begin, end) {
-      begin = (begin === undefined) ? 0 : adjustIndex(begin, this.length);
-      end = (end === undefined) ? this.length : adjustIndex(end, this.length);
-      const dv = this[MEMORY];
-      const offset = begin * elementSize;
-      const len = (end * elementSize) - offset;
-      return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
-    }
-    function getSubarrayOf(begin, end) {
-      const dv = getSubArrayView.call(this, begin, end);
-      return constructor(dv);
-    };
-    const getSliceOf = function(begin, end, options = {}) {
-      const {
-        fixed = false
-      } = options;
-      const dv1 = getSubArrayView.call(this, begin, end);
-      const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
-      const slice = constructor(dv2);
-      copier.call(slice, { [MEMORY]: dv1 });
-      return slice;
-    };
     const descriptor = this.defineMember(member);
-    const finalizer = function() {
-      return thisEnv.finalizeArray(this, descriptor);
-    };
-    const constructor = structure.constructor = this.createConstructor(structure, { initializer, shapeDefiner, finalizer });
-    const hasObject = member.type === MemberType.Object;
-    const shapeHandlers = { shapeDefiner };
-    const instanceDescriptors = {
-      $: { get: getProxy, set: initializer },
-      length: { get: getLength },
-      entries: { value: getArrayEntries },
-      slice: { value: getSliceOf },
-      subarray: { value: getSubarrayOf },
-      [Symbol.iterator]: { value: getArrayIterator },
-      [ENTRIES]: { get: getArrayEntries },
-      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this, true) },
-      [VISIT]: hasPointer && { value: getPointerVisitor(structure) },
-    };
-    const staticDescriptors = {
-      child: { get: () => elementStructure.constructor },
-    };
-    structure.TypedArray = getTypedArrayClass(member);
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors, shapeHandlers);
+    const constructor = this.createConstructor(structure);
+    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.slice = null; // TODO
+    descriptors.subarray = null; // TODO
+    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[SHAPE] = defineValue(shapeDefiner);
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
+    descriptors[ENTRIES] = { get: getArrayEntries };
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    return constructor;
+  },
+  finalizeSlice(structure, staticDescriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    staticDescriptors.child = defineValue(member.structure.constructor);
   },
 });
 

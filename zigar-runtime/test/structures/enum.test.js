@@ -23,7 +23,7 @@ import Enum, {
 import Primitive from '../../src/structures/primitive.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
-const Env = defineClass('StructureTest', [
+const Env = defineClass('EnumTest', [
   AccessorAll, MemberInt, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
   SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo,
   AccessorJumboInt, Enum, MemberObject
@@ -52,7 +52,6 @@ describe('Structure: enum', function() {
         byteSize: 1,
         instance: {},
         static: { members: [] },
-        flags: StructureFlag.HasSelector,
       };
       structure.instance.members = [
         {
@@ -72,7 +71,7 @@ describe('Structure: enum', function() {
       const structure = {
         type: StructureType.Enum,
         name: 'Hello',
-        byteSize: 8,
+        byteSize: 1,
         instance: {},
         static: { members: [] },
       };
@@ -144,13 +143,13 @@ describe('Structure: enum', function() {
         {
           name: 'dog',
           type: MemberType.Object,
-          flags: MemberFlag.IsPartOfSet,
+          flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
           slot: 0,
         },
         {
           name: 'cat',
           type: MemberType.Object,
-          flags: MemberFlag.IsPartOfSet,
+          flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
           slot: 1,
         },
       ];
@@ -194,14 +193,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -245,14 +244,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -295,14 +294,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -336,14 +335,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -375,14 +374,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -414,14 +413,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -454,14 +453,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -495,14 +494,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -535,14 +534,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -579,14 +578,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -618,14 +617,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -657,14 +656,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -739,14 +738,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -778,14 +777,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);
@@ -816,14 +815,14 @@ describe('Structure: enum', function() {
       env.attachMember(structure, {
         name: 'Dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 0,
         structure,
       }, true);
       env.attachMember(structure, {
         name: 'Cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
         slot: 1,
         structure,
       }, true);

@@ -1,7 +1,7 @@
-import { StructureType } from '../constants.js';
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
-import { CAST, CLASS, INITIALIZE, TYPED_ARRAY } from '../symbols.js';
+import { CAST, CLASS, INITIALIZE, PROPS, SLOTS } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
@@ -14,10 +14,16 @@ export default mixin({
       instance: { members: [ member ] },
     } = structure;
     if (!this.currentErrorClass) {
+      // create anyerror set
       this.currentErrorClass = class ZigError extends ZigErrorBase {};
-      const ae = { ...structure, name: 'anyerror' };
-      this.defineErrorSet(ae);
-      this.currentGlobalSet = ae.constructor;
+      const ae = {
+        type: StructureType.ErrorSet,
+        name: 'anyerror',
+        instance: { members: [ member ] },
+        static: { members: [], template: { SLOTS: {} } },
+      };
+      this.currentGlobalSet = this.defineStructure(ae);
+      this.finalizeStructure(ae);
     }
     if (this.currentGlobalSet && name === 'anyerror') {
       structure.constructor = this.currentGlobalSet;
@@ -44,17 +50,16 @@ export default mixin({
       }
     });
     descriptors.$ = descriptor;
-    descriptors[INITIALIZE] = initializer;
+    descriptors[INITIALIZE] = defineValue(initializer);
     return constructor;
   },
   finalizeErrorSet(structure, staticDescriptors) {
     const {
-      flags,
       constructor,
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    const items = template[SLOTS];
+    const items = template?.[SLOTS] ?? {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);
     for (const { name, slot } of members) {
@@ -66,16 +71,15 @@ export default mixin({
       const number = get.call(item);
       let error = this.currentGlobalSet[number], inGlobalSet = true;
       if (!error) {
-        const errorClass = errorSet[CLASS];
-        error = new errorClass(name, number);
+        error = new this.currentErrorClass(name, number);
         inGlobalSet = false;
       }
-      // make the error object available by index, by name, and by error message
+      // make the error object available by errno, by name, and by error message
       const descriptor = defineValue(error);
       const string = String(error);
       staticDescriptors[name] =
       staticDescriptors[string] =
-      staticDescriptors[index] = descriptor;
+      staticDescriptors[number] = descriptor;
       if (!inGlobalSet) {
         // add to global error set as well
         defineProperties(this.currentGlobalSet, {
@@ -83,6 +87,7 @@ export default mixin({
           [string]: descriptor,
           [name]: descriptor,
         });
+        this.currentGlobalSet[PROPS].push(name);
       }
     }
     // add cast handler allowing strings, numbers, and JSON object to be casted into error set
@@ -99,9 +104,13 @@ export default mixin({
         }
       }
     };
-    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
+    staticDescriptors[CLASS] = defineValue(this.currentErrorClass);
   },
-  transformDescriptorErrorSet(int, structure) {
+  transformDescriptorErrorSet(descriptor, member) {
+    const { type, structure } = member;
+    if (type === MemberType.Object) {
+      return descriptor;
+    }
     const findError = function(value) {
       const { constructor } = structure;
       const item = constructor(value);
@@ -114,28 +123,27 @@ export default mixin({
       }
       return item
     };
+    const { get, set } = descriptor;
     return {
-      get: (int.get.length === 0)
+      get: (get.length === 0)
       ? function getError() {
-          const value = int.get.call(this);
+          const value = get.call(this);
           return findError(value);
         }
       : function getErrorElement(index) {
-          const value = int.get.call(this, index);
+          const value = get.call(this, index);
           return findError(value);
         },
-      set: (int.set.length === 1)
+      set: (set.length === 1)
       ? function setError(value) {
-          if (hint !== 'number') {
-            const item = findError(value);
-            value = Number(item);
-          }
-          int.set.call(this, value);
+          const item = findError(value);
+          value = Number(item);
+          set.call(this, value);
         }
       : function setError(index, value) {
           const item = findError(value);
           value = Number(item);
-          int.set.call(this, index, value);
+          set.call(this, index, value);
         },
     };
   },

@@ -28,7 +28,7 @@ import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
 import { INITIALIZE } from '../../src/symbols.js';
 
-const Env = defineClass('StructureTest', [
+const Env = defineClass('OptionalTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt,
   Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat, MemberObject, Struct,

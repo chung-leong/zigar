@@ -9,6 +9,7 @@ import {
   PROPS,
   RESTORE,
   SETTERS, SHAPE, SIZE, SLOTS, TYPE,
+  TYPED_ARRAY,
   VARIANTS, VISIT
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, getTypeName } from '../utils.js';
@@ -78,6 +79,7 @@ export default mixin({
       [TYPE]: defineValue(type),
       [FLAGS]: defineValue(flags),
       [PROPS]: defineValue(props),
+      [TYPED_ARRAY]: defineValue(this.getTypedArray(structure)),
     };
     const descriptors = {};
     for (const member of members) {
@@ -290,6 +292,7 @@ export default mixin({
         }
         case StructureType.Array:
         case StructureType.Slice:
+        case StructureType.Vector:
           return this.getTypedArray(member.structure);
       }
     }

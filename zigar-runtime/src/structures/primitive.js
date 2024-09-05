@@ -1,7 +1,7 @@
 import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE, TYPED_ARRAY } from '../symbols.js';
+import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -35,7 +35,6 @@ export default mixin({
     const {
       instance: { members: [ member ] },
     } = structure;
-    staticDescriptors[TYPED_ARRAY] = defineValue(this.getTypedArray(structure));
     staticDescriptors[BIT_SIZE] = defineValue(member.bitSize);
     staticDescriptors[PRIMITIVE] = defineValue(member.type);
   },

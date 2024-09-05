@@ -1,8 +1,9 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getVectorEntries, getVectorIterator } from '../iterators.js';
-import { getSelf } from '../object.js';
-import { COPY, ENTRIES } from '../symbols.js';
+import { COPY, ENTRIES, INITIALIZE } from '../symbols.js';
+import { defineValue, getSelf } from '../utils.js';
 
 export default mixin({
   defineVector(structure, descriptors) {
@@ -51,12 +52,21 @@ export default mixin({
       descriptors[i] = this.defineMember({ ...member, bitOffset });
     }
     descriptors.$ = { get: getSelf, set: initializer };
-    descriptors.length = { value: length };
-    descriptors.entries = { value: getVectorEntries };
-    descriptors[Symbol.iterator] = { value: getVectorIterator };
+    descriptors.length = defineValue(length);
+    descriptors.entries = defineValue(getVectorEntries);
+    descriptors[Symbol.iterator] = defineValue(getVectorIterator);
+    descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[ENTRIES] = { get: getVectorEntries };
     return constructor;
   },
+  finalizeVector(structure, staticDescriptors) {
+    const {
+      instance: { members: [ member ] },
+    } = structure;
+    staticDescriptors.child = defineValue(member.structure.constructor);
+  },
 });
 
-
+export function isNeededByStructure(structure) {
+  return structure.type === StructureType.Vector;
+}

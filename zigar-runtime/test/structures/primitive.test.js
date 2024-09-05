@@ -21,7 +21,7 @@ import Primitive, {
 import { BIT_SIZE, INITIALIZE, PRIMITIVE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 
-const Env = defineClass('StructureTest', [
+const Env = defineClass('PrimitiveTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt
 ]);

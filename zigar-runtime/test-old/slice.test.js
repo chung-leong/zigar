@@ -17,7 +17,7 @@ describe('Slice functions', function() {
     it('should define structure for holding an int slice', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -27,12 +27,11 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(Hello).to.be.a('function');
-      expect(Hello.child).to.equal(constructor);
-      const object = Hello(new ArrayBuffer(32));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(Slice).to.be.a('function');
+      expect(Slice.child).to.equal(constructor);
+      const object = Slice(new ArrayBuffer(32));
       object.set(1, 321);
       expect(object.get(1)).to.equal(321);
       expect(object.length).to.equal(8);
@@ -58,7 +57,7 @@ describe('Slice functions', function() {
     it('should cast the same buffer to the same object', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -68,18 +67,17 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const buffer = new ArrayBuffer(4 * 20);
-      const object1 = Hello(buffer);
-      const object2 = Hello(buffer);
+      const object1 = Slice(buffer);
+      const object2 = Slice(buffer);
       expect(object2).to.equal(object1);
     })
     it('should throw when no initializer is provided', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -89,15 +87,14 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(() => new Hello).to.throw(TypeError);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new Slice).to.throw(TypeError);
     })
     it('should throw when the slice length is changed', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -107,16 +104,15 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(32));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = Slice(new ArrayBuffer(32));
       expect(() => object.length = 0).to.throw(TypeError);
     })
     it('should define slice that is iterable', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -126,10 +122,9 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(32));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = Slice(new ArrayBuffer(32));
       object.set(1, 321);
       const list = [];
       for (const value of object) {
@@ -140,7 +135,7 @@ describe('Slice functions', function() {
     it('should permit retrieval of indices during iteration', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       const constructor = function() {};
@@ -150,10 +145,9 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = Hello(new ArrayBuffer(32));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = Slice(new ArrayBuffer(32));
       object.set(1, 321);
       const indexList = [];
       const valueList = [];
@@ -167,7 +161,7 @@ describe('Slice functions', function() {
     it('should have string property when slice contains Uint8', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 1,
       });
       env.attachMember(structure, {
@@ -176,22 +170,21 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const dv = new DataView(new ArrayBuffer(4));
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
       dv.setUint8(2, 'C'.charCodeAt(0));
       dv.setUint8(3, 'D'.charCodeAt(0));
-      const object = Hello(dv);
+      const object = Slice(dv);
       const { string } = object;
       expect(string).to.equal('ABCD');
     })
     it('should have string property when slice contains Uint16', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -200,22 +193,21 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint16(0, 'A'.charCodeAt(0), true);
       dv.setUint16(2, 'B'.charCodeAt(0), true);
       dv.setUint16(4, 'C'.charCodeAt(0), true);
       dv.setUint16(6, 'D'.charCodeAt(0), true);
-      const object = Hello(dv);
+      const object = Slice(dv);
       const { string } = object;
       expect(string).to.equal('ABCD');
     })
     it('should accept array as initializer', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -224,10 +216,9 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = new Slice([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       expect(object.length).to.equal(8);
       for (let i = 0; i < 8; i++) {
         expect(object.get(i)).to.equal(i + 1);
@@ -236,7 +227,7 @@ describe('Slice functions', function() {
     it('should accept number as initializer', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -245,16 +236,15 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello(8);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = new Slice(8);
       expect(object.length).to.equal(8);
     })
     it('should throw when given an invalid number', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -263,12 +253,11 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      expect(() => new Hello(-123)).to.throw();
-      expect(() => new Hello(NaN)).to.throw();
-      expect(() => new Hello(Infinity)).to.throw();
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new Slice(-123)).to.throw();
+      expect(() => new Slice(NaN)).to.throw();
+      expect(() => new Slice(Infinity)).to.throw();
     })
     it('should accept string as initializer for []u8', function() {
       const structure = env.beginStructure({
@@ -282,10 +271,9 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const str = 'Hello world';
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
       const slice = new U8Slice(str);
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
@@ -304,11 +292,10 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const str = 'Hello world';
-      const slice = new U8Slice(str);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
+      const slice = new Slice(str);
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
@@ -326,11 +313,10 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      const str = 'Hello world';
-      const slice = new U16Slice(str);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
+      const slice = new Slice(str);
       const str2 = 'World war z';
       slice.$ = str2;
       for (let i = 0; i < str2.length; i++) {
@@ -349,12 +335,11 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      const str = 'Hello world';
-      const slice = new U16Slice(str);
-      const slice2 = new U16Slice(str + '!');
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
+      const slice = new Slice(str);
+      const slice2 = new Slice(str + '!');
       expect(() => slice.$ = slice2).to.throw(TypeError);
     })
     it('should initialize correctly from a string when fixed is specified', function() {
@@ -376,11 +361,10 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const str = 'Hello world';
-      const slice = new U8Slice(str, { fixed: true });
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
+      const slice = new Slice(str, { fixed: true });
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
@@ -398,11 +382,10 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      const slice = new U16Slice(11);
-      const str = 'Hello world';
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice(11);
+      const str = 'Slice world';
       slice.string = str;
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
@@ -420,11 +403,10 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      const slice = new U16Slice(11);
-      const str = 'Hello';
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice(11);
+      const str = 'Slice';
       expect(() => slice.string = str).to.throw(TypeError);
     })
     it('should throw when given an object with unrecognized properties', function() {
@@ -439,10 +421,9 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      expect(() => new U16Slice({ dogmeat: 5 })).to.throw();
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new Slice({ dogmeat: 5 })).to.throw();
     })
     it('should throw when given something unacceptable', function() {
       const structure = env.beginStructure({
@@ -456,10 +437,9 @@ describe('Slice functions', function() {
         byteSize: 2,
         structure: { constructor: function() {}, typedArray: Uint16Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U16Slice } = structure;
-      expect(() => new U16Slice(() => {})).to.throw();
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new Slice(() => {})).to.throw();
     })
     it('should accept base64 data as initializer', function() {
       const structure = env.beginStructure({
@@ -473,18 +453,18 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const str = 'Hello world';
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const str = 'Slice world';
       const base64 = encodeBase64(Buffer.from(str));
-      const slice = new U8Slice({ base64 });
+      const slice = new Slice({ base64 });
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
       }
     })
     it('should allow assignment of base64 data', function() {
+
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -496,10 +476,9 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const slice = new U8Slice('Hello world');
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice('Slice world');
       const str = 'World war z';
       slice.base64 = encodeBase64(Buffer.from(str));
       for (let i = 0; i < str.length; i++) {
@@ -518,11 +497,10 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
-      const slice = new U8Slice({ typedArray });
+      const slice = new Slice({ typedArray });
       expect(slice).to.have.lengthOf(typedArray.length);
       for (let i = 0; i < typedArray.length; i++) {
         expect(slice[i]).to.equal(typedArray[i]);
@@ -542,10 +520,9 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const slice = new U8Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Uint8Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       slice.typedArray = typedArray;
       for (let i = 0; i < typedArray.length; i++) {
@@ -564,10 +541,9 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const slice = new U8Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Int16Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       expect(() => slice.typedArray = typedArray).to.throw(TypeError);
     })
@@ -583,12 +559,11 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
-      const slice = new U8Slice({ dataView });
+      const slice = new Slice({ dataView });
       expect(slice).to.have.lengthOf(typedArray.length);
       for (let i = 0; i < typedArray.length; i++) {
         expect(slice[i]).to.equal(typedArray[i]);
@@ -608,10 +583,9 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
-      const slice = new U8Slice(8);
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const slice = new Slice(8);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       slice.dataView = new DataView(typedArray.buffer);
       for (let i = 0; i < typedArray.length; i++) {
@@ -632,11 +606,10 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
-      const slice = new U8Slice(typedArray);
+      const slice = new Slice(typedArray);
       expect(slice).to.have.lengthOf(typedArray.length);
       for (let i = 0; i < typedArray.length; i++) {
         expect(slice[i]).to.equal(typedArray[i]);
@@ -654,9 +627,8 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       const f = function*() {
         let i = 0;
         while (i < 8) {
@@ -664,7 +636,7 @@ describe('Slice functions', function() {
         }
       };
       const gen = f();
-      const slice = new U8Slice(gen);
+      const slice = new Slice(gen);
       expect(slice).to.have.lengthOf(8);
       for (let i = 0; i < slice.length; i++) {
         expect(slice[i]).to.equal(i);
@@ -682,9 +654,8 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: U8Slice } = structure;
+      const Slice = env.defineStructure(structure);
+      env.endStructure(structure);
       // incorrect length would lead to too small a buffer
       const f1 = function*() {
         yield { length: 4 };
@@ -693,7 +664,7 @@ describe('Slice functions', function() {
           yield i++;
         }
       };
-      expect(() => new U8Slice(f1())).throw(RangeError);
+      expect(() => new Slice(f1())).throw(RangeError);
       const f2 = function*() {
         yield { length: 8 };
         let i = 0;
@@ -710,7 +681,7 @@ describe('Slice functions', function() {
     it('should correctly initialize a slice of structs', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -729,12 +700,11 @@ describe('Slice functions', function() {
         bitOffset: 32,
         bitSize: 32,
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const { constructor: Hello } = structStructure;
+      env.defineStructure(structure);
+      env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -743,10 +713,9 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: HelloSlice } = structure;
-      const object = new HelloSlice([
+      const SliceSlice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = new SliceSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -762,7 +731,7 @@ describe('Slice functions', function() {
     it('should not set default values of structs when initialized with an element count', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -789,12 +758,11 @@ describe('Slice functions', function() {
           return dv;
         })(),
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const { constructor: Hello } = structStructure;
+      const Slice = env.defineStructure(structStructure);
+      env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -803,10 +771,9 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: HelloSlice } = structure;
-      const object = new HelloSlice(4);
+      const SliceSlice = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = new SliceSlice(4);
       for (let i = 0; i < 4; i++) {
         expect(object[i].valueOf()).to.eql({ dog: 0, cat: 0 });
       }
@@ -816,7 +783,7 @@ describe('Slice functions', function() {
     it('should allow reinitialization through the dollar property', function() {
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -825,10 +792,10 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: function() {}, typedArray: BigUint64Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: Hello } = structure;
-      const object = new Hello([ 100n, 200n, 300n, 400n ]);
+      env.defineStructure(structure);
+      env.endStructure(structure);
+      const { constructor: Slice } = structure;
+      const object = new Slice([ 100n, 200n, 300n, 400n ]);
       expect(object.length).to.equal(4);
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
@@ -851,8 +818,8 @@ describe('Slice functions', function() {
         byteSize: 4,
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U32Slice } = structure;
       const buffer = new Buffer(16);
       const slice = U32Slice(buffer);
@@ -872,8 +839,8 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = U8Slice(typedArray);
@@ -892,8 +859,8 @@ describe('Slice functions', function() {
         byteSize: 1,
         structure: { constructor: function() {}, typedArray: Uint8Array }
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
       const typedArray = new Uint8ClampedArray([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = U8Slice(typedArray);
@@ -913,8 +880,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
       });
-      env.finalizeShape(sliceStructure);
-      env.finalizeStructure(sliceStructure);
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
       const { constructor: Int64Slice } = sliceStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
@@ -928,8 +895,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Int64 },
       });
-      env.finalizeShape(arrayStructure);
-      env.finalizeStructure(arrayStructure);
+      env.defineStructure(arrayStructure);
+      env.endStructure(arrayStructure);
       const { constructor: Int64Array } = arrayStructure;
       const array = new Int64Array([ 100n, 200n, 300n, 400n ]);
       const slice = Int64Slice(array);
@@ -948,8 +915,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
       });
-      env.finalizeShape(sliceStructure);
-      env.finalizeStructure(sliceStructure);
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
       const { constructor: Int64Slice } = sliceStructure;
       const vectorStructure = env.beginStructure({
         type: StructureType.Vector,
@@ -963,8 +930,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Int64 },
       });
-      env.finalizeShape(vectorStructure);
-      env.finalizeStructure(vectorStructure);
+      env.defineStructure(vectorStructure);
+      env.endStructure(vectorStructure);
       const { constructor: Int64Vector } = vectorStructure;
       const vector = new Int64Vector([ 100n, 200n, 300n, 400n ]);
       const slice = Int64Slice(vector);
@@ -984,8 +951,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Int64, typedArray: BigUint64Array }
       });
-      env.finalizeShape(sliceStructure);
-      env.finalizeStructure(sliceStructure);
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
       const { constructor: Int64Slice } = sliceStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
@@ -999,8 +966,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: { constructor: Uint64 },
       });
-      env.finalizeShape(arrayStructure);
-      env.finalizeStructure(arrayStructure);
+      env.defineStructure(arrayStructure);
+      env.endStructure(arrayStructure);
       const { constructor: Uint64Array } = arrayStructure;
       const array = new Uint64Array([ 100n, 200n, 300n, 400n ]);
       expect(() => Int64Slice(array)).to.throw(TypeError)
@@ -1009,7 +976,7 @@ describe('Slice functions', function() {
     it('should throw when initializer has the wrong size', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -1028,12 +995,12 @@ describe('Slice functions', function() {
         bitOffset: 32,
         bitSize: 32,
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
-      const { constructor: Hello } = structStructure;
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const { constructor: Slice } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1042,10 +1009,10 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: HelloSlice } = structure;
-      const object = new HelloSlice([
+      env.defineStructure(structure);
+      env.endStructure(structure);
+      const { constructor: SliceSlice } = structure;
+      const object = new SliceSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
         { dog: 5, cat: 6 },
@@ -1062,7 +1029,7 @@ describe('Slice functions', function() {
     it('should throw when initializer is of an invalid type', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -1081,11 +1048,11 @@ describe('Slice functions', function() {
         bitOffset: 32,
         bitSize: 32,
       });
-      env.finalizeShape(structStructure);
-      env.finalizeStructure(structStructure);
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        name: 'Hello',
+        name: 'Slice',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1094,10 +1061,10 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: structStructure,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
-      const { constructor: HelloSlice } = structure;
-      expect(() => new HelloSlice({})).to.throw(TypeError);
+      env.defineStructure(structure);
+      env.endStructure(structure);
+      const { constructor: SliceSlice } = structure;
+      expect(() => new SliceSlice({})).to.throw(TypeError);
     })
     it('should correctly copy a slice holding pointers', function() {
       const intStructure = env.beginStructure({
@@ -1111,8 +1078,8 @@ describe('Slice functions', function() {
         bitOffset: 0,
         byteSize: 4,
       });
-      env.finalizeShape(intStructure);
-      env.finalizeStructure(intStructure);
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.SlicePointer,
@@ -1128,8 +1095,8 @@ describe('Slice functions', function() {
         slot: 0,
         structure: intStructure,
       });
-      env.finalizeShape(ptrStructure);
-      env.finalizeStructure(ptrStructure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -1142,8 +1109,8 @@ describe('Slice functions', function() {
         byteSize: 8,
         structure: ptrStructure,
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: Int32PtrSlice } = structure;
       const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
       const slice2 = new Int32PtrSlice(slice1);
@@ -1173,10 +1140,10 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
-      const array = [ ...'Hello\0' ].map(c => c.charCodeAt(0));
+      const array = [ ...'Slice\0' ].map(c => c.charCodeAt(0));
       const slice = new U8Slice(array);
       expect(slice).to.have.lengthOf(6);
       const str = slice.string;
@@ -1203,10 +1170,10 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
-      const slice = new U8Slice('Hello');
+      const slice = new U8Slice('Slice');
       expect(slice).to.have.lengthOf(6);
       expect(slice[5]).to.equal(0);
     })
@@ -1231,10 +1198,10 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
-      const slice = new U8Slice('Hello\0');
+      const slice = new U8Slice('Slice\0');
       expect(slice).to.have.lengthOf(6);
     })
     it('should should throw when sentinel appears too early', function() {
@@ -1259,8 +1226,8 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
       const array = [ ...'H\0llo\0' ].map(c => c.charCodeAt(0));
       expect(() => new U8Slice(array)).to.throw(TypeError);
@@ -1291,13 +1258,13 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
-      const array = [ ...'Hello' ].map(c => c.charCodeAt(0));
+      const array = [ ...'Slice' ].map(c => c.charCodeAt(0));
       expect(() => new U8Slice(array)).to.throw(TypeError);
       expect(() => new U8Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
-      expect(() => new U8Slice('Hello')).to.not.throw();
+      expect(() => new U8Slice('Slice')).to.not.throw();
       const slice = new U8Slice(5);
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
         .with.property('message').that.contains(4);
@@ -1326,13 +1293,13 @@ describe('Slice functions', function() {
       env.attachTemplate(structure, {
         [MEMORY]: new DataView(new ArrayBuffer(1)),
       });
-      env.finalizeShape(structure);
-      env.finalizeStructure(structure);
+      env.defineStructure(structure);
+      env.endStructure(structure);
       const { constructor: U8Slice } = structure;
-      const array = [ ...'Hello' ].map(c => c.charCodeAt(0));
+      const array = [ ...'Slice' ].map(c => c.charCodeAt(0));
       expect(() => new U8Slice(array)).to.throw(TypeError);
       expect(() => new U8Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
-      expect(() => new U8Slice('Hello')).to.not.throw();
+      expect(() => new U8Slice('Slice')).to.not.throw();
       const slice = new U8Slice(5);
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
         .with.property('message').that.contains(4);
