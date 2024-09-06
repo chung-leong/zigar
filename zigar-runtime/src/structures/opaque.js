@@ -1,8 +1,9 @@
-import { StructureFlag } from '../constants.js';
+import { StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { AccessingOpaque, CreatingOpaque } from '../errors.js';
 import { getZigIterator } from '../iterators.js';
-import { StructureType } from './constants.js';
+import { INITIALIZE } from '../symbols.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
   defineOpaque(structure, descriptors) {
@@ -22,6 +23,7 @@ export default mixin({
         return `[opaque ${name}]`;
       },
     };
+    descriptors[INITIALIZE] = defineValue(initializer);
     return constructor;
   },
 });

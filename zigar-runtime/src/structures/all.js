@@ -3,9 +3,10 @@ import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
 } from '../errors.js';
+import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
   ALIGN, CACHE, CAST,
-  CONST_TARGET, COPY, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, MODIFY,
+  CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, MODIFY,
   PROPS,
   RESTORE,
   SETTERS, SHAPE, SIZE, SLOTS, TYPE,
@@ -80,13 +81,17 @@ export default mixin({
       [FLAGS]: defineValue(flags),
       [PROPS]: defineValue(props),
       [TYPED_ARRAY]: defineValue(this.getTypedArray(structure)),
+      [Symbol.iterator]: defineValue(getStructIterator),
+      [ENTRIES]: { get: getStructEntries },
+      [PROPS]: defineValue(props),
+      ...this.defineSpecialMethods?.(),
     };
     const descriptors = {};
     for (const member of members) {
-      const { name, slot, structure: { type, instance: { members: [ fnMember ] } } } = member;
-      staticDescriptors[name] = this.defineMember(member);
-      if (type === StructureType.Function) {
+      const { name, slot } = member;
+      if (member.structure.type === StructureType.Function) {
         const fn = template[SLOTS][slot];
+        staticDescriptors[name] = defineValue(fn);
         // provide a name if one isn't assigned yet
         if (!fn.name) {
           defineProperty(fn, 'name', { value: name });
@@ -99,18 +104,21 @@ export default mixin({
           descriptor[accessorType] = fn;
         }
         // see if it's a method
-        if (startsWithSelf(fnMember.structure, structure)) {
-          const method = fn[VARIANTS].method;
-          descriptors[name] = { value: method };
+        if (startsWithSelf(member, structure)) {
+          const { method } = fn[VARIANTS];
+          descriptors[name] = defineValue(method);
           if (accessorType && method.length  === argRequired) {
             const descriptor = descriptors[propName] ??= {};
             descriptor[accessorType] = method;
           }
         }
       } else {
+        staticDescriptors[name] = this.defineMember(member);
         props.push(name);
       }
     }
+    // static variable/constants are stored in slots
+    staticDescriptors[SLOTS] = (props.length > 0) && defineValue(template[SLOTS]);
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
     f?.call(this, structure, staticDescriptors);
@@ -325,7 +333,8 @@ export class ObjectCache {
   }
 }
 
-function startsWithSelf(argStructure, structure) {
+function startsWithSelf(fnMember, structure) {
+  const argStructure = fnMember.structure.instance.members[0].structure;
   // get structure of first argument (members[0] is retval)
   const arg0Structure = argStructure.instance.members[1]?.structure;
   if (arg0Structure) {

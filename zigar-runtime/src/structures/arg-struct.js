@@ -1,27 +1,22 @@
-import { MemberType, StructureType } from '../constants.js';
-import { defineProperties, mixin } from '../environment.js';
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
-import { getChildVivificator, getPointerVisitor } from '../struct.js';
-import {
-  ALIGN, COPY, MEMORY,
-  SIZE, SLOTS,
-  VISIT,
-  VIVIFICATE
-} from '../symbols.js';
+import { MEMORY, SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
+import { never } from '../utils.js';
 
 export default mixin({
-  defineArgStruct(structure) {
+  defineArgStruct(structure, descriptors) {
     const {
+      flags,
       byteSize,
       align,
       instance: { members },
-      hasPointer,
     } = structure;
     const thisEnv = this;
     const hasObject = !!members.find(m => m.type === MemberType.Object);
     const argKeys = members.slice(1).map(m => m.name);
     const argCount = argKeys.length;
-    const constructor = structure.constructor = function(args, name, offset) {
+    const constructor = function(args, name, offset) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
@@ -50,9 +45,8 @@ export default mixin({
         return self;
       }
     };
-    const memberDescriptors = {};
     for (const member of members) {
-      memberDescriptors[member.name] = this.defineMember(member);
+      descriptors[member.name] = this.defineMember(member);
     }
     const { slot: retvalSlot, type: retvalType } = members[0];
     const isChildMutable = (retvalType === MemberType.Object)
@@ -60,17 +54,10 @@ export default mixin({
         const child = this[VIVIFICATE](retvalSlot);
         return object === child;
       }
-    : function() { return false };
-    defineProperties(constructor.prototype, {
-      ...memberDescriptors,
-      [COPY]: this.defineCopier(byteSize),
-      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, this) },
-      [VISIT]: hasPointer && { value: getPointerVisitor(structure, { isChildMutable }) },
-    });
-    defineProperties(constructor, {
-      [ALIGN]: { value: align },
-      [SIZE]: { value: byteSize },
-    });
+    : never;
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    return constructor;
   },
 });
 

@@ -23,7 +23,6 @@ import MemberPrimitive from '../../src/members/primitive.js';
 import Sentinel from '../../src/members/sentinel.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import ArrayLike from '../../src/structures/array-like.js';
@@ -38,10 +37,10 @@ import { encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('ArrayTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt,
-  Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
-  MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
-  StructLike, Slice, ArrayLike, Sentinel,
+  SpecialProps, StructureAcquisition, ViewManagement, AccessorJumbo, AccessorJumboInt, Struct,
+  AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned, MemberUint,
+  AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Slice,
+  ArrayLike, Sentinel,
 ]);
 
 describe('Structure: slice', function() {

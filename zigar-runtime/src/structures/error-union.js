@@ -1,10 +1,9 @@
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotInErrorSet } from '../errors.js';
-import { resetPointer } from '../pointer.js';
 import { CLASS, COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
-import { isErrorJSON } from '../types.js';
 import { defineValue } from '../utils.js';
+import { isErrorJSON } from './error-set.js';
 
 export default mixin({
   defineErrorUnion(structure, descriptors) {
@@ -30,7 +29,7 @@ export default mixin({
     };
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.(resetPointer);
+      this[VISIT]?.('reset');
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
@@ -70,12 +69,13 @@ export default mixin({
         }
       }
     };
-    const constructor = this.createConstructor(structure, { initializer });
+    const { bitOffset, byteSize } = members[0];
+    const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for clear value after error union is set to an an error (from mixin "features/data-copying")
-    descriptors[RESET] = this.getResetterDescriptor(members[0].bitOffset / 8, members[0].byteSize);
+    descriptors[RESET] = this.defineResetter(bitOffset / 8, byteSize);
     // for operating on pointers contained in the error union
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
     return constructor;

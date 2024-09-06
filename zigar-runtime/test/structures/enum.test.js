@@ -14,18 +14,18 @@ import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
+import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import Enum, {
-  isNeededByStructure,
+    isNeededByStructure,
 } from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('EnumTest', [
   AccessorAll, MemberInt, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
-  SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo,
+  SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
   AccessorJumboInt, Enum, MemberObject
 ]);
 

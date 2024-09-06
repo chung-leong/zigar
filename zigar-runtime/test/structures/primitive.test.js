@@ -13,17 +13,17 @@ import MemberInt from '../../src/members/int.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
+import MemberTypeMixin from '../../src/members/type.js';
 import All from '../../src/structures/all.js';
 import Primitive, {
-  isNeededByStructure,
+    isNeededByStructure,
 } from '../../src/structures/primitive.js';
 import { BIT_SIZE, INITIALIZE, PRIMITIVE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('PrimitiveTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt
 ]);
 
 describe('Structure: primitive', function() {

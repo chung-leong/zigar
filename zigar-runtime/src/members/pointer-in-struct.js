@@ -1,8 +1,9 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
 
 export default mixin({
-  defineVisitorStruct(structure, visitorOptions) {
+  defineVisitorStruct(structure, visitorOptions = {}) {
     const {
       isChildActive = always,
       isChildMutable = always,
@@ -47,13 +48,13 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
-  const { type, hasPointer } = structure;
+  const { type, flags } = structure;
   switch (type) {
     case StructureType.Struct:
     case StructureType.Union:
     case StructureType.ErrorUnion:
     case StructureType.Optional:
-      return hasPointer;
+      return !!(flags & StructureFlag.HasPointer);
   }
   return false;
 }

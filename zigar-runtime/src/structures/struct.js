@@ -66,9 +66,9 @@ export default mixin({
     );
     descriptors[INITIALIZE] = defineValue(initializer);
     // for creating complex fields on access
-    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure, true);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive: () => true });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
     descriptors[ENTRIES] = { get: (flags & StructureFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
     return constructor;

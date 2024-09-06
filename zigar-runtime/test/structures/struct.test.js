@@ -22,7 +22,7 @@ import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
+import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import Primitive from '../../src/structures/primitive.js';
@@ -35,7 +35,7 @@ import { encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, AccessorJumbo, AccessorJumboInt,
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
   MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
   StructLike,
@@ -1100,7 +1100,7 @@ describe('Structure: struct', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: {},
+        structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);

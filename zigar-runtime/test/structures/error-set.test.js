@@ -11,18 +11,18 @@ import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
+import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import ErrorSet, {
-  isNeededByStructure,
+    isNeededByStructure,
 } from '../../src/structures/error-set.js';
 import Primitive from '../../src/structures/primitive.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('ErrorSetTest', [
   AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTyp,  ErrorSet, MemberObject
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin,  ErrorSet, MemberObject
 ]);
 
 describe('Structure: error-set', function() {

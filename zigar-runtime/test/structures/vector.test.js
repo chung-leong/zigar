@@ -15,20 +15,20 @@ import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
-import MemberTyp from '../../src/members/type.js';
+import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import ArrayLike from '../../src/structures/array-like.js';
 import Array from '../../src/structures/array.js';
 import Primitive from '../../src/structures/primitive.js';
 import Vector, {
-  isNeededByStructure,
+    isNeededByStructure,
 } from '../../src/structures/vector.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('VectorTest', [
   AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTyp, Vector, MemberObject, MemberFloat,
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, Vector, MemberObject, MemberFloat,
   MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array,
 ]);
 

@@ -2,24 +2,31 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
-import { MemberType, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
 import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
+import MemberUint from '../../src/members/uint.js';
 import All, {
   isNeededByStructure,
 } from '../../src/structures/all.js';
+import Enum from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
-import { ALIGN, MEMORY, SIZE, TYPED_ARRAY } from '../../src/symbols.js';
+import StructLike from '../../src/structures/struct-like.js';
+import Struct from '../../src/structures/struct.js';
+import { ALIGN, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, ViewManagement
+  SpecialProps, ViewManagement, StructureAcquisition, StructLike, Struct, MemberUint, MemberObject,
+  Enum,
 ]);
 
 describe('Structure: all', function() {
@@ -238,6 +245,174 @@ describe('Structure: all', function() {
       env.finalizeStructure(structure);
       // finalizePrimitive() in mixin "structure/primitive" adds property [TYPE_ARRAY]
       expect(Hello[TYPED_ARRAY]).to.equal(BigInt64Array);
+    })
+    it('should attach variables to a struct', function() {
+      // define structure for integer variables
+      const env = new Env;
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const { constructor: Int32 } = intStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8 * 2,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: 'superdog',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'supercat',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
+        bitSize: 64,
+        bitOffset: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: intStructure,
+      }, true);
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: int1,
+          1: int2,
+        },
+      }, true);
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(Hello.superdog).to.equal(1234);
+      Hello.superdog = 43;
+      expect(Hello.superdog).to.equal(43);
+      expect(Hello.supercat).to.equal(4567);
+      expect(() => Hello.supercat = 777).to.throw();
+      expect(Hello.supercat).to.equal(4567);
+      const object = new Hello(undefined);
+      expect(object.dog).to.equal(0);
+      object.dog = 123;
+      expect(object.dog).to.equal(123);
+      expect(Hello.superdog).to.equal(43);
+      const descriptors = Object.getOwnPropertyDescriptors(Hello);
+      expect(descriptors.superdog.set).to.be.a('function');
+      expect(descriptors.supercat.set).to.be.undefined;
+      const names = [], values = [];
+      for (const [ name, value ] of Hello) {
+        names.push(name);
+        values.push(value);
+      }
+      expect(names).to.eql([ 'superdog', 'supercat' ]);
+      expect(values).to.eql([ 43, 4567 ]);
+      expect(Hello.valueOf()).to.eql({ superdog: 43, supercat: 4567 });
+      expect(JSON.stringify(Hello)).to.eql('{"superdog":43,"supercat":4567}');
+    })
+    it('should attach variables to an enum', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        name: 'Int32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32 = env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Enum,
+        flags: StructureFlag.HasValue,
+        name: 'Hello'
+      });
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachTemplate(structure, {
+        [MEMORY]: (() => {
+          const dv = new DataView(new ArrayBuffer(4 * 2));
+          dv.setUint32(0, 0, true);
+          dv.setUint32(4, 1, true);
+          return dv;
+        })(),
+        [SLOTS]: {},
+      });
+      env.attachMember(structure, {
+        name: 'superdog',
+        type: MemberType.Object,
+        slot: 0,
+        structure: intStructure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'supercat',
+        type: MemberType.Object,
+        slot: 1,
+        structure: intStructure,
+      }, true);
+      const int1 = new Int32(1234);
+      const int2 = new Int32(4567);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: int1,
+          1: int2,
+        },
+      }, true);
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(Hello.superdog).to.equal(1234);
+      Hello.superdog = 43;
+      expect(Hello.superdog).to.equal(43);
+      expect(Hello.supercat).to.equal(4567);
+      // make sure the variables aren't overwriting the enum slots
+      expect(Hello(0)).to.equal(Hello.Dog);
+      expect(Hello(1)).to.equal(Hello.Cat);
     })
   })
   describe('getTypedArray', function() {
