@@ -47,6 +47,8 @@ export default mixin({
         throw new ArrayLengthMismatch(structure, this, arg);
       }
     };
+    const descriptor = this.defineMember(member);
+    const { set } = descriptor;
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
@@ -89,12 +91,37 @@ export default mixin({
         throw new InvalidArrayInitializer(structure, arg);
       }
     };
-    const descriptor = this.defineMember(member);
+    const getSubArrayView = function(begin, end) {
+      const length = this[LENGTH];
+      const dv = this[MEMORY];
+      begin = (begin === undefined) ? 0 : adjustIndex(begin, length);
+      end = (end === undefined) ? length : adjustIndex(end, length);
+      const offset = begin * elementSize;
+      const len = (end * elementSize) - offset;
+      return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
+    };
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.length = { get: getLength };
     descriptors.entries = defineValue(getArrayEntries);
-    descriptors.slice = null; // TODO
-    descriptors.subarray = null; // TODO
+    descriptors.subarray = {
+      value(begin, end) {
+        const dv = getSubArrayView.call(this, begin, end);
+        return constructor(dv);
+      },
+    };
+    descriptors.slice = {
+      value(begin, end, options = {}) {
+        const {
+          fixed = false
+        } = options;
+        const dv1 = getSubArrayView.call(this, begin, end);
+        const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
+        const slice = constructor(dv2);
+        slice[COPY]({ [MEMORY]: dv1 });
+        return slice;
+      },
+    };
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -114,4 +141,23 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Slice;
+}
+
+function getLength() {
+  return this[LENGTH];
+}
+
+function adjustIndex(index, len) {
+  index = index | 0;
+  if (index < 0) {
+    index = len + index;
+    if (index < 0) {
+      index = 0;
+    }
+  } else {
+    if (index > len) {
+      index = len;
+    }
+  }
+  return index;
 }

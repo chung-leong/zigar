@@ -16,13 +16,13 @@ export const StructureType = {
   Function: 13,
 };
 export const StructureFlag = {
-  HasPointer:       0x0000_0001,
+  HasValue:         0x0000_0001,
   HasObject:        0x0000_0002,
-  HasLength:        0x0000_0004,
+  HasPointer:       0x0000_0004,
   HasSlot:          0x0000_0008,
-  HasTag:           0x0000_0010,
+  HasLength:        0x0000_0010,
   HasSelector:      0x0000_0020,
-  HasValue:         0x0000_0040,
+  HasTag:           0x0000_0040,
   HasInaccessible:  0x0000_0080,
 
   IsConst:          0x0000_0100,
@@ -58,6 +58,5 @@ export const MemberFlag = {
   IsReadOnly:       0x0000_0002,
   IsPartOfSet:      0x0000_0004,
   IsSelector:       0x0000_0008,
-  IsSentinel:       0x0000_0010,
-  IsBackingInt:     0x0000_0020,
+  IsBackingInt:     0x0000_0010,
 };
