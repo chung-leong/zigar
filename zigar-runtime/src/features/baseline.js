@@ -1,11 +1,13 @@
 mixin({
+  littleEndian: true,
+
   getSpecialExports() {
     const check = (v) => {
       if (v === undefined) throw new Error('Not a Zig type');
       return v;
     };
     return {
-      init: (...args) => this.initialize(...args),
+      init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
       released: () => this.released,
       connect: (console) => this.console = console,
@@ -15,7 +17,6 @@ mixin({
       typeOf: (T) => this.getStructureName?.(check(T[TYPE])),
     };
   },
-
   recreateStructures(structures, options) {
     Object.assign(this, options);
     const insertObjects = (dest, placeholders) => {
@@ -88,17 +89,6 @@ mixin({
       this.finalizeStructure(structure);
     }
   },
-
-  ...(process.env.TARGET === 'wasm' ? {
-    littleEndian: true,
-
-    async initialize(wasi) {
-      this.setCustomWASI?.(wasi);
-      await this.initPromise;
-    },
-  } : process.env.TARGET === 'node' ? {
-    littleEndian: true,
-  } : undefined),
 });
 
 function isNeeded() {

@@ -1,16 +1,13 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-import {
-  COPY,
-  MEMORY
-} from '../../src/symbols.js';
-
 import { MemberType, StructureType } from '../../src/constants.js';
+import { defineClass } from '../../src/environment.js';
+import { COPY, MEMORY } from '../../src/symbols.js';
+import { defineProperties } from '../../src/utils.js';
+
 import DataCopying from '../../src/features/data-copying.js';
 import ViewManagement, {
   isNeededByStructure,
 } from '../../src/features/view-management.js';
-import { defineProperties } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [ ViewManagement, DataCopying ]);
 
@@ -302,5 +299,24 @@ describe('Feature: view-management', function() {
       expect(dv.buffer.align).to.equal(4);
     })
   })
+  describe('allocateRelocMemory', function() {
+    if (process.env.TARGET === 'wasm') {
+      it('should allocate relocable memory', function() {
+        const env = new Env();
+        const dv = env.allocateRelocMemory(64, 32);
+        expect(dv.byteLength).to.equal(64);
+        expect(dv.buffer.byteLength).to.equal(64);
+      })
+    } else if (process.env.TARGET === 'node') {
+      it('should allocate extra bytes to account for alignment', function() {
+        const env = new Env();
+        env.getBufferAddress = function(buffer) {
+          return 0x1000n;
+        };
+        const dv = env.allocateRelocMemory(64, 32);
+        expect(dv.byteLength).to.equal(64);
+        expect(dv.buffer.byteLength).to.equal(96);
+      })
+    }
+  })
 })
-

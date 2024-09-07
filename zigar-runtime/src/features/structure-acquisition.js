@@ -264,6 +264,10 @@ export default mixin({
       const ta = new Uint8Array(buffer, address, len);
       return decodeText(ta);
     },
+    getMemoryOffset(address) {
+      // WASM address space starts at 0
+      return address;
+    },
   } : process.env.TARGET === 'node' ? {
     imports: {
       getFactoryThunk: null,

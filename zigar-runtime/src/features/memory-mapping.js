@@ -86,10 +86,10 @@ export default mixin({
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = shadowDV;
-    /* WASM-ONLY */
-    // attach fixed memory info to aligned data view so it gets freed correctly
-    shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
-    /* WASM-ONLY-END */
+    if (process.env.TARGET === 'wasm') {
+      // attach fixed memory info to aligned data view so it gets freed correctly
+      shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
+    }
     return this.addShadow(shadow, source, 1);
   },
   updateShadows() {
@@ -273,13 +273,6 @@ export default mixin({
       }
       // relocatable buffers always need shadowing
     },
-    getMemoryOffset(address) {
-      // WASM address space starts at 0
-      return address;
-    },
-    recreateAddress(reloc) {
-      return reloc;
-    },
     getBufferAddress(buffer) {
       if (process.env.DEV) {
         if (buffer !== this.memory.buffer) {
@@ -288,11 +281,40 @@ export default mixin({
       }
       return 0;
     },
+    defineRestorer(updateCache = true) {
+      const thisEnv = this;
+      return {
+        value() {
+          const dv = this[MEMORY];
+          const fixed = dv?.[FIXED];
+          if (fixed && dv.buffer.byteLength === 0) {
+            const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
+            if (fixed.align) {
+              newDV[FIXED].align = fixed.align;
+            }
+            this[MEMORY] = newDV;
+            if (updateCache) {
+              this.constructor[CACHE].save(newDV, this);
+            }
+            return true;
+          } else {
+            return false;
+          }
+        },
+      }
+    },
+    copyExternBytes(dst, address, len) {
+      const { memory } = this;
+      const src = new DataView(memory.buffer, address, len);
+      const copy = getCopyFunction(len);
+      copy(dst, src);
+    },
   } : process.env.TARGET === 'node' ? {
     imports: {
       allocateExternMemory: null,
       freeExternMemory: null,
       getBufferAddress: null,
+      copyExternBytes: null,
     },
     exports: {
       allocateHostMemory: null,

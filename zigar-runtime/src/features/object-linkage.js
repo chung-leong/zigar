@@ -69,9 +69,9 @@ export default mixin({
     if (!object[MEMORY][FIXED]) {
       return;
     }
-    /* WASM-ONLY */
-    object[RESTORE]?.();
-    /* WASM-ONLY-END */
+    if (process.env.TARGET === 'wasm') {
+      object[RESTORE]?.();
+    }
     const dv = object[MEMORY];
     const relocDV = this.allocateMemory(dv.byteLength);
     if (object[COPY]) {
@@ -81,4 +81,13 @@ export default mixin({
     }
     object[MEMORY] = relocDV;
   },
+  ...(process.env.TARGET === 'wasm' ? {
+    recreateAddress(reloc) {
+      return reloc;
+    },
+  } : process.env.TARGET === 'node' ? {
+    imports: {
+      recreateAddress: null,
+    },
+  } : undefined),
 });

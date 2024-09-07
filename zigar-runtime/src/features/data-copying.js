@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { CACHE, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
   defineCopier(size, multiple) {
@@ -28,40 +28,6 @@ export default mixin({
       }
     };
   },
-  ...(process.env.TARGET === 'wasm' ? {
-    defineRestorer(updateCache = true) {
-      const thisEnv = this;
-      return {
-        value() {
-          const dv = this[MEMORY];
-          const fixed = dv?.[FIXED];
-          if (fixed && dv.buffer.byteLength === 0) {
-            const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
-            if (fixed.align) {
-              newDV[FIXED].align = fixed.align;
-            }
-            this[MEMORY] = newDV;
-            if (updateCache) {
-              this.constructor[CACHE].save(newDV, this);
-            }
-            return true;
-          } else {
-            return false;
-          }
-        },
-      }
-    },
-    copyExternBytes(dst, address, len) {
-      const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
-      const copy = getCopyFunction(len);
-      copy(dst, src);
-    },
-  } : process.env.TARGET === 'node' ? {
-    imports: {
-      copyExternBytes: null,
-    },
-  } : undefined),
 });
 
 export function isNeededByStructure(structure) {

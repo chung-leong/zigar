@@ -503,4 +503,62 @@ describe('Feature: structure-acquisition', function() {
       expect(template[SLOTS][1]['*']).to.equal(0x2000);
     })
   })
+  if (process.env.TARGET === 'wasm') {
+    describe('beginDefinition', function() {
+      it('should return an empty object', function() {
+        const env = new Env();
+        const def1 = env.beginDefinition();
+        expect(def1).to.be.an('object');
+        const { _beginDefinition } = env.exportFunctions();
+        const def2 = env.fromWebAssembly('v', _beginDefinition());
+        expect(def2).to.be.an('object');
+      })
+    })
+    describe('insertProperty', function() {
+      it('should insert value into object', function() {
+        const env = new Env();
+        const def1 = env.beginDefinition();
+        env.insertProperty(def1, 'hello', 1234);
+        expect(def1).to.have.property('hello', 1234);
+        const {
+          _beginDefinition,
+          _insertInteger,
+          _insertBoolean,
+          _insertString,
+          _insertObject,
+        } = env.exportFunctions();
+        const object = {};
+        const defIndex = _beginDefinition();
+        _insertInteger(defIndex, env.toWebAssembly('s', 'number'), 4567);
+        _insertBoolean(defIndex, env.toWebAssembly('s', 'boolean'), 1);
+        _insertString(defIndex, env.toWebAssembly('s', 'string'), env.toWebAssembly('s', 'holy cow'));
+        _insertObject(defIndex, env.toWebAssembly('s', 'object'), env.toWebAssembly('v', object));
+        const def2 = env.fromWebAssembly('v', defIndex);
+        expect(def2).to.have.property('number', 4567);
+        expect(def2).to.have.property('boolean', true);
+        expect(def2).to.have.property('string', 'holy cow');
+        expect(def2).to.have.property('object', object);
+      })
+    })
+    describe('captureString', function() {
+      it('should return string located at address', function() {
+        const env = new Env();
+        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+        const text = 'Hello';
+        const src = new DataView(memory.buffer, 128, 16);
+        for (let i = 0; i < text.length; i++) {
+          src.setUint8(i, text.charCodeAt(i));
+        }
+        const string = env.captureString(128, 5);
+        expect(string).to.equal('Hello');
+      })
+    })
+    describe('getMemoryOffset', function() {
+      it('should return the same address', function() {
+        const env = new Env();
+        const offset = env.getMemoryOffset(128);
+        expect(offset).to.equal(128);
+      })
+    })
+  }
 })

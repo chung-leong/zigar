@@ -8,9 +8,11 @@
     "test": "test"
   },
   "scripts": {
-    "test": "DEV=1 TARGET=wasm mocha  --no-warnings 'test/**/*.test.js'",
+    "test": "DEV=1 TARGET=wasm mocha --no-warnings 'test/**/*.test.js'",
+    "test:node": "DEV=1 TARGET=node mocha --no-warnings 'test/**/*.test.js'",
+    "test:both": "npm run test && npm run test:node",
     "debug": "DEV=1 TARGET=wasm mocha --reporter spec --inspect-brk 'test/**/*.test.js'",
-    "coverage": "DEV=1 TARGET=wasm c8 mocha --parallel -- 'test/**/*.test.js'",
+    "coverage": "c8 npm run test",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [
@@ -36,7 +38,6 @@
     "mersenne-twister": "^1.1.0",
     "mocha": "^10.7.3",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.20.0",
-    "rollup-plugin-strip-code": "^0.2.7"
+    "rollup": "^4.20.0"
   }
 }

@@ -28,6 +28,10 @@ export default mixin({
     valueMap: new Map(),
     valueIndices: new Map(),
 
+    async initialize(wasi) {
+      this.setCustomWASI?.(wasi);
+      await this.initPromise;
+    },
     clearExchangeTable() {
       if (this.nextValueIndex !== 1) {
         this.nextValueIndex = 1;

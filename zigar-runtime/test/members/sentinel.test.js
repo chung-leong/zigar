@@ -100,5 +100,30 @@ describe('Member: sentinel', function() {
       expect(sentinel.isRequired).to.be.true;
     })
   })
+  describe('findSentinel', function() {
+    if (process.env.TARGET === 'wasm') {
+      it('should find length of zero-terminated string at address', function() {
+        const env = new Env();
+        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+        const text = 'Hello';
+        const src = new DataView(memory.buffer, 128, 16);
+        for (let i = 0; i < text.length; i++) {
+          src.setUint8(i, text.charCodeAt(i));
+        }
+        const byte = new DataView(new ArrayBuffer(1));
+        const len = env.findSentinel(128, byte);
+        expect(len).to.equal(5);
+      })
+      it('should return undefined upon hitting end of memory', function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        const text = 'Hello';
+        const byte = new DataView(new ArrayBuffer(1));
+        byte.setUint8(0, 0xFF);
+        const len = env.findSentinel(128, byte);
+        expect(len).to.be.undefined;
+      })
+    }
+  })
 })
 

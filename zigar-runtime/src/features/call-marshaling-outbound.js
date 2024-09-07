@@ -19,10 +19,6 @@ export default mixin({
       runThunk: { argType: 'iii', returnType: 'v' },
       runVariadicThunk: { argType: 'iiiii', returnType: 'v' },
     },
-    exports: {
-      allocateHostMemory: { argType: 'ii', returnType: 'v' },
-      freeHostMemory: { argType: 'iii' },
-    },
 
     invokeThunk(thunkAddress, fnAddress, args) {
       // runThunk will be present only after WASM has compiled
@@ -128,7 +124,5 @@ export class CallContext {
   pointerProcessed = new Map();
   memoryList = [];
   shadowMap = null;
-  /* WASM-ONLY */
   call = 0;
-  /* WASM-ONLY-END */
 }

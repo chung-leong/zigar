@@ -41,7 +41,6 @@ export default mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
-        /* WASM-ONLY-END */
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });

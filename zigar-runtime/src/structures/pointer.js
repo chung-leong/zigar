@@ -237,9 +237,9 @@ export default mixin({
         }
       }
       if (arg instanceof Target) {
-        /* WASM-ONLY */
-        arg[RESTORE]?.();
-        /* WASM-ONLY-END */
+        if (process.env.TARGET === 'wasm') {
+          arg[RESTORE]?.();
+        }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
           if (isConst) {

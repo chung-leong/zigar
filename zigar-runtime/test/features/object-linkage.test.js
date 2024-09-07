@@ -89,6 +89,27 @@ describe('Feature: object-linkage', function() {
       expect(object[LAST_ADDRESS]).to.equal(0x4000);
       expect(object[LAST_LENGTH]).to.equal(4);
     });
+    if (process.env.TARGET === 'wasm') {
+      it('should link variables after initialization promise is fulfilled', async function() {
+        const env = new Env();
+        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.initPromise = Promise.resolve();
+        const cache = new ObjectCache();
+        const Type = function() {};
+        Type.prototype[COPIER] = getMemoryCopier(4);
+        Type.prototype[MEMORY_RESTORER] = getMemoryRestorer(cache, env);
+        const object = new Type();
+        const dv = object[MEMORY] = new DataView(new ArrayBuffer(4));
+        dv.setUint32(0, 1234, true);
+        env.variables.push({ object, reloc: 128 });
+        env.linkVariables(true);
+        await env.initPromise;
+        expect(object[MEMORY]).to.not.equal(dv);
+        expect(object[MEMORY].buffer).to.equal(memory.buffer);
+        expect(object[MEMORY].byteOffset).to.equal(128);
+        expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
+      });
+    }
   })
   describe('linkObject', function() {
     it('should replace relocatable memory with fixed memory', function() {
@@ -250,4 +271,13 @@ describe('Feature: object-linkage', function() {
       env.unlinkObject(object);
     })
   })
+  if (process.env.TARGET === 'wasm') {
+    describe('recreateAddress', function() {
+      it('should return the same address', function() {
+        const env = new Env();
+        const address = env.recreateAddress(128);
+        expect(address).to.equal(128);
+      })
+    })
+  }
 })
