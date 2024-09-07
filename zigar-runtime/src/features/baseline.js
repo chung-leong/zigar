@@ -1,4 +1,6 @@
-mixin({
+import { mixin } from '../environment.js';
+
+export default mixin({
   littleEndian: true,
 
   getSpecialExports() {
@@ -91,6 +93,6 @@ mixin({
   },
 });
 
-function isNeeded() {
+export function isNeeded() {
   return true;
 }

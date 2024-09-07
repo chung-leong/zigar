@@ -14,3 +14,4 @@ export default mixin({
 export function isNeededByMember(member) {
   return member.type === MemberType.Int;
 }
+

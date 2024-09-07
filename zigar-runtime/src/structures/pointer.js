@@ -5,26 +5,15 @@ import {
   InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
   warnImplicitArrayCreation
 } from '../errors.js';
-import { defineMember } from '../member.js';
-import { createConstructor, defineProperties } from '../object.js';
 import {
-  ADDRESS,
-  CONST_PROXY, CONST_TARGET,
-  ENVIRONMENT, FIXED,
-  LENGTH,
-  MAX_LENGTH, MEMORY,
-  PARENT,
-  PROXY,
-  RESTORE,
-  SELF,
-  SETTERS,
-  SIZE, SLOTS, TARGET, TARGET_UPDATER, TYPE,
-  TYPED_ARRAY,
-  VISIT
+  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, FLAGS, INITIALIZE,
+  LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, PROXY, RESTORE, SELF, SETTERS,
+  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT,
 } from '../symbols.js';
+import { defineProperties, defineValue, getProxy } from '../utils.js';
 
 export default mixin({
-  definePointer(structure, env) {
+  definePointer(structure, descriptors) {
     const {
       name,
       type,
@@ -32,34 +21,35 @@ export default mixin({
       byteSize,
       instance: { members: [ member ] },
     } = structure;
-    const {
-      runtimeSafety = true,
-    } = env;
     const { structure: targetStructure } = member;
-    const { type: targetType, sentinel, byteSize: elementSize = 1 } = targetStructure;
+    const {
+      type: targetType,
+      flags: targetFlags,
+      sentinel,
+      byteSize: targetSuze = 1
+    } = targetStructure;
     // length for slice can be zero or undefined
-    const hasLengthInMemory = type === StructureType.SlicePointer;
-    const addressSize = (hasLengthInMemory) ? byteSize / 2 : byteSize;
-    const { get: getAddressInMemory, set: setAddressInMemory } = defineMember({
+    const addressSize = (flags & StructureFlag.HasLength) ? byteSize / 2 : byteSize;
+    const { get: readAddress, set: writeAddress } = this.defineMember({
       type: MemberType.Uint,
       bitOffset: 0,
       bitSize: addressSize * 8,
       byteSize: addressSize,
       structure: { byteSize: addressSize },
-    }, env);
-    const { get: getLengthInMemory, set: setLengthInMemory } = (hasLengthInMemory) ? defineMember({
+    });
+    const { get: readLength, set: writeLength } = (flags & StructureFlag.HasLength) ? this.defineMember({
       type: MemberType.Uint,
       bitOffset: addressSize * 8,
       bitSize: addressSize * 8,
       byteSize: addressSize,
       structure: { name: 'usize', byteSize: addressSize },
-    }, env) : {};
+    }) : {};
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
-          const address = getAddressInMemory.call(this);
-          const length = (hasLengthInMemory)
-          ? getLengthInMemory.call(this)
+          const address = readAddress.call(this);
+          const length = (flags & StructureFlag.HasLength)
+          ? readLength.call(this)
           : (sentinel?.isRequired)
             ? thisEnv.findSentinel(address, sentinel.bytes) + 1
             : 1;
@@ -70,7 +60,7 @@ export default mixin({
             this[SLOTS][0] = newTarget;
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
-            if (hasLengthInMemory) {
+            if (flags & StructureFlag.HasLength) {
               this[MAX_LENGTH] = undefined;
             }
             return newTarget;
@@ -82,12 +72,12 @@ export default mixin({
       return this[SLOTS][0];
     };
     const setAddress = function(address) {
-      setAddressInMemory.call(this, address);
+      writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
-    const setLength = (hasLengthInMemory || sentinel)
+    const setLength = (flags & StructureFlag.HasLength || sentinel)
     ? function(length) {
-        setLengthInMemory?.call?.(this, length);
+        writeLength?.call?.(this, length);
         this[LAST_LENGTH] = length;
       }
     : null;
@@ -112,9 +102,7 @@ export default mixin({
         if (arg[MEMORY][FIXED]) {
           const address = thisEnv.getViewAddress(arg[MEMORY]);
           setAddress.call(this, address);
-          if (hasLengthInMemory) {
-            setLength.call(this, arg.length);
-          }
+          setLength?.call?.(this, arg.length);
         } else {
           if (pointer[MEMORY][FIXED]) {
             throw new FixedMemoryTargetRequired(structure, arg);
@@ -122,25 +110,23 @@ export default mixin({
         }
       } else if (pointer[MEMORY][FIXED]) {
         setAddress.call(this, 0);
-        if (hasLengthInMemory) {
-          setLength.call(this, 0);
-        }
+        setLength?.call?.(this, 0);
       }
       pointer[SLOTS][0] = arg ?? null;
-      if (hasLengthInMemory) {
+      if (flags & StructureFlag.HasLength) {
         pointer[MAX_LENGTH] = undefined;
       }
     };
-    const getTarget = (flags & StructureFlag.HasValue)
+    const getTarget = (targetFlags & StructureFlag.HasValue)
     ? function() {
         const target = getTargetObject.call(this);
-        return target[SELF];
+        return target.$;
       }
     : getTargetObject;
     const setTarget = !isConst
     ? function(value) {
         const target = getTargetObject.call(this);
-        return target[SELF] = value;
+        return target.$ = value;
       }
     : throwReadOnly;
     const getTargetLength = function() {
@@ -162,16 +148,16 @@ export default mixin({
       // determine the maximum length
       let max;
       if (!fixed) {
-        if (hasLengthInMemory) {
+        if (flags & StructureFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
-          max = (bytesAvailable / elementSize) | 0;
+          max = (bytesAvailable / targetSuze) | 0;
         }
       }
       if (len < 0 || len > max) {
         throw new InvalidSliceLength(len, max);
       }
-      const byteLength = len * elementSize;
+      const byteLength = len * targetSuze;
       const newDV = (byteLength <= bytesAvailable)
       // can use the same buffer
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
@@ -179,35 +165,7 @@ export default mixin({
       : thisEnv.obtainFixedView(fixed.address, byteLength);
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
-      if (hasLengthInMemory) {
-        setLength?.call(this, len);
-      }
-    };
-    const alternateCaster = function(arg, options) {
-      const Target = targetStructure.constructor;
-      if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
-        // casting from buffer to pointer is allowed only if request comes from the runtime
-        // casting from writable to read-only is also allowed
-        return false;
-      } else if (isPointerOf(arg, Target)) {
-        // const/non-const casting
-        return new constructor(Target(arg['*']), options);
-      } else if (isCompatiblePointer(arg, Target, type)) {
-        // casting between C/multi/slice pointers
-        return new constructor(arg);
-      } else if (targetType === StructureType.Slice) {
-        // allow casting to slice through constructor of its pointer
-        return new constructor(Target(arg), options);
-      } else {
-        throw new NoCastingToPointer(structure);
-      }
-    };
-    const finalizer = function() {
-      const handlers = isPointer(targetType) ? {} : proxyHandlers;
-      const proxy = new Proxy(this, handlers);
-      // hide the proxy so console wouldn't display a recursive structure
-      Object.defineProperty(this, PROXY, { value: proxy });
-      return proxy;
+      setLength?.call?.(this, len);
     };
     const thisEnv = this;
     const initializer = function(arg) {
@@ -223,7 +181,7 @@ export default mixin({
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
       } else if (name === '*anyopaque' && arg) {
-        if (isPointer(arg.constructor[TYPE])) {
+        if (arg.constructor[TYPE] === StructureType.Pointer) {
           arg = arg['*']?.[MEMORY];
         } else if (arg[MEMORY]) {
           arg = arg[MEMORY];
@@ -247,15 +205,17 @@ export default mixin({
           } else {
             throw new ReadOnlyTarget(structure);
           }
-        }
-      } else if (type === StructureType.CPointer && arg instanceof Target.child) {
+        }0
+      } else if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple && arg instanceof Target.child) {
+        // C pointer
         arg = Target(arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
         // autocast to target type
         const dv = thisEnv.extractView(targetStructure, arg);
         arg = Target(dv);
       } else if (arg != undefined && !arg[MEMORY]) {
-        if (type === StructureType.CPointer) {
+        if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple) {
+          // C pointer
           if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
             let single = true;
             // make sure the object doesn't contain special props for the slice
@@ -274,7 +234,7 @@ export default mixin({
         }
         // autovivificate target object
         const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
-        if (runtimeSafety) {
+        if (thisEnv.runtimeSafety) {
           // creation of a new slice using a typed array is probably
           // not what the user wants; it's more likely that the intention
           // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
@@ -287,74 +247,102 @@ export default mixin({
         }
         arg = autoObj;
       } else if (arg !== undefined) {
-        if (type !== StructureType.CPointer || arg !== null) {
+        if (!(flags & StructureFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
         }
       }
       this[TARGET] = arg;
     };
-    const getTargetPrimitive = (targetType === StructureType.Primitive)
-    ? function(hint) {
-        const target = this[TARGET];
-        return target[Symbol.toPrimitive](hint);
-      }
-    : null;
-    const getSliceOf = (targetType === StructureType.Slice)
-    ? function(begin, end) {
-        const target = this[TARGET];
-        const newTarget = target.slice(begin, end);
+    const destructor = descriptors.delete.value;
+    const constructor = this.createConstructor(structure);
+    descriptors['*'] = { get: getTarget, set: setTarget };
+    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.length = { get: getTargetLength, set: setTargetLength };
+    descriptors.slice = (targetType === StructureType.Slice) && {
+      value(begin, end) {
+        const newTarget = this[TARGET].slice(begin, end);
         return new constructor(newTarget);
       }
-    : null;
-    const getSubarrayOf = (targetType === StructureType.Slice)
-    ? function(begin, end, options) {
-        const target = this[TARGET];
-        const newTarget = target.subarray(begin, end, options);
+    };
+    descriptors.subarray = (targetType === StructureType.Slice) && {
+      value(begin, end, options) {
+        const newTarget = this[TARGET].subarray(begin, end, options);
         return new constructor(newTarget);
       }
-    : null;
-    const constructor = structure.constructor = createConstructor(structure, { initializer, alternateCaster, finalizer }, env);
-    const instanceDescriptors = {
-      '*': { get: getTarget, set: setTarget },
-      '$': { get: getProxy, set: initializer },
-      length: { get: getTargetLength, set: setTargetLength },
-      delete: { value: deleteTarget },
-      slice: getSliceOf && { value: getSliceOf },
-      subarray: getSubarrayOf && { value: getSubarrayOf },
-      [Symbol.toPrimitive]: getTargetPrimitive && { value: getTargetPrimitive },
-      [TARGET]: { get: getTargetObject, set: setTargetObject },
-      [TARGET_UPDATER]: { value: updateTarget },
-      [ADDRESS]: { value: setAddress },
-      [LENGTH]: setLength && { value: setLength },
-      [VISIT]: { value: visitPointer },
-      [LAST_ADDRESS]: { value: undefined, writable: true },
-      [LAST_LENGTH]: setLength && { value: undefined, writable: true },
     };
-    const staticDescriptors = {
-      child: { get: () => targetStructure.constructor },
-      const: { value: isConst },
+    descriptors.delete = {
+      value() {
+        this[TARGET]?.delete();
+        destructor.call(this);
+      }
+    },
+    descriptors[Symbol.toPrimitive] = (targetType === StructureType.Primitive) && {
+      value(hint) {
+        return this[TARGET][Symbol.toPrimitive](hint);
+      }
     };
-    return this.attachDescriptors(structure, instanceDescriptors, staticDescriptors);
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[FINALIZE] = {
+      value() {
+        const handlers = (targetType === StructureType.Pointer) ? {} : proxyHandlers;
+        const proxy = new Proxy(this, handlers);
+        // hide the proxy so console wouldn't display a recursive structure
+        Object.defineProperty(this, PROXY, { value: proxy });
+        return proxy;
+      }
+    };
+    descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
+    descriptors[UPDATE] = defineValue(updateTarget);
+    descriptors[ADDRESS] = defineValue(setAddress);
+    descriptors[LENGTH] = defineValue(setLength);
+    descriptors[VISIT] = defineValue(visitPointer);
+    descriptors[LAST_ADDRESS] = defineValue(0);
+    descriptors[LAST_LENGTH] = defineValue(0);
+    return constructor;
   },
+  finalizePointer(structure, staticDescriptors) {
+    const {
+      type,
+      constructor,
+      instance: { members: [ member ] },
+    } = structure;
+    const { structure: targetStructure } = member;
+    const {
+      type: targetType,
+      flags: targetFlags,
+    } = targetStructure;
+    staticDescriptors.child = { get: () => targetStructure.constructor };
+    staticDescriptors.const = { get: isConst };
+    staticDescriptors[CAST] = {
+      value(arg, options) {
+        const Target = targetStructure.constructor;
+        if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
+          // casting from buffer to pointer is allowed only if request comes from the runtime
+          // casting from writable to read-only is also allowed
+          return false;
+        } else if (isPointerOf(arg, Target)) {
+          // const/non-const casting
+          return new constructor(Target(arg['*']), options);
+        } else if (isCompatiblePointer(arg, Target, targetFlags)) {
+          // casting between C/multi/slice pointers
+          return new constructor(arg);
+        } else if (targetType === StructureType.Slice) {
+          // allow casting to slice through constructor of its pointer
+          return new constructor(Target(arg), options);
+        } else {
+          throw new NoCastingToPointer(structure);
+        }
+      }
+    };
+  }
 });
 
 export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Pointer:
+  return structure.type === StructureType.Pointer;
 }
 
-function deleteTarget() {
-  const target = this[TARGET];
-  target?.delete();
-}
-
-export function getProxy() {
-  return this[PROXY];
-}
-
-// function needed in object.js so it's defined there
-export { copyPointer } from '.../../src/object.js';
-
-export function resetPointer({ isActive }) {
+function isConst() {
+  return this[FLAGS] & StructureFlag.IsConst;
 }
 
 function throwInaccessible() {
@@ -413,12 +401,12 @@ function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
 }
 
-function isCompatiblePointer(arg, Target, type) {
-  // FIXME
-  if (type !== StructureType.SinglePointer) {
+function isCompatiblePointer(arg, Target, flags) {
+  if (flags & StructureFlag.IsMultiple) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;
-    } else if (type === StructureType.CPointer && isPointerOf(arg, Target.child)) {
+    } else if (flags & StructureFlag.IsSingle && isPointerOf(arg, Target.child)) {
+      // C pointer
       return true;
     }
   }
@@ -497,7 +485,7 @@ const constTargetHandlers = {
   }
 };
 
-export function isCompatibleBuffer(arg, constructor) {
+function isCompatibleBuffer(arg, constructor) {
   // TODO: merge this with extractView in mixin "view-management"
   const tag = arg?.[Symbol.toStringTag];
   if (tag) {
@@ -522,12 +510,3 @@ export function isCompatibleBuffer(arg, constructor) {
   }
   return false;
 }
-
-export function always() {
-  return true;
-}
-
-export function never() {
-  return false;
-}
-

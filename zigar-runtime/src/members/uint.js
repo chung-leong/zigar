@@ -14,3 +14,7 @@ export default mixin({
 export function isNeededByMember(member) {
   return member.type === MemberType.Uint;
 }
+
+export function isNeededByStructure(structure) {
+  return structure.type === StructureType.Pointer;
+}

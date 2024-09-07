@@ -11,10 +11,11 @@ export default mixin({
   defineSlice(structure, descriptors) {
     const {
       align,
+      flags,
+      byteSize,
       instance: {
         members: [ member ],
       },
-      flags,
     } = structure;
     /* c8 ignore start */
     if (process.env.DEV) {

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { SELF, VISIT } from '../symbols.js';
+import { SELF, UPDATE, VISIT } from '../symbols.js';
 
 export default mixin({
   updatePointerAddresses(args) {
@@ -69,7 +69,7 @@ export default mixin({
         const writable = !pointer.constructor.const;
         const currentTarget = pointer[SLOTS][0];
         const newTarget = (!currentTarget || isMutable(this))
-        ? pointer[TARGET_UPDATER](true, isActive(this))
+        ? pointer[UPDATE](true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target (which could have been altered)
         currentTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
