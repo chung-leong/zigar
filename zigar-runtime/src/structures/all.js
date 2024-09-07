@@ -33,13 +33,15 @@ export default mixin({
     }
     // default discriptors
     const keys = [];
+    const setters = {};
     const descriptors = {
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
+      [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
       // add memory copier (from mixin "memory/copying")
-      [COPY]: this.defineCopier(byteSize, type === StructureType.Slice),
+      [COPY]: this.defineCopier(byteSize),
       // add special methods like toJSON() (from mixin "members/special-method")
       ...this.defineSpecialMethods?.(),
       // add special properties like dataView (from mixin "members/special-props")
@@ -48,16 +50,14 @@ export default mixin({
         [RESTORE]: this.defineRestorer(),
       }),
     };
-    const constructor = f.call(this, structure, descriptors);
-    // find all the
-    const setters = {};
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
-      if (descriptor?.set && name !== '$' && name !== '*') {
-        setters[name] = descriptor.set;
+      let s;
+      if (s = descriptor?.set) {
+        setters[name] = s;
+        keys.push(name);
       }
     }
-    descriptors[SETTERS] = defineValue(setters);
-    descriptors[KEYS] = defineValue(Object.keys(setters));
+    const constructor = f.call(this, structure, descriptors);
     defineProperties(constructor.prototype, descriptors);
     structure.constructor = constructor;
     return constructor;

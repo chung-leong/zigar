@@ -1,5 +1,5 @@
 import { CONST_TARGET, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
-import { MemberType, StructureType } from '../constants.js';
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({
@@ -76,10 +76,10 @@ export default mixin({
     }
   },
   castView(address, len, copy, structure) {
-    const { constructor, hasPointer } = structure;
+    const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy);
     const object = constructor.call(ENVIRONMENT, dv);
-    if (hasPointer) {
+    if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
       this.updatePointerTargets(object);
     }
@@ -91,8 +91,8 @@ export default mixin({
   },
   acquireDefaultPointers() {
     for (const structure of this.structures) {
-      const { constructor, hasPointer, instance: { template } } = structure;
-      if (hasPointer && template && template[MEMORY]) {
+      const { constructor, flags, instance: { template } } = structure;
+      if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
         // create a placeholder for retrieving default pointers
         const placeholder = Object.create(constructor.prototype);
         placeholder[MEMORY] = template[MEMORY];
@@ -104,9 +104,9 @@ export default mixin({
   defineFactoryArgStruct() {
     const options = this.beginStructure({
       type: StructureType.Struct,
+      flags: 0,
       name: 'Options',
       byteSize: 2,
-      hasPointer: false,
     })
     this.attachMember(options, {
       type: MemberType.Bool,
@@ -125,9 +125,9 @@ export default mixin({
     this.defineStructure(options);
     const structure = this.beginStructure({
       type: StructureType.ArgStruct,
+      flags: 0,
       name: 'ArgFactory',
       byteSize: 2,
-      hasPointer: false,
     });
     this.attachMember(structure, {
       type: MemberType.Void,

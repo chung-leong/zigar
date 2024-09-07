@@ -1264,9 +1264,9 @@ describe('Structure: array', function() {
       env.endStructure(structStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1493,10 +1493,9 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1549,10 +1548,9 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureType.HasSlot | StructureType.HasPointer | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1566,11 +1564,10 @@ describe('Structure: array', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.HasObject | StructureType.HasSlot | StructureType.HasPointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,

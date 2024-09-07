@@ -170,7 +170,7 @@ export function isNeededByStructure(structure) {
   return true;
 }
 
-function checkDataViewSize(dv, structure) {
+export function checkDataViewSize(dv, structure) {
   const { byteSize, type } = structure;
   const isSizeMatching = type === StructureType.Slice
   ? dv.byteLength % byteSize === 0

@@ -29,6 +29,7 @@ export const ENVIRONMENT = Symbol('environment');
 export const ATTRIBUTES = Symbol('attributes');
 export const PRIMITIVE = Symbol('primitive');
 export const VARIANTS = Symbol('variants');
+export const GETTERS = Symbol('getters');
 export const SETTERS = Symbol('setters');
 export const TYPED_ARRAY = Symbol('typedArray');
 

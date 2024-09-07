@@ -30,8 +30,8 @@ import StructLike from '../../src/structures/struct-like.js';
 import Struct, {
   isNeededByStructure,
 } from '../../src/structures/struct.js';
-import { ENTRIES, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
-import { encodeBase64 } from '../../src/utils.js';
+import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
+import { defineValue, encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
@@ -84,7 +84,12 @@ describe('Structure: struct', function() {
         },
       ];
       const env = new Env();
-      const descriptors = {};
+      const setters = {};
+      const keys = [];
+      const descriptors = {
+        [SETTERS]: defineValue(setters),
+        [KEYS]: defineValue(keys),
+      };
       const constructor = env.defineStruct(structure, descriptors);
       expect(constructor).to.be.a('function');
     })
@@ -115,7 +120,12 @@ describe('Structure: struct', function() {
         },
       ];
       const env = new Env();
-      const descriptors = {};
+      const setters = {};
+      const keys = [];
+      const descriptors = {
+        [SETTERS]: defineValue(setters),
+        [KEYS]: defineValue(keys),
+      };
       env.defineStruct(structure, descriptors);
       expect(descriptors.$?.get).to.be.a('function');
       expect(descriptors.$?.set).to.be.a('function');
@@ -126,6 +136,9 @@ describe('Structure: struct', function() {
       expect(descriptors[Symbol.iterator]?.value).to.be.a('function');
       expect(descriptors[INITIALIZE]?.value).to.be.a('function');
       expect(descriptors[ENTRIES]?.get).to.be.a('function');
+      expect(keys).to.eql([ 'number', 'boolean' ]);
+      expect(setters.number).to.be.a('function');
+      expect(setters.boolean).to.be.a('function');
     })
   })
   describe('defineStructure', function() {

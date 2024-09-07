@@ -6,8 +6,13 @@ import DataCopying, {
   getResetFunction,
   isNeededByStructure,
 } from '../../src/features/data-copying.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
+import ViewManagement from '../../src/features/view-management.js';
+import { ObjectCache } from '../../src/structures/all.js';
+import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
+import { defineProperties, defineValue } from '../../src/utils.js';
 
-const Env = defineClass('FeatureTest', [ DataCopying ]);
+const Env = defineClass('FeatureTest', [ DataCopying, MemoryMapping, ViewManagement ]);
 
 describe('Feature: data-copying', function() {
   describe('isNeededByStructure', function() {
@@ -81,6 +86,49 @@ describe('Feature: data-copying', function() {
         }
       }
       expect(functions).to.have.lengthOf(10);
+    })
+  })
+  describe('defineRestorer', function() {
+    it('should restore WASM memory buffer that has become detached', function() {
+      const env = new Env();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const dv = new DataView(memory.buffer, 1000, 8);
+      dv[FIXED] = { address: 1000, len: 8 };
+      const constructor = function() {};
+      defineProperties(constructor, {
+        [CACHE]: defineValue(new ObjectCache()),
+      });
+      const object = defineProperties(new constructor(), {
+        [MEMORY]: defineValue(dv),
+        [RESTORE]: env.defineRestorer(),
+      });
+      memory.grow(1);
+      expect(() => dv.getInt8(0)).to.throw(TypeError);
+      object[RESTORE]();
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+      expect(constructor[CACHE].find(object[MEMORY])).to.equal(object);
+    })
+    it('should add align to new buffer when previous buffer has one attached', function() {
+      const env = new Env();
+
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const dv = new DataView(memory.buffer, 1000, 8);
+      dv[FIXED] = { address: 1000, len: 8, align: 4 };
+      const constructor = function() {};
+      defineProperties(constructor, {
+        [CACHE]: defineValue(new ObjectCache()),
+      });
+      const object = defineProperties(new constructor(), {
+        [MEMORY]: defineValue(dv),
+        [RESTORE]: env.defineRestorer(),
+      });
+      memory.grow(1);
+      expect(() => dv.getInt8(0)).to.throw(TypeError);
+      object[RESTORE]();
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+      expect(object[MEMORY][FIXED].align).to.equal(4);
     })
   })
 })

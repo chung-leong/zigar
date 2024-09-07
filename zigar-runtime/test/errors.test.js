@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, StructureType } from '../src/constants.js';
+import { MemberType, StructureFlag, StructureType } from '../src/constants.js';
 import {
   AccessingOpaque,
   AlignmentConflict,
@@ -427,12 +427,12 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
-        type: StructureType.SinglePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],
         },
-        hasPointer: true,
       };
       const err = new NoCastingToPointer(structure);
       expect(err.message).to.contain('new operator');
@@ -442,12 +442,12 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '[]const u8',
-        type: StructureType.SlicePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         byteSize: 1,
         instance: {
           members: [],
         },
-        hasPointer: true,
       };
       const pointer = {};
       const err = new ConstantConstraint(structure, pointer);
@@ -463,7 +463,6 @@ describe('Error functions', function() {
         instance: {
           members: [],
         },
-        hasPointer: false,
       };
       const err = new MisplacedSentinel(structure, 0, 5, 8);
       expect(err.message).to.contain('0').and.contain(5).and.contain('8');
@@ -478,7 +477,6 @@ describe('Error functions', function() {
         instance: {
           members: [],
         },
-        hasPointer: false,
       };
       const err = new MissingSentinel(structure, 0, 8);
       expect(err.message).to.contain('0').and.contain('8');
@@ -525,12 +523,12 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
-        type: StructureType.SinglePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],
         },
-        hasPointer: true,
       };
       function Bear() {};
       function Antelope() {};
@@ -551,11 +549,11 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.SinglePointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],
         },
-        hasPointer: true,
       };
       const err = new FixedMemoryTargetRequired(structure, null);
       expect(err.message).to.contain('fixed memory');

@@ -85,7 +85,6 @@ describe('Feature: structure-acquisition', function() {
         byteSize: 16,
         align: 3,
         isConst: false,
-        hasPointer: false,
       });
       expect(s.type).to.equal(StructureType.Struct);
       expect(s.name).to.equal('Hello');
@@ -102,7 +101,6 @@ describe('Feature: structure-acquisition', function() {
         byteSize: 16,
         align: 3,
         isConst: false,
-        hasPointer: false,
       });
       env.attachMember(s, {
         type: MemberType.Int,
@@ -128,7 +126,6 @@ describe('Feature: structure-acquisition', function() {
         byteSize: 16,
         align: 3,
         isConst: false,
-        hasPointer: false,
       });
       env.attachMember(s, {
         type: MemberType.Int,
@@ -158,7 +155,6 @@ describe('Feature: structure-acquisition', function() {
         byteSize: 16,
         align: 3,
         isConst: false,
-        hasPointer: false,
       });
       env.attachTemplate(s, templ, false);
       expect(s.instance.template).to.equal(templ);
@@ -174,7 +170,6 @@ describe('Feature: structure-acquisition', function() {
         byteSize: 16,
         align: 3,
         isConst: false,
-        hasPointer: false,
       });
       env.attachTemplate(s, templ, true);
       expect(s.static.template).to.equal(templ);
@@ -244,7 +239,7 @@ describe('Feature: structure-acquisition', function() {
             // [PROTECTOR]: () => {},
           };
         },
-        hasPointer: true,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
       };
       const object = env.castView(1234, 8, true, structure);
     })
@@ -438,10 +433,10 @@ describe('Feature: structure-acquisition', function() {
       const Int32 = env.defineStructure(intStructure);
       env.finalizeStructure(intStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.SinglePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -455,9 +450,9 @@ describe('Feature: structure-acquisition', function() {
       env.finalizeStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 8 * 2,
-        hasPointer: true
       });
       env.attachMember(structure, {
         name: 'dog',

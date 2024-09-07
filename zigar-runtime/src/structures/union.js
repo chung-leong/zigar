@@ -3,27 +3,23 @@ import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
 } from '../errors.js';
-import { getZigIterator } from '../iterators.js';
-import { resetPointer } from '../pointer.js';
+import { getUnionEntries, getUnionIterator, getZigIterator } from '../iterators.js';
 import {
-  COPY, ENTRIES, INITIALIZE, MODIFY, NAME, TAG, VISIT, VIVIFICATE
+  COPY, ENTRIES, GETTERS, INITIALIZE, KEYS, MODIFY, NAME, PROPS, SETTERS, TAG, VISIT, VIVIFICATE
 } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
   defineUnion(structure, descriptors) {
     const {
-      type,
       flags,
       instance: { members,  },
     } = structure;
-    const memberInitializers = {};
-    const memberValueGetters = {};
-    const valueMembers = (flags & StructureFlag.HasSelector) ? members.slice(0, -1) : members;
-    const selectorMember = (flags & StructureFlag.HasSelector) ? members[members.length - 1] : null;
+    const exclusion = !!(flags & StructureFlag.HasSelector);
+    const valueMembers = (exclusion) ? members.slice(0, -1) : members;
+    const selectorMember = (exclusion) ? members[members.length - 1] : null;
     const { get: getSelector, set: setSelector } = this.defineMember(selectorMember);
-    const { get: getSelectorNumber, set: setSelectorNumber } = this.defineMember(selectorMember);
-
+    const { get: getSelectorNumber } = this.defineMember(selectorMember);
     const getActiveField = (flags & StructureFlag.HasTag)
     ? function() {
         const item = getSelector.call(this);
@@ -42,18 +38,17 @@ export default mixin({
         const index = valueMembers.findIndex(m => m.name === name);
         setSelector.call(this, index);
       };
-    const memberKeys = Object.keys(memberDescriptors);
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         /* WASM-ONLY-END */
         this[COPY](arg);
-        if (hasPointer) {
+        if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
-        for (const key of memberKeys) {
+        for (const key of props) {
           if (key in arg) {
             found++;
           }
@@ -69,6 +64,10 @@ export default mixin({
       }
     };
     const constructor = this.createConstructor(structure);
+    const getters = {};
+    const setters = descriptors[SETTERS].value;
+    const keys = descriptors[KEYS].value;
+    const props = [];
     for (const member of valueMembers) {
       const { name } = member;
       const { get: getValue, set: setValue } = this.defineMember(member);
@@ -85,7 +84,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.(resetPointer);
+          this[VISIT]?.('reset');
           return getValue.call(this);
         }
       : getValue;
@@ -102,12 +101,14 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISIT]?.(resetPointer);
+          this[VISIT]?.('reset');
         }
       : setValue;
       descriptors[name] = { get, set };
-      memberInitializers[name] = init;
-      memberValueGetters[name] = getValue;
+      setters[name] = init;
+      getters[name] = getValue;
+      keys.push(name);
+      props.push(name);
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
     descriptors[Symbol.iterator] = {
@@ -131,18 +132,20 @@ export default mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[ENTRIES] = { get: getUnionEntries };
     descriptors[TAG] = (flags & StructureFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
       isChildActive: (flags & StructureFlag.HasTag)
       ? function(child) {
           const name = getActiveField.call(this);
-          const active = memberValueGetters[name].call(this);
+          const active = getters[name].call(this);
           return child === active;
         }
       : () => false,
     });
+    descriptors[ENTRIES] = { get: getUnionEntries };
+    descriptors[PROPS] = defineValue(props);
+    descriptors[GETTERS] = defineValue(getters);
     return constructor;
   },
 });

@@ -6,6 +6,7 @@ import {
   alignForward,
   decodeBase64,
   decodeText,
+  defineProperties,
   encodeBase64,
   encodeText,
   findSortedIndex,
@@ -263,6 +264,19 @@ describe('Utility functions', function() {
       expect(result).to.be.a('generator');
       expect(result).to.have.lengthOf(5);
       expect([ ...result ]).to.eql([ 0, 1, 2, 3, 4 ]);
+    })
+  })
+  describe('defineProperties', function() {
+    it('should define properties on an object', function() {
+      const object = {};
+      defineProperties(object, {
+        hello: { value: 5 },
+        world: { get: () => 6 },
+        universe: false,
+      });
+      expect(object.hello).to.equal(5);
+      expect(object.world).to.equal(6);
+      expect(object).to.not.have.property('universe');
     })
   })
 })

@@ -1,3 +1,4 @@
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
 
@@ -31,11 +32,11 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
-  const { type, hasPointer } = structure;
+  const { type, flags } = structure;
   switch (type) {
     case StructureType.Array:
     case StructureType.Slice:
-      return hasPointer;
+      return !!(flags & StructureFlag.HasPointer);
   }
   return false;
 }

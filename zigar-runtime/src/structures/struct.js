@@ -4,7 +4,7 @@ import { InvalidInitializer } from '../errors.js';
 import {
   getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
 } from '../iterators.js';
-import { COPY, ENTRIES, INITIALIZE, PROPS, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -19,7 +19,7 @@ export default mixin({
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
-        if (hasPointer) {
+        if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (arg && typeof(arg) === 'object') {
@@ -32,13 +32,20 @@ export default mixin({
     };
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
+    const setters = descriptors[SETTERS].value;
+    const keys = descriptors[KEYS].value;
     const props = [];
     for (const member of members.filter(m => !!m.name)) {
-      const { set } = descriptors[member.name] = this.defineMember(member);
-      if (set && member.flags & MemberFlag.IsRequired) {
-        set.required = true;
+      const { name, flags } = member;
+      const { set } = descriptors[name] = this.defineMember(member);
+      if (set) {
+        if (flags & MemberFlag.IsRequired) {
+          set.required = true;
+        }
+        setters[name] = set;
+        keys.push(name);
       }
-      props.push(member.name);
+      props.push(name);
     }
     descriptors.$ = { get() { return this }, set: initializer };
     // add length and entries if struct is a tuple

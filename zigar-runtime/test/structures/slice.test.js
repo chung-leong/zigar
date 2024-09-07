@@ -1727,10 +1727,10 @@ describe('Structure: slice', function() {
       const Int32 = env.defineStructure(uintStructure);
       env.endStructure(uintStructure);
       const ptrStructure = env.beginStructure({
-        type: StructureType.SlicePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1744,9 +1744,9 @@ describe('Structure: slice', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]i32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,

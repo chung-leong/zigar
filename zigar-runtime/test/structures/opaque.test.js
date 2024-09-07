@@ -101,10 +101,9 @@ describe('Structure: opaque', function() {
       const Hello = env.defineStructure(structure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -140,9 +139,9 @@ describe('Structure: opaque', function() {
       env.endStructure(optStructure);
       const argStruct = env.beginStructure({
         type: StructureType.ArgStruct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 13,
-        hasPointer: true,
       });
       env.attachMember(argStruct, {
         name: 'retval',

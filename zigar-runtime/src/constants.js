@@ -13,7 +13,8 @@ export const StructureType = {
   Vector: 10,
   Opaque: 11,
   ArgStruct: 12,
-  Function: 13,
+  VariadicStruct: 13,
+  Function: 14,
 };
 export const StructureFlag = {
   HasValue:         0x0000_0001,

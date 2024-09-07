@@ -124,6 +124,7 @@ export default mixin({
     };
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[SHAPE] = defineValue(shapeDefiner);
+    descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };

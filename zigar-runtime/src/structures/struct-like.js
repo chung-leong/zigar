@@ -36,6 +36,8 @@ export default mixin({
 export function isNeededByStructure(structure) {
   const { type, instance: { members } } = structure;
   switch (type) {
+    case StructureType.ArgStruct:
+    case StructureType.VariadicStruct:
     case StructureType.Struct:
     case StructureType.Union:
     case StructureType.ErrorUnion:

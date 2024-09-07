@@ -1,4 +1,4 @@
-import { PROPS, SELF } from './symbols.js';
+import { GETTERS, PROPS, SELF } from './symbols.js';
 
 export function getZigIterator() {
   const self = this;

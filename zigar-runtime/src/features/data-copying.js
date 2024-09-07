@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { CACHE, FIXED, MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
   defineCopier(size, multiple) {
@@ -29,15 +29,12 @@ export default mixin({
     };
   },
   ...(process.env.TARGET === 'wasm' ? {
-    addRestorer(structurer, staticDescriptors, descriptors) {
-      descriptors[RESTORE] = this.defineRestorer();
-    },
     defineRestorer(updateCache = true) {
       const thisEnv = this;
       return {
         value() {
           const dv = this[MEMORY];
-          const fixed = dv[FIXED];
+          const fixed = dv?.[FIXED];
           if (fixed && dv.buffer.byteLength === 0) {
             const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
             if (fixed.align) {

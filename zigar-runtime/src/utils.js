@@ -159,7 +159,7 @@ export function alignForward(address, align) {
   } else {
     mask = ~(align - 1);
   }
-  return (address & mask) + align;
+  return (address + align - 1) & mask;
 }
 
 export function isInvalidAddress(address) {

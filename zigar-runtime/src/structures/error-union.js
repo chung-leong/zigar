@@ -35,7 +35,7 @@ export default mixin({
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
-        if (hasPointer) {
+        if (flags & StructureFlag.HasPointer) {
           if (isChildActive.call(this)) {
             this[VISIT]('copy', { vivificate: true, source: arg });
           }

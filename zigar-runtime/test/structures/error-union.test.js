@@ -617,7 +617,6 @@ describe('Structure: error-union', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -629,12 +628,11 @@ describe('Structure: error-union', function() {
       });
       env.defineStructure(ptrStructure);
       env.endStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         name: 'value',
@@ -719,7 +717,6 @@ describe('Structure: error-union', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Uint8',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -733,9 +730,9 @@ describe('Structure: error-union', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 18,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         name: 'value',
@@ -821,7 +818,6 @@ describe('Structure: error-union', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -835,9 +831,9 @@ describe('Structure: error-union', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         name: 'value',
@@ -921,7 +917,6 @@ describe('Structure: error-union', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -935,9 +930,9 @@ describe('Structure: error-union', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         name: 'value',

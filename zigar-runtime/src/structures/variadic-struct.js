@@ -1,38 +1,29 @@
-import { MemberType, StructureType } from '../constants.js';
-import { defineProperties, mixin } from '../environment.js';
+import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { getMemoryCopier } from '../memory.js';
-import { always } from '../pointer.js';
-import { getChildVivificator } from '../struct.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY,
-  PARENT,
-  PRIMITIVE,
-  RESTORE,
-  SIZE,
-  SLOTS,
-  VISIT,
-  VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { alignForward } from '../utils.js';
+import { alignForward, always, defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
-  defineVariadicStruct(structure) {
+  defineVariadicStruct(structure, descriptors) {
     const {
       byteSize,
       align,
+      flags,
       instance: { members },
     } = structure;
-    const thisEnv = this;
-    const hasObject = !!members.find(m => m.type === MemberType.Object);
     const argMembers = members.slice(1);
     const argCount = argMembers.length;
     const argKeys = argMembers.map(m => m.name);
     const maxSlot = members.map(m => m.slot).sort().pop();
-    const constructor = structure.constructor = function(args, name, offset) {
+    const thisEnv = this;
+    const constructor = function(args, name, offset) {
       if (args.length < argCount) {
         throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
       }
+      debugger;
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
@@ -57,7 +48,7 @@ export default mixin({
         totalByteSize = byteOffset + dv.byteLength;
       }
       const attrs = new ArgAttributes(args.length);
-      const dv = this.allocateMemory(totalByteSize, maxAlign);
+      const dv = thisEnv.allocateMemory(totalByteSize, maxAlign);
       // attach the alignment so we can correctly shadow the struct
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
@@ -89,9 +80,8 @@ export default mixin({
       }
       this[ATTRIBUTES] = attrs;
     };
-    const memberDescriptors = {};
     for (const member of members) {
-      memberDescriptors[member.name] = this.defineMember(member);
+      descriptors[member.name] = this.defineMember(member);
     }
     const { slot: retvalSlot, type: retvalType } = members[0];
     const isChildMutable = (retvalType === MemberType.Object)
@@ -100,24 +90,6 @@ export default mixin({
         return object === child;
       }
     : function() { return false };
-    const visitPointers = function(cb, options = {}) {
-      const {
-        vivificate = false,
-        isActive = always,
-        isMutable = always,
-      } = options;
-      const childOptions = {
-        ...options,
-        isActive,
-        isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
-      };
-      if (vivificate && retvalType === MemberType.Object) {
-        this[VIVIFICATE](retvalSlot);
-      }
-      for (const child of Object.values(this[SLOTS])) {
-        child?.[VISIT]?.(cb, childOptions);
-      }
-    };
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -136,22 +108,35 @@ export default mixin({
       [ALIGN]: { value: 4 },
     });
     defineProperties(ArgAttributes.prototype, {
-      set: { value: setAttributes },
-      [COPY]: { value: getMemoryCopier(4, true) },
-      /* WASM-ONLY */
-      [RESTORE]: { value: this.getMemoryRestorer(null) },
-      /* WASM-ONLY-END */
+      set: defineValue(setAttributes),
+      [COPY]: this.defineCopier(4, true),
+      ...(process.env.TARGET === 'wasm' ? {
+        [RESTORE]: this.defineRestorer(),
+      } : undefined),
     });
-    defineProperties(constructor.prototype, {
-      ...memberDescriptors,
-      [COPY]: { value: getMemoryCopier(undefined, true) },
-      [VIVIFICATE]: hasObject && { value: getChildVivificator(structure, env) },
-      [VISIT]: { value: visitPointers },
-    });
-    defineProperties(constructor, {
-      [SIZE]: { value: byteSize },
-      // [ALIGN]: omitted so that Environment.createShadow() would obtain the alignment from the data view
-    });
+    descriptors[COPY] = this.defineCopier(undefined, true);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && {
+      value(cb, options = {}) {
+        const {
+          vivificate = false,
+          isActive = always,
+          isMutable = always,
+        } = options;
+        const childOptions = {
+          ...options,
+          isActive,
+          isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
+        };
+        if (vivificate && retvalType === MemberType.Object) {
+          this[VIVIFICATE](retvalSlot);
+        }
+        for (const child of Object.values(this[SLOTS])) {
+          child?.[VISIT]?.(cb, childOptions);
+        }
+      },
+    };
+    return constructor;
   }
 });
 

@@ -15,6 +15,7 @@ import SpecialProps from '../../src/members/special-props.js';
 import MemberUint from '../../src/members/uint.js';
 import All, {
   isNeededByStructure,
+  ObjectCache,
 } from '../../src/structures/all.js';
 import Enum from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
@@ -522,5 +523,20 @@ describe('Structure: all', function() {
       expect(f).to.equal(Float32Array);
     })
   })
+  describe('ObjectCache', function() {
+    describe('save/find', function() {
+      it('should save object to cache', function() {
+        const cache = new ObjectCache();
+        const dv = new DataView(new ArrayBuffer(4));
+        expect(cache.find(dv)).to.be.undefined;
+        const object = { [MEMORY]: dv };
+        cache.save(dv, object);
+        expect(cache.find(dv)).to.equal(object);
+        const dv2 = new DataView(new ArrayBuffer(8));
+        expect(cache.find(dv2)).to.be.undefined;
+      })
+    })
+  })
+
 })
 

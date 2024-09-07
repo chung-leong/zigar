@@ -454,10 +454,9 @@ describe('Structure: optional', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -530,10 +529,9 @@ describe('Structure: optional', function() {
       env.endStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Uint8',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -547,9 +545,9 @@ describe('Structure: optional', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         name: 'value',
@@ -677,7 +675,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -694,7 +691,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 8 * 2,
-        hasPointer: true
       });
       env.attachMember(structStructure, {
         name: 'dog',
@@ -787,7 +783,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -805,7 +800,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 8 * 2,
-        hasPointer: true
       });
       env.attachMember(structStructure, {
         name: 'dog',
@@ -848,7 +842,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: structStructure.byteSize + 4,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
@@ -896,7 +889,6 @@ describe('Structure: optional', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -914,7 +906,6 @@ describe('Structure: optional', function() {
         name: 'Hello',
         length: 4,
         byteSize: 8 * 4,
-        hasPointer: true,
       });
       env.attachMember(arrayStructure, {
         type: MemberType.Object,
@@ -926,9 +917,9 @@ describe('Structure: optional', function() {
       env.endStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: arrayStructure.byteSize + 32,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
