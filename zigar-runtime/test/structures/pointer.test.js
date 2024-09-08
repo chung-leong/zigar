@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
+import AccessorBool from '../../src/accessors/bool.js';
 import JumboUint128 from '../../src/accessors/jumbo-uint.js';
 import Jumbo from '../../src/accessors/jumbo.js';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
@@ -39,7 +40,7 @@ const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberObject, MemberAll, All, Pointer, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
   MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
-  MemberBool, JumboUint128, Jumbo, Array, PointerInArray,
+  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool,
 ]);
 
 describe('Structure: pointer', function() {
@@ -890,6 +891,7 @@ describe('Structure: pointer', function() {
         bitSize: 1,
         bitOffset: 0,
         byteSize: 1,
+        structure: {},
       });
       env.defineStructure(boolStructure);
       env.endStructure(boolStructure);
@@ -1758,6 +1760,7 @@ describe('Structure: pointer', function() {
       env.endStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Target',
         byteSize: 4,
         hasPointer: false,
@@ -1870,7 +1873,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: uintStructure,
+        structure: {},
       });
       env.attachMember(structStructure, {
         type: MemberType.Uint,
@@ -1878,6 +1881,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
@@ -3083,6 +3087,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.attachMember(structStructure, {
         type: MemberType.Uint,
@@ -3090,6 +3095,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
@@ -3112,7 +3118,6 @@ describe('Structure: pointer', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple,
         name: '[*c]Hello',
         byteSize: 8,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
@@ -3143,6 +3148,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.attachMember(structStructure, {
         type: MemberType.Uint,
@@ -3150,6 +3156,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
