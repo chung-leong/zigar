@@ -123,12 +123,12 @@ export default mixin({
         return target.$;
       }
     : getTargetObject;
-    const setTarget = !isConst
-    ? function(value) {
+    const setTarget = (flags & StructureFlag.IsConst)
+    ? throwReadOnly
+    : function(value) {
         const target = getTargetObject.call(this);
         return target.$ = value;
-      }
-    : throwReadOnly;
+      };
     const getTargetLength = function() {
       const target = getTargetObject.call(this);
       return (target) ? target.length : 0;
@@ -172,7 +172,7 @@ export default mixin({
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         // initialize with the other pointer'structure target
-        if (!isConst && arg.constructor.const) {
+        if (!(flags & StructureFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
         arg = arg[SLOTS][0];
@@ -316,7 +316,7 @@ export default mixin({
     staticDescriptors[CAST] = {
       value(arg, options) {
         const Target = targetStructure.constructor;
-        if ((this === ENVIRONMENT || this === PARENT) || arg instanceof constructor) {
+        if (this === ENVIRONMENT || this === PARENT || arg instanceof constructor) {
           // casting from buffer to pointer is allowed only if request comes from the runtime
           // casting from writable to read-only is also allowed
           return false;

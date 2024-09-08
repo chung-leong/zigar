@@ -169,7 +169,7 @@ export default mixin({
       } else {
         if (CAST in constructor) {
           // casting from number, string, etc.
-          self = constructor[CAST](arg, options);
+          self = constructor[CAST].call(this, arg, options);
           if (self !== false) {
             return self;
           }
