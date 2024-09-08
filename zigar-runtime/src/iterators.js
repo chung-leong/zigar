@@ -1,4 +1,4 @@
-import { GETTERS, PROPS, SELF } from './symbols.js';
+import { ARRAY, GETTERS, PROPS } from './symbols.js';
 
 export function getZigIterator() {
   const self = this;
@@ -44,7 +44,7 @@ export function getStructEntriesIterator(options) {
 }
 
 export function getArrayIterator() {
-  const self = this[SELF] ?? this;
+  const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {
@@ -64,7 +64,7 @@ export function getArrayIterator() {
 
 export function getArrayEntriesIterator(options) {
   const handleError = getErrorHandler(options);
-  const self = this[SELF] ?? this;
+  const self = this[ARRAY] ?? this;
   const length = this.length;
   let index = 0;
   return {

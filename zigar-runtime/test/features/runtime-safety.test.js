@@ -10,7 +10,7 @@ import RuntimeSafety, {
 const Env = defineClass('FeatureTest', [ RuntimeSafety ]);
 
 describe('Feature: runtime-safety', function() {
-  describe('isNeededByStructure', function() {
+  describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
       const env = { runtimeSafety: true };
       const members = [

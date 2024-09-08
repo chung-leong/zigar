@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
@@ -6,9 +6,9 @@ import {
   warnImplicitArrayCreation
 } from '../errors.js';
 import {
-  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, FLAGS, INITIALIZE,
-  LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, PROXY, RESTORE, SELF, SETTERS,
-  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT,
+  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, INITIALIZE, LAST_ADDRESS,
+  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SETTERS, SIZE, SLOTS,
+  TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT
 } from '../symbols.js';
 import { defineProperties, defineValue, findElements, getProxy } from '../utils.js';
 
@@ -38,12 +38,13 @@ export default mixin({
     });
     const { get: readLength, set: writeLength } = (flags & StructureFlag.HasLength) ? this.defineMember({
       type: MemberType.Uint,
+      flags: MemberFlag.IsSize,
       bitOffset: addressSize * 8,
       bitSize: addressSize * 8,
       byteSize: addressSize,
-      structure: { name: 'usize', byteSize: addressSize },
+      structure: { byteSize: addressSize },
     }) : {};
-    const zero = (addressSize === 4) ? 0 : 0n;
+    const zero = (addressSize > 4) ? 0n : 0;
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
@@ -82,7 +83,7 @@ export default mixin({
       }
     : null;
     const getTargetObject = function() {
-      const pointer = this[SELF] ?? this;
+      const pointer = this[POINTER] ?? this;
       const target = updateTarget.call(pointer, false);
       if (!target) {
         if (flags & StructureFlag.IsNullable) {
@@ -96,7 +97,7 @@ export default mixin({
       if (arg === undefined) {
         return;
       }
-      const pointer = this[SELF] ?? this;
+      const pointer = this[POINTER] ?? this;
       // the target sits in fixed memory--apply the change immediately
       if (arg) {
         if (arg[MEMORY][FIXED]) {
@@ -200,7 +201,7 @@ export default mixin({
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
-          if (isConst) {
+          if (flags & StructureFlag.IsConst) {
             arg = constTarget;
           } else {
             throw new ReadOnlyTarget(structure);
@@ -293,8 +294,8 @@ export default mixin({
     };
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
     descriptors[UPDATE] = defineValue(updateTarget);
-    descriptors[ADDRESS] = defineValue(setAddress);
-    descriptors[LENGTH] = defineValue(setLength);
+    descriptors[ADDRESS] = { set: setAddress };
+    descriptors[LENGTH] = { set: setLength };
     descriptors[VISIT] = defineValue(visitPointer);
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
@@ -306,15 +307,11 @@ export default mixin({
       constructor,
       instance: { members: [ member ] },
     } = structure;
-    const { structure: targetStructure } = member;
-    const {
-      type: targetType,
-    } = targetStructure;
-    staticDescriptors.child = { get: () => targetStructure.constructor };
-    staticDescriptors.const = { get: isConst };
+    const { type: targetType, constructor: Target } = member.structure;
+    staticDescriptors.child = defineValue(Target);
+    staticDescriptors.const = defineValue(!!(flags & StructureFlag.IsConst));
     staticDescriptors[CAST] = {
       value(arg, options) {
-        const Target = targetStructure.constructor;
         if (this === ENVIRONMENT || this === PARENT || arg instanceof constructor) {
           // casting from buffer to pointer is allowed only if request comes from the runtime
           // casting from writable to read-only is also allowed
@@ -340,10 +337,6 @@ export function isNeededByStructure(structure) {
   return structure.type === StructureType.Pointer;
 }
 
-function isConst() {
-  return this[FLAGS] & StructureFlag.IsConst;
-}
-
 function throwInaccessible() {
   throw new InaccessiblePointer();
 };
@@ -352,7 +345,7 @@ const builtinVisitors = {
   copy({ source }) {
     const target = source[SLOTS][0];
     if (target) {
-      this[TARGET_SETTER](target);
+      this[TARGET] = target;
     }
   },
   reset({ isActive }) {
@@ -362,10 +355,10 @@ const builtinVisitors = {
   },
   disable() {
     const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-    defineProperties(this[SELF], {
+    defineProperties(this[POINTER], {
       '*': disabledProp,
       '$': disabledProp,
-      [SELF]: disabledProp,
+      [POINTER]: disabledProp,
       [TARGET]: disabledProp,
     });
   },
@@ -424,7 +417,7 @@ function getConstProxy(target) {
 
 const proxyHandlers = {
   get(pointer, name) {
-    if (name === SELF) {
+    if (name === POINTER) {
       return pointer;
     } else if (name in pointer) {
       return pointer[name];
@@ -474,7 +467,7 @@ const constTargetHandlers = {
     }
   },
   set(target, name, value) {
-    const ptr = target[SELF];
+    const ptr = target[POINTER];
     if (ptr && !(name in ptr)) {
       target[name] = value;
     } else {

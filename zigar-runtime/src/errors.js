@@ -1,6 +1,6 @@
 import { StructureType } from './constants.js';
 import { TYPED_ARRAY } from './symbols.js';
-import { getTypeName } from './utils.js';
+import { getPrimitiveName, getTypeName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -146,7 +146,7 @@ export class InvalidArrayInitializer extends InvalidInitializer {
   constructor(structure, arg, shapeless = false) {
     const { instance: { members: [ member ] }, type, typedArray } = structure;
     const acceptable = [];
-    const primitive = getPrimitiveType(member);
+    const primitive = getPrimitiveName(member);
     if (primitive) {
       let object;
       switch (member.structure?.type) {

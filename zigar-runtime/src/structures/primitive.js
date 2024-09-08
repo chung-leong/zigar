@@ -1,8 +1,8 @@
-import { MemberType, StructureType } from '../constants.js';
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { defineValue, getPrimitiveName } from '../utils.js';
 
 export default mixin({
   definePrimitive(structure, descriptors) {
@@ -17,7 +17,7 @@ export default mixin({
       } else {
         if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {
-            const type = getTypeName(member);
+            const type = getPrimitiveName(member);
             throw new InvalidInitializer(structure, type, arg);
           }
         } else if (arg !== undefined) {
@@ -42,16 +42,4 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.Primitive;
-}
-
-function getTypeName({ type, bitSize }) {
-  switch (type) {
-    case MemberType.Bool: return 'boolean';
-    case MemberType.Int:
-    case MemberType.Uint:
-      if (bitSize <= 32) {
-        return 'bigint';
-      }
-    case MemberType.Float: return 'number';
-  }
 }

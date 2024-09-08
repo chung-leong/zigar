@@ -1,6 +1,6 @@
 import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, PARENT, PROXY, SELF, SLOTS } from '../symbols.js';
+import { ARRAY, MEMORY, PARENT, PROXY, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 export default mixin({
@@ -52,7 +52,7 @@ const proxyHandlers = {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
       return array.get(index);
-    } else if (name === SELF) {
+    } else if (name === ARRAY) {
       return array;
     } else {
       return array[name];

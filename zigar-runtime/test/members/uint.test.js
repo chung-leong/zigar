@@ -8,6 +8,7 @@ import All from '../../src/members/all.js';
 import Primitive from '../../src/members/primitive.js';
 import Uint, {
   isNeededByMember,
+  isNeededByStructure,
 } from '../../src/members/uint.js';
 import { MEMORY } from '../../src/symbols.js';
 
@@ -22,6 +23,16 @@ describe('Member: uint', function() {
     it('should return false when mixin is not needed by a member', function() {
       const member = { type: MemberType.Object, slot: 1 };
       expect(isNeededByMember(member)).to.be.false;
+    })
+  })
+  describe('isNeededByStructure', function() {
+    it('should return true when mixin is needed by a structure', function() {
+      const structure = { type: StructureType.Pointer };
+      expect(isNeededByStructure(structure)).to.be.true;
+    })
+    it('should return false when mixin is not needed by a structure', function() {
+      const structure = { type: StructureType.Primitive };
+      expect(isNeededByStructure(structure)).to.be.false;
     })
   })
   describe('defineMemberUint', function() {

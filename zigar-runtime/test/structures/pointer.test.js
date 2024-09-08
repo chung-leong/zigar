@@ -17,6 +17,7 @@ import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
 import PointerInArray from '../../src/members/pointer-in-array.js';
 import MemberPrimitive from '../../src/members/primitive.js';
+import MemberSize from '../../src/members/size.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberTypeMixin from '../../src/members/type.js';
@@ -32,7 +33,7 @@ import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
 import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LENGTH, MEMORY, SELF, UPDATE,
+  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LENGTH, MEMORY, POINTER, TARGET, UPDATE,
 } from '../../src/symbols.js';
 import { defineValue } from '../../src/utils.js';
 
@@ -40,7 +41,7 @@ const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberObject, MemberAll, All, Pointer, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
   MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
-  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool,
+  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, MemberSize,
 ]);
 
 describe('Structure: pointer', function() {
@@ -2090,7 +2091,7 @@ describe('Structure: pointer', function() {
       const int32 = Int32.call(ENVIRONMENT, dv1);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv2);
       intPtr.$ = int32;
-      expect(getUsize.call(dv2, 0, true)).to.equal(1000n);
+      expect(getUsize.call(dv2, 0, true)).to.equal(usize(1000));
     })
     it('should immediately write to slice pointer in fixed memory', function() {
       const env = new Env();
@@ -2176,11 +2177,11 @@ describe('Structure: pointer', function() {
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
       pointer1.$ = target;
       expect(getUsize.call(dv2, 0, true)).to.equal(usize(1000));
-      expect(getUsize.call(dv2, 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv2, addressSize / 8, true)).to.equal(usize(4));
       const pointer2 = HelloPtr.call(ENVIRONMENT, dv3);
       pointer2.$ = pointer1;
       expect(getUsize.call(dv3, 0, true)).to.equal(usize(1000));
-      expect(getUsize.call(dv3, 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv3, addressSize / 8, true)).to.equal(usize(4));
     })
     it('should yield underlying pointer object', function() {
       const env = new Env();
@@ -2220,7 +2221,7 @@ describe('Structure: pointer', function() {
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
-      const actualIntPointer = intPointer[SELF];
+      const actualIntPointer = intPointer[POINTER];
       expect(actualIntPointer).to.be.instanceOf(Int32Ptr);
     })
     it('should detect property of pointer object', function() {
@@ -2300,10 +2301,10 @@ describe('Structure: pointer', function() {
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
       const pointer = new Int32Ptr(new Int32(4));
-      pointer[MEMORY].setBigUint64(0, 0x1000n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
       pointer[UPDATE]();
-      const address = pointer[ADDRESS];
-      expect(address).to.equal(0x1000n);
+      const address = pointer[LAST_ADDRESS];
+      expect(address).to.equal(usize(0x1000));
     })
     it('should write address of pointer into memory', function() {
       const env = new Env();
@@ -2321,30 +2322,27 @@ describe('Structure: pointer', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      env.defineStructure(intStructure);
+      const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
-        hasPointer: true,
+        byteSize: addressSize / 8,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: intStructure,
       });
-      env.defineStructure(structure);
+      const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Int32Ptr } = structure;
       const pointer = new Int32Ptr(new Int32(4));
-      pointer[ADDRESS] = 0x1000n;
-      expect(pointer[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
+      pointer[ADDRESS] = usize(0x1000);
+      expect(getUsize.call(pointer[MEMORY], 0, true)).to.equal(usize(0x1000));
     })
     it('should get address and length of slice pointer from memory', function() {
       const env = new Env();
@@ -2356,7 +2354,6 @@ describe('Structure: pointer', function() {
         flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
-        hasPointer: false,
       });
       env.attachMember(intStructure, {
         type: MemberType.Int,
@@ -2403,7 +2400,7 @@ describe('Structure: pointer', function() {
       pointer[MEMORY].setBigUint64(0, 0x1000n, true);
       pointer[MEMORY].setBigUint64(8, 4n, true);
       pointer[UPDATE]();
-      const address = pointer[ADDRESS];
+      const address = pointer[LAST_ADDRESS];
       expect(address).to.equal(0x1000n);
     })
     it('should write address and length of slice pointer into memory', function() {
@@ -2509,25 +2506,24 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
         name: '[*:0]Int32',
-        byteSize: 16,
+        byteSize: addressSize / 8,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: sliceStructure,
       });
-      env.defineStructure(structure);
+      const Int32SlicePtr = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4, 0 ]);
       const pointer = new Int32SlicePtr(ta);
-      pointer[ADDRESS] = 0x1000n;
+      pointer[ADDRESS] = usize(0x1000);
       pointer[LENGTH] = 5;
-      pointer[MEMORY].setBigUint64(0, 0x1000n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
       let findSentinelCalled = false;
       env.findSentinel = function(address) {
         findSentinelCalled = true;
@@ -2535,11 +2531,11 @@ describe('Structure: pointer', function() {
       };
       pointer[UPDATE]();
       expect(findSentinelCalled).to.be.true;
-      pointer[MEMORY].setBigUint64(0, 0n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0), true);
       pointer[UPDATE]();
-      const address = pointer[ADDRESS];
-      const length = pointer[LENGTH];
-      expect(address).to.equal(0n);
+      const address = pointer[LAST_ADDRESS];
+      const length = pointer[LAST_LENGTH];
+      expect(address).to.equal(usize(0));
       expect(length).to.equal(0);
     })
     it('should update target of fixed-memory pointer on dereferencing', function() {
@@ -2692,7 +2688,7 @@ describe('Structure: pointer', function() {
       expect(slice1.length).to.equal(3);
       expect(() => slice1.length = 1).to.throw(TypeError);
       expect(() => pointer.length = 2).to.not.throw();
-      expect(pointer[MEMORY].getBigUint64(8, true)).to.equal(2n);
+      expect(getUsize.call(pointer[MEMORY], addressSize / 8, true)).to.equal(usize(2));
       expect(slice1.length).to.equal(3);
       const slice2 = pointer['*'];
       expect(slice2.length).to.equal(2);
@@ -3733,14 +3729,14 @@ describe('Structure: pointer', function() {
       const intSPointer2 = new Int32SPtr(undefined, { fixed: true });
       const dv = intSPointer2[MEMORY];
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
-      expect(getUsize.call(dv, 8, true)).to.equal(usize(0));
+      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(0));
       intSPointer2.$ = intSPointer1;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0x2000));
-      expect(getUsize.call(dv, 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(4));
       // can't actually set slice pointer to null, but there's code for that just in case
-      intSPointer2[TARGET_SETTER](null);
+      intSPointer2[TARGET] = null;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
-      expect(getUsize.call(dv, 8, true)).to.equal(usize(0));
+      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(0));
     })
     it('should immediately update a C pointer in fixed memory', function() {
       const env = new Env();

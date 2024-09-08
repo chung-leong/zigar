@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { SELF, UPDATE, VISIT } from '../symbols.js';
+import { POINTER, UPDATE, VISIT } from '../symbols.js';
 
 export default mixin({
   updatePointerAddresses(args) {
@@ -11,7 +11,7 @@ export default mixin({
     const callback = function({ isActive }) {
       if (isActive(this)) {
         // bypass proxy
-        const pointer = this[SELF];
+        const pointer = this[POINTER];
         if (!pointerMap.get(pointer)) {
           const target = pointer[SLOTS][0];
           if (target) {
@@ -63,7 +63,7 @@ export default mixin({
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[SELF] ?? this;
+      const pointer = this[POINTER] ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;

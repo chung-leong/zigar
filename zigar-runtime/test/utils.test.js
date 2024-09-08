@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 
 import { MemberType } from '../src/constants.js';
+import { MEMORY } from '../src/symbols.js';
 import {
   add,
   alignForward,
@@ -10,6 +11,7 @@ import {
   encodeBase64,
   encodeText,
   findSortedIndex,
+  getPrimitiveName,
   getTypeName,
   isInvalidAddress,
   isMisaligned,
@@ -292,6 +294,36 @@ describe('Utility functions', function() {
         const dv2 = new DataView(new ArrayBuffer(8));
         expect(cache.find(dv2)).to.be.undefined;
       })
+    })
+  })
+  describe('getPrimitiveName', function() {
+    it('should return "number" when int is 32-bit or less', function() {
+      const member = { type: MemberType.Int, bitSize: 32 };
+      expect(getPrimitiveName(member)).to.equal('number');
+    })
+    it('should return "number" when uint is 32-bit or less', function() {
+      const member = { type: MemberType.Uint, bitSize: 32 };
+      expect(getPrimitiveName(member)).to.equal('number');
+    })
+    it('should return "bigint" when int is larger than 32-bit', function() {
+      const member = { type: MemberType.Int, bitSize: 34 };
+      expect(getPrimitiveName(member)).to.equal('bigint');
+    })
+    it('should return "bigint" when uint is larger than 32-bit', function() {
+      const member = { type: MemberType.Uint, bitSize: 64 };
+      expect(getPrimitiveName(member)).to.equal('bigint');
+    })
+    it('should return "number" for float', function() {
+      const member = { type: MemberType.Float, bitSize: 32 };
+      expect(getPrimitiveName(member)).to.equal('number');
+    })
+    it('should return "boolean" for bool', function() {
+      const member = { type: MemberType.Bool, bitSize: 32 };
+      expect(getPrimitiveName(member)).to.equal('boolean');
+    })
+    it('should return undefined for other types', function() {
+      const member = { type: MemberType.Object, bitSize: 32 };
+      expect(getPrimitiveName(member)).to.be.undefined;
     })
   })
 })

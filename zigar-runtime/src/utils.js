@@ -51,6 +51,18 @@ export function getTypeName(member) {
   return name;
 }
 
+export function getPrimitiveName({ type, bitSize }) {
+  switch (type) {
+    case MemberType.Bool: return 'boolean';
+    case MemberType.Int:
+    case MemberType.Uint:
+      if (bitSize > 32) {
+        return 'bigint';
+      }
+    case MemberType.Float: return 'number';
+  }
+}
+
 export function decodeText(arrays, encoding = 'utf-8') {
   const decoder = decoders[encoding] ??= new TextDecoder(encoding);
   let array;
