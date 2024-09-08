@@ -37,12 +37,12 @@
     "node-api-headers": "^1.2.0"
   },
   "devDependencies": {
+    "@rollup/plugin-replace": "^5.0.7",
     "@rollup/plugin-terser": "^0.4.4",
     "c8": "^10.1.2",
     "chai": "^5.1.1",
     "mocha": "^10.7.3",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.20.0",
-    "rollup-plugin-strip-code": "^0.2.7"
+    "rollup": "^4.20.0"
   }
 }

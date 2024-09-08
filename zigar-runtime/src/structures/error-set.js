@@ -1,6 +1,8 @@
 import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { deanimalizeErrorName, ErrorExpected, InvalidInitializer, NotInErrorSet } from '../errors.js';
+import {
+  deanimalizeErrorName, ErrorExpected, InvalidInitializer, isErrorJSON, NotInErrorSet
+} from '../errors.js';
 import { CAST, CLASS, INITIALIZE, PROPS, SLOTS } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
@@ -154,10 +156,6 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return structure.type === StructureType.ErrorSet;
-}
-
-export function isErrorJSON(arg) {
-  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
 class ZigErrorBase extends Error {

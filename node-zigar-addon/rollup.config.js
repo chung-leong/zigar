@@ -1,42 +1,37 @@
-import Terser from '@rollup/plugin-terser';
-import StripCode from 'rollup-plugin-strip-code';
-
-const productionReady = false;
+import Replace from '@rollup/plugin-replace';
+// import Terser from '@rollup/plugin-terser';
 
 export default {
   input: 'src/addon.js',
   plugins: [
-    StripCode({
-      start_comment: 'OVERRIDDEN',
-      end_comment: 'OVERRIDDEN-END'
-    }),
-    StripCode({
-      start_comment: 'DEV-TEST',
-      end_comment: 'DEV-TEST-END'
-    }),
-    StripCode({
-      start_comment: 'WASM-ONLY',
-      end_comment: 'WASM-ONLY-END'
-    }),
+    Replace({
+      preventAssignment: true,
+      values: {
+        'process.env.DEV': 'false',
+        'process.env.TARGET': '"node"',
+      },
+    })
   ],
   output: {
     file: 'src/addon.js.txt',
     format: 'iife',
     name: 'variable',
     plugins: [
-      productionReady && Terser(),
-      {
-        // place JS code into a C++ string
-        name: 'C++ string',
-        renderChunk (code) {
-          // rollup insisted on using a variable--remove it
-          const iife = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
-          // MSVC can't handle long raw string--need to break it up
-          const lines = iife.split(/(?<=\n)/);
-          const literals = lines.map(l => JSON.stringify(l));
-          return literals.join('\n');
-        }
-      },
+      // Terser(),
+      CPPString(),
     ]
   },
 };
+
+function CPPString() {
+  // place JS code into a C++ raw string
+  // we can't rely on banner/footer here since those are seen by Terser,
+  // which would promptly throw a syntax error
+  return {
+    name: 'C++ string',
+    renderChunk (code) {
+      code = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
+      return `R"=====(\n${code}\n)====="`;
+    }
+  };
+}

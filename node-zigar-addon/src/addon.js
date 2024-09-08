@@ -1,9 +1,5 @@
-import { useAllExtendedTypes } from '../zigar-runtime/src/data-view.js';
-import { useAllMemberTypes } from '../zigar-runtime/src/member.js';
-import { useAllStructureTypes } from '../zigar-runtime/src/structure.js';
+import { defineEnvironment } from '../../zigar-runtime/src/environment.js';
+import '../../zigar-runtime/src/mixins.js';
 
-useAllMemberTypes();
-useAllStructureTypes();
-useAllExtendedTypes();
+export const Environment = defineEnvironment();
 
-export { NodeEnvironment as Environment } from '../zigar-runtime/src/environment-node.js';

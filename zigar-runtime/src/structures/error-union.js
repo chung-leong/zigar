@@ -1,9 +1,8 @@
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { NotInErrorSet } from '../errors.js';
+import { isErrorJSON, NotInErrorSet } from '../errors.js';
 import { CLASS, COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
-import { isErrorJSON } from './error-set.js';
 
 export default mixin({
   defineErrorUnion(structure, descriptors) {

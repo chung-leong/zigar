@@ -4,7 +4,7 @@ import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
 import { COPY, FIXED, MEMORY, SHAPE, TYPED_ARRAY } from '../symbols.js';
-import { add } from '../utils.js';
+import { add, findElements } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
@@ -177,18 +177,6 @@ export function checkDataViewSize(dv, structure) {
   : dv.byteLength === byteSize;
   if (!isSizeMatching) {
     throw new BufferSizeMismatch(structure, dv);
-  }
-}
-
-function findElements(arg, Child) {
-  // casting to a array/slice
-  const { constructor: Arg } = arg;
-  if (Arg === Child) {
-    // matching object
-    return 1;
-  } else if (Arg.child === Child) {
-    // matching slice/array
-    return arg.length;
   }
 }
 

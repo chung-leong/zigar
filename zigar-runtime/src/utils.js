@@ -201,6 +201,18 @@ export function transformIterable(arg) {
   }
 }
 
+export function findElements(arg, Child) {
+  // casting to a array/slice
+  const { constructor: Arg } = arg;
+  if (Arg === Child) {
+    // matching object
+    return 1;
+  } else if (Arg.child === Child) {
+    // matching slice/array
+    return arg.length;
+  }
+}
+
 export function getSelf() {
   return this;
 }
@@ -225,42 +237,15 @@ export function never() {
   return false;
 }
 
-function adjustIndex(index, len) {
-  index = index | 0;
-  if (index < 0) {
-    index = len + index;
-    if (index < 0) {
-      index = 0;
-    }
-  } else {
-    if (index > len) {
-      index = len;
-    }
+export class ObjectCache {
+  map = new WeakMap();
+
+  find(dv) {
+    return this.map.get(dv);
   }
-  return index;
+
+  save(dv, object) {
+    this.map.set(dv, object);
+    return object;
+  }
 }
-
-function getSubArrayView(begin, end) {
-  begin = (begin === undefined) ? 0 : adjustIndex(begin, this.length);
-  end = (end === undefined) ? this.length : adjustIndex(end, this.length);
-  const dv = this[MEMORY];
-  const offset = begin * elementSize;
-  const len = (end * elementSize) - offset;
-  return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
-}
-
-function getSubarrayOf(begin, end) {
-  const dv = getSubArrayView.call(this, begin, end);
-  return constructor(dv);
-};
-
-function getSliceOf(begin, end, options = {}) {
-  const {
-    fixed = false
-  } = options;
-  const dv1 = getSubArrayView.call(this, begin, end);
-  const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
-  const slice = constructor(dv2);
-  copier.call(slice, { [MEMORY]: dv1 });
-  return slice;
-};

@@ -10,13 +10,12 @@ import {
   LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, PROXY, RESTORE, SELF, SETTERS,
   SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT,
 } from '../symbols.js';
-import { defineProperties, defineValue, getProxy } from '../utils.js';
+import { defineProperties, defineValue, findElements, getProxy } from '../utils.js';
 
 export default mixin({
   definePointer(structure, descriptors) {
     const {
       name,
-      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -44,6 +43,7 @@ export default mixin({
       byteSize: addressSize,
       structure: { name: 'usize', byteSize: addressSize },
     }) : {};
+    const zero = (addressSize === 4) ? 0 : 0n;
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
@@ -109,8 +109,8 @@ export default mixin({
           }
         }
       } else if (pointer[MEMORY][FIXED]) {
-        setAddress.call(this, 0);
-        setLength?.call?.(this, 0);
+        setAddress.call(this, zero);
+        setLength?.call?.(this, zero);
       }
       pointer[SLOTS][0] = arg ?? null;
       if (flags & StructureFlag.HasLength) {
@@ -177,7 +177,7 @@ export default mixin({
         }
         arg = arg[SLOTS][0];
       } else if (flags & StructureFlag.IsMultiple) {
-        if (isCompatiblePointer(arg, Target, type)) {
+        if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
       } else if (name === '*anyopaque' && arg) {
@@ -302,14 +302,13 @@ export default mixin({
   },
   finalizePointer(structure, staticDescriptors) {
     const {
-      type,
+      flags,
       constructor,
       instance: { members: [ member ] },
     } = structure;
     const { structure: targetStructure } = member;
     const {
       type: targetType,
-      flags: targetFlags,
     } = targetStructure;
     staticDescriptors.child = { get: () => targetStructure.constructor };
     staticDescriptors.const = { get: isConst };
@@ -323,7 +322,7 @@ export default mixin({
         } else if (isPointerOf(arg, Target)) {
           // const/non-const casting
           return new constructor(Target(arg['*']), options);
-        } else if (isCompatiblePointer(arg, Target, targetFlags)) {
+        } else if (isCompatiblePointer(arg, Target, flags)) {
           // casting between C/multi/slice pointers
           return new constructor(arg);
         } else if (targetType === StructureType.Slice) {

@@ -1,3 +1,4 @@
+import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({
@@ -16,7 +17,7 @@ export default mixin({
       multithread: (enable) => this.setMultithread?.(enable),
       sizeOf: (T) => check(T[SIZE]),
       alignOf: (T) => check(T[ALIGN]),
-      typeOf: (T) => this.getStructureName?.(check(T[TYPE])),
+      typeOf: (T) => structureNames[check(T[TYPE])],
     };
   },
   recreateStructures(structures, options) {

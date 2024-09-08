@@ -13,6 +13,7 @@ import {
   getTypeName,
   isInvalidAddress,
   isMisaligned,
+  ObjectCache,
   transformIterable,
 } from '../src/utils.js';
 
@@ -277,6 +278,20 @@ describe('Utility functions', function() {
       expect(object.hello).to.equal(5);
       expect(object.world).to.equal(6);
       expect(object).to.not.have.property('universe');
+    })
+  })
+  describe('ObjectCache', function() {
+    describe('save/find', function() {
+      it('should save object to cache', function() {
+        const cache = new ObjectCache();
+        const dv = new DataView(new ArrayBuffer(4));
+        expect(cache.find(dv)).to.be.undefined;
+        const object = { [MEMORY]: dv };
+        cache.save(dv, object);
+        expect(cache.find(dv)).to.equal(object);
+        const dv2 = new DataView(new ArrayBuffer(8));
+        expect(cache.find(dv2)).to.be.undefined;
+      })
     })
   })
 })

@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { defineProperties, ObjectCache } from '../object.js';
 import { ALIGN, MEMORY, VARIANTS } from '../symbols.js';
+import { defineProperties, ObjectCache } from '../utils.js';
 
 export default mixin({
   defineFunction(structure) {

@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
+import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
+import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
 
 import DataCopying, {
   getCopyFunction,
@@ -8,9 +10,6 @@ import DataCopying, {
 } from '../../src/features/data-copying.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import ViewManagement from '../../src/features/view-management.js';
-import { ObjectCache } from '../../src/structures/all.js';
-import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
-import { defineProperties, defineValue } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [ DataCopying, MemoryMapping, ViewManagement ]);
 

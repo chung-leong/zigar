@@ -94,3 +94,5 @@ webpack.debug.js
 coverage
 
 .DS_Store
+
+dist

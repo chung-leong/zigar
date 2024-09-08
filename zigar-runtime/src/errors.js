@@ -1,5 +1,4 @@
 import { StructureType } from './constants.js';
-import { isErrorJSON } from './structures/error-set.js';
 import { TYPED_ARRAY } from './symbols.js';
 import { getTypeName } from './utils.js';
 
@@ -433,6 +432,10 @@ export function deanimalizeErrorName(name) {
   } catch (err) {
   }
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+export function isErrorJSON(arg) {
+  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
 function getDescription(arg) {

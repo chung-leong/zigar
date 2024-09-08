@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag, StructureType, structureNames } from '../constants.js';
+import { MemberFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
@@ -13,7 +13,7 @@ import {
   TYPED_ARRAY,
   VARIANTS, VISIT
 } from '../symbols.js';
-import { defineProperties, defineProperty, defineValue, getTypeName } from '../utils.js';
+import { defineProperties, defineProperty, defineValue, getTypeName, ObjectCache } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -309,28 +309,6 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return true;
-}
-
-
-export function getStructureName(type) {
-  const name = structureNames[type];
-  if (!name) {
-    return;
-  }
-  return name.replace(/\B[A-Z]/g, m => ` ${m}`).toLowerCase();
-}
-
-export class ObjectCache {
-  map = new WeakMap();
-
-  find(dv) {
-    return this.map.get(dv);
-  }
-
-  save(dv, object) {
-    this.map.set(dv, object);
-    return object;
-  }
 }
 
 function startsWithSelf(fnMember, structure) {
