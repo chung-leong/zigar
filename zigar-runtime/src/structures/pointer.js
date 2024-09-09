@@ -7,7 +7,7 @@ import {
 } from '../errors.js';
 import {
   ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, INITIALIZE, LAST_ADDRESS,
-  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SETTERS, SIZE, SLOTS,
+  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
   TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT
 } from '../symbols.js';
 import { defineProperties, defineValue, findElements, getProxy } from '../utils.js';
@@ -24,7 +24,6 @@ export default mixin({
     const {
       type: targetType,
       flags: targetFlags,
-      sentinel,
       byteSize: targetSuze = 1
     } = targetStructure;
     // length for slice can be zero or undefined
@@ -48,14 +47,14 @@ export default mixin({
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
+          const Target = constructor.child;
           const address = readAddress.call(this);
           const length = (flags & StructureFlag.HasLength)
           ? readLength.call(this)
-          : (sentinel?.isRequired)
-            ? thisEnv.findSentinel(address, sentinel.bytes) + 1
+          : (flags & StructureFlag.HasSentinel)
+            ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
-            const Target = targetStructure.constructor;
             const dv = thisEnv.findMemory(address, length, Target[SIZE]);
             const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
             this[SLOTS][0] = newTarget;
@@ -76,7 +75,7 @@ export default mixin({
       writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
-    const setLength = (flags & StructureFlag.HasLength || sentinel)
+    const setLength = (flags & StructureFlag.HasLength || flags & StructureFlag.HasSentinel)
     ? function(length) {
         writeLength?.call?.(this, length);
         this[LAST_LENGTH] = length;

@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import {
-  COPY, ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SHAPE, VISIT, VIVIFICATE
+  COPY, ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SENTINEL, SHAPE, VISIT, VIVIFICATE
 } from '../symbols.js';
 import { defineValue, getProxy, transformIterable } from '../utils.js';
 
@@ -28,13 +28,6 @@ export default mixin({
     }
     /* c8 ignore end */
     const { byteSize: elementSize, structure: elementStructure } = member;
-    // method will not exist when there're no sentinels
-    const sentinel = this.getSentinel?.(structure);
-    if (sentinel) {
-      // zero-terminated strings aren't expected to be commonly used
-      // so we're not putting this prop into the standard structure
-      structure.sentinel = sentinel;
-    }
     const thisEnv = this;
     const shapeDefiner = function(dv, length, fixed = false) {
       if (!dv) {
@@ -75,7 +68,7 @@ export default mixin({
         }
         let i = 0;
         for (const value of arg) {
-          sentinel?.validateValue(value, i, arg.length);
+          constructor[SENTINEL]?.validateValue(value, i, arg.length);
           set.call(this, i++, value);
         }
       } else if (typeof(arg) === 'number') {
@@ -135,9 +128,11 @@ export default mixin({
   },
   finalizeSlice(structure, staticDescriptors) {
     const {
+      flags,
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
+    staticDescriptors[SENTINEL] = (flags & StructureFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });
 

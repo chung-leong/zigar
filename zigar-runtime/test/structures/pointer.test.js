@@ -5,11 +5,12 @@ import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
 import JumboUint128 from '../../src/accessors/jumbo-uint.js';
 import Jumbo from '../../src/accessors/jumbo.js';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
+import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -18,6 +19,7 @@ import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
 import PointerInArray from '../../src/members/pointer-in-array.js';
 import MemberPrimitive from '../../src/members/primitive.js';
+import MemberSentinel from '../../src/members/sentinel.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberTypeMixin from '../../src/members/type.js';
@@ -33,7 +35,8 @@ import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
 import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LENGTH, MEMORY, POINTER, TARGET, UPDATE,
+  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+  UPDATE,
 } from '../../src/symbols.js';
 import { defineValue } from '../../src/utils.js';
 
@@ -42,6 +45,7 @@ const Env = defineClass('StructureTest', [
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
   MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
   MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, IntConversion,
+  RuntimeSafety, MemberSentinel,
 ]);
 
 describe('Structure: pointer', function() {
@@ -989,6 +993,7 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       env.attachMember(structStructure, {
         type: MemberType.Uint,
@@ -996,11 +1001,13 @@ describe('Structure: pointer', function() {
         bitSize: 32,
         bitOffset: 32,
         byteSize: 4,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
         hasPointer: false,
@@ -1019,7 +1026,6 @@ describe('Structure: pointer', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Hello',
         byteSize: 16,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
@@ -1108,6 +1114,7 @@ describe('Structure: pointer', function() {
     })
     it('should show a warning when given a typed array is of the incorrect type', function() {
       const env = new Env();
+      env.runtimeSafety = true;
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -1525,6 +1532,7 @@ describe('Structure: pointer', function() {
       env.endStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
         hasPointer: false,
@@ -2263,9 +2271,13 @@ describe('Structure: pointer', function() {
     })
     it('should get address of pointer from memory', function() {
       const env = new Env();
-      env.obtainExternBuffer = function(address, len) {
-        return new ArrayBuffer(len);
-      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else if (process.env.TARGET === 'node') {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -2280,9 +2292,8 @@ describe('Structure: pointer', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      env.defineStructure(intStructure);
+      const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
@@ -2345,9 +2356,13 @@ describe('Structure: pointer', function() {
     })
     it('should get address and length of slice pointer from memory', function() {
       const env = new Env();
-      env.obtainExternBuffer = function(address, len) {
-        return new ArrayBuffer(len);
-      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else if (process.env.TARGET === 'node') {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -2380,14 +2395,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: 16,
+        byteSize: addressSize / 8 * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2396,11 +2411,11 @@ describe('Structure: pointer', function() {
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
-      pointer[MEMORY].setBigUint64(0, 0x1000n, true);
-      pointer[MEMORY].setBigUint64(8, 4n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
+      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
       pointer[UPDATE]();
       const address = pointer[LAST_ADDRESS];
-      expect(address).to.equal(0x1000n);
+      expect(address).to.equal(usize(0x1000));
     })
     it('should write address and length of slice pointer into memory', function() {
       const env = new Env();
@@ -2478,6 +2493,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasSentinel,
         name: '[_:0]Int32',
         byteSize: 4,
         hasPointer: false,
@@ -2490,7 +2506,7 @@ describe('Structure: pointer', function() {
       });
       env.attachMember(sliceStructure, {
         type: MemberType.Int,
-        isRequired: true,
+        flags: MemberFlag.IsRequired | MemberFlag.IsSentinel,
         bitOffset: 0,
         bitSize: 32,
         byteSize: 4,
@@ -2503,7 +2519,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasSentinel,
         name: '[*:0]Int32',
         byteSize: addressSize / 8,
         hasPointer: true,
@@ -2528,6 +2544,13 @@ describe('Structure: pointer', function() {
         findSentinelCalled = true;
         return (address) ? 4 : -1;
       };
+      if (process.env.TARGET === 'wasm') {
+
+      } else if (process.env.TARGET === 'node') {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       pointer[UPDATE]();
       expect(findSentinelCalled).to.be.true;
       setUsize.call(pointer[MEMORY], 0, usize(0), true);
@@ -2584,45 +2607,50 @@ describe('Structure: pointer', function() {
       env.defineStructure(structure);
       env.endStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
-      const bufferMap = new Map();
-      const addressMap = new Map();
-      let nextAddress = 0x1000n;
-      env.allocateExternMemory = function(type, len, align) {
-        const address = nextAddress;
-        nextAddress += 0x1000n;
-        const buffer = new ArrayBuffer(len);
-        bufferMap.set(address, buffer);
-        addressMap.set(buffer, address);
-        return address;
-      };
-      env.extractBufferAddress = function(buffer) {
-        return addressMap.get(buffer);
-      };
-      env.obtainExternBuffer = function(address, len) {
-        let buffer = bufferMap.get(address);
-        if (!buffer && address === 0x30000n) {
-          buffer = new ArrayBuffer(len);
-          // fill with byte value 8
-          const dv = new DataView(buffer);
-          for (let i = 0; i < dv.byteLength; i += 4) {
-            dv.setInt32(i, 8, true);
-          }
+      let nextAddress = usize(0x1000);
+      let at0x30000;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+        at0x30000 = new DataView(env.memory.buffer, 0x30000, 4 * 4);
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          return address;
+        };
+      } else if (process.env.TARGET === 'node') {
+        const at0x30000 = new DataView(new ArrayBuffer(4 * 4));
+        const bufferMap = new Map([ 0x30000n, at0x30000 ]);
+        const addressMap = new Map([ at0x30000, 0x30000n ]);
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const buffer = new ArrayBuffer(len);
           bufferMap.set(address, buffer);
           addressMap.set(buffer, address);
+          return address;
+        };
+        env.extractBufferAddress = function(buffer) {
+          return addressMap.get(buffer);
+        };
+        env.obtainExternBuffer = function(address, len) {
+          return bufferMap.get(address);
         }
-        return buffer;
       }
       const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { fixed: true });
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
-      pointer[MEMORY].setBigUint64(0, 0x30000n, true);
-      pointer[MEMORY].setBigUint64(8, 4n, true);
+      // put 4 '8' at address 0x30000
+      for (let i = 0; i < at0x30000.byteLength; i += 4) {
+        at0x30000.setInt32(i, 8, true);
+      }
+      setUsize.call(pointer[MEMORY], 0, usize(0x30000), true);
+      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
-      pointer[MEMORY].setBigUint64(0, 0x2000n, true);
-      pointer[MEMORY].setBigUint64(8, 4n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0x2000), true);
+      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
-      pointer[MEMORY].setBigUint64(8, 3n, true);
+      setUsize.call(pointer[MEMORY], addressSize / 8, usize(3), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
     })
@@ -2843,15 +2871,19 @@ describe('Structure: pointer', function() {
       });
       const HelloPtr = env.defineStructure(structure);
       env.endStructure(structure);
-      let nextAddress = 0x1000n;
+      let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress;
-        nextAddress += 0x1000n;
+        nextAddress += usize(0x1000);
         return address;
       };
-      env.obtainExternBuffer = function(address, len) {
-        return new ArrayBuffer(len);
-      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else if (process.env.TARGET === 'node') {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       const pointer = new HelloPtr(5, { fixed: true });
       expect(() => pointer.length = 6).to.not.throw();
     })

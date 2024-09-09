@@ -1,7 +1,7 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { MEMORY, RESTORE } from '../symbols.js';
+import { MEMORY, RESTORE, SENTINEL } from '../symbols.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
@@ -47,7 +47,7 @@ export default mixin({
       },
     });
     const {
-      sentinel,
+      constructor,
       instance: { members: [ member ] }
     } = structure;
     // check member type so we don't attach string property to multi-dimensional arrays
@@ -58,10 +58,9 @@ export default mixin({
         const dv = this.dataView;
         const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
         let str = decodeText(ta, encoding);
-        if (sentinel?.value !== undefined) {
-          if (str.charCodeAt(str.length - 1) === sentinel.value) {
-            str = str.slice(0, -1);
-          }
+        const sentinelValue = constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) === sentinel.value) {
+          str = str.slice(0, -1);
         }
         return str;
       },
@@ -69,10 +68,9 @@ export default mixin({
         if (typeof(str) !== 'string') {
           throw new TypeMismatch('a string', str);
         }
-        if (sentinel?.value !== undefined) {
-          if (str.charCodeAt(str.length - 1) !== sentinel.value) {
-            str = str + String.fromCharCode(sentinel.value);
-          }
+        const sentinelValue = constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinel.value) {
+          str += String.fromCharCode(sentinelValue);
         }
         const ta = encodeText(str, encoding);
         const dv = new DataView(ta.buffer);

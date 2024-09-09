@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPY, FIXED, MEMORY, SHAPE, TYPED_ARRAY } from '../symbols.js';
+import { COPY, FIXED, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
 import { add, findElements } from '../utils.js';
 
 export default mixin({
@@ -57,7 +57,7 @@ export default mixin({
     return dv;
   },
   assignView(target, dv, structure, copy, fixed) {
-    const { byteSize, type, sentinel } = structure;
+    const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
     if (!target[MEMORY]) {
       if (byteSize !== undefined) {
@@ -65,7 +65,7 @@ export default mixin({
       }
       const len = dv.byteLength / elementSize;
       const source = { [MEMORY]: dv };
-      sentinel?.validateData(source, len);
+      target[SENTINEL]?.validateData?.(source, len);
       if (fixed) {
         // need to copy when target object is in fixed memory
         copy = true;
@@ -80,7 +80,7 @@ export default mixin({
         throw new BufferSizeMismatch(structure, dv, target);
       }
       const source = { [MEMORY]: dv };
-      sentinel?.validateData(source, target.length);
+      target[SENTINEL]?.validateData?.(source, target.length);
       target[COPY](source);
     }
   },

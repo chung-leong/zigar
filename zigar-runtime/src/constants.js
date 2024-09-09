@@ -24,19 +24,22 @@ export const StructureFlag = {
   HasLength:        0x0000_0010,
   HasSelector:      0x0000_0020,
   HasTag:           0x0000_0040,
-  HasInaccessible:  0x0000_0080,
+  HasSentinel:      0x0000_0080,
 
   IsConst:          0x0000_0100,
   IsMultiple:       0x0000_0200,
   IsSingle:         0x0000_0400,
-  IsNullable:       0x0000_0800,
-  IsPacked:         0x0000_1000,
-  IsExtern:         0x0000_2000,
-  IsString:         0x0000_4000,
-  IsIterator:       0x0000_8000,
-  IsTuple:          0x0001_0000,
-  IsOpenEnded:      0x0002_0000,
-  IsVariandic:      0x0004_0000,
+  IsExtern:         0x0000_0800,
+  IsString:         0x0000_1000,
+  IsPacked:         0x0000_2000,
+  IsIterator:       0x0000_4000,
+  IsTuple:          0x0000_8000,
+
+  HasInaccessible:  0x0001_0000,
+
+  IsNullable:       0x0100_0000,
+  IsOpenEnded:      0x0200_0000,
+  IsVariandic:      0x0400_0000,
 };
 export const structureNames = Object.keys(StructureType);
 
@@ -60,5 +63,6 @@ export const MemberFlag = {
   IsSize:           0x0000_0004,
   IsPartOfSet:      0x0000_0008,
   IsSelector:       0x0000_0010,
-  IsBackingInt:     0x0000_0020,
+  IsSentinel:       0x0000_0020,
+  IsBackingInt:     0x0000_0040,
 };

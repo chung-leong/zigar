@@ -1,17 +1,15 @@
-import { StructureType } from '../constants.js';
+import { MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MisplacedSentinel, MissingSentinel } from '../errors.js';
 import { MEMORY } from '../symbols.js';
+import { defineValue } from '../utils.js';
 
 export default mixin({
-  getSentinel(structure) {
+  defineSentinel(structure) {
     const {
       byteSize,
       instance: { members: [ member, sentinel ], template },
     } = structure;
-    if (!sentinel) {
-      return;
-    }
     /* c8 ignore start */
     if (process.env.DEV) {
       if (sentinel.bitOffset === undefined) {
@@ -20,47 +18,46 @@ export default mixin({
     }
     /* c8 ignore end */
     const { get: getSentinelValue } = this.defineMember(sentinel);
-    const value = getSentinelValue.call(template, 0);
     const { get } = this.defineMember(member);
-    const { isRequired } = sentinel;
-    const validateValue = (isRequired)
-    ? (this.runtimeSafety)
-      ? function(v, i, l) {
-        if (v === value && i !== l - 1) {
-          throw new MisplacedSentinel(structure, v, i, l);
-        } else if (v !== value && i === l - 1) {
-          throw new MissingSentinel(structure, value, i, l);
+    const value = getSentinelValue.call(template, 0);
+    const isRequired = !!(sentinel.flags & MemberFlag.IsRequired);
+    return defineValue({
+      value,
+      bytes: template[MEMORY],
+      validateValue(v, i, l) {
+        if (isRequired) {
+          if (this.runtimeSafety && v === value && i !== l - 1) {
+            throw new MisplacedSentinel(structure, v, i, l);
+          }
+          if (v !== value && i === l - 1) {
+            throw new MissingSentinel(structure, value, l);
+          }
         }
-      } : function(v, i, l) {
-        if (v !== value && i === l - 1) {
-          throw new MissingSentinel(structure, value, l);
-        }
-      }
-    : function() {};
-    const validateData = (isRequired)
-    ? (this.runtimeSafety)
-      ? function(source, len) {
-          for (let i = 0; i < len; i++) {
-            const v = get.call(source, i);
-            if (v === value && i !== len - 1) {
-              throw new MisplacedSentinel(structure, value, i, len);
-            } else if (v !== value && i === len - 1) {
-              throw new MissingSentinel(structure, value, len);
+      },
+      validateData(source, len) {
+        if (isRequired) {
+          if (this.runtimeSafety) {
+            for (let i = 0; i < len; i++) {
+              const v = get.call(source, i);
+              if (v === value && i !== len - 1) {
+                throw new MisplacedSentinel(structure, value, i, len);
+              } else if (v !== value && i === len - 1) {
+                throw new MissingSentinel(structure, value, len);
+              }
+            }
+          } else {
+            // if the length doesn't match, let the operation fail elsewhere
+            if (len * byteSize === source[MEMORY].byteLength) {
+              const v = get.call(source, len - 1);
+              if (v !== value) {
+                throw new MissingSentinel(structure, value, len);
+              }
             }
           }
         }
-      : function(source, len) {
-          if (len * byteSize === source[MEMORY].byteLength) {
-            const i = len - 1;
-            const v = get.call(source, i);
-            if (v !== value) {
-              throw new MissingSentinel(structure, value, len);
-            }
-          }
-      }
-    : function () {};
-    const bytes = template[MEMORY];
-    return { value, bytes, validateValue, validateData, isRequired };
+      },
+      isRequired,
+    });
   },
   ...(process.env.target === 'wasm' ? {
     findSentinel(address, bytes) {
@@ -91,8 +88,5 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
-  if (structure.type === StructureType.Slice) {
-    return !!this.getSentinel(structure);
-  }
-  return false;
+  return !!(structure.flags & StructureFlag.HasSentinel);
 }

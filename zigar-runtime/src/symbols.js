@@ -9,6 +9,7 @@ export const CLASS = Symbol('class');
 export const TAG = Symbol('tag');
 export const PROPS = Symbol('props');
 export const POINTER = Symbol('pointer');
+export const SENTINEL = Symbol('sentinel');
 export const ARRAY = Symbol('array');
 export const ITEMS = Symbol('items');
 export const TARGET = Symbol('target');

@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import AccessorAll from '../../src/accessors/all.js';
-import { MemberType, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import MemberAll from '../../src/members/all.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import Sentinel, {
@@ -11,63 +12,35 @@ import Sentinel, {
 import MemberUint from '../../src/members/uint.js';
 import { MEMORY } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel ]);
+const Env = defineClass('MemberTest', [
+  AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel, IntConversion
+]);
 
 describe('Member: sentinel', function() {
   describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a member', function() {
+    it('should return true when mixin is needed by a structure', function() {
       const structure = {
         type: StructureType.Slice,
-        instance: {
-          members: [
-            {
-              type: MemberType.Uint,
-              bitSize: 8,
-              byteSize: 8,
-              structure: {},
-            },
-            {
-              name: 'sentinel',
-              type: MemberType.Uint,
-              bitSize: 8,
-              byteSize: 8,
-              bitOffset: 0,
-              structure: {},
-            }
-          ],
-          template: {
-            [MEMORY]: new DataView(new ArrayBuffer(1)),
-          },
-        },
+        flags: StructureFlag.HasSentinel,
       };
-      const env = new Env();
-      expect(isNeededByStructure.call(env, structure)).to.be.true;
+      expect(isNeededByStructure(structure)).to.be.true;
     })
     it('should return false when mixin is not needed by a member', function() {
       const structure = {
         type: StructureType.Slice,
-        instance: {
-          members: [
-            {
-              type: MemberType.Uint,
-              bitSize: 8,
-              byteSize: 8,
-              structure: {},
-            },
-          ],
-        },
       };
       const env = new Env();
-      expect(isNeededByStructure.call(env, structure)).to.be.false;
+      expect(isNeededByStructure(structure)).to.be.false;
     })
   })
-  describe('getSentinel', function() {
-    it('should return sentinel descriptor when there is one', function() {
+  describe('defineSentinel', function() {
+    it('should return sentinel descriptor', function() {
       const env = new Env();
       const dv = new DataView(new ArrayBuffer(1));
       dv.setUint8(0, 0xff);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureType.HasSentinel,
         instance: {
           members: [
             {
@@ -77,12 +50,11 @@ describe('Member: sentinel', function() {
               structure: {},
             },
             {
-              name: 'sentinel',
               type: MemberType.Uint,
+              flags: MemberFlag.IsRequired,
               bitSize: 8,
               byteSize: 8,
               bitOffset: 0,
-              isRequired: true,
               structure: {},
             }
           ],
@@ -91,7 +63,7 @@ describe('Member: sentinel', function() {
           },
         },
       };
-      const sentinel = env.getSentinel(structure);
+      const { value: sentinel } = env.defineSentinel(structure);
       expect(sentinel).to.be.an('object');
       expect(sentinel.validateValue).to.be.a('function');
       expect(sentinel.validateData).to.be.a('function');
