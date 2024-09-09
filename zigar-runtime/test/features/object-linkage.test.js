@@ -9,7 +9,7 @@ import StructureAll from '../../src/structures/all.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
-import { defineProperties } from '../../src/utils.js';
+import { defineProperties, ObjectCache } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [
   ObjectLinkage, StructureAll, DataCopying, ViewManagement, MemoryMapping,
@@ -96,12 +96,15 @@ describe('Feature: object-linkage', function() {
         env.initPromise = Promise.resolve();
         const cache = new ObjectCache();
         const Type = function() {};
-        Type.prototype[COPIER] = getMemoryCopier(4);
-        Type.prototype[MEMORY_RESTORER] = getMemoryRestorer(cache, env);
+        defineProperties(Type.prototype, {
+          [COPY]: env.defineCopier(4),
+          [RESTORE]: env.defineRestorer(cache),
+        });
         const object = new Type();
         const dv = object[MEMORY] = new DataView(new ArrayBuffer(4));
         dv.setUint32(0, 1234, true);
         env.variables.push({ object, reloc: 128 });
+        throw new Error('FIXME');
         env.linkVariables(true);
         await env.initPromise;
         expect(object[MEMORY]).to.not.equal(dv);

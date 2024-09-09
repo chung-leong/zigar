@@ -1,18 +1,21 @@
 import { expect } from 'chai';
+import { MemberType, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { MEMORY } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorUint from '../../src/accessors/uint.js';
-import { MemberType } from '../../src/constants.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import All from '../../src/members/all.js';
 import Primitive from '../../src/members/primitive.js';
 import Uint, {
   isNeededByMember,
   isNeededByStructure,
 } from '../../src/members/uint.js';
-import { MEMORY } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ All, Uint, Primitive, AccessorAll, AccessorUint ]);
+const Env = defineClass('MemberTest', [
+  All, Uint, Primitive, AccessorAll, AccessorUint, IntConversion
+]);
 
 describe('Member: uint', function() {
   describe('isNeededByMember', function() {

@@ -1,17 +1,54 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { capture } from '../capture.js';
 
-import { StructureType } from '../../src/constants.js';
-import Baseline from '../../src/features/baseline.js';
+import AccessorAll from '../../src/accessors/all.js';
+import AccessorBoolUnalign from '../../src/accessors/bool1-unaligned.js';
+import Baseline, {
+  isNeeded,
+} from '../../src/features/baseline.js';
+import DataCopying from '../../src/features/data-copying.js';
+import intConversion from '../../src/features/int-conversion.js';
+import ModuleLoading from '../../src/features/module-loading.js';
+import StreamRedirection from '../../src/features/stream-redirection.js';
+import StructureAcqusiton from '../../src/features/structure-acquisition.js';
+import ViewManagement from '../../src/features/view-management.js';
+import MemberAll from '../../src/members/all.js';
+import MemberBool from '../../src/members/bool.js';
+import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
+import MemberPrimitive from '../../src/members/primitive.js';
+import MemberTypeMixin from '../../src/members/type.js';
+import MemberUint from '../../src/members/uint.js';
+import MemberVoid from '../../src/members/void.js';
+import StructureAll from '../../src/structures/all.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
+import Pointer from '../../src/structures/pointer.js';
+import StructurePrimitive from '../../src/structures/primitive.js';
+import StructLike from '../../src/structures/struct-like.js';
+import Struct from '../../src/structures/struct.js';
 
-const Env = defineClass('FeatureTest', [ Baseline ]);
+const Env = defineClass('FeatureTest', [
+  Baseline, StructureAll, MemberAll, MemberPrimitive, StructurePrimitive, DataCopying, MemberInt,
+  intConversion, AccessorAll, ArgStruct, MemberVoid, Pointer, PointerInStruct, MemberUint,
+  ViewManagement, Struct, StructLike, MemberObject, MemberTypeMixin, ModuleLoading,
+  StructureAcqusiton, MemberBool, AccessorBoolUnalign, StreamRedirection,
+]);
 
 describe('Feature: baseline', function() {
+  describe('isNeeded', function() {
+    it('should return true', function() {
+      expect(isNeeded()).to.be.true;
+    })
+  })
   describe('recreateStructures', function() {
     it('should recreate structures based on input definition', function() {
-      const env = new Environment();
+      const env = new Env();
       const s1 = {
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
         align: 4,
@@ -23,14 +60,13 @@ describe('Feature: baseline', function() {
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
+              structure: {},
             }
           ],
-          methods: [],
           template: null,
         },
         static: {
           members: [],
-          methods: [],
           template: null,
         },
       };
@@ -39,7 +75,6 @@ describe('Feature: baseline', function() {
         name: 'hello',
         byteSize: 0,
         align: 0,
-        hasPointer: false,
         instance: {
           members: [
             {
@@ -48,22 +83,21 @@ describe('Feature: baseline', function() {
               bitOffset: 0,
               bitSize: 0,
               byteSize: 0,
+              structure: {},
             }
           ],
-          methods: [],
           template: null,
         },
         static: {
           members: [],
-          methods: [],
           template: null,
         },
       };
       const s3 = {
-        type: StructureType.SinglePointer,
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
-        hasPointer: true,
         instance: {
           members: [
             {
@@ -75,21 +109,19 @@ describe('Feature: baseline', function() {
               structure: {},
             },
           ],
-          methods: [],
           template: null,
         },
         static: {
           members: [],
-          methods: [],
           template: null,
         },
       };
       const s4 = {
         type: StructureType.Struct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: 8,
         align: 4,
-        hasPointer: false,
         instance: {
           members: [
             {
@@ -110,7 +142,8 @@ describe('Feature: baseline', function() {
             },
             {
               name: 'ghost',
-              type: MemberType.Comptime,
+              type: MemberType.Object,
+              flags: MemberFlag.IsReadOnly,
               slot: 2,
               structure: s1,
             },
@@ -118,9 +151,9 @@ describe('Feature: baseline', function() {
               name: 'type',
               type: MemberType.Type,
               slot: 3,
+              structure: {},
             }
           ],
-          methods: [],
           template: {
             memory: (() => {
               const array = new Uint8Array(8);
@@ -149,24 +182,17 @@ describe('Feature: baseline', function() {
         static: {
           members: [
             {
-              type: MemberType.Static,
+              type: MemberType.Object,
               name: 'pointer',
               slot: 0,
               structure: s3,
             },
             {
-              type: MemberType.Static,
+              type: MemberType.Object,
               name: 'unsupported',
               slot: 1,
               structure: {},
             },
-          ],
-          methods: [
-            {
-              name: 'hello',
-              thunkId: 34,
-              argStruct: s2,
-            }
           ],
           template: {
             slots: {
@@ -206,6 +232,7 @@ describe('Feature: baseline', function() {
         thunkId = args[0];
         argStruct = args[1];
       };
+      throw new Error('FIXME');
       expect(() => constructor.hello()).to.not.throw();
       expect(thunkId).to.equal(34);
       expect(argStruct[MEMORY].byteLength).to.equal(0);
@@ -214,7 +241,7 @@ describe('Feature: baseline', function() {
   })
   describe('getSpecialExports', function() {
     it('should return object for controlling module', async function() {
-      const env = new Environment();
+      const env = new Env();
       env.init = async () => {};
       env.imports = {
         runThunk: function() {},
@@ -231,7 +258,7 @@ describe('Feature: baseline', function() {
       expect(object.released()).to.be.false;
     })
     it('should allow redirection of console output', async function() {
-      const env = new Environment();
+      const env = new Env();
       const dv = new DataView(new ArrayBuffer(2));
       dv.setUint8(0, '?'.charCodeAt(0));
       dv.setUint8(1, '\n'.charCodeAt(0));
@@ -249,7 +276,7 @@ describe('Feature: baseline', function() {
       expect(content).to.equal('?');
     })
     it('should provide functions for obtaining type info', async function() {
-      const env = new Environment();
+      const env = new Env();
       env.imports = {
         runThunk: function() {},
       };
@@ -258,7 +285,8 @@ describe('Feature: baseline', function() {
       expect(alignOf).to.be.a('function');
       expect(typeOf).to.be.a('function');
       const structure = env.beginStructure({
-        type: StructureType.PackedStruct,
+        type: StructureType.Struct,
+        flags: StructureFlag.IsPacked,
         name: 'Packed',
         byteSize: 4,
         align: 2,
@@ -268,32 +296,34 @@ describe('Feature: baseline', function() {
         name: 'nice',
         bitSize: 1,
         bitOffset: 0,
+        structure: {},
       });
       env.attachMember(structure, {
         type: MemberType.Bool,
         name: 'rich',
         bitSize: 1,
         bitOffset: 1,
+        structure: {},
       });
       env.attachMember(structure, {
         type: MemberType.Bool,
         name: 'young',
         bitSize: 1,
         bitOffset: 2,
+        structure: {},
       });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
-      env.finalizeShape(structure);
+      const Packed = env.defineStructure(structure);
       env.finalizeStructure(structure);
-      const { constructor: Packed } = structure;
       expect(sizeOf(Packed)).to.equal(4);
       expect(alignOf(Packed)).to.equal(2);
-      expect(typeOf(Packed)).to.equal('packed struct');
+      expect(typeOf(Packed)).to.equal('struct');
     })
   })
-
 })

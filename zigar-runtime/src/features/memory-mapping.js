@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
-import { ALIGN, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import { add, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
 export default mixin({

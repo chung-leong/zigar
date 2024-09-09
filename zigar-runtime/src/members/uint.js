@@ -1,4 +1,4 @@
-import { MemberType } from '../constants.js';
+import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({

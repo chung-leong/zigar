@@ -4,6 +4,7 @@ import { defineClass } from '../../src/environment.js';
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorInt from '../../src/accessors/int.js';
 import { MemberType } from '../../src/constants.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import All from '../../src/members/all.js';
 import Int, {
   isNeededByMember,
@@ -11,7 +12,9 @@ import Int, {
 import Primitive from '../../src/members/primitive.js';
 import { MEMORY } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ All, Int, Primitive, AccessorAll, AccessorInt ]);
+const Env = defineClass('MemberTest', [
+  All, Int, Primitive, AccessorAll, AccessorInt, IntConversion,
+]);
 
 describe('Member: int', function() {
   describe('isNeededByMember', function() {

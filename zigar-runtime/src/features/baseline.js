@@ -1,8 +1,10 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
+import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
 export default mixin({
   littleEndian: true,
+  variables: [],
 
   getSpecialExports() {
     const check = (v) => {
@@ -17,7 +19,7 @@ export default mixin({
       multithread: (enable) => this.setMultithread?.(enable),
       sizeOf: (T) => check(T[SIZE]),
       alignOf: (T) => check(T[ALIGN]),
-      typeOf: (T) => structureNames[check(T[TYPE])],
+      typeOf: (T) => structureNames[check(T[TYPE])]?.toLowerCase(),
     };
   },
   recreateStructures(structures, options) {
