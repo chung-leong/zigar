@@ -3,8 +3,8 @@ import { defineClass } from '../../src/environment.js';
 
 import { StructureType } from '../../src/constants.js';
 import CallMarshalingOutbound, {
-  CallContext,
-  isNeededByStructure,
+    CallContext,
+    isNeededByStructure,
 } from '../../src/features/call-marshaling-outbound.js';
 
 const Env = defineClass('FeatureTest', [ CallMarshalingOutbound ]);
@@ -133,7 +133,7 @@ describe('Feature: call-marshaling-outbound', function() {
         };
         Arg.prototype[COPIER] = getMemoryCopier(4);
         let called = false;
-        Arg.prototype[POINTER_VISITOR] = function() {
+        Arg.prototype[VISIT] = function() {
           called = true;
         };
         const args = new Arg();
@@ -357,7 +357,7 @@ describe('Feature: call-marshaling-outbound', function() {
         const argStruct = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
           [SLOTS]: { 0: {} },
-          [POINTER_VISITOR]: () => {
+          [VISIT]: () => {
             if (thunkCalled) {
               visitorCalledAfter = true;
             } else {
@@ -409,7 +409,7 @@ describe('Feature: call-marshaling-outbound', function() {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
           [SLOTS]: { 0: {} },
           [ATTRIBUTES]: argAttrs,
-          [POINTER_VISITOR]: () => {},
+          [VISIT]: () => {},
         };
         env.invokeThunk(100, argStruct);
         expect(recv).to.equal(env);

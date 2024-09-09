@@ -6,8 +6,9 @@ import { mixin } from '../environment.js';
 
 export default mixin({
   getAccessorBool(access, member) {
-    const { bitSize, byteSize } = member;
-    const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize: byteSize });
+    const { byteSize } = member;
+    const bitSize = byteSize * 8;
+    const f = this.getAccessor(access, { type: MemberType.Uint, bitSize, byteSize });
     if (access === 'get') {
       return function(offset, littleEndian) {
         return !!f.call(this, offset, littleEndian);

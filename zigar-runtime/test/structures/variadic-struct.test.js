@@ -1,5 +1,8 @@
 import { expect } from 'chai';
+import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ArgumentCountMismatch, InvalidVariadicArgument } from '../../src/errors.js';
+import { MEMORY, VISIT } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -7,9 +10,9 @@ import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorIntUnaligned from '../../src/accessors/int-unaligned.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { ArgumentCountMismatch, InvalidVariadicArgument } from '../../src/errors.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -18,23 +21,25 @@ import MemberBool from '../../src/members/bool.js';
 import MemberFloat from '../../src/members/float.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
 import VariadicStruct, {
   isNeededByStructure,
 } from '../../src/structures/variadic-struct.js';
-import { MEMORY } from '../../src/symbols.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
   StructureAcquisition, ViewManagement, VariadicStruct, AccessorBool, AccessorFloat128,
   RuntimeSafety, MemberBool, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned,
   AccessorUnaligned, MemberObject, Struct, StructLike, SpecialMethods, MemberFloat,
+  IntConversion, Pointer, PointerInStruct, MemoryMapping,
 ]);
 
 describe('Structure: variadic-struct', function() {
@@ -122,8 +127,10 @@ describe('Structure: variadic-struct', function() {
   describe('defineStructure', function() {
     it('should define an variadic argument struct', function() {
       const env = new Env();
+      env.runtimeSafety = true;
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
         align: 4,
@@ -139,6 +146,7 @@ describe('Structure: variadic-struct', function() {
       env.endStructure(intStructure);
       const floatStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'f64',
         byteSize: 8,
         align: 8,
@@ -223,6 +231,7 @@ describe('Structure: variadic-struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
         align: 4,
@@ -291,7 +300,7 @@ describe('Structure: variadic-struct', function() {
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
       const pointers = [], active = [], mutable = [];
-      args1[POINTER_VISITOR](function({ isActive, isMutable }) {
+      args1[VISIT](function({ isActive, isMutable }) {
         pointers.push(this);
         active.push(isActive());
         mutable.push(isMutable());
@@ -305,6 +314,7 @@ describe('Structure: variadic-struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
         align: 4,
@@ -373,7 +383,7 @@ describe('Structure: variadic-struct', function() {
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
       const pointers = [], active = [], mutable = [];
-      args1[POINTER_VISITOR](function({ isActive, isMutable }) {
+      args1[VISIT](function({ isActive, isMutable }) {
         pointers.push(this);
         active.push(isActive());
         mutable.push(isMutable());

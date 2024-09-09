@@ -1,13 +1,15 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
 import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -15,6 +17,8 @@ import MemberBool from '../../src/members/bool.js';
 import MemberFloat from '../../src/members/float.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInArray from '../../src/members/pointer-in-array.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
@@ -22,19 +26,23 @@ import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import MemberVoid from '../../src/members/void.js';
 import All from '../../src/structures/all.js';
+import ArrayLike from '../../src/structures/array-like.js';
+import Array from '../../src/structures/array.js';
 import Optional, {
   isNeededByStructure,
 } from '../../src/structures/optional.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
+import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { INITIALIZE } from '../../src/symbols.js';
 
 const Env = defineClass('OptionalTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
-  Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat, MemberObject, Struct,
-  StructLike, MemberUint, MemberVoid,
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
+  AccessorJumboInt, Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat,
+  MemberObject, Struct, StructLike, MemberUint, MemberVoid, IntConversion, Pointer,
+  PointerInStruct, Slice, ArrayLike, Array, PointerInArray,
 ]);
 
 describe('Structure: optional', function() {
@@ -122,9 +130,9 @@ describe('Structure: optional', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
       });
       env.attachMember(structure, {
         type: MemberType.Float,
@@ -159,9 +167,9 @@ describe('Structure: optional', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
       });
       env.attachMember(structure, {
         type: MemberType.Float,
@@ -192,9 +200,9 @@ describe('Structure: optional', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
       });
       env.attachMember(structure, {
         type: MemberType.Float,
@@ -222,9 +230,9 @@ describe('Structure: optional', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
       });
       env.attachMember(structure, {
         type: MemberType.Float,
@@ -255,9 +263,9 @@ describe('Structure: optional', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector,
       });
       env.attachMember(structure, {
         type: MemberType.Float,
@@ -312,9 +320,9 @@ describe('Structure: optional', function() {
       const { constructor: Animal } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue | StructureFlag.HasSlot | StructureFlag.HasObject,
         name: 'Hello',
         byteSize: 18,
-        flags: StructureFlag.HasSelector | StructureFlag.HasValue | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
@@ -363,7 +371,7 @@ describe('Structure: optional', function() {
       env.endStructure(floatStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasSelector,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 18,
       });
@@ -407,6 +415,7 @@ describe('Structure: optional', function() {
       env.endStructure(voidStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
+        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 1,
       });
@@ -440,6 +449,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -470,7 +480,7 @@ describe('Structure: optional', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 8,
       });
@@ -502,6 +512,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -516,6 +527,7 @@ describe('Structure: optional', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]Uint8',
         byteSize: 1,
       })
@@ -545,7 +557,7 @@ describe('Structure: optional', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 16,
       });
@@ -582,6 +594,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -596,6 +609,7 @@ describe('Structure: optional', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]Uint8',
         byteSize: 1,
       })
@@ -609,7 +623,7 @@ describe('Structure: optional', function() {
       env.endStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasLength | StructureFlag.IsMultiple,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasLength | StructureFlag.IsMultiple,
         name: '[]Uint8',
         byteSize: 16,
       });
@@ -625,7 +639,7 @@ describe('Structure: optional', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 16,
       });
@@ -658,6 +672,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -730,7 +745,7 @@ describe('Structure: optional', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: structStructure.byteSize + 32,
       });
@@ -757,7 +772,7 @@ describe('Structure: optional', function() {
       expect(ptr[SLOTS][0]).to.not.be.undefined;
       object.$ = null;
       expect(ptr[SLOTS][0]).to.be.undefined;
-      object[POINTER_VISITOR](function({ isActive }) {
+      object[VISIT](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       });
     })
@@ -765,6 +780,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -839,7 +855,7 @@ describe('Structure: optional', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: structStructure.byteSize + 4,
       });
@@ -872,6 +888,7 @@ describe('Structure: optional', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -917,7 +934,7 @@ describe('Structure: optional', function() {
       env.endStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasSelector | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: arrayStructure.byteSize + 32,
       });

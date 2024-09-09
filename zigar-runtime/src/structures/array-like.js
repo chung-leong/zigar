@@ -10,8 +10,8 @@ export default mixin({
         const value = new Proxy(this, proxyHandlers);
         defineProperties(this, {
           [PROXY]: { value },
-          get: { value: get },
-          set: { value: set },
+          get: { value: get.bind(this) },
+          set: { value: set.bind(this) },
         });
         return value;
       },

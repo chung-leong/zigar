@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
+import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
+import { defineValue, encodeBase64 } from '../../src/utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -12,6 +14,7 @@ import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -19,27 +22,33 @@ import MemberAll from '../../src/members/all.js';
 import MemberBool from '../../src/members/bool.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInArray from '../../src/members/pointer-in-array.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
+import ArrayLike from '../../src/structures/array-like.js';
+import Array from '../../src/structures/array.js';
 import Enum from '../../src/structures/enum.js';
+import Optional from '../../src/structures/optional.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
 import Union, {
   isNeededByStructure,
 } from '../../src/structures/union.js';
-import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
-import { defineValue, encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Union, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,  MemberUint,
   AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Enum, Struct,
+  IntConversion, Pointer, PointerInStruct, Optional, ArgStruct, Array, ArrayLike, PointerInArray,
 ]);
 
 describe('Structure: union', function() {
@@ -866,7 +875,7 @@ describe('Structure: union', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: {},
+        structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
@@ -896,17 +905,20 @@ describe('Structure: union', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       const HelloTag = env.defineStructure(enumStructure);
       env.attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -968,7 +980,7 @@ describe('Structure: union', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: {},
+        structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
@@ -998,17 +1010,20 @@ describe('Structure: union', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       const HelloTag = env.defineStructure(enumStructure);
       env.attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1100,17 +1115,20 @@ describe('Structure: union', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       const HelloTag = env.defineStructure(enumStructure);
       env.attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1158,7 +1176,7 @@ describe('Structure: union', function() {
       const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[POINTER_VISITOR](function({ isActive }) {
+      object[VISIT](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
     })
@@ -1204,17 +1222,20 @@ describe('Structure: union', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       const HelloTag = env.defineStructure(enumStructure);
       env.attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1264,7 +1285,7 @@ describe('Structure: union', function() {
       object[MEMORY].setInt16(8, 1, true);
       expect(object.number).to.equal(1234);
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[POINTER_VISITOR](function({ isActive }) {
+      object[VISIT](function({ isActive }) {
         expect(isActive(this)).to.be.false;
       })
     })
@@ -1310,17 +1331,20 @@ describe('Structure: union', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure: enumStructure,
       });
       const HelloTag = env.defineStructure(enumStructure);
       env.attachMember(enumStructure, {
         name: 'pointer',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
-        type: MemberType.Comptime,
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1694,6 +1718,7 @@ describe('Structure: union', function() {
       });
       env.defineStructure(argStruct);
       env.endStructure(argStruct);
+      throw new Error('FIXME');
       env.attachMethod(structure, {
         name: 'next',
         argStruct,

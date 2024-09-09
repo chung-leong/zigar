@@ -144,7 +144,7 @@ export class InvalidInitializer extends TypeError {
 
 export class InvalidArrayInitializer extends InvalidInitializer {
   constructor(structure, arg, shapeless = false) {
-    const { instance: { members: [ member ] }, type, typedArray } = structure;
+    const { instance: { members: [ member ] }, type, constructor } = structure;
     const acceptable = [];
     const primitive = getPrimitiveName(member);
     if (primitive) {
@@ -158,8 +158,8 @@ export class InvalidArrayInitializer extends InvalidInitializer {
     } else {
       acceptable.push(`array of objects`);
     }
-    if (typedArray) {
-      acceptable.push(typedArray.name);
+    if (constructor[TYPED_ARRAY]) {
+      acceptable.push(constructor[TYPED_ARRAY].name);
     }
     if (type === StructureType.Slice && shapeless) {
       acceptable.push(`length`);

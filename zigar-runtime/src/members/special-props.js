@@ -1,4 +1,4 @@
-import { MemberType } from '../constants.js';
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { MEMORY, RESTORE, SENTINEL } from '../symbols.js';
@@ -47,19 +47,18 @@ export default mixin({
       },
     });
     const {
-      constructor,
+      flags,
       instance: { members: [ member ] }
     } = structure;
     // check member type so we don't attach string property to multi-dimensional arrays
-    const isString = [ Uint8Array, Uint16Array ].includes(TypedArray) && member?.type === MemberType.Uint;
     const encoding = `utf-${member?.bitSize}`;
-    const string = isString && markAsSpecial({
+    const string = (flags & StructureFlag.IsString) && markAsSpecial({
       get() {
         const dv = this.dataView;
         const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
         let str = decodeText(ta, encoding);
-        const sentinelValue = constructor[SENTINEL]?.value;
-        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) === sentinel.value) {
+        const sentinelValue = this.constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) === sentinelValue) {
           str = str.slice(0, -1);
         }
         return str;
@@ -68,8 +67,8 @@ export default mixin({
         if (typeof(str) !== 'string') {
           throw new TypeMismatch('a string', str);
         }
-        const sentinelValue = constructor[SENTINEL]?.value;
-        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinel.value) {
+        const sentinelValue = this.constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
           str += String.fromCharCode(sentinelValue);
         }
         const ta = encodeText(str, encoding);

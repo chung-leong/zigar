@@ -12,6 +12,7 @@ import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -19,13 +20,18 @@ import MemberAll from '../../src/members/all.js';
 import MemberBool from '../../src/members/bool.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
+import Optional from '../../src/structures/optional.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
+import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct, {
   isNeededByStructure,
@@ -38,7 +44,7 @@ const Env = defineClass('StructureTest', [
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
   MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
-  StructLike,
+  StructLike, IntConversion, Pointer, Slice, PointerInStruct, Optional, ArgStruct,
 ]);
 
 describe('Structure: struct', function() {
@@ -1529,6 +1535,7 @@ describe('Structure: struct', function() {
       });
       env.defineStructure(argStruct);
       env.endStructure(argStruct);
+      throw new Error('FIXME');
       env.attachMethod(structure, {
         name: 'next',
         argStruct,

@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
+import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import { encodeBase64 } from '../../src/utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -12,6 +14,7 @@ import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -19,6 +22,7 @@ import MemberAll from '../../src/members/all.js';
 import MemberBool from '../../src/members/bool.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInArray from '../../src/members/pointer-in-array.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
@@ -29,18 +33,18 @@ import ArrayLike from '../../src/structures/array-like.js';
 import Array, {
   isNeededByStructure,
 } from '../../src/structures/array.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
+import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { ENTRIES, FINALIZE, INITIALIZE } from '../../src/symbols.js';
-import { encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('ArrayTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
   MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
-  StructLike, Array, ArrayLike,
+  StructLike, Array, ArrayLike, IntConversion, PointerInArray, Pointer, Slice,
 ]);
 
 describe('Structure: array', function() {
@@ -1423,7 +1427,7 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1439,7 +1443,7 @@ describe('Structure: array', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
@@ -1456,12 +1460,12 @@ describe('Structure: array', function() {
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
       // make sure that children don't get vivificated unless the vivificate option is set
-      array[POINTER_VISITOR](function() {
+      array[VISIT](function() {
         pointers.push(this);
       }, {});
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
-      array[POINTER_VISITOR](function({ isMutable, isActive }) {
+      array[VISIT](function({ isMutable, isActive }) {
         try {
           expect(this['*']).to.be.null;
         } catch (err) {
@@ -1479,6 +1483,7 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -1509,7 +1514,7 @@ describe('Structure: array', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
@@ -1534,6 +1539,7 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });

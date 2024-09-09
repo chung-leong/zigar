@@ -23,7 +23,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], offset, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]()) {
+              if (err instanceof TypeError && this[RESTORE]?.()) {
                 return getter.call(this[MEMORY], offset, littleEndian);
               } else {
                 throw err;
@@ -34,7 +34,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], offset, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]()) {
+              if (err instanceof TypeError && this[RESTORE]?.()) {
                 return setter.call(this[MEMORY], offset, value, littleEndian);
               } else {
                 throw err;
@@ -48,7 +48,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], index * byteSize, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]()) {
+              if (err instanceof TypeError && this[RESTORE]?.()) {
                 return getter.call(this[MEMORY], index * byteSize, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);
@@ -59,7 +59,7 @@ export default mixin({
             try {
               return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
             } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]()) {
+              if (err instanceof TypeError && this[RESTORE]?.()) {
                 return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
               } else {
                 throw adjustRangeError(member, index, err);

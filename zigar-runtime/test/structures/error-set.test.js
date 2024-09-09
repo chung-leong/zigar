@@ -4,6 +4,7 @@ import { defineClass } from '../../src/environment.js';
 import AccessorAll from '../../src/accessors/all.js';
 import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -15,14 +16,15 @@ import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import ErrorSet, {
-    isNeededByStructure,
+  isNeededByStructure,
 } from '../../src/structures/error-set.js';
 import Primitive from '../../src/structures/primitive.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('ErrorSetTest', [
   AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin,  ErrorSet, MemberObject
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin,  ErrorSet, MemberObject,
+  IntConversion,
 ]);
 
 describe('Structure: error-set', function() {
@@ -301,7 +303,7 @@ describe('Structure: error-set', function() {
       // define another error afterward
       const errorStructure2 = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet1',
+        name: 'ErrorSet2',
         byteSize: 2,
       });
       env.attachMember(errorStructure2, {

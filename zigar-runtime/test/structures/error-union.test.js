@@ -8,6 +8,7 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -15,6 +16,7 @@ import MemberBool from '../../src/members/bool.js';
 import MemberFloat from '../../src/members/float.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PoitnerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
@@ -22,20 +24,23 @@ import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import MemberVoid from '../../src/members/void.js';
 import All from '../../src/structures/all.js';
+import ArrayLike from '../../src/structures/array-like.js';
 import ErrorSet from '../../src/structures/error-set.js';
 import ErrorUnion, {
   isNeededByStructure,
 } from '../../src/structures/error-union.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
+import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { ENVIRONMENT, INITIALIZE, SLOTS } from '../../src/symbols.js';
+import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('ErrorUnionTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   ErrorSet, ErrorUnion, AccessorBool, AccessorFloat128, MemberBool, MemberFloat, MemberObject, Struct,
-  StructLike, MemberUint, MemberVoid,
+  StructLike, MemberUint, MemberVoid, IntConversion, Pointer, PoitnerInStruct, Slice, ArrayLike,
 ]);
 
 describe('Structure: error-union', function() {
@@ -134,8 +139,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -178,9 +182,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(10));
       expect(object.$).to.equal(0n);
       object.$ = 1234n;
@@ -248,9 +251,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello({ error: 'Unable to create object' });
       expect(() => object.$).to.throw(MyError.UnableToCreateObject);
     })
@@ -269,7 +271,6 @@ describe('Structure: error-union', function() {
         structure: anyErrorStructure,
       });
       env.defineStructure(anyErrorStructure);
-      const { constructor: AnyError } = anyErrorStructure;
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'MyError',
@@ -282,8 +283,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -326,9 +326,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: anyErrorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(10));
       expect(object.$).to.equal(0n);
       object.$ = 1234n;
@@ -351,8 +350,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -395,9 +393,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(10);
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
@@ -417,8 +414,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -461,9 +457,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should define an error union with internal struct', function() {
@@ -480,8 +475,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -528,6 +522,7 @@ describe('Structure: error-union', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '!Animal',
         byteSize: 10,
       });
@@ -548,9 +543,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello({ dog: 17, cat: 234 });
       expect(object).to.be.an('!Animal');
       expect(object.$).to.be.an('Animal');
@@ -574,8 +568,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -599,6 +592,7 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -609,9 +603,8 @@ describe('Structure: error-union', function() {
         byteSize: 4,
         structure: {},
       });
-      env.defineStructure(intStructure);
+      const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
@@ -651,9 +644,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(16));
       object[MEMORY].setInt16(8, 16, true)
       expect(() => object.$).to.throw();
@@ -675,8 +667,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -698,24 +689,38 @@ describe('Structure: error-union', function() {
         }
       }, true);
       env.endStructure(errorStructure);
+      const uintStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        name: 'u8',
+        byteSize: 1,
+      });
+      env.attachMember(uintStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      env.defineStructure(uintStructure);
+      env.endStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        name: '[_]Uint8',
+        flags: StructureFlag.IsString,
+        name: '[_]u8',
         byteSize: 1,
       })
       env.attachMember(sliceStructure, {
         type: MemberType.Uint,
         bitSize: 8,
         byteSize: 1,
-        structure: { constructor: function() {}, typedArray: Uint8Array },
+        structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
       env.endStructure(sliceStructure);
-      const { constructor: Uint8Slice } = sliceStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
-        name: '[]Uint8',
+        name: '[]u8',
         byteSize: 16,
       });
       env.attachMember(ptrStructure, {
@@ -751,9 +756,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -770,13 +774,13 @@ describe('Structure: error-union', function() {
       });
       env.attachMember(errorStructure, {
         type: MemberType.Uint,
+        flags: StructureFlag.HasValue,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -800,6 +804,7 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -810,9 +815,8 @@ describe('Structure: error-union', function() {
         byteSize: 4,
         structure: {},
       });
-      env.defineStructure(intStructure);
+      const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
@@ -831,7 +835,7 @@ describe('Structure: error-union', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
         name: 'Hello',
         byteSize: 16,
       });
@@ -852,9 +856,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello(new Int32(777));
       const object2 = new Hello(object);
       expect(object.$['*']).to.equal(777);
@@ -874,8 +877,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -909,9 +911,8 @@ describe('Structure: error-union', function() {
         byteSize: 4,
         structure: {},
       });
-      env.defineStructure(intStructure);
+      const Int32 = env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
@@ -951,9 +952,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello(new Int32(777));
       const ptr = object.$;
       object.$ = MyError.UnableToCreateObject;
@@ -973,8 +973,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1017,9 +1016,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const dv = new DataView(new ArrayBuffer(10));
       dv.setInt16(8, 32, true)
       const object = Hello(dv);
@@ -1040,8 +1038,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1084,9 +1081,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello(123n);
       expect(object.$).to.equal(123n);
       expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
@@ -1106,8 +1102,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1150,9 +1145,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       expect(() => new Hello(null)).to.throw(TypeError);
       expect(() => new Hello({})).to.throw(SyntaxError);
       expect(() => new Hello('Evil')).to.throw(SyntaxError);
@@ -1171,8 +1165,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1215,9 +1208,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object1 = new Hello(123n);
       const object2 = new Hello(MyError.UnableToCreateObject);
       const object3 = new Hello({ base64: object1.base64 });
@@ -1239,8 +1231,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1283,9 +1274,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello(1234n);
       expect(object.$).to.equal(1234n);
       object.$ = undefined;
@@ -1305,8 +1295,7 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(errorStructure);
-      const { constructor: MyError } = errorStructure;
+      const MyError = env.defineStructure(errorStructure);
       env.attachMember(errorStructure, {
         name: 'UnableToRetrieveMemoryLocation',
         type: MemberType.Object,
@@ -1349,9 +1338,8 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: errorStructure,
       });
-      env.defineStructure(structure);
+      const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Hello } = structure;
       const object = new Hello(MyError.UnableToCreateObject);
       expect(() => object.$).to.throw(MyError.UnableToCreateObject);
       object.$ = undefined;

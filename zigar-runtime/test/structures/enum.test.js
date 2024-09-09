@@ -6,6 +6,7 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -18,7 +19,7 @@ import MemberTypeMixin from '../../src/members/type.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import Enum, {
-    isNeededByStructure,
+  isNeededByStructure,
 } from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -26,7 +27,7 @@ import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.
 const Env = defineClass('EnumTest', [
   AccessorAll, MemberInt, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
   SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
-  AccessorJumboInt, Enum, MemberObject
+  AccessorJumboInt, Enum, MemberObject, IntConversion
 ]);
 
 describe('Structure: enum', function() {

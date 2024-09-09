@@ -1,19 +1,35 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { defineClass } from '../../src/environment.js';
+import { ENVIRONMENT, INITIALIZE } from '../../src/symbols.js';
+
+import AccessorAll from '../../src/accessors/all.js';
+import AccessorBool from '../../src/accessors/bool.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
+import MemberAll from '../../src/members/all.js';
+import MemberBool from '../../src/members/bool.js';
+import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
+import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
+import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
 import Opaque, {
   isNeededByStructure,
 } from '../../src/structures/opaque.js';
-import { ENVIRONMENT, INITIALIZE } from '../../src/symbols.js';
+import Optional from '../../src/structures/optional.js';
+import Pointer from '../../src/structures/pointer.js';
+import StructLike from '../../src/structures/struct-like.js';
 
 const Env = defineClass('StructureTest', [
-  All, Opaque, DataCopying, StructureAcquisition, ViewManagement, SpecialMethods,
+  All, Opaque, DataCopying, StructureAcquisition, ViewManagement, SpecialMethods, Pointer,
+  MemberAll, MemberPrimitive, MemberUint, IntConversion, AccessorAll, Optional, MemberInt,
+  MemberBool, AccessorBool, ArgStruct, MemberObject, StructLike, PointerInStruct,
 ]);
 
 describe('Structure: opaque', function() {
@@ -130,7 +146,7 @@ describe('Structure: opaque', function() {
       });
       env.attachMember(optStructure, {
         type: MemberType.Bool,
-        bitSize: 8,
+        bitSize: 1,
         bitOffset: 32,
         byteSize: 1,
         structure: {},
@@ -162,6 +178,7 @@ describe('Structure: opaque', function() {
       });
       env.defineStructure(argStruct);
       env.endStructure(argStruct);
+      throw new Error('FIXME')
       env.attachMethod(structure, {
         name: 'next',
         argStruct,

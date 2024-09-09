@@ -1,6 +1,7 @@
 import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
+import { always } from '../utils.js';
 
 export default mixin({
   defineVisitorStruct(structure, visitorOptions = {}) {
@@ -50,6 +51,8 @@ export default mixin({
 export function isNeededByStructure(structure) {
   const { type, flags } = structure;
   switch (type) {
+    case StructureType.ArgStruct:
+    case StructureType.VariadicStruct:
     case StructureType.Struct:
     case StructureType.Union:
     case StructureType.ErrorUnion:

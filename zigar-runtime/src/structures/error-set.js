@@ -24,11 +24,11 @@ export default mixin({
         instance: { members: [ member ] },
         static: { members: [], template: { SLOTS: {} } },
       };
-      this.currentGlobalSet = this.defineStructure(ae);
+      this.defineStructure(ae);
       this.finalizeStructure(ae);
+      this.currentGlobalSet = ae.constructor;
     }
     if (this.currentGlobalSet && name === 'anyerror') {
-      structure.constructor = this.currentGlobalSet;
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);
@@ -58,9 +58,14 @@ export default mixin({
   finalizeErrorSet(structure, staticDescriptors) {
     const {
       constructor,
+      name,
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
+    if (this.currentGlobalSet && name === 'anyerror') {
+      // already finalized
+      return false;
+    }
     const items = template?.[SLOTS] ?? {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);

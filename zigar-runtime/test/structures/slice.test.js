@@ -12,6 +12,7 @@ import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -40,7 +41,7 @@ const Env = defineClass('ArrayTest', [
   SpecialProps, StructureAcquisition, ViewManagement, AccessorJumbo, AccessorJumboInt, Struct,
   AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned, MemberUint,
   AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Slice,
-  ArrayLike, Sentinel,
+  ArrayLike, Sentinel, IntConversion,
 ]);
 
 describe('Structure: slice', function() {

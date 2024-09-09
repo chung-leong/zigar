@@ -6,6 +6,7 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import { MemberType, StructureType } from '../../src/constants.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -22,14 +23,14 @@ import ArrayLike from '../../src/structures/array-like.js';
 import Array from '../../src/structures/array.js';
 import Primitive from '../../src/structures/primitive.js';
 import Vector, {
-    isNeededByStructure,
+  isNeededByStructure,
 } from '../../src/structures/vector.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('VectorTest', [
   AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, Vector, MemberObject, MemberFloat,
-  MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array,
+  MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array, IntConversion,
 ]);
 
 describe('Structure: vector', function() {
@@ -197,7 +198,6 @@ describe('Structure: vector', function() {
         length: 4,
         byteSize: 4 * 4,
       });
-      const constructor = function() {};
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 32,
@@ -236,7 +236,6 @@ describe('Structure: vector', function() {
         length: 4,
         byteSize: 4 * 4,
       });
-      const constructor = function() {};
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 32,
@@ -332,18 +331,30 @@ describe('Structure: vector', function() {
     })
     it('should correctly cast a data view with byteOffset', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
-      const constructor = function() {};
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -356,9 +367,22 @@ describe('Structure: vector', function() {
     })
     it('should define structure for holding an float vector', function() {
       const env = new Env();
+      const floatStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'f32',
+        byteSize: 4,
+      })
+      env.attachMember(floatStructure, {
+        type: MemberType.Float,
+        bitSize: 32,
+        byteSize: 4,
+        structure: floatStructure,
+      });
+      env.defineStructure(floatStructure);
+      env.endStructure(floatStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
+        name: '@Vector(4, f32)',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -366,7 +390,7 @@ describe('Structure: vector', function() {
         type: MemberType.Float,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Float32Array },
+        structure: floatStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -382,6 +406,19 @@ describe('Structure: vector', function() {
     })
     it('should have special properties', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i64',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 64,
+        byteSize: 8,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
@@ -392,7 +429,7 @@ describe('Structure: vector', function() {
         type: MemberType.Int,
         bitSize: 64,
         byteSize: 8,
-        structure: { constructor, typedArray: BigInt64Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -402,6 +439,19 @@ describe('Structure: vector', function() {
     })
     it('should not have typedArray prop when it is a 128-bit vector', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i128',
+        byteSize: 16,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 128,
+        byteSize: 16,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
@@ -412,7 +462,7 @@ describe('Structure: vector', function() {
         type: MemberType.Int,
         bitSize: 128,
         byteSize: 16,
-        structure: { constructor, typedArray: null },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -422,6 +472,19 @@ describe('Structure: vector', function() {
     })
     it('should allow casting to an int vector', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
@@ -432,7 +495,7 @@ describe('Structure: vector', function() {
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -446,6 +509,19 @@ describe('Structure: vector', function() {
     })
     it('should initialize vector with vector of the same type', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
@@ -456,7 +532,7 @@ describe('Structure: vector', function() {
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -466,6 +542,19 @@ describe('Structure: vector', function() {
     })
     it('should initialize vector with generator', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
@@ -476,7 +565,7 @@ describe('Structure: vector', function() {
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);
@@ -642,18 +731,30 @@ describe('Structure: vector', function() {
     })
     it('should accept special initializers', function() {
       const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'u32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
-      const constructor = function() {};
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 32,
         byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array },
+        structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
       env.endStructure(structure);

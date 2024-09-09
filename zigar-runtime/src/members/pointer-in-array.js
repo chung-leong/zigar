@@ -1,6 +1,7 @@
 import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
+import { always } from '../utils.js';
 
 export default mixin({
   defineVisitorArray(structure) {

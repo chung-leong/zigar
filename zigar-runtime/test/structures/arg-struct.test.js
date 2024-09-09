@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
+import { VISIT } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -10,6 +11,7 @@ import AccessorUnaligned from '../../src/accessors/unaligned.js';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { ArgumentCountMismatch } from '../../src/errors.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -17,6 +19,7 @@ import MemberAll from '../../src/members/all.js';
 import MemberBool from '../../src/members/bool.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import MemberUint from '../../src/members/uint.js';
@@ -24,6 +27,7 @@ import All from '../../src/structures/all.js';
 import ArgStruct, {
   isNeededByStructure,
 } from '../../src/structures/arg-struct.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
@@ -32,7 +36,7 @@ const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
   StructureAcquisition, ViewManagement, ArgStruct, AccessorBool, AccessorFloat128, RuntimeSafety,
   MemberBool, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned,
-  MemberObject, Struct, StructLike, SpecialMethods,
+  MemberObject, Struct, StructLike, SpecialMethods, IntConversion, Pointer, PointerInStruct,
 ]);
 
 describe('Structure: arg-struct', function() {
@@ -306,12 +310,12 @@ describe('Structure: arg-struct', function() {
         slot: 1,
         structure: ptrStructure,
       });
-      env.defineStructure(structure);
-      const ArgStruct = env.endStructure(structure);
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
       const int = new Int32(1234);
       const object = new ArgStruct([ int ], 'hello', 0);
       const pointers = [], mutabilities = [];
-      object[POINTER_VISITOR](function({ isMutable }) {
+      object[VISIT](function({ isMutable }) {
         pointers.push(this);
         mutabilities.push(isMutable(this));
       }, { vivificate: true });

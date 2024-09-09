@@ -122,9 +122,10 @@ export default mixin({
     staticDescriptors[SLOTS] = (props.length > 0) && defineValue(template[SLOTS]);
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    f?.call(this, structure, staticDescriptors);
-    defineProperties(constructor.prototype, descriptors);
-    defineProperties(constructor, staticDescriptors);
+    if (f?.call(this, structure, staticDescriptors) !== false) {
+      defineProperties(constructor.prototype, descriptors);
+      defineProperties(constructor, staticDescriptors);
+    }
   },
   createConstructor(structure, handlers = {}) {
     const {
@@ -277,7 +278,7 @@ export default mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.(copyPointer, { vivificate: true, source: template });
+          this[VISIT]?.('copy', { vivificate: true, source: template });
         }
       }
       for (const key of argKeys) {
