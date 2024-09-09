@@ -8,6 +8,7 @@ import Jumbo from '../../src/accessors/jumbo.js';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -17,7 +18,6 @@ import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
 import PointerInArray from '../../src/members/pointer-in-array.js';
 import MemberPrimitive from '../../src/members/primitive.js';
-import MemberSize from '../../src/members/size.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberTypeMixin from '../../src/members/type.js';
@@ -41,7 +41,7 @@ const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberObject, MemberAll, All, Pointer, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
   MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
-  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, MemberSize,
+  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, IntConversion,
 ]);
 
 describe('Structure: pointer', function() {
@@ -859,7 +859,6 @@ describe('Structure: pointer', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
         byteSize: addressSize / 8,
-        hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,

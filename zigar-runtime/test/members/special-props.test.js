@@ -1,4 +1,4 @@
-
+import { expect } from "chai";
 
 describe('isTypedArray', function() {
   it('should return true when given the correct TypedArray', function() {

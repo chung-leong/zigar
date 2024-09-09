@@ -1,35 +1,23 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
-import AccessorAll from '../../src/accessors/all.js';
 import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
-import All from '../../src/members/all.js';
-import Size, {
+import IntConversion, {
   isNeededByMember,
   isNeededByStructure,
-} from '../../src/members/size.js';
+} from '../../src/features/int-conversion.js';
 
-const Env = defineClass('MemberTest', [ Size, All, AccessorAll ]);
+const Env = defineClass('MemberTest', [ IntConversion ]);
 
-describe('Member: size', function() {
+describe('Feature: int-conversion', function() {
   describe('isNeededByMember', function() {
     it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Int, bitSize: 32, byteSize: 4, flags: MemberFlag.IsSize },
-        { type: MemberType.Uint, bitSize: 64, byteSize: 8, flags: MemberFlag.IsSize },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
+      const member = { type: MemberType.Int, bitSize: 24, byteSize: 4, bitOffset: 8 };
+      expect(isNeededByMember(member)).to.be.true;
     })
     it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, byteSize: 1, bitOffset: 32 },
-        { type: MemberType.Uint, bitSize: 32, byteSize: 4 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
+      const member = { type: MemberType.Object, slot: 1 };
+      expect(isNeededByMember(member)).to.be.false;
     })
   })
   describe('isNeededByStructure', function() {
@@ -42,18 +30,17 @@ describe('Member: size', function() {
       expect(isNeededByStructure(structure)).to.be.false;
     })
   })
-  describe('addSizeAdjustment', function() {
+  describe('addIntConversion', function() {
     it('should put wrapper around setter', function() {
       const env = new Env();
       const list = [];
-      const getAccessor = env.addSizeAdjustment(function(access, member) {
+      const getAccessor = env.addIntConversion(function(access, member) {
         return function(offset, value) {
           list.push(value)
         };
       });
       const member1 = {
         type: MemberType.Int,
-        flags: MemberFlag.IsSize,
         bitSize: 32,
         byteSize: 4,
         bitOffset: 1,
@@ -61,7 +48,6 @@ describe('Member: size', function() {
       const set1 = getAccessor('set', member1);
       const member2 = {
         type: MemberType.Uint,
-        flags: MemberFlag.IsSize,
         bitSize: 64,
         byteSize: 8,
         bitOffset: 1,
@@ -73,5 +59,22 @@ describe('Member: size', function() {
       set2.call(null, 1, 1234);
       expect(list).to.eql([ 1234, 1234, 1234n, 1234n ]);
     })
+    it('should put wrapper around setter', function() {
+      const env = new Env();
+      const getAccessor = env.addIntConversion(function(access, member) {
+        return () => 1234n;
+      });
+      const member = {
+        type: MemberType.Uint,
+        flags: MemberFlag.IsSize,
+        bitSize: 64,
+        byteSize: 8,
+        bitOffset: 1,
+      };
+      const get = getAccessor('get', member);
+      expect(get.call(null, 1, true)).to.equal(1234);
+    })
+
   })
 })
+

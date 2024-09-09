@@ -10,7 +10,7 @@ export default mixin({
     const dataView = markAsSpecial({
       get() {
         if (process.env.TARGET === 'wasm') {
-          this[RESTORE]();
+          this[RESTORE]?.();
         }
         return this[MEMORY];
       },

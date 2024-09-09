@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType } from '../constants.js';
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({
@@ -7,9 +7,7 @@ export default mixin({
     if (this.runtimeSafety) {
       getAccessor = this.addRuntimeCheck(getAccessor);
     }
-    if (member.flags & MemberFlag.IsSize) {
-      getAccessor = this.addSizeAdjustment(getAccessor);
-    }
+    getAccessor = this.addIntConversion(getAccessor);
     return this.defineMemberUsing(member, getAccessor);
   },
 });

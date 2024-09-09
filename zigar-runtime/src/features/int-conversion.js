@@ -1,12 +1,8 @@
-import { MemberFlag, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({
-  imports: {
-    isRuntimeSafetyActive: { argType: '', returnType: 'b' },
-  },
-
-  addSizeAdjustment(getAccessor) {
+  addIntConversion(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor.call(this, access, member);
       if (access === 'set') {
@@ -15,16 +11,19 @@ export default mixin({
           accessor.call(this, offset, Type(value), littleEndian);
         };
       } else {
-        return function(offset, littleEndian) {
-          return Number(accessor.call(this, offset, littleEndian));
-        };
+        if (member.flags & MemberFlag.IsSize) {
+          return function(offset, littleEndian) {
+            return Number(accessor.call(this, offset, littleEndian));
+          };
+        }
       }
+      return accessor;
     };
   },
 });
 
 export function isNeededByMember(member) {
-  return !!(member.flags & MemberFlag.IsSize);
+  return member.type === MemberType.Int || member.type === MemberType.Uint;
 }
 
 export function isNeededByStructure(structure) {
