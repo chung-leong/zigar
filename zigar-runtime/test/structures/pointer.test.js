@@ -1,12 +1,19 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { InvalidSliceLength } from '../../src/errors.js';
+import {
+  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+  UPDATE,
+} from '../../src/symbols.js';
+import { defineValue } from '../../src/utils.js';
+import { addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
 import JumboUint128 from '../../src/accessors/jumbo-uint.js';
 import Jumbo from '../../src/accessors/jumbo.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { InvalidSliceLength } from '../../src/errors.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
@@ -34,18 +41,13 @@ import Primitive from '../../src/structures/primitive.js';
 import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
-  UPDATE,
-} from '../../src/symbols.js';
-import { defineValue } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberObject, MemberAll, All, Pointer, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
   MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
   MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, IntConversion,
-  RuntimeSafety, MemberSentinel,
+  RuntimeSafety, MemberSentinel, Baseline,
 ]);
 
 describe('Structure: pointer', function() {
@@ -3830,15 +3832,3 @@ describe('Structure: pointer', function() {
   })
 })
 
-const addressSize = process.env.TARGET === 'wasm' ? 32 : 64;
-
-function usize(value) {
-  return (addressSize === 64) ? BigInt(value) : Number(value);
-}
-
-const getUsize = (addressSize === 64)
-? DataView.prototype.getBigUint64
-: DataView.prototype.getUint32;
-const setUsize = (addressSize === 64)
-? DataView.prototype.setBigUint64
-: DataView.prototype.setUint32;

@@ -6,8 +6,9 @@ import All from '../../src/accessors/all.js';
 import Bool, {
   isNeededByMember
 } from '../../src/accessors/bool.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, Bool ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, Bool ]);
 
 describe('Accessor: bool', function() {
   describe('isNeededByMember', function() {

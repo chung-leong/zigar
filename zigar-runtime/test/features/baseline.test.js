@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { capture } from '../capture.js';
+import { capture } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBoolUnalign from '../../src/accessors/bool1-unaligned.js';

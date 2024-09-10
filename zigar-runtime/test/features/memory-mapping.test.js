@@ -1,15 +1,17 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
+import { InvalidDeallocation } from '../../src/errors.js';
+import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
+import { defineProperties, defineProperty } from '../../src/utils.js';
 
+import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import ViewManagement from '../../src/features/view-management.js';
-import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
-import { defineProperties, defineProperty } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [
-  MemoryMapping, DataCopying, CallMarshalingOutbound, ViewManagement,
+  Baseline, MemoryMapping, DataCopying, CallMarshalingOutbound, ViewManagement,
 ]);
 
 describe('Feature: memory-mapping', function() {

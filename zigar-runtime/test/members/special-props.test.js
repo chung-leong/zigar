@@ -1,5 +1,10 @@
 import { expect } from "chai";
 
+import { defineClass } from "../../src/environment.js";
+import Baseline from '../../src/features/baseline.js';
+
+const Env = defineClass('MemberTest', [ Baseline ]);
+
 describe('isTypedArray', function() {
   it('should return true when given the correct TypedArray', function() {
     const ta = new Int32Array(4);

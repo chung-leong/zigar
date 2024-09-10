@@ -28,6 +28,7 @@ export default mixin({
       }
     };
   },
+  getCopyFunction,
 });
 
 export function isNeededByStructure(structure) {

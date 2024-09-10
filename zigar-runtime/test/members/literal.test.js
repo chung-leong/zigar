@@ -1,14 +1,15 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-
 import { MemberType } from '../../src/constants.js';
+import { defineClass } from '../../src/environment.js';
+import { SLOTS } from '../../src/symbols.js';
+
+import Baseline from '../../src/features/baseline.js';
 import All from '../../src/members/all.js';
 import Literal, {
   isNeededByMember,
 } from '../../src/members/literal.js';
-import { SLOTS } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ All, Literal ]);
+const Env = defineClass('MemberTest', [ Baseline, All, Literal ]);
 
 describe('Member: literal', function() {
   describe('isNeededByMember', function() {

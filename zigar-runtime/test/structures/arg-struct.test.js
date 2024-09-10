@@ -1,5 +1,7 @@
 import { expect } from 'chai';
+import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ArgumentCountMismatch } from '../../src/errors.js';
 import { VISIT } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
@@ -8,8 +10,7 @@ import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorIntUnaligned from '../../src/accessors/int-unaligned.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { ArgumentCountMismatch } from '../../src/errors.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
@@ -37,6 +38,7 @@ const Env = defineClass('StructureTest', [
   StructureAcquisition, ViewManagement, ArgStruct, AccessorBool, AccessorFloat128, RuntimeSafety,
   MemberBool, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned,
   MemberObject, Struct, StructLike, SpecialMethods, IntConversion, Pointer, PointerInStruct,
+  Baseline,
 ]);
 
 describe('Structure: arg-struct', function() {

@@ -5,8 +5,9 @@ import { defineClass } from '../../src/environment.js';
 import BoolUnaligned, {
   isNeededByMember
 } from '../../src/accessors/bool1-unaligned.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ BoolUnaligned ]);
+const Env = defineClass('AccessorTest', [ Baseline, BoolUnaligned ]);
 
 describe('Accessor: bool1-unaligned', function() {
   describe('isNeededByMember', function() {

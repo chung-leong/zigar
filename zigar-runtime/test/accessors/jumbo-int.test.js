@@ -7,8 +7,9 @@ import JumboInt, {
   isNeededByMember
 } from '../../src/accessors/jumbo-int.js';
 import Jumbo from '../../src/accessors/jumbo.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, Jumbo, JumboInt ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, Jumbo, JumboInt ]);
 
 describe('Accessor: jumbo-int', function() {
   describe('isNeededByMember', function() {

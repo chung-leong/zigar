@@ -4,13 +4,30 @@ import {
   getArrayEntries,
   getArrayEntriesIterator,
   getArrayIterator,
+  getZigIterator,
 } from '../src/iterators.js';
 import { MEMORY } from '../src/symbols.js';
 import { defineProperties } from '../src/utils.js';
 
 describe('Iterator functions', function() {
+  describe('getZigIterator', function() {
+    it('should return an iterator for a Zig iterator', function() {
+      const object = {
+        index: 0,
+        next() {
+          if (this.index < 4) {
+            return this.index++;
+          } else {
+            return null;
+          }
+        },
+        [Symbol.iterator]: getZigIterator
+      };
+      expect([ ...object ]).to.eql([ 0, 1, 2, 3 ]);
+    })
+  })
   describe('getArrayIterator', function() {
-    it('should return a iterator', function() {
+    it('should return an iterator', function() {
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
@@ -41,7 +58,7 @@ describe('Iterator functions', function() {
     })
   })
   describe('getArrayEntriesIterator', function() {
-    it('should return a iterator', function() {
+    it('should return an iterator', function() {
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);

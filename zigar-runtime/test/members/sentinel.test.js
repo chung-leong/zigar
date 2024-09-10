@@ -1,8 +1,10 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { MEMORY } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import MemberAll from '../../src/members/all.js';
 import MemberPrimitive from '../../src/members/primitive.js';
@@ -10,10 +12,9 @@ import Sentinel, {
   isNeededByStructure,
 } from '../../src/members/sentinel.js';
 import MemberUint from '../../src/members/uint.js';
-import { MEMORY } from '../../src/symbols.js';
 
 const Env = defineClass('MemberTest', [
-  AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel, IntConversion
+  Baseline, AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel, IntConversion
 ]);
 
 describe('Member: sentinel', function() {

@@ -1,12 +1,13 @@
 import { expect } from 'chai';
+import { MemberType, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 
-import { MemberType, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import CallMarshalingInbound, {
   isNeededByStructure,
 } from '../../src/features/call-marshaling-inbound.js';
 
-const Env = defineClass('FeatureTest', [ CallMarshalingInbound ]);
+const Env = defineClass('FeatureTest', [ Baseline, CallMarshalingInbound ]);
 
 describe('Feature: call-marshaling-outbound', function() {
   describe('isNeededByStructure', function() {

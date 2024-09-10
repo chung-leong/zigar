@@ -1,16 +1,37 @@
 import { expect } from 'chai';
+import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
 
-// import DataCopying from '../../src/features/data-copying.js';
-import { MemberType, StructureType } from '../../src/constants.js';
+import AccessorAll from '../../src/accessors/all.js';
+import AccessorBool from '../../src/accessors/bool.js';
+import Baseline from '../../src/features/baseline.js';
+import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
+import ModuleLoading from '../../src/features/module-loading.js';
 import PointerSynchronization from '../../src/features/pointer-synchronization.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
+import MemberAll from '../../src/members/all.js';
+import MemberBool from '../../src/members/bool.js';
+import MemberObject from '../../src/members/object.js';
+import PointerInStruct from '../../src/members/pointer-in-struct.js';
+import MemberPrimitive from '../../src/members/primitive.js';
+import MemberUint from '../../src/members/uint.js';
+import MemberVoid from '../../src/members/void.js';
 import StructureAll from '../../src/structures/all.js';
-import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
+import Pointer from '../../src/structures/pointer.js';
+import StructurePrimitive from '../../src/structures/primitive.js';
+import StructLike from '../../src/structures/struct-like.js';
+import Struct from '../../src/structures/struct.js';
 
 const Env = defineClass('FeatureTest', [
-  StructureAcquisition, StructureAll, ViewManagement, PointerSynchronization
+  Baseline, StructureAcquisition, StructureAll, ViewManagement, PointerSynchronization, Struct,
+  StructLike, DataCopying, MemberAll, MemberBool, MemberPrimitive, StructurePrimitive, MemberUint,
+  IntConversion, AccessorAll, AccessorBool, ModuleLoading, Pointer, MemberObject, PointerInStruct,
+  ArgStruct, MemberVoid, MemoryMapping,
 ]);
 
 describe('Feature: structure-acquisition', function() {
@@ -259,15 +280,15 @@ describe('Feature: structure-acquisition', function() {
     it('should invoke the factory thunk', function() {
       const env = new Env();
       env.getFactoryThunk = function() {
-        return 1234;
+        return 0x1234;
       };
-      let thunkId, options;
+      let thunkAddress, options;
       env.invokeThunk = function(...args) {
-        thunkId = args[0];
-        options = args[1][0];
+        thunkAddress = args[0];
+        options = args[2][0];
       };
       env.acquireStructures({ omitFunctions: true });
-      expect(thunkId).to.equal(1234);
+      expect(thunkAddress).to.equal(0x1234);
       expect(options.omitFunctions).to.be.true;
     })
   })
@@ -421,6 +442,7 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
       });
@@ -429,6 +451,7 @@ describe('Feature: structure-acquisition', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
       env.finalizeStructure(intStructure);

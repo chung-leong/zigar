@@ -1,14 +1,15 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-
 import { MemberType } from '../../src/constants.js';
+import { defineClass } from '../../src/environment.js';
+import { MEMORY } from '../../src/symbols.js';
+
+import Baseline from '../../src/features/baseline.js';
 import All from '../../src/members/all.js';
 import Void, {
   isNeededByMember,
 } from '../../src/members/void.js';
-import { MEMORY } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ All, Void ]);
+const Env = defineClass('MemberTest', [ Baseline, All, Void ]);
 
 describe('Member: void', function() {
   describe('isNeededByMember', function() {

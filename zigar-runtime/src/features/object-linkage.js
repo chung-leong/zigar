@@ -4,8 +4,6 @@ import {
 } from '../symbols.js';
 
 export default mixin({
-  variables: [],
-
   linkVariables(writeBack) {
     if (process.env.TARGET === 'wasm') {
       // linkage occurs when WASM compilation is complete and functions have been imported

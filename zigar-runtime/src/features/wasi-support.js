@@ -1,10 +1,11 @@
 import { mixin } from '../environment.js';
+import { Exit } from '../errors.js';
 
 export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
     customWASI: null,
 
-    setCustomWASI() {
+    setCustomWASI(wasi) {
       if (wasi && this.hasCodeSource) {
         throw new Error('Cannot set WASI interface after compilation has already begun (consider disabling topLevelAwait)');
       }

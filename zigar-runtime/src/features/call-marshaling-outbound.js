@@ -1,5 +1,6 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
+import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
 
 export default mixin({
   context: undefined,
@@ -76,9 +77,6 @@ export default mixin({
     imports: {
       runThunk: null,
       runVariadicThunk: null,
-    },
-    exports: {
-      runFunction: null,
     },
 
     invokeThunk(thunkAddress, fnAddress, args) {

@@ -5,6 +5,7 @@ import { ENVIRONMENT, INITIALIZE } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -29,7 +30,7 @@ import StructLike from '../../src/structures/struct-like.js';
 const Env = defineClass('StructureTest', [
   All, Opaque, DataCopying, StructureAcquisition, ViewManagement, SpecialMethods, Pointer,
   MemberAll, MemberPrimitive, MemberUint, IntConversion, AccessorAll, Optional, MemberInt,
-  MemberBool, AccessorBool, ArgStruct, MemberObject, StructLike, PointerInStruct,
+  MemberBool, AccessorBool, ArgStruct, MemberObject, StructLike, PointerInStruct, Baseline,
 ]);
 
 describe('Structure: opaque', function() {

@@ -13,15 +13,16 @@ export default mixin({
   defineUnion(structure, descriptors) {
     const {
       flags,
-      instance: { members,  },
+      instance: { members },
     } = structure;
     const exclusion = !!(flags & StructureFlag.HasSelector);
     const valueMembers = (exclusion) ? members.slice(0, -1) : members;
     const selectorMember = (exclusion) ? members[members.length - 1] : null;
     const { get: getSelector, set: setSelector } = this.defineMember(selectorMember);
-    const { get: getSelectorNumber } = this.defineMember(selectorMember);
+    const { get: getSelectorNumber } = this.defineMember(selectorMember, false);
     const getActiveField = (flags & StructureFlag.HasTag)
     ? function() {
+        debugger;
         const item = getSelector.call(this);
         return item[NAME];
       }
@@ -120,7 +121,7 @@ export default mixin({
           case 'default':
             return getActiveField.call(this);
           default:
-            return getSelectorNumber(this);
+            return getSelectorNumber.call(this);
         }
       }
     };
@@ -143,10 +144,23 @@ export default mixin({
       : () => false,
     });
     descriptors[ENTRIES] = { get: getUnionEntries };
-    descriptors[PROPS] = defineValue(props);
+    descriptors[PROPS] = (flags & StructureFlag.HasTag) ? {
+      get() {
+        return [ getActiveField.call(this) ];
+      }
+    } : defineValue(props);
     descriptors[GETTERS] = defineValue(getters);
     return constructor;
   },
+  finalizeUnion(structure, staticDescriptors) {
+    const {
+      flags,
+      instance: { members },
+    } = structure;
+    if (flags & StructureFlag.HasTag) {
+      staticDescriptors.tag = defineValue(members[members.length - 1].structure.constructor);
+    }
+  }
 });
 
 export function isNeededByStructure(structure) {

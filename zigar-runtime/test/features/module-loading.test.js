@@ -1,18 +1,31 @@
+import { expect } from 'chai';
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { WASI } from 'wasi';
 import { defineClass } from '../../src/environment.js';
+import { capture } from '../test-utils.js';
 
+import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
 import ModuleLoading from '../../src/features/module-loading.js';
+import StreamRedirection from '../../src/features/stream-redirection.js';
+import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
+import WasiSupport from '../../src/features/wasi-support.js';
 
+debugger;
 const Env = defineClass('FeatureTest', [
-  ModuleLoading, DataCopying, CallMarshalingOutbound, ViewManagement,
+  Baseline, ModuleLoading, DataCopying, CallMarshalingOutbound, ViewManagement, WasiSupport,
+  StreamRedirection, StructureAcquisition, MemoryMapping,
 ]);
 
 describe('Feature: module-loading', function() {
   describe('releaseFunctions', function() {
     it('should make all imported functions throw', function() {
-      const env = new Environment();
+      debugger;
+      const env = new Env();
       env.imports = {
         runThunk: function() {},
       };
@@ -26,7 +39,7 @@ describe('Feature: module-loading', function() {
   })
   describe('abandonModule', function() {
     it('should release imported functions and variables', function() {
-      const env = new Environment();
+      const env = new Env();
       env.imports = {
         runThunk: function() {},
       };
@@ -34,7 +47,7 @@ describe('Feature: module-loading', function() {
         env[name] = f;
       }
       expect(() => env.runThunk()).to.not.throw();
-      env.abandon();
+      env.abandonModule();
       expect(() => env.runThunk()).to.throw();
       expect(env.abandoned).to.be.true;
     })
@@ -45,7 +58,12 @@ describe('Feature: module-loading', function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
-        env.loadModule(buffer);
+        env.loadModule(buffer, {
+          memoryInitial: 128,
+          memoryMax: undefined,
+          tableInitial: 18,
+          multithreaded: false,
+        });
         const wasi = new WASI({
           version: 'preview1',
           args: [],
@@ -54,13 +72,18 @@ describe('Feature: module-loading', function() {
             '/local': fileURLToPath(new URL('.', import.meta.url)),
           },
         });
-        await env.init(wasi);
+        await env.initialize(wasi);
       })
       it('should throw when WASM source has already been obtained', async function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
-        await env.instantiateWebAssembly(buffer);
+        await env.instantiateWebAssembly(buffer, {
+          memoryInitial: 128,
+          memoryMax: undefined,
+          tableInitial: 18,
+          multithreaded: false,
+        });
         const wasi = new WASI({
           version: 'preview1',
           args: [],
@@ -82,9 +105,9 @@ describe('Feature: module-loading', function() {
       it('should release objects stored in value table', function() {
         const env = new Env();
         const index = env.getObjectIndex({});
-        expect(env.valueTable[index]).to.be.an('object');
+        expect(env.valueMap.get(index)).to.be.an('object');
         env.clearExchangeTable();
-        expect(env.valueTable[index]).to.be.undefined;
+        expect(env.valueMap.get(index)).to.be.undefined;
       })
     })
     describe('getObjectIndex', function() {
@@ -155,6 +178,7 @@ describe('Feature: module-loading', function() {
       it('should store string in value table', function() {
         const env = new Env();
         const string = 'hello world';
+        debugger;
         const index = env.toWebAssembly('s', string);
         const result = env.fromWebAssembly('s', index);
         expect(result).to.equal(string);
@@ -227,12 +251,12 @@ describe('Feature: module-loading', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new Env();
         const exports = env.exportFunctions();
-        expect(exports._allocateHostMemory).to.be.a('function');
+        expect(exports._captureString).to.be.a('function');
         expect(exports._beginStructure).to.be.a('function');
       })
     })
     describe('importFunctions', function() {
-      it('should create methods in the environment object', function() {
+      it('should attach methods to environment', function() {
         const env = new Env();
         let freed;
         const exports = {
@@ -242,7 +266,6 @@ describe('Feature: module-loading', function() {
           },
           runThunk: () => {},
           runVariadicThunk: () => {},
-          isRuntimeSafetyActive: () => {},
           getFactoryThunk: () => {},
           flushStdout: () => {},
           garbage: () => {},
@@ -252,7 +275,6 @@ describe('Feature: module-loading', function() {
         expect(env.freeExternMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
         expect(env.runVariadicThunk).to.be.a('function');
-        expect(env.isRuntimeSafetyActive).to.be.a('function');
         expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
         expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
       })
@@ -268,7 +290,12 @@ describe('Feature: module-loading', function() {
           [Symbol.toStringTag]: 'Response',
         };
         try {
-          const wasm = await env.instantiateWebAssembly(response);
+          const wasm = await env.instantiateWebAssembly(response, {
+            memoryInitial: 128,
+            memoryMax: undefined,
+            tableInitial: 18,
+            multithreaded: false,
+          });
         } catch (err) {
         }
       })
@@ -276,7 +303,12 @@ describe('Feature: module-loading', function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
-        const wasm = await env.instantiateWebAssembly(buffer);
+        const wasm = await env.instantiateWebAssembly(buffer, {
+          memoryInitial: 128,
+          memoryMax: undefined,
+          tableInitial: 18,
+          multithreaded: false,
+        });
       })
     })
     describe('loadModule', function() {
@@ -285,7 +317,12 @@ describe('Feature: module-loading', function() {
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         expect(env.getFactoryThunk).to.be.undefined;
-        await env.loadModule(buffer);
+        await env.loadModule(buffer, {
+          memoryInitial: 128,
+          memoryMax: undefined,
+          tableInitial: 18,
+          multithreaded: false,
+        });
         expect(env.allocateExternMemory).to.be.a('function');
         expect(env.freeExternMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
@@ -395,6 +432,45 @@ describe('Feature: module-loading', function() {
         const wasi = env.getWASIImport();
         expect(() => wasi.proc_exit()).to.throw(Error)
           .with.property('message', 'Program exited');
+      })
+    })
+  } else if (process.env.TARGET === 'node') {
+    describe('exportFunctions', function() {
+      it('should export functions of the class needed by Zig code', function() {
+        const env = new Env();
+        const exports = env.exportFunctions();
+        expect(exports.allocateHostMemory).to.be.a('function');
+        expect(exports.getViewAddress).to.be.a('function');
+      })
+    })
+    describe('importFunctions', function() {
+      it('should attach methods to environment', function() {
+        const env = new Env();
+        let freed;
+        const exports = {
+          allocateExternMemory: () => {},
+          freeExternMemory: (type, address, len, align) => {
+            freed = { type, address, len, align };
+          },
+          runThunk: () => {},
+          runVariadicThunk: () => {},
+          getBufferAddress: () => {},
+          copyExternBytes: () => {},
+          getFactoryThunk: () => {},
+          flushStdout: () => {},
+          garbage: () => {},
+        };
+        env.importFunctions(exports);
+        expect(env.allocateExternMemory).to.be.a('function');
+        expect(env.freeExternMemory).to.be.a('function');
+        expect(env.runThunk).to.be.a('function');
+        expect(env.runVariadicThunk).to.be.a('function');
+        expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
+        expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
+      })
+      it('should throw when a function is missing', function() {
+        const env = new Env();
+        expect(() => env.importFunctions({})).to.throw(Error);
       })
     })
   }

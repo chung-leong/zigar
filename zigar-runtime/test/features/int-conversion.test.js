@@ -1,13 +1,14 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 
-import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import IntConversion, {
   isNeededByMember,
   isNeededByStructure,
 } from '../../src/features/int-conversion.js';
 
-const Env = defineClass('MemberTest', [ IntConversion ]);
+const Env = defineClass('MemberTest', [ Baseline, IntConversion ]);
 
 describe('Feature: int-conversion', function() {
   describe('isNeededByMember', function() {

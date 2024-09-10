@@ -6,8 +6,9 @@ import All from '../../src/accessors/all.js';
 import UintUnaligned, {
   isNeededByMember
 } from '../../src/accessors/uint-unaligned.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, UintUnaligned ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, UintUnaligned ]);
 
 describe('Accessor: uint-unaligned', function() {
   describe('isNeededByMember', function() {

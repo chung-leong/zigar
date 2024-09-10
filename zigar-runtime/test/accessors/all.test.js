@@ -5,8 +5,9 @@ import { defineClass } from '../../src/environment.js';
 import All, {
   isNeededByMember,
 } from '../../src/accessors/all.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All ]);
+const Env = defineClass('AccessorTest', [ Baseline, All ]);
 
 describe('Accessor: all', function() {
   describe('isNeededByMember', function() {

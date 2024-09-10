@@ -1,13 +1,14 @@
 import { expect } from 'chai';
+import { MemberType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 
-import { MemberType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import All from '../../src/members/all.js';
 import Unsupported, {
   isNeededByMember,
 } from '../../src/members/unsupported.js';
 
-const Env = defineClass('MemberTest', [ All, Unsupported ]);
+const Env = defineClass('MemberTest', [ Baseline, All, Unsupported ]);
 
 describe('Member: unsupported', function() {
   describe('isNeededByMember', function() {

@@ -1,13 +1,14 @@
 import { expect } from 'chai';
+import { MemberType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 
-import { MemberType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import All from '../../src/members/all.js';
 import Undefined, {
   isNeededByMember,
 } from '../../src/members/undefined.js';
 
-const Env = defineClass('MemberTest', [ All, Undefined ]);
+const Env = defineClass('MemberTest', [ Baseline, All, Undefined ]);
 
 describe('Member: undefined', function() {
   describe('isNeededByMember', function() {

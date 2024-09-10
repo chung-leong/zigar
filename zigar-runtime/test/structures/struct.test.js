@@ -1,5 +1,9 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
+import { defineValue, encodeBase64 } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -10,9 +14,10 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -36,15 +41,14 @@ import StructLike from '../../src/structures/struct-like.js';
 import Struct, {
   isNeededByStructure,
 } from '../../src/structures/struct.js';
-import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
-import { defineValue, encodeBase64 } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
   MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
-  StructLike, IntConversion, Pointer, Slice, PointerInStruct, Optional, ArgStruct,
+  StructLike, IntConversion, Pointer, Slice, PointerInStruct, Optional, ArgStruct, Baseline,
+  MemoryMapping,
 ]);
 
 describe('Structure: struct', function() {
@@ -1378,15 +1382,19 @@ describe('Structure: struct', function() {
     })
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new Env();
-      let nextAddress = 0x1000n;
+      let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress;
-        nextAddress += BigInt(len * 0x0F);
+        nextAddress += usize(len * 0x0F);
         return address;
       };
-      env.obtainExternBuffer = function(address, len) {
-        return new ArrayBuffer(len);
-      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'i32',

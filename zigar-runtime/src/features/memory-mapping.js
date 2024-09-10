@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { AlignmentConflict } from '../errors.js';
+import { AlignmentConflict, InvalidDeallocation } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import { add, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
@@ -227,12 +227,13 @@ export default mixin({
     exports: {
       allocateHostMemory: { argType: 'ii', returnType: 'v' },
       freeHostMemory: { argType: 'iii' },
+      getViewAddress: { argType: 'v', returnType: 'i' },
     },
 
     allocateHostMemory(len, align) {
       // allocate memory in both JavaScript and WASM space
       const constructor = { [ALIGN]: align };
-      const copier = getMemoryCopier(len);
+      const { value: copier } = this.defineCopier(len);
       const dv = this.allocateRelocMemory(len, align);
       const shadowDV = this.allocateShadowMemory(len, align);
       // create a shadow for the relocatable memory
@@ -306,7 +307,7 @@ export default mixin({
     copyExternBytes(dst, address, len) {
       const { memory } = this;
       const src = new DataView(memory.buffer, address, len);
-      const copy = getCopyFunction(len);
+      const copy = this.getCopyFunction(len);
       copy(dst, src);
     },
   } : process.env.TARGET === 'node' ? {
@@ -319,6 +320,7 @@ export default mixin({
     exports: {
       allocateHostMemory: null,
       freeHostMemory: null,
+      getViewAddress: null,
     },
 
     allocateHostMemory(len, align) {

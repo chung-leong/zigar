@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
@@ -12,7 +13,7 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
@@ -44,7 +45,7 @@ const Env = defineClass('ArrayTest', [
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   Struct, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,
   MemberUint, AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject,
-  StructLike, Array, ArrayLike, IntConversion, PointerInArray, Pointer, Slice,
+  StructLike, Array, ArrayLike, IntConversion, PointerInArray, Pointer, Slice, Baseline,
 ]);
 
 describe('Structure: array', function() {

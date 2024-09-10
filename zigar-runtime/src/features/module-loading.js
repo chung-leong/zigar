@@ -1,6 +1,8 @@
 import { mixin } from '../environment.js';
 
 export default mixin({
+  exports: {},
+  imports: {},
   released: false,
   abandoned: false,
 
@@ -17,9 +19,9 @@ export default mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.setMultithread(false);
+      this.setMultithread?.(false);
       this.releaseFunctions();
-      this.unlinkVariables();
+      this.unlinkVariables?.();
       this.abandoned = true;
     }
   },
@@ -40,7 +42,7 @@ export default mixin({
       }
     },
     getObjectIndex(object) {
-      if (object) {
+      if (object != null) {
         let index = this.valueIndices.get(object);
         if (index === undefined) {
           index = this.nextValueIndex++;
@@ -89,6 +91,11 @@ export default mixin({
       const imports = {};
       for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
+        if (process.env.DEV) {
+          if (!fn) {
+            throw new Error(`Unable to export function: ${name}`);
+          }
+        }
         imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
       }
       return imports;
@@ -104,7 +111,7 @@ export default mixin({
         this[name] = this.importFunction(fn, argType, returnType);
       }
     },
-    async instantiateWebAssembly(source, options = {}) {
+    async instantiateWebAssembly(source, options) {
       const {
         memoryInitial,
         memoryMax,
@@ -153,12 +160,23 @@ export default mixin({
       const imports = {};
       for (const [ name, alias ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
+        if (process.env.DEV) {
+          if (!fn) {
+            throw new Error(`Unable to export function: ${name}`);
+          }
+        }
         imports[name] = fn.bind(this);
       }
       return imports;
     },
     importFunctions(exports) {
-      for (const [ name, fn ] of Object.entries(exports)) {
+      for (const [ name, alias ] of Object.entries(this.imports)) {
+        const fn = exports[alias ?? name];
+        if (process.env.DEV) {
+          if (!fn) {
+            throw new Error(`Unable to import function: ${name}`);
+          }
+        }
         this[name] = fn;
       }
     },

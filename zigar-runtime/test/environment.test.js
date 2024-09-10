@@ -115,6 +115,10 @@ describe('Environment class', function() {
       ];
       expect(() => defineClass('Hello', mixins)).to.not.throw();
     })
+    it('should throw when the same mixin is listed twoce', function() {
+      const mixin = {};
+      expect(() => defineClass('Hello', [ mixin, mixin ])).to.throw();
+    })
   })
   describe('defineEnvironment', function() {
     it('should define a class using collected info', function() {

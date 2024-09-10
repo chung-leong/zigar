@@ -27,12 +27,21 @@ export function defineEnvironment() {
 }
 
 export function defineClass(name, mixins) {
-  const props = {
-    littleEndian: true,
-  };
+  const props = {};
   const constructor = function() {
-    Object.assign(this, props);
+    for (const [ name, object ] of Object.entries(props)) {
+      this[name] = structuredClone(object);
+    }
   };
+  if (process.env.DEV) {
+    const map = new Map();
+    for (const mixin of mixins) {
+      if (map.get(mixin)) {
+        throw new Error('Duplicate mixin');
+      }
+      map.set(mixin, true);
+    }
+  }
   const { prototype } = constructor;
   defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
@@ -41,14 +50,14 @@ export function defineClass(name, mixins) {
         defineProperty(prototype, name, defineValue(object));
       } else {
         let current = props[name];
-        if (current !== undefined) {
-          if (typeof(current) === 'object') {
+        if (current === undefined) {
+          props[name] = object;
+        } else {
+          if (current?.constructor === Object) {
             Object.assign(current, object);
           } else if (current !== object) {
             throw new Error(`Duplicate property: ${name}`);
           }
-        } else {
-          props[name] = object;
         }
       }
     }

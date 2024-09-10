@@ -5,8 +5,9 @@ import { defineClass } from '../../src/environment.js';
 import Float128, {
   isNeededByMember
 } from '../../src/accessors/float128.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ Float128 ]);
+const Env = defineClass('AccessorTest', [ Baseline, Float128 ]);
 
 describe('Accessor: float128', function() {
   describe('isNeededByMember', function() {

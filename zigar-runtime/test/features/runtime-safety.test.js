@@ -2,12 +2,13 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 
 import { MemberType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import RuntimeSafety, {
   getIntRange,
   isNeededByMember,
 } from '../../src/features/runtime-safety.js';
 
-const Env = defineClass('FeatureTest', [ RuntimeSafety ]);
+const Env = defineClass('FeatureTest', [ Baseline, RuntimeSafety ]);
 
 describe('Feature: runtime-safety', function() {
   describe('isNeededByMember', function() {

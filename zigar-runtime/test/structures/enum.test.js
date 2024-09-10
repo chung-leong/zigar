@@ -1,10 +1,12 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -22,12 +24,11 @@ import Enum, {
   isNeededByStructure,
 } from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
-import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('EnumTest', [
   AccessorAll, MemberInt, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
-  SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
-  AccessorJumboInt, Enum, MemberObject, IntConversion
+  SpecialMethods, SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin,
+  AccessorJumbo, AccessorJumboInt, Enum, MemberObject, IntConversion, Baseline,
 ]);
 
 describe('Structure: enum', function() {

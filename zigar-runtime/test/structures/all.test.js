@@ -1,8 +1,11 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ALIGN, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
+import { defineProperty } from '../../src/utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -21,13 +24,11 @@ import Enum from '../../src/structures/enum.js';
 import Primitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { ALIGN, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
-import { defineProperty } from '../../src/utils.js';
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, ViewManagement, StructureAcquisition, StructLike, Struct, MemberUint, MemberObject,
-  Enum, IntConversion,
+  Enum, IntConversion, Baseline,
 ]);
 
 describe('Structure: all', function() {

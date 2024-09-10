@@ -3,6 +3,7 @@ import { defineClass } from '../../src/environment.js';
 import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
 
+import Baseline from '../../src/features/baseline.js';
 import DataCopying, {
   getCopyFunction,
   getResetFunction,
@@ -11,7 +12,7 @@ import DataCopying, {
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import ViewManagement from '../../src/features/view-management.js';
 
-const Env = defineClass('FeatureTest', [ DataCopying, MemoryMapping, ViewManagement ]);
+const Env = defineClass('FeatureTest', [ Baseline, DataCopying, MemoryMapping, ViewManagement ]);
 
 describe('Feature: data-copying', function() {
   describe('isNeededByStructure', function() {

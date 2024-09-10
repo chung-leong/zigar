@@ -10,6 +10,7 @@ import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorIntUnaligned from '../../src/accessors/int-unaligned.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
@@ -39,7 +40,7 @@ const Env = defineClass('StructureTest', [
   StructureAcquisition, ViewManagement, VariadicStruct, AccessorBool, AccessorFloat128,
   RuntimeSafety, MemberBool, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned,
   AccessorUnaligned, MemberObject, Struct, StructLike, SpecialMethods, MemberFloat,
-  IntConversion, Pointer, PointerInStruct, MemoryMapping,
+  IntConversion, Pointer, PointerInStruct, MemoryMapping, Baseline,
 ]);
 
 describe('Structure: variadic-struct', function() {

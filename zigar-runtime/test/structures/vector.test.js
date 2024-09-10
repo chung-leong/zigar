@@ -1,10 +1,12 @@
 import { expect } from 'chai';
+import { MemberType, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
-import { MemberType, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -25,12 +27,11 @@ import Primitive from '../../src/structures/primitive.js';
 import Vector, {
   isNeededByStructure,
 } from '../../src/structures/vector.js';
-import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('VectorTest', [
   AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, Vector, MemberObject, MemberFloat,
-  MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array, IntConversion,
+  MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array, IntConversion, Baseline,
 ]);
 
 describe('Structure: vector', function() {

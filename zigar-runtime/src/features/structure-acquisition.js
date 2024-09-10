@@ -1,6 +1,7 @@
 import { CONST_TARGET, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
+import { decodeText } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -114,6 +115,7 @@ export default mixin({
       bitOffset: 0,
       bitSize: 1,
       byteSize: 1,
+      structure: {},
     });
     this.attachMember(options, {
       type: MemberType.Bool,
@@ -121,11 +123,12 @@ export default mixin({
       bitOffset: 8,
       bitSize: 1,
       byteSize: 1,
+      structure: {},
     });
     this.defineStructure(options);
     const structure = this.beginStructure({
       type: StructureType.ArgStruct,
-      flags: 0,
+      flags: StructureFlag.HasObject | StructureFlag.HasSlot,
       name: 'ArgFactory',
       byteSize: 2,
     });
@@ -134,7 +137,8 @@ export default mixin({
       name: 'retval',
       bitOffset: 0,
       bitSize: 0,
-      byteSize: 0
+      byteSize: 0,
+      structure: {},
     });
     this.attachMember(structure, {
       type: MemberType.Object,
@@ -152,7 +156,7 @@ export default mixin({
       omitFunctions = false,
       omitVariables = isElectron(),
     } = options;
-    this.resetGlobalErrorSet();
+    this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
@@ -235,7 +239,6 @@ export default mixin({
       castView: { argType: 'iibv', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
-      getViewAddress: { argType: 'v', returnType: 'i' },
       beginDefinition: { returnType: 'v' },
       insertInteger: { argType: 'vsi', alias: 'insertProperty' },
       insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
@@ -243,10 +246,8 @@ export default mixin({
       insertObject: { argType: 'vsv', alias: 'insertProperty' },
       beginStructure: { argType: 'v', returnType: 'v' },
       attachMember: { argType: 'vvb' },
-      attachMethod: { argType: 'vvb' },
       createTemplate: { argType: 'v', returnType: 'v' },
       attachTemplate: { argType: 'vvb' },
-      defineStructure: { argType: 'v' },
       endStructure: { argType: 'v' },
     },
     imports: {

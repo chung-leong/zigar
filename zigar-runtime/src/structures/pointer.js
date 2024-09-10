@@ -10,7 +10,7 @@ import {
   LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
   TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT
 } from '../symbols.js';
-import { defineProperties, defineValue, findElements, getProxy } from '../utils.js';
+import { always, defineProperties, defineValue, findElements, getProxy } from '../utils.js';
 
 export default mixin({
   definePointer(structure, descriptors) {
@@ -43,7 +43,6 @@ export default mixin({
       byteSize: addressSize,
       structure: { byteSize: addressSize },
     }) : {};
-    const zero = (addressSize > 4) ? 0n : 0;
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
@@ -109,8 +108,8 @@ export default mixin({
           }
         }
       } else if (pointer[MEMORY][FIXED]) {
-        setAddress.call(this, zero);
-        setLength?.call?.(this, zero);
+        setAddress.call(this, 0);
+        setLength?.call?.(this, 0);
       }
       pointer[SLOTS][0] = arg ?? null;
       if (flags & StructureFlag.HasLength) {

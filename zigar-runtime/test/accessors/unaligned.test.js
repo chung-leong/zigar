@@ -7,8 +7,9 @@ import Unaligned, {
   getBitAlignFunction,
   isNeededByMember,
 } from '../../src/accessors/unaligned.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, Unaligned ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, Unaligned ]);
 
 describe('Accessor: unaligned', function() {
   describe('isNeededByMember', function() {

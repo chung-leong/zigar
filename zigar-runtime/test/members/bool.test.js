@@ -1,17 +1,20 @@
 import { expect } from 'chai';
+import { MemberType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { MEMORY } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
-import { MemberType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import All from '../../src/members/all.js';
 import Bool, {
   isNeededByMember,
 } from '../../src/members/bool.js';
 import Primitive from '../../src/members/primitive.js';
-import { MEMORY } from '../../src/symbols.js';
 
-const Env = defineClass('MemberTest', [ All, Bool, Primitive, AccessorAll, AccessorBool ]);
+const Env = defineClass('MemberTest', [
+  Baseline, All, Bool, Primitive, AccessorAll, AccessorBool
+]);
 
 describe('Member: bool', function() {
   describe('isNeededByMember', function() {

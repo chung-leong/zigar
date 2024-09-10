@@ -4,12 +4,13 @@ import { defineClass } from '../../src/environment.js';
 import { COPY, MEMORY } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import ViewManagement, {
   isNeededByStructure,
 } from '../../src/features/view-management.js';
 
-const Env = defineClass('FeatureTest', [ ViewManagement, DataCopying ]);
+const Env = defineClass('FeatureTest', [ Baseline, ViewManagement, DataCopying ]);
 
 describe('Feature: view-management', function() {
   describe('isNeededByStructure', function() {

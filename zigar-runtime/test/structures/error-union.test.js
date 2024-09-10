@@ -1,12 +1,14 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
 import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -34,13 +36,12 @@ import Primitive from '../../src/structures/primitive.js';
 import Slice from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 
 const Env = defineClass('ErrorUnionTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
   ErrorSet, ErrorUnion, AccessorBool, AccessorFloat128, MemberBool, MemberFloat, MemberObject, Struct,
-  StructLike, MemberUint, MemberVoid, IntConversion, Pointer, PoitnerInStruct, Slice, ArrayLike,
+  StructLike, MemberUint, MemberVoid, IntConversion, Pointer, PoitnerInStruct, Slice, ArrayLike, Baseline,
 ]);
 
 describe('Structure: error-union', function() {

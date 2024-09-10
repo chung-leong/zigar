@@ -15,9 +15,6 @@ export default mixin({
         throw new Error(`Missing method: ${handleName}`);
       }
     }
-    if (!structure) {
-      console.log(member);
-    }
     /* c8 ignore end */
     const descriptor = f.call(this, member);
     if (applyTransform) {

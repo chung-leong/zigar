@@ -1,13 +1,16 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-
 import { StructureType } from '../../src/constants.js';
-import CallMarshalingOutbound, {
-    CallContext,
-    isNeededByStructure,
-} from '../../src/features/call-marshaling-outbound.js';
+import { defineClass } from '../../src/environment.js';
+import { Exit } from '../../src/errors.js';
 
-const Env = defineClass('FeatureTest', [ CallMarshalingOutbound ]);
+import Baseline from '../../src/features/baseline.js';
+import CallMarshalingOutbound, {
+  CallContext,
+  isNeededByStructure,
+} from '../../src/features/call-marshaling-outbound.js';
+import { ALIGN, MEMORY, VISIT } from '../../src/symbols.js';
+
+const Env = defineClass('FeatureTest', [ Baseline, CallMarshalingOutbound ]);
 
 describe('Feature: call-marshaling-outbound', function() {
   describe('isNeededByStructure', function() {

@@ -5,6 +5,7 @@ import { MEMORY } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorUint from '../../src/accessors/uint.js';
+import Baseline from '../../src/features/baseline.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import All from '../../src/members/all.js';
 import Primitive from '../../src/members/primitive.js';
@@ -14,7 +15,7 @@ import Uint, {
 } from '../../src/members/uint.js';
 
 const Env = defineClass('MemberTest', [
-  All, Uint, Primitive, AccessorAll, AccessorUint, IntConversion
+  Baseline, All, Uint, Primitive, AccessorAll, AccessorUint, IntConversion
 ]);
 
 describe('Member: uint', function() {

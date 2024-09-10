@@ -1,5 +1,9 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
+import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { encodeBase64 } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -10,9 +14,10 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
@@ -20,6 +25,7 @@ import MemberAll from '../../src/members/all.js';
 import MemberBool from '../../src/members/bool.js';
 import MemberInt from '../../src/members/int.js';
 import MemberObject from '../../src/members/object.js';
+import PointerInArray from '../../src/members/pointer-in-array.js';
 import MemberPrimitive from '../../src/members/primitive.js';
 import Sentinel from '../../src/members/sentinel.js';
 import SpecialMethods from '../../src/members/special-methods.js';
@@ -27,21 +33,23 @@ import SpecialProps from '../../src/members/special-props.js';
 import MemberUint from '../../src/members/uint.js';
 import All from '../../src/structures/all.js';
 import ArrayLike from '../../src/structures/array-like.js';
+import Array from '../../src/structures/array.js';
+import Pointer from '../../src/structures/pointer.js';
 import Primitive from '../../src/structures/primitive.js';
 import Slice, {
   isNeededByStructure,
 } from '../../src/structures/slice.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
-import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
-import { encodeBase64 } from '../../src/utils.js';
+import Vector from '../../src/structures/vector.js';
 
 const Env = defineClass('ArrayTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, StructureAcquisition, ViewManagement, AccessorJumbo, AccessorJumboInt, Struct,
   AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned, MemberUint,
   AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Slice,
-  ArrayLike, Sentinel, IntConversion,
+  ArrayLike, Sentinel, IntConversion, Baseline, Array, Vector, MemoryMapping, Pointer,
+  PointerInArray,
 ]);
 
 describe('Structure: slice', function() {
@@ -306,6 +314,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: 'Slice',
         byteSize: 1,
       });
@@ -344,6 +353,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: 'Slice',
         byteSize: 2,
       });
@@ -482,6 +492,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -518,6 +529,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -554,6 +566,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -610,11 +623,15 @@ describe('Structure: slice', function() {
     it('should initialize correctly from a string when fixed is specified', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
-        return 0x1000n;
+        return usize(0x1000);
       };
-      env.obtainExternBuffer = function(address, len) {
-        return new ArrayBuffer(len);
-      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else if (process.env.TARGET === 'node') {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
@@ -631,6 +648,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -667,6 +685,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -1259,7 +1278,7 @@ describe('Structure: slice', function() {
       env.attachMember(structStructure, {
         name: 'dog',
         type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
+        flags: 0,
         byteSize: 4,
         bitOffset: 0,
         bitSize: 32,
@@ -1268,7 +1287,7 @@ describe('Structure: slice', function() {
       env.attachMember(structStructure, {
         name: 'cat',
         type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
+        flags: 0,
         byteSize: 4,
         bitOffset: 32,
         bitSize: 32,
@@ -1686,6 +1705,7 @@ describe('Structure: slice', function() {
         byteSize: 4,
         bitOffset: 0,
         bitSize: 32,
+        structure: {},
       });
       env.attachMember(structStructure, {
         name: 'cat',
@@ -1694,6 +1714,7 @@ describe('Structure: slice', function() {
         byteSize: 4,
         bitOffset: 32,
         bitSize: 32,
+        structure: {},
       });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
@@ -1716,6 +1737,7 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -1724,6 +1746,7 @@ describe('Structure: slice', function() {
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
+        structure: {},
       });
       const Int32 = env.defineStructure(uintStructure);
       env.endStructure(uintStructure);
@@ -1899,6 +1922,7 @@ describe('Structure: slice', function() {
     })
     it('should should throw when sentinel appears too early', function() {
       const env = new Env();
+      env.runtimeSafety = true;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
@@ -1915,9 +1939,10 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      }, { runtimeSafety: true });
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 8,
@@ -1946,6 +1971,7 @@ describe('Structure: slice', function() {
     })
     it('should should throw when sentinel is missing', function() {
       const env = new Env();
+      env.runtimeSafety = true;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
@@ -1962,9 +1988,10 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      }, { runtimeSafety: true });
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 8,
@@ -1994,6 +2021,7 @@ describe('Structure: slice', function() {
     })
     it('should should throw when sentinel is missing even if runtimeSafety is false', function() {
       const env = new Env();
+      env.runtimeSafety = false;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'u8',
@@ -2011,9 +2039,10 @@ describe('Structure: slice', function() {
       env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      }, { runtimeSafety: false });
+      });
       env.attachMember(structure, {
         type: MemberType.Uint,
         bitSize: 8,

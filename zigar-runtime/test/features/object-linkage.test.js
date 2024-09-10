@@ -1,18 +1,19 @@
 import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
-
-import DataCopying from '../../src/features/data-copying.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ObjectLinkage from '../../src/features/object-linkage.js';
-import ViewManagement from '../../src/features/view-management.js';
-import StructureAll from '../../src/structures/all.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
 import { defineProperties, ObjectCache } from '../../src/utils.js';
 
+import Baseline from '../../src/features/baseline.js';
+import DataCopying from '../../src/features/data-copying.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
+import ObjectLinkage from '../../src/features/object-linkage.js';
+import ViewManagement from '../../src/features/view-management.js';
+import StructureAll from '../../src/structures/all.js';
+
 const Env = defineClass('FeatureTest', [
-  ObjectLinkage, StructureAll, DataCopying, ViewManagement, MemoryMapping,
+  Baseline, ObjectLinkage, StructureAll, DataCopying, ViewManagement, MemoryMapping,
 ]);
 
 describe('Feature: object-linkage', function() {

@@ -2,12 +2,11 @@ import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
-  console: globalThis.console,
+  consoleObject: null,
   consolePending: [],
   consoleTimeout: 0,
 
   writeToConsole(dv) {
-    const { console } = this;
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory
       const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
@@ -18,8 +17,7 @@ export default mixin({
       } else {
         const beginning = array.subarray(0, index);
         const remaining = array.subarray(index + 1);
-        const list = [ ...this.consolePending, beginning ];
-        console.log(decodeText(list));
+        this.writeToConsoleNow([ ...this.consolePending, beginning ]);
         this.consolePending.splice(0);
         if (remaining.length > 0) {
           this.consolePending.push(remaining);
@@ -29,7 +27,7 @@ export default mixin({
       this.consoleTimeout = 0;
       if (this.consolePending.length > 0) {
         this.consoleTimeout = setTimeout(() => {
-          console.log(decodeText(this.consolePending));
+          this.writeToConsoleNow(this.consolePending);
           this.consolePending.splice(0);
         }, 250);
       }
@@ -38,9 +36,13 @@ export default mixin({
       console.error(err);
     }
   },
+  writeToConsoleNow(array) {
+    const c = this.consoleObject ?? globalThis.console;
+    c.log?.call?.(c, decodeText(array));
+  },
   flushConsole() {
     if (this.consolePending.length > 0) {
-      console.log(decodeText(this.consolePending));
+      this.writeToConsoleNow(this.consolePending);
       this.consolePending.splice(0);
       clearTimeout(this.consoleTimeout);
     }

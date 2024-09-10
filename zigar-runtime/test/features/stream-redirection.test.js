@@ -2,9 +2,10 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import { capture, delay } from '../test-utils.js';
 
+import Baseline from '../../src/features/baseline.js';
 import StreamRedirection from '../../src/features/stream-redirection.js';
 
-const Env = defineClass('FeatureTest', [ StreamRedirection ]);
+const Env = defineClass('FeatureTest', [ Baseline, StreamRedirection ]);
 
 describe('Feature: stream-redirection', function() {
   describe('writeToConsole', function() {

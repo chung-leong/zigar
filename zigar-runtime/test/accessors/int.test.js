@@ -6,8 +6,9 @@ import All from '../../src/accessors/all.js';
 import Int, {
   isNeededByMember
 } from '../../src/accessors/int.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, Int ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, Int ]);
 
 describe('Accessor: int', function() {
   describe('isNeededByMember', function() {

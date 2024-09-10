@@ -6,8 +6,9 @@ import All from '../../src/accessors/all.js';
 import BigInt, {
   isNeededByMember
 } from '../../src/accessors/big-int.js';
+import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ All, BigInt ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, BigInt ]);
 
 describe('Accessor: big-int', function() {
   describe('isNeededByMember', function() {

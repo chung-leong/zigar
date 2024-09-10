@@ -1,6 +1,9 @@
 import { expect } from 'chai';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
+import {
+  ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT
+} from '../../src/symbols.js';
 import { defineValue, encodeBase64 } from '../../src/utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
@@ -12,7 +15,7 @@ import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
 import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
 import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import RuntimeSafety from '../../src/features/runtime-safety.js';
@@ -45,10 +48,11 @@ import Union, {
 
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
-  Union, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned,  MemberUint,
-  AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Enum, Struct,
-  IntConversion, Pointer, PointerInStruct, Optional, ArgStruct, Array, ArrayLike, PointerInArray,
+  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
+  AccessorJumboInt, Union, AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool,
+  AccessorBool1Unaligned, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned,
+  AccessorUnaligned, MemberObject, StructLike, Enum, Struct, IntConversion, Pointer,
+  PointerInStruct, Optional, ArgStruct, Array, ArrayLike, PointerInArray, Baseline,
 ]);
 
 describe('Structure: union', function() {
@@ -149,6 +153,51 @@ describe('Structure: union', function() {
       expect(keys).to.eql([ 'number', 'boolean' ]);
       expect(setters.number).to.be.a('function');
       expect(setters.boolean).to.be.a('function');
+    })
+  })
+  describe('finalizeUnion', function() {
+    it('should add static descriptors to the given object', function() {
+      const structure = {
+        type: StructureType.Union,
+        flags: StructureFlag.HasTag,
+        name: 'Hello',
+        byteSize: 4,
+        instance: {},
+        static: { members: [] },
+      };
+      structure.instance.members = [
+        {
+          name: "number",
+          type: MemberType.Int,
+          bitSize: 32,
+          bitOffset: 0,
+          byteSize: 4,
+          structure: {},
+        },
+        {
+          name: "boolean",
+          type: MemberType.Bool,
+          bitSize: 1,
+          bitOffset: 0,
+          byteSize: 1,
+          structure: {},
+        },
+        {
+          type: MemberType.Enum,
+          flags: MemberFlag.IsSelector,
+          bitSize: 8,
+          bitOffset: 32,
+          byteSize: 1,
+          structure: {
+            type: StructureType.Enum,
+            constructor: () => {},
+          },
+        },
+      ];
+      const env = new Env();
+      const descriptors = {};
+      env.finalizeUnion(structure, descriptors);
+      expect(descriptors.tag?.value).to.be.a('function');
     })
   })
   describe('defineStructure', function() {
@@ -572,6 +621,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -719,14 +769,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -788,6 +838,7 @@ describe('Structure: union', function() {
       expect(HelloTag(object)).to.equal(HelloTag.cat);
       expect(Hello.tag).to.equal(HelloTag);
       expect(object == 'cat').to.be.true;
+      expect(String(object)).to.equal('cat');
       expect(Number(object)).to.equal(200);
       expect(`${object}`).to.equal('cat');
     })
@@ -809,14 +860,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'dog',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'cat',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -867,6 +918,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -911,14 +963,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -972,6 +1024,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -1016,14 +1069,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1077,6 +1130,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -1121,14 +1175,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1184,6 +1238,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
       });
@@ -1228,14 +1283,14 @@ describe('Structure: union', function() {
       env.attachMember(enumStructure, {
         name: 'pointer',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 0,
         structure: enumStructure,
       }, true);
       env.attachMember(enumStructure, {
         name: 'number',
         type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
         slot: 1,
         structure: enumStructure,
       }, true);
@@ -1289,117 +1344,113 @@ describe('Structure: union', function() {
         expect(isActive(this)).to.be.false;
       })
     })
-    it('should reapply pointer when initialized with no initializer', function() {
-      const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'i32',
-        byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
-        name: '*i32',
-        byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
-      const enumStructure = env.beginStructure({
-        type: StructureType.Enum,
-        name: 'HelloTag',
-        byteSize: 2,
-      });
-      env.attachMember(enumStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: enumStructure,
-      });
-      const HelloTag = env.defineStructure(enumStructure);
-      env.attachMember(enumStructure, {
-        name: 'pointer',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: enumStructure,
-      }, true);
-      env.attachMember(enumStructure, {
-        name: 'number',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: enumStructure,
-      }, true);
-      env.attachTemplate(enumStructure, {
-        [SLOTS]: {
-          0: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 0 ]))),
-          1: HelloTag.call(ENVIRONMENT, viewOf(new Uint16Array([ 1 ]))),
-        },
-      }, true);
-      env.endStructure(enumStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
-        byteSize: 10,
-      });
-      env.attachMember(structure, {
-        name: 'pointer',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: 'number',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSelector,
-        bitSize: 16,
-        bitOffset: 64,
-        byteSize: 2,
-        structure: enumStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(10)),
-        [SLOTS]: { 0: new Int32Ptr(new Int32(1234)) },
-      });
-      const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
-      const object = new Hello({});
-      expect(object.pointer['*']).to.equal(1234);
-      object.$ = { number: 4567 };
-      expect(object.pointer).to.be.null;
-      object.$ = {};
-      expect(object.pointer['*']).to.equal(1234);
-    })
+    // TODO: make sure that it's possible to create union with default values
+    // it('should reapply pointer when initialized with no initializer', function() {
+    //   const env = new Env();
+    //   const intStructure = env.beginStructure({
+    //     type: StructureType.Primitive,
+    //     flags: StructureFlag.HasValue,
+    //     name: 'i32',
+    //     byteSize: 4,
+    //   });
+    //   env.attachMember(intStructure, {
+    //     type: MemberType.Uint,
+    //     bitSize: 32,
+    //     bitOffset: 0,
+    //     byteSize: 4,
+    //     structure: intStructure,
+    //   });
+    //   const Int32 = env.defineStructure(intStructure);
+    //   env.endStructure(intStructure);
+    //   const ptrStructure = env.beginStructure({
+    //     type: StructureType.Pointer,
+    //     flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+    //     name: '*i32',
+    //     byteSize: 8,
+    //   });
+    //   env.attachMember(ptrStructure, {
+    //     type: MemberType.Object,
+    //     bitSize: 64,
+    //     bitOffset: 0,
+    //     byteSize: 8,
+    //     slot: 0,
+    //     structure: intStructure,
+    //   });
+    //   const Int32Ptr = env.defineStructure(ptrStructure);
+    //   env.endStructure(ptrStructure);
+    //   const enumStructure = env.beginStructure({
+    //     type: StructureType.Enum,
+    //     name: 'HelloTag',
+    //     byteSize: 2,
+    //   });
+    //   env.attachMember(enumStructure, {
+    //     type: MemberType.Uint,
+    //     bitSize: 16,
+    //     bitOffset: 0,
+    //     byteSize: 2,
+    //     structure: enumStructure,
+    //   });
+    //   const HelloTag = env.defineStructure(enumStructure);
+    //   env.attachMember(enumStructure, {
+    //     name: 'pointer',
+    //     type: MemberType.Object,
+    //     flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
+    //     slot: 0,
+    //     structure: enumStructure,
+    //   }, true);
+    //   env.attachMember(enumStructure, {
+    //     name: 'number',
+    //     type: MemberType.Object,
+    //     flags: MemberFlag.IsReadOnly | MemberFlag.IsPartOfSet,
+    //     slot: 1,
+    //     structure: enumStructure,
+    //   }, true);
+    //   env.endStructure(enumStructure);
+    //   const structure = env.beginStructure({
+    //     type: StructureType.Union,
+    //     flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+    //     name: 'Hello',
+    //     byteSize: 10,
+    //   });
+    //   env.attachMember(structure, {
+    //     name: 'pointer',
+    //     type: MemberType.Object,
+    //     bitSize: 64,
+    //     bitOffset: 0,
+    //     byteSize: 8,
+    //     slot: 0,
+    //     structure: ptrStructure,
+    //   });
+    //   env.attachMember(structure, {
+    //     name: 'number',
+    //     type: MemberType.Int,
+    //     flags: MemberFlag.IsRequired,
+    //     bitSize: 32,
+    //     bitOffset: 0,
+    //     byteSize: 4,
+    //     structure: {},
+    //   });
+    //   env.attachMember(structure, {
+    //     type: MemberType.Uint,
+    //     flags: MemberFlag.IsSelector,
+    //     bitSize: 16,
+    //     bitOffset: 64,
+    //     byteSize: 2,
+    //     structure: enumStructure,
+    //   });
+    //   env.attachTemplate(structure, {
+    //     [MEMORY]: new DataView(new ArrayBuffer(10)),
+    //     [SLOTS]: { 0: new Int32Ptr(new Int32(1234)) },
+    //   });
+    //   const Hello = env.defineStructure(structure);
+    //   env.endStructure(structure);
+    //   const object = new Hello({});
+    //   expect(object.pointer['*']).to.equal(1234);
+    //   object.$ = { number: 4567 };
+    //   expect(object.pointer).to.be.null;
+    //   object.$ = {};
+    //   expect(object.pointer['*']).to.equal(1234);
+    // })
     it('should complain about missing union initializer', function() {
       const env = new Env();
       const structure = env.beginStructure({

@@ -8,6 +8,7 @@ import AccessorBool from '../../src/accessors/bool.js';
 import AccessorFloat128 from '../../src/accessors/float128.js';
 import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
 import AccessorJumbo from '../../src/accessors/jumbo.js';
+import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
@@ -42,7 +43,7 @@ const Env = defineClass('OptionalTest', [
   SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
   AccessorJumboInt, Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat,
   MemberObject, Struct, StructLike, MemberUint, MemberVoid, IntConversion, Pointer,
-  PointerInStruct, Slice, ArrayLike, Array, PointerInArray,
+  PointerInStruct, Slice, ArrayLike, Array, PointerInArray, Baseline,
 ]);
 
 describe('Structure: optional', function() {
@@ -583,6 +584,7 @@ describe('Structure: optional', function() {
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
+      debugger;
       expect(object.$.string).to.equal('This is a test');
       expect(object.$.typedArray).to.eql(array);
       object.valueOf();

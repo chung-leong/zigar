@@ -1,5 +1,6 @@
 import { mixin } from '../environment.js';
-import { POINTER, UPDATE, VISIT } from '../symbols.js';
+import { ADDRESS, FIXED, LENGTH, MEMORY, POINTER, SLOTS, UPDATE, VISIT } from '../symbols.js';
+import { findSortedIndex } from '../utils.js';
 
 export default mixin({
   updatePointerAddresses(args) {
