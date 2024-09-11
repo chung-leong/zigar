@@ -15,12 +15,13 @@ import CallMarshalingOutbound, {
 import DataCopying from '../../src/features/data-copying.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import PointerSynchronization from '../../src/features/pointer-synchronization.js';
+import StreamRedirection from '../../src/features/stream-redirection.js';
 import ViewManagement from '../../src/features/view-management.js';
 import { defineProperties } from '../../src/utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, DataCopying, CallMarshalingOutbound, MemoryMapping, ViewManagement,
-  PointerSynchronization,
+  PointerSynchronization, StreamRedirection,
 ]);
 
 describe('Feature: call-marshaling-outbound', function() {
@@ -359,6 +360,7 @@ describe('Feature: call-marshaling-outbound', function() {
           thunkAddress = args[0];
           fnAddress = args[1];
           argDV = args[2];
+          return true;
         };
         const argStruct = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -373,14 +375,13 @@ describe('Feature: call-marshaling-outbound', function() {
       it('should throw an error if thunk returns false', function() {
         const env = new Env();
         env.runThunk = function(...args) {
-          return 'JellyDonutInsurrection';
+          return false;
         };
         const argStruct = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
           [SLOTS]: { 0: {} },
         };
-        expect(() => env.invokeThunk(100, argStruct)).to.throw(Error)
-          .with.property('message').that.equals('Jelly donut insurrection') ;
+        expect(() => env.invokeThunk(100, 200, argStruct)).to.throw(ZigError);
       })
       it('should activate pointer visitor before and after the call', function() {
         const env = new Env();
@@ -389,6 +390,7 @@ describe('Feature: call-marshaling-outbound', function() {
         let visitorCalledAfter = false;
         env.runThunk = function(...args) {
           thunkCalled = true;
+          return true;
         };
         const argStruct = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -415,6 +417,7 @@ describe('Feature: call-marshaling-outbound', function() {
           fnAddress = args[1];
           argDV = args[2];
           attrDV = args[3];
+          return true;
         };
         const argAttrs = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -427,7 +430,7 @@ describe('Feature: call-marshaling-outbound', function() {
         env.invokeThunk(100, 200, argStruct);
         expect(recv).to.equal(env);
         expect(thunkAddress).to.equal(100);
-        expect(fnAddress).to.equal(100, 200);
+        expect(fnAddress).to.equal(200);
         expect(argDV).to.equal(argStruct[MEMORY]);
         expect(attrDV).to.equal(argAttrs[MEMORY]);
       })
@@ -440,6 +443,7 @@ describe('Feature: call-marshaling-outbound', function() {
           fnAddress = args[1];
           argDV = args[2];
           attrDV = args[3];
+          return true;
         };
         const argAttrs = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),

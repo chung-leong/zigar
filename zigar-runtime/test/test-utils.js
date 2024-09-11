@@ -42,16 +42,36 @@ export async function delay(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-export const addressSize = process.env.TARGET === 'wasm' ? 32 : 64;
+export const addressSize = (process.env.BITS === '64')
+? 64
+: (process.env.BITS === '32')
+? 32
+: undefined;
 
-export function usize(value) {
-  return (addressSize === 64) ? BigInt(value) : Number(value);
-}
+export const addressByteSize = (process.env.BITS === '64')
+? 8
+: (process.env.BITS === '32')
+? 4
+: undefined;
 
-export const getUsize = (addressSize === 64)
+export const usize = (process.env.BITS === '64')
+? function(value) {
+    return BigInt(value);
+  }
+: (process.env.BITS === '32')
+? function(value) {
+    return Number(value);
+  }
+: undefined;
+
+export const getUsize = (process.env.BITS === '64')
 ? DataView.prototype.getBigUint64
-: DataView.prototype.getUint32;
+: (process.env.BITS === '32')
+? DataView.prototype.getUint32
+: undefined;
 
-export const setUsize = (addressSize === 64)
+export const setUsize = (process.env.BITS === '64')
 ? DataView.prototype.setBigUint64
-: DataView.prototype.setUint32;
+: (process.env.BITS === '32')
+? DataView.prototype.setUint32
+: undefined;

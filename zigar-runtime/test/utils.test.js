@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { MemberType } from '../src/constants.js';
 import { MEMORY } from '../src/symbols.js';
 import {
-  add,
+  adjustAddress,
   alignForward,
   decodeBase64,
   decodeText,
@@ -190,55 +190,6 @@ describe('Utility functions', function() {
       expect(findSortedIndex(list, 10, m => m.address)).to.equal(1);
     })
   })
-  describe('isMisaligned', function() {
-    it(`should determine whether address is misaligned`, function() {
-      expect(isMisaligned(0x1000, 2)).to.be.false;
-      expect(isMisaligned(0x1001, 2)).to.be.true;
-      expect(isMisaligned(0x1002, 2)).to.be.false;
-      expect(isMisaligned(0x1002, 4)).to.be.true;
-      expect(isMisaligned(0x1004, 4)).to.be.false;
-      expect(isMisaligned(0x1004, 8)).to.be.true;
-    })
-    it(`should handle bigInt addresses`, function() {
-      expect(isMisaligned(0xF000000000001000n, 2)).to.be.false;
-      expect(isMisaligned(0xF000000000001001n, 2)).to.be.true;
-      expect(isMisaligned(0xF000000000001002n, 2)).to.be.false;
-      expect(isMisaligned(0xF000000000001002n, 4)).to.be.true;
-      expect(isMisaligned(0xF000000000001004n, 4)).to.be.false;
-      expect(isMisaligned(0xF000000000001004n, 8)).to.be.true;
-    })
-    it(`should return false when align is undefined`, function() {
-      expect(isMisaligned(0x1000, undefined)).to.be.false;
-      expect(isMisaligned(0xF000000000001000n, undefined)).to.be.false;
-    })
-  })
-  describe('alignForward', function() {
-    it('should create an aligned address from one that is not aligned', function() {
-      expect(alignForward(0x0001, 4)).to.equal(0x0004)
-    })
-  })
-  describe('isInvalidAddress', function() {
-    it(`should return true when 0xaaaaaaaa is given`, function() {
-      expect(isInvalidAddress(0xaaaaaaaa)).to.be.true;
-    })
-    it(`should return true when 0xaaaaaaaaaaaaaaaan is given`, function() {
-      expect(isInvalidAddress(0xaaaaaaaaaaaaaaaan)).to.be.true;
-    })
-    it(`should return false when address valid`, function() {
-      expect(isInvalidAddress(0x1000n)).to.be.false;
-    })
-  })
-  describe('add', function() {
-    it(`should add a number to another`, function() {
-      expect(add(5, 5)).to.equal(10);
-    })
-    it(`should add a number to a bigint`, function() {
-      expect(add(5n, 5)).to.equal(10n);
-    })
-    it(`should add a bigint to a bigint`, function() {
-      expect(add(5n, 5n)).to.equal(10n);
-    })
-  })
   describe('transformIterable', function() {
     it('should return array as is when given one', function() {
       const array = [];
@@ -325,5 +276,72 @@ describe('Utility functions', function() {
       const member = { type: MemberType.Object, bitSize: 32 };
       expect(getPrimitiveName(member)).to.be.undefined;
     })
+  })
+  describe('alignForward', function() {
+    if (process.env.BITS === '64') {
+      it('should create an aligned address from one that is not aligned', function() {
+        expect(alignForward(0x0001n, 4)).to.equal(0x0004n)
+      })
+    } else if (process.env.BITS === '32') {
+      it('should create an aligned address from one that is not aligned', function() {
+        expect(alignForward(0x0001, 4)).to.equal(0x0004)
+      })
+    }
+  })
+  describe('adjustAddress', function() {
+    if (process.env.BITS === '64') {
+      it(`should add a number to an address`, function() {
+        expect(adjustAddress(5n, 5)).to.equal(10n);
+      })
+
+    } else if (process.env.BITS === '32') {
+      it(`should add a number to an address`, function() {
+        expect(adjustAddress(5, 5)).to.equal(10);
+      })
+    }
+  })
+  describe('isInvalidAddress', function() {
+    if (process.env.BITS === '64') {
+      it(`should return true when 0xaaaaaaaaaaaaaaaan is given`, function() {
+        expect(isInvalidAddress(0xaaaaaaaaaaaaaaaan)).to.be.true;
+      })
+      it(`should return false when address is valid`, function() {
+        expect(isInvalidAddress(0x1000n)).to.be.false;
+      })
+    } else if (process.env.BITS === '32') {
+      it(`should return true when 0xaaaaaaaa is given`, function() {
+        expect(isInvalidAddress(0xaaaaaaaa)).to.be.true;
+      })
+      it(`should return false when address is valid`, function() {
+        expect(isInvalidAddress(0x1000)).to.be.false;
+      })
+    }
+  })
+  describe('isMisaligned', function() {
+    if (process.env.BITS === '64') {
+      it(`should determine whether address is misaligned`, function() {
+        expect(isMisaligned(0xF000000000001000n, 2)).to.be.false;
+        expect(isMisaligned(0xF000000000001001n, 2)).to.be.true;
+        expect(isMisaligned(0xF000000000001002n, 2)).to.be.false;
+        expect(isMisaligned(0xF000000000001002n, 4)).to.be.true;
+        expect(isMisaligned(0xF000000000001004n, 4)).to.be.false;
+        expect(isMisaligned(0xF000000000001004n, 8)).to.be.true;
+      })
+      it(`should return false when align is undefined`, function() {
+        expect(isMisaligned(0xF000000000001000n, undefined)).to.be.false;
+      })
+    } else {
+      it(`should determine whether address is misaligned`, function() {
+        expect(isMisaligned(0x1000, 2)).to.be.false;
+        expect(isMisaligned(0x1001, 2)).to.be.true;
+        expect(isMisaligned(0x1002, 2)).to.be.false;
+        expect(isMisaligned(0x1002, 4)).to.be.true;
+        expect(isMisaligned(0x1004, 4)).to.be.false;
+        expect(isMisaligned(0x1004, 8)).to.be.true;
+      })
+      it(`should return false when align is undefined`, function() {
+        expect(isMisaligned(0x1000, undefined)).to.be.false;
+      })
+    }
   })
 })

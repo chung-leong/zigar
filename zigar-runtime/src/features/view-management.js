@@ -4,7 +4,7 @@ import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
 import { COPY, FIXED, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
-import { add, alignForward, findElements } from '../utils.js';
+import { adjustAddress, alignForward, findElements } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
@@ -122,7 +122,7 @@ export default mixin({
     const fixed = buffer[FIXED];
     if (fixed) {
       // attach address to view of fixed buffer
-      dv[FIXED] = { address: add(fixed.address, offset), len };
+      dv[FIXED] = { address: adjustAddress(fixed.address, offset), len };
     }
     return dv;
   },

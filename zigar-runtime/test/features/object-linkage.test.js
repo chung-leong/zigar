@@ -12,6 +12,7 @@ import MemoryMapping from '../../src/features/memory-mapping.js';
 import ObjectLinkage from '../../src/features/object-linkage.js';
 import ViewManagement from '../../src/features/view-management.js';
 import StructureAll from '../../src/structures/all.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, ObjectLinkage, StructureAll, DataCopying, ViewManagement, MemoryMapping,
@@ -213,10 +214,10 @@ describe('Feature: object-linkage', function() {
   describe('unlinkVariables', function() {
     it('should pass variables to unlinkObject', function() {
       const env = new Env();
-      let nextAddress = 0x1000n;
+      let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
-        nextAddress += BigInt(len * 0x0F);
+        nextAddress += len * usize(0x0F);
         return address;
       };
       env.obtainExternView = function(address, len) {
@@ -245,10 +246,10 @@ describe('Feature: object-linkage', function() {
   describe('unlinkObject', function() {
     it('should replace buffer in fixed memory with ones in relocatable memory', function() {
       const env = new Env();
-      let nextAddress = 0x1000n;
+      let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
-        nextAddress += BigInt(len * 0x0F);
+        nextAddress += len * usize(0x0F);
         return address;
       };
       env.obtainExternView = function(address, len) {

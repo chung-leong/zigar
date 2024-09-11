@@ -27,6 +27,7 @@ import Pointer from '../../src/structures/pointer.js';
 import StructurePrimitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
+import { addressByteSize, addressSize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, StructureAcquisition, StructureAll, ViewManagement, PointerSynchronization, Struct,
@@ -461,7 +462,7 @@ describe('Feature: structure-acquisition', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Int32',
-        byteSize: 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -477,29 +478,29 @@ describe('Feature: structure-acquisition', function() {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
-        byteSize: 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
         slot: 1,
         structure: ptrStructure,
       })
       const dv = new DataView(new ArrayBuffer(8 * 2));
-      dv.setBigUint64(0, 0x1000n, true);
-      dv.setBigUint64(8, 0x2000n, true);
+      setUsize.call(dv, 0, usize(0x1000), true);
+      setUsize.call(dv, addressByteSize, usize(0x2000), true);
       const template = env.createTemplate(dv);
       env.attachTemplate(structure, template);
       env.defineStructure(structure);
@@ -516,8 +517,8 @@ describe('Feature: structure-acquisition', function() {
       };
       env.acquireDefaultPointers(structure);
       expect(requests).to.eql([
-        { address: 0x1000n, len: 4 },
-        { address: 0x2000n, len: 4 }
+        { address: usize(0x1000), len: 4 },
+        { address: usize(0x2000), len: 4 }
       ]);
       expect(template[SLOTS][0]).to.be.instanceOf(Int32Ptr);
       expect(template[SLOTS][0][SLOTS][0]).to.be.instanceOf(Int32);

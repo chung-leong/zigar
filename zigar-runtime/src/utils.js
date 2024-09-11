@@ -152,39 +152,45 @@ export function findSortedIndex(array, value, cb) {
   return high;
 }
 
-export function isMisaligned(address, align) {
-  if (align === undefined) {
-    return false;
+export const isMisaligned = (process.env.BITS === '64')
+? function(address, align) {
+    return (align !== undefined) ? !!(address & BigInt(align - 1)) : false;
   }
-  if (typeof(address) === 'bigint') {
-    address = Number(address & 0xFFFFFFFFn);
+: (process.env.BITS === '32')
+? function(address, align) {
+    return (align !== undefined) ? !!(address & (align - 1)) : false;
   }
-  const mask = align - 1;
-  return (address & mask) !== 0;
-}
+: undefined;
 
-export function alignForward(address, align) {
-  let mask;
-  if (typeof(address) === 'bigint') {
-    align = BigInt(align);
-    mask = ~(align - 1n);
-  } else {
-    mask = ~(align - 1);
+export const alignForward = (process.env.BITS === '64')
+? function(address, align) {
+    return (address + BigInt(align - 1)) & ~BigInt(align - 1);
   }
-  return (address + align - 1) & mask;
-}
+: (process.env.BITS === '32')
+? function(address, align) {
+    return (address + (align - 1)) & ~(align - 1);
+  }
+: undefined;
 
-export function isInvalidAddress(address) {
-  if (typeof(address) === 'bigint') {
+export const isInvalidAddress = (process.env.BITS === '64')
+? function(address) {
     return address === 0xaaaaaaaaaaaaaaaan;
-  } else {
+  }
+: (process.env.BITS === '32')
+? function(address) {
     return address === 0xaaaaaaaa;
   }
-}
+: undefined;
 
-export function add(arg1, arg2) {
-  return arg1 + ((typeof(arg1) === 'bigint') ? BigInt(arg2) : arg2);
-}
+export const adjustAddress = (process.env.BITS === '64')
+? function(address, addend) {
+    return address + BigInt(addend);
+  }
+: (process.env.BITS === '32')
+? function(address, addend) {
+    return address + addend;
+  }
+: undefined;
 
 export function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {

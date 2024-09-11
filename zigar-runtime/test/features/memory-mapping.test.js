@@ -2,13 +2,14 @@ import { expect } from 'chai';
 import { defineClass } from '../../src/environment.js';
 import { InvalidDeallocation } from '../../src/errors.js';
 import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
-import { defineProperties, defineProperty } from '../../src/utils.js';
+import { adjustAddress, defineProperties, defineProperty } from '../../src/utils.js';
 
 import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import ViewManagement from '../../src/features/view-management.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, MemoryMapping, DataCopying, CallMarshalingOutbound, ViewManagement,
@@ -27,11 +28,11 @@ describe('Feature: memory-mapping', function() {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       const address = env.getShadowAddress(object);
-      expect(address).to.equal(0x1000);
+      expect(address).to.equal(usize(0x1000));
     })
     it('should return shadow addresses of objects in a cluster', function() {
       const env = new Env();
@@ -53,13 +54,13 @@ describe('Feature: memory-mapping', function() {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       const address1 = env.getShadowAddress(object1, cluster);
       const address2 = env.getShadowAddress(object2, cluster);
-      expect(address1).to.equal(0x1000);
-      expect(address2).to.equal(0x1004);
+      expect(address1).to.equal(usize(0x1000));
+      expect(address2).to.equal(usize(0x1004));
     })
   })
   describe('createShadow', function() {
@@ -74,7 +75,7 @@ describe('Feature: memory-mapping', function() {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       const shadow = env.createShadow(object);
@@ -89,7 +90,7 @@ describe('Feature: memory-mapping', function() {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -119,7 +120,7 @@ describe('Feature: memory-mapping', function() {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -181,7 +182,7 @@ describe('Feature: memory-mapping', function() {
         [MEMORY]: new DataView(new ArrayBuffer(4))
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       expect(env.context.shadowMap).to.be.null;
@@ -199,7 +200,7 @@ describe('Feature: memory-mapping', function() {
         [MEMORY]: new DataView(new ArrayBuffer(4))
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       env.addShadow(shadow, object);
@@ -224,7 +225,7 @@ describe('Feature: memory-mapping', function() {
         [COPY]: env.defineCopier(size),
       });
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       env.addShadow(shadow, object);
@@ -250,7 +251,7 @@ describe('Feature: memory-mapping', function() {
         [MEMORY]: new DataView(new ArrayBuffer(size)),
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       env.startContext();
       env.addShadow(shadow, object);
@@ -275,7 +276,7 @@ describe('Feature: memory-mapping', function() {
         [MEMORY]: new DataView(new ArrayBuffer(size)),
       };
       env.getBufferAddress = function() {
-        return 0x1000;
+        return usize(0x1000);
       };
       let freed;
       env.freeShadowMemory = function(dv) {
@@ -291,7 +292,7 @@ describe('Feature: memory-mapping', function() {
     it('should try to allocate fixed memory from zig', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
-        return 0x1000n;
+        return usize(0x1000);
       };
       env.obtainExternView = function(address, len) {
         const buffer = new ArrayBuffer(len);
@@ -306,7 +307,7 @@ describe('Feature: memory-mapping', function() {
     it('should return empty data view when len is 0', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
-        return 0x1000n;
+        return usize(0x1000);
       };
       env.obtainExternView = function(address, len) {
         const buffer = new ArrayBuffer(len);
@@ -331,12 +332,12 @@ describe('Feature: memory-mapping', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv[FIXED] = {
         type: 0,
-        address: 0x1000n,
+        address: usize(0x1000),
         len: 16,
         align: 4,
       };
       env.freeFixedMemory(dv);
-      expect(args).to.eql({ type: 0, address: 0x1000n, len: 16, align: 4 });
+      expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
     })
     it('should try to free fixed memory with unaligned address through Zig', function() {
       const env = new Env();
@@ -347,13 +348,13 @@ describe('Feature: memory-mapping', function() {
       const dv = new DataView(new ArrayBuffer(16));
       dv[FIXED] = {
         type: 0,
-        unalignedAddress: 0x1000n,
-        address: 0x1004n,
+        unalignedAddress: usize(0x1000),
+        address: usize(0x1004),
         len: 16,
         align: 4,
       };
       env.freeFixedMemory(dv);
-      expect(args).to.eql({ type: 0, address: 0x1000n, len: 16, align: 4 });
+      expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
     })
     it('should do nothing when len is 0', function() {
       const env = new Env();
@@ -364,7 +365,7 @@ describe('Feature: memory-mapping', function() {
       const dv = new DataView(new ArrayBuffer(0));
       dv[FIXED] = {
         type: 0,
-        address: 0x1000n,
+        address: usize(0x1000),
         len: 0,
         align: 0,
       };
@@ -381,7 +382,7 @@ describe('Feature: memory-mapping', function() {
         const dv = this.obtainView(buffer, 0, len);
         return dv;
       };
-      const dv = env.obtainFixedView(0x1000n, 16);
+      const dv = env.obtainFixedView(usize(0x1000), 16);
       expect(dv.byteLength).to.equal(16);
       expect(dv[FIXED]).to.be.an('object')
     })
@@ -393,8 +394,8 @@ describe('Feature: memory-mapping', function() {
         const dv = this.obtainView(buffer, 0, len);
         return dv;
       };
-      const dv1 = env.obtainFixedView(0x1000n, 0);
-      const dv2 = env.obtainFixedView(0x2000n, 0);
+      const dv1 = env.obtainFixedView(usize(0x1000), 0);
+      const dv2 = env.obtainFixedView(usize(0x2000), 0);
       expect(dv1.byteLength).to.equal(0);
       expect(dv2.byteLength).to.equal(0);
       expect(dv1).to.not.equal(dv2);
@@ -403,7 +404,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return a view to the empty buffer when len is zero and address is 0', function() {
       const env = new Env();
-      const dv = env.obtainFixedView(0n, 0);
+      const dv = env.obtainFixedView(usize(0), 0);
       expect(dv.buffer).to.equal(env.emptyBuffer);
     })
   })
@@ -411,7 +412,7 @@ describe('Feature: memory-mapping', function() {
     it('should free a data view that was allocated using allocateFixedMemory', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
-        return 0x1000n;
+        return usize(0x1000);
       };
       env.obtainExternView = function(address, len) {
         const buffer = new ArrayBuffer(len);
@@ -425,25 +426,25 @@ describe('Feature: memory-mapping', function() {
       };
       const dv = env.allocateFixedMemory(400, 4);
       env.releaseFixedView(dv);
-      expect(args).to.eql({ type: 0, address: 0x1000n, len: 400, align: 4 });
+      expect(args).to.eql({ type: 0, address: usize(0x1000), len: 400, align: 4 });
     })
   })
   describe('registerMemory', function() {
     it('should return address of data view', function() {
       const env = new Env();
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv = new DataView(new ArrayBuffer(16), 8, 8);
       env.startContext();
       const address = env.registerMemory(dv);
-      expect(address).to.equal(0x1000n + 8n);
+      expect(address).to.equal(usize(0x1000 + 8));
     })
     it('should return address as number when address is number', function() {
       const env = new Env();
-      env.getBufferAddress = () => 0x1000;
+      env.getBufferAddress = () => usize(0x1000);
       const dv = new DataView(new ArrayBuffer(16), 8, 8);
       env.startContext();
       const address = env.registerMemory(dv);
-      expect(address).to.equal(0x1000 + 8);
+      expect(address).to.equal(usize(0x1000 + 8));
     })
   })
   describe('unregisterMemory', function() {
@@ -452,7 +453,7 @@ describe('Feature: memory-mapping', function() {
     it('should find previously imported buffer', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
@@ -464,7 +465,7 @@ describe('Feature: memory-mapping', function() {
     it('should find previously imported buffer when size is undefined', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
@@ -476,11 +477,11 @@ describe('Feature: memory-mapping', function() {
     it('should find a subslice of previously imported buffer', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(address + 8n, 8, 1);
+      const dv2 = env.findMemory(adjustAddress(address, 8), 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(8);
@@ -488,22 +489,22 @@ describe('Feature: memory-mapping', function() {
     it('should return data view of shared memory if address is not known', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(0xFF0000n, 8, 1);
+      const dv2 = env.findMemory(usize(0xFF0000), 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
     })
     it('should return data view of shared memory if address is not known and size, is undefined', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       env.startContext();
       const address = env.registerMemory(dv1);
-      const dv2 = env.findMemory(0xFF0000n, 4, undefined);
+      const dv2 = env.findMemory(usize(0xFF0000), 4, undefined);
       expect(dv2).to.be.instanceOf(DataView);
       expect(dv2.buffer).to.be.instanceOf(SharedArrayBuffer);
     })
@@ -520,7 +521,7 @@ describe('Feature: memory-mapping', function() {
     it('should return empty view when address is invalid and count is 0', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv = env.findMemory(0xaaaaaaaa, 0, 5);
       expect(dv.byteLength).to.equal(0);
     })
@@ -528,10 +529,10 @@ describe('Feature: memory-mapping', function() {
   describe('getViewAddress', function() {
     it('should return address of data view', function() {
       const env = new Env();
-      env.getBufferAddress = () => 0x1000n;
+      env.getBufferAddress = () => usize(0x1000);
       const dv = new DataView(new ArrayBuffer(32), 8, 8);
       const address = env.getViewAddress(dv);
-      expect(address).to.equal(0x1008n);
+      expect(address).to.equal(usize(0x1000 + 8));
     })
   })
   if (process.env.TARGET === 'wasm') {
@@ -654,12 +655,12 @@ describe('Feature: memory-mapping', function() {
     describe('allocateHostMemory', function() {
       it('should create a buffer that can be discovered later', function() {
       const env = new Env();
-      env.getBufferAddress = () => 0x10000n;
+      env.getBufferAddress = () => usize(0x10000);
       env.startContext();
       const dv1 = env.allocateHostMemory(32, 8);
       expect(dv1).to.be.instanceOf(DataView);
       expect(dv1.byteLength).to.equal(32);
-      const dv2 = env.findMemory(0x10000n, 32);
+      const dv2 = env.findMemory(usize(0x10000), 32);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteLength).to.equal(32);
       })
@@ -668,7 +669,7 @@ describe('Feature: memory-mapping', function() {
       it('should remove buffer at indicated address', function() {
         const env = new Env();
         env.obtainFixedView = () => null;
-        env.getBufferAddress = () => 0x10010;
+        env.getBufferAddress = () => usize(0x10010);
         env.startContext();
         const dv = env.allocateHostMemory(32, 32);
         expect(dv).to.be.instanceOf(DataView);
@@ -682,7 +683,7 @@ describe('Feature: memory-mapping', function() {
       it('should throw when address is invalid', function() {
         const env = new Env();
         env.startContext();
-        expect(() => env.freeHostMemory(0x1000, 32, 32)).to.throw(ReferenceError);
+        expect(() => env.freeHostMemory(usize(0x1000), 32, 32)).to.throw(ReferenceError);
       })
     })
     describe('allocateShadowMemory', function() {
@@ -696,14 +697,14 @@ describe('Feature: memory-mapping', function() {
     describe('freeShadowMemory', function() {
       it('should do nothing', function() {
         const env = new Env();
-        env.freeShadowMemory(0x1000n, 16, 4);
+        env.freeShadowMemory(usize(0x1000), 16, 4);
       })
     })
     describe('getTargetAddress', function() {
       it('should return address when address is correctly aligned', function() {
         const env = new Env();
         env.getBufferAddress = function(buffer) {
-          return 0x1000n;
+          return usize(0x1000);
         };
         env.startContext();
         const Type = function() {};
@@ -711,12 +712,12 @@ describe('Feature: memory-mapping', function() {
         const object = new Type();
         object[MEMORY] = new DataView(new ArrayBuffer(64));
         const address = env.getTargetAddress(object);
-        expect(address).to.equal(0x1000n);
+        expect(address).to.equal(usize(0x1000));
       })
       it('should return undefined when address is misaligned', function() {
         const env = new Env();
         env.getBufferAddress = function(buffer) {
-          return 0x1004;
+          return usize(0x1004);
         };
         env.startContext();
         const Type = function() {};
@@ -729,7 +730,7 @@ describe('Feature: memory-mapping', function() {
       it('should return address when cluster is correctly aligned', function() {
         const env = new Env();
         env.getBufferAddress = function(buffer) {
-          return 0x1006n;
+          return usize(0x1006);
         };
         env.startContext();
         const Type = function() {};
@@ -747,15 +748,15 @@ describe('Feature: memory-mapping', function() {
           misaligned: undefined,
         };
         const address1 = env.getTargetAddress(object1, cluster);
-        expect(address1).to.equal(0x1008n);
+        expect(address1).to.equal(usize(0x1008));
         expect(cluster.misaligned).to.be.false;
         const address2 = env.getTargetAddress(object2, cluster);
-        expect(address2).to.equal(0x1010n);
+        expect(address2).to.equal(usize(0x1010));
       })
       it('should return false when cluster is misaligned', function() {
         const env = new Env();
         env.getBufferAddress = function(buffer) {
-          return 0x1000n;
+          return usize(0x1000);
         };
         env.startContext();
         const Type = function() {};

@@ -1,4 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-DEV=1 TARGET=wasm npx mocha --no-warnings '**/*.test.js' -- "$@" || true
-DEV=1 TARGET=node npx mocha --no-warnings '**/*.test.js' -- "$@"
+DEV=1 TARGET=wasm BITS=32 npx mocha --no-warnings '**/*.test.js' -- "$@" || true
+DEV=1 TARGET=node BITS=64 npx mocha --no-warnings '**/*.test.js' -- "$@"

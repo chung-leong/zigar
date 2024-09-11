@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict, InvalidDeallocation } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
-import { add, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
+import { adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
@@ -13,7 +13,7 @@ export default mixin({
         const shadow = this.createClusterShadow(cluster);
         cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
-      return add(cluster.address, dv.byteOffset - cluster.start);
+      return adjustAddress(cluster.address, dv.byteOffset - cluster.start);
     } else {
       const shadow = this.createShadow(target);
       return this.getViewAddress(shadow[MEMORY]);
@@ -65,8 +65,8 @@ export default mixin({
     const len = end - start;
     const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
     const unalignedAddress = this.getViewAddress(unalignedShadowDV);
-    const maxAlignAddress = alignForward(add(unalignedAddress, maxAlignOffset - start), maxAlign);
-    const shadowAddress = add(maxAlignAddress, start - maxAlignOffset);
+    const maxAlignAddress = alignForward(adjustAddress(unalignedAddress, maxAlignOffset - start), maxAlign);
+    const shadowAddress = adjustAddress(maxAlignAddress, start - maxAlignOffset);
     const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
     const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
     // make sure that other pointers are correctly aligned also
@@ -75,7 +75,7 @@ export default mixin({
       const offset = dv.byteOffset;
       if (offset !== maxAlignOffset) {
         const align = target.constructor[ALIGN] ?? dv[ALIGN];
-        if (isMisaligned(add(shadowAddress, offset - start), align)) {
+        if (isMisaligned(adjustAddress(shadowAddress, offset - start), align)) {
           throw new AlignmentConflict(align, maxAlign);
         }
       }
@@ -153,7 +153,7 @@ export default mixin({
       const entry = memoryList[index - 1];
       if (entry?.address === address && entry.len === len) {
         return entry.targetDV ?? entry.dv;
-      } else if (entry?.address <= address && address < add(entry.address, entry.len)) {
+      } else if (entry?.address <= address && address < adjustAddress(entry.address, entry.len)) {
         const offset = Number(address - entry.address);
         const targetDV = entry.targetDV ?? entry.dv;
         const isOpaque = size === undefined;
@@ -216,7 +216,7 @@ export default mixin({
       return fixed.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
-      return add(address, dv.byteOffset);
+      return adjustAddress(address, dv.byteOffset);
     }
   },
   ...(process.env.TARGET === 'wasm' ? {
@@ -357,7 +357,7 @@ export default mixin({
           for (const target of cluster.targets) {
             const offset = target[MEMORY].byteOffset;
             const align = target.constructor[ALIGN];
-            const viewAddress = add(address, offset);
+            const viewAddress = adjustAddress(address, offset);
             if (isMisaligned(viewAddress, align)) {
               cluster.misaligned = true;
               break;
@@ -369,7 +369,7 @@ export default mixin({
           }
         }
         if (!cluster.misaligned) {
-          return add(cluster.address, dv.byteOffset);
+          return adjustAddress(cluster.address, dv.byteOffset);
         }
       } else {
         const align = target.constructor[ALIGN];

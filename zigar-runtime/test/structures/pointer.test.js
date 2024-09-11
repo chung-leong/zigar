@@ -7,7 +7,7 @@ import {
   UPDATE,
 } from '../../src/symbols.js';
 import { defineValue } from '../../src/utils.js';
-import { addressSize, getUsize, setUsize, usize } from '../test-utils.js';
+import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -861,13 +861,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -1271,14 +1271,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]bool',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1348,14 +1348,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1405,14 +1405,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]u8',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1465,14 +1465,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i8',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1549,14 +1549,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Hello',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1617,13 +1617,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
         name: '[]const u8',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(constStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1641,7 +1641,7 @@ describe('Structure: pointer', function() {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1699,13 +1699,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
         name: '[]const u8',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(constStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1715,13 +1715,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]u8',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(nonConstStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1775,13 +1775,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
         name: '[]const Target',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(constStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -1814,13 +1814,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Target',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: structStructure,
       });
@@ -1830,13 +1830,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
         name: '*const *Target',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(constStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: ptrStructure,
       });
@@ -1885,13 +1885,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Hello',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: structStructure,
       });
@@ -1930,13 +1930,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -1968,13 +1968,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2017,13 +2017,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
         name: '*const i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2068,13 +2068,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
         name: '*const i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2141,13 +2141,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Hello',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2183,11 +2183,11 @@ describe('Structure: pointer', function() {
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
       pointer1.$ = target;
       expect(getUsize.call(dv2, 0, true)).to.equal(usize(1000));
-      expect(getUsize.call(dv2, addressSize / 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv2, addressByteSize, true)).to.equal(usize(4));
       const pointer2 = HelloPtr.call(ENVIRONMENT, dv3);
       pointer2.$ = pointer1;
       expect(getUsize.call(dv3, 0, true)).to.equal(usize(1000));
-      expect(getUsize.call(dv3, addressSize / 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv3, addressByteSize, true)).to.equal(usize(4));
     })
     it('should yield underlying pointer object', function() {
       const env = new Env();
@@ -2211,14 +2211,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2251,13 +2251,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2297,13 +2297,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2337,13 +2337,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -2394,14 +2394,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2411,7 +2411,7 @@ describe('Structure: pointer', function() {
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
       setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
-      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
+      setUsize.call(pointer[MEMORY], addressByteSize, usize(4), true);
       pointer[UPDATE]();
       const address = pointer[LAST_ADDRESS];
       expect(address).to.equal(usize(0x1000));
@@ -2520,14 +2520,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasSentinel,
         name: '[*:0]Int32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2593,13 +2593,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize * 2,
         bitOffset: 0,
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2642,14 +2642,14 @@ describe('Structure: pointer', function() {
         at0x30000.setInt32(i, 8, true);
       }
       setUsize.call(pointer[MEMORY], 0, usize(0x30000), true);
-      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
+      setUsize.call(pointer[MEMORY], addressByteSize, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
       setUsize.call(pointer[MEMORY], 0, usize(0x2000), true);
-      setUsize.call(pointer[MEMORY], addressSize / 8, usize(4), true);
+      setUsize.call(pointer[MEMORY], addressByteSize, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
-      setUsize.call(pointer[MEMORY], addressSize / 8, usize(3), true);
+      setUsize.call(pointer[MEMORY], addressByteSize, usize(3), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3 ]);
     })
@@ -2697,13 +2697,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]Hello',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize * 2,
         bitOffset: 0,
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2714,7 +2714,7 @@ describe('Structure: pointer', function() {
       expect(slice1.length).to.equal(3);
       expect(() => slice1.length = 1).to.throw(TypeError);
       expect(() => pointer.length = 2).to.not.throw();
-      expect(getUsize.call(pointer[MEMORY], addressSize / 8, true)).to.equal(usize(2));
+      expect(getUsize.call(pointer[MEMORY], addressByteSize, true)).to.equal(usize(2));
       expect(slice1.length).to.equal(3);
       const slice2 = pointer['*'];
       expect(slice2.length).to.equal(2);
@@ -2772,13 +2772,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
         name: '[*]Hello',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2858,13 +2858,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
         name: '[*]Hello',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2907,13 +2907,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*u8',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: byteStructure,
       });
@@ -2937,13 +2937,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*anyopaque',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -2991,13 +2991,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3028,13 +3028,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -3058,14 +3058,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3120,13 +3120,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]Hello',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3179,13 +3179,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]Hello',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3219,13 +3219,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -3249,14 +3249,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3303,14 +3303,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3320,14 +3320,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3392,13 +3392,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3446,14 +3446,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3463,13 +3463,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3517,13 +3517,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3594,13 +3594,13 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3610,14 +3610,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
         name: '[*:0]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(muStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructureWS,
       });
@@ -3649,14 +3649,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -3719,14 +3719,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
         name: '[]i32',
-        byteSize: addressSize / 8 * 2,
+        byteSize: addressByteSize * 2,
         hasPointer: true,
       });
       env.attachMember(spStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
@@ -3749,14 +3749,14 @@ describe('Structure: pointer', function() {
       const intSPointer2 = new Int32SPtr(undefined, { fixed: true });
       const dv = intSPointer2[MEMORY];
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
-      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(0));
+      expect(getUsize.call(dv, addressByteSize, true)).to.equal(usize(0));
       intSPointer2.$ = intSPointer1;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0x2000));
-      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(4));
+      expect(getUsize.call(dv, addressByteSize, true)).to.equal(usize(4));
       // can't actually set slice pointer to null, but there's code for that just in case
       intSPointer2[TARGET] = null;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
-      expect(getUsize.call(dv, addressSize / 8, true)).to.equal(usize(0));
+      expect(getUsize.call(dv, addressByteSize, true)).to.equal(usize(0));
     })
     it('should immediately update a C pointer in fixed memory', function() {
       const env = new Env();
@@ -3793,14 +3793,14 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
         name: '[*c]i32',
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         hasPointer: true,
       });
       env.attachMember(cpStructure, {
         type: MemberType.Object,
         bitSize: addressSize,
         bitOffset: 0,
-        byteSize: addressSize / 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: sliceStructure,
       });
