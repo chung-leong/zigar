@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { COPY, MEMORY } from '../../src/symbols.js';
+import { COPY, MEMORY, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
 import Baseline from '../../src/features/baseline.js';
@@ -115,11 +115,13 @@ describe('Feature: view-management', function() {
         .with.property('message').that.contains('3');
     })
     it('should accept compatible TypedArray', function() {
+      const constructor = function() {};
+      constructor[TYPED_ARRAY] = Uint32Array;
       const structure = {
         type: StructureType.Slice,
         name: 'Test',
         byteSize: 3,
-        typedArray: Uint32Array
+        constructor,
       };
       const env = new Env();
       const ta1 = new Uint32Array([ 1, 2, 3 ]);
@@ -153,6 +155,7 @@ describe('Feature: view-management', function() {
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
       const env = new Env();
+      debugger;
       const dv = env.extractView(structure, array);
       expect(dv).to.be.an.instanceOf(DataView);
     })

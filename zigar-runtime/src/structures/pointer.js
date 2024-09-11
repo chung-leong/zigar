@@ -297,6 +297,8 @@ export default mixin({
     descriptors[VISIT] = defineValue(visitPointer);
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
+    // disable these so the target's properties are returned instead through auto-dereferencing
+    descriptors.dataView = descriptors.base64 = undefined;
     return constructor;
   },
   finalizePointer(structure, staticDescriptors) {
@@ -305,8 +307,12 @@ export default mixin({
       constructor,
       instance: { members: [ member ] },
     } = structure;
-    const { type: targetType, constructor: Target } = member.structure;
-    staticDescriptors.child = defineValue(Target);
+    const { structure: targetStructure } = member;
+    const { type: targetType, constructor: Target } = targetStructure;
+    staticDescriptors.child = (Target) ? defineValue(Target) : {
+      // deal with self-referencing pointer
+      get() { return targetStructure.constructor }
+    };
     staticDescriptors.const = defineValue(!!(flags & StructureFlag.IsConst));
     staticDescriptors[CAST] = {
       value(arg, options) {

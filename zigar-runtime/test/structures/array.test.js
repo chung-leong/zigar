@@ -695,6 +695,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: StructureFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -733,6 +734,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: StructureFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,

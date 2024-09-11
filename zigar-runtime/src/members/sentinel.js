@@ -21,12 +21,13 @@ export default mixin({
     const { get } = this.defineMember(member);
     const value = getSentinelValue.call(template, 0);
     const isRequired = !!(sentinel.flags & MemberFlag.IsRequired);
+    const { runtimeSafety } = this;
     return defineValue({
       value,
       bytes: template[MEMORY],
       validateValue(v, i, l) {
         if (isRequired) {
-          if (this.runtimeSafety && v === value && i !== l - 1) {
+          if (runtimeSafety && v === value && i !== l - 1) {
             throw new MisplacedSentinel(structure, v, i, l);
           }
           if (v !== value && i === l - 1) {
@@ -36,7 +37,7 @@ export default mixin({
       },
       validateData(source, len) {
         if (isRequired) {
-          if (this.runtimeSafety) {
+          if (runtimeSafety) {
             for (let i = 0; i < len; i++) {
               const v = get.call(source, i);
               if (v === value && i !== len - 1) {
@@ -47,7 +48,7 @@ export default mixin({
             }
           } else {
             // if the length doesn't match, let the operation fail elsewhere
-            if (len * byteSize === source[MEMORY].byteLength) {
+            if (len > 0 && len * byteSize === source[MEMORY].byteLength) {
               const v = get.call(source, len - 1);
               if (v !== value) {
                 throw new MissingSentinel(structure, value, len);
@@ -59,7 +60,7 @@ export default mixin({
       isRequired,
     });
   },
-  ...(process.env.target === 'wasm' ? {
+  ...(process.env.TARGET === 'wasm' ? {
     findSentinel(address, bytes) {
       const { memory } = this;
       const len = bytes.byteLength;
@@ -80,7 +81,7 @@ export default mixin({
         }
       }
     },
-  } : process.env.target === 'node' ? {
+  } : process.env.TARGET === 'node' ? {
     imports: {
       findSentinel: null,
     },

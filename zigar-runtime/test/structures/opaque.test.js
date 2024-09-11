@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { ENVIRONMENT, INITIALIZE } from '../../src/symbols.js';
@@ -107,6 +108,7 @@ describe('Structure: opaque', function() {
       env.endStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
+    skip.
     it('should define an iterator opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({

@@ -20,6 +20,8 @@ import MemberObject from '../../src/members/object.js';
 import PointerInArray from '../../src/members/pointer-in-array.js';
 import PointerInStruct from '../../src/members/pointer-in-struct.js';
 import MemberPrimitive from '../../src/members/primitive.js';
+import SpecialMethods from '../../src/members/special-methods.js';
+import SpecialProps from '../../src/members/special-props.js';
 import MemberUint from '../../src/members/uint.js';
 import MemberVoid from '../../src/members/void.js';
 import StructureAll from '../../src/structures/all.js';
@@ -34,7 +36,7 @@ import StructureSlice from '../../src/structures/slice.js';
 import StructureStructLike from '../../src/structures/struct-like.js';
 import StructureStruct from '../../src/structures/struct.js';
 import StructureUnion from '../../src/structures/union.js';
-import { addressSize, getUsize, usize } from '../test-utils.js';
+import { addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, StructureAcquisition, StructureAll, StructurePrimitive, DataCopying, StructurePointer,
@@ -42,7 +44,7 @@ const Env = defineClass('FeatureTest', [
   AccessorAll, StructureOptional, StructureArgStruct, AccessorBool, MemberBool, MemberVoid,
   StructureStruct, StructureStructLike, PointerInArray, PointerInStruct, StructureArray,
   StructureSlice, ViewManagement, CallMarshalingOutbound, PointerSynchronization,
-  MemoryMapping, StructureArrayLike, MemberInt, StructureUnion,
+  MemoryMapping, StructureArrayLike, MemberInt, StructureUnion, SpecialProps, SpecialMethods,
 ]);
 
 describe('Feature: pointer-synchronization', function() {
@@ -282,13 +284,13 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressSize / 8,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: intStructure,
       });
@@ -298,14 +300,14 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
         name: 'Hello',
-        byteSize: 8,
+        byteSize: addressSize / 8,
       });
       env.attachMember(structure, {
         name: 'value',
         type: MemberType.Object,
         bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
+        bitSize: addressSize,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: ptrStructure,
       });
@@ -314,22 +316,22 @@ describe('Feature: pointer-synchronization', function() {
         type: MemberType.Bool,
         bitOffset: 0,
         bitSize: 1,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         structure: {},
       });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
       env.getTargetAddress = function(target, cluster) {
-        return 0x1000n;
+        return usize(0x1000);
       };
       // start now with an active pointer so it gets vivificated in order to ensure code coverage
       const object = new Hello(new Int32(1234));
       env.updatePointerAddresses(object);
-      expect(object[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
+      expect(getUsize.call(object[MEMORY], 0, true)).to.equal(usize(0x1000));
       // now make the pointer inactive
       object.$ = null;
       env.updatePointerAddresses(object);
-      expect(object[MEMORY].getBigUint64(0, true)).to.equal(0n);
+      expect(getUsize.call(object[MEMORY], 0, true)).to.equal(usize(0));
     })
     it('should ignore pointers in a bare union', function() {
       const env = new Env();
@@ -867,27 +869,27 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*Hello',
-        byteSize: 8,
+        byteSize: addressSize / 8,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: opaqueStructure,
       });
       const Ptr = env.defineStructure(ptrStructure);
       env.endStructure(ptrStructure);
       const pointer = new Ptr(undefined);
-      const dv = new DataView(new ArrayBuffer(16))
+      const dv = new DataView(new ArrayBuffer(16));
       const map = new Map([
-        [ 0x1000n, dv ],
+        [ usize(0x1000), dv ],
       ]);
       env.obtainFixedView = function(address, len) {
         return map.get(address);
       };
-      pointer[MEMORY].setBigUint64(0, 0x1000n, true);
+      setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
       env.updatePointerTargets(pointer);
       expect(pointer.dataView).to.equal(dv);
     })

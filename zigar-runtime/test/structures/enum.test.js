@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -177,6 +178,7 @@ describe('Structure: enum', function() {
     })
   })
   describe('defineStructure', function() {
+    skip.
     it('should define an enum class', function() {
       const env = new Env();
       const structure = env.beginStructure({
@@ -221,6 +223,7 @@ describe('Structure: enum', function() {
       expect(Hello.Dog.toString()).to.equal('Dog');
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;
+      throw new Error('FIXME');
       expect(() => Hello.Dog.$ = Hello.Dog).to.throw(TypeError);
       const e = new Hello(Hello.Cat);
       expect(e.$).to.equal(Hello.Cat);

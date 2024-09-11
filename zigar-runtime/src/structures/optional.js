@@ -22,6 +22,7 @@ export default mixin({
     };
     const isValueVoid = members[0].type === MemberType.Void;
     const isChildActive = function () {
+
       return !!getPresent.call(this);
     };
     const initializer = function(arg) {
@@ -57,8 +58,8 @@ export default mixin({
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
-    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure, { isChildActive });
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
     return constructor;
   },
 });

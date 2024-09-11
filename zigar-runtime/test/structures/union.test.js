@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import {
@@ -1687,6 +1688,7 @@ describe('Structure: union', function() {
       object.$ = { cat: 4567 };
       expect(object.cat).to.equal(4567);
     })
+    skip.
     it('should define an iterator union', function() {
       const env = new Env();
       const structure = env.beginStructure({

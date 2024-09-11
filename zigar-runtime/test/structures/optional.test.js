@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import AccessorBool from '../../src/accessors/bool.js';
@@ -514,14 +514,14 @@ describe('Structure: optional', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'Int32',
-        byteSize: 4,
+        name: 'u8',
+        byteSize: 1,
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 8,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 1,
         structure: intStructure,
       });
       env.defineStructure(intStructure);
@@ -596,14 +596,14 @@ describe('Structure: optional', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'Int32',
-        byteSize: 4,
+        name: 'u8',
+        byteSize: 1,
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
-        bitSize: 32,
+        bitSize: 8,
         bitOffset: 0,
-        byteSize: 4,
+        byteSize: 1,
         structure: intStructure,
       });
       env.defineStructure(intStructure);
@@ -611,7 +611,7 @@ describe('Structure: optional', function() {
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.IsString,
-        name: '[_]Uint8',
+        name: '[_]u8',
         byteSize: 1,
       })
       env.attachMember(sliceStructure, {
@@ -625,7 +625,7 @@ describe('Structure: optional', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasLength | StructureFlag.IsMultiple,
-        name: '[]Uint8',
+        name: '[]u8',
         byteSize: 16,
       });
       env.attachMember(ptrStructure, {

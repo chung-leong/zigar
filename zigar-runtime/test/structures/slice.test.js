@@ -722,6 +722,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -1364,41 +1365,6 @@ describe('Structure: slice', function() {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 1000n);
       }
     })
-    it('should allow casting from a buffer', function() {
-      const env = new Env();
-      const uintStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'u32',
-        byteSize: 4,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
-      env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Slice,
-        name: '[_]u32',
-        byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
-      env.endStructure(structure);
-      const buffer = new Buffer(16);
-      const slice = Slice(buffer);
-      slice[0] = 0xf0f0f0f0;
-      expect(slice).to.have.lengthOf(4);
-      expect(buffer[0]).to.equal(0xf0);
-    })
     it('should allow casting from a typed array', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
@@ -1805,6 +1771,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1851,6 +1818,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1895,6 +1863,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1939,7 +1908,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: StructureFlag.HasSentinel,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1988,7 +1957,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: StructureFlag.HasSentinel,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -2039,7 +2008,7 @@ describe('Structure: slice', function() {
       env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: StructureFlag.HasSentinel,
+        flags: StructureFlag.IsString | StructureFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -2070,5 +2039,42 @@ describe('Structure: slice', function() {
       expect(() => slice.$.typedArray = new Uint8Array(array)).to.throw(TypeError)
         .with.property('message').that.contains(4);
     })
+    if (process.env.TARGET === 'node') {
+      it('should allow casting from a buffer', function() {
+        const env = new Env();
+        const uintStructure = env.beginStructure({
+          type: StructureType.Primitive,
+          name: 'u32',
+          byteSize: 4,
+        });
+        env.attachMember(uintStructure, {
+          type: MemberType.Uint,
+          bitSize: 32,
+          bitOffset: 0,
+          byteSize: 4,
+          structure: uintStructure,
+        });
+        env.defineStructure(uintStructure);
+        env.finalizeStructure(uintStructure);
+        const structure = env.beginStructure({
+          type: StructureType.Slice,
+          name: '[_]u32',
+          byteSize: 4,
+        });
+        env.attachMember(structure, {
+          type: MemberType.Uint,
+          bitSize: 32,
+          byteSize: 4,
+          structure: uintStructure,
+        });
+        const Slice = env.defineStructure(structure);
+        env.endStructure(structure);
+        const buffer = new Buffer(16);
+        const slice = Slice(buffer);
+        slice[0] = 0xf0f0f0f0;
+        expect(slice).to.have.lengthOf(4);
+        expect(buffer[0]).to.equal(0xf0);
+      })
+    }
   })
 })

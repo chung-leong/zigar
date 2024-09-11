@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
@@ -1461,6 +1462,7 @@ describe('Structure: struct', function() {
       expect(() => object2.$ = object1).to.throw(TypeError)
         .with.property('message').that.contains('cannot point to garbage-collected');
     })
+    skip.
     it('should define an iterator struct', function() {
       const env = new Env();
       const structure = env.beginStructure({

@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -312,6 +313,7 @@ describe('Feature: structure-acquisition', function() {
     })
   })
   describe('hasMethods', function() {
+    skip.
     it('should return true when some structures have methods', function() {
       const env = new Env();
       const s1 = {

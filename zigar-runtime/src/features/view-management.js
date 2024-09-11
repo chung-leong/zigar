@@ -4,7 +4,7 @@ import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
 import { COPY, FIXED, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
-import { add, findElements } from '../utils.js';
+import { add, alignForward, findElements } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
@@ -14,16 +14,19 @@ export default mixin({
     let dv;
     // not using instanceof just in case we're getting objects created in other contexts
     const tag = arg?.[Symbol.toStringTag];
-    if (tag === 'DataView') {
-      // capture relationship between the view and its buffer
-      dv = this.registerView(arg);
-    } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
-      dv = this.obtainView(arg, 0, arg.byteLength);
-    } else if (tag === constructor[TYPED_ARRAY]?.name || (tag === 'Uint8ClampedArray' && constructor[TYPED_ARRAY] === Uint8Array)) {
-      dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-    } else if (tag === 'Uint8Array' && typeof(Buffer) === 'function' && arg instanceof Buffer) {
-      dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
-    } else {
+    if (tag) {
+      if (tag === 'DataView') {
+        // capture relationship between the view and its buffer
+        dv = this.registerView(arg);
+      } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+        dv = this.obtainView(arg, 0, arg.byteLength);
+      } else if ((tag && tag === constructor[TYPED_ARRAY]?.name) || (tag === 'Uint8ClampedArray' && constructor[TYPED_ARRAY] === Uint8Array)) {
+        dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
+      } else if (process.env.TARGET === 'node' && tag === 'Uint8Array' && arg instanceof Buffer) {
+        dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
+      }
+    }
+    if (!dv) {
       const memory = arg?.[MEMORY];
       if (memory) {
         // arg a Zig data object
@@ -65,7 +68,7 @@ export default mixin({
       }
       const len = dv.byteLength / elementSize;
       const source = { [MEMORY]: dv };
-      target[SENTINEL]?.validateData?.(source, len);
+      target.constructor[SENTINEL]?.validateData?.(source, len);
       if (fixed) {
         // need to copy when target object is in fixed memory
         copy = true;
@@ -80,7 +83,7 @@ export default mixin({
         throw new BufferSizeMismatch(structure, dv, target);
       }
       const source = { [MEMORY]: dv };
-      target[SENTINEL]?.validateData?.(source, target.length);
+      target.constructor[SENTINEL]?.validateData?.(source, target.length);
       target[COPY](source);
     }
   },

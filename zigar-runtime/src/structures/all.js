@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
@@ -13,7 +13,7 @@ import {
   TYPED_ARRAY,
   VARIANTS, VISIT
 } from '../symbols.js';
-import { defineProperties, defineProperty, defineValue, getTypeName, ObjectCache } from '../utils.js';
+import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -296,10 +296,14 @@ export default mixin({
         case StructureType.Enum:
         case StructureType.ErrorSet:
         case StructureType.Primitive: {
-          const typeName = getTypeName(member)
-          const arrayName = typeName + 'Array';
+          const { byteSize, type } = member;
+          const intType = (type === MemberType.Float)
+                        ? 'Float'
+                        : (type === MemberType.Int) ? 'Int' : 'Uint';
+          const prefix = (byteSize > 4 && type !== MemberType.Float) ? 'Big' : '';
+          const arrayName = prefix + intType + (byteSize * 8) + 'Array';
           return globalThis[arrayName];
-        }
+        } break;
         case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
@@ -307,11 +311,11 @@ export default mixin({
       }
     }
   },
-  ...(process.env.target === 'wasm' ? {
+  ...(process.env.TARGET === 'wasm' ? {
     exports: {
       defineStructure: { argType: 'v' },
     },
-  } : process.env.target === 'node' ? {
+  } : process.env.TARGET === 'node' ? {
     exports: {
       defineStructure: null,
     },
