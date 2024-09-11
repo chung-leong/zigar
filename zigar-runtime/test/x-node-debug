@@ -1,0 +1,5 @@
+#!/bin/bash
+cd "$(dirname "$0")"
+DEV=1
+TARGET=node
+npx mocha --reporter spec --inspect-brk '**/*.test.js' -- $@

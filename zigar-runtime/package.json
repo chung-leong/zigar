@@ -8,11 +8,12 @@
     "test": "test"
   },
   "scripts": {
-    "test": "DEV=1 TARGET=wasm mocha --no-warnings 'test/**/*.test.js'",
-    "test:node": "DEV=1 TARGET=node mocha --no-warnings 'test/**/*.test.js'",
-    "test:both": "npm run test && npm run test:node",
-    "debug": "DEV=1 TARGET=wasm mocha --reporter spec --inspect-brk 'test/**/*.test.js'",
-    "coverage": "c8 npm run test",
+    "test": "./test/x-wasm",
+    "test:node": "./test/x-node",
+    "test:both": "./test/x-both",
+    "debug": "./test/x-wasm-debug",
+    "debug:node": "./test/x-wasm-debug",
+    "coverage": "c8 ./test/x-both",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [

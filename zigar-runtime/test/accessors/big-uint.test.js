@@ -45,6 +45,11 @@ describe('Accessor: big-uint', function() {
       const get1 = env.getAccessorBigUint('get', members[0]);
       dv1.setBigUint64(8, 0x0000_ffff_ffff_fffen, true);
       expect(get1.call(dv1, 8, true)).to.equal(0x0000_ffff_ffff_fffen);
+      const set1 = env.getAccessorBigUint('set', members[0]);
+      set1.call(dv1, 8, 1234n, true);
+      expect(get1.call(dv1, 8, true)).to.equal(1234n);
+      set1.call(dv1, 8, 0x0000_ffff_ffff_fffen, true);
+      expect(get1.call(dv1, 8, true)).to.equal(0x0000_ffff_ffff_fffen);
       const dv2 = new DataView(new ArrayBuffer(8 + 8))
       const get2 = env.getAccessorBigUint('get', members[1]);
       dv2.setBigUint64(8, 0x7fff_ffff_ffff_ffffn, false);
