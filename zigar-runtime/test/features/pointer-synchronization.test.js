@@ -34,6 +34,7 @@ import StructureSlice from '../../src/structures/slice.js';
 import StructureStructLike from '../../src/structures/struct-like.js';
 import StructureStruct from '../../src/structures/struct.js';
 import StructureUnion from '../../src/structures/union.js';
+import { addressSize, getUsize, usize } from '../test-utils.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, StructureAcquisition, StructureAll, StructurePrimitive, DataCopying, StructurePointer,
@@ -68,13 +69,13 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressSize / 8,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: intStructure,
       });
@@ -84,7 +85,7 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'ArgStruct',
-        byteSize: 32,
+        byteSize: addressSize / 8 * 4,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -97,36 +98,36 @@ describe('Feature: pointer-synchronization', function() {
       env.attachMember(structure, {
         name: '0',
         type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
+        bitOffset: addressSize * 0,
+        bitSize: addressSize,
+        byteSize: addressSize / 8,
         slot: 0,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: '1',
         type: MemberType.Object,
-        bitOffset: 64,
-        bitSize: 64,
-        byteSize: 8,
+        bitOffset: addressSize * 1,
+        bitSize: addressSize,
+        byteSize: addressSize / 8,
         slot: 1,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: '2',
         type: MemberType.Object,
-        bitOffset: 128,
-        bitSize: 64,
-        byteSize: 8,
+        bitOffset: addressSize * 2,
+        bitSize: addressSize,
+        byteSize: addressSize / 8,
         slot: 2,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: '3',
         type: MemberType.Object,
-        bitOffset: 192,
-        bitSize: 64,
-        byteSize: 8,
+        bitOffset: addressSize * 2,
+        bitSize: addressSize,
+        byteSize: addressSize / 8,
         slot: 3,
         structure: ptrStructure,
       });
@@ -140,21 +141,21 @@ describe('Feature: pointer-synchronization', function() {
         if (cluster) {
           return;
         } else {
-          return 0x1000n;
+          return usize(0x1000);
         }
       };
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
       };
       env.getBufferAddress = function(buffer) {
-        return 0x2000n;
+        return usize(0x2000);
       };
       env.startContext();
       env.updatePointerAddresses(args);
-      expect(args[0][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
-      expect(args[1][MEMORY].getBigUint64(0, true)).to.equal(0x1000n);
-      expect(args[2][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
-      expect(args[3][MEMORY].getBigUint64(0, true)).to.equal(0x2004n);
+      expect(getUsize.call(args[0][MEMORY], 0, true)).to.equal(usize(0x2000));
+      expect(getUsize.call(args[1][MEMORY], 0, true)).to.equal(usize(0x1000));
+      expect(getUsize.call(args[2][MEMORY], 0, true)).to.equal(usize(0x2000));
+      expect(getUsize.call(args[3][MEMORY], 0, true)).to.equal(usize(0x2000));
     })
     it('should be able to handle self-referencing structures', function() {
       const env = new Env();

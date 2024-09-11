@@ -46,6 +46,12 @@ export default mixin({
       allocateJsThunk: { argType: 'i', returnType: 'i' },
       performJsCall: { argType: 'iii', returnType: 'i' },
     },
+    allocateJsThunk() {
+      // TODO
+    },
+    performJsCall() {
+      // TODO
+    },
   } : process.env.TARGET === 'node' ? {
     imports: {
       runJsThunkConstructor: null,

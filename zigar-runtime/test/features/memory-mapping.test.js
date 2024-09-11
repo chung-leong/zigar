@@ -58,8 +58,8 @@ describe('Feature: memory-mapping', function() {
       env.startContext();
       const address1 = env.getShadowAddress(object1, cluster);
       const address2 = env.getShadowAddress(object2, cluster);
-      expect(address1).to.equal(0x1000 + 4);
-      expect(address2).to.equal(0x1004 + 4);
+      expect(address1).to.equal(0x1000);
+      expect(address2).to.equal(0x1004);
     })
   })
   describe('createShadow', function() {

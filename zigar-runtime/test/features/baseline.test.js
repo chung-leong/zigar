@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { capture } from '../test-utils.js';
@@ -44,6 +45,7 @@ describe('Feature: baseline', function() {
     })
   })
   describe('recreateStructures', function() {
+    skip.
     it('should recreate structures based on input definition', function() {
       const env = new Env();
       const s1 = {

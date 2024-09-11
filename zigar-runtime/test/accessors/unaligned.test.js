@@ -113,7 +113,7 @@ describe('Accessor: unaligned', function() {
     })
   })
   describe('getAccessorUnaligned', function() {
-    it('should return methods for accessing non-standard ints', function() {
+    it('should return methods for accessing unaligned non-standard ints', function() {
       const env = new Env();
       const members = [
         { type: MemberType.Int, bitSize: 7, byteSize: 1, bitOffset: 0 },

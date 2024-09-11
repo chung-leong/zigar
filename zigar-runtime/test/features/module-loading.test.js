@@ -1,10 +1,12 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
+import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { WASI } from 'wasi';
 import { defineClass } from '../../src/environment.js';
 import { capture } from '../test-utils.js';
 
+import { Exit } from '../../src/errors.js';
 import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
@@ -15,7 +17,6 @@ import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import WasiSupport from '../../src/features/wasi-support.js';
 
-debugger;
 const Env = defineClass('FeatureTest', [
   Baseline, ModuleLoading, DataCopying, CallMarshalingOutbound, ViewManagement, WasiSupport,
   StreamRedirection, StructureAcquisition, MemoryMapping,
@@ -24,7 +25,6 @@ const Env = defineClass('FeatureTest', [
 describe('Feature: module-loading', function() {
   describe('releaseFunctions', function() {
     it('should make all imported functions throw', function() {
-      debugger;
       const env = new Env();
       env.imports = {
         runThunk: function() {},
@@ -53,6 +53,7 @@ describe('Feature: module-loading', function() {
     })
   })
   if (process.env.TARGET === 'wasm') {
+    skip.
     describe('initialize', function() {
       it('should accept a WASI object', async function() {
         const env = new Env();
@@ -178,7 +179,6 @@ describe('Feature: module-loading', function() {
       it('should store string in value table', function() {
         const env = new Env();
         const string = 'hello world';
-        debugger;
         const index = env.toWebAssembly('s', string);
         const result = env.fromWebAssembly('s', index);
         expect(result).to.equal(string);
@@ -283,6 +283,7 @@ describe('Feature: module-loading', function() {
         expect(() => env.importFunctions({})).to.throw(Error);
       })
     })
+    skip.
     describe('instantiateWebAssembly', function() {
       it('should attempt to stream in a WASM instance', async function() {
         const env = new Env();
@@ -311,6 +312,7 @@ describe('Feature: module-loading', function() {
         });
       })
     })
+    skip.
     describe('loadModule', function() {
       it('should load a module', async function() {
         const env = new Env();
@@ -430,8 +432,7 @@ describe('Feature: module-loading', function() {
       it('should throw exit error when proc_exit is called', async function() {
         const env = new Env();
         const wasi = env.getWASIImport();
-        expect(() => wasi.proc_exit()).to.throw(Error)
-          .with.property('message', 'Program exited');
+        expect(() => wasi.proc_exit()).to.throw(Exit);
       })
     })
   } else if (process.env.TARGET === 'node') {

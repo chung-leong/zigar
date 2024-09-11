@@ -628,8 +628,8 @@ describe('Error functions', function() {
   })
   describe('ZigError', function() {
     it('should throw error with the correct message', function() {
-      const err = new ZigError('PantsOnFire');
-      expect(err.message).to.contain('Pants on fire');
+      const err = new ZigError();
+      expect(err.message).to.contain('Zig');
     })
   })
   describe('adjustArgumentError', function() {

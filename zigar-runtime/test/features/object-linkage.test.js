@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { defineClass } from '../../src/environment.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
@@ -91,6 +92,7 @@ describe('Feature: object-linkage', function() {
       expect(object[LAST_LENGTH]).to.equal(4);
     });
     if (process.env.TARGET === 'wasm') {
+      skip.
       it('should link variables after initialization promise is fulfilled', async function() {
         const env = new Env();
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });

@@ -371,8 +371,8 @@ export class InvalidVariadicArgument extends TypeError {
 }
 
 export class ZigError extends Error {
-  constructor(name) {
-    super(deanimalizeErrorName(name));
+  constructor() {
+    super(`Error encountered in Zig code`);
   }
 }
 

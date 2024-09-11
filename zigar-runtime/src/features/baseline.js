@@ -15,7 +15,7 @@ export default mixin({
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
       released: () => this.released,
-      connect: (console) => this.console = console,
+      connect: (console) => this.consoleObject = console,
       multithread: (enable) => this.setMultithread?.(enable),
       sizeOf: (T) => check(T[SIZE]),
       alignOf: (T) => check(T[ALIGN]),

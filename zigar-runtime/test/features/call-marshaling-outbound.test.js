@@ -1,16 +1,27 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
 import { StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { Exit } from '../../src/errors.js';
+import { Exit, ZigError } from '../../src/errors.js';
+import { ALIGN, ATTRIBUTES, COPY, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+
+use (ChaiAsPromised);
 
 import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound, {
   CallContext,
   isNeededByStructure,
 } from '../../src/features/call-marshaling-outbound.js';
-import { ALIGN, MEMORY, VISIT } from '../../src/symbols.js';
+import DataCopying from '../../src/features/data-copying.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
+import PointerSynchronization from '../../src/features/pointer-synchronization.js';
+import ViewManagement from '../../src/features/view-management.js';
+import { defineProperties } from '../../src/utils.js';
 
-const Env = defineClass('FeatureTest', [ Baseline, CallMarshalingOutbound ]);
+const Env = defineClass('FeatureTest', [
+  Baseline, DataCopying, CallMarshalingOutbound, MemoryMapping, ViewManagement,
+  PointerSynchronization,
+]);
 
 describe('Feature: call-marshaling-outbound', function() {
   describe('isNeededByStructure', function() {
@@ -96,10 +107,12 @@ describe('Feature: call-marshaling-outbound', function() {
     describe('invokeThunk', function() {
       it('should call runThunk', function() {
         const env = new Env();
-        let thunkId, argAddress;
+        let thunkAddress, fnAddress, argAddress;
         env.runThunk = function(...args) {
-          thunkId = args[0];
-          argAddress = args[1];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argAddress = args[2];
+          return true;
         };
         env.allocateExternMemory = function(type, len, align) {
           return 0x1000;
@@ -111,18 +124,23 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         const args = new Arg();
-        env.invokeThunk(100, args);
-        expect(thunkId).to.equal(100);
+        env.invokeThunk(100, 200, args);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(200);
         expect(argAddress).to.equal(0x1000);
       })
       it('should attempt to update pointers in argument struct', function() {
         const env = new Env();
-        let thunkId, argAddress;
+        let thunkAddress, fnAddress, argAddress;
         env.runThunk = function(...args) {
-          thunkId = args[0];
-          argAddress = args[1];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argAddress = args[2];
+          return true;
         };
         env.allocateExternMemory = function(type, len, align) {
           return 0x1000;
@@ -134,19 +152,23 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
         let called = false;
-        Arg.prototype[VISIT] = function() {
-          called = true;
-        };
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+          [VISIT]: {
+            value() {
+              called = true;
+            }
+          }
+        });
         const args = new Arg();
-        env.invokeThunk(100, args);
+        env.invokeThunk(100, 100, args);
         expect(called).to.equal(true);
       })
-      it('should throw when runThunk returns a string', function() {
+      it('should throw when runThunk returns false', function() {
         const env = new Env();
         env.runThunk = function(...args) {
-          return 'NoDonut';
+          return false;
         };
         env.allocateExternMemory = function(type, len, align) {
           return 0x1000;
@@ -158,10 +180,12 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         const args = new Arg();
-        expect(() => env.invokeThunk(100, args)).to.throw(Error)
-          .with.property('message', 'No donut');
+        expect(() => env.invokeThunk(100, 200, args)).to.throw(Error)
+          .with.property('message').that.contains('Zig');
       })
       it('should return promise when thunk runner is not ready', async function() {
         const env = new Env();
@@ -172,15 +196,19 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const args = new Arg();
-        const promise = env.invokeThunk(100, args);
+        const promise = env.invokeThunk(100, 200, args);
         expect(promise).to.be.a('promise');
-        let thunkId, argAddress;
+        let thunkAddress, fnAddress, argAddress;
         env.runThunk = function(...args) {
-          thunkId = args[0];
-          argAddress = args[1];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argAddress = args[2];
+          return true;
         };
         env.allocateExternMemory = function(type, len, align) {
           return 0x1000;
@@ -190,10 +218,11 @@ describe('Feature: call-marshaling-outbound', function() {
         done();
         const result = await promise;
         expect(result).to.equal(123);
-        expect(thunkId).to.equal(100);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(200);
         expect(argAddress).to.equal(0x1000);
       })
-      it('should throw when thunk runner eventually returns a string', async function() {
+      it('should throw when thunk runner eventually returns a false', async function() {
         const env = new Env();
         let done;
         env.initPromise = new Promise(resolve => done = resolve);
@@ -202,13 +231,15 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const args = new Arg();
-        const promise = env.invokeThunk(100, args);
+        const promise = env.invokeThunk(100, 100, args);
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
-          return 'TooManyDonuts';
+          return false;
         };
         env.allocateExternMemory = function(type, len, align) {
           return 0x1000;
@@ -216,12 +247,7 @@ describe('Feature: call-marshaling-outbound', function() {
         env.freeExternMemory = function() {};
         env.flushStdout = function() {};
         done();
-        try {
-          await promise;
-          expect.fail('Not throwing');
-        } catch (err) {
-          expect(err).to.have.property('message', 'Too many donuts');
-        }
+        await expect(promise).to.eventually.be.rejectedWith(ZigError);
       })
       it('should throw when function exits with non-zero code', async function() {
         const env = new Env();
@@ -232,10 +258,12 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const args = new Arg();
-        const promise = env.invokeThunk(100, args);
+        const promise = env.invokeThunk(100, 100, args);
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
           throw new Exit(-1);
@@ -246,13 +274,7 @@ describe('Feature: call-marshaling-outbound', function() {
         env.freeExternMemory = function() {};
         env.flushStdout = function() {};
         done();
-        try {
-          await promise;
-          expect.fail('Not throwing');
-        } catch (err) {
-          expect(err).to.have.property('message', 'Program exited');
-          expect(err.code).to.equal(-1);
-        }
+        await expect(promise).to.eventually.be.rejectedWith(Exit).with.property('code', -1);
       })
       it('should not throw when function exits with zero', async function() {
         const env = new Env();
@@ -263,10 +285,12 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(4);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(4),
+        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const args = new Arg();
-        const promise = env.invokeThunk(100, args);
+        const promise = env.invokeThunk(100, 100, args);
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
           throw new Exit(0);
@@ -277,17 +301,19 @@ describe('Feature: call-marshaling-outbound', function() {
         env.freeExternMemory = function() {};
         env.flushStdout = function() {};
         done();
-        await promise;
+        await expect(promise).to.eventually.be.fulfilled;
       })
       it('should use variadic handler when argument struct has attributes', function() {
         const env = new Env();
-        let recv, thunkId, argAddress, attrAddress;
+        let recv, thunkAddress, fnAddress, argAddress, attrAddress;
         env.runThunk = function() {};
         env.runVariadicThunk = function(...args) {
           recv = this;
-          thunkId = args[0];
-          argAddress = args[1];
-          attrAddress = args[2];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argAddress = args[2];
+          attrAddress = args[3];
+          return true;
         };
         let nextAddress = 0x1000;
         env.allocateExternMemory = function(type, len, align) {
@@ -301,7 +327,9 @@ describe('Feature: call-marshaling-outbound', function() {
         const Attributes = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(16));
         };
-        Attributes.prototype[COPIER] = getMemoryCopier(undefined);
+        defineProperties(Attributes.prototype, {
+          [COPY]: env.defineCopier(undefined),
+        });
         const Arg = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(16));
           this[MEMORY][ALIGN] = 4;
@@ -309,11 +337,14 @@ describe('Feature: call-marshaling-outbound', function() {
           this[ATTRIBUTES] = new Attributes();
           this.retval = 123;
         };
-        Arg.prototype[COPIER] = getMemoryCopier(16);
+        defineProperties(Arg.prototype, {
+          [COPY]: env.defineCopier(16),
+        });
         const args = new Arg();
-        env.invokeThunk(100, args);
+        env.invokeThunk(100, 200, args);
         expect(recv).to.equal(env);
-        expect(thunkId).to.equal(100);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(200);
         expect(argAddress).to.equal(0x1000);
         expect(attrAddress).to.equal(0x2000);
       })
@@ -322,22 +353,24 @@ describe('Feature: call-marshaling-outbound', function() {
     describe('invokeThunk', function() {
       it('should invoke the given thunk with the expected arguments', function() {
         const env = new Env();
-        let recv, thunkId, argDV;
+        let recv, thunkAddress, fnAddress, argDV;
         env.runThunk = function(...args) {
           recv = this;
-          thunkId = args[0];
-          argDV = args[1];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argDV = args[2];
         };
         const argStruct = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
           [SLOTS]: { 0: {} },
         };
-        env.invokeThunk(100, argStruct);
+        env.invokeThunk(100, 200, argStruct);
         expect(recv).to.equal(env);
-        expect(thunkId).to.equal(100);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(200);
         expect(argDV).to.equal(argStruct[MEMORY]);
       })
-      it('should throw an error if thunk returns a string', function() {
+      it('should throw an error if thunk returns false', function() {
         const env = new Env();
         env.runThunk = function(...args) {
           return 'JellyDonutInsurrection';
@@ -368,19 +401,20 @@ describe('Feature: call-marshaling-outbound', function() {
             }
           }
         };
-        env.invokeThunk(100, argStruct);
+        env.invokeThunk(100, 200, argStruct);
         expect(thunkCalled).to.be.true;
         expect(visitorCalledBefore).to.be.true;
         expect(visitorCalledAfter).to.be.true;
       })
       it('should use variadic handler when argument struct has attributes', function() {
         const env = new Env();
-        let recv, thunkId, argDV, attrDV;
+        let recv, thunkAddress, fnAddress, argDV, attrDV;
         env.runVariadicThunk = function(...args) {
           recv = this;
-          thunkId = args[0];
-          argDV = args[1];
-          attrDV = args[2];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argDV = args[2];
+          attrDV = args[3];
         };
         const argAttrs = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -390,20 +424,22 @@ describe('Feature: call-marshaling-outbound', function() {
           [SLOTS]: { 0: {} },
           [ATTRIBUTES]: argAttrs,
         };
-        env.invokeThunk(100, argStruct);
+        env.invokeThunk(100, 200, argStruct);
         expect(recv).to.equal(env);
-        expect(thunkId).to.equal(100);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(100, 200);
         expect(argDV).to.equal(argStruct[MEMORY]);
         expect(attrDV).to.equal(argAttrs[MEMORY]);
       })
       it('should use variadic handler when argument struct has attributes and pointers', function() {
         const env = new Env();
-        let recv, thunkId, argDV, attrDV;
+        let recv, thunkAddress, fnAddress, argDV, attrDV;
         env.runVariadicThunk = function(...args) {
           recv = this;
-          thunkId = args[0];
-          argDV = args[1];
-          attrDV = args[2];
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          argDV = args[2];
+          attrDV = args[3];
         };
         const argAttrs = {
           [MEMORY]: new DataView(new ArrayBuffer(16)),
@@ -414,9 +450,10 @@ describe('Feature: call-marshaling-outbound', function() {
           [ATTRIBUTES]: argAttrs,
           [VISIT]: () => {},
         };
-        env.invokeThunk(100, argStruct);
+        env.invokeThunk(100, 200, argStruct);
         expect(recv).to.equal(env);
-        expect(thunkId).to.equal(100);
+        expect(thunkAddress).to.equal(100);
+        expect(fnAddress).to.equal(200);
         expect(argDV).to.equal(argStruct[MEMORY]);
         expect(attrDV).to.equal(argAttrs[MEMORY]);
       })

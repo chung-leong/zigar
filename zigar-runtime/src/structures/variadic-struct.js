@@ -23,7 +23,6 @@ export default mixin({
       if (args.length < argCount) {
         throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
       }
-      debugger;
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;

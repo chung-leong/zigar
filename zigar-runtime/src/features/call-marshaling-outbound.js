@@ -1,5 +1,6 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
+import { Exit, ZigError } from '../errors.js';
 import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
 
 export default mixin({
@@ -34,7 +35,7 @@ export default mixin({
     invokeThunkNow(thunkAddress, fnAddress, args) {
       try {
         this.startContext();
-        if (args[VISIT]) {
+        if (VISIT in args) {
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
@@ -43,7 +44,7 @@ export default mixin({
         // get address of attributes if function variadic
         const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
         this.updateShadows();
-        const err = (attrs)
+        const success = (attrs)
         ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
         : this.runThunk(thunkAddress, fnAddress, address);
         // create objects that pointers point to
@@ -60,10 +61,10 @@ export default mixin({
         }
         // errors returned by exported Zig functions are normally written into the
         // argument object and get thrown when we access its retval property (a zig error union)
-        // error strings returned by the thunk are due to problems in the thunking process
+        // if the thunk returns false, it indicates a problem in the thunking process
         // (i.e. bugs in export.zig)
-        if (err) {
-          throw new ZigError(err);
+        if (!success) {
+          throw new ZigError();
         }
         return args.retval;
       } catch (err) {
@@ -89,7 +90,7 @@ export default mixin({
         this.updatePointerAddresses(args);
         this.updateShadows();
       }
-      const err = (attrs)
+      const success = (attrs)
       ? this.runVariadicThunk(thunkAddress, fnAddress, args[MEMORY], attrs[MEMORY])
       : this.runThunk(thunkAddress, fnAddress, args[MEMORY]);
       if (hasPointers) {
@@ -105,10 +106,10 @@ export default mixin({
       }
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
-      // error strings returned by the thunk are due to problems in the thunking process
+      // if the thunk returns false, it indicates a problem in the thunking process
       // (i.e. bugs in export.zig)
-      if (err) {
-        throw new ZigError(err);
+      if (!success) {
+        throw new ZigError();
       }
     },
   } : {}),

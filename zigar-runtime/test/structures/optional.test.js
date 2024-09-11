@@ -584,7 +584,6 @@ describe('Structure: optional', function() {
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
-      debugger;
       expect(object.$.string).to.equal('This is a test');
       expect(object.$.typedArray).to.eql(array);
       object.valueOf();

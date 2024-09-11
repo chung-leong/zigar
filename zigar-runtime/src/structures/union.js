@@ -22,7 +22,6 @@ export default mixin({
     const { get: getSelectorNumber } = this.defineMember(selectorMember, false);
     const getActiveField = (flags & StructureFlag.HasTag)
     ? function() {
-        debugger;
         const item = getSelector.call(this);
         return item[NAME];
       }

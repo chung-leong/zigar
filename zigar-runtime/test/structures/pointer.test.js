@@ -3073,7 +3073,6 @@ describe('Structure: pointer', function() {
       env.endStructure(cpStructure);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
-      debugger;
       const intCPointer = new Int32CPtr(intPointer);
       expect(intCPointer['*'][0]).to.equal(1234);
     })
