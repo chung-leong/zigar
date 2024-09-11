@@ -4,7 +4,7 @@ import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } f
 import {
   ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { alignForward, always, defineProperties, defineValue } from '../utils.js';
+import { always, defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
   defineVariadicStruct(structure, descriptors) {
@@ -43,7 +43,8 @@ export default mixin({
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
         }
-        const byteOffset = offsets[index] = alignForward(totalByteSize, argAlign);
+        // can't use alignForward here, since that uses bigint when platform is 64-bit
+        const byteOffset = offsets[index] = (totalByteSize + (argAlign - 1)) & ~(argAlign - 1);
         totalByteSize = byteOffset + dv.byteLength;
       }
       const attrs = new ArgAttributes(args.length);

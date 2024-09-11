@@ -510,7 +510,8 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return null when address is invalid and count is above 0', function() {
       const env = new Env();
-      const dv = env.findMemory(0xaaaaaaaa, 14, 5);
+      const address = (process.env.BITS === '64') ? 0xaaaa_aaaa_aaaa_aaaan : 0xaaaa_aaaa;
+      const dv = env.findMemory(address, 14, 5);
       expect(dv).to.be.null;
     })
     it('should return null when address is 0 and count is above 0', function() {

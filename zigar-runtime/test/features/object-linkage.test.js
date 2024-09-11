@@ -4,7 +4,7 @@ import { defineClass } from '../../src/environment.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
-import { defineProperties, ObjectCache } from '../../src/utils.js';
+import { adjustAddress, defineProperties, ObjectCache } from '../../src/utils.js';
 
 import Baseline from '../../src/features/baseline.js';
 import DataCopying from '../../src/features/data-copying.js';
@@ -47,7 +47,7 @@ describe('Feature: object-linkage', function() {
     it('should add target location to pointer', function() {
       const env = new Env();
       env.recreateAddress = function(address) {
-        return address + 0x1000;
+        return adjustAddress(usize(address), 0x1000);
       };
       env.obtainFixedView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
@@ -55,7 +55,7 @@ describe('Feature: object-linkage', function() {
         return dv;
       };
       env.getBufferAddress = function(buffer) {
-        return 0x4000;
+        return usize(0x4000);
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -89,7 +89,7 @@ describe('Feature: object-linkage', function() {
       const object = new Test(new DataView(new ArrayBuffer(4)));
       env.variables.push({ object, reloc: 128 });
       env.linkVariables(false);
-      expect(object[LAST_ADDRESS]).to.equal(0x4000);
+      expect(object[LAST_ADDRESS]).to.equal(usize(0x4000));
       expect(object[LAST_LENGTH]).to.equal(4);
     });
     if (process.env.TARGET === 'wasm') {
@@ -217,7 +217,7 @@ describe('Feature: object-linkage', function() {
       let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
-        nextAddress += len * usize(0x0F);
+        nextAddress += usize(len * 0x0F);
         return address;
       };
       env.obtainExternView = function(address, len) {
@@ -234,6 +234,7 @@ describe('Feature: object-linkage', function() {
           value: function() {},
         }
       });
+      env.allocateMemory(16, 8, true);
       const object1 = new Test(env.allocateMemory(16, 8, true));
       const object2 = new Test(env.allocateMemory(16, 8, true));
       env.variables.push({ name: 'a', object: object1 });
@@ -249,7 +250,7 @@ describe('Feature: object-linkage', function() {
       let nextAddress = usize(0x1000);
       env.allocateExternMemory = function(type, len, align) {
         const address = nextAddress
-        nextAddress += len * usize(0x0F);
+        nextAddress += usize(len * 0x0F);
         return address;
       };
       env.obtainExternView = function(address, len) {

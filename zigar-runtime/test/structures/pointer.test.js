@@ -2617,9 +2617,9 @@ describe('Structure: pointer', function() {
           return address;
         };
       } else if (process.env.TARGET === 'node') {
-        const at0x30000 = new DataView(new ArrayBuffer(4 * 4));
-        const bufferMap = new Map([ 0x30000n, at0x30000 ]);
-        const addressMap = new Map([ at0x30000, 0x30000n ]);
+        at0x30000 = new DataView(new ArrayBuffer(4 * 4));
+        const bufferMap = new Map([ [ usize(0x30000), at0x30000.buffer ] ]);
+        const addressMap = new Map([ [ at0x30000, usize(0x30000) ] ]);
         env.allocateExternMemory = function(type, len, align) {
           const address = nextAddress;
           nextAddress += usize(0x1000);
