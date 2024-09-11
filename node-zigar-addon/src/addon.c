@@ -1,7 +1,5 @@
 #include "addon.h"
 
-#include <stdio.h>
-
 int module_count = 0;
 int buffer_count = 0;
 int function_count = 0;
@@ -978,14 +976,14 @@ napi_value load_module(napi_env env,
 bool compile_javascript(napi_env env,
                         napi_value *dest) {
     // compile the code
-    static const char* addon_js_txt = (
-        #include "addon.js.txt"
+    static char addon_js_txt[] = (
+        #if UINTPTR_MAX == UINT64_MAX
+            #include "./addon.64b.js.txt"
+        #else
+            #include "./addon.32b.js.txt"
+        #endif
     );
-    // getting the length of the string this way due to VC throwing "compiler is out of heap space" error
-    // when addon_js_txt is a char array instead of a pointer
-    static size_t addon_js_txt_len = sizeof(
-        #include "addon.js.txt"
-    ) - 1;
+    static size_t addon_js_txt_len = sizeof(addon_js_txt) - 1;
     napi_value string;
     return napi_create_string_utf8(env, addon_js_txt, addon_js_txt_len, &string) == napi_ok
         && napi_run_script(env, string, dest) == napi_ok;

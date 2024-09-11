@@ -1,27 +1,52 @@
 import Replace from '@rollup/plugin-replace';
 // import Terser from '@rollup/plugin-terser';
 
-export default {
-  input: 'src/addon.js',
-  plugins: [
-    Replace({
-      preventAssignment: true,
-      values: {
-        'process.env.DEV': 'false',
-        'process.env.TARGET': '"node"',
-      },
-    })
-  ],
-  output: {
-    file: 'src/addon.js.txt',
-    format: 'iife',
-    name: 'variable',
+export default [
+  {
+    input: 'src/addon.js',
     plugins: [
-      // Terser(),
-      CPPString(),
-    ]
+      Replace({
+        preventAssignment: true,
+        values: {
+          'process.env.DEV': 'false',
+          'process.env.BITS': '"64"',
+          'process.env.TARGET': '"node"',
+        },
+      })
+    ],
+    output: {
+      file: 'src/addon.64b.js.txt',
+      format: 'iife',
+      name: 'variable',
+      plugins: [
+        // Terser(),
+        CPPString(),
+      ]
+    },
   },
-};
+  {
+    input: 'src/addon.js',
+    plugins: [
+      Replace({
+        preventAssignment: true,
+        values: {
+          'process.env.DEV': 'false',
+          'process.env.BITS': '"32"',
+          'process.env.TARGET': '"node"',
+        },
+      })
+    ],
+    output: {
+      file: 'src/addon.32b.js.txt',
+      format: 'iife',
+      name: 'variable',
+      plugins: [
+        // Terser(),
+        CPPString(),
+      ]
+    },
+  }
+]
 
 function CPPString() {
   // place JS code into a C++ raw string

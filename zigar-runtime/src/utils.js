@@ -1,5 +1,5 @@
 import { memberNames, MemberType } from './constants.js';
-import { PROXY } from './symbols.js';
+import { LENGTH, PROXY } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {

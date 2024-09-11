@@ -327,6 +327,33 @@ describe('Structure: struct', function() {
       env.endStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
     })
+    it('should throw when no initializer is invalid for a struct', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: {},
+      });
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new Hello(123)).to.throw(TypeError);
+    })
     it('should work correctly with big-endian data', function() {
       const env = new Env();
       env.littleEndian = false;

@@ -1,21 +1,27 @@
 import { expect } from 'chai';
 
 import { MemberType } from '../src/constants.js';
-import { MEMORY } from '../src/symbols.js';
+import { LENGTH, MEMORY, PROXY } from '../src/symbols.js';
 import {
   adjustAddress,
   alignForward,
+  always,
   decodeBase64,
   decodeText,
   defineProperties,
   encodeBase64,
   encodeText,
   findSortedIndex,
+  getLength,
   getPrimitiveName,
+  getProxy,
+  getSelf,
   getTypeName,
   isInvalidAddress,
   isMisaligned,
+  never,
   ObjectCache,
+  toString,
   transformIterable,
 } from '../src/utils.js';
 
@@ -343,5 +349,50 @@ describe('Utility functions', function() {
         expect(isMisaligned(0x1000, undefined)).to.be.false;
       })
     }
+  })
+  describe('getSelf', function() {
+    it('should return this', function() {
+      const object = {};
+      expect(getSelf.call(object)).to.equal(object);
+    })
+  })
+  describe('getLength', function() {
+    it('should return this[LENGTH]', function() {
+      const object = {
+        [LENGTH]: 123,
+      };
+      expect(getLength.call(object)).to.equal(123);
+    })
+  })
+  describe('getProxy', function() {
+    it('should return this[PROXY]', function() {
+      const object = {
+        [PROXY]: 123,
+      };
+      expect(getProxy.call(object)).to.equal(123);
+    })
+  })
+  describe('toString', function() {
+    it('should invoke toPrimitive with \"string\" as hint', function() {
+      const object = {
+        [Symbol.toPrimitive](hint) {
+          switch (hint) {
+            case 'string': return 'hello';
+            default: return 123;
+          }
+        },
+      };
+      expect(toString.call(object)).to.equal('hello');
+    })
+  })
+  describe('always', function() {
+    it('should return true', function() {
+      expect(always()).to.be.true;
+    })
+  })
+  describe('never', function() {
+    it('should return false', function() {
+      expect(never()).to.be.false;
+    })
   })
 })
