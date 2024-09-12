@@ -150,7 +150,7 @@ typedef struct {
     size_t futex_handle;
 } js_call;
 
-typedef struct export_table {
+struct export_table {
     result (__cdecl *allocate_host_memory)(module_data*, size_t, uint16_t, memory*);
     result (__cdecl *free_host_memory)(module_data*, const memory*);
     result (__cdecl *capture_string)(module_data*, const memory*, napi_value*);
@@ -169,18 +169,18 @@ typedef struct export_table {
     result (__cdecl *disable_multithread)(module_data*);
     result (__cdecl *perform_js_call)(module_data*, js_call*);
     result (__cdecl *queue_js_call)(module_data*, js_call*);
-} export_table;
+};
 
-typedef struct import_table {
+struct import_table {
     result (__cdecl *initialize)(module_data*);
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);
-    result (__cdecl *run_thunk)(module_data*, size_t, size_t, void*, napi_value*);
-    result (__cdecl *run_variadic_thunk)(module_data*, size_t, size_t, void*, void*, size_t, napi_value*);
-    result (__cdecl *run_js_thunk_constructor)(module_data*, size_t, size_t, napi_value*);
+    result (__cdecl *run_thunk)(module_data*, size_t, size_t, void*);
+    result (__cdecl *run_variadic_thunk)(module_data*, size_t, size_t, void*, void*, size_t);
+    result (__cdecl *create_js_thunk)(module_data*, size_t, size_t, size_t*);
     result (__cdecl *override_write)(const void*, size_t);
     result (__cdecl *wake_caller)(size_t, uint32_t);
-} import_table;
+};
 
 #endif

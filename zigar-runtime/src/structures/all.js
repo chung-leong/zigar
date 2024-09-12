@@ -105,7 +105,7 @@ export default mixin({
           descriptor[accessorType] = fn;
         }
         // see if it's a method
-        if (startsWithSelf(member, structure)) {
+        if (member.flags & MemberFlag.IsMethod) {
           const { method } = fn[VARIANTS];
           descriptors[name] = defineValue(method);
           if (accessorType && method.length  === argRequired) {
@@ -324,22 +324,4 @@ export default mixin({
 
 export function isNeededByStructure(structure) {
   return true;
-}
-
-function startsWithSelf(fnMember, structure) {
-  const argStructure = fnMember.structure.instance.members[0].structure;
-  // get structure of first argument (members[0] is retval)
-  const arg0Structure = argStructure.instance.members[1]?.structure;
-  if (arg0Structure) {
-    if (arg0Structure === structure) {
-      return true;
-    } else if (arg0Structure.type === StructureType.Pointer) {
-      const targetStructure = arg0Structure.instance.members[0].structure;
-      if (targetStructure === structure) {
-        return true;
-      }
-    }
-
-  }
-  return false;
 }

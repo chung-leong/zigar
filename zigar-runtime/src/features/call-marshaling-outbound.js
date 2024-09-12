@@ -16,6 +16,27 @@ export default mixin({
   endContext() {
     this.context = this.contextStack.pop();
   },
+  createOutboundCallers(thunk, ArgStruct) {
+    const invoke = (argStruct) => {
+      const thunkAddr = this.getViewAddress(thunk[MEMORY]);
+      const funcAddr = this.getViewAddress(self[MEMORY]);
+      this.invokeThunk(thunkAddr, funcAddr, argStruct);
+    };
+    const self = function (...args) {
+      const argStruct = new ArgStruct(args, self.name, 0);
+      invoke(argStruct);
+      return argStruct.retval;
+    };
+    const method = function(...args) {
+      const argStruct = new ArgStruct([ this, ...args ], self.name, 1);
+      invoke(argStruct);
+      return argStruct.retval;
+    };
+    const binary = function(dv) {
+      invoke(ArgStruct(dv));
+    };
+    return { self, method, binary };
+  },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       runThunk: { argType: 'iii', returnType: 'v' },
@@ -55,9 +76,8 @@ export default mixin({
         this.releaseShadows();
         // restore the previous context if there's one
         this.endContext();
-        if (!this.context && this.flushConsole) {
-          this.flushStdout();
-          this.flushConsole();
+        if (!this.context) {
+          this.flushConsole?.();
         }
         // errors returned by exported Zig functions are normally written into the
         // argument object and get thrown when we access its retval property (a zig error union)
@@ -102,7 +122,7 @@ export default mixin({
       // restore the previous context if there's one
       this.endContext();
       if (!this.context) {
-        this.flushConsole();
+        this.flushConsole?.();
       }
       // errors returned by exported Zig functions are normally written into the
       // argument object and get thrown when we access its retval property (a zig error union)
@@ -116,6 +136,7 @@ export default mixin({
 });
 
 export function isNeededByStructure(structure) {
+  // TODO: check for instances of function instead
   return structure.type === StructureType.Function;
 }
 

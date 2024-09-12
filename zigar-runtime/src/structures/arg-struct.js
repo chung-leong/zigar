@@ -2,7 +2,7 @@ import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
 import { MEMORY, SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
-import { never } from '../utils.js';
+import { defineValue, never } from '../utils.js';
 
 export default mixin({
   defineArgStruct(structure, descriptors) {
@@ -55,6 +55,7 @@ export default mixin({
         return object === child;
       }
     : never;
+    descriptors.length = defineValue(argCount);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
     return constructor;

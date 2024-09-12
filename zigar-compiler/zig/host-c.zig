@@ -396,9 +396,9 @@ const Exports = extern struct {
     allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *?Value) callconv(.C) Result,
-    run_variadic_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *const anyopaque, usize, *?Value) callconv(.C) Result,
-    run_js_thunk_constructor: *const fn (*ModuleData, usize, usize, *?Value) callconv(.C) Result,
+    run_thunk: *const fn (*ModuleData, usize, usize, *anyopaque) callconv(.C) Result,
+    run_variadic_thunk: *const fn (*ModuleData, usize, usize, *anyopaque, *const anyopaque, usize) callconv(.C) Result,
+    create_js_thunk: *const fn (*ModuleData, usize, usize, *usize) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };

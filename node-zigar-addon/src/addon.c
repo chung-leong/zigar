@@ -631,8 +631,8 @@ napi_value run_variadic_thunk(napi_env env,
     return result;
 }
 
-napi_value run_js_thunk_constructor(napi_env env,
-                                    napi_callback_info info) {
+napi_value create_js_thunk(napi_env env,
+                           napi_callback_info info) {
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
@@ -813,7 +813,7 @@ struct {
     { "getFactoryThunk", get_factory_thunk },
     { "runThunk", run_thunk },
     { "runVariadicThunk", run_variadic_thunk },
-    { "runJsThunkConstructor", run_js_thunk_constructor },
+    { "createJsThunk", create_js_thunk },
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
     { "setMultithread", set_multithread },

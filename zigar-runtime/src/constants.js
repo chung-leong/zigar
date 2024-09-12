@@ -63,6 +63,7 @@ export const MemberFlag = {
   IsSize:           0x0000_0004,
   IsPartOfSet:      0x0000_0008,
   IsSelector:       0x0000_0010,
-  IsSentinel:       0x0000_0020,
-  IsBackingInt:     0x0000_0040,
+  IsMethod:         0x0000_0020,
+  IsSentinel:       0x0000_0040,
+  IsBackingInt:     0x0000_0080,
 };

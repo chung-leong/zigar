@@ -1,27 +1,45 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
-import { StructureType } from '../../src/constants.js';
+import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 import { Exit, ZigError } from '../../src/errors.js';
-import { ALIGN, ATTRIBUTES, COPY, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import { ALIGN, ATTRIBUTES, COPY, FIXED, MEMORY, SIZE, SLOTS, VISIT } from '../../src/symbols.js';
+import { defineProperties } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 use (ChaiAsPromised);
 
+import AccessorAll from '../../src/accessors/all.js';
 import Baseline from '../../src/features/baseline.js';
 import CallMarshalingOutbound, {
   CallContext,
   isNeededByStructure,
 } from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
+import IntConversion from '../../src/features/int-conversion.js';
 import MemoryMapping from '../../src/features/memory-mapping.js';
 import PointerSynchronization from '../../src/features/pointer-synchronization.js';
 import StreamRedirection from '../../src/features/stream-redirection.js';
+import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
-import { defineProperties } from '../../src/utils.js';
+import MemberAll from '../../src/members/all.js';
+import MemberBool from '../../src/members/bool.js';
+import MemberInt from '../../src/members/int.js';
+import MemberObject from '../../src/members/object.js';
+import MemberPrimitive from '../../src/members/primitive.js';
+import MemberUint from '../../src/members/uint.js';
+import StructureAll from '../../src/structures/all.js';
+import StructureArgStruct from '../../src/structures/arg-struct.js';
+import StructurePrimitive from '../../src/structures/primitive.js';
+import StructLike from '../../src/structures/struct-like.js';
+import StructureStruct from '../../src/structures/struct.js';
 
 const Env = defineClass('FeatureTest', [
   Baseline, DataCopying, CallMarshalingOutbound, MemoryMapping, ViewManagement,
-  PointerSynchronization, StreamRedirection,
+  PointerSynchronization, StreamRedirection, StructureAcquisition, StructureAll,
+  StructureArgStruct, MemberUint, MemberAll, MemberBool, MemberInt, IntConversion,
+  MemberPrimitive, StructurePrimitive, AccessorAll, StructureStruct, MemberObject,
+  StructLike,
 ]);
 
 describe('Feature: call-marshaling-outbound', function() {
@@ -31,22 +49,23 @@ describe('Feature: call-marshaling-outbound', function() {
         type: StructureType.Function,
         instance: {}
       };
-      it('should return true when structure is not a function', function() {
-        const structure = {
-          type: StructureType.SinglePointer,
-          instance: {
-            members: [
-              {
-                type: MemberType.Object,
-                structure: {
-                  type: StructureType.Function,
-                }
+      expect(isNeededByStructure(structure)).to.be.true;
+    })
+    it('should return true when structure is not a function', function() {
+      const structure = {
+        type: StructureType.SinglePointer,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: {
+                type: StructureType.Function,
               }
-            ]
-          }
-        };
-        expect(isNeededByStructure(structure)).to.be.false;
-      })
+            }
+          ]
+        }
+      };
+      expect(isNeededByStructure(structure)).to.be.false;
     })
   })
   describe('startContext', function() {
@@ -102,6 +121,278 @@ describe('Feature: call-marshaling-outbound', function() {
       } finally {
         env.endContext();
       }
+    })
+  })
+  describe('createOutboundCallers', function() {
+    it('should create a caller for invoking a Zig function', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: 4 * 3,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      const thunk = {
+        [MEMORY]: new DataView(new ArrayBuffer(0)),
+      };
+      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const { self } = env.createOutboundCallers(thunk, ArgStruct)
+      let thunkAddress, fnAddress, argStruct;
+      env.runThunk = (...args) => {
+        thunkAddress = args[0];
+        fnAddress = args[1];
+        argStruct = args[2];
+        return true;
+      };
+      self[MEMORY] = new DataView(new ArrayBuffer(0));
+      self[MEMORY][FIXED] = { address: usize(0x2008) };
+      env.allocateExternMemory = function(address, len) {
+        return usize(0x4000);
+      };
+      env.freeExternMemory = function() {
+      }
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      }
+      self(1, 2);
+      expect(thunkAddress).to.equal(usize(0x1004));
+      expect(fnAddress).to.equal(usize(0x2008));
+      if (process.env.TARGET === 'wasm') {
+        // on the WASM side external memory is used and the address is passed to runThunk()
+        expect(argStruct).to.equal(usize(0x4000));
+        argStruct = ArgStruct(new DataView(env.memory.buffer, 0x4000, ArgStruct[SIZE]));
+      } else if (process.env.TARGET === 'node') {
+        // on the Node side the arg struct is accessed directly and the DataView is passed to runThunk()
+        expect(argStruct).to.be.instanceOf(DataView);
+        argStruct = ArgStruct(argStruct);
+      }
+      expect(argStruct[0]).to.equal(1);
+      expect(argStruct[1]).to.equal(2);
+    })
+    it('should create a caller that accept a data view as argument', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: 4 * 3,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      const thunk = {
+        [MEMORY]: new DataView(new ArrayBuffer(0)),
+      };
+      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const { self, binary } = env.createOutboundCallers(thunk, ArgStruct)
+      let thunkAddress, fnAddress, argStruct;
+      env.runThunk = (...args) => {
+        thunkAddress = args[0];
+        fnAddress = args[1];
+        argStruct = args[2];
+        return true;
+      };
+      self[MEMORY] = new DataView(new ArrayBuffer(0));
+      self[MEMORY][FIXED] = { address: usize(0x2008) };
+      env.allocateExternMemory = function(address, len) {
+        return usize(0x4000);
+      };
+      env.freeExternMemory = function() {
+      }
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      }
+      const dv = new ArgStruct([ 1, 2 ], 'hello', 0)[MEMORY];
+      binary(dv);
+      expect(thunkAddress).to.equal(usize(0x1004));
+      expect(fnAddress).to.equal(usize(0x2008));
+      if (process.env.TARGET === 'wasm') {
+        expect(argStruct).to.equal(usize(0x4000));
+        argStruct = ArgStruct(new DataView(env.memory.buffer, 0x4000, ArgStruct[SIZE]));
+      } else if (process.env.TARGET === 'node') {
+        expect(argStruct).to.equal(dv);
+        argStruct = ArgStruct(argStruct);
+      }
+      expect(argStruct[0]).to.equal(1);
+      expect(argStruct[1]).to.equal(2);
+    })
+    it('should create a caller for method calls', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Struct',
+        byteSize: 4 * 2,
+      });
+      env.attachMember(structStructure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structStructure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Struct = env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Hello',
+        byteSize: 4 * 3,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: structStructure,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      const thunk = {
+        [MEMORY]: new DataView(new ArrayBuffer(0)),
+      };
+      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const { self, method } = env.createOutboundCallers(thunk, ArgStruct)
+      let thunkAddress, fnAddress, argStruct;
+      env.runThunk = (...args) => {
+        thunkAddress = args[0];
+        fnAddress = args[1];
+        argStruct = args[2];
+        return true;
+      };
+      self[MEMORY] = new DataView(new ArrayBuffer(0));
+      self[MEMORY][FIXED] = { address: usize(0x2008) };
+      env.allocateExternMemory = function(address, len) {
+        return usize(0x4000);
+      };
+      env.freeExternMemory = function() {
+      }
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      }
+      const struct = new Struct({ cat: 123, dog: 456 });
+      method.call(struct);
+      expect(thunkAddress).to.equal(usize(0x1004));
+      expect(fnAddress).to.equal(usize(0x2008));
+      if (process.env.TARGET === 'wasm') {
+        expect(argStruct).to.equal(usize(0x4000));
+        argStruct = ArgStruct(new DataView(env.memory.buffer, 0x4000, ArgStruct[SIZE]));
+      } else if (process.env.TARGET === 'node') {
+        expect(argStruct).to.be.instanceOf(DataView);
+        argStruct = ArgStruct(argStruct);
+      }
+      expect(argStruct[0].cat).to.equal(123);
+      expect(argStruct[0].dog).to.equal(456);
     })
   })
   if (process.env.TARGET === 'wasm') {
