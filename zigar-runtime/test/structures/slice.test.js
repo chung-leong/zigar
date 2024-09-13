@@ -604,6 +604,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -855,6 +856,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: StructureFlag.IsString,
         name: '[_]u8',
         byteSize: 1,
       });

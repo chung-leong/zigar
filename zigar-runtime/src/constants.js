@@ -33,13 +33,14 @@ export const StructureFlag = {
   IsString:         0x0000_1000,
   IsPacked:         0x0000_2000,
   IsIterator:       0x0000_4000,
-  IsTuple:          0x0000_8000,
+  IsThrowing:       0x0000_8000,
 
   HasInaccessible:  0x0001_0000,
 
-  IsNullable:       0x0100_0000,
-  IsOpenEnded:      0x0200_0000,
-  IsVariandic:      0x0400_0000,
+  IsTuple:          0x0100_0000,
+  IsNullable:       0x0200_0000,
+  IsOpenEnded:      0x0400_0000,
+  IsVariandic:      0x0800_0000,
 };
 export const structureNames = Object.keys(StructureType);
 

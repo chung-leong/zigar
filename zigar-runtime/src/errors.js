@@ -14,6 +14,12 @@ export class InvalidDeallocation extends ReferenceError {
   }
 }
 
+export class InvalidIntConversion extends SyntaxError {
+  constructor(arg) {
+    super(`Cannot convert ${arg} to an Int`);
+  }
+}
+
 export class Unsupported extends TypeError {
   constructor() {
     super(`Unsupported`);
@@ -438,7 +444,7 @@ export function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
-function getDescription(arg) {
+export function getDescription(arg) {
   const type = typeof(arg);
   let s;
   if (type === 'object') {

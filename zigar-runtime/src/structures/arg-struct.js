@@ -1,7 +1,7 @@
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
-import { MEMORY, SLOTS, VISIT, VIVIFICATE } from '../symbols.js';
+import { MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue, never } from '../utils.js';
 
 export default mixin({
@@ -13,7 +13,6 @@ export default mixin({
       instance: { members },
     } = structure;
     const thisEnv = this;
-    const hasObject = !!members.find(m => m.type === MemberType.Object);
     const argKeys = members.slice(1).map(m => m.name);
     const argCount = argKeys.length;
     const constructor = function(args, name, offset) {
@@ -27,7 +26,7 @@ export default mixin({
         dv = args;
       }
       self[MEMORY] = dv;
-      if (hasObject) {
+      if (flags & StructureFlag.HasSlot) {
         self[SLOTS] = {};
       }
       if (creating) {
@@ -48,10 +47,10 @@ export default mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: retvalSlot, type: retvalType } = members[0];
-    const isChildMutable = (retvalType === MemberType.Object)
+    const { slot: rvSlot, type: rvType } = members[0];
+    const isChildMutable = (rvType === MemberType.Object)
     ? function(object) {
-        const child = this[VIVIFICATE](retvalSlot);
+        const child = this[VIVIFICATE](rvSlot);
         return object === child;
       }
     : never;
@@ -59,6 +58,10 @@ export default mixin({
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
     return constructor;
+  },
+  finalizeArgStruct(structure, staticDescriptors) {
+    const { flags } = structure;
+    staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
   },
 });
 

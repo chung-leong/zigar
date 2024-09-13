@@ -44,6 +44,7 @@ import {
   article,
   deanimalizeErrorName,
   formatList,
+  getDescription,
 } from '../src/errors.js';
 
 describe('Error functions', function() {
@@ -700,6 +701,13 @@ describe('Error functions', function() {
     it('should correct format a list of one item', function() {
       const list = [ 'apple' ];
       expect(formatList(list)).to.equal('apple');
+    })
+  })
+  describe('getDescription', function() {
+    it('should return noun describing the passed with the correct article', function() {
+      expect(getDescription(123)).to.equal('a number');
+      expect(getDescription({})).to.equal('an [object Object]');
+      expect(getDescription(null)).to.equal('a null');
     })
   })
 })

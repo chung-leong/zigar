@@ -1,6 +1,6 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
+import { NoInitializer, TypeMismatch } from '../errors.js';
 import { LENGTH, MEMORY, VARIANTS } from '../symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../utils.js';
 
@@ -56,8 +56,10 @@ export default mixin({
       cache.save(dv, self);
       return self;
     };
-    // make function type a superclass of Funtion
+    // make function type a superclass of Function
     descriptors.constructor = defineValue(Object.create(Function.prototype));
+    // don't change the tag of functions
+    descriptors[Symbol.toStringTag] = undefined;
     return constructor;
   },
 });

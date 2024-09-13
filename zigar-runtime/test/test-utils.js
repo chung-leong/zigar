@@ -2,13 +2,10 @@ export async function capture(cb) {
   const logFn = console.log;
   const lines = [];
   try {
-    console.log = (text) => {
-      if (typeof(text) === 'string') {
-        for (const line of text.split(/\r?\n/)) {
-          lines.push(line)
-        }
-      } else {
-        logFn.call(console, text);
+    console.log = (arg) => {
+      const text = arg.toString();
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
       }
     };
     await cb();
@@ -22,18 +19,32 @@ export async function captureWarning(cb) {
   const warnFn = console.warn;
   const lines = [];
   try {
-    console.warn = (text) => {
-      if (typeof(text) === 'string') {
-        for (const line of text.split(/\r?\n/)) {
-          lines.push(line)
-        }
-      } else {
-        warnFn.call(console, text);
+    console.warn = (arg) => {
+      const text = arg.toString();
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
       }
     };
     await cb();
   } finally {
     console.warn = warnFn;
+  }
+  return lines;
+}
+
+export async function captureError(cb) {
+  const errorFn = console.error;
+  const lines = [];
+  try {
+    console.error = (arg) => {
+      const text = arg.toString();
+      for (const line of text.split(/\r?\n/)) {
+        lines.push(line)
+      }
+    };
+    await cb();
+  } finally {
+    console.error = errorFn;
   }
   return lines;
 }

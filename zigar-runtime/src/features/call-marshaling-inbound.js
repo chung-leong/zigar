@@ -1,6 +1,6 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY } from '../symbols.js';
+import { MEMORY, THROWING } from '../symbols.js';
 
 export default mixin({
   jsFunctionMap: null,
@@ -44,36 +44,42 @@ export default mixin({
     };
     const binary = (dv, asyncCallHandle) => {
       let result = CallResult.OK;
-      let awaiting = false;
-      try {
-        const argStruct = ArgStruct(dv);
-        const args = [];
-        for (let i = 0; i < argStruct.length; i++) {
-          args.push(argStruct[i]);
+      const argStruct = ArgStruct(dv);
+      const args = [];
+      for (let i = 0; i < argStruct.length; i++) {
+        args.push(argStruct[i]);
+      }
+      const onError = (err) => {
+        if (ArgStruct[THROWING] && err instanceof Error) {
+          // see if the error is part of the error set of the error union returned by function
+          try {
+            argStruct.retval = err;
+            return;
+          } catch (_) {
+            console.error(err);
+          }
         }
+        console.error(err);
+        result = CallResult.Failure;
+      };
+      try {
         const retval = fn(...args);
         if (retval?.[Symbol.toStringTag] === 'Promise') {
           if (asyncCallHandle) {
-            retval.then((value) => {
-              argStruct.retval = value;
-            }).catch((err) => {
-              console.error(err);
-              result = CallResult.Failure;
-            }).then(() => {
+            retval.then(value => argStruct.retval = value, onError).then(() => {
               this.finalizeAsyncCall(asyncCallHandle, result);
             });
-            awaiting = true;
+            return CallResult.OK;
           } else {
-            result = CallResult.Deadlock;
+            return CallResult.Deadlock;
           }
         } else {
           argStruct.retval = retval;
         }
       } catch (err) {
-        console.error(err);
-        result = CallResult.Failure;
+        onError(err);
       }
-      if (!awaiting && asyncCallHandle) {
+      if (asyncCallHandle) {
         this.finalizeAsyncCall(asyncCallHandle, result);
       }
       return result;
@@ -122,7 +128,7 @@ export function isNeededByStructure(structure) {
   return false;
 }
 
-const CallResult = {
+export const CallResult = {
   OK: 0,
   Failure: 1,
   Deadlock: 2,

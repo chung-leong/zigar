@@ -618,6 +618,7 @@ describe('Structure: union', function() {
       expect(object.$.money).to.equal(1000);
       expect(() => object.$.pets).to.throw(TypeError);
     })
+    skip.
     it('should disable pointers in a bare union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({

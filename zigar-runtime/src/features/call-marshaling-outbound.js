@@ -132,7 +132,8 @@ export default mixin({
         throw new ZigError();
       }
     },
-  } : {}),
+    /* c8 ignore next */
+  } : undefined),
 });
 
 export function isNeededByStructure(structure) {

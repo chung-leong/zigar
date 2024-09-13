@@ -2,7 +2,7 @@ import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, VISIT, VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING, VISIT, VIVIFICATE
 } from '../symbols.js';
 import { always, defineProperties, defineValue } from '../utils.js';
 
@@ -137,7 +137,11 @@ export default mixin({
       },
     };
     return constructor;
-  }
+  },
+  finalizeVariadicStruct(structure, staticDescriptors) {
+    const { flags } = structure;
+    staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
+  },
 });
 
 export function isNeededByStructure(structure) {

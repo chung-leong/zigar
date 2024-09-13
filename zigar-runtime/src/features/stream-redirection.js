@@ -55,5 +55,6 @@ export default mixin({
     imports: {
       flushStdout: null,
     },
+    /* c8 ignore next */
   } : undefined),
 });

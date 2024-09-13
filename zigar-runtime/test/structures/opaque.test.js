@@ -69,7 +69,6 @@ describe('Structure: opaque', function() {
         instance: { members: [] },
         static: { members: [] },
       };
-
       const env = new Env();
       const descriptors = {};
       env.defineOpaque(structure, descriptors);
@@ -113,6 +112,7 @@ describe('Structure: opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Opaque,
+        flags: StructureFlag.IsIterator,
         name: 'Hello',
         byteSize: 4,
         isIterator: true,

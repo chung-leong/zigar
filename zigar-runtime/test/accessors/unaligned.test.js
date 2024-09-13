@@ -3,13 +3,16 @@ import { MemberType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
 
 import All from '../../src/accessors/all.js';
+import Int from '../../src/accessors/int.js';
+import JumboInt from '../../src/accessors/jumbo-int.js';
+import Jumbo from '../../src/accessors/jumbo.js';
 import Unaligned, {
   getBitAlignFunction,
   isNeededByMember,
 } from '../../src/accessors/unaligned.js';
 import Baseline from '../../src/features/baseline.js';
 
-const Env = defineClass('AccessorTest', [ Baseline, All, Unaligned ]);
+const Env = defineClass('AccessorTest', [ Baseline, All, Int, Jumbo, JumboInt, Unaligned ]);
 
 describe('Accessor: unaligned', function() {
   describe('isNeededByMember', function() {
@@ -17,7 +20,7 @@ describe('Accessor: unaligned', function() {
       const members = [
         { type: MemberType.Int, bitSize: 7, bitOffset: 2 },
         { type: MemberType.Float, bitSize: 15, bitOffset: 3 },
-        { type: MemberType.Uint, bitSize: 31, bitOffset: 4 },
+        { type: MemberType.Uint, bitSize: 128, bitOffset: 4 },
       ];
       for (const member of members) {
         expect(isNeededByMember(member)).to.be.true;
@@ -113,13 +116,29 @@ describe('Accessor: unaligned', function() {
     })
   })
   describe('getAccessorUnaligned', function() {
-    it('should return methods for accessing unaligned non-standard ints', function() {
+    it('should return methods for accessing unaligned ints', function() {
       const env = new Env();
       const members = [
-        { type: MemberType.Int, bitSize: 7, byteSize: 1, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 15, byteSize: 2, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 30, byteSize: 4, bitOffset: 0 },
+        { type: MemberType.Int, bitSize: 7, bitOffset: 3 },
+        { type: MemberType.Int, bitSize: 130, bitOffset: 3 },
       ];
+      const dv = new DataView(new ArrayBuffer(32));
+      for (const member of members) {
+        const get = env.getAccessorUnaligned('get', member);
+        const set = env.getAccessorUnaligned('set', member);
+        const { bitSize } = member;
+        if (bitSize > 32) {
+          const value = 2n ** BigInt(bitSize - 2);
+          set.call(dv, 0, value, true);
+          const result = get.call(dv, 0, true);
+          expect(value).to.equal(result);
+        } else {
+          const value = 2 ** (bitSize - 2);
+          set.call(dv, 0, value, true);
+          const result = get.call(dv, 0, true);
+          expect(value).to.equal(result);
+        }
+      }
     })
   })
 })
