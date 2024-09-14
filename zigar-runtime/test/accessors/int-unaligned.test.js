@@ -1,38 +1,11 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import All from '../../src/accessors/all.js';
-import IntUnaligned, {
-  isNeededByMember
-} from '../../src/accessors/int-unaligned.js';
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('AccessorTest', [ Baseline, All, IntUnaligned ]);
+const Env = defineEnvironment();
 
 describe('Accessor: int-unaligned', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Int, bitSize: 7, bitOffset: 1 },
-        { type: MemberType.Int, bitSize: 1, bitOffset: 2 },
-        { type: MemberType.Int, bitSize: 3, bitOffset: 32 + 3 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Object, slot: 1 },
-        { type: MemberType.Int, bitSize: 32, byteSize: 4, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 7, bitOffset: 3 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
   describe('getAccessorIntUnaligned', function() {
     it('should return methods for accessing small misaligned ints', function() {
       const members = [

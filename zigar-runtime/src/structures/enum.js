@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { EnumExpected, InvalidInitializer } from '../errors.js';
 import { CAST, INITIALIZE, NAME, SLOTS, TAG, TYPED_ARRAY } from '../symbols.js';
@@ -134,8 +134,3 @@ export default mixin({
     };
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Enum;
-}
-

@@ -1,66 +1,12 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import AccessorFloat128 from '../../src/accessors/float128.js';
-import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
-import AccessorJumbo from '../../src/accessors/jumbo.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberFloat from '../../src/members/float.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInArray from '../../src/members/pointer-in-array.js';
-import PointerInStruct from '../../src/members/pointer-in-struct.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import MemberVoid from '../../src/members/void.js';
-import All from '../../src/structures/all.js';
-import ArrayLike from '../../src/structures/array-like.js';
-import Array from '../../src/structures/array.js';
-import Optional, {
-  isNeededByStructure,
-} from '../../src/structures/optional.js';
-import Pointer from '../../src/structures/pointer.js';
-import Primitive from '../../src/structures/primitive.js';
-import Slice from '../../src/structures/slice.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-
-const Env = defineClass('OptionalTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo,
-  AccessorJumboInt, Optional, AccessorBool, AccessorFloat128, MemberBool, MemberFloat,
-  MemberObject, Struct, StructLike, MemberUint, MemberVoid, IntConversion, Pointer,
-  PointerInStruct, Slice, ArrayLike, Array, PointerInArray, Baseline,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: optional', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Optional
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Struct
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('defineOptional', function() {
     it('should return a function', function() {
       const structure = {

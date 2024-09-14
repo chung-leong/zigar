@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
 import { MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
@@ -64,7 +64,3 @@ export default mixin({
     staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.ArgStruct;
-}

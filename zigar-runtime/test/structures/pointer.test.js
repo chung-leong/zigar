@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
+import '../../src/mixins.js';
 import {
   ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
   UPDATE,
@@ -9,62 +10,9 @@ import {
 import { defineValue } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import JumboUint128 from '../../src/accessors/jumbo-uint.js';
-import Jumbo from '../../src/accessors/jumbo.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import RuntimeSafety from '../../src/features/runtime-safety.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInArray from '../../src/members/pointer-in-array.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberSentinel from '../../src/members/sentinel.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import ArrayLike from '../../src/structures/array-like.js';
-import Array from '../../src/structures/array.js';
-import Pointer, {
-  isNeededByStructure,
-} from '../../src/structures/pointer.js';
-import Primitive from '../../src/structures/primitive.js';
-import Slice from '../../src/structures/slice.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-
-const Env = defineClass('StructureTest', [
-  AccessorAll, MemberInt, MemberObject, MemberAll, All, Pointer, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, MemberUint,
-  MemberPrimitive, Primitive, MemoryMapping, Struct, StructLike, Slice, ArrayLike,
-  MemberBool, JumboUint128, Jumbo, Array, PointerInArray, AccessorBool, IntConversion,
-  RuntimeSafety, MemberSentinel, Baseline,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: pointer', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Pointer
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Struct
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('definePointer', function() {
     it('should return a function', function() {
       const structure = {

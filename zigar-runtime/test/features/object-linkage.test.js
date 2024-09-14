@@ -1,22 +1,14 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
 import { adjustAddress, defineProperties, ObjectCache } from '../../src/utils.js';
-
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ObjectLinkage from '../../src/features/object-linkage.js';
-import ViewManagement from '../../src/features/view-management.js';
-import StructureAll from '../../src/structures/all.js';
 import { usize } from '../test-utils.js';
 
-const Env = defineClass('FeatureTest', [
-  Baseline, ObjectLinkage, StructureAll, DataCopying, ViewManagement, MemoryMapping,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: object-linkage', function() {
   describe('linkVariables', function() {

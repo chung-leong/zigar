@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag } from '../constants.js';
+import { MemberFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MisplacedSentinel, MissingSentinel } from '../errors.js';
 import { MEMORY } from '../symbols.js';
@@ -87,7 +87,3 @@ export default mixin({
     },
   } : {}),
 });
-
-export function isNeededByStructure(structure) {
-  return !!(structure.flags & StructureFlag.HasSentinel);
-}

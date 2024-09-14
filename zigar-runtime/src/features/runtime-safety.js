@@ -24,17 +24,6 @@ export default mixin({
   },
 });
 
-export function isNeededByMember(member) {
-  if (this.runtimeSafety) {
-    switch (member.type) {
-      case MemberType.Int:
-      case MemberType.Uint:
-        return true;
-    }
-  }
-  return false;
-}
-
 export function getIntRange(member) {
   const { type, bitSize } = member;
   const signed = (type === MemberType.Int);

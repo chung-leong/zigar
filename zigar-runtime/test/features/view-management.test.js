@@ -1,23 +1,13 @@
 import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { COPY, MEMORY, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import ViewManagement, {
-  isNeededByStructure,
-} from '../../src/features/view-management.js';
-
-const Env = defineClass('FeatureTest', [ Baseline, ViewManagement, DataCopying ]);
+const Env = defineEnvironment();
 
 describe('Feature: view-management', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true', function() {
-      expect(isNeededByStructure()).to.be.true;
-    })
-  })
   describe('extractView', function() {
     it('should return a DataView when given an ArrayBuffer', function() {
       const structure = {

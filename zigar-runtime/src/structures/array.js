@@ -1,4 +1,4 @@
-import { StructureFlag, StructureType } from '../constants.js';
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -72,7 +72,3 @@ export default mixin({
     staticDescriptors.child = defineValue(member.structure.constructor);
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Array;
-}

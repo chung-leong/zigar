@@ -1,42 +1,12 @@
 import { expect } from 'chai';
+import { getBitAlignFunction } from '../../src/accessors/unaligned.js';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import All from '../../src/accessors/all.js';
-import Int from '../../src/accessors/int.js';
-import JumboInt from '../../src/accessors/jumbo-int.js';
-import Jumbo from '../../src/accessors/jumbo.js';
-import Unaligned, {
-  getBitAlignFunction,
-  isNeededByMember,
-} from '../../src/accessors/unaligned.js';
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('AccessorTest', [ Baseline, All, Int, Jumbo, JumboInt, Unaligned ]);
+const Env = defineEnvironment();
 
 describe('Accessor: unaligned', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Int, bitSize: 7, bitOffset: 2 },
-        { type: MemberType.Float, bitSize: 15, bitOffset: 3 },
-        { type: MemberType.Uint, bitSize: 128, bitOffset: 4 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Object, slot: 1 },
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 3 },
-        { type: MemberType.Int, bitSize: 7, bitOffset: 1 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
   describe('getBitAlignFunction', function() {
     it ('should return functions for copying to and from a bit offset (not crossing byte boundary)', function() {
       const misaligned = new DataView(new ArrayBuffer(4));

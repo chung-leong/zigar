@@ -1,51 +1,11 @@
 import { expect } from 'chai';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { MEMORY, SLOTS } from '../../src/symbols.js';
-
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import PointerSynchronization from '../../src/features/pointer-synchronization.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInArray from '../../src/members/pointer-in-array.js';
-import PointerInStruct from '../../src/members/pointer-in-struct.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberUint from '../../src/members/uint.js';
-import MemberVoid from '../../src/members/void.js';
-import StructureAll from '../../src/structures/all.js';
-import StructureArgStruct from '../../src/structures/arg-struct.js';
-import StructureArrayLike from '../../src/structures/array-like.js';
-import StructureArray from '../../src/structures/array.js';
-import StructureOpaque from '../../src/structures/opaque.js';
-import StructureOptional from '../../src/structures/optional.js';
-import StructurePointer from '../../src/structures/pointer.js';
-import StructurePrimitive from '../../src/structures/primitive.js';
-import StructureSlice from '../../src/structures/slice.js';
-import StructureStructLike from '../../src/structures/struct-like.js';
-import StructureStruct from '../../src/structures/struct.js';
-import StructureUnion from '../../src/structures/union.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
-const Env = defineClass('FeatureTest', [
-  Baseline, StructureAcquisition, StructureAll, StructurePrimitive, DataCopying, StructurePointer,
-  MemberAll, MemberObject, MemberUint, MemberPrimitive, IntConversion, StructureOpaque,
-  AccessorAll, StructureOptional, StructureArgStruct, AccessorBool, MemberBool, MemberVoid,
-  StructureStruct, StructureStructLike, PointerInArray, PointerInStruct, StructureArray,
-  StructureSlice, ViewManagement, CallMarshalingOutbound, PointerSynchronization,
-  MemoryMapping, StructureArrayLike, MemberInt, StructureUnion, SpecialProps, SpecialMethods,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: pointer-synchronization', function() {
   describe('updatePointerAddresses', function() {

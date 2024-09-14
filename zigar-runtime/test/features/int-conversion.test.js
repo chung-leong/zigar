@@ -1,36 +1,11 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { MemberFlag, MemberType } from '../../src/constants.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import Baseline from '../../src/features/baseline.js';
-import IntConversion, {
-  isNeededByMember,
-  isNeededByStructure,
-} from '../../src/features/int-conversion.js';
-
-const Env = defineClass('MemberTest', [ Baseline, IntConversion ]);
+const Env = defineEnvironment();
 
 describe('Feature: int-conversion', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const member = { type: MemberType.Int, bitSize: 24, byteSize: 4, bitOffset: 8 };
-      expect(isNeededByMember(member)).to.be.true;
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const member = { type: MemberType.Object, slot: 1 };
-      expect(isNeededByMember(member)).to.be.false;
-    })
-  })
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = { type: StructureType.Pointer };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is not needed by a structure', function() {
-      const structure = { type: StructureType.Primitive };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('addIntConversion', function() {
     it('should put wrapper around setter', function() {
       const env = new Env();

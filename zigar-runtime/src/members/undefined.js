@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 export default mixin({
@@ -11,6 +10,3 @@ export default mixin({
   },
 });
 
-export function isNeededByMember(member) {
-  return member.type === MemberType.Undefined;
-}

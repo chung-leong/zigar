@@ -47,7 +47,18 @@ export function defineClass(name, mixins) {
   for (const mixin of mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
       if (typeof(object) === 'function') {
-        defineProperty(prototype, name, defineValue(object));
+        if (process.env.MIXIN === 'track') {
+          if (!props.mixinUsage) {
+            props.mixinUsage = new Map();
+          }
+          const f = function(...args) {
+            this.mixinUsage.set(mixin, true);
+            return object.call(this, ...args);
+          }
+          defineProperty(prototype, name, defineValue(f));
+        } else {
+          defineProperty(prototype, name, defineValue(object));
+        }
       } else {
         let current = props[name];
         if (current !== undefined) {

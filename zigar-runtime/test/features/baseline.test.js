@@ -1,49 +1,13 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { capture } from '../test-utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBoolUnalign from '../../src/accessors/bool1-unaligned.js';
-import Baseline, {
-  isNeeded,
-} from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import intConversion from '../../src/features/int-conversion.js';
-import ModuleLoading from '../../src/features/module-loading.js';
-import StreamRedirection from '../../src/features/stream-redirection.js';
-import StructureAcqusiton from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInStruct from '../../src/members/pointer-in-struct.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import MemberVoid from '../../src/members/void.js';
-import StructureAll from '../../src/structures/all.js';
-import ArgStruct from '../../src/structures/arg-struct.js';
-import Pointer from '../../src/structures/pointer.js';
-import StructurePrimitive from '../../src/structures/primitive.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-
-const Env = defineClass('FeatureTest', [
-  Baseline, StructureAll, MemberAll, MemberPrimitive, StructurePrimitive, DataCopying, MemberInt,
-  intConversion, AccessorAll, ArgStruct, MemberVoid, Pointer, PointerInStruct, MemberUint,
-  ViewManagement, Struct, StructLike, MemberObject, MemberTypeMixin, ModuleLoading,
-  StructureAcqusiton, MemberBool, AccessorBoolUnalign, StreamRedirection,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: baseline', function() {
-  describe('isNeeded', function() {
-    it('should return true', function() {
-      expect(isNeeded()).to.be.true;
-    })
-  })
   describe('recreateStructures', function() {
     skip.
     it('should recreate structures based on input definition', function() {

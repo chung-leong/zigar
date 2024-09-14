@@ -127,7 +127,3 @@ export default mixin({
     return clusters;
   },
 });
-
-export function isNeeded() {
-  // TODO
-}

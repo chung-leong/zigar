@@ -109,15 +109,3 @@ export default mixin({
     },
   }),
 });
-
-export function isNeededByMember(member) {
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Uint:
-    case MemberType.Float:
-      return true;
-    default:
-      return false;
-  }
-}

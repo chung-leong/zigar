@@ -321,7 +321,3 @@ export default mixin({
     },
   } : undefined),
 });
-
-export function isNeededByStructure(structure) {
-  return true;
-}

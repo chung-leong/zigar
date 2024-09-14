@@ -119,6 +119,27 @@ describe('Environment class', function() {
       const mixin = {};
       expect(() => defineClass('Hello', [ mixin, mixin ])).to.throw();
     })
+    it('should track mixin usage', function() {
+      const log = [];
+      const mixin1 = {
+        hello() {
+          log.push('hello');
+        }
+      };
+      const mixin2 = {
+        world() {
+          log.push('world');
+        }
+      };
+      const Env = defineClass('Hello', [ mixin1, mixin2 ]);
+      expect(Env).to.have.property('name', 'Hello');
+      const env = new Env();
+      env.hello();
+      expect(log).to.eql([ 'hello' ]);
+      expect(env.mixinUsage).to.be.a('map');
+      expect(env.mixinUsage.get(mixin1)).to.be.true;
+      expect(env.mixinUsage.get(mixin2)).to.be.undefined;
+    })
   })
   describe('defineEnvironment', function() {
     it('should define a class using collected info', function() {

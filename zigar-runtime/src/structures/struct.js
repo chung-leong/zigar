@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag, StructureType } from '../constants.js';
+import { MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import {
@@ -81,7 +81,3 @@ export default mixin({
     return constructor;
   }
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Struct;
-}

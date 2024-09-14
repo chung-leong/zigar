@@ -1,4 +1,3 @@
-import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { Exit, ZigError } from '../errors.js';
 import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
@@ -135,11 +134,6 @@ export default mixin({
     /* c8 ignore next */
   } : undefined),
 });
-
-export function isNeededByStructure(structure) {
-  // TODO: check for instances of function instead
-  return structure.type === StructureType.Function;
-}
 
 export class CallContext {
   pointerProcessed = new Map();

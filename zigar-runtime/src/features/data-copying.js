@@ -31,10 +31,6 @@ export default mixin({
   getCopyFunction,
 });
 
-export function isNeededByStructure(structure) {
-  return true;
-}
-
 export function getCopyFunction(size, multiple = false) {
   if (size !== undefined) {
     if (!multiple) {

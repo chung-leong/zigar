@@ -1,40 +1,11 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import All from '../../src/accessors/all.js';
-import Int, {
-  isNeededByMember
-} from '../../src/accessors/int.js';
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('AccessorTest', [ Baseline, All, Int ]);
+const Env = defineEnvironment();
 
 describe('Accessor: int', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Int, bitSize: 7, byteSize: 1, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 15, byteSize: 2, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 31, bitOffset: 4 },
-        { type: MemberType.Int, bitSize: 7, bitOffset: 4 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Object, slot: 1 },
-        { type: MemberType.Int, bitSize: 32, byteSize: 4, bitOffset: 0 },
-        { type: MemberType.Int, bitSize: 7, bitOffset: 1 },
-        { type: MemberType.Int, bitSize: 33, byteSize: 8, bitOffset: 0 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
   describe('getAccessorInt', function() {
     it('should return methods for accessing non-standard ints', function() {
       const env = new Env();

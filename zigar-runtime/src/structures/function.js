@@ -1,4 +1,3 @@
-import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch } from '../errors.js';
 import { MEMORY, VARIANTS } from '../symbols.js';
@@ -64,8 +63,3 @@ export default mixin({
     return constructor;
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Function;
-}
-

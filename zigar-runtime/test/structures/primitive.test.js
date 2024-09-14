@@ -1,50 +1,13 @@
 import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { BIT_SIZE, INITIALIZE, PRIMITIVE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
-import AccessorJumbo from '../../src/accessors/jumbo.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberInt from '../../src/members/int.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import Primitive, {
-  isNeededByStructure,
-} from '../../src/structures/primitive.js';
-
-const Env = defineClass('PrimitiveTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, AccessorJumbo, AccessorJumboInt,
-  IntConversion, MemberUint, Baseline,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: primitive', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Primitive
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Struct
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('definePrimitive', function() {
     it('should return a function', function() {
       const structure = {

@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 // handle ints 7-bit or smaller in packed structs that are stored in a single byte
@@ -30,7 +29,3 @@ export default mixin({
   }
 });
 
-export function isNeededByMember(member) {
-  const { type, bitSize, bitOffset, byteSize } = member;
-  return type === MemberType.Int && byteSize === undefined && (bitOffset & 0x07) + bitSize <= 8;
-}

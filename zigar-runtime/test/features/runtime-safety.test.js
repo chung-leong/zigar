@@ -1,38 +1,12 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
-
 import { MemberType } from '../../src/constants.js';
-import Baseline from '../../src/features/baseline.js';
-import RuntimeSafety, {
-  getIntRange,
-  isNeededByMember,
-} from '../../src/features/runtime-safety.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { getIntRange } from '../../src/features/runtime-safety.js';
+import '../../src/mixins.js';
 
-const Env = defineClass('FeatureTest', [ Baseline, RuntimeSafety ]);
+const Env = defineEnvironment();
 
 describe('Feature: runtime-safety', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const env = { runtimeSafety: true };
-      const members = [
-        { type: MemberType.Int, bitSize: 8, byteSize: 1, bitOffset: 9 },
-        { type: MemberType.Uint, bitSize: 64, byteSize: 8, bitOffset: 64 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember.call(env, member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const env = { runtimeSafety: true };
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, byteSize: 1, bitOffset: 32 },
-        { type: MemberType.Float, bitSize: 32, byteSize: 4, bitOffset: 0 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember.call(env, member)).to.be.false;
-      }
-    })
-  })
   describe('addRuntimeCheck', function() {
     it('should put wrapper around setter', function() {
       const env = new Env();

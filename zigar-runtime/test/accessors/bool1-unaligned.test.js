@@ -1,38 +1,11 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import BoolUnaligned, {
-  isNeededByMember
-} from '../../src/accessors/bool1-unaligned.js';
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('AccessorTest', [ Baseline, BoolUnaligned ]);
+const Env = defineEnvironment();
 
 describe('Accessor: bool1-unaligned', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 0 },
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 1 },
-        { type: MemberType.Bool, bitSize: 1, bitOffset: 2 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Literal, slot: 1 },
-        { type: MemberType.Comptime, slot: 1 },
-        { type: MemberType.Object, slot: 1 },
-        { type: MemberType.Bool, bitSize: 1, byteSize: 1, bitOffset: 0 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
   describe('getAccessorBool1Unaligned', function() {
     it('should return methods for accessing bool in packed struct', function() {
       const members = [

@@ -1,27 +1,12 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { MEMORY } from '../../src/symbols.js';
 
-import Baseline from '../../src/features/baseline.js';
-import All from '../../src/members/all.js';
-import Void, {
-  isNeededByMember,
-} from '../../src/members/void.js';
-
-const Env = defineClass('MemberTest', [ Baseline, All, Void ]);
+const Env = defineEnvironment();
 
 describe('Member: void', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const member = { type: MemberType.Void, bitSize: 0, byteSize: 0, bitOffset: 0 };
-      expect(isNeededByMember(member)).to.be.true;
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const member = { type: MemberType.Object, slot: 1 };
-      expect(isNeededByMember(member)).to.be.false;
-    })
-  })
   describe('defineMemberVoid', function() {
     it('should return descriptor for void', function() {
       const env = new Env();

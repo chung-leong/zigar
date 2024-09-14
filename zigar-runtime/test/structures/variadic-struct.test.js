@@ -1,63 +1,13 @@
 import { expect } from 'chai';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument } from '../../src/errors.js';
+import '../../src/mixins.js';
 import { MEMORY, VISIT } from '../../src/symbols.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import AccessorFloat128 from '../../src/accessors/float128.js';
-import AccessorIntUnaligned from '../../src/accessors/int-unaligned.js';
-import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
-import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import RuntimeSafety from '../../src/features/runtime-safety.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberFloat from '../../src/members/float.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInStruct from '../../src/members/pointer-in-struct.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import Pointer from '../../src/structures/pointer.js';
-import Primitive from '../../src/structures/primitive.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-import VariadicStruct, {
-  isNeededByStructure,
-} from '../../src/structures/variadic-struct.js';
-
-const Env = defineClass('StructureTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
-  StructureAcquisition, ViewManagement, VariadicStruct, AccessorBool, AccessorFloat128,
-  RuntimeSafety, MemberBool, MemberUint, AccessorIntUnaligned, AccessorUintUnaligned,
-  AccessorUnaligned, MemberObject, Struct, StructLike, SpecialMethods, MemberFloat,
-  IntConversion, Pointer, PointerInStruct, MemoryMapping, Baseline,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: variadic-struct', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.VariadicStruct
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Optional
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('defineVariadicStruct', function() {
     it('should return a function', function() {
       const structure = {

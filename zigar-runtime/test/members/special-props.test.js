@@ -1,8 +1,7 @@
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 
-import { defineClass } from "../../src/environment.js";
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('MemberTest', [ Baseline ]);
+const Env = defineEnvironment();
 
 describe('isTypedArray', function() {
   // it('should return true when given the correct TypedArray', function() {

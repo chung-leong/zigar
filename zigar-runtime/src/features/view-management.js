@@ -169,10 +169,6 @@ export default mixin({
   } : undefined),
 });
 
-export function isNeededByStructure(structure) {
-  return true;
-}
-
 export function checkDataViewSize(dv, structure) {
   const { byteSize, type } = structure;
   const isSizeMatching = type === StructureType.Slice

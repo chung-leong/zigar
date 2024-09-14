@@ -1,4 +1,3 @@
-import { MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ARRAY, MEMORY, PARENT, PROXY, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
@@ -33,19 +32,6 @@ export default mixin({
     return { value };
   },
 });
-
-export function isNeededByStructure(structure) {
-  const { type, instance: { members: [ member ] } } = structure;
-  switch (type) {
-    case StructureType.Array:
-    case StructureType.Slice: {
-      if (member.type === MemberType.Object) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 const proxyHandlers = {
   get(array, name) {

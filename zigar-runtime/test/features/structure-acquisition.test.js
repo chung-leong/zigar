@@ -1,40 +1,12 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
-
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ModuleLoading from '../../src/features/module-loading.js';
-import PointerSynchronization from '../../src/features/pointer-synchronization.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInStruct from '../../src/members/pointer-in-struct.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberUint from '../../src/members/uint.js';
-import MemberVoid from '../../src/members/void.js';
-import StructureAll from '../../src/structures/all.js';
-import ArgStruct from '../../src/structures/arg-struct.js';
-import Pointer from '../../src/structures/pointer.js';
-import StructurePrimitive from '../../src/structures/primitive.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
 import { addressByteSize, addressSize, setUsize, usize } from '../test-utils.js';
 
-const Env = defineClass('FeatureTest', [
-  Baseline, StructureAcquisition, StructureAll, ViewManagement, PointerSynchronization, Struct,
-  StructLike, DataCopying, MemberAll, MemberBool, MemberPrimitive, StructurePrimitive, MemberUint,
-  IntConversion, AccessorAll, AccessorBool, ModuleLoading, Pointer, MemberObject, PointerInStruct,
-  ArgStruct, MemberVoid, MemoryMapping,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: structure-acquisition', function() {
   describe('readSlot', function() {

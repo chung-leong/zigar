@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { COPY, FIXED, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
@@ -63,7 +63,3 @@ export default mixin({
     return constructor;
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Optional;
-}

@@ -277,6 +277,7 @@ export default mixin({
     getBufferAddress(buffer) {
       if (process.env.DEV) {
         if (buffer !== this.memory.buffer) {
+          debugger;
           throw new Error('Cannot obtain address of relocatable buffer');
         }
       }
@@ -383,10 +384,6 @@ export default mixin({
     },
   } : undefined),
 });
-
-export function isNeeded() {
-  // TODO
-}
 
 function findMemoryIndex(array, address) {
   return findSortedIndex(array, address, m => m.address);

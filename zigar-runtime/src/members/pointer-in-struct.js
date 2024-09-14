@@ -47,17 +47,3 @@ export default mixin({
     return { value };
   }
 });
-
-export function isNeededByStructure(structure) {
-  const { type, flags } = structure;
-  switch (type) {
-    case StructureType.ArgStruct:
-    case StructureType.VariadicStruct:
-    case StructureType.Struct:
-    case StructureType.Union:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional:
-      return !!(flags & StructureFlag.HasPointer);
-  }
-  return false;
-}

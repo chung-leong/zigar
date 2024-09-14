@@ -1,38 +1,11 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { AccessorAll } from '../../src/mixins.js';
 
-import All, {
-  isNeededByMember,
-} from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-
-const Env = defineClass('AccessorTest', [ Baseline, All ]);
+const Env = defineEnvironment();
 
 describe('Accessor: all', function() {
-  describe('isNeededByMember', function() {
-    it('should return true when mixin is needed by a member', function() {
-      const members = [
-        { type: MemberType.Bool, bitSize: 1, byteSize: 1, bitOffset: 32 },
-        { type: MemberType.Int, bitSize: 8, byteSize: 1, bitOffset: 9 },
-        { type: MemberType.Uint, bitSize: 64, byteSize: 8, bitOffset: 64 },
-        { type: MemberType.Float, bitSize: 32, byteSize: 4, bitOffset: 0 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.true;
-      }
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const members = [
-        { type: MemberType.Literal, slot: 1 },
-        { type: MemberType.Comptime, slot: 1 },
-        { type: MemberType.Object, slot: 1 },
-      ];
-      for (const member of members) {
-        expect(isNeededByMember(member)).to.be.false;
-      }
-    })
-  })
   describe('getAccessor', function() {
     it('should return builtin methods', function() {
       const env = new Env();
@@ -64,6 +37,7 @@ describe('Accessor: all', function() {
         bitOffset: 0,
       });
       expect(method4).to.equal(DataView.prototype.setBigInt64);
+      expect(env.mixinUsage.get(AccessorAll)).to.be.true;
     })
   })
 })

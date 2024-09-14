@@ -1,19 +1,12 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
 import { InvalidDeallocation } from '../../src/errors.js';
+import '../../src/mixins.js';
 import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
 import { adjustAddress, defineProperties, defineProperty } from '../../src/utils.js';
-
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ViewManagement from '../../src/features/view-management.js';
 import { usize } from '../test-utils.js';
 
-const Env = defineClass('FeatureTest', [
-  Baseline, MemoryMapping, DataCopying, CallMarshalingOutbound, ViewManagement,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: memory-mapping', function() {
   describe('getShadowAddress', function() {

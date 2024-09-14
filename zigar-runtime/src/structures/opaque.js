@@ -1,4 +1,4 @@
-import { StructureFlag, StructureType } from '../constants.js';
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { AccessingOpaque, CreatingOpaque } from '../errors.js';
 import { getZigIterator } from '../iterators.js';
@@ -27,7 +27,3 @@ export default mixin({
     return constructor;
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Opaque;
-}

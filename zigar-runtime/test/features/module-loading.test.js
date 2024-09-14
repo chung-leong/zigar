@@ -3,24 +3,12 @@ import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { WASI } from 'wasi';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { Exit } from '../../src/errors.js';
+import '../../src/mixins.js';
 import { capture } from '../test-utils.js';
 
-import { Exit } from '../../src/errors.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ModuleLoading from '../../src/features/module-loading.js';
-import StreamRedirection from '../../src/features/stream-redirection.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import WasiSupport from '../../src/features/wasi-support.js';
-
-const Env = defineClass('FeatureTest', [
-  Baseline, ModuleLoading, DataCopying, CallMarshalingOutbound, ViewManagement, WasiSupport,
-  StreamRedirection, StructureAcquisition, MemoryMapping,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: module-loading', function() {
   describe('releaseFunctions', function() {

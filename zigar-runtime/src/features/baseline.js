@@ -95,7 +95,3 @@ export default mixin({
     }
   },
 });
-
-export function isNeeded() {
-  return true;
-}

@@ -1,4 +1,4 @@
-import { StructureFlag, StructureType } from '../constants.js';
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -135,10 +135,6 @@ export default mixin({
     staticDescriptors[SENTINEL] = (flags & StructureFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Slice;
-}
 
 function getLength() {
   return this[LENGTH];

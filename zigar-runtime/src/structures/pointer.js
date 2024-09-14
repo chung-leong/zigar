@@ -337,10 +337,6 @@ export default mixin({
   }
 });
 
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Pointer;
-}
-
 function throwInaccessible() {
   throw new InaccessiblePointer();
 };

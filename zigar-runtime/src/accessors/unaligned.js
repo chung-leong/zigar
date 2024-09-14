@@ -1,5 +1,4 @@
 
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 // handle unaligned ints and floats by copying the bits into a
@@ -28,25 +27,6 @@ export default mixin({
     }
   }
 });
-
-export function isNeededByMember(member) {
-  const { type, bitSize, bitOffset, byteSize } = member;
-  if (byteSize === undefined) {
-    switch (type) {
-      case MemberType.Int:
-      case MemberType.Uint:
-        if ((bitOffset & 0x07) + bitSize <= 8) {
-          break;
-        } else {
-          // fall-thru
-        }
-      case MemberType.Float:
-        return true;
-    }
-  }
-  return false;
-}
-
 
 export function getBitAlignFunction(bitPos, bitSize, toAligned) {
   if (bitPos + bitSize <= 8) {

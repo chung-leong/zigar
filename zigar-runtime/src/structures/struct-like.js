@@ -1,4 +1,4 @@
-import { MemberType, StructureType } from '../constants.js';
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
 import { MEMORY, PARENT, SLOTS } from '../symbols.js';
@@ -32,22 +32,3 @@ export default mixin({
     };
   },
 });
-
-export function isNeededByStructure(structure) {
-  const { type, instance: { members } } = structure;
-  switch (type) {
-    case StructureType.ArgStruct:
-    case StructureType.VariadicStruct:
-    case StructureType.Struct:
-    case StructureType.Union:
-    case StructureType.ErrorUnion:
-    case StructureType.Optional: {
-      for (const { type } of members) {
-        if (type === MemberType.Object) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}

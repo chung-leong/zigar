@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 // handle bools in packed structs
@@ -23,7 +22,3 @@ export default mixin({
   },
 });
 
-export function isNeededByMember(member) {
-  const { type, byteSize } = member;
-  return type === MemberType.Bool && byteSize === undefined;
-}

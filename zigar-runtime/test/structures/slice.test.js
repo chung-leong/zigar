@@ -1,72 +1,14 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorBool from '../../src/accessors/bool.js';
-import AccessorBool1Unaligned from '../../src/accessors/bool1-unaligned.js';
-import AccessorFloat128 from '../../src/accessors/float128.js';
-import AccessorIntUnaligned from '../../src/accessors/int-unaligned.js';
-import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
-import AccessorJumbo from '../../src/accessors/jumbo.js';
-import AccessorUintUnaligned from '../../src/accessors/uint-unaligned.js';
-import AccessorUnaligned from '../../src/accessors/unaligned.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import RuntimeSafety from '../../src/features/runtime-safety.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import PointerInArray from '../../src/members/pointer-in-array.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import Sentinel from '../../src/members/sentinel.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import ArrayLike from '../../src/structures/array-like.js';
-import Array from '../../src/structures/array.js';
-import Pointer from '../../src/structures/pointer.js';
-import Primitive from '../../src/structures/primitive.js';
-import Slice, {
-  isNeededByStructure,
-} from '../../src/structures/slice.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-import Vector from '../../src/structures/vector.js';
-
-const Env = defineClass('ArrayTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, AccessorJumbo, AccessorJumboInt, Struct,
-  AccessorBool, AccessorFloat128, RuntimeSafety, MemberBool, AccessorBool1Unaligned, MemberUint,
-  AccessorIntUnaligned, AccessorUintUnaligned, AccessorUnaligned, MemberObject, StructLike, Slice,
-  ArrayLike, Sentinel, IntConversion, Baseline, Array, Vector, MemoryMapping, Pointer,
-  PointerInArray,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: slice', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Slice
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Struct
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('defineSlice', function() {
     it('should return a function', function() {
       const structure = {

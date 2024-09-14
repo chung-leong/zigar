@@ -1,4 +1,3 @@
-import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, THROWING } from '../symbols.js';
 
@@ -118,15 +117,6 @@ export default mixin({
     },
   } : undefined),
 });
-
-export function isNeededByStructure(structure) {
-  const { type, instance: { members } } = structure;
-  if (type === StructureType.Pointer) {
-    const { type: targetType } = members[0].structure;
-    return targetType === StructureType.Function;
-  }
-  return false;
-}
 
 export const CallResult = {
   OK: 0,

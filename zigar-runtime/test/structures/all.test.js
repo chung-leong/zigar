@@ -1,49 +1,14 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { ALIGN, FIXED, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberUint from '../../src/members/uint.js';
-import MemberVoid from '../../src/members/void.js';
-import All, {
-  isNeededByStructure,
-} from '../../src/structures/all.js';
-import ArgStruct from '../../src/structures/arg-struct.js';
-import Enum from '../../src/structures/enum.js';
-import FunctionMixin from '../../src/structures/function.js';
-import Primitive from '../../src/structures/primitive.js';
-import StructLike from '../../src/structures/struct-like.js';
-import Struct from '../../src/structures/struct.js';
-
-const Env = defineClass('StructureTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
-  SpecialProps, ViewManagement, StructureAcquisition, StructLike, Struct, MemberUint, MemberObject,
-  Enum, IntConversion, Baseline, ArgStruct, FunctionMixin, CallMarshalingOutbound, MemoryMapping,
-  MemberVoid,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: all', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true', function() {
-      expect(isNeededByStructure()).to.be.true;
-    })
-  })
   describe('defineStructure', function() {
     it('should define a structure for holding an integer', function() {
       const env = new Env;
@@ -490,8 +455,7 @@ describe('Structure: all', function() {
         structure: fnStructure,
         slot: 0,
       }, true);
-      const fnDV = { [MEMORY]: fixed(0x4567) };
-      const fn = Func(fnDV);
+      const fn = Func(fixed(0x4567));
       expect(fn).to.be.a('function');
       env.attachTemplate(structure, {
         [SLOTS]: {

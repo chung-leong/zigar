@@ -1,70 +1,14 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { CallResult } from '../../src/features/call-marshaling-inbound.js';
+import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { capture, captureError, delay, usize } from '../test-utils.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingInbound, {
-  CallResult,
-  isNeededByStructure,
-} from '../../src/features/call-marshaling-inbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import PointerSynchronization from '../../src/features/pointer-synchronization.js';
-import StreamRedirection from '../../src/features/stream-redirection.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberUint from '../../src/members/uint.js';
-import StructureAll from '../../src/structures/all.js';
-import StructureArgStruct from '../../src/structures/arg-struct.js';
-import StructureErrorSet from '../../src/structures/error-set.js';
-import ErrorUnionStructure from '../../src/structures/error-union.js';
-import StructurePrimitive from '../../src/structures/primitive.js';
-import StructureStructLike from '../../src/structures/struct-like.js';
-import StructureStruct from '../../src/structures/struct.js';
-
-const Env = defineClass('FeatureTest', [
-  Baseline, DataCopying, CallMarshalingInbound, MemoryMapping, ViewManagement,
-  PointerSynchronization, StreamRedirection, StructureAcquisition, StructureAll,
-  StructureArgStruct, MemberUint, MemberAll, MemberBool, MemberInt, IntConversion,
-  MemberPrimitive, StructurePrimitive, AccessorAll, StructureStruct, MemberObject,
-  StructureStructLike, StructureErrorSet, ErrorUnionStructure,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: call-marshaling-inbound', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when structure is a function pointer', function() {
-      const structure = {
-        type: StructureType.Pointer,
-        instance: {
-          members: [
-            {
-              type: MemberType.Object,
-              structure: {
-                type: StructureType.Function,
-              }
-            }
-          ]
-        }
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when structure is not a function pointer', function() {
-      const structure = {
-        type: StructureType.Function,
-        instance: {}
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('getFunctionId', function() {
     it('should allocate different ids for different functions', function() {
       const f1 = () => {};

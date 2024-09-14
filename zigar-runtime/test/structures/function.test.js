@@ -1,65 +1,15 @@
 import { expect } from 'chai';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
-
-import AccessorAll from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingInbound, { CallResult } from '../../src/features/call-marshaling-inbound.js';
-import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberInt from '../../src/members/int.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import StructureArgStruct from '../../src/structures/arg-struct.js';
-import FunctionMixin, {
-  isNeededByStructure,
-} from '../../src/structures/function.js';
-import Primitive from '../../src/structures/primitive.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { CallResult } from '../../src/features/call-marshaling-inbound.js';
+import '../../src/mixins.js';
 import { FIXED, MEMORY, SIZE, VARIANTS } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
-const Env = defineClass('PrimitiveTest', [
-  AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying,
-  StructureAcquisition, ViewManagement, MemberTypeMixin, IntConversion, MemberUint, Baseline,
-  FunctionMixin, StructureArgStruct, CallMarshalingOutbound, CallMarshalingInbound, MemoryMapping,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: function', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when structure is a function', function() {
-      const structure = {
-        type: StructureType.Function,
-        instance: {}
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return true when structure is not a function', function() {
-      const structure = {
-        type: StructureType.SinglePointer,
-        instance: {
-          members: [
-            {
-              type: MemberType.Object,
-              structure: {
-                type: StructureType.Function,
-              }
-            }
-          ]
-        }
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
-  describe('defineFunction', function() {
-  })
   describe('defineStructure', function() {
     it('should define a function type', function() {
       const env = new Env();
@@ -118,15 +68,11 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const thunk = { [MEMORY]: fixed(0x1004) };
       env.attachTemplate(structure, thunk, false);
       const constructor = env.defineStructure(structure);
       expect(constructor).to.be.a('function');
-      const dv = new DataView(new ArrayBuffer(0));
-      dv[FIXED] = { address: usize(0x2008) };
+      const dv = fixed(0x2008);
       const f = constructor(dv);
       expect(f).to.be.a('function');
       const f2 = constructor(dv);
@@ -222,15 +168,9 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const thunk = { [MEMORY]: fixed(0x1004) };
       env.attachTemplate(structure, thunk, false);
-      const jsThunkConstructor = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      jsThunkConstructor[MEMORY][FIXED] = { address: usize(0x8888) };
+      const jsThunkConstructor = { [MEMORY]: fixed(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
       expect(constructor).to.be.a('function');
@@ -314,15 +254,9 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      const thunk = { [MEMORY]: fixed(0x1004) };
       env.attachTemplate(structure, thunk, false);
-      const jsThunkConstructor = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      jsThunkConstructor[MEMORY][FIXED] = { address: usize(0x8888) };
+      const jsThunkConstructor = { [MEMORY]: fixed(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
       expect(() => new constructor()).to.throw(TypeError);
@@ -330,3 +264,9 @@ describe('Structure: function', function() {
     })
   })
 })
+
+function fixed(address, len = 0) {
+  const dv = new DataView(new ArrayBuffer(len));
+  dv[FIXED] = { address: usize(address), len };
+  return dv;
+}

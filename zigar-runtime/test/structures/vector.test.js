@@ -1,54 +1,12 @@
 import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import AccessorJumboInt from '../../src/accessors/jumbo-int.js';
-import AccessorJumbo from '../../src/accessors/jumbo.js';
-import Baseline from '../../src/features/baseline.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberFloat from "../../src/members/float.js";
-import MemberInt from "../../src/members/int.js";
-import MemberObject from '../../src/members/object.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import SpecialMethods from '../../src/members/special-methods.js';
-import SpecialProps from '../../src/members/special-props.js';
-import MemberTypeMixin from '../../src/members/type.js';
-import MemberUint from '../../src/members/uint.js';
-import All from '../../src/structures/all.js';
-import ArrayLike from '../../src/structures/array-like.js';
-import Array from '../../src/structures/array.js';
-import Primitive from '../../src/structures/primitive.js';
-import Vector, {
-  isNeededByStructure,
-} from '../../src/structures/vector.js';
-
-const Env = defineClass('VectorTest', [
-  AccessorAll, MemberUint, MemberPrimitive, MemberAll, All, Primitive, DataCopying,  SpecialMethods,
-  SpecialProps, StructureAcquisition, ViewManagement, MemberTypeMixin, Vector, MemberObject, MemberFloat,
-  MemberInt, AccessorJumboInt, AccessorJumbo, ArrayLike, Array, IntConversion, Baseline,
-]);
+const Env = defineEnvironment();
 
 describe('Structure: vector', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Vector,
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Struct
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('defineVector', function() {
     it('should return a function', function() {
       const structure = {

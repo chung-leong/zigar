@@ -23,7 +23,3 @@ export default mixin({
   }
 });
 
-export function isNeededByMember(member) {
-  const { type, byteSize } = member;
-  return type === MemberType.Bool && byteSize !== undefined;
-}

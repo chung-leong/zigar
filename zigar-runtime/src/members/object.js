@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
+import { MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { SLOTS, VIVIFICATE } from '../symbols.js';
 import { bindSlot } from './all.js';
@@ -11,10 +11,6 @@ export default mixin({
     });
   }
 });
-
-export function isNeededByMember(member) {
-  return member.type === MemberType.Object;
-}
 
 function getValue(slot) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);

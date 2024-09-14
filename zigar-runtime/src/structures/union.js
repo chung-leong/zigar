@@ -1,4 +1,4 @@
-import { StructureFlag, StructureType } from '../constants.js';
+import { StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
@@ -161,7 +161,3 @@ export default mixin({
     }
   }
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Union;
-}

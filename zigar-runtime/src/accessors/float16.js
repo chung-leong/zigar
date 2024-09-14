@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 
 // handles f16
@@ -51,7 +50,3 @@ export default mixin({
   }
 });
 
-export function isNeededByMember(member) {
-  const { type, bitSize } = member;
-  return type === MemberType.Float && bitSize === 16;
-}

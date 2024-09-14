@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { defineProperty, defineValue, getTypeName } from '../utils.js';
 
@@ -34,16 +33,3 @@ export default mixin({
 });
 
 const cache = new Map();
-
-export function isNeededByMember(member) {
-  switch (member.type) {
-    case MemberType.Bool:
-    case MemberType.Int:
-    case MemberType.Uint:
-    case MemberType.Float:
-      return true;
-    default:
-      return false;
-  }
-}
-

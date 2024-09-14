@@ -1,39 +1,12 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
 import { MEMORY } from '../../src/symbols.js';
 
-import AccessorAll from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemberAll from '../../src/members/all.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import Sentinel, {
-  isNeededByStructure,
-} from '../../src/members/sentinel.js';
-import MemberUint from '../../src/members/uint.js';
-
-const Env = defineClass('MemberTest', [
-  Baseline, AccessorAll, MemberUint, MemberPrimitive, MemberAll, Sentinel, IntConversion
-]);
+const Env = defineEnvironment();
 
 describe('Member: sentinel', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when mixin is needed by a structure', function() {
-      const structure = {
-        type: StructureType.Slice,
-        flags: StructureFlag.HasSentinel,
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return false when mixin is not needed by a member', function() {
-      const structure = {
-        type: StructureType.Slice,
-      };
-      const env = new Env();
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('defineSentinel', function() {
     it('should return sentinel descriptor', function() {
       const env = new Env();

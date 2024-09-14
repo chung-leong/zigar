@@ -1,4 +1,3 @@
-import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotUndefined, OutOfBound } from '../errors.js';
 
@@ -26,7 +25,3 @@ export default mixin({
     };
   }
 });
-
-export function isNeededByMember(member) {
-  return member.type === MemberType.Void;
-}

@@ -22,17 +22,3 @@ export default mixin({
     }
   }
 });
-
-export function isNeededByMember(member) {
-  const { type, bitSize, bitOffset, byteSize } = member;
-  if (type === MemberType.Int && bitSize <= 32) {
-    if (![ 8, 16, 32 ].includes(bitSize)) {
-      if (byteSize === undefined && (bitOffset & 0x07) + bitSize <= 8) {
-        // ints handled by the mixin "int-unaligned" don't need this one
-        return false;
-      }
-      return true
-    }
-  }
-  return false;
-}

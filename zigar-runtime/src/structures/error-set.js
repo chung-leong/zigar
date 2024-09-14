@@ -159,10 +159,6 @@ export default mixin({
   },
 });
 
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.ErrorSet;
-}
-
 class ZigErrorBase extends Error {
   constructor(name, number) {
     super(deanimalizeErrorName(name));

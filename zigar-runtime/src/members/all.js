@@ -25,16 +25,12 @@ export default mixin({
       const handleName = `transformDescriptor${structureNames[type]}`;
       const f = this[handleName];
       if (f) {
-        return f(descriptor, member);
+        return f.call(this, descriptor, member);
       }
     }
     return descriptor;
   },
 });
-
-export function isNeededByMember(member) {
-  return true;
-}
 
 export function bindSlot(slot, { get, set }) {
   if (slot !== undefined) {

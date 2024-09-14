@@ -1,25 +1,13 @@
 import { expect } from 'chai';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
+import { getCopyFunction, getResetFunction } from '../../src/features/data-copying.js';
+import '../../src/mixins.js';
 import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
 
-import Baseline from '../../src/features/baseline.js';
-import DataCopying, {
-  getCopyFunction,
-  getResetFunction,
-  isNeededByStructure,
-} from '../../src/features/data-copying.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import ViewManagement from '../../src/features/view-management.js';
-
-const Env = defineClass('FeatureTest', [ Baseline, DataCopying, MemoryMapping, ViewManagement ]);
+const Env = defineEnvironment();
 
 describe('Feature: data-copying', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true', function() {
-      expect(isNeededByStructure()).to.be.true;
-    })
-  })
   describe('getCopyFunction', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
       const functions = [];

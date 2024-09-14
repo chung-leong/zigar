@@ -1,73 +1,19 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
-import { defineClass } from '../../src/environment.js';
+import { defineEnvironment } from '../../src/environment.js';
 import { Exit, ZigError } from '../../src/errors.js';
+import { CallContext } from '../../src/features/call-marshaling-outbound.js';
+import '../../src/mixins.js';
 import { ALIGN, ATTRIBUTES, COPY, FIXED, MEMORY, SIZE, SLOTS, VISIT } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
 use (ChaiAsPromised);
 
-import AccessorAll from '../../src/accessors/all.js';
-import Baseline from '../../src/features/baseline.js';
-import CallMarshalingOutbound, {
-  CallContext,
-  isNeededByStructure,
-} from '../../src/features/call-marshaling-outbound.js';
-import DataCopying from '../../src/features/data-copying.js';
-import IntConversion from '../../src/features/int-conversion.js';
-import MemoryMapping from '../../src/features/memory-mapping.js';
-import PointerSynchronization from '../../src/features/pointer-synchronization.js';
-import StreamRedirection from '../../src/features/stream-redirection.js';
-import StructureAcquisition from '../../src/features/structure-acquisition.js';
-import ViewManagement from '../../src/features/view-management.js';
-import MemberAll from '../../src/members/all.js';
-import MemberBool from '../../src/members/bool.js';
-import MemberInt from '../../src/members/int.js';
-import MemberObject from '../../src/members/object.js';
-import MemberPrimitive from '../../src/members/primitive.js';
-import MemberUint from '../../src/members/uint.js';
-import StructureAll from '../../src/structures/all.js';
-import StructureArgStruct from '../../src/structures/arg-struct.js';
-import StructurePrimitive from '../../src/structures/primitive.js';
-import StructLike from '../../src/structures/struct-like.js';
-import StructureStruct from '../../src/structures/struct.js';
-
-const Env = defineClass('FeatureTest', [
-  Baseline, DataCopying, CallMarshalingOutbound, MemoryMapping, ViewManagement,
-  PointerSynchronization, StreamRedirection, StructureAcquisition, StructureAll,
-  StructureArgStruct, MemberUint, MemberAll, MemberBool, MemberInt, IntConversion,
-  MemberPrimitive, StructurePrimitive, AccessorAll, StructureStruct, MemberObject,
-  StructLike,
-]);
+const Env = defineEnvironment();
 
 describe('Feature: call-marshaling-outbound', function() {
-  describe('isNeededByStructure', function() {
-    it('should return true when structure is a function', function() {
-      const structure = {
-        type: StructureType.Function,
-        instance: {}
-      };
-      expect(isNeededByStructure(structure)).to.be.true;
-    })
-    it('should return true when structure is not a function', function() {
-      const structure = {
-        type: StructureType.SinglePointer,
-        instance: {
-          members: [
-            {
-              type: MemberType.Object,
-              structure: {
-                type: StructureType.Function,
-              }
-            }
-          ]
-        }
-      };
-      expect(isNeededByStructure(structure)).to.be.false;
-    })
-  })
   describe('startContext', function() {
     it('should start a new context', function() {
       const env = new Env();

@@ -1,4 +1,3 @@
-import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { BIT_SIZE, COPY, INITIALIZE, PRIMITIVE } from '../symbols.js';
@@ -39,7 +38,3 @@ export default mixin({
     staticDescriptors[PRIMITIVE] = defineValue(member.type);
   },
 });
-
-export function isNeededByStructure(structure) {
-  return structure.type === StructureType.Primitive;
-}
