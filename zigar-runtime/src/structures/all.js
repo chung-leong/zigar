@@ -108,7 +108,7 @@ export default mixin({
         if (member.flags & MemberFlag.IsMethod) {
           const { method } = fn[VARIANTS];
           descriptors[name] = defineValue(method);
-          if (accessorType && method.length  === argRequired) {
+          if (accessorType && method.length === argRequired) {
             const descriptor = descriptors[propName] ??= {};
             descriptor[accessorType] = method;
           }

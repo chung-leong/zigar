@@ -1,13 +1,16 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineClass } from '../../src/environment.js';
-import { ALIGN, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
+import { ALIGN, FIXED, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 import AccessorAll from '../../src/accessors/all.js';
 import Baseline from '../../src/features/baseline.js';
+import CallMarshalingOutbound from '../../src/features/call-marshaling-outbound.js';
 import DataCopying from '../../src/features/data-copying.js';
 import IntConversion from '../../src/features/int-conversion.js';
+import MemoryMapping from '../../src/features/memory-mapping.js';
 import StructureAcquisition from '../../src/features/structure-acquisition.js';
 import ViewManagement from '../../src/features/view-management.js';
 import MemberAll from '../../src/members/all.js';
@@ -17,10 +20,13 @@ import MemberPrimitive from '../../src/members/primitive.js';
 import SpecialMethods from '../../src/members/special-methods.js';
 import SpecialProps from '../../src/members/special-props.js';
 import MemberUint from '../../src/members/uint.js';
+import MemberVoid from '../../src/members/void.js';
 import All, {
   isNeededByStructure,
 } from '../../src/structures/all.js';
+import ArgStruct from '../../src/structures/arg-struct.js';
 import Enum from '../../src/structures/enum.js';
+import FunctionMixin from '../../src/structures/function.js';
 import Primitive from '../../src/structures/primitive.js';
 import StructLike from '../../src/structures/struct-like.js';
 import Struct from '../../src/structures/struct.js';
@@ -28,7 +34,8 @@ import Struct from '../../src/structures/struct.js';
 const Env = defineClass('StructureTest', [
   AccessorAll, MemberInt, MemberPrimitive, MemberAll, All, Primitive, DataCopying, SpecialMethods,
   SpecialProps, ViewManagement, StructureAcquisition, StructLike, Struct, MemberUint, MemberObject,
-  Enum, IntConversion, Baseline,
+  Enum, IntConversion, Baseline, ArgStruct, FunctionMixin, CallMarshalingOutbound, MemoryMapping,
+  MemberVoid,
 ]);
 
 describe('Structure: all', function() {
@@ -416,6 +423,383 @@ describe('Structure: all', function() {
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
+    it('should attach method to a struct', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: {},
+      });
+      const argStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Argument',
+        byteSize: 12,
+      });
+      env.attachMember(argStruct, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(argStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: structure.byteSize * 8,
+        bitOffset: 32,
+        byteSize: structure.byteSize,
+        structure,
+        slot: 0,
+      });
+      const ArgStruct = env.defineStructure(argStruct);
+      env.endStructure(argStruct);
+      const fnStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(fnStructure, {
+        type: MemberType.Object,
+        structure: argStruct,
+      });
+      const thunk = { [MEMORY]: fixed(0x1234) };
+      env.attachTemplate(fnStructure, thunk, false);
+      const Func = env.defineStructure(fnStructure);
+      env.finalizeStructure(fnStructure);
+      env.attachMember(structure, {
+        name: 'merge',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsMethod,
+        structure: fnStructure,
+        slot: 0,
+      }, true);
+      const fnDV = { [MEMORY]: fixed(0x4567) };
+      const fn = Func(fnDV);
+      expect(fn).to.be.a('function');
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: fn,
+        }
+      }, true);
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(Hello.merge).to.be.a('function');
+      expect(Hello.merge).to.have.property('name', 'merge');
+      expect(Hello.prototype.merge).to.be.a('function');
+      expect(Hello.prototype.merge).to.have.property('name', 'merge');
+      const object = new Hello({});
+      object.dog = 10;
+      object.cat = 13;
+      let call;
+      env.allocateExternMemory = function(type, len, align) {
+        return 0x1000;
+      };
+      env.freeExternMemory = function() {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+        env.runThunk = function(thunkAddress, fnAddress, argAddress) {
+          const argDV = new DataView(env.memory.buffer, argAddress, ArgStruct[SIZE]);
+          call = { thunkAddress, fnAddress, argDV };
+          const dog = argDV.getInt32(4, true);
+          const cat = argDV.getInt32(8, true);
+          argDV.setInt32(0, dog + cat, true);
+          return true;
+        };
+      } else if (process.env.TARGET === 'node') {
+        env.runThunk = function(thunkAddress, fnAddress, argDV) {
+          call = { thunkAddress, fnAddress, argDV };
+          const dog = argDV.getInt32(4, true);
+          const cat = argDV.getInt32(8, true);
+          argDV.setInt32(0, dog + cat, true);
+          return true;
+        };
+      }
+      const res1 = object.merge();
+      expect(res1).to.equal(23);
+      object.dog = 20;
+      const res2 = object.merge();
+      expect(res2).to.equal(33);
+      expect(call.thunkAddress).to.equal(usize(0x1234));
+      expect(call.fnAddress).to.equal(usize(0x4567));
+    })
+    it('should attach getter and setter to a struct', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        name: 'dog',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: 'cat',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: {},
+      });
+      const Hello = env.defineStructure(structure);
+      const getterArgStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Argument',
+        byteSize: 12,
+      });
+      env.attachMember(getterArgStruct, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(getterArgStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: structure.byteSize * 8,
+        bitOffset: 32,
+        byteSize: structure.byteSize,
+        structure,
+        slot: 0,
+      });
+      env.defineStructure(getterArgStruct);
+      env.endStructure(getterArgStruct);
+      const getterStructure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn (Hello) i32',
+        byteSize: 0,
+      });
+      env.attachMember(getterStructure, {
+        type: MemberType.Object,
+        structure: getterArgStruct,
+      });
+      const getterThunk = { [MEMORY]: fixed(0x1234) };
+      env.attachTemplate(getterStructure, getterThunk, false);
+      const Getter = env.defineStructure(getterStructure);
+      env.endStructure(getterStructure);
+      env.attachMember(structure, {
+        name: 'get  apple',
+        type: MemberType.Object,
+        flags: MemberFlag.IsMethod,
+        slot: 0,
+        structure: getterStructure,
+      }, true);
+      const setterArgStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Argument',
+        byteSize: 12,
+      });
+      env.attachMember(setterArgStruct, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: {},
+      });
+      env.attachMember(setterArgStruct, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: structure.byteSize * 8,
+        bitOffset: 0,
+        byteSize: structure.byteSize,
+        structure,
+        slot: 0,
+      });
+      env.attachMember(setterArgStruct, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: structure.byteSize * 8,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(setterArgStruct);
+      env.endStructure(setterArgStruct);
+      const setterStructure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn (Hello, i32) void',
+        byteSize: 0,
+      });
+      env.attachMember(setterStructure, {
+        type: MemberType.Object,
+        structure: setterArgStruct,
+      });
+      const setterThunk = { [MEMORY]: fixed(0x4567) };
+      env.attachTemplate(setterStructure, setterThunk, false);
+      const Setter = env.defineStructure(setterStructure);
+      env.endStructure(setterStructure);
+      env.attachMember(structure, {
+        name: 'set apple',
+        type: MemberType.Object,
+        flags: MemberFlag.IsMethod,
+        slot: 1,
+        structure: setterStructure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Getter(fixed(0x12345)),
+          1: Setter(fixed(0x45678)),
+        }
+      }, true);
+      env.endStructure(structure);
+      const object = new Hello({ dog: 1, cat: 2 });
+      let apple = 123;
+      const thunkAddresses = [];
+      env.invokeThunk = (thunkAddress, fnAddress, args) => {
+        thunkAddresses.push(thunkAddress);
+        switch (fnAddress) {
+          case usize(0x12345): // getter
+             args.retval = apple;
+            break;
+          case usize(0x45678): // setter
+            apple = args[1];
+            break;
+        }
+        return args.retval;
+      };
+      expect(object.apple).to.equal(123);
+      object.apple = 456;
+      expect(apple).to.equal(456);
+      expect(thunkAddresses).to.eql([ usize(0x1234), usize(0x4567) ]);
+    })
+    it('should attach static getter and setter to a struct', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 0,
+      });
+      const Hello = env.defineStructure(structure);
+      const getterArgStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Argument',
+        byteSize: 4,
+      });
+      env.attachMember(getterArgStruct, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(getterArgStruct);
+      env.endStructure(getterArgStruct);
+      const getterStructure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn () i32',
+        byteSize: 0,
+      });
+      env.attachMember(getterStructure, {
+        type: MemberType.Object,
+        structure: getterArgStruct,
+      });
+      const getterThunk = { [MEMORY]: fixed(0x1234) };
+      env.attachTemplate(getterStructure, getterThunk, false);
+      const Getter = env.defineStructure(getterStructure);
+      env.endStructure(getterStructure);
+      env.attachMember(structure, {
+        name: 'get  apple',
+        type: MemberType.Object,
+        slot: 0,
+        structure: getterStructure,
+      }, true);
+      const setterArgStruct = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Argument',
+        byteSize: 4,
+      });
+      env.attachMember(setterArgStruct, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: {},
+      });
+      env.attachMember(setterArgStruct, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(setterArgStruct);
+      env.endStructure(setterArgStruct);
+      const setterStructure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn (i32) void',
+        byteSize: 0,
+      });
+      env.attachMember(setterStructure, {
+        type: MemberType.Object,
+        structure: setterArgStruct,
+      });
+      const setterThunk = { [MEMORY]: fixed(0x4567) };
+      env.attachTemplate(setterStructure, setterThunk, false);
+      const Setter = env.defineStructure(setterStructure);
+      env.endStructure(setterStructure);
+      env.attachMember(structure, {
+        name: 'set apple',
+        type: MemberType.Object,
+        slot: 1,
+        structure: setterStructure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: Getter(fixed(0x12345)),
+          1: Setter(fixed(0x45678)),
+        }
+      }, true);
+      env.endStructure(structure);
+      let apple = 123;
+      const thunkAddresses = [];
+      env.invokeThunk = (thunkAddress, fnAddress, args) => {
+        thunkAddresses.push(thunkAddress);
+        switch (fnAddress) {
+          case usize(0x12345): // getter
+             args.retval = apple;
+            break;
+          case usize(0x45678): // setter
+            apple = args[0];
+            break;
+        }
+        return args.retval;
+      };
+      expect(Hello.apple).to.equal(123);
+      Hello.apple = 456;
+      expect(apple).to.equal(456);
+      expect(thunkAddresses).to.eql([ usize(0x1234), usize(0x4567) ]);
+    })
   })
   describe('getTypedArray', function() {
     it('should return typed array constructor for integer primitive', function() {
@@ -526,3 +910,8 @@ describe('Structure: all', function() {
   })
 })
 
+function fixed(address, len = 0) {
+  const dv = new DataView(new ArrayBuffer(len));
+  dv[FIXED] = { address: usize(address), len };
+  return dv;
+}

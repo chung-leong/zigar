@@ -44,30 +44,37 @@ pub const StructureType = enum(u32) {
     vector,
     @"opaque",
     arg_struct,
+    variadic_struct,
     function,
 };
 
 pub const StructureFlags = packed struct(u32) {
-    has_pointer: bool = false,
-    has_object: bool = false,
-    has_length: bool = false,
-    has_slots: bool = false,
-    has_tag: bool = false,
-    has_selector: bool = false,
     has_value: bool = false,
-    has_inaccessible: bool = false,
+    has_object: bool = false,
+    has_pointer: bool = false,
+    has_slot: bool = false,
+    has_length: bool = false,
+    has_selector: bool = false,
+    has_tag: bool = false,
+    has_sentinel: bool = false,
 
     is_const: bool = false,
     is_multiple: bool = false,
     is_single: bool = false,
-    is_nullable: bool = false,
-    is_packed: bool = false,
     is_extern: bool = false,
     is_string: bool = false,
+    is_packed: bool = false,
     is_iterator: bool = false,
+    is_throwing: bool = false,
+
+    has_inaccessible: bool = false,
+    _: u7 = 0,
+
     is_tuple: bool = false,
+    is_nullable: bool = false,
     is_open_ended: bool = false,
     is_variandic: bool = false,
+    __: u4 = 0,
 };
 
 pub const MemberType = enum(u32) {
@@ -87,8 +94,11 @@ pub const MemberType = enum(u32) {
 pub const MemberFlags = packed struct(u32) {
     is_required: bool = false,
     is_read_only: bool = false,
-    is_sentinel: bool = false,
+    is_size: bool = false,
+    is_part_of_set: bool = false,
     is_selector: bool = false,
+    is_method: bool = false,
+    is_sentinel: bool = false,
     is_backing_int: bool = false,
 };
 

@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch } from '../errors.js';
-import { LENGTH, MEMORY, VARIANTS } from '../symbols.js';
+import { MEMORY, VARIANTS } from '../symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../utils.js';
 
 export default mixin({
@@ -34,16 +34,17 @@ export default mixin({
       if (existing = cache.find(dv)) {
         return existing;
       }
+      const argCount = ArgStruct.prototype.length;
       const { self, method, binary } = (creating)
       ? thisEnv.createInboundCallers(arg, ArgStruct)
       : thisEnv.createOutboundCallers(thunk, ArgStruct);
       defineProperties(self, {
-        length: defineValue(ArgStruct[LENGTH]),
+        length: defineValue(argCount),
         [VARIANTS]: defineValue({ method, binary }),
         name: defineValue(''),
       });
       defineProperties(method, {
-        length: defineValue(ArgStruct[LENGTH] - 1),
+        length: defineValue(argCount - 1),
         name: {
           get() {
             return self.name;
