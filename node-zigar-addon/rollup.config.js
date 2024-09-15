@@ -51,13 +51,13 @@ export default [
 
 function CPPString() {
   // place JS code into a C++ raw string
-  // we can't rely on banner/footer here since those are seen by Terser,
-  // which would promptly throw a syntax error
   return {
     name: 'C++ string',
     renderChunk (code) {
-      code = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
-      return `R"=====(\n${code}\n)====="`;
+      const iife = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
+      const lines = iife.split(/(?<=\n)/);
+      const literals = lines.map(l => JSON.stringify(l));
+      return literals.join('\n');
     }
   };
 }

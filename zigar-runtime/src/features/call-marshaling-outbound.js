@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { Exit, ZigError } from '../errors.js';
+import { Exit } from '../errors.js';
 import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
 
 export default mixin({
@@ -78,13 +78,6 @@ export default mixin({
         if (!this.context) {
           this.flushConsole?.();
         }
-        // errors returned by exported Zig functions are normally written into the
-        // argument object and get thrown when we access its retval property (a zig error union)
-        // if the thunk returns false, it indicates a problem in the thunking process
-        // (i.e. bugs in export.zig)
-        if (!success) {
-          throw new ZigError();
-        }
         return args.retval;
       } catch (err) {
         // do nothing when exit code is 0
@@ -122,13 +115,6 @@ export default mixin({
       this.endContext();
       if (!this.context) {
         this.flushConsole?.();
-      }
-      // errors returned by exported Zig functions are normally written into the
-      // argument object and get thrown when we access its retval property (a zig error union)
-      // if the thunk returns false, it indicates a problem in the thunking process
-      // (i.e. bugs in export.zig)
-      if (!success) {
-        throw new ZigError();
       }
     },
     /* c8 ignore next */

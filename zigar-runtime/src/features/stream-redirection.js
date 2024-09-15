@@ -52,6 +52,9 @@ export default mixin({
       flushStdout: { argType: '', returnType: '' },
     },
   } : process.env.TARGET === 'node' ? {
+    exports: {
+      writeToConsole: null,
+    },
     imports: {
       flushStdout: null,
     },

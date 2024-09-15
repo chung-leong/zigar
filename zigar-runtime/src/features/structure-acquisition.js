@@ -68,7 +68,7 @@ export default mixin({
       // copy content into reloctable memory
       const dv = this.allocateRelocMemory(len, 0);
       if (len > 0) {
-        this.copyBytes(dv, address, len);
+        this.copyExternBytes(dv, address, len);
       }
       return dv;
     } else {
@@ -248,6 +248,7 @@ export default mixin({
       attachMember: { argType: 'vvb' },
       createTemplate: { argType: 'v', returnType: 'v' },
       attachTemplate: { argType: 'vvb' },
+      defineStructure: { argType: 'v', returnType: 'v' },
       endStructure: { argType: 'v' },
     },
     imports: {
@@ -270,8 +271,21 @@ export default mixin({
       return address;
     },
   } : process.env.TARGET === 'node' ? {
+    exports: {
+      captureView: null,
+      castView: null,
+      readSlot: null,
+      writeSlot: null,
+      beginStructure: null,
+      attachMember: null,
+      createTemplate: null,
+      attachTemplate: null,
+      defineStructure: null,
+      endStructure: null,
+    },
     imports: {
       getFactoryThunk: null,
+      getMemoryOffset: null,
     },
   } : {}),
 });

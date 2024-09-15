@@ -38,7 +38,6 @@ import {
   Overflow,
   TypeMismatch,
   Unsupported,
-  ZigError,
   adjustArgumentError,
   adjustRangeError,
   article,
@@ -625,12 +624,6 @@ describe('Error functions', function() {
       const structure =  { name: 'Apple' };
       const err = new AccessingOpaque(structure);
       expect(err.message).to.contain('Apple');
-    })
-  })
-  describe('ZigError', function() {
-    it('should throw error with the correct message', function() {
-      const err = new ZigError();
-      expect(err.message).to.contain('Zig');
     })
   })
   describe('adjustArgumentError', function() {

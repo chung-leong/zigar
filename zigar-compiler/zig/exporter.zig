@@ -30,7 +30,7 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
         // define the shape of the structure
         try addMembers(ctx, structure, td);
         // finalize the shape so that static members can be instances of the structure
-        try ctx.host.defineStructure(structure);
+        _ = try ctx.host.defineStructure(structure);
         try addStaticMembers(ctx, structure, td);
         try ctx.host.endStructure(structure);
         break :create structure;

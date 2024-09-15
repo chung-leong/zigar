@@ -182,10 +182,10 @@ describe('Feature: structure-acquisition', function() {
     })
   })
   describe('captureView', function() {
-    it('should allocate new buffer and copy data using copyBytes', function() {
+    it('should allocate new buffer and copy data using copyExternBytes', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {
+      env.copyExternBytes = (dv, address, len) => {
         dv.setInt32(0, address, true);
         dv.setInt32(4, len, true);
       };
@@ -208,7 +208,7 @@ describe('Feature: structure-acquisition', function() {
     it('should call constructor without the use of the new operator', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {};
+      env.copyExternBytes = (dv, address, len) => {};
       let recv, arg;
       const structure = {
         constructor: function(dv) {
@@ -225,7 +225,7 @@ describe('Feature: structure-acquisition', function() {
     it('should try to create targets of pointers', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyBytes = (dv, address, len) => {};
+      env.copyExternBytes = (dv, address, len) => {};
       let visitor;
       const structure = {
         constructor: function(dv) {
@@ -337,7 +337,7 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       env.getViewAddress = (dv) => dv[FIXED].address;
       env.getMemoryOffset = (address) => Number(address);
-      env.copyBytes = (dv, address, len) => {};
+      env.copyExternBytes = (dv, address, len) => {};
       const fixed = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[FIXED] = { address, len }
@@ -378,7 +378,7 @@ describe('Feature: structure-acquisition', function() {
       const addressMap = new Map();
       env.getViewAddress = (dv) => addressMap.get(dv);
       env.getMemoryOffset = (address) => Number(address);
-      env.copyBytes = (dv, address, len) => {};
+      env.copyExternBytes = (dv, address, len) => {};
       const templ1 = {
         [MEMORY]: new DataView(new ArrayBuffer(8))
       };

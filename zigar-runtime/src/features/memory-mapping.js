@@ -317,6 +317,7 @@ export default mixin({
       freeExternMemory: null,
       getBufferAddress: null,
       copyExternBytes: null,
+      obtainExternBuffer: null,
     },
     exports: {
       allocateHostMemory: null,

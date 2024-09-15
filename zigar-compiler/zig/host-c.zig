@@ -160,10 +160,12 @@ pub const Host = struct {
         }
     }
 
-    pub fn defineStructure(self: Host, structure: Value) !void {
-        if (imports.define_structure(self.context, structure) != .ok) {
+    pub fn defineStructure(self: Host, structure: Value) !Value {
+        var value: Value = undefined;
+        if (imports.define_structure(self.context, structure, &value) != .ok) {
             return Error.unable_to_define_structure;
         }
+        return value;
     }
 
     pub fn endStructure(self: Host, structure: Value) !void {
@@ -368,7 +370,7 @@ const Imports = extern struct {
     begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) Result,
     attach_member: *const fn (*ModuleData, Value, *const MemberC, bool) callconv(.C) Result,
     attach_template: *const fn (*ModuleData, Value, Value, bool) callconv(.C) Result,
-    define_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
+    define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) Result,
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
@@ -419,7 +421,7 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
 
 pub fn createModule(comptime T: type) Module {
     return .{
-        .version = 4,
+        .version = 5,
         .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == .little,
             .runtime_safety = switch (builtin.mode) {

@@ -154,7 +154,7 @@ struct export_table {
     result (__cdecl *begin_structure)(module_data*, const structure*, napi_value*);
     result (__cdecl *attach_member)(module_data*, napi_value, const member*, bool);
     result (__cdecl *attach_template)(module_data*, napi_value, napi_value, bool);
-    result (__cdecl *define_structure)(module_data*, napi_value);
+    result (__cdecl *define_structure)(module_data*, napi_value, napi_value*);
     result (__cdecl *end_structure)(module_data*, napi_value);
     result (__cdecl *create_template)(module_data*, napi_value, napi_value*);
     result (__cdecl *write_to_console)(module_data*, napi_value);

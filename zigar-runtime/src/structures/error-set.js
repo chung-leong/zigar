@@ -17,7 +17,7 @@ export default mixin({
     } = structure;
     if (!this.currentErrorClass) {
       // create anyerror set
-      this.currentErrorClass = class ZigError extends ZigErrorBase {};
+      this.currentErrorClass = class Error extends ZigErrorBase {};
       const ae = {
         type: StructureType.ErrorSet,
         name: 'anyerror',

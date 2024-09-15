@@ -202,7 +202,7 @@ result begin_structure(module_data* md,
      && napi_create_uint32(env, s->type, &type) == napi_ok
      && napi_set_named_property(env, args[0], "type", type) == napi_ok
      && napi_create_uint32(env, s->flags, &flags) == napi_ok
-     && napi_set_named_property(env, args[0], "type", type) == napi_ok
+     && napi_set_named_property(env, args[0], "flags", flags) == napi_ok
      && (s->length == MISSING(size_t) || napi_create_uint32(env, s->length, &length) == napi_ok)
      && (s->length == MISSING(size_t) || napi_set_named_property(env, args[0], "length", length) == napi_ok)
      && (s->byte_size == MISSING(size_t)  || napi_create_uint32(env, s->byte_size, &byte_size) == napi_ok)
@@ -230,7 +230,7 @@ result attach_member(module_data* md,
      && napi_create_uint32(env, m->type, &type) == napi_ok
      && napi_set_named_property(env, args[1], "type", type) == napi_ok
      && napi_create_uint32(env, m->flags, &flags) == napi_ok
-     && napi_set_named_property(env, args[1], "type", flags) == napi_ok
+     && napi_set_named_property(env, args[1], "flags", flags) == napi_ok
      && (m->bit_size == MISSING(size_t) || napi_create_uint32(env, m->bit_size, &bit_size) == napi_ok)
      && (m->bit_size == MISSING(size_t) || napi_set_named_property(env, args[1], "bitSize", bit_size) == napi_ok)
      && (m->bit_offset == MISSING(size_t) || napi_create_uint32(env, m->bit_offset, &bit_offset) == napi_ok)
@@ -263,7 +263,8 @@ result attach_template(module_data* md,
 }
 
 result define_structure(module_data* md,
-                        napi_value structure) {
+                        napi_value structure,
+                        napi_value *dest) {
     napi_env env = md->env;
     napi_value args[1] = { structure };
     napi_value result;
@@ -559,6 +560,8 @@ napi_value get_factory_thunk(napi_env env,
     return result;
 }
 
+#include <stdio.h>
+
 napi_value run_thunk(napi_env env,
                      napi_callback_info info) {
     module_data* md;
@@ -576,18 +579,14 @@ napi_value run_thunk(napi_env env,
     } else if (napi_get_dataview_info(env, args[2], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
         return throw_error(env, "Arguments must be a DataView");
     }
-    napi_value result;
     if (args_len == 0) {
         // pointer might not be valid when length is zero
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_thunk(md, thunk_address, fn_address, args_ptr, &result) != OK) {
+    if (md->mod->imports->run_thunk(md, thunk_address, fn_address, args_ptr) != OK) {
         return throw_error(env, "Unable to execute function");
     }
-    if (!result) {
-        napi_get_null(env, &result);
-    }
-    return result;
+    return NULL;
 }
 
 napi_value run_variadic_thunk(napi_env env,
@@ -616,13 +615,10 @@ napi_value run_variadic_thunk(napi_env env,
     if (args_len == 0) {
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_variadic_thunk(md, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count, &result) != OK) {
+    if (md->mod->imports->run_variadic_thunk(md, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) != OK) {
         return throw_error(env, "Unable to execute function");
     }
-    if (!result) {
-        napi_get_null(env, &result);
-    }
-    return result;
+    return NULL;
 }
 
 napi_value create_js_thunk(napi_env env,
@@ -638,12 +634,11 @@ napi_value create_js_thunk(napi_env env,
     } else if (napi_get_value_uint32(env, args[1], &fn_id) != napi_ok) {
         return throw_error(env, "Function id must be a number");
     }
+    size_t thunk_address;
     napi_value result;
-    if (md->mod->imports->run_js_thunk_constructor(md, constructor_address, fn_id, &result) != OK) {
+    if (md->mod->imports->create_js_thunk(md, constructor_address, fn_id, &thunk_address) != OK
+     || napi_create_uintptr(env, thunk_address, &result) != napi_ok) {
         return throw_error(env, "Unable to create thunk");
-    }
-    if (!result) {
-        napi_get_null(env, &result);
     }
     return result;
 }
@@ -871,15 +866,11 @@ bool import_functions(module_data* md,
      || napi_call_function(env, js_env, export_fn, 0, args, &exports) != napi_ok) {
         return false;
     }
-    napi_value run_fn = NULL;
     for (int i = 0; i < IMPORT_COUNT; i++) {
         napi_value function;
         if (napi_get_named_property(env, exports, imports[i].name, &function) != napi_ok
          || napi_create_reference(env, function, 1, &md->js_fns[i]) != napi_ok) {
             return false;
-        }
-        if (i == runFunction) {
-            run_fn = function;
         }
     }
     return true;
@@ -911,7 +902,7 @@ napi_value load_module(napi_env env,
         return throw_error(env, "Unable to find the symbol \"zig_module\"");
     }
     module* mod = md->mod = (module*) symbol;
-    if (mod->version != 4) {
+    if (mod->version != 5) {
         return throw_error(env, "Cached module is compiled for a different version of Zigar");
     }
 

@@ -376,13 +376,7 @@ export class InvalidVariadicArgument extends TypeError {
   }
 }
 
-export class ZigError extends Error {
-  constructor() {
-    super(`Error encountered in Zig code`);
-  }
-}
-
-export class Exit extends ZigError {
+export class Exit extends Error {
   constructor(code) {
     super('Program exited');
     this.code = code;

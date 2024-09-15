@@ -26,9 +26,6 @@ export default mixin({
     if (dv === undefined) {
       const constructorAddr = this.getViewAddress(jsThunkConstructor[MEMORY]);
       const thunkAddr = this.createJsThunk(constructorAddr, funcId);
-      if (!thunkAddr) {
-        throw new ZigError();
-      }
       dv = this.obtainFixedView(thunkAddr, 0);
       this.jsFunctionThunkMap.set(funcId, dv);
     }
@@ -95,12 +92,12 @@ export default mixin({
     return caller?.(dv, futexHandle) ?? CallResult.Failure;
   },
   ...(process.env.TARGET === 'wasm' ? {
-    imports: {
-      createJsThunk: { argType: 'ii', returnType: 'i' },
-    },
     exports: {
       allocateJsThunk: { argType: 'i', returnType: 'i' },
       performJsCall: { argType: 'iii', returnType: 'i' },
+    },
+    imports: {
+      createJsThunk: { argType: 'ii', returnType: 'i' },
     },
     allocateJsThunk() {
       // TODO
@@ -109,11 +106,11 @@ export default mixin({
       // TODO
     },
   } : process.env.TARGET === 'node' ? {
+    exports: {
+      runFunction: null,
+    },
     imports: {
       createJsThunk: null,
-    },
-    export: {
-      runFunction: null,
     },
   } : undefined),
 });

@@ -2,7 +2,7 @@ import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { Exit, ZigError } from '../../src/errors.js';
+import { Exit } from '../../src/errors.js';
 import { CallContext } from '../../src/features/call-marshaling-outbound.js';
 import '../../src/mixins.js';
 import { ALIGN, ATTRIBUTES, COPY, FIXED, MEMORY, SIZE, SLOTS, VISIT } from '../../src/symbols.js';
@@ -485,7 +485,7 @@ describe('Feature: call-marshaling-outbound', function() {
         env.freeExternMemory = function() {};
         env.flushStdout = function() {};
         done();
-        await expect(promise).to.eventually.be.rejectedWith(ZigError);
+        await expect(promise).to.eventually.be.rejectedWith();
       })
       it('should throw when function exits with non-zero code', async function() {
         const env = new Env();
@@ -608,17 +608,6 @@ describe('Feature: call-marshaling-outbound', function() {
         expect(thunkAddress).to.equal(100);
         expect(fnAddress).to.equal(200);
         expect(argDV).to.equal(argStruct[MEMORY]);
-      })
-      it('should throw an error if thunk returns false', function() {
-        const env = new Env();
-        env.runThunk = function(...args) {
-          return false;
-        };
-        const argStruct = {
-          [MEMORY]: new DataView(new ArrayBuffer(16)),
-          [SLOTS]: { 0: {} },
-        };
-        expect(() => env.invokeThunk(100, 200, argStruct)).to.throw(ZigError);
       })
       it('should activate pointer visitor before and after the call', function() {
         const env = new Env();

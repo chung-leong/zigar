@@ -156,6 +156,10 @@ export default mixin({
       Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
   } : process.env.TARGET === 'node' ? {
+    imports: {
+      loadModule: null,
+    },
+
     exportFunctions() {
       const imports = {};
       for (const [ name, alias ] of Object.entries(this.exports)) {
