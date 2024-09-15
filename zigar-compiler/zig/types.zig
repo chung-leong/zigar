@@ -100,6 +100,7 @@ pub const MemberFlags = packed struct(u32) {
     is_method: bool = false,
     is_sentinel: bool = false,
     is_backing_int: bool = false,
+    _: u24 = 0,
 };
 
 pub const Value = *opaque {};
@@ -107,19 +108,16 @@ pub const Value = *opaque {};
 pub const Structure = struct {
     name: ?[]const u8 = null,
     structure_type: StructureType,
+    structure_flags: StructureFlags,
     length: ?usize,
     byte_size: ?usize,
     alignment: ?u16,
-    is_const: bool = false,
-    is_tuple: bool = false,
-    is_iterator: bool = false,
-    has_pointer: bool,
 };
 
 pub const Member = struct {
     name: ?[]const u8 = null,
     member_type: MemberType,
-    is_required: bool = false,
+    member_flags: MemberFlags,
     bit_offset: ?usize = null,
     bit_size: ?usize = null,
     byte_size: ?usize = null,
@@ -387,6 +385,11 @@ pub const TypeData = struct {
         return self.name orelse @typeName(self.Type);
     }
 
+    test "getName" {
+        try expectCT(std.mem.eql(u8, getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
+        try expectCT(std.mem.eql(u8, getName(.{ .Type = void, .name = "nothing" }), "nothing"));
+    }
+
     pub fn getSlot(comptime self: @This()) usize {
         return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
     }
@@ -411,26 +414,14 @@ pub const TypeData = struct {
             .Type,
             .EnumLiteral,
             => .primitive,
-            .Struct => |st| switch (st.layout) {
-                .@"extern" => .extern_struct,
-                .@"packed" => .packed_struct,
-                else => .@"struct",
-            },
-            .Union => |un| switch (un.layout) {
-                .@"extern" => .extern_union,
-                else => if (un.tag_type) |_| .tagged_union else .bare_union,
-            },
+            .Struct => .@"struct",
+            .Union => .@"union",
             .ErrorUnion => .error_union,
             .ErrorSet => .error_set,
             .Optional => .optional,
             .Enum => .@"enum",
             .Array => .array,
-            .Pointer => |pt| switch (pt.size) {
-                .One => .single_pointer,
-                .Many => .multi_pointer,
-                .Slice => .slice_pointer,
-                .C => .c_pointer,
-            },
+            .Pointer => .pointer,
             .Vector => .vector,
             .Opaque => .@"opaque",
             .Fn => .function,
@@ -438,11 +429,113 @@ pub const TypeData = struct {
         };
     }
 
+    test "getStructureType" {
+        const Enum = enum { apple, banana };
+        const TaggedUnion = union(Enum) {
+            apple: i32,
+            banana: i32,
+        };
+        const BareUnion = union {};
+        const ExternUnion = extern union {};
+        try expectCT(getStructureType(.{ .Type = i32 }) == .primitive);
+        try expectCT(getStructureType(.{ .Type = Enum }) == .@"enum");
+        try expectCT(getStructureType(.{ .Type = BareUnion }) == .@"union");
+        try expectCT(getStructureType(.{ .Type = TaggedUnion }) == .@"union");
+        try expectCT(getStructureType(.{ .Type = ExternUnion }) == .@"union");
+    }
+
+    pub fn getStructureFlags(comptime self: @This()) StructureFlags {
+        var s_flags: StructureFlags = .{
+            .has_pointer = self.attrs.has_pointer,
+        };
+        switch (@typeInfo(self.Type)) {
+            .Bool,
+            .Int,
+            .ComptimeInt,
+            .Float,
+            .ComptimeFloat,
+            .Null,
+            .Undefined,
+            .Void,
+            .Type,
+            .EnumLiteral,
+            .ErrorSet,
+            => {
+                s_flags.has_value = true;
+                s_flags.has_slot = self.attrs.is_comptime_only;
+            },
+            .Struct => |st| {
+                s_flags.is_extern = st.layout == .@"extern";
+                s_flags.is_packed = st.layout == .@"packed";
+                s_flags.is_tuple = st.is_tuple;
+                if (self.attrs.is_arguments) {
+                    s_flags.is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion;
+                } else if (self.attrs.is_slice) {
+                    s_flags.has_sentinel = self.Type.sentinel != null;
+                    s_flags.is_string = self.Type.ElementType == u8 or self.Type.ElementType == u16;
+                }
+                s_flags.has_object = inline for (st.fields) |field| {
+                    if (isObject(.{ .Type = field.type })) break true;
+                } else false;
+                s_flags.has_slot = inline for (st.fields) |field| {
+                    if (isObject(.{ .Type = field.type }) or field.is_comptime) break true;
+                } else false;
+                s_flags.is_iterator = self.isIterator();
+            },
+            .Union => |un| {
+                s_flags.is_extern = un.layout == .@"extern";
+                s_flags.has_tag = un.tag_type != null;
+                s_flags.has_inaccessible = un.tag_type == null and self.attrs.has_pointer;
+                s_flags.has_selector = self.getSelectorType() != null;
+                s_flags.has_object = inline for (un.fields) |field| {
+                    if (isObject(.{ .Type = field.type })) break true;
+                } else false;
+                s_flags.has_slot = s_flags.has_object;
+                s_flags.is_iterator = self.isIterator();
+            },
+            .ErrorUnion => |eu| {
+                s_flags.has_value = true;
+                s_flags.has_selector = true;
+                s_flags.has_object = isObject(.{ .Type = eu.payload });
+                s_flags.has_slot = s_flags.has_object;
+            },
+            .Optional => |op| {
+                s_flags.has_value = true;
+                s_flags.has_selector = self.getSelectorType() != null;
+                s_flags.has_object = isObject(.{ .Type = op.child });
+                s_flags.has_slot = s_flags.has_object;
+            },
+            .Enum => |en| {
+                s_flags.has_value = true;
+                s_flags.is_open_ended = !en.is_exhaustive;
+                s_flags.is_iterator = self.isIterator();
+            },
+            .Array => |ar| {
+                s_flags.has_object = isObject(.{ .Type = ar.child });
+                s_flags.has_slot = s_flags.has_object;
+                s_flags.is_string = ar.child == u8 or ar.child == u16;
+            },
+            .Pointer => |pt| {
+                s_flags.has_slot = true;
+                s_flags.is_const = pt.is_const;
+                s_flags.is_single = pt.size == .One or pt.size == .C;
+                s_flags.is_multiple = pt.size != .One;
+                s_flags.is_nullable = pt.is_allowzero;
+                s_flags.has_length = pt.size == .Slice;
+            },
+            .Opaque => {
+                s_flags.is_iterator = self.isIterator();
+            },
+            else => {},
+        }
+        return s_flags;
+    }
+
     pub fn getMemberType(comptime self: @This(), comptime is_comptime: bool) MemberType {
         return switch (self.isSupported()) {
             false => .unsupported,
             true => switch (is_comptime) {
-                true => .@"comptime",
+                true => .object,
                 false => switch (@typeInfo(self.Type)) {
                     .Bool => .bool,
                     .Int => |int| if (int.signedness == .signed) .int else .uint,
@@ -457,16 +550,26 @@ pub const TypeData = struct {
                     .Pointer,
                     .Vector,
                     .Fn,
+                    .ComptimeInt,
+                    .ComptimeFloat,
                     => .object,
                     .Type => .type,
                     .EnumLiteral => .literal,
-                    .ComptimeInt, .ComptimeFloat => .@"comptime",
                     .Void => .void,
                     .Null => .null,
                     else => .undefined,
                 },
             },
         };
+    }
+
+    test "getMemberType" {
+        try expectCT(getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }, false) == .int);
+        try expectCT(getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }, false) == .uint);
+        try expectCT(getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }, false) == .object);
+        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, false) == .type);
+        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, true) == .object);
+        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = false } }, true) == .unsupported);
     }
 
     pub fn getElementType(comptime self: @This()) type {
@@ -476,6 +579,10 @@ pub const TypeData = struct {
             inline .Array, .Vector => |ar| ar.child,
             else => @compileError("Not an array, vector, or slice"),
         };
+    }
+
+    test "getElementType" {
+        try expectCT(getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
     }
 
     pub fn getTargetType(comptime self: @This()) type {
@@ -497,6 +604,12 @@ pub const TypeData = struct {
         };
     }
 
+    test "getTargetType" {
+        try expectCT(getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
+        try expectCT(getTargetType(.{ .Type = *const anyopaque }) == Slice(anyopaque, null));
+        try expectCT(getTargetType(.{ .Type = *i32 }) == i32);
+    }
+
     pub fn getByteSize(comptime self: @This()) ?usize {
         if (self.attrs.is_slice and self.Type.is_opaque) {
             // opaque types have unknown size
@@ -510,6 +623,12 @@ pub const TypeData = struct {
         };
     }
 
+    test "getByteSize" {
+        try expectCT(getByteSize(.{ .Type = void }) == 0);
+        try expectCT(getByteSize(.{ .Type = @TypeOf(null) }) == 0);
+        try expectCT(getByteSize(.{ .Type = u8 }) == 1);
+    }
+
     pub fn getBitSize(comptime self: @This()) ?usize {
         return switch (@typeInfo(self.Type)) {
             .Null, .Undefined, .Fn => 0,
@@ -517,6 +636,12 @@ pub const TypeData = struct {
             .ErrorSet => @bitSizeOf(anyerror),
             else => return @bitSizeOf(self.Type),
         };
+    }
+
+    test "getBitSize" {
+        try expectCT(getBitSize(.{ .Type = void }) == 0);
+        try expectCT(getBitSize(.{ .Type = @TypeOf(null) }) == 0);
+        try expectCT(getBitSize(.{ .Type = u8 }) == 8);
     }
 
     pub fn getAlignment(comptime self: @This()) ?u16 {
@@ -532,6 +657,12 @@ pub const TypeData = struct {
         };
     }
 
+    test "getAlignment" {
+        try expectCT(getAlignment(.{ .Type = void }) == 1);
+        try expectCT(getAlignment(.{ .Type = u8 }) == 1);
+        try expectCT(getAlignment(.{ .Type = u32 }) == 4);
+    }
+
     pub fn getLength(comptime self: @This()) ?usize {
         return switch (@typeInfo(self.Type)) {
             .Array => |ar| ar.len,
@@ -540,11 +671,24 @@ pub const TypeData = struct {
         };
     }
 
+    test "getLength" {
+        try expectCT(getLength(.{ .Type = [5]u8 }) == 5);
+        try expectCT(getLength(.{ .Type = u8 }) == null);
+        try expectCT(getLength(.{ .Type = @Vector(3, f32) }) == 3);
+    }
+
     pub fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
         return switch (self.attrs.is_slice) {
             true => self.Type.sentinel,
             else => @compileError("Not a slice"),
         };
+    }
+
+    test "getSentinel" {
+        try expectCT(getSentinel(.{ .Type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
+        try expectCT(getSentinel(.{ .Type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
+        try expectCT(getSentinel(.{ .Type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
+        try expectCT(getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
     }
 
     pub fn getSelectorType(comptime self: @This()) ?type {
@@ -560,6 +704,22 @@ pub const TypeData = struct {
             },
             else => @compileError("Not a union or optional"),
         };
+    }
+
+    test "getSelectorType" {
+        const Tag = enum { cat, dog };
+        const Union = union(Tag) {
+            cat: u32,
+            dog: u32,
+        };
+        try expectCT(getSelectorType(.{ .Type = Union }) == Tag);
+        if (runtime_safety) {
+            const BareUnion = union {
+                cat: u32,
+                dog: u32,
+            };
+            try expectCT(getSelectorType(.{ .Type = BareUnion }) == u8);
+        }
     }
 
     pub fn getSelectorBitOffset(comptime self: @This()) comptime_int {
@@ -587,6 +747,14 @@ pub const TypeData = struct {
         };
     }
 
+    test "getSelectorBitOffset" {
+        const Union = union(enum) {
+            cat: i32,
+            dog: i32,
+        };
+        try expectCT(getSelectorBitOffset(.{ .Type = Union }) == 32);
+    }
+
     pub fn getErrorBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.Type)) {
             // value is placed after the error number if its alignment is smaller than that of anyerror
@@ -610,6 +778,14 @@ pub const TypeData = struct {
         };
     }
 
+    test "getContentBitOffset" {
+        const Union = union(enum) {
+            cat: i32,
+            dog: i32,
+        };
+        try expectCT(getContentBitOffset(.{ .Type = Union }) == 0);
+    }
+
     pub fn isConst(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Pointer => |pt| pt.is_const,
@@ -617,18 +793,10 @@ pub const TypeData = struct {
         };
     }
 
-    pub fn isSingle(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
-            .Pointer => |pt| pt.size == .One,
-            else => false,
-        };
-    }
-
-    pub fn isTuple(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
-            .Struct => |st| st.is_tuple,
-            else => false,
-        };
+    test "isConst" {
+        try expectCT(isConst(.{ .Type = i32 }) == false);
+        try expectCT(isConst(.{ .Type = *i32 }) == false);
+        try expectCT(isConst(.{ .Type = *const i32 }) == true);
     }
 
     pub fn isPacked(comptime self: @This()) bool {
@@ -639,11 +807,99 @@ pub const TypeData = struct {
         };
     }
 
+    test "isPacked" {
+        const A = struct {
+            number: u17,
+            flag: bool,
+        };
+        const B = packed union {
+            flag1: bool,
+            flag2: bool,
+        };
+        try expectCT(isPacked(.{ .Type = A }) == false);
+        try expectCT(isPacked(.{ .Type = B }) == true);
+    }
+
     pub fn isBitVector(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.Type),
             else => false,
         };
+    }
+
+    test "isBitVector" {
+        const A = @Vector(8, bool);
+        const B = @Vector(4, f32);
+        try expectCT(isBitVector(.{ .Type = A }) == true);
+        try expectCT(isBitVector(.{ .Type = B }) == false);
+    }
+
+    fn PayloadType(comptime T: type) ?type {
+        return switch (@typeInfo(T)) {
+            .Optional => |op| op.child,
+            .ErrorUnion => |eu| PayloadType(eu.payload),
+            else => null,
+        };
+    }
+
+    test "PayloadType" {
+        const T1 = PayloadType(?i32) orelse unreachable;
+        try expect(T1 == i32);
+        const T2 = PayloadType(anyerror!?i32) orelse unreachable;
+        try expect(T2 == i32);
+        const T3 = PayloadType(i32);
+        try expect(T3 == null);
+    }
+
+    fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
+        const f = @typeInfo(FT).Fn;
+        if (f.return_type) |RT| {
+            const param_match = switch (f.params.len) {
+                1 => f.params[0].type == *T,
+                2 => f.params[0].type == *T and f.params[1].type == std.mem.Allocator,
+                else => false,
+            };
+            if (param_match) {
+                if (PayloadType(RT)) |PT| {
+                    return PT;
+                }
+            }
+        }
+        return null;
+    }
+
+    test "NextMethodReturnType" {
+        const S = struct {
+            pub fn next1(_: *@This()) ?i32 {
+                return null;
+            }
+
+            pub fn next2(_: *@This()) !?i32 {
+                return null;
+            }
+
+            pub fn next3(_: *@This(), _: i32) !?i32 {
+                return null;
+            }
+
+            pub fn next4(_: i32) !?i32 {
+                return null;
+            }
+
+            pub fn next5(_: *@This()) i32 {
+                return 0;
+            }
+        };
+        const T1 = NextMethodReturnType(@TypeOf(S.next1), S) orelse unreachable;
+        try expect(T1 == i32);
+        const T2 = NextMethodReturnType(@TypeOf(S.next2), S) orelse unreachable;
+        try expect(T2 == i32);
+        const T3 = NextMethodReturnType(@TypeOf(S.next3), S);
+        try expect(T3 == null);
+        const T4 = NextMethodReturnType(@TypeOf(S.next4), S);
+        try expect(T4 == null);
+        const T5 = NextMethodReturnType(@TypeOf(S.next5), S);
+        try expect(T5 == null);
     }
 
     pub fn isIterator(comptime self: @This()) bool {
@@ -659,9 +915,59 @@ pub const TypeData = struct {
         return false;
     }
 
+    test "isIterator" {
+        try expect(isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
+        try expect(isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
+        try expect(isIterator(.{ .Type = std.fs.path }) == false);
+    }
+
+    pub fn isMethodOf(comptime self: @This(), comptime T: type) bool {
+        switch (@typeInfo(self.Type)) {
+            .Fn => |f| {
+                if (f.params.len > 0) {
+                    if (f.params[0].type) |PT| {
+                        return (PT == T) or switch (@typeInfo(PT)) {
+                            .Pointer => |pt| pt.child == T,
+                            else => false,
+                        };
+                    }
+                }
+            },
+            else => {},
+        }
+        return false;
+    }
+
+    test "isMethodOf" {
+        const A = struct {
+            number: i32 = 0,
+
+            fn a() void {}
+            fn b(_: i32) void {}
+            fn c(_: @This()) void {}
+            fn d(_: *@This()) void {}
+            fn e(_: *const @This()) void {}
+        };
+        const B = struct {};
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.a) }, A) == false);
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.b) }, A) == false);
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.c) }, A) == true);
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.d) }, A) == true);
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.e) }, A) == true);
+        try expect(isMethodOf(.{ .Type = @TypeOf(A.e) }, B) == false);
+        try expect(isMethodOf(.{ .Type = u32 }, B) == false);
+    }
+
     pub fn isPointer(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Pointer => true,
+            else => false,
+        };
+    }
+
+    pub fn isObject(comptime self: @This()) bool {
+        return switch (@typeInfo(self.Type)) {
+            .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector, .Fn => true,
             else => false,
         };
     }
@@ -681,229 +987,7 @@ pub const TypeData = struct {
     pub fn isInUse(comptime self: @This()) bool {
         return self.attrs.is_in_use;
     }
-
-    pub fn hasPointer(comptime self: @This()) bool {
-        return self.attrs.has_pointer;
-    }
-
-    pub fn hasUnsupported(comptime self: @This()) bool {
-        return if (self.attrs.is_supported) self.attrs.has_unsupported else true;
-    }
 };
-
-test "TypeData.getName" {
-    try expectCT(std.mem.eql(u8, TypeData.getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
-    try expectCT(std.mem.eql(u8, TypeData.getName(.{ .Type = void, .name = "nothing" }), "nothing"));
-}
-
-test "TypeData.getStructureType" {
-    const Enum = enum { apple, banana };
-    const TaggedUnion = union(Enum) {
-        apple: i32,
-        banana: i32,
-    };
-    const BareUnion = union {};
-    const ExternUnion = extern union {};
-    try expectCT(TypeData.getStructureType(.{ .Type = i32 }) == .primitive);
-    try expectCT(TypeData.getStructureType(.{ .Type = Enum }) == .@"enum");
-    try expectCT(TypeData.getStructureType(.{ .Type = BareUnion }) == .bare_union);
-    try expectCT(TypeData.getStructureType(.{ .Type = TaggedUnion }) == .tagged_union);
-    try expectCT(TypeData.getStructureType(.{ .Type = ExternUnion }) == .extern_union);
-}
-
-test "TypeData.getElementType" {
-    try expectCT(TypeData.getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
-}
-
-test "TypeData.getTargetType" {
-    try expectCT(TypeData.getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
-    try expectCT(TypeData.getTargetType(.{ .Type = *const anyopaque }) == Slice(anyopaque, null));
-    try expectCT(TypeData.getTargetType(.{ .Type = *i32 }) == i32);
-}
-
-test "TypeData.getMemberType" {
-    try expectCT(TypeData.getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }, false) == .int);
-    try expectCT(TypeData.getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }, false) == .uint);
-    try expectCT(TypeData.getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }, false) == .object);
-    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, false) == .type);
-    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, true) == .@"comptime");
-    try expectCT(TypeData.getMemberType(.{ .Type = type, .attrs = .{ .is_supported = false } }, true) == .unsupported);
-}
-
-test "TypeData.getByteSize" {
-    try expectCT(TypeData.getByteSize(.{ .Type = void }) == 0);
-    try expectCT(TypeData.getByteSize(.{ .Type = @TypeOf(null) }) == 0);
-    try expectCT(TypeData.getByteSize(.{ .Type = u8 }) == 1);
-}
-
-test "TypeData.getBitSize" {
-    try expectCT(TypeData.getBitSize(.{ .Type = void }) == 0);
-    try expectCT(TypeData.getBitSize(.{ .Type = @TypeOf(null) }) == 0);
-    try expectCT(TypeData.getBitSize(.{ .Type = u8 }) == 8);
-}
-
-test "TypeData.getAlignment" {
-    try expectCT(TypeData.getAlignment(.{ .Type = void }) == 1);
-    try expectCT(TypeData.getAlignment(.{ .Type = u8 }) == 1);
-    try expectCT(TypeData.getAlignment(.{ .Type = u32 }) == 4);
-}
-
-test "TypeData.getLength" {
-    try expectCT(TypeData.getLength(.{ .Type = [5]u8 }) == 5);
-    try expectCT(TypeData.getLength(.{ .Type = u8 }) == null);
-    try expectCT(TypeData.getLength(.{ .Type = @Vector(3, f32) }) == 3);
-}
-
-test "TypeData.isConst" {
-    try expectCT(TypeData.isConst(.{ .Type = i32 }) == false);
-    try expectCT(TypeData.isConst(.{ .Type = *i32 }) == false);
-    try expectCT(TypeData.isConst(.{ .Type = *const i32 }) == true);
-}
-
-test "TypeData.isSingle" {
-    try expectCT(TypeData.isSingle(.{ .Type = i32 }) == false);
-    try expectCT(TypeData.isSingle(.{ .Type = *i32 }) == true);
-    try expectCT(TypeData.isSingle(.{ .Type = []i32 }) == false);
-    try expectCT(TypeData.isSingle(.{ .Type = [*]i32 }) == false);
-}
-
-test "TypeData.isTuple" {
-    try expectCT(TypeData.isTuple(.{ .Type = @TypeOf(.{}) }) == true);
-    try expectCT(TypeData.isTuple(.{ .Type = struct {} }) == false);
-}
-
-test "TypeData.isPacked" {
-    const A = struct {
-        number: u17,
-        flag: bool,
-    };
-    const B = packed union {
-        flag1: bool,
-        flag2: bool,
-    };
-    try expectCT(TypeData.isPacked(.{ .Type = A }) == false);
-    try expectCT(TypeData.isPacked(.{ .Type = B }) == true);
-}
-
-test "TypeData.isBitVector" {
-    const A = @Vector(8, bool);
-    const B = @Vector(4, f32);
-    try expectCT(TypeData.isBitVector(.{ .Type = A }) == true);
-    try expectCT(TypeData.isBitVector(.{ .Type = B }) == false);
-}
-
-test "TypeData.isIterator" {
-    try expect(TypeData.isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
-    try expect(TypeData.isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
-    try expect(TypeData.isIterator(.{ .Type = std.fs.path }) == false);
-}
-
-test "TypeData.getSentinel" {
-    try expectCT(TypeData.getSentinel(.{ .Type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
-    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
-    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
-    try expectCT(TypeData.getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
-}
-
-test "TypeData.getSelectorType" {
-    const Tag = enum { cat, dog };
-    const Union = union(Tag) {
-        cat: u32,
-        dog: u32,
-    };
-    try expectCT(TypeData.getSelectorType(.{ .Type = Union }) == Tag);
-    if (runtime_safety) {
-        const BareUnion = union {
-            cat: u32,
-            dog: u32,
-        };
-        try expectCT(TypeData.getSelectorType(.{ .Type = BareUnion }) == u8);
-    }
-}
-
-test "TypeData.getSelectorBitOffset" {
-    const Union = union(enum) {
-        cat: i32,
-        dog: i32,
-    };
-    try expectCT(TypeData.getSelectorBitOffset(.{ .Type = Union }) == 32);
-}
-
-test "TypeData.getContentBitOffset" {
-    const Union = union(enum) {
-        cat: i32,
-        dog: i32,
-    };
-    try expectCT(TypeData.getContentBitOffset(.{ .Type = Union }) == 0);
-}
-
-fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
-    const f = @typeInfo(FT).Fn;
-    if (f.return_type) |RT| {
-        const param_match = switch (f.params.len) {
-            1 => f.params[0].type == *T,
-            2 => f.params[0].type == *T and f.params[1].type == std.mem.Allocator,
-            else => false,
-        };
-        if (param_match) {
-            if (PayloadType(RT)) |PT| {
-                return PT;
-            }
-        }
-    }
-    return null;
-}
-
-fn PayloadType(comptime T: type) ?type {
-    return switch (@typeInfo(T)) {
-        .Optional => |op| op.child,
-        .ErrorUnion => |eu| PayloadType(eu.payload),
-        else => null,
-    };
-}
-
-test "PayloadType" {
-    const T1 = PayloadType(?i32) orelse unreachable;
-    try expect(T1 == i32);
-    const T2 = PayloadType(anyerror!?i32) orelse unreachable;
-    try expect(T2 == i32);
-    const T3 = PayloadType(i32);
-    try expect(T3 == null);
-}
-
-test "NextMethodReturnType" {
-    const S = struct {
-        pub fn next1(_: *@This()) ?i32 {
-            return null;
-        }
-
-        pub fn next2(_: *@This()) !?i32 {
-            return null;
-        }
-
-        pub fn next3(_: *@This(), _: i32) !?i32 {
-            return null;
-        }
-
-        pub fn next4(_: i32) !?i32 {
-            return null;
-        }
-
-        pub fn next5(_: *@This()) i32 {
-            return 0;
-        }
-    };
-    const T1 = NextMethodReturnType(@TypeOf(S.next1), S) orelse unreachable;
-    try expect(T1 == i32);
-    const T2 = NextMethodReturnType(@TypeOf(S.next2), S) orelse unreachable;
-    try expect(T2 == i32);
-    const T3 = NextMethodReturnType(@TypeOf(S.next3), S);
-    try expect(T3 == null);
-    const T4 = NextMethodReturnType(@TypeOf(S.next4), S);
-    try expect(T4 == null);
-    const T5 = NextMethodReturnType(@TypeOf(S.next5), S);
-    try expect(T5 == null);
-}
 
 pub const TypeDataCollector = struct {
     types: ComptimeList(TypeData),
@@ -938,6 +1022,55 @@ pub const TypeDataCollector = struct {
             tdb.entries[index] = td;
         }
         return tdb;
+    }
+
+    test "createDatabase" {
+        @setEvalBranchQuota(10000);
+        const ns = struct {
+            pub const StructA = struct {
+                number: i32,
+                string: []const u8,
+            };
+            pub const StructB = struct {
+                function: *const fn () void,
+            };
+            pub const StructC = struct {
+                number: i32 = 0,
+                ptr: *@This(),
+            };
+            pub const StructD = struct {
+                function: fn () void,
+                ptr: *@This(),
+            };
+            pub const UnionA = union(enum) {
+                cat: u32,
+                dog: u32,
+            };
+
+            pub const a1: StructA = .{ .number = 123, .string = "Hello" };
+            pub var a2: StructA = .{ .number = 123, .string = "Hello" };
+
+            pub fn normal() void {}
+
+            pub fn generic1(comptime T: type) void {
+                _ = T;
+            }
+
+            pub fn generic2(arg: anytype) @TypeOf(arg) {}
+        };
+        comptime var tdc = init(0);
+        comptime tdc.scan(ns);
+        const tdb = comptime tdc.createDatabase();
+        try expectCT(tdb.get(ns.StructA).attrs.is_supported == true);
+        try expectCT(tdb.get(ns.StructB).attrs.is_supported == true);
+        try expectCT(tdb.get(@TypeOf(ns.normal)).attrs.is_supported == true);
+        try expectCT(tdb.get(@TypeOf(ns.generic1)).attrs.is_supported == false);
+        try expectCT(tdb.get(@TypeOf(ns.generic2)).attrs.is_supported == false);
+        try expectCT(tdb.get(*ns.StructA).attrs.is_supported == true);
+        try expectCT(tdb.get(*const ns.StructA).attrs.is_supported == true);
+        try expectCT(tdb.get(ns.StructC).attrs.is_supported == true);
+        try expectCT(tdb.get(ns.StructD).attrs.is_supported == true);
+        try expectCT(tdb.get(ns.UnionA).attrs.is_supported == true);
     }
 
     fn append(comptime self: *@This(), comptime td: TypeData) void {
@@ -1262,153 +1395,153 @@ pub const TypeDataCollector = struct {
             else => type_name,
         };
     }
-};
 
-test "TypeDataCollector.scan" {
-    @setEvalBranchQuota(10000);
-    const ns = struct {
-        pub const StructA = struct {
-            number: i32,
-            string: []const u8,
+    test "scan" {
+        @setEvalBranchQuota(10000);
+        const ns = struct {
+            pub const StructA = struct {
+                number: i32,
+                string: []const u8,
+            };
         };
-    };
-    comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(ns);
-    try expectCT(tdc.indexOf(ns.StructA) != null);
-}
+        comptime var tdc = init(0);
+        comptime tdc.scan(ns);
+        try expectCT(tdc.indexOf(ns.StructA) != null);
+    }
 
-test "TypeDataCollector.setAttributes" {
-    @setEvalBranchQuota(10000);
-    const ns = struct {
-        pub const StructA = struct {
-            number: i32,
-            string: []const u8,
-        };
-        pub const StructB = struct {
-            comptime Type: type = *const fn () void,
-            function: *const fn () void,
-        };
-        pub const StructC = struct {
-            number: i32 = 0,
-            ptr: ?*@This(),
-        };
-        pub const StructD = struct {
-            function: fn () void,
-            ptr: *@This(),
-        };
-        pub const UnionA = union(enum) {
-            cat: u32,
-            dog: u32,
+    test "setAttributes" {
+        @setEvalBranchQuota(10000);
+        const ns = struct {
+            pub const StructA = struct {
+                number: i32,
+                string: []const u8,
+            };
+            pub const StructB = struct {
+                comptime Type: type = *const fn () void,
+                function: *const fn () void,
+            };
+            pub const StructC = struct {
+                number: i32 = 0,
+                ptr: ?*@This(),
+            };
+            pub const StructD = struct {
+                function: fn () void,
+                ptr: *@This(),
+            };
+            pub const UnionA = union(enum) {
+                cat: u32,
+                dog: u32,
 
-            pub const weird = noreturn;
-        };
-        pub const EnumA = enum {
-            apple,
-            orange,
+                pub const weird = noreturn;
+            };
+            pub const EnumA = enum {
+                apple,
+                orange,
 
-            pub fn hello(_: u17) i18 {
-                return 0;
+                pub fn hello(_: u17) i18 {
+                    return 0;
+                }
+            };
+
+            pub var a: StructA = undefined;
+            pub var b: StructB = undefined;
+            pub const c: StructC = .{ .number = 1, .ptr = null };
+
+            pub const optional_type: ?type = null;
+            pub const Null = null;
+            pub const Undefined = undefined;
+
+            pub const A = struct {
+                number: i32,
+            };
+            pub const B = struct {
+                number: i32,
+                a: A,
+            };
+            pub const C = struct {
+                number: i32,
+                a: A,
+                pointer: [*]i32,
+            };
+            pub const D = union {
+                a: A,
+                c: C,
+            };
+            pub const E = struct {
+                number: i32,
+                comptime pointer: ?*u32 = null,
+            };
+
+            pub var slice_of_slices: [][]u8 = undefined;
+            pub var array_of_pointers: [5]*u8 = undefined;
+
+            pub fn normal() void {}
+
+            pub fn generic1(comptime T: type) void {
+                _ = T;
             }
+
+            pub fn generic2(arg: anytype) @TypeOf(arg) {}
         };
+        comptime var tdc = init(0);
+        comptime tdc.scan(ns);
+        // is_supported
+        try expectCT(tdc.get(ns.StructA).attrs.is_supported == true);
+        try expectCT(tdc.get(ns.StructB).attrs.is_supported == true);
+        try expectCT(tdc.get(@TypeOf(ns.normal)).attrs.is_supported == true);
+        try expectCT(tdc.get(@TypeOf(ns.generic1)).attrs.is_supported == false);
+        try expectCT(tdc.get(@TypeOf(ns.generic2)).attrs.is_supported == false);
+        try expectCT(tdc.get(*ns.StructA).attrs.is_supported == true);
+        try expectCT(tdc.get(*ns.StructB).attrs.is_supported == true);
+        try expectCT(tdc.get(ns.StructC).attrs.is_supported == true);
+        try expectCT(tdc.get(ns.StructD).attrs.is_supported == true);
+        try expectCT(tdc.get(ns.UnionA).attrs.is_supported == true);
+        try expectCT(tdc.get(@TypeOf(null)).attrs.is_supported == true);
+        try expectCT(tdc.get(@TypeOf(undefined)).attrs.is_supported == true);
+        try expectCT(tdc.get(noreturn).attrs.is_supported == true);
+        try expectCT(tdc.get(u17).attrs.is_supported == true);
+        try expectCT(tdc.get(i18).attrs.is_supported == true);
+        // pointer should include this
+        try expectCT(tdc.get(usize).attrs.is_supported == true);
 
-        pub var a: StructA = undefined;
-        pub var b: StructB = undefined;
-        pub const c: StructC = .{ .number = 1, .ptr = null };
+        // is_comptime_only
+        try expectCT(tdc.get(type).attrs.is_comptime_only == true);
+        try expectCT(tdc.get(*const type).attrs.is_comptime_only == true);
+        try expectCT(tdc.get(?type).attrs.is_comptime_only == true);
+        // has_pointer
+        try expectCT(tdc.get(i32).attrs.has_pointer == false);
+        try expectCT(tdc.get([*]i32).attrs.has_pointer == true);
+        try expectCT(tdc.get([]const u8).attrs.has_pointer == true);
+        try expectCT(tdc.get([5]*u8).attrs.has_pointer == true);
+        try expectCT(tdc.get([][]u8).attrs.has_pointer == true);
+        try expectCT(tdc.get(ns.A).attrs.has_pointer == false);
+        try expectCT(tdc.get(ns.B).attrs.has_pointer == false);
+        try expectCT(tdc.get(ns.C).attrs.has_pointer == true);
+        // pointers in union are inaccessible
+        try expectCT(tdc.get(ns.D).attrs.has_pointer == false);
+        // // comptime fields should be ignored
+        try expectCT(tdc.get(ns.E).attrs.has_pointer == false);
+    }
 
-        pub const optional_type: ?type = null;
-        pub const Null = null;
-        pub const Undefined = undefined;
-
-        pub const A = struct {
-            number: i32,
+    test "setNames" {
+        @setEvalBranchQuota(10000);
+        const ns = struct {
+            pub const tuple = .{.tuple};
+            pub const Error = error{ a, b, c };
+            pub const AnyError = anyerror;
         };
-        pub const B = struct {
-            number: i32,
-            a: A,
-        };
-        pub const C = struct {
-            number: i32,
-            a: A,
-            pointer: [*]i32,
-        };
-        pub const D = union {
-            a: A,
-            c: C,
-        };
-        pub const E = struct {
-            number: i32,
-            comptime pointer: ?*u32 = null,
-        };
-
-        pub var slice_of_slices: [][]u8 = undefined;
-        pub var array_of_pointers: [5]*u8 = undefined;
-
-        pub fn normal() void {}
-
-        pub fn generic1(comptime T: type) void {
-            _ = T;
-        }
-
-        pub fn generic2(arg: anytype) @TypeOf(arg) {}
-    };
-    comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(ns);
-    // is_supported
-    try expectCT(tdc.get(ns.StructA).isSupported() == true);
-    try expectCT(tdc.get(ns.StructB).isSupported() == true);
-    try expectCT(tdc.get(@TypeOf(ns.normal)).isSupported() == true);
-    try expectCT(tdc.get(@TypeOf(ns.generic1)).isSupported() == false);
-    try expectCT(tdc.get(@TypeOf(ns.generic2)).isSupported() == false);
-    try expectCT(tdc.get(*ns.StructA).isSupported() == true);
-    try expectCT(tdc.get(*ns.StructB).isSupported() == true);
-    try expectCT(tdc.get(ns.StructC).isSupported() == true);
-    try expectCT(tdc.get(ns.StructD).isSupported() == true);
-    try expectCT(tdc.get(ns.UnionA).isSupported() == true);
-    try expectCT(tdc.get(@TypeOf(null)).isSupported() == true);
-    try expectCT(tdc.get(@TypeOf(undefined)).isSupported() == true);
-    try expectCT(tdc.get(noreturn).isSupported() == true);
-    try expectCT(tdc.get(u17).isSupported() == true);
-    try expectCT(tdc.get(i18).isSupported() == true);
-    // pointer should include this
-    try expectCT(tdc.get(usize).isSupported() == true);
-
-    // is_comptime_only
-    try expectCT(tdc.get(type).isComptimeOnly() == true);
-    try expectCT(tdc.get(*const type).isComptimeOnly() == true);
-    try expectCT(tdc.get(?type).isComptimeOnly() == true);
-    // has_pointer
-    try expectCT(tdc.get(i32).hasPointer() == false);
-    try expectCT(tdc.get([*]i32).hasPointer() == true);
-    try expectCT(tdc.get([]const u8).hasPointer() == true);
-    try expectCT(tdc.get([5]*u8).hasPointer() == true);
-    try expectCT(tdc.get([][]u8).hasPointer() == true);
-    try expectCT(tdc.get(ns.A).hasPointer() == false);
-    try expectCT(tdc.get(ns.B).hasPointer() == false);
-    try expectCT(tdc.get(ns.C).hasPointer() == true);
-    // pointers in union are inaccessible
-    try expectCT(tdc.get(ns.D).hasPointer() == false);
-    // // comptime fields should be ignored
-    try expectCT(tdc.get(ns.E).hasPointer() == false);
-}
-
-test "TypeDataCollector.setNames" {
-    @setEvalBranchQuota(10000);
-    const ns = struct {
-        pub const tuple = .{.tuple};
-        pub const Error = error{ a, b, c };
-        pub const AnyError = anyerror;
-    };
-    comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(ns);
-    const s_td = tdc.get(@TypeOf(ns.tuple));
-    const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
-    try expectCT(std.mem.eql(u8, s_td.getName(), s_name));
-    const e_td = tdc.get(ns.Error);
-    const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
-    try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
-    const ae_td = tdc.get(ns.AnyError);
-    try expectCT(std.mem.eql(u8, ae_td.getName(), "anyerror"));
-}
+        comptime var tdc = init(0);
+        comptime tdc.scan(ns);
+        const s_td = tdc.get(@TypeOf(ns.tuple));
+        const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
+        try expectCT(std.mem.eql(u8, s_td.getName(), s_name));
+        const e_td = tdc.get(ns.Error);
+        const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
+        try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
+        const ae_td = tdc.get(ns.AnyError);
+        try expectCT(std.mem.eql(u8, ae_td.getName(), "anyerror"));
+    }
+};
 
 fn TypeDatabase(comptime len: comptime_int) type {
     return struct {
@@ -1424,55 +1557,6 @@ fn TypeDatabase(comptime len: comptime_int) type {
             }
         }
     };
-}
-
-test "TypeDatabase.get" {
-    @setEvalBranchQuota(10000);
-    const ns = struct {
-        pub const StructA = struct {
-            number: i32,
-            string: []const u8,
-        };
-        pub const StructB = struct {
-            function: *const fn () void,
-        };
-        pub const StructC = struct {
-            number: i32 = 0,
-            ptr: *@This(),
-        };
-        pub const StructD = struct {
-            function: fn () void,
-            ptr: *@This(),
-        };
-        pub const UnionA = union(enum) {
-            cat: u32,
-            dog: u32,
-        };
-
-        pub const a1: StructA = .{ .number = 123, .string = "Hello" };
-        pub var a2: StructA = .{ .number = 123, .string = "Hello" };
-
-        pub fn normal() void {}
-
-        pub fn generic1(comptime T: type) void {
-            _ = T;
-        }
-
-        pub fn generic2(arg: anytype) @TypeOf(arg) {}
-    };
-    comptime var tdc = TypeDataCollector.init(0);
-    comptime tdc.scan(ns);
-    const tdb = comptime tdc.createDatabase();
-    try expectCT(tdb.get(ns.StructA).isSupported() == true);
-    try expectCT(tdb.get(ns.StructB).isSupported() == true);
-    try expectCT(tdb.get(@TypeOf(ns.normal)).isSupported() == true);
-    try expectCT(tdb.get(@TypeOf(ns.generic1)).isSupported() == false);
-    try expectCT(tdb.get(@TypeOf(ns.generic2)).isSupported() == false);
-    try expectCT(tdb.get(*ns.StructA).isSupported() == true);
-    try expectCT(tdb.get(*const ns.StructA).isSupported() == true);
-    try expectCT(tdb.get(ns.StructC).isSupported() == true);
-    try expectCT(tdb.get(ns.StructD).isSupported() == true);
-    try expectCT(tdb.get(ns.UnionA).isSupported() == true);
 }
 
 fn Sentinel(comptime T: type) type {
@@ -1588,6 +1672,11 @@ test "ArgumentStruct" {
 
 fn expectCT(comptime value: bool) !void {
     try expect(value);
+}
+
+test {
+    _ = TypeData;
+    _ = TypeDataCollector;
 }
 
 const runtime_safety = (builtin.mode == .ReleaseSafe or builtin.mode == .Debug);

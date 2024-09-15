@@ -17,28 +17,20 @@ const ModuleData = opaque {};
 const StructureC = extern struct {
     name: ?[*:0]const u8,
     structure_type: types.StructureType,
+    structure_flags: types.StructureFlags,
     length: usize,
     byte_size: usize,
     alignment: u16,
-    is_const: bool,
-    is_tuple: bool,
-    is_iterator: bool,
-    has_pointer: bool,
 };
 const MemberC = extern struct {
     name: ?[*:0]const u8,
     member_type: types.MemberType,
-    is_required: bool,
+    member_flags: types.MemberFlags,
     bit_offset: usize,
     bit_size: usize,
     byte_size: usize,
     slot: usize,
     structure: ?Value,
-};
-const MethodC = extern struct {
-    name: ?[*:0]const u8,
-    thunk_id: usize,
-    structure: Value,
 };
 const JsCall = extern struct {
     id: usize,
@@ -130,13 +122,10 @@ pub const Host = struct {
         const def_c: StructureC = .{
             .name = if (def.name) |p| @ptrCast(p) else null,
             .structure_type = def.structure_type,
+            .structure_flags = def.structure_flags,
             .length = def.length orelse missing(usize),
             .byte_size = def.byte_size orelse missing(usize),
             .alignment = def.alignment orelse missing(u16),
-            .is_const = def.is_const,
-            .is_tuple = def.is_tuple,
-            .is_iterator = def.is_iterator,
-            .has_pointer = def.has_pointer,
         };
         var structure: Value = undefined;
         if (imports.begin_structure(self.context, &def_c, &structure) != .ok) {
@@ -149,7 +138,7 @@ pub const Host = struct {
         const member_c: MemberC = .{
             .name = if (member.name) |p| @ptrCast(p) else null,
             .member_type = member.member_type,
-            .is_required = member.is_required,
+            .member_flags = member.member_flags,
             .bit_offset = member.bit_offset orelse missing(usize),
             .bit_size = member.bit_size orelse missing(usize),
             .byte_size = member.byte_size orelse missing(usize),
@@ -319,11 +308,9 @@ pub fn runThunk(
     thunk_address: usize,
     fn_address: usize,
     args: *anyopaque,
-    dest: *?Value,
 ) callconv(.C) Result {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
-    dest.* = thunk(md, @ptrFromInt(fn_address), args);
-    return .ok;
+    return if (thunk(md, @ptrFromInt(fn_address), args)) .ok else |_| .failure;
 }
 
 pub fn runVariadicThunk(
@@ -333,22 +320,24 @@ pub fn runVariadicThunk(
     args: *anyopaque,
     attr_ptr: *const anyopaque,
     arg_count: usize,
-    dest: *?Value,
 ) callconv(.C) Result {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
-    dest.* = thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count);
-    return .ok;
+    return if (thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count)) .ok else |_| .failure;
 }
 
-pub fn runJsThunkConstructor(
+pub fn createJsThunk(
     md: *ModuleData,
-    thunk_address: usize,
+    constructor_address: usize,
     func_id: usize,
-    dest: *?Value,
+    dest: *usize,
 ) callconv(.C) Result {
-    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(thunk_address);
-    dest.* = constructor(md, func_id);
-    return .ok;
+    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(constructor_address);
+    if (constructor(md, func_id)) |thunk_address| {
+        dest.* = thunk_address;
+        return .ok;
+    } else |_| {
+        return .failure;
+    }
 }
 
 const Futex = struct {
@@ -447,7 +436,7 @@ pub fn createModule(comptime T: type) Module {
             .get_factory_thunk = createGetFactoryThunk(T),
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,
-            .run_js_thunk_constructor = runJsThunkConstructor,
+            .create_js_thunk = createJsThunk,
             .override_write = overrideWrite,
             .wake_caller = wakeCaller,
         },

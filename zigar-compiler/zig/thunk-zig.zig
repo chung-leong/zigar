@@ -5,8 +5,8 @@ const expect = std.testing.expect;
 
 const Memory = types.Memory;
 
-pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) callconv(.C) bool;
-pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) callconv(.C) bool;
+pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) anyerror!void;
+pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;
 
 pub fn ThunkType(comptime FT: type) type {
     return switch (@typeInfo(FT).Fn.is_var_args) {
@@ -24,11 +24,8 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
     const f = @typeInfo(FT).Fn;
     const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
-        fn tryFunction(
-            host: HostT,
-            fn_ptr: *const anyopaque,
-            arg_ptr: *anyopaque,
-        ) !void {
+        fn invokeFunction(ptr: ?*anyopaque, fn_ptr: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
+            const host = HostT.init(ptr);
             // extract arguments from argument struct
             const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
             var args: std.meta.ArgsTuple(FT) = undefined;
@@ -57,44 +54,10 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
                 arg_struct.retval = retval;
             }
         }
-
-        fn invokeFunction(
-            ptr: ?*anyopaque,
-            fn_ptr: *const anyopaque,
-            arg_ptr: *anyopaque,
-        ) callconv(.C) bool {
-            const host = HostT.init(ptr);
-            if (tryFunction(host, fn_ptr, arg_ptr)) |_| {
-                return true;
-            } else |_| {
-                return false;
-            }
-        }
     };
     const ns_variadic = struct {
-        fn tryFunction(
-            _: HostT,
-            fn_ptr: *const anyopaque,
-            arg_ptr: *anyopaque,
-            attr_ptr: *const anyopaque,
-            arg_count: usize,
-        ) !void {
+        fn invokeFunction(_: ?*anyopaque, fn_ptr: *const anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) anyerror!void {
             return variadic.call(FT, fn_ptr, arg_ptr, attr_ptr, arg_count);
-        }
-
-        fn invokeFunction(
-            ptr: ?*anyopaque,
-            fn_ptr: *const anyopaque,
-            arg_ptr: *anyopaque,
-            attr_ptr: *const anyopaque,
-            arg_count: usize,
-        ) callconv(.C) bool {
-            const host = HostT.init(ptr);
-            if (tryFunction(host, fn_ptr, arg_ptr, attr_ptr, arg_count)) |_| {
-                return true;
-            } else |_| {
-                return false;
-            }
         }
     };
     const ns = switch (f.is_var_args) {

@@ -6,6 +6,12 @@ const cls = {
   constructor: null,
 };
 
+export function reset() {
+  cls.name = '';
+  cls.constructor = null;
+  cls.mixins = [];
+}
+
 export function name(s) {
   cls.name = s;
 }

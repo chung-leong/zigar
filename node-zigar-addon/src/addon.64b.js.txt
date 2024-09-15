@@ -36,13 +36,14 @@ R"=====(
     IsString:         0x0000_1000,
     IsPacked:         0x0000_2000,
     IsIterator:       0x0000_4000,
-    IsTuple:          0x0000_8000,
+    IsThrowing:       0x0000_8000,
 
     HasInaccessible:  0x0001_0000,
 
-    IsNullable:       0x0100_0000,
-    IsOpenEnded:      0x0200_0000,
-    IsVariandic:      0x0400_0000,
+    IsTuple:          0x0100_0000,
+    IsNullable:       0x0200_0000,
+    IsOpenEnded:      0x0400_0000,
+    IsVariandic:      0x0800_0000,
   };
   const structureNames = Object.keys(StructureType);
 
@@ -66,8 +67,9 @@ R"=====(
     IsSize:           0x0000_0004,
     IsPartOfSet:      0x0000_0008,
     IsSelector:       0x0000_0010,
-    IsSentinel:       0x0000_0020,
-    IsBackingInt:     0x0000_0040,
+    IsMethod:         0x0000_0020,
+    IsSentinel:       0x0000_0040,
+    IsBackingInt:     0x0000_0080,
   };
 
   const MEMORY = Symbol('memory');
@@ -105,6 +107,7 @@ R"=====(
   const GETTERS = Symbol('getters');
   const SETTERS = Symbol('setters');
   const TYPED_ARRAY = Symbol('typedArray');
+  const THROWING = Symbol('throwing');
 
   const UPDATE = Symbol('update');
   const RESET = Symbol('resetter');
@@ -394,7 +397,9 @@ R"=====(
     for (const mixin of mixins) {
       for (let [ name, object ] of Object.entries(mixin)) {
         if (typeof(object) === 'function') {
-          defineProperty(prototype, name, defineValue(object));
+          {
+            defineProperty(prototype, name, defineValue(object));
+          }
         } else {
           let current = props[name];
           if (current !== undefined) {
@@ -914,7 +919,6 @@ R"=====(
     }
   });
 
-
   function getBitAlignFunction(bitPos, bitSize, toAligned) {
     if (bitPos + bitSize <= 8) {
       const mask = (2 ** bitSize) - 1;
@@ -1101,25 +1105,78 @@ R"=====(
       }
       return id;
     },
-    getFunctionThunk(constructorAddr, funcId) {
+    getFunctionThunk(fn, jsThunkConstructor) {
+      const funcId = this.getFunctionId(fn);
       if (!this.jsFunctionThunkMap) {
         this.jsFunctionThunkMap = new Map();
       }
       let dv = this.jsFunctionThunkMap.get(funcId);
       if (dv === undefined) {
-        dv = this.runJsThunkConstructor(constructorAddr, funcId);
-        if (typeof(dv) === 'string') {
-          throw new ZigError(dv);
+        const constructorAddr = this.getViewAddress(jsThunkConstructor[MEMORY]);
+        const thunkAddr = this.createJsThunk(constructorAddr, funcId);
+        if (!thunkAddr) {
+          throw new ZigError();
         }
+        dv = this.obtainFixedView(thunkAddr, 0);
         this.jsFunctionThunkMap.set(funcId, dv);
       }
       return dv;
     },
-    setFunctionCaller(id, caller) {
+    createInboundCallers(fn, ArgStruct) {
+      const self = function(...args) {
+        return fn(...args);
+      };
+      const method = function(...args) {
+        return fn.call(this, ...args);
+      };
+      const binary = (dv, asyncCallHandle) => {
+        let result = CallResult.OK;
+        const argStruct = ArgStruct(dv);
+        const args = [];
+        for (let i = 0; i < argStruct.length; i++) {
+          args.push(argStruct[i]);
+        }
+        const onError = (err) => {
+          if (ArgStruct[THROWING] && err instanceof Error) {
+            // see if the error is part of the error set of the error union returned by function
+            try {
+              argStruct.retval = err;
+              return;
+            } catch (_) {
+              console.error(err);
+            }
+          }
+          console.error(err);
+          result = CallResult.Failure;
+        };
+        try {
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (asyncCallHandle) {
+              retval.then(value => argStruct.retval = value, onError).then(() => {
+                this.finalizeAsyncCall(asyncCallHandle, result);
+              });
+              return CallResult.OK;
+            } else {
+              return CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          onError(err);
+        }
+        if (asyncCallHandle) {
+          this.finalizeAsyncCall(asyncCallHandle, result);
+        }
+        return result;
+      };
+      const funcId = this.getFunctionId(fn);
       if (!this.jsFunctionCallerMap) {
         this.jsFunctionCallerMap = new Map();
       }
-      this.jsFunctionCallerMap.set(id, caller);
+      this.jsFunctionCallerMap.set(funcId, binary);
+      return { self, method, binary };
     },
     runFunction(id, dv, futexHandle) {
       const caller = this.jsFunctionCallerMap.get(id);
@@ -1127,7 +1184,7 @@ R"=====(
     },
     ...({
       imports: {
-        runJsThunkConstructor: null,
+        createJsThunk: null,
       },
       export: {
         runFunction: null,
@@ -1135,9 +1192,22 @@ R"=====(
     } ),
   });
 
+  const CallResult = {
+    OK: 0,
+    Failure: 1,
+    Deadlock: 2,
+    Disabled: 3,
+  };
+
   class InvalidDeallocation extends ReferenceError {
     constructor(address) {
       super(`Invalid memory deallocation: @${address.toString(16)}`);
+    }
+  }
+
+  class InvalidIntConversion extends SyntaxError {
+    constructor(arg) {
+      super(`Cannot convert ${arg} to an Int`);
     }
   }
 
@@ -1147,12 +1217,12 @@ R"=====(
     }
   }
 
-  let NoInitializer$1 = class NoInitializer extends TypeError {
+  class NoInitializer extends TypeError {
     constructor(structure) {
       const { name } = structure;
       super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
     }
-  };
+  }
 
   class BufferSizeMismatch extends TypeError {
     constructor(structure, dv, target = null) {
@@ -1585,6 +1655,27 @@ R"=====(
     endContext() {
       this.context = this.contextStack.pop();
     },
+    createOutboundCallers(thunk, ArgStruct) {
+      const invoke = (argStruct) => {
+        const thunkAddr = this.getViewAddress(thunk[MEMORY]);
+        const funcAddr = this.getViewAddress(self[MEMORY]);
+        this.invokeThunk(thunkAddr, funcAddr, argStruct);
+      };
+      const self = function (...args) {
+        const argStruct = new ArgStruct(args, self.name, 0);
+        invoke(argStruct);
+        return argStruct.retval;
+      };
+      const method = function(...args) {
+        const argStruct = new ArgStruct([ this, ...args ], self.name, 1);
+        invoke(argStruct);
+        return argStruct.retval;
+      };
+      const binary = function(dv) {
+        invoke(ArgStruct(dv));
+      };
+      return { self, method, binary };
+    },
     ...({
       imports: {
         runThunk: null,
@@ -1613,7 +1704,7 @@ R"=====(
         // restore the previous context if there's one
         this.endContext();
         if (!this.context) {
-          this.flushConsole();
+          this.flushConsole?.();
         }
         // errors returned by exported Zig functions are normally written into the
         // argument object and get thrown when we access its retval property (a zig error union)
@@ -1623,6 +1714,7 @@ R"=====(
           throw new ZigError$1();
         }
       },
+      /* c8 ignore next */
     } ),
   });
 
@@ -1832,9 +1924,16 @@ R"=====(
       return function (access, member) {
         const accessor = getAccessor.call(this, access, member);
         if (access === 'set') {
-          const Type = (member.bitSize > 32) ? BigInt : Number;
-          return function(offset, value, littleEndian) {
-            accessor.call(this, offset, Type(value), littleEndian);
+          return (member.bitSize > 32)
+          ? function(offset, value, littleEndian) {
+              accessor.call(this, offset, BigInt(value), littleEndian);
+            }
+          : function(offset, value, littleEndian) {
+            const number = Number(value);
+            if (!isFinite(number)) {
+              throw new InvalidIntConversion(value)
+            }
+            accessor.call(this, offset, number, littleEndian);
           };
         } else {
           if (member.flags & MemberFlag.IsSize) {
@@ -2382,10 +2481,6 @@ R"=====(
   });
 
   mixin({
-    imports: {
-      isRuntimeSafetyActive: { argType: '', returnType: 'b' },
-    },
-
     addRuntimeCheck(getAccessor) {
       return function (access, member) {
         const accessor = getAccessor.call(this, access, member);
@@ -2401,6 +2496,7 @@ R"=====(
         return accessor;
       };
     },
+    ...(undefined),
   });
 
   function getIntRange(member) {
@@ -2469,6 +2565,7 @@ R"=====(
       imports: {
         flushStdout: null,
       },
+      /* c8 ignore next */
     } ),
   });
 
@@ -2932,7 +3029,7 @@ R"=====(
         const handleName = `transformDescriptor${structureNames[type]}`;
         const f = this[handleName];
         if (f) {
-          return f(descriptor, member);
+          return f.call(this, descriptor, member);
         }
       }
       return descriptor;
@@ -3700,10 +3797,10 @@ R"=====(
             descriptor[accessorType] = fn;
           }
           // see if it's a method
-          if (startsWithSelf(member, structure)) {
+          if (member.flags & MemberFlag.IsMethod) {
             const { method } = fn[VARIANTS];
             descriptors[name] = defineValue(method);
-            if (accessorType && method.length  === argRequired) {
+            if (accessorType && method.length === argRequired) {
               const descriptor = descriptors[propName] ??= {};
               descriptor[accessorType] = method;
             }
@@ -3748,7 +3845,7 @@ R"=====(
         let self, dv;
         if (creating) {
           if (arguments.length === 0) {
-            throw new NoInitializer$1(structure);
+            throw new NoInitializer(structure);
           }
           self = this;
           if (flags & StructureFlag.HasSlot) {
@@ -3912,24 +4009,6 @@ R"=====(
     } ),
   });
 
-  function startsWithSelf(fnMember, structure) {
-    const argStructure = fnMember.structure.instance.members[0].structure;
-    // get structure of first argument (members[0] is retval)
-    const arg0Structure = argStructure.instance.members[1]?.structure;
-    if (arg0Structure) {
-      if (arg0Structure === structure) {
-        return true;
-      } else if (arg0Structure.type === StructureType.Pointer) {
-        const targetStructure = arg0Structure.instance.members[0].structure;
-        if (targetStructure === structure) {
-          return true;
-        }
-      }
-
-    }
-    return false;
-  }
-
   mixin({
     defineArgStruct(structure, descriptors) {
       const {
@@ -3939,7 +4018,6 @@ R"=====(
         instance: { members },
       } = structure;
       const thisEnv = this;
-      const hasObject = !!members.find(m => m.type === MemberType.Object);
       const argKeys = members.slice(1).map(m => m.name);
       const argCount = argKeys.length;
       const constructor = function(args, name, offset) {
@@ -3953,7 +4031,7 @@ R"=====(
           dv = args;
         }
         self[MEMORY] = dv;
-        if (hasObject) {
+        if (flags & StructureFlag.HasSlot) {
           self[SLOTS] = {};
         }
         if (creating) {
@@ -3974,16 +4052,21 @@ R"=====(
       for (const member of members) {
         descriptors[member.name] = this.defineMember(member);
       }
-      const { slot: retvalSlot, type: retvalType } = members[0];
-      const isChildMutable = (retvalType === MemberType.Object)
+      const { slot: rvSlot, type: rvType } = members[0];
+      const isChildMutable = (rvType === MemberType.Object)
       ? function(object) {
-          const child = this[VIVIFICATE](retvalSlot);
+          const child = this[VIVIFICATE](rvSlot);
           return object === child;
         }
       : never;
+      descriptors.length = defineValue(argCount);
       descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
       descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
       return constructor;
+    },
+    finalizeArgStruct(structure, staticDescriptors) {
+      const { flags } = structure;
+      staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
     },
   });
 
@@ -4517,134 +4600,65 @@ R"=====(
   });
 
   mixin({
-    defineFunction(structure) {
+    defineFunction(structure, descriptors) {
       const {
-        name,
         instance: { members: [ member ], template: thunk },
         static: { template: jsThunkConstructor },
       } = structure;
-      const thisEnv = this;
       const cache = new ObjectCache();
-      const { structure: { constructor: Arg, instance: { members: argMembers } } } = member;
-      const argCount = argMembers.length - 1;
-      const constructor = structure.constructor = function(arg) {
+      const { structure: { constructor: ArgStruct } } = member;
+      const thisEnv = this;
+      const constructor = function(arg) {
         const creating = this instanceof constructor;
-        let self, method, binary;
-        let dv, funcId;
+        let dv;
         if (creating) {
+          // creating a Zig function object from a JavaScript function
           if (arguments.length === 0) {
             throw new NoInitializer(structure);
           }
           if (typeof(arg) !== 'function') {
             throw new TypeMismatch('function', arg);
           }
-          const constuctorAddr = thisEnv.getViewAddress(jsThunkConstructor[MEMORY]);
-          funcId = thisEnv.getFunctionId(arg);
-          dv = thisEnv.getFunctionThunk(constuctorAddr, funcId);
+          // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
+          dv = thisEnv.getFunctionThunk(arg, jsThunkConstructor);
         } else {
+          // casting a memory pointing to Zig binary
           dv = arg;
         }
-        if (self = cache.find(dv)) {
-          return self;
+        let existing;
+        if (existing = cache.find(dv)) {
+          return existing;
         }
-        if (creating) {
-          const fn = arg;
-          self = anonymous(function(...args) {
-            return fn(...args);
-          });
-          method = function(...args) {
-            return fn([ this, ...args]);
-          };
-          binary = function(dv, asyncCallHandle) {
-            let result = CallResult$1.OK;
-            let awaiting = false;
-            try {
-              const argStruct = Arg(dv);
-              const args = [];
-              for (let i = 0; i < argCount; i++) {
-                args.push(argStruct[i]);
-              }
-              const retval = fn(...args);
-              if (retval?.[Symbol.toStringTag] === 'Promise') {
-                if (asyncCallHandle) {
-                  retval.then((value) => {
-                    argStruct.retval = value;
-                  }).catch((err) => {
-                    console.error(err);
-                    result = CallResult$1.Failure;
-                  }).then(() => {
-                    thisEnv.finalizeAsyncCall(asyncCallHandle, result);
-                  });
-                  awaiting = true;
-                } else {
-                  result = CallResult$1.Deadlock;
-                }
-              } else {
-                argStruct.retval = retval;
-              }
-            } catch (err) {
-              console.error(err);
-              result = CallResult$1.Failure;
-            }
-            if (!awaiting && asyncCallHandle) {
-              thisEnv.finalizeAsyncCall(asyncCallHandle, result);
-            }
-            return result;
-          };
-          thisEnv.setFunctionCaller(funcId, binary);
-        } else {
-          const invoke = function(argStruct) {
-            const thunkAddr = thisEnv.getViewAddress(thunk[MEMORY]);
-            const funcAddr = thisEnv.getViewAddress(self[MEMORY]);
-            thisEnv.invokeThunk(thunkAddr, funcAddr, argStruct);
-          };
-          self = anonymous(function (...args) {
-            const argStruct = new Arg(args, self.name, 0);
-            invoke(argStruct);
-            return argStruct.retval;
-          });
-          method = function(...args) {
-            const argStruct = new Arg([ this, ...args ], self.name, 1);
-            invoke(argStruct);
-            return argStruct.retval;
-          };
-          binary = function(dv) {
-            invoke(Arg(dv));
-          };
-        }
-        Object.setPrototypeOf(self, constructor.prototype);
-        self[MEMORY] = dv;
+        const argCount = ArgStruct.prototype.length;
+        const { self, method, binary } = (creating)
+        ? thisEnv.createInboundCallers(arg, ArgStruct)
+        : thisEnv.createOutboundCallers(thunk, ArgStruct);
         defineProperties(self, {
-          length: { value: argCount, writable: false },
-          [VARIANTS]: { value: { method, binary } },
+          length: defineValue(argCount),
+          [VARIANTS]: defineValue({ method, binary }),
+          name: defineValue(''),
         });
         defineProperties(method, {
-          length: { value: argCount - 1, writable: false },
-          name: { get: () => self.name },
+          length: defineValue(argCount - 1),
+          name: {
+            get() {
+              return self.name;
+            },
+          }
         });
+        // make self an instance of this function type
+        Object.setPrototypeOf(self, constructor.prototype);
+        self[MEMORY] = dv;
         cache.save(dv, self);
         return self;
       };
-      constructor.prototype = Object.create(Function.prototype);
-      defineProperties(constructor.prototype, {
-        constructor: { value: constructor },
-      });
-      defineProperties(constructor, {
-        [ALIGN]: { value: 1 },
-      });
+      // make function type a superclass of Function
+      descriptors.constructor = defineValue(Object.create(Function.prototype));
+      // don't change the tag of functions
+      descriptors[Symbol.toStringTag] = undefined;
+      return constructor;
     },
   });
-
-  const CallResult$1 = {
-    OK: 0,
-    Failure: 1,
-    Deadlock: 2,
-    Disabled: 3,
-  };
-
-  function anonymous(f) {
-    return f
-  }
 
   mixin({
     defineOpaque(structure, descriptors) {
@@ -5763,7 +5777,11 @@ R"=====(
         },
       };
       return constructor;
-    }
+    },
+    finalizeVariadicStruct(structure, staticDescriptors) {
+      const { flags } = structure;
+      staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
+    },
   });
 
   mixin({

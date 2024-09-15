@@ -585,13 +585,13 @@ describe('Feature: pointer-synchronization', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -599,7 +599,8 @@ describe('Feature: pointer-synchronization', function() {
       env.endStructure(ptrStructure);
       const ptr = new Int32Ptr(new Int32(123));
       expect(ptr['*']).to.equal(123);
-      ptr[MEMORY].setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
+      const invalidAddress = (addressSize == 32) ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
+      setUsize.call(ptr[MEMORY], 0, invalidAddress, true);
       env.updatePointerTargets(ptr);
       expect(() => ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('Null')

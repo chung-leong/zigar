@@ -197,9 +197,11 @@ result begin_structure(module_data* md,
                        napi_value* dest) {
     napi_env env = md->env;
     napi_value args[1];
-    napi_value type, length, byte_size, align, is_const, is_tuple, is_iterator, has_pointer, name;
+    napi_value type, flags, length, byte_size, align, name;
     if (napi_create_object(env, &args[0]) == napi_ok
      && napi_create_uint32(env, s->type, &type) == napi_ok
+     && napi_set_named_property(env, args[0], "type", type) == napi_ok
+     && napi_create_uint32(env, s->flags, &flags) == napi_ok
      && napi_set_named_property(env, args[0], "type", type) == napi_ok
      && (s->length == MISSING(size_t) || napi_create_uint32(env, s->length, &length) == napi_ok)
      && (s->length == MISSING(size_t) || napi_set_named_property(env, args[0], "length", length) == napi_ok)
@@ -207,14 +209,6 @@ result begin_structure(module_data* md,
      && (s->byte_size == MISSING(size_t) || napi_set_named_property(env, args[0], "byteSize", byte_size) == napi_ok)
      && (s->align == MISSING(uint16_t) || napi_create_uint32(env, s->align, &align) == napi_ok)
      && (s->align == MISSING(uint16_t) || napi_set_named_property(env, args[0], "align", align) == napi_ok)
-     && napi_get_boolean(env, s->is_const, &is_const) == napi_ok
-     && napi_set_named_property(env, args[0], "isConst", is_const) == napi_ok
-     && napi_get_boolean(env, s->is_tuple, &is_tuple) == napi_ok
-     && napi_set_named_property(env, args[0], "isTuple", is_tuple) == napi_ok
-     && napi_get_boolean(env, s->is_iterator, &is_iterator) == napi_ok
-     && napi_set_named_property(env, args[0], "isIterator", is_iterator) == napi_ok
-     && napi_get_boolean(env, s->has_pointer, &has_pointer) == napi_ok
-     && napi_set_named_property(env, args[0], "hasPointer", has_pointer) == napi_ok
      && (napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
      && (napi_set_named_property(env, args[0], "name", name) == napi_ok)
      && call_js_function(md, beginStructure, 1, args, dest)) {
@@ -230,13 +224,13 @@ result attach_member(module_data* md,
     napi_env env = md->env;
     napi_value args[3] = { structure };
     napi_value result;
-    napi_value type, is_required, bit_size, bit_offset, byte_size, slot, name;
+    napi_value type, flags, is_required, bit_size, bit_offset, byte_size, slot, name;
     if (napi_create_object(env, &args[1]) == napi_ok
      && napi_get_boolean(env, is_static, &args[2]) == napi_ok
      && napi_create_uint32(env, m->type, &type) == napi_ok
      && napi_set_named_property(env, args[1], "type", type) == napi_ok
-     && napi_get_boolean(env, m->is_required, &is_required) == napi_ok
-     && napi_set_named_property(env, args[1], "isRequired", is_required) == napi_ok
+     && napi_create_uint32(env, m->flags, &flags) == napi_ok
+     && napi_set_named_property(env, args[1], "type", flags) == napi_ok
      && (m->bit_size == MISSING(size_t) || napi_create_uint32(env, m->bit_size, &bit_size) == napi_ok)
      && (m->bit_size == MISSING(size_t) || napi_set_named_property(env, args[1], "bitSize", bit_size) == napi_ok)
      && (m->bit_offset == MISSING(size_t) || napi_create_uint32(env, m->bit_offset, &bit_offset) == napi_ok)

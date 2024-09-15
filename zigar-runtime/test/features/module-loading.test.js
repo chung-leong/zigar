@@ -257,6 +257,8 @@ describe('Feature: module-loading', function() {
           getFactoryThunk: () => {},
           flushStdout: () => {},
           garbage: () => {},
+          createJsThunk: () => {},
+          isRuntimeSafetyActive: () => {},
         };
         env.importFunctions(exports);
         expect(env.allocateExternMemory).to.be.a('function');
@@ -448,6 +450,9 @@ describe('Feature: module-loading', function() {
           getFactoryThunk: () => {},
           flushStdout: () => {},
           garbage: () => {},
+          createJsThunk: () => {},
+          recreateAddress: () => {},
+          findSentinel: () => {},
         };
         env.importFunctions(exports);
         expect(env.allocateExternMemory).to.be.a('function');

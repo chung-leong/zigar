@@ -5,6 +5,7 @@ import {
   defineEnvironment,
   mixin,
   name,
+  reset,
 } from '../src/environment.js';
 
 describe('Environment class', function() {
@@ -140,9 +141,26 @@ describe('Environment class', function() {
       expect(env.mixinUsage.get(mixin1)).to.be.true;
       expect(env.mixinUsage.get(mixin2)).to.be.undefined;
     })
+    it('should omit mixin usage tracking when env variable is not set', function() {
+      const before = process.env.MIXIN;
+      try {
+        process.env.MIXIN = '';
+        const mixin = {
+          hello() {
+            log.push('hello');
+          }
+        };
+        const Env = defineClass('Hello', [ mixin ]);
+        const env = new Env();
+        expect(env.mixinUsage).to.be.undefined;
+      } finally {
+        process.env.MIXIN = before;
+      }
+    })
   })
   describe('defineEnvironment', function() {
     it('should define a class using collected info', function() {
+      reset();
       name('Hello');
       const log = [];
       mixin({

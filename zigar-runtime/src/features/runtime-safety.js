@@ -3,10 +3,6 @@ import { mixin } from '../environment.js';
 import { Overflow } from '../errors.js';
 
 export default mixin({
-  imports: {
-    isRuntimeSafetyActive: { argType: '', returnType: 'b' },
-  },
-
   addRuntimeCheck(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor.call(this, access, member);
@@ -22,6 +18,11 @@ export default mixin({
       return accessor;
     };
   },
+  ...(process.env.TARGET === 'wasm' ? {
+    imports: {
+      isRuntimeSafetyActive: { argType: '', returnType: 'b' },
+    },
+  } : undefined),
 });
 
 export function getIntRange(member) {

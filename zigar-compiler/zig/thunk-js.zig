@@ -12,7 +12,7 @@ pub const CallResult = enum(u32) {
     disabled,
 };
 
-pub const ThunkConstructor = *const fn (*anyopaque, usize) callconv(.C) usize;
+pub const ThunkConstructor = *const fn (*anyopaque, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch) {
     .wasm32, .wasm64 => wasm,
@@ -30,7 +30,8 @@ const native = struct {
 
     pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkConstructor {
         const ft_ns = struct {
-            fn tryConstruction(host: HostT, id: usize) !usize {
+            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) anyerror!usize {
+                const host = HostT.init(ptr);
                 const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
                 const instance = try closure_factory.alloc(caller, .{
                     .ptr = host.context,
@@ -38,11 +39,6 @@ const native = struct {
                 });
                 const thunk = instance.function(FT);
                 return @intFromPtr(thunk);
-            }
-
-            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) usize {
-                const host = HostT.init(ptr);
-                return tryConstruction(host, id) catch |_| 0;
             }
         };
         return ft_ns.construct;
@@ -107,7 +103,7 @@ const wasm = struct {
                 // ask the host to create a new instance of this module and get a new
                 // thunk from that
                 const host = HostT.init(ptr);
-                return tryConstruction(host, id) catch |_| 0;
+                return tryConstruction(host, id) catch 0;
             }
         };
         // export these functions so they can be called from the JS side

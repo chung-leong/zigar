@@ -61,25 +61,23 @@ enum {
 };
 
 typedef uint32_t structure_type;
+typedef uint32_t structure_flags;
 typedef uint32_t member_type;
+typedef uint32_t member_flags;
 
 typedef struct {
     const char* name;
     structure_type type;
+    structure_flags flags;
     size_t length;
     size_t byte_size;
     uint16_t align;
-    bool is_const;
-    bool is_tuple;
-    bool is_iterator;
-    bool has_pointer;
 } structure;
 
 typedef struct {
     const char* name;
     member_type type;
-    bool is_required;
-    bool is_signed;
+    member_flags flags;
     size_t bit_offset;
     size_t bit_size;
     size_t byte_size;
@@ -88,15 +86,10 @@ typedef struct {
 } member;
 
 typedef struct  {
-    // need to structure the fields in this manner for the sake of VC++
-    union {
-        struct {
-            uint16_t align: 16;
-            bool is_const: 1;
-            bool is_comptime: 1;
-        };
-        uint32_t _;
-    };
+  uint16_t align: 16;
+  bool is_const: 1;
+  bool is_comptime: 1;
+  int :14;
 } memory_attributes;
 
 typedef struct {
