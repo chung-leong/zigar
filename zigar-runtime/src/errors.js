@@ -338,7 +338,7 @@ export class NotUndefined extends TypeError {
 
 export class NotOnByteBoundary extends TypeError {
   constructor(member) {
-    const { name, structure: { name: { struct }} } = member;
+    const { name, structure: { name: struct } } = member;
     super(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
   }
 }
