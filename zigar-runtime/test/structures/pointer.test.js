@@ -6,6 +6,7 @@ import '../../src/mixins.js';
 import {
   ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
   UPDATE,
+  VISIT,
 } from '../../src/symbols.js';
 import { defineValue } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
@@ -1375,6 +1376,9 @@ describe('Structure: pointer', function() {
       const pointer = new U8SlicePtr(buffer);
       expect(pointer['*']).to.be.instanceOf(U8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      const clampedArray = new Uint8ClampedArray([ 1, 2, 3, 4, 5, 6, 7 ]);
+      const pointer2 = new U8SlicePtr(clampedArray);
+      expect([ ...pointer2 ]).to.eql([ 1, 2, 3, 4, 5, 6, 7 ]);
     })
     it('should allow casting of a buffer to a slice of i8', function() {
       const env = new Env();
@@ -3776,6 +3780,47 @@ describe('Structure: pointer', function() {
       intCPointer2.$ = null;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
     })
+  })
+  it('should should when visitor specified is unrecognized or invalid', function() {
+    const env = new Env();
+    const intStructure = env.beginStructure({
+      type: StructureType.Primitive,
+      flags: StructureFlag.HasValue,
+      name: 'i32',
+      byteSize: 4,
+    });
+    env.attachMember(intStructure, {
+      type: MemberType.Uint,
+      bitSize: 32,
+      bitOffset: 0,
+      byteSize: 4,
+      structure: intStructure,
+    });
+    const Int32 = env.defineStructure(intStructure);
+    env.endStructure(intStructure);
+    const structure = env.beginStructure({
+      type: StructureType.Pointer,
+      flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+      name: '*i32',
+      byteSize: 8,
+      hasPointer: true,
+    });
+    env.attachMember(structure, {
+      type: MemberType.Object,
+      bitSize: 64,
+      bitOffset: 0,
+      byteSize: 8,
+      slot: 0,
+      structure: intStructure,
+    });
+    const Int32Ptr = env.defineStructure(structure);
+    env.endStructure(structure);
+    expect(Int32Ptr.child).to.equal(Int32);
+    const int32 = new Int32(1234);
+    const intPointer = new Int32Ptr(int32);
+    expect(() => intPointer[VISIT]('reset', { isActive: () => true })).to.not.throw();
+    expect(() => intPointer[VISIT]('evil')).to.throw();
+    expect(() => intPointer[VISIT](1234)).to.throw();
   })
 })
 

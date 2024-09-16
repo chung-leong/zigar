@@ -239,7 +239,7 @@ export default mixin({
           // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
           if (TYPED_ARRAY in Target) {
             const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+            if (tag === 'ArrayBuffer' || /* c8 ignore next */ tag === 'SharedArrayBuffer') {
               warnImplicitArrayCreation(targetStructure, arg);
             }
           }

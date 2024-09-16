@@ -5,7 +5,7 @@ import {
   getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
 } from '../iterators.js';
 import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { defineValue, getSelf } from '../utils.js';
 
 export default mixin({
   defineStruct(structure, descriptors) {
@@ -47,7 +47,7 @@ export default mixin({
       }
       props.push(name);
     }
-    descriptors.$ = { get() { return this }, set: initializer };
+    descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = (flags & StructureFlag.IsTuple) && {
       value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
