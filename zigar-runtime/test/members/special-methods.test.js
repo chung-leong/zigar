@@ -124,6 +124,7 @@ describe('Member: special-methods', function() {
       env.endStructure(floatStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
+        flags: StructureFlag.HasSlot | StructureFlag.HasPointer,
         name: '*f64',
         byteSize: 8,
       });
@@ -139,7 +140,7 @@ describe('Member: special-methods', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer | StructureFlag.HasInaccessible,
         name: 'Union',
         byteSize: 8,
       });

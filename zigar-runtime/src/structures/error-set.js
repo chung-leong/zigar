@@ -106,6 +106,8 @@ export default mixin({
           return constructor[Number(arg)];
         } else if (isErrorJSON(arg)) {
           return constructor[`Error: ${arg.error}`];
+        } else if (arg instanceof Error) {
+          return undefined;
         } else {
           return false;
         }
@@ -120,6 +122,7 @@ export default mixin({
     }
     const findError = function(value) {
       const { constructor } = structure;
+      debugger;
       const item = constructor(value);
       if (!item) {
         if (value instanceof Error) {
@@ -143,7 +146,7 @@ export default mixin({
         },
       set: (set.length === 1)
       ? function setError(value) {
-          const item = findError(value);
+        const item = findError(value);
           value = Number(item);
           set.call(this, value);
         }

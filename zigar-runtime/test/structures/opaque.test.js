@@ -1,9 +1,10 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, INITIALIZE } from '../../src/symbols.js';
+import { ENVIRONMENT, FIXED, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -66,7 +67,6 @@ describe('Structure: opaque', function() {
       env.endStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
-    skip.
     it('should define an iterator opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({
@@ -74,7 +74,6 @@ describe('Structure: opaque', function() {
         flags: StructureFlag.IsIterator,
         name: 'Hello',
         byteSize: 4,
-        isIterator: true,
       });
       const Hello = env.defineStructure(structure);
       const ptrStructure = env.beginStructure({
@@ -115,13 +114,13 @@ describe('Structure: opaque', function() {
       });
       env.defineStructure(optStructure);
       env.endStructure(optStructure);
-      const argStruct = env.beginStructure({
+      const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 13,
       });
-      env.attachMember(argStruct, {
+      env.attachMember(argStructure, {
         name: 'retval',
         type: MemberType.Object,
         bitSize: 32,
@@ -129,7 +128,7 @@ describe('Structure: opaque', function() {
         byteSize: 5,
         structure: optStructure,
       });
-      env.attachMember(argStruct, {
+      env.attachMember(argStructure, {
         name: '0',
         type: MemberType.Object,
         bitSize: 64,
@@ -138,28 +137,78 @@ describe('Structure: opaque', function() {
         structure: ptrStructure,
         slot: 0,
       });
-      env.defineStructure(argStruct);
-      env.endStructure(argStruct);
-      throw new Error('FIXME')
-      env.attachMethod(structure, {
-        name: 'next',
-        argStruct,
-        isStaticOnly: false,
-        thunkId: 1234,
+      env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const fnStructure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn (*Hello) ?i32',
+        byteSize: 0,
       });
-      env.endStructure(structure);
-      let i = 0;
-      env.runThunk = function(thunkId, argDV) {
-        if (i++ < 5) {
-          argDV.setInt32(0, i, true);
-          argDV.setInt8(4, 1);
-        } else {
-          argDV.setInt32(0, 0, true);
-          argDV.setInt8(4, 0);
-        }
+      env.attachMember(fnStructure, {
+        byteSize: argStructure.byteSize,
+        bitSize: argStructure.byteSize * 8,
+        bitOffset: 0,
+        structure: argStructure,
+      });
+      const thunk = {
+        [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      env.getBufferAddress = function(buffer) {
-        return 0x1000n;
+      thunk[MEMORY][FIXED] = { address: usize(0x8888) };
+      env.attachTemplate(fnStructure, thunk, false);
+      const Next = env.defineStructure(fnStructure);
+      env.endStructure(fnStructure);
+      env.attachMember(structure, {
+        name: 'next',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly | MemberFlag.IsMethod,
+        slot: 0,
+        structure: fnStructure,
+      }, true);
+      const fnDV = new DataView(new ArrayBuffer(0));
+      fnDV[FIXED] = { address: usize(0x1_8888) };
+      const next = Next(fnDV);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: next,
+        }
+      }, true);
+      env.endStructure(structure);
+      let i = 0, thunkAddress, fnAddress;
+      if (process.env.TARGET === 'wasm') {
+        env.allocateExternMemory = function(len, align) {
+          return 0x1000;
+        };
+        env.freeExternMemory = function(address) {
+        };
+        env.runThunk = function(...args) {
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          const argDV = new DataView(env.memory.buffer, args[2], 13);
+          if (i++ < 5) {
+            argDV.setInt32(0, i, true);
+            argDV.setInt8(4, 1);
+          } else {
+            argDV.setInt32(0, 0, true);
+            argDV.setInt8(4, 0);
+          }
+        };
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else if (process.env.TARGET === 'node') {
+        env.runThunk = function(...args) {
+          thunkAddress = args[0];
+          fnAddress = args[1];
+          const argDV = args[2];
+          if (i++ < 5) {
+            argDV.setInt32(0, i, true);
+            argDV.setInt8(4, 1);
+          } else {
+            argDV.setInt32(0, 0, true);
+            argDV.setInt8(4, 0);
+          }
+        };
+        env.getBufferAddress = function(buffer) {
+          return 0x1000n;
+        }
       }
       const dv = new DataView(new ArrayBuffer(4));
       const object = Hello(dv);
@@ -168,6 +217,8 @@ describe('Structure: opaque', function() {
         results.push(value);
       }
       expect(results).to.eql([ 1, 2, 3, 4, 5 ]);
+      expect(thunkAddress).to.equal(usize(0x8888));
+      expect(fnAddress).to.equal(usize(0x1_8888));
     })
   })
 })

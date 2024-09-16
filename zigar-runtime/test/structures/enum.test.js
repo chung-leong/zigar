@@ -139,7 +139,6 @@ describe('Structure: enum', function() {
     })
   })
   describe('defineStructure', function() {
-    skip.
     it('should define an enum class', function() {
       const env = new Env();
       const structure = env.beginStructure({
@@ -282,6 +281,62 @@ describe('Structure: enum', function() {
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
       expect(object2).to.equal(object1);
+    })
+    it('should work correctly in an array', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Enum,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure,
+      });
+      const Hello = env.defineStructure(structure);
+      env.attachMember(structure, {
+        name: 'Dog',
+        type: MemberType.Object,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'Cat',
+        type: MemberType.Object,
+        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: instanceOf(structure, new Uint32Array([ 0 ])),
+          1: instanceOf(structure, new Uint32Array([ 1 ])),
+        },
+      }, true);
+      env.endStructure(structure);
+      const arrayStructure = env.beginStructure({
+        type: StructureType.Array,
+        name: '[4]Hello',
+        length: 4,
+        byteSize: 4 * 4,
+      });
+      env.attachMember(arrayStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        byteSize: 4,
+        structure,
+      });
+      const HelloArray = env.defineStructure(arrayStructure);
+      env.endStructure(arrayStructure);
+      const array = new HelloArray([ Hello.Dog, Hello.Cat, Hello.Dog, Hello.Dog ]);
+      expect(array.valueOf()).to.eql([ 'Dog', 'Cat', 'Dog', 'Dog' ]);
+      expect(array[1]).to.equal(Hello.Cat);
+      expect(() => array[1] = 'Dog').to.not.throw();
+      expect(array.valueOf()).to.eql([ 'Dog', 'Dog', 'Dog', 'Dog' ]);
     })
     it('should look up the correct enum object', function() {
       const env = new Env();

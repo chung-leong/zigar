@@ -354,6 +354,76 @@ describe('Structure: error-set', function() {
       env.endStructure(structure);
       const error = new ErrorSet(5);
       expect(error.$.message).to.equal(ErrorSet.UnableToRetrieveMemoryLocation.message);
+      expect(() => error.$ = new Error('Doh!')).to.throw(TypeError);
+      error.dataView.setUint16(0, 0xffff, true);
+      expect(() => error.$).to.throw(TypeError)
+    })
+    it('should work correctly in an array', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'ErrorSet',
+        byteSize: 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+        structure,
+      });
+      const ErrorSet = env.defineStructure(structure);
+      env.attachMember(structure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
+        slot: 0,
+        structure,
+      }, true);
+      env.attachMember(structure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
+        slot: 1,
+        structure,
+      }, true);
+      env.attachTemplate(structure, {
+        [SLOTS]: {
+          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.endStructure(structure);
+      const arrayStructure = env.beginStructure({
+        type: StructureType.Array,
+        name: '[4]ErrorSet',
+        length: 4,
+        byteSize: 2 * 4,
+
+      })
+      env.attachMember(arrayStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        byteSize: 2,
+        structure,
+      });
+      const ErrorArray = env.defineStructure(arrayStructure);
+      env.endStructure(arrayStructure);
+      const array = new ErrorArray([ 5, 8, 5, 5 ]);
+      array[1] = ErrorSet.UnableToRetrieveMemoryLocation;
+      for (let i = 0; i < array.length; i++) {
+        expect(array[i]).to.equal(ErrorSet.UnableToRetrieveMemoryLocation);
+      }
+      for (const err of array) {
+        expect(err).to.equal(ErrorSet.UnableToRetrieveMemoryLocation);
+      }
+      expect(JSON.stringify(array)).to.equal(JSON.stringify([
+        { "error": "Unable to retrieve memory location" },
+        { "error": "Unable to retrieve memory location" },
+        { "error": "Unable to retrieve memory location" },
+        { "error": "Unable to retrieve memory location" },
+      ]));
+      expect(() => array[0] = new Error('Doh!')).to.throw(TypeError);
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
