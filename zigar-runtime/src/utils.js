@@ -160,6 +160,7 @@ export const isMisaligned = (process.env.BITS === '64')
 ? function(address, align) {
     return (align !== undefined) ? !!(address & (align - 1)) : false;
   }
+  /* c8 ignore next */
 : undefined;
 
 export const alignForward = (process.env.BITS === '64')
@@ -170,6 +171,7 @@ export const alignForward = (process.env.BITS === '64')
 ? function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
+  /* c8 ignore next */
 : undefined;
 
 export const isInvalidAddress = (process.env.BITS === '64')
@@ -180,6 +182,7 @@ export const isInvalidAddress = (process.env.BITS === '64')
 ? function(address) {
     return address === 0xaaaaaaaa;
   }
+  /* c8 ignore next */
 : undefined;
 
 export const adjustAddress = (process.env.BITS === '64')
@@ -190,6 +193,7 @@ export const adjustAddress = (process.env.BITS === '64')
 ? function(address, addend) {
     return address + addend;
   }
+  /* c8 ignore next */
 : undefined;
 
 export function transformIterable(arg) {

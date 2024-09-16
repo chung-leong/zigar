@@ -531,6 +531,25 @@ pub const TypeData = struct {
         return s_flags;
     }
 
+    test "getStructureFlags" {
+        const A = struct {
+            number: i32,
+        };
+        const a = comptime getStructureFlags(.{ .Type = A });
+        try expectCT(a.has_object == false);
+        const B = struct {
+            object: A,
+        };
+        const b = comptime getStructureFlags(.{ .Type = B });
+        try expectCT(b.has_object == true);
+        try expectCT(b.has_slot == true);
+        const C = struct {
+            comptime number: i32 = 1234,
+        };
+        const c = comptime getStructureFlags(.{ .Type = C });
+        try expectCT(c.has_object == false);
+        try expectCT(c.has_slot == true);
+    }
     pub fn getMemberType(comptime self: @This(), comptime is_comptime: bool) MemberType {
         return switch (self.isSupported()) {
             false => .unsupported,

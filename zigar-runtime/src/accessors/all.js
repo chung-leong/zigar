@@ -19,8 +19,8 @@ export default mixin({
       return accessor;
     }
     accessor = this[`getAccessor${typeName}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/\d+/, '') || '*'}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '') || '*'}`]?.(access, member);
+            ?? this[`getAccessor${typeName.replace(/\d+/, '')}`]?.(access, member)
+            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '')}`]?.(access, member);
     /* c8 ignore start */
     if (!accessor) {
       throw new Error(`No accessor available: ${typeName}`);

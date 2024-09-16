@@ -156,6 +156,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
             .name = field.name,
             .member_type = field_td.getMemberType(field.is_comptime),
             .member_flags = .{
+                .is_read_only = !is_actual,
                 .is_required = field.default_value == null,
                 .is_size = field_td.Type == usize or field_td.Type == isize,
             },

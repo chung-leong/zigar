@@ -30,7 +30,6 @@ export default mixin({
             n >>= 64n;
           }
         } else {
-          n <<= BigInt(wordCount * 64 - bitSize);
           for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
             const w = n & mask;
             this.setBigUint64(j, w, littleEndian);
