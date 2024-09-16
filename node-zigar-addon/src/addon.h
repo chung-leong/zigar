@@ -131,7 +131,7 @@ typedef struct {
 } module_data;
 
 typedef struct {
-    napi_ref env_constructor;
+    napi_ref create_env;
 } addon_data;
 
 typedef struct {

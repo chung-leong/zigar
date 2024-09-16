@@ -124,7 +124,7 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(false),
         .member_flags = .{
-            .is_size = child_td.isSize(),
+            .is_size = child_td.Type == usize or child_td.Type == isize,
         },
         .bit_size = child_td.getBitSize(),
         .byte_size = if (td.isBitVector()) null else child_td.getByteSize(),

@@ -6,8 +6,9 @@ export default mixin({
   addIntConversion(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor.call(this, access, member);
+      const { flags, bitSize } = member;
       if (access === 'set') {
-        return (member.bitSize > 32)
+        return (bitSize > 32)
         ? function(offset, value, littleEndian) {
             accessor.call(this, offset, BigInt(value), littleEndian);
           }
@@ -19,10 +20,15 @@ export default mixin({
           accessor.call(this, offset, number, littleEndian);
         };
       } else {
-        if (member.flags & MemberFlag.IsSize) {
+        if ((flags & MemberFlag.IsSize) && bitSize > 32) {
+          const max = BigInt(Number.MAX_SAFE_INTEGER);
+          const min = BigInt(Number.MIN_SAFE_INTEGER);
           return function(offset, littleEndian) {
-            return Number(accessor.call(this, offset, littleEndian));
+            const bigint = accessor.call(this, offset, littleEndian);
+            return (min <= bigint && bigint <= max) ? Number(bigint) : bigint;
           };
+        } else {
+          return accessor;
         }
       }
       return accessor;

@@ -231,6 +231,28 @@ export function findElements(arg, Child) {
   }
 }
 
+export function findObjects(structures, SLOTS) {
+  const list = [];
+  const found = new Map();
+  const find = (object) => {
+    if (!object || found.get(object)) {
+      return;
+    }
+    found.set(object, true);
+    list.push(object);
+    if (object[SLOTS]) {
+      for (const child of Object.values(object[SLOTS])) {
+        find(child);
+      }
+    }
+  };
+  for (const structure of structures) {
+    find(structure.instance.template);
+    find(structure.static.template);
+  }
+  return list;
+}
+
 export function getSelf() {
   return this;
 }

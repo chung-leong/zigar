@@ -1,24 +1,16 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
-import StripCode from 'rollup-plugin-strip-code';
+import Replace from '@rollup/plugin-replace';
 
 const input = './src/index.js';
 const plugins = [
   NodeResolve({}),
-  StripCode({
-    start_comment: 'OVERRIDDEN',
-    end_comment: 'OVERRIDDEN-END'
-  }),
-  StripCode({
-    start_comment: 'DEV-TEST',
-    end_comment: 'DEV-TEST-END'
-  }),
-  StripCode({
-    start_comment: 'NODE-ONLY',
-    end_comment: 'NODE-ONLY-END'
-  }),
-  StripCode({
-    start_comment: 'RUNTIME-ONLY',
-    end_comment: 'RUNTIME-ONLY-END'
+  Replace({
+    preventAssignment: true,
+    values: {
+      'process.env.DEV': 'false',
+      'process.env.TARGET': '"wasm"',
+      'process.env.MIXIN': '""',
+    },
   })
 ];
 

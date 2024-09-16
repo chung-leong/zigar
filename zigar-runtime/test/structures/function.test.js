@@ -75,6 +75,9 @@ describe('Structure: function', function() {
       const dv = fixed(0x2008);
       const f = constructor(dv);
       expect(f).to.be.a('function');
+      expect(f).to.be.an.instanceOf(constructor);
+      expect(f.constructor).to.equal(constructor);
+      expect(f).to.be.an.instanceOf(Function);
       const f2 = constructor(dv);
       expect(f2).to.equal(f);
       expect(f.name).to.equal('');

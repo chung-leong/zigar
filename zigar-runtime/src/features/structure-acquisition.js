@@ -1,7 +1,7 @@
 import { CONST_TARGET, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { MemberType, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText } from '../utils.js';
+import { decodeText, findObjects } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -182,7 +182,7 @@ export default mixin({
     };
   },
   prepareObjectsForExport() {
-    const objects = findAllObjects(this.structures, SLOTS);
+    const objects = findObjects(this.structures, SLOTS);
     const list = [];
     for (const object of objects) {
       if (object[MEMORY]?.[FIXED]) {
@@ -289,28 +289,6 @@ export default mixin({
     },
   } : {}),
 });
-
-export function findAllObjects(structures, SLOTS) {
-  const list = [];
-  const found = new Map();
-  const find = (object) => {
-    if (!object || found.get(object)) {
-      return;
-    }
-    found.set(object, true);
-    list.push(object);
-    if (object[SLOTS]) {
-      for (const child of Object.values(object[SLOTS])) {
-        find(child);
-      }
-    }
-  };
-  for (const structure of structures) {
-    find(structure.instance.template);
-    find(structure.static.template);
-  }
-  return list;
-}
 
 function isElectron() {
   return typeof(process) === 'object'

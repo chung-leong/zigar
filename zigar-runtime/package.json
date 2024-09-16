@@ -2,7 +2,7 @@
   "name": "zigar-runtime",
   "version": "0.13.2",
   "description": "JavaScript runtime for code transpiled using Zigar",
-  "main": "./dist/index.js",
+  "main": "./dist/environment.js",
   "type": "module",
   "directories": {
     "test": "test"
@@ -15,6 +15,9 @@
     "debug:node": "./test/x-wasm-debug",
     "coverage": "c8 ./test/x-both",
     "rollup": "rollup -c rollup.config.js"
+  },
+  "exports": {
+    ".": "./dist"
   },
   "files": [
     "dist/*"

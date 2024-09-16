@@ -57,7 +57,7 @@ export default mixin({
       return self;
     };
     // make function type a superclass of Function
-    descriptors.constructor = defineValue(Object.create(Function.prototype));
+    Object.setPrototypeOf(constructor.prototype, Function.prototype);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     return constructor;

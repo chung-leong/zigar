@@ -977,13 +977,13 @@ bool compile_javascript(napi_env env,
 
 napi_value create_environment(napi_env env,
                               napi_callback_info info) {
-    // look for cached copy of environment constructor
+    // look for cached copy of createEnvironment
     addon_data* ad;
-    napi_value env_constructor;
+    napi_value create_env;
     if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &ad) != napi_ok
-     || !ad->env_constructor
-     || napi_get_reference_value(env, ad->env_constructor, &env_constructor) != napi_ok
-     || !env_constructor) {
+     || !ad->create_env
+     || napi_get_reference_value(env, ad->create_env, &create_env) != napi_ok
+     || !create_env) {
         // compile embedded JavaScript
         napi_value js_module;
         if (!compile_javascript(env, &js_module)) {
@@ -991,19 +991,21 @@ napi_value create_environment(napi_env env,
         }
         // look for the Environment class
         napi_value env_name;
-        if (napi_create_string_utf8(env, "Environment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
-        || napi_get_property(env, js_module, env_name, &env_constructor) != napi_ok) {
-            return throw_error(env, "Unable to find the class \"Environment\"");
+        if (napi_create_string_utf8(env, "createEnvironment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
+        || napi_get_property(env, js_module, env_name, &create_env) != napi_ok) {
+            return throw_error(env, "Unable to find the function \"createEnvironment\"");
         }
         // save in weak reference
-        if (napi_create_reference(env, env_constructor, 0, &ad->env_constructor) != napi_ok) {
-            ad->env_constructor = NULL;
+        if (napi_create_reference(env, create_env, 0, &ad->create_env) != napi_ok) {
+            ad->create_env = NULL;
         }
     }
     // create the environment and a reference to it
     napi_value js_env;
     napi_ref js_env_ref;
-    if (napi_new_instance(env, env_constructor, 0, NULL, &js_env) != napi_ok
+    napi_value null;
+    if (napi_get_null(env, &null) != napi_ok
+     || napi_call_function(env, null, create_env, 0, NULL, &js_env) != napi_ok
      || napi_create_reference(env, js_env, 0, &js_env_ref) != napi_ok) {
         return throw_error(env, "Unable to create runtime environment");
     }

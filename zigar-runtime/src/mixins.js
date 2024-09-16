@@ -29,6 +29,7 @@ export { default as FeatureStreamRedirection } from './features/stream-redirecti
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';
 export { default as FeatureViewManagement } from './features/view-management.js';
 export { default as FeatureWasiSupport } from './features/wasi-support.js';
+export { default as FeatureWriteProtection } from './features/write-protection.js';
 export { default as MemberAll } from './members/all.js';
 export { default as MemberBool } from './members/bool.js';
 export { default as MemberFloat } from './members/float.js';

@@ -6,20 +6,20 @@ const { writeFileSync } = require('fs');
 const os = require('os');
 const { join, resolve } = require('path');
 
-function createEnvironment(options) {
-  const { createEnvironment } = loadAddon(options);
+function createEnvironment() {
+  const { createEnvironment } = loadAddon();
   return createEnvironment();
 }
 
 function importModule(soPath, options) {
-  const env = createEnvironment(options);
+  const env = createEnvironment();
   env.loadModule(soPath);
   env.acquireStructures(options);
   return env.useStructures();
 }
 
-function getGCStatistics(options) {
-  const { getGCStatistics } = loadAddon(options);
+function getGCStatistics() {
+  const { getGCStatistics } = loadAddon();
   return getGCStatistics();
 }
 
@@ -107,8 +107,8 @@ async function buildAddon(addonDir, options) {
   return { outputPath, changed };
 }
 
-function loadAddon(options) {
-  const { addonPath } = options;
+function loadAddon() {
+  const addonPath = process.env.ADDON_PATH;
   return require(addonPath);
 }
 

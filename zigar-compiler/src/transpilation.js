@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
-import { createEnvironment } from '../zigar-runtime/src/index.js';
+import { defineEnvironment } from '../../zigar-runtime/src/environment.js';
+import '../../zigar-runtime/src/mixins.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
 import { findSourceFile, getAbsoluteMapping } from './configuration.js';
@@ -36,7 +37,8 @@ export async function transpile(path, options) {
     tableInitial,
     multithreaded: compileOptions.multithreaded ?? false,
   };
-  const env = createEnvironment();
+  const Env = defineEnvironment();
+  const env = new Env();
   env.loadModule(content, moduleOptions);
   await env.initPromise;
   env.acquireStructures(compileOptions);
