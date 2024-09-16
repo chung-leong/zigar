@@ -30,7 +30,8 @@ export default mixin({
         const exp = (n & 0x7fff_0000_0000_0000_0000_0000_0000_0000n) >> 112n;
         const frac = n & 0x0000_ffff_ffff_ffff_ffff_ffff_ffff_ffffn;
         if (exp === 0n) {
-          return (sign) ? -0 : 0;
+          const value = (frac) ? Number.MIN_VALUE : 0;
+          return (sign) ? -value : value;
         } else if (exp === 0x7fffn) {
           if (!frac) {
             return (sign) ? -Infinity : Infinity;
@@ -40,7 +41,8 @@ export default mixin({
         }
         const exp64 = exp - 16383n + 1023n;
         if (exp64 >= 2047n) {
-          return (sign) ? -Infinity : Infinity;
+          const value = Infinity;
+          return (sign) ? -value : value;
         }
         const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
         buf.setBigUint64(0, n64, littleEndian);

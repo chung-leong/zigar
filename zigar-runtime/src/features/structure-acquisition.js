@@ -220,7 +220,7 @@ export default mixin({
   useStructures() {
     const module = this.getRootModule();
     // add fixed memory object to list so they can be unlinked
-    const objects = findAllObjects(this.structures, SLOTS);
+    const objects = findObjects(this.structures, SLOTS);
     for (const object of objects) {
       if (object[MEMORY]?.[FIXED]) {
         this.variables.push({ object });
