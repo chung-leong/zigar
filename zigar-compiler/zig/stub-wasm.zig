@@ -24,7 +24,7 @@ export fn runVariadicThunk(thunk_address: usize, fn_address: usize, arg_ptr: *an
     return host.runVariadicThunk(thunk_address, fn_address, arg_ptr, attr_ptr, arg_count);
 }
 
-export fn getModuleAttributes() u32 {
+export fn getModuleAttributes() i32 {
     return host.getModuleAttributes();
 }
 

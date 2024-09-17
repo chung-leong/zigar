@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { Exit } from '../errors.js';
+import { Exit, ZigError } from '../errors.js';
 import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
 
 export default mixin({
@@ -55,7 +55,8 @@ export default mixin({
     invokeThunkNow(thunkAddress, fnAddress, args) {
       try {
         this.startContext();
-        if (VISIT in args) {
+        const hasPointers = VISIT in args;
+        if (hasPointers) {
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
@@ -67,9 +68,12 @@ export default mixin({
         const success = (attrs)
         ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
         : this.runThunk(thunkAddress, fnAddress, address);
+        if (!success) {
+          throw new ZigError();
+        }
         // create objects that pointers point to
         this.updateShadowTargets();
-        if (args[VISIT]) {
+        if (hasPointers) {
           this.updatePointerTargets(args);
         }
         this.releaseShadows();
@@ -95,7 +99,7 @@ export default mixin({
     invokeThunk(thunkAddress, fnAddress, args) {
       // create an object where information concerning pointers can be stored
       this.startContext();
-      const hasPointers = args[VISIT];
+      const hasPointers = VISIT in args;
       const attrs = args[ATTRIBUTES];
       if (hasPointers) {
         // copy addresses of garbage-collectible objects into memory
@@ -105,6 +109,9 @@ export default mixin({
       const success = (attrs)
       ? this.runVariadicThunk(thunkAddress, fnAddress, args[MEMORY], attrs[MEMORY])
       : this.runThunk(thunkAddress, fnAddress, args[MEMORY]);
+      if (!success) {
+        throw new ZigError();
+      }
       if (hasPointers) {
         // create objects that pointers point to
         this.updateShadowTargets();

@@ -2755,7 +2755,13 @@ class InvalidVariadicArgument extends TypeError {
   }
 }
 
-class Exit extends Error {
+class ZigError extends Error {
+  constructor(message) {
+    super(message ?? 'Error encountered in Zig code');
+  }
+}
+
+class Exit extends ZigError {
   constructor(code) {
     super('Program exited');
     this.code = code;
@@ -2898,7 +2904,8 @@ var callMarshalingOutbound = mixin({
     invokeThunkNow(thunkAddress, fnAddress, args) {
       try {
         this.startContext();
-        if (VISIT in args) {
+        const hasPointers = VISIT in args;
+        if (hasPointers) {
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
@@ -2910,9 +2917,12 @@ var callMarshalingOutbound = mixin({
         const success = (attrs)
         ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
         : this.runThunk(thunkAddress, fnAddress, address);
+        if (!success) {
+          throw new ZigError();
+        }
         // create objects that pointers point to
         this.updateShadowTargets();
-        if (args[VISIT]) {
+        if (hasPointers) {
           this.updatePointerTargets(args);
         }
         this.releaseShadows();
@@ -3559,14 +3569,15 @@ var moduleLoading = mixin({
         case 'b': return arg ? 1 : 0;
       }
     },
-    exportFunction(fn, argType = '', returnType = '') {
+    exportFunction(fn, argType = '', returnType = '', name) {
       if (!fn) {
         return () => {};
       }
       return (...args) => {
         args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
         const retval = fn.apply(this, args);
-        return this.toWebAssembly(returnType, retval);
+        const retval2 = this.toWebAssembly(returnType, retval);
+        return retval2;
       };
     },
     importFunction(fn, argType = '', returnType = '') {
@@ -3580,7 +3591,7 @@ var moduleLoading = mixin({
       const imports = {};
       for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
-        imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
+        imports[`_${name}`] = this.exportFunction(fn, argType, returnType, name);
       }
       return imports;
     },
@@ -4090,10 +4101,10 @@ var structureAcquisition = mixin({
     const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
-    this.comptime = true;
-    if (!this.mixinUsage) {
+    {
       this.mixinUsage = new Map();
     }
+    this.comptime = true;
     this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
   },
@@ -4147,6 +4158,12 @@ var structureAcquisition = mixin({
             }
           }
         }
+      }
+    }
+    {
+      if (list.length > 0) {
+        // mixin "features/object-linkage" is used when there are objects linked to fixed memory
+        this.useObjectLinkage();
       }
     }
   },
@@ -5520,11 +5537,6 @@ var all = mixin({
       }
     }
   },
-  ...({
-    exports: {
-      defineStructure: { argType: 'v' },
-    },
-  } ),
 });
 
 var argStruct = mixin({
@@ -6126,7 +6138,6 @@ var _function = mixin({
       instance: { members: [ member ], template: thunk },
       static: { template: jsThunkConstructor },
     } = structure;
-    console.log('defineFunction');
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
@@ -8824,14 +8835,19 @@ async function transpile(path, options) {
       usage[name] = true;
     }
   }
+  usage.FeatureBaseline = true;
+  usage.FeatureWasiSupport = true;
+  usage.FeatureStructureAcquisition = false;
+  usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
   const mixinPaths = [];
-  for (const name of Object.keys(usage)) {
-    const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
-    const dir = parts.shift() + 's';
-    const filename = parts.join('-') + '.js';
-    mixinPaths.push(`${dir}/${filename}`);
+  for (const [ name, inUse ] of Object.entries(usage)) {
+    if (inUse) {
+      const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
+      const dir = parts.shift() + 's';
+      const filename = parts.join('-') + '.js';
+      mixinPaths.push(`${dir}/${filename}`);
+    }
   }
-  console.log(mixinPaths);
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;
   if (env.hasMethods()) {
@@ -8854,7 +8870,6 @@ async function transpile(path, options) {
     moduleOptions,
     mixinPaths,
   });
-  console.log(code);
   return { code, exports, structures, sourcePaths };
 }
 

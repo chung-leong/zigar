@@ -73,14 +73,15 @@ export default mixin({
         case 'b': return arg ? 1 : 0;
       }
     },
-    exportFunction(fn, argType = '', returnType = '') {
+    exportFunction(fn, argType = '', returnType = '', name) {
       if (!fn) {
         return () => {};
       }
       return (...args) => {
         args = args.map((arg, i) => this.fromWebAssembly(argType.charAt(i), arg));
         const retval = fn.apply(this, args);
-        return this.toWebAssembly(returnType, retval);
+        const retval2 = this.toWebAssembly(returnType, retval);
+        return retval2;
       };
     },
     importFunction(fn, argType = '', returnType = '') {
@@ -99,7 +100,7 @@ export default mixin({
             throw new Error(`Unable to export function: ${name}`);
           }
         }
-        imports[`_${name}`] = this.exportFunction(fn, argType, returnType);
+        imports[`_${name}`] = this.exportFunction(fn, argType, returnType, name);
       }
       return imports;
     },

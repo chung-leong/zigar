@@ -49,14 +49,19 @@ export async function transpile(path, options) {
       usage[name] = true;
     }
   }
+  usage.FeatureBaseline = true;
+  usage.FeatureWasiSupport = true;
+  usage.FeatureStructureAcquisition = false;
+  usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
   const mixinPaths = [];
-  for (const name of Object.keys(usage)) {
-    const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
-    const dir = parts.shift() + 's';
-    const filename = parts.join('-') + '.js';
-    mixinPaths.push(`${dir}/${filename}`);
+  for (const [ name, inUse ] of Object.entries(usage)) {
+    if (inUse) {
+      const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
+      const dir = parts.shift() + 's';
+      const filename = parts.join('-') + '.js';
+      mixinPaths.push(`${dir}/${filename}`);
+    }
   }
-  console.log(mixinPaths);
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;
   if (env.hasMethods()) {
@@ -79,7 +84,6 @@ export async function transpile(path, options) {
     moduleOptions,
     mixinPaths,
   });
-  console.log(code);
   return { code, exports, structures, sourcePaths };
 }
 

@@ -583,10 +583,10 @@ napi_value run_thunk(napi_env env,
         // pointer might not be valid when length is zero
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_thunk(md, thunk_address, fn_address, args_ptr) != OK) {
-        return throw_error(env, "Unable to execute function");
-    }
-    return NULL;
+    bool success = md->mod->imports->run_thunk(md, thunk_address, fn_address, args_ptr) == OK;
+    napi_value retval = NULL;
+    napi_get_boolean(env, success, &retval);
+    return retval;
 }
 
 napi_value run_variadic_thunk(napi_env env,
@@ -615,10 +615,10 @@ napi_value run_variadic_thunk(napi_env env,
     if (args_len == 0) {
         args_ptr = NULL;
     }
-    if (md->mod->imports->run_variadic_thunk(md, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) != OK) {
-        return throw_error(env, "Unable to execute function");
-    }
-    return NULL;
+    bool success = md->mod->imports->run_variadic_thunk(md, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) == OK;
+    napi_value retval = NULL;
+    napi_get_boolean(env, success, &retval);
+    return retval;
 }
 
 napi_value create_js_thunk(napi_env env,

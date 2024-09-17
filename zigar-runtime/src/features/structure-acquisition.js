@@ -160,10 +160,10 @@ export default mixin({
     const thunkAddress = this.getFactoryThunk();
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
-    this.comptime = true;
-    if (process.env.MIXIN === 'track' && !this.mixinUsage) {
+    if (process.env.MIXIN === 'track') {
       this.mixinUsage = new Map();
     }
+    this.comptime = true;
     this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
   },
@@ -219,7 +219,7 @@ export default mixin({
         }
       }
     }
-    if (process.env.MIXIN === 'tracking') {
+    if (process.env.MIXIN === 'track') {
       if (list.length > 0) {
         // mixin "features/object-linkage" is used when there are objects linked to fixed memory
         this.useObjectLinkage();

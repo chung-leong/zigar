@@ -311,13 +311,4 @@ export default mixin({
       }
     }
   },
-  ...(process.env.TARGET === 'wasm' ? {
-    exports: {
-      defineStructure: { argType: 'v' },
-    },
-  } : process.env.TARGET === 'node' ? {
-    exports: {
-      defineStructure: null,
-    },
-  } : undefined),
 });

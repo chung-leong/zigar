@@ -226,11 +226,7 @@ pub const Host = struct {
             .Int => _insertInteger(container, key_str, @intCast(value)),
             .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
             .Bool => _insertBoolean(container, key_str, value),
-            .Struct => |st| {
-                const IT = st.backing_integer orelse @compileError("No support for value type: " ++ @typeName(T));
-                const int_ptr: *const IT = @ptrCast(&value);
-                _insertInteger(container, key_str, @intCast(int_ptr.*));
-            },
+            .Struct => _insertInteger(container, key_str, @bitCast(value)),
             else => @compileError("No support for value type: " ++ @typeName(T)),
         }
     }
@@ -330,9 +326,6 @@ pub fn flushStdout() void {
     }
 }
 
-pub fn getModuleAttributes() u32 {
-    const attrs = exporter.getModuleAttributes();
-    const IT = @typeInfo(@TypeOf(attrs)).Struct.backing_integer.?;
-    const int_ptr: *const IT = @ptrCast(&attrs);
-    return int_ptr.*;
+pub fn getModuleAttributes() i32 {
+    return @bitCast(exporter.getModuleAttributes());
 }
