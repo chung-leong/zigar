@@ -32,7 +32,6 @@ export fn flushStdout() void {
     host.flushStdout();
 }
 
-pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
-    std.debug.print("{s}\n", .{msg});
-    return std.process.abort();
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    host.panic(msg, error_return_trace, ret_addr);
 }

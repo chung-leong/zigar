@@ -34,6 +34,7 @@ extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(slot: usize) ?*const anyopaque;
 extern fn _performJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.CallResult;
 extern fn _getArgAttributes() *anyopaque;
+extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,
@@ -328,4 +329,9 @@ pub fn flushStdout() void {
 
 pub fn getModuleAttributes() i32 {
     return @bitCast(exporter.getModuleAttributes());
+}
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    _displayPanic(msg.ptr, msg.len);
+    std.process.abort();
 }

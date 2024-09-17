@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { encodeText } from '../utils.js';
 
 export default mixin({
   released: false,
@@ -27,7 +28,9 @@ export default mixin({
     imports: {
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
-    exports: {},
+    exports: {
+      displayPanic: { argType: 'ii' },
+    },
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
@@ -123,36 +126,43 @@ export default mixin({
         multithreaded,
       } = options;
       const res = await source;
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
+      const w = WebAssembly;
+      const f = w['compile' + suffix];
+      const module = await f(res);
+      // const imports = w.Module.imports(module);
+      // console.log(imports);
       this.hasCodeSource = true;
       const wasi = this.getWASIImport();
       const env = this.exportFunctions();
-      this.memory = env.memory = new WebAssembly.Memory({
+      this.memory = env.memory = new w.Memory({
         initial: memoryInitial,
         maximum: memoryMax,
         shared: multithreaded,
       });
-      this.table = env.__indirect_function_table = new WebAssembly.Table({
+      this.table = env.__indirect_function_table = new w.Table({
         initial: tableInitial,
         element: 'anyfunc',
       });
       this.multithreaded = multithreaded;
       this.nextTableIndex = tableInitial;
-      const imports = { env, wasi_snapshot_preview1: wasi };
-      if (res[Symbol.toStringTag] === 'Response') {
-        return WebAssembly.instantiateStreaming(res, imports);
-      } else {
-        return WebAssembly.instantiate(res, imports);
-      }
+      const importObject = { env, wasi_snapshot_preview1: wasi };
+      return new w.Instance(module, importObject);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
-        const { instance } = await this.instantiateWebAssembly(source, options);
+        const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;
         this.importFunctions(exports);
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
         // this.runtimeSafety = ;
       })();
+    },
+    displayPanic(address, len) {
+      const array = new UintArray8(this.message.buffer, address, len);
+      const msg = encodeText(array);
+      console.error(`Zig panic: ${msg}`);
     },
     trackInstance(instance) {
       // use WeakRef to detect whether web-assembly instance has been gc'ed
