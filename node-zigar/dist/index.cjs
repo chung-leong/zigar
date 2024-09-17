@@ -31,7 +31,7 @@ Module._load = new Proxy(Module._load, {
 });
 
 function startWorker(url) {
-  const workerURL = pathToFileURL(join(__dirname, 'worker.cjs'));
+  const workerURL = pathToFileURL(join(__dirname, 'worker.js'));
   const workerData = { url,
     buffers: {
       status: new Int32Array(new SharedArrayBuffer(4)),

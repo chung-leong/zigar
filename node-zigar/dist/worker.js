@@ -1,14 +1,14 @@
-(async () => {
-  const { buildAddon } = require('node-zigar-addon');
-  const { dirname, extname, join, parse } = require('path');
-  const { URL } = require('url');
-  const {
-    compile, extractOptions, findConfigFile, findSourceFile, getArch, getCachePath,
-    getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile,
-  } = require('zigar-compiler/cjs');
-  const { hideStatus, showStatus } = require('./status.cjs');
-  const { workerData } = require('worker_threads');
+import { buildAddon } from 'node-zigar-addon';
+import { dirname, extname, join, parse } from 'path';
+import { URL } from 'url';
+import { workerData } from 'worker_threads';
+import {
+  compile, extractOptions, findConfigFile, findSourceFile, getArch, getCachePath,
+  getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile,
+} from 'zigar-compiler';
+import { hideStatus, showStatus } from './status.js';
 
+(async () => {
   const { url, buffers } = workerData;
   let status = 0, result = null;
   try {

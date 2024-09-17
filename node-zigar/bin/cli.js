@@ -5,7 +5,7 @@ import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, join, parse } from 'path';
 import { compile, findConfigFile, loadConfigFile, optionsForCompile } from 'zigar-compiler';
-import { hideStatus, showResult, showStatus } from '../dist/status.cjs';
+import { hideStatus, showResult, showStatus } from '../dist/status.js';
 
 const possiblePlatforms = [
   'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
