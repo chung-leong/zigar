@@ -132,7 +132,7 @@ export function formatProjectConfig(config) {
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
       const snakeCase = name.replace(/[A-Z]+/g, m => '_' + m.toLowerCase());
-      lines.push(`pub const ${snakeCase} = ${JSON.stringify(value)};`);
+      lines.push(`pub const ${snakeCase} = ${JSON.stringify(value ?? null)};`);
     }
   }
   return lines.join('\n');

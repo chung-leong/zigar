@@ -651,3 +651,14 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) thunk_zig.Thunk
     };
     return RootFactory.exportStructure;
 }
+
+pub fn getModuleAttributes() types.ModuleAttributes {
+    return .{
+        .little_endian = builtin.target.cpu.arch.endian() == .little,
+        .runtime_safety = switch (builtin.mode) {
+            .Debug, .ReleaseSafe => true,
+            else => false,
+        },
+        .multithreaded = !builtin.single_threaded,
+    };
+}

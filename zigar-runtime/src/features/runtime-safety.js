@@ -18,11 +18,6 @@ export default mixin({
       return accessor;
     };
   },
-  ...(process.env.TARGET === 'wasm' ? {
-    imports: {
-      isRuntimeSafetyActive: { argType: '', returnType: 'b' },
-    },
-  } : undefined),
 });
 
 export function getIntRange(member) {

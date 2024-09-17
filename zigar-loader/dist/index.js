@@ -1,4 +1,3 @@
-const { transpile, optionsForCompile, optionsForTranspile } = require('zigar-compiler/cjs');
 const { createHash } = require('crypto');
 const { parse } = require('path');
 
@@ -12,21 +11,20 @@ module.exports = function (content, map, meta) {
 };
 module.exports.raw = true;
 
-const schema = {
-  type: 'object',
-  default: {},
-  title: 'Zigar-loader Options Schema',
-  required: [],
-  additionalProperties: false,
-  properties: {
-    ...optionsForCompile,
-    ...optionsForTranspile,
-  },
-};
-
 async function loader(content, map, meta) {
   const path = this.resourcePath;
-  const options = this.getOptions(schema);
+  const options = this.getOptions({
+    type: 'object',
+    default: {},
+    title: 'Zigar-loader Options Schema',
+    required: [],
+    additionalProperties: false,
+    properties: {
+      ...optionsForCompile,
+      ...optionsForTranspile,
+    },
+  });
+  const { transpile, optionsForCompile, optionsForTranspile } = await import('zigar-compiler/transpiler');
   const {
     useReadFile = (this.target === 'node'),
     embedWASM = false,

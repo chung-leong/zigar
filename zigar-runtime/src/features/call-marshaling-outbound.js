@@ -38,8 +38,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
-      runThunk: { argType: 'iii', returnType: 'v' },
-      runVariadicThunk: { argType: 'iiiii', returnType: 'v' },
+      runThunk: { argType: 'iii', returnType: 'b' },
+      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
 
     invokeThunk(thunkAddress, fnAddress, args) {

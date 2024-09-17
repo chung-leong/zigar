@@ -89,4 +89,9 @@ export default mixin({
     },
     /* c8 ignore next */
   } : undefined),
+  ...(process.env.MIXIN === 'track' ? {
+    useObjectLinkage() {
+      // empty function used for mixin tracking
+    },
+  } : undefined),
 });

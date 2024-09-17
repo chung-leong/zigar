@@ -114,6 +114,13 @@ pub const Structure = struct {
     alignment: ?u16,
 };
 
+pub const ModuleAttributes = packed struct(u32) {
+    little_endian: bool,
+    runtime_safety: bool,
+    multithreaded: bool,
+    _: u29 = 0,
+};
+
 pub const Member = struct {
     name: ?[]const u8 = null,
     member_type: MemberType,
@@ -196,6 +203,31 @@ pub const Memory = struct {
         };
     }
 
+    test "from" {
+        var a: i32 = 1234;
+        const memA = from(&a, false);
+        const b: []const u8 = "Hello";
+        const memB = from(b, false);
+        const c: [*]const u8 = b.ptr;
+        const memC = from(c, true);
+        const d: [*c]const u8 = b.ptr;
+        const memD = from(d, false);
+        const e = &b;
+        const memE = from(e, false);
+        const f: [*:0]const u8 = "Hello";
+        const memF = from(f, false);
+        try expect(memA.len == 4);
+        try expect(memA.attributes.is_const == false);
+        try expect(memB.len == 5);
+        try expect(memB.attributes.is_const == true);
+        try expect(memC.len == 1);
+        try expect(memC.attributes.is_comptime == true);
+        try expect(memD.len == 1);
+        try expect(memD.attributes.is_const == true);
+        try expect(memE.len == @sizeOf(@TypeOf(b)));
+        try expect(memF.len == 6);
+    }
+
     pub fn to(self: Memory, comptime PtrT: type) PtrT {
         const pt = @typeInfo(PtrT).Pointer;
         return switch (pt.size) {
@@ -212,53 +244,28 @@ pub const Memory = struct {
             .C => @ptrCast(@alignCast(self.bytes)),
         };
     }
+
+    test "to" {
+        var array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+        const memory: @This() = .{
+            .bytes = &array,
+            .len = array.len,
+        };
+        const p1 = memory.to(*u8);
+        try expect(p1.* == 'H');
+        try expect(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
+        const p2 = memory.to([]u8);
+        try expect(p2[0] == 'H');
+        try expect(p2.len == 5);
+        try expect(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
+        const p3 = memory.to([*]u8);
+        try expect(p3[0] == 'H');
+        try expect(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
+        const p4 = memory.to([*c]u8);
+        try expect(p4[0] == 'H');
+        try expect(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
+    }
 };
-
-test "Memory.from" {
-    var a: i32 = 1234;
-    const memA = Memory.from(&a, false);
-    const b: []const u8 = "Hello";
-    const memB = Memory.from(b, false);
-    const c: [*]const u8 = b.ptr;
-    const memC = Memory.from(c, true);
-    const d: [*c]const u8 = b.ptr;
-    const memD = Memory.from(d, false);
-    const e = &b;
-    const memE = Memory.from(e, false);
-    const f: [*:0]const u8 = "Hello";
-    const memF = Memory.from(f, false);
-    try expect(memA.len == 4);
-    try expect(memA.attributes.is_const == false);
-    try expect(memB.len == 5);
-    try expect(memB.attributes.is_const == true);
-    try expect(memC.len == 1);
-    try expect(memC.attributes.is_comptime == true);
-    try expect(memD.len == 1);
-    try expect(memD.attributes.is_const == true);
-    try expect(memE.len == @sizeOf(@TypeOf(b)));
-    try expect(memF.len == 6);
-}
-
-test "Memory.to" {
-    var array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
-    const memory: Memory = .{
-        .bytes = &array,
-        .len = array.len,
-    };
-    const p1 = memory.to(*u8);
-    try expect(p1.* == 'H');
-    try expect(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
-    const p2 = memory.to([]u8);
-    try expect(p2[0] == 'H');
-    try expect(p2.len == 5);
-    try expect(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
-    const p3 = memory.to([*]u8);
-    try expect(p3[0] == 'H');
-    try expect(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
-    const p4 = memory.to([*c]u8);
-    try expect(p4[0] == 'H');
-    try expect(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
-}
 
 pub fn IntType(comptime n: comptime_int) type {
     comptime var bits = 8;
@@ -1694,6 +1701,7 @@ fn expectCT(comptime value: bool) !void {
 }
 
 test {
+    _ = Memory;
     _ = TypeData;
     _ = TypeDataCollector;
 }

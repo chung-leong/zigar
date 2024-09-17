@@ -1,8 +1,6 @@
 import { mixin } from '../environment.js';
 
 export default mixin({
-  exports: {},
-  imports: {},
   released: false,
   abandoned: false,
 
@@ -26,6 +24,10 @@ export default mixin({
     }
   },
   ...(process.env.TARGET === 'wasm' ? {
+    imports: {
+      getModuleAttributes: { argType: '', returnType: 'i' },
+    },
+    exports: {},
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
@@ -148,7 +150,7 @@ export default mixin({
         this.importFunctions(exports);
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
-        this.runtimeSafety = this.isRuntimeSafetyActive();
+        // this.runtimeSafety = ;
       })();
     },
     trackInstance(instance) {
@@ -157,6 +159,8 @@ export default mixin({
       Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
   } : process.env.TARGET === 'node' ? {
+    exports: {
+    },
     imports: {
       loadModule: null,
     },

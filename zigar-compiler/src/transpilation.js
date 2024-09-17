@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import { basename } from 'path';
 import { defineEnvironment } from '../../zigar-runtime/src/environment.js';
-import '../../zigar-runtime/src/mixins.js';
+import * as mixins from '../../zigar-runtime/src/mixins.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
 import { findSourceFile, getAbsoluteMapping } from './configuration.js';
@@ -43,6 +43,20 @@ export async function transpile(path, options) {
   await env.initPromise;
   env.acquireStructures(compileOptions);
   const definition = env.exportStructures();
+  const usage = {};
+  for (const [ name, mixin ] of Object.entries(mixins)) {
+    if (env.mixinUsage.get(mixin)) {
+      usage[name] = true;
+    }
+  }
+  const mixinPaths = [];
+  for (const name of Object.keys(usage)) {
+    const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
+    const dir = parts.shift() + 's';
+    const filename = parts.join('-') + '.js';
+    mixinPaths.push(`${dir}/${filename}`);
+  }
+  console.log(mixinPaths);
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;
   if (env.hasMethods()) {
@@ -63,7 +77,9 @@ export async function transpile(path, options) {
     topLevelAwait,
     omitExports,
     moduleOptions,
+    mixinPaths,
   });
+  console.log(code);
   return { code, exports, structures, sourcePaths };
 }
 

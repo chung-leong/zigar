@@ -3,6 +3,10 @@
   "version": "0.13.2",
   "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./transpiler": "./dist/transpiler.js"
+  },
   "type": "module",
   "directories": {
     "test": "test"
@@ -25,10 +29,6 @@
   "keywords": [
     "zig"
   ],
-  "exports": {
-    ".": "./dist/index.js",
-    "./cjs": "./dist/index.cjs"
-  },
   "author": "Chung Leong",
   "license": "MIT",
   "bugs": {

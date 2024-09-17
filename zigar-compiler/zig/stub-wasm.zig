@@ -16,16 +16,16 @@ export fn getFactoryThunk() usize {
     return host.getFactoryThunk(@import("module"));
 }
 
-export fn runThunk(thunk_address: usize, fn_address: usize, arg_ptr: *anyopaque) ?Value {
+export fn runThunk(thunk_address: usize, fn_address: usize, arg_ptr: *anyopaque) bool {
     return host.runThunk(thunk_address, fn_address, arg_ptr);
 }
 
-export fn runVariadicThunk(thunk_address: usize, fn_address: usize, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) ?Value {
+export fn runVariadicThunk(thunk_address: usize, fn_address: usize, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) bool {
     return host.runVariadicThunk(thunk_address, fn_address, arg_ptr, attr_ptr, arg_count);
 }
 
-export fn isRuntimeSafetyActive() bool {
-    return host.isRuntimeSafetyActive();
+export fn getModuleAttributes() u32 {
+    return host.getModuleAttributes();
 }
 
 export fn flushStdout() void {

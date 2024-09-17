@@ -1,34 +1,42 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 
-const input = './src/index.js';
-const plugins = [
-  NodeResolve({}),
-  Replace({
-    preventAssignment: true,
-    values: {
-      'process.env.DEV': 'false',
-      'process.env.TARGET': '"wasm"',
-      'process.env.MIXIN': '""',
-    },
-  })
-];
 
 export default [
   {
-    input,
-    plugins,
+    input: './src/index.js',
+    plugins: [
+      NodeResolve({}),
+      Replace({
+        preventAssignment: true,
+        values: {
+          'process.env.DEV': 'false',
+        },
+      })
+    ],
     output: {
       file: './dist/index.js',
       format: 'esm',
     },
   },
   {
-    input,
-    plugins,
+    input: './src/transpiler.js',
+    plugins: [
+      NodeResolve({}),
+      Replace({
+        preventAssignment: true,
+        values: {
+          'process.env.DEV': 'false',
+          // env vars used in the code of zigar-runtime
+          'process.env.TARGET': '"wasm"',
+          'process.env.BITS': '"32"',
+          'process.env.MIXIN': '"track"',
+        },
+      })
+    ],
     output: {
-      file: './dist/index.cjs',
-      format: 'commonjs',
+      file: './dist/transpiler.js',
+      format: 'esm',
     },
   }
 ];

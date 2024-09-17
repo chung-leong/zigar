@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { parse } from 'path';
-import { optionsForCompile, optionsForTranspile, transpile } from 'zigar-compiler';
+import { optionsForCompile, optionsForTranspile, transpile } from 'zigar-compiler/transpiler';
 
 export const schema = {
   type: 'object',

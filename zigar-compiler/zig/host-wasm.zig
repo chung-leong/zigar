@@ -226,29 +226,31 @@ pub const Host = struct {
             .Int => _insertInteger(container, key_str, @intCast(value)),
             .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
             .Bool => _insertBoolean(container, key_str, value),
+            .Struct => |st| {
+                const IT = st.backing_integer orelse @compileError("No support for value type: " ++ @typeName(T));
+                const int_ptr: *const IT = @ptrCast(&value);
+                _insertInteger(container, key_str, @intCast(int_ptr.*));
+            },
             else => @compileError("No support for value type: " ++ @typeName(T)),
         }
     }
 
-    pub fn beginStructure(_: Host, def: types.Structure) !Value {
-        const structure = beginDefinition();
-        try insertProperty(structure, "name", def.name);
-        try insertProperty(structure, "type", def.structure_type);
-        try insertProperty(structure, "length", def.length);
-        try insertProperty(structure, "byteSize", def.byte_size);
-        try insertProperty(structure, "align", def.alignment);
-        try insertProperty(structure, "isConst", def.is_const);
-        try insertProperty(structure, "isTuple", def.is_tuple);
-        try insertProperty(structure, "isIterator", def.is_iterator);
-        try insertProperty(structure, "hasPointer", def.has_pointer);
-        return _beginStructure(structure) orelse
+    pub fn beginStructure(_: Host, structure: types.Structure) !Value {
+        const def = beginDefinition();
+        try insertProperty(def, "name", structure.name);
+        try insertProperty(def, "type", structure.structure_type);
+        try insertProperty(def, "flags", structure.structure_flags);
+        try insertProperty(def, "length", structure.length);
+        try insertProperty(def, "byteSize", structure.byte_size);
+        try insertProperty(def, "align", structure.alignment);
+        return _beginStructure(def) orelse
             Error.unable_to_start_structure_definition;
     }
 
     pub fn attachMember(_: Host, structure: Value, member: types.Member, is_static: bool) !void {
         const def = beginDefinition();
         try insertProperty(def, "type", member.member_type);
-        try insertProperty(def, "isRequired", member.is_required);
+        try insertProperty(def, "flags", member.member_flags);
         try insertProperty(def, "bitOffset", member.bit_offset);
         try insertProperty(def, "bitSize", member.bit_size);
         try insertProperty(def, "byteSize", member.byte_size);
@@ -258,7 +260,7 @@ pub const Host = struct {
         _attachMember(structure, def, is_static);
     }
 
-    pub fn defineStructure(_: Host, structure: Value) !void {
+    pub fn defineStructure(_: Host, structure: Value) !Value {
         return _defineStructure(structure) orelse
             Error.unable_to_define_structure;
     }
@@ -295,12 +297,11 @@ pub const Host = struct {
 pub fn runThunk(
     thunk_address: usize,
     fn_address: usize,
-    arg_ptr: *anyopaque,
-) ?Value {
-    // function pointers in WASM are indices into function table 0
-    // so the thunk_id is really the thunk itself
+    args: *anyopaque,
+) bool {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
-    return thunk(null, @ptrFromInt(fn_address), arg_ptr);
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(null, fn_ptr, args)) true else |_| false;
 }
 
 pub fn runVariadicThunk(
@@ -309,18 +310,15 @@ pub fn runVariadicThunk(
     arg_ptr: *anyopaque,
     attr_ptr: *const anyopaque,
     arg_count: usize,
-) ?Value {
+) bool {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
-    return thunk(null, @ptrFromInt(fn_address), arg_ptr, attr_ptr, arg_count);
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(null, fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
     return @intFromPtr(factory);
-}
-
-pub fn isRuntimeSafetyActive() bool {
-    return builtin.mode == .ReleaseSafe or builtin.mode == .Debug;
 }
 
 pub fn flushStdout() void {
@@ -330,4 +328,11 @@ pub fn flushStdout() void {
         });
         _ = c.fflush(c.stdout);
     }
+}
+
+pub fn getModuleAttributes() u32 {
+    const attrs = exporter.getModuleAttributes();
+    const IT = @typeInfo(@TypeOf(attrs)).Struct.backing_integer.?;
+    const int_ptr: *const IT = @ptrCast(&attrs);
+    return int_ptr.*;
 }

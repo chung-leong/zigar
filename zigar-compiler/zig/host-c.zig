@@ -312,7 +312,8 @@ pub fn runThunk(
     args: *anyopaque,
 ) callconv(.C) Result {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
-    return if (thunk(md, @ptrFromInt(fn_address), args)) .ok else |_| .failure;
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(md, fn_ptr, args)) .ok else |_| .failure;
 }
 
 pub fn runVariadicThunk(
@@ -324,7 +325,8 @@ pub fn runVariadicThunk(
     arg_count: usize,
 ) callconv(.C) Result {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
-    return if (thunk(md, @ptrFromInt(fn_address), args, attr_ptr, arg_count)) .ok else |_| .failure;
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(md, fn_ptr, args, attr_ptr, arg_count)) .ok else |_| .failure;
 }
 
 pub fn createJsThunk(
@@ -394,16 +396,9 @@ const Exports = extern struct {
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };
 
-const ModuleAttributes = packed struct(u32) {
-    little_endian: bool,
-    runtime_safety: bool,
-    multithreaded: bool,
-    _: u29 = 0,
-};
-
 pub const Module = extern struct {
     version: u32,
-    attributes: ModuleAttributes,
+    attributes: types.ModuleAttributes,
     imports: *Imports = &imports,
     exports: *const Exports,
 };
@@ -422,14 +417,7 @@ pub fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
 pub fn createModule(comptime T: type) Module {
     return .{
         .version = 5,
-        .attributes = .{
-            .little_endian = builtin.target.cpu.arch.endian() == .little,
-            .runtime_safety = switch (builtin.mode) {
-                .Debug, .ReleaseSafe => true,
-                else => false,
-            },
-            .multithreaded = !builtin.single_threaded,
-        },
+        .attributes = exporter.getModuleAttributes(),
         .imports = &imports,
         .exports = &.{
             .initialize = initialize,

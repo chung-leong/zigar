@@ -1,15 +1,12 @@
-'use strict';
+import childProcess from 'child_process';
+import { openSync, readSync, closeSync, writeFileSync } from 'fs';
+import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
+import os from 'os';
+import { sep, dirname, join, parse, basename, resolve, isAbsolute } from 'path';
+import { fileURLToPath } from 'url';
+import { promisify } from 'util';
+import { createHash } from 'crypto';
 
-var childProcess = require('child_process');
-var fs = require('fs');
-var promises = require('fs/promises');
-var os = require('os');
-var path = require('path');
-var url = require('url');
-var util = require('util');
-var crypto = require('crypto');
-
-var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const StructureType = {
   Primitive: 0,
   Array: 1,
@@ -269,45 +266,29 @@ function findSortedIndex(array, value, cb) {
   return high;
 }
 
-const isMisaligned = (process.env.BITS === '64')
-? function(address, align) {
-    return (align !== undefined) ? !!(address & BigInt(align - 1)) : false;
-  }
-: (process.env.BITS === '32')
-? function(address, align) {
+const isMisaligned = function(address, align) {
     return (align !== undefined) ? !!(address & (align - 1)) : false;
   }
-: undefined;
+  /* c8 ignore next */
+;
 
-const alignForward = (process.env.BITS === '64')
-? function(address, align) {
-    return (address + BigInt(align - 1)) & ~BigInt(align - 1);
-  }
-: (process.env.BITS === '32')
-? function(address, align) {
+const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-: undefined;
+  /* c8 ignore next */
+;
 
-const isInvalidAddress = (process.env.BITS === '64')
-? function(address) {
-    return address === 0xaaaaaaaaaaaaaaaan;
-  }
-: (process.env.BITS === '32')
-? function(address) {
+const isInvalidAddress = function(address) {
     return address === 0xaaaaaaaa;
   }
-: undefined;
+  /* c8 ignore next */
+;
 
-const adjustAddress = (process.env.BITS === '64')
-? function(address, addend) {
-    return address + BigInt(addend);
-  }
-: (process.env.BITS === '32')
-? function(address, addend) {
+const adjustAddress = function(address, addend) {
     return address + addend;
   }
-: undefined;
+  /* c8 ignore next */
+;
 
 function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {
@@ -766,13 +747,13 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile$1 = util.promisify(childProcess.execFile);
+const execFile$1 = promisify(childProcess.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
-      await createDirectory(path.dirname(pidPath));
-      const handle = await promises.open(pidPath, 'wx');
+      await createDirectory(dirname(pidPath));
+      const handle = await open(pidPath, 'wx');
       handle.write(`${process.pid}`);
       handle.close();
       break;
@@ -812,7 +793,7 @@ async function checkPidFile(pidPath, staleTime) {
       }
       /* c8 ignore end */
     }
-    const stats = await promises.stat(pidPath);
+    const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
@@ -827,15 +808,15 @@ async function checkPidFile(pidPath, staleTime) {
 }
 
 async function copyFile(srcPath, dstPath) {
-  const info = await promises.stat(srcPath);
-  const data = await promises.readFile(srcPath);
-  await promises.writeFile(dstPath, data);
-  await promises.chmod(dstPath, info.mode);
+  const info = await stat(srcPath);
+  const data = await readFile(srcPath);
+  await writeFile(dstPath, data);
+  await chmod(dstPath, info.mode);
 }
 
 async function loadFile(path, def) {
   try {
-    return await promises.readFile(path, 'utf8');
+    return await readFile(path, 'utf8');
   } catch (err) {
     return def;
   }
@@ -843,7 +824,7 @@ async function loadFile(path, def) {
 
 async function deleteFile(path) {
   try {
-    await promises.unlink(path);
+    await unlink(path);
   } catch (err) {
     if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
@@ -851,14 +832,14 @@ async function deleteFile(path) {
   }
 }
 
-async function createDirectory(path$1) {
+async function createDirectory(path) {
   try {
-    await promises.stat(path$1);
+    await stat(path);
   } catch (err) {
-    const dir = path.dirname(path$1);
+    const dir = dirname(path);
     await createDirectory(dir);
     try {
-      await promises.mkdir(path$1);
+      await mkdir(path);
       /* c8 ignore next 5 */
     } catch (err) {
       if (err.code != 'EEXIST') {
@@ -870,17 +851,17 @@ async function createDirectory(path$1) {
 
 async function deleteDirectory(dir) {
   try {
-    const list = await promises.readdir(dir);
+    const list = await readdir(dir);
     for (const name of list) {
-      const path$1 = path.join(dir, name);
-      const info = await promises.lstat(path$1);
+      const path = join(dir, name);
+      const info = await lstat(path);
       if (info.isDirectory()) {
-        await deleteDirectory(path$1);
+        await deleteDirectory(path);
       } else if (info) {
-        await deleteFile(path$1);
+        await deleteFile(path);
       }
     }
-    await promises.rmdir(dir);
+    await rmdir(dir);
   } catch (err) {
     if (err.code !== 'ENOENT') {
       throw err;
@@ -893,7 +874,7 @@ async function delay(ms) {
 }
 
 function md5(text) {
-  const hash = crypto.createHash('md5');
+  const hash = createHash('md5');
   hash.update(text);
   return hash.digest('hex');
 }
@@ -924,9 +905,9 @@ function getPlatform() {
 function findElfDependencies(path) {
   const list = [];
   try {
-    const fd = fs.openSync(path, 'r');
+    const fd = openSync(path, 'r');
     const sig = new Uint8Array(8);
-    fs.readSync(fd, sig);
+    readSync(fd, sig);
     for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
       if (sig[index] !== value.charCodeAt(0)) {
         throw new Error('Incorrect magic number');
@@ -946,7 +927,7 @@ function findElfDependencies(path) {
     const Usize = (bits === 64) ? BigInt : Number;
     const read = (position, size) => {
       const buf = new DataView(new ArrayBuffer(Number(size)));
-      fs.readSync(fd, buf, { position });
+      readSync(fd, buf, { position });
       buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
       return buf;
     };
@@ -985,7 +966,7 @@ function findElfDependencies(path) {
         }
       }
     }
-    fs.closeSync(fd);
+    closeSync(fd);
   } catch (err) {
   }
   return list;
@@ -995,27 +976,27 @@ function getArch() {
   return os.arch();
 }
 
-function normalizePath(url$1) {
+function normalizePath(url) {
   let archive;
-  const parts = url.fileURLToPath(url$1).split(path.sep).map((part) => {
+  const parts = fileURLToPath(url).split(sep).map((part) => {
     if (part === 'app.asar') {
       archive = 'asar';
       return part + '.unpacked';
     }
     return part;
   });
-  const path$1 = parts.join(path.sep);
-  return { path: path$1, archive }
+  const path = parts.join(sep);
+  return { path, archive }
 }
 
 async function getDirectoryStats(dirPath) {
   let size = 0, mtimeMs = 0;
-  const names = await promises.readdir(dirPath);
+  const names = await readdir(dirPath);
   for (const name of names) {
-    const path$1 = path.join(dirPath, name);
-    let info = await promises.stat(path$1);
+    const path = join(dirPath, name);
+    let info = await stat(path);
     if(info.isDirectory()) {
-      info = await getDirectoryStats(path$1);
+      info = await getDirectoryStats(path);
     } else if (!info.isFile()) {
       continue;
     }
@@ -1027,12 +1008,12 @@ async function getDirectoryStats(dirPath) {
   return { size, mtimeMs };
 }
 
-const execFile = util.promisify(childProcess.execFile);
+const execFile = promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? await promises.stat(srcPath) : null;
+  const srcInfo = (srcPath) ? await stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
-    srcPath = path.join(srcPath, '?');
+    srcPath = join(srcPath, '?');
   }
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
@@ -1041,16 +1022,16 @@ async function compile(srcPath, modPath, options) {
   if (srcPath) {
     // add custom build file
     try {
-      const path$1 = path.join(moduleDir, 'build.zig');
-      await promises.stat(path$1);
-      config.buildFilePath = path$1;
+      const path = join(moduleDir, 'build.zig');
+      await stat(path);
+      config.buildFilePath = path;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
-      const path$1 = path.join(moduleDir, 'build.zig.zon');
-      await promises.stat(path$1);
-      config.packageConfigPath = path$1;
+      const path = join(moduleDir, 'build.zig.zon');
+      await stat(path);
+      config.packageConfigPath = path;
     } catch (err) {
     }
     const { zigPath, zigArgs, moduleBuildDir } = config;
@@ -1059,7 +1040,7 @@ async function compile(srcPath, modPath, options) {
     await acquireLock(pidPath);
     const getOutputMTime = async () => {
       try {
-        const stats = await promises.stat(outputPath);
+        const stats = await stat(outputPath);
         return stats.mtimeMs;
       } catch (err) {
       }
@@ -1116,16 +1097,16 @@ async function runCompiler(path, args, options) {
 }
 
 class CompilationError extends Error {
-  constructor(path$1, args, cwd, err) {
+  constructor(path, args, cwd, err) {
     super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
-    this.path = path$1;
+    this.path = path;
     this.args = args;
     this.errno = err.errno;
     this.code = err.code;
     if (err.stderr) {
       try {
-        const logPath = path.join(cwd, 'log');
-        fs.writeFileSync(logPath, err.stderr);
+        const logPath = join(cwd, 'log');
+        writeFileSync(logPath, err.stderr);
         this.log = logPath;
         /* c8 ignore next 2 */
       } catch (err) {
@@ -1149,7 +1130,7 @@ function formatProjectConfig(config) {
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
       const snakeCase = name.replace(/[A-Z]+/g, m => '_' + m.toLowerCase());
-      lines.push(`pub const ${snakeCase} = ${JSON.stringify(value)};`);
+      lines.push(`pub const ${snakeCase} = ${JSON.stringify(value ?? null)};`);
     }
   }
   return lines.join('\n');
@@ -1158,12 +1139,12 @@ function formatProjectConfig(config) {
 async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
-  const cfgFilePath = path.join(dir, 'build-cfg.zig');
-  await promises.writeFile(cfgFilePath, content);
-  const buildFilePath = path.join(dir, 'build.zig');
+  const cfgFilePath = join(dir, 'build-cfg.zig');
+  await writeFile(cfgFilePath, content);
+  const buildFilePath = join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
-    const packageConfigPath = path.join(dir, 'build.zig.zon');
+    const packageConfigPath = join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
   }
 }
@@ -1172,7 +1153,7 @@ const cwd = process.cwd();
 
 function getCachePath(options) {
   const {
-    cacheDir = path.join(cwd, '.zigar-cache'),
+    cacheDir = join(cwd, '.zigar-cache'),
   } = options;
   return cacheDir;
 }
@@ -1181,10 +1162,10 @@ function getModuleCachePath(srcPath, options) {
   const {
     optimize,
   } = options;
-  const src = path.parse(srcPath);
-  const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const src = parse(srcPath);
+  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
-  return path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
+  return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
 function createConfig(srcPath, modPath, options = {}) {
@@ -1195,32 +1176,32 @@ function createConfig(srcPath, modPath, options = {}) {
     isWASM = false,
     useLibc = isWASM ? false : true,
     clean = false,
-    buildDir = path.join(os.tmpdir(), 'zigar-build'),
+    buildDir = join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
     multithreaded = isWASM ? false : true,
     maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
   } = options;
-  const src = path.parse(srcPath ?? '');
-  const mod = path.parse(modPath ?? '');
+  const src = parse(srcPath ?? '');
+  const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
   const moduleDir = src.dir;
-  const modulePrefix = path.basename(moduleName).slice(0, 16);
+  const modulePrefix = basename(moduleName).slice(0, 16);
   const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
-  const moduleBuildDir = path.join(buildDir, modulePrefix + '-' + moduleHash);
+  const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {
       // save output in build folder
-      return path.join(moduleBuildDir, optimize, `${src.name}.wasm`);
+      return join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
       const extensions = {
         darwin: 'dylib',
         win32: 'dll',
       };
       const ext = extensions[platform] || 'so';
-      return path.join(modPath, `${platform}.${arch}.${ext}`);
+      return join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
@@ -1298,9 +1279,9 @@ function absolute(relpath) {
   // just use __dirname as it's going to be there
   /* c8 ignore next 2 */
   if (typeof(__dirname) === 'string') {
-    return path.resolve(__dirname, relpath);
+    return resolve(__dirname, relpath);
   } else {
-    return url.fileURLToPath(new URL(relpath, (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
+    return fileURLToPath(new URL(relpath, import.meta.url));
   }
 }
 
@@ -1308,18 +1289,18 @@ async function getManifestLists(buildPath) {
   let dirPath;
   let names;
   try {
-    dirPath = path.join(buildPath, '.zig-cache', 'h');
-    names = await promises.readdir(dirPath);
+    dirPath = join(buildPath, '.zig-cache', 'h');
+    names = await readdir(dirPath);
     /* c8 ignore next 8 */
   } catch (err) {
     try {
-      dirPath = path.join(buildPath, 'zig-cache', 'h');
-      names = await promises.readdir(dirPath);
+      dirPath = join(buildPath, 'zig-cache', 'h');
+      names = await readdir(dirPath);
     } catch (err) {
       names = [];
     }
   }
-  return names.filter(n => /\.txt$/.test(n)).map(n => path.join(dirPath, n));
+  return names.filter(n => /\.txt$/.test(n)).map(n => join(dirPath, n));
 }
 
 async function findSourcePaths(buildPath) {
@@ -1327,7 +1308,7 @@ async function findSourcePaths(buildPath) {
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
-      const data = await promises.readFile(manifestPath, 'utf-8');
+      const data = await readFile(manifestPath, 'utf-8');
       if (data.length > 0) {
         const lines = data.split(/\r?\n/);
         // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
@@ -1337,7 +1318,7 @@ async function findSourcePaths(buildPath) {
           const m = re.exec(line);
           if (m) {
             const srcPath = m[1];
-            if(path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+            if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
               involved[srcPath] = true;
             }
           }
@@ -1353,16 +1334,16 @@ async function findSourcePaths(buildPath) {
 async function cleanBuildDirectory(config) {
   const { buildDir, buildDirSize } = config;
   try {
-    const names = await promises.readdir(buildDir);
+    const names = await readdir(buildDir);
     const list = [];
     let total = 0;
     for (const name of names) {
-      const path$1 = path.join(buildDir, name);
-      const info = await promises.stat(path$1);
+      const path = join(buildDir, name);
+      const info = await stat(path);
       if (info.isDirectory()) {
-        const { size, mtimeMs } = await getDirectoryStats(path$1);
+        const { size, mtimeMs } = await getDirectoryStats(path);
         total += size;
-        list.push({ path: path$1, size, mtimeMs });
+        list.push({ path, size, mtimeMs });
       }
     }
     list.sort((a, b) => a.mtimeMs - b.mtimeMs);
@@ -1522,12 +1503,12 @@ class UnknownOption extends Error {
 }
 
 async function findConfigFile(name, dir) {
-  const path$1 = path.join(dir, name);
+  const path = join(dir, name);
   try {
-    await promises.stat(path$1);
-    return path$1;
+    await stat(path);
+    return path;
   } catch (err) {
-    const parent = path.dirname(dir);
+    const parent = dirname(dir);
     if (parent !== dir) {
       return findConfigFile(name, parent);
     }
@@ -1550,7 +1531,7 @@ function processConfigFile(text, cfgPath, availableOptions) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
   }
-  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, path.dirname(cfgPath));
+  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, dirname(cfgPath));
   return options;
 }
 
@@ -1558,8 +1539,8 @@ function getAbsoluteMapping(sourceFiles, cfgDir) {
   const map = {};
   if (sourceFiles) {
     for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = path.resolve(cfgDir, module);
-      const sourcePath = path.resolve(cfgDir, source);
+      const modulePath = resolve(cfgDir, module);
+      const sourcePath = resolve(cfgDir, source);
       map[modulePath] = sourcePath;
     }
   }
@@ -1606,7 +1587,11 @@ function defineClass(name, mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
       if (typeof(object) === 'function') {
         {
-          defineProperty(prototype, name, defineValue(object));
+          const f = function(...args) {
+            this.mixinUsage?.set?.(mixin, true);
+            return object.call(this, ...args);
+          };
+          defineProperty(prototype, name, defineValue(f));
         }
       } else {
         let current = props[name];
@@ -1626,7 +1611,7 @@ function defineClass(name, mixins) {
 
 // handle retrieval of accessors
 
-mixin({
+var all$2 = mixin({
   getAccessor(access, member) {
     const { bitOffset, byteSize } = member;
     const typeName = getTypeName(member);
@@ -1642,8 +1627,8 @@ mixin({
       return accessor;
     }
     accessor = this[`getAccessor${typeName}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/\d+/, '') || '*'}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '') || '*'}`]?.(access, member);
+            ?? this[`getAccessor${typeName.replace(/\d+/, '')}`]?.(access, member)
+            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '')}`]?.(access, member);
     /* c8 ignore start */
     if (!accessor) {
       throw new Error(`No accessor available: ${typeName}`);
@@ -1657,7 +1642,7 @@ mixin({
 
 const cache = new Map();
 
-mixin({
+var bigInt = mixin({
   getAccessorBigInt(access, member) {
     const { bitSize } = member;
     const signMask = 2n ** BigInt(bitSize - 1);
@@ -1676,7 +1661,7 @@ mixin({
   },
 });
 
-mixin({
+var bigUint = mixin({
   getAccessorBigUint(access, member) {
     const { bitSize } = member;
     const valueMask = (2n ** BigInt(bitSize)) - 1n;
@@ -1697,7 +1682,7 @@ mixin({
 // handles bools, including implicit ones in optional pointers, where an address
 // of zero would be treated as boolean false
 
-mixin({
+var bool$1 = mixin({
   getAccessorBool(access, member) {
     const { byteSize } = member;
     const bitSize = byteSize * 8;
@@ -1718,7 +1703,7 @@ mixin({
 
 // handle bools in packed structs
 
-mixin({
+var bool1Unaligned = mixin({
   getAccessorBool1Unaligned(access, member) {
     const { bitOffset } = member;
     const bitPos = bitOffset & 0x07;
@@ -1740,7 +1725,7 @@ mixin({
 
 // handles f128
 
-mixin({
+var float128 = mixin({
   getAccessorFloat128(access, member) {
     const { byteSize } = member;
     const buf = new DataView(new ArrayBuffer(8));
@@ -1768,7 +1753,8 @@ mixin({
         const exp = (n & 0x7fff_0000_0000_0000_0000_0000_0000_0000n) >> 112n;
         const frac = n & 0x0000_ffff_ffff_ffff_ffff_ffff_ffff_ffffn;
         if (exp === 0n) {
-          return (sign) ? -0 : 0;
+          const value = (frac) ? Number.MIN_VALUE : 0;
+          return (sign) ? -value : value;
         } else if (exp === 0x7fffn) {
           if (!frac) {
             return (sign) ? -Infinity : Infinity;
@@ -1778,7 +1764,8 @@ mixin({
         }
         const exp64 = exp - 16383n + 1023n;
         if (exp64 >= 2047n) {
-          return (sign) ? -Infinity : Infinity;
+          const value = Infinity;
+          return (sign) ? -value : value;
         }
         const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 60n) + BigInt((frac & (2n**60n - 1n)) >= 2n**59n);
         buf.setBigUint64(0, n64, littleEndian);
@@ -1807,7 +1794,7 @@ mixin({
 
 // handles f16
 
-mixin({
+var float16 = mixin({
   getAccessorFloat16(access, member) {
     const buf = new DataView(new ArrayBuffer(4));
     const set = DataView.prototype.setUint16;
@@ -1857,7 +1844,7 @@ mixin({
 
 // handles f80
 
-mixin({
+var float80 = mixin({
   getAccessorFloat80(access, member) {
     const { byteSize } = member;
     const buf = new DataView(new ArrayBuffer(8));
@@ -1882,7 +1869,8 @@ mixin({
         const exp = (n & 0x7fff_0000_0000_0000_0000n) >> 64n;
         const frac = n & 0x0000_7fff_ffff_ffff_ffffn;
         if (exp === 0n) {
-          return (sign) ? -0 : 0;
+          const value = (frac) ? Number.MIN_VALUE : 0;
+          return (sign) ? -value : value;
         } else if (exp === 0x7fffn) {
           if (!frac) {
             return (sign) ? -Infinity : Infinity;
@@ -1892,7 +1880,8 @@ mixin({
         }
         const exp64 = exp - 16383n + 1023n;
         if (exp64 >= 2047n) {
-          return (sign) ? -Infinity : Infinity;
+          const value = Infinity;
+          return (sign) ? -value : value;
         }
         const n64 = (sign << 63n) | (exp64 << 52n) | (frac >> 11n) + BigInt((frac & (2n**11n - 1n)) >= 2n**10n);
         buf.setBigUint64(0, n64, littleEndian);
@@ -1923,7 +1912,7 @@ mixin({
 // handle ints 7-bit or smaller in packed structs that are stored in a single byte
 // other unaligned ints are handled by the mixin "unaligned"
 
-mixin({
+var intUnaligned = mixin({
   getAccessorIntUnaligned(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
@@ -1951,7 +1940,7 @@ mixin({
 
 // handle non-standard ints 32-bit or smaller
 
-mixin({
+var int$1 = mixin({
   getAccessorInt(access, member) {
     const { bitSize, byteSize } = member;
     if (byteSize) {
@@ -1973,7 +1962,7 @@ mixin({
   }
 });
 
-mixin({
+var jumboInt = mixin({
   getAccessorJumboInt(access, member) {
     const { bitSize } = member;
     const f = this.getJumboAccessor(access, bitSize);
@@ -1993,7 +1982,7 @@ mixin({
   },
 });
 
-mixin({
+var jumboUint = mixin({
   getAccessorJumboUint(access, member) {
     const { bitSize } = member;
     const f = this.getJumboAccessor(access, bitSize);
@@ -2012,7 +2001,7 @@ mixin({
   },
 });
 
-mixin({
+var jumbo = mixin({
   getJumboAccessor(access, bitSize) {
     const wordCount = (bitSize + 63) >> 6;
     if (access === 'get') {
@@ -2042,7 +2031,6 @@ mixin({
             n >>= 64n;
           }
         } else {
-          n <<= BigInt(wordCount * 64 - bitSize);
           for (let i = 0, j = offset + (wordCount - 1) * 8; i < wordCount; i++, j -= 8) {
             const w = n & mask;
             this.setBigUint64(j, w, littleEndian);
@@ -2057,7 +2045,7 @@ mixin({
 // handle uints 7-bit or smaller in packed structs that are stored in a single byte
 // other unaligned ints are handled by the mixin "unaligned"
 
-mixin({
+var uintUnaligned = mixin({
   getAccessorUintUnaligned(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
@@ -2083,7 +2071,7 @@ mixin({
 
 // handle non-standard uints 32-bit or smaller
 
-mixin({
+var uint$1 = mixin({
   getAccessorUint(access, member) {
     const { bitSize, byteSize } = member;
     if (byteSize) {
@@ -2107,7 +2095,7 @@ mixin({
 // handle unaligned ints and floats by copying the bits into a
 // temporary buffer, aligning them
 
-mixin({
+var unaligned = mixin({
   getAccessorUnaligned(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
@@ -2211,7 +2199,7 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
   }
 }
 
-mixin({
+var baseline = mixin({
   littleEndian: true,
   variables: [],
 
@@ -2226,9 +2214,9 @@ mixin({
       released: () => this.released,
       connect: (console) => this.consoleObject = console,
       multithread: (enable) => this.setMultithread?.(enable),
-      sizeOf: (T) => check(T[SIZE]),
-      alignOf: (T) => check(T[ALIGN]),
-      typeOf: (T) => structureNames[check(T[TYPE])]?.toLowerCase(),
+      sizeOf: (T) => check(T?.[SIZE]),
+      alignOf: (T) => check(T?.[ALIGN]),
+      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
     };
   },
   recreateStructures(structures, options) {
@@ -2249,9 +2237,7 @@ mixin({
           const dv = this.obtainView(array.buffer, offset, length);
           const { reloc, const: isConst } = placeholder;
           const constructor = structure?.constructor;
-          const object = placeholder.actual = (constructor)
-          ? constructor.call(ENVIRONMENT, dv)
-          : { [MEMORY]: dv };
+          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);
           }
@@ -2301,7 +2287,7 @@ mixin({
   },
 });
 
-mixin({
+var callMarshalingInbound = mixin({
   jsFunctionMap: null,
   jsFunctionIdMap: null,
   jsFunctionNextId: 1,
@@ -2731,7 +2717,7 @@ class NotUndefined extends TypeError {
 
 class NotOnByteBoundary extends TypeError {
   constructor(member) {
-    const { name, structure: { name: { struct }} } = member;
+    const { name, structure: { name: struct } } = member;
     super(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
   }
 }
@@ -2859,7 +2845,7 @@ function formatList(list, conj = 'or') {
   }
 }
 
-mixin({
+var callMarshalingOutbound = mixin({
   context: undefined,
   contextStack: [],
 
@@ -2895,8 +2881,8 @@ mixin({
   },
   ...({
     imports: {
-      runThunk: { argType: 'iii', returnType: 'v' },
-      runVariadicThunk: { argType: 'iiiii', returnType: 'v' },
+      runThunk: { argType: 'iii', returnType: 'b' },
+      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
 
     invokeThunk(thunkAddress, fnAddress, args) {
@@ -2953,7 +2939,7 @@ class CallContext {
   call = 0;
 }
 
-mixin({
+var dataCopying = mixin({
   defineCopier(size, multiple) {
     const copy = getCopyFunction(size, multiple);
     return {
@@ -3154,12 +3140,13 @@ function reset32(dest, offset) {
   dest.setInt32(offset + 28, 0, true);
 }
 
-mixin({
+var intConversion = mixin({
   addIntConversion(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor.call(this, access, member);
+      const { flags, bitSize } = member;
       if (access === 'set') {
-        return (member.bitSize > 32)
+        return (bitSize > 32)
         ? function(offset, value, littleEndian) {
             accessor.call(this, offset, BigInt(value), littleEndian);
           }
@@ -3171,9 +3158,12 @@ mixin({
           accessor.call(this, offset, number, littleEndian);
         };
       } else {
-        if (member.flags & MemberFlag.IsSize) {
+        if ((flags & MemberFlag.IsSize) && bitSize > 32) {
+          const max = BigInt(Number.MAX_SAFE_INTEGER);
+          const min = BigInt(Number.MIN_SAFE_INTEGER);
           return function(offset, littleEndian) {
-            return Number(accessor.call(this, offset, littleEndian));
+            const bigint = accessor.call(this, offset, littleEndian);
+            return (min <= bigint && bigint <= max) ? Number(bigint) : bigint;
           };
         }
       }
@@ -3182,7 +3172,7 @@ mixin({
   },
 });
 
-mixin({
+var memoryMapping = mixin({
   emptyBuffer: new ArrayBuffer(0),
 
   getShadowAddress(target, cluster) {
@@ -3496,9 +3486,7 @@ const MemoryType = {
   Scratch: 1,
 };
 
-mixin({
-  exports: {},
-  imports: {},
+var moduleLoading = mixin({
   released: false,
   abandoned: false,
 
@@ -3522,9 +3510,14 @@ mixin({
     }
   },
   ...({
+    imports: {
+      getModuleAttributes: { argType: '', returnType: 'i' },
+    },
+    exports: {},
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
+    hasCodeSource: false,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -3633,7 +3626,7 @@ mixin({
         this.importFunctions(exports);
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
-        this.runtimeSafety = this.isRuntimeSafetyActive();
+        // this.runtimeSafety = ;
       })();
     },
     trackInstance(instance) {
@@ -3644,11 +3637,11 @@ mixin({
   } )
 });
 
-mixin({
+var objectLinkage = mixin({
   linkVariables(writeBack) {
     {
       // linkage occurs when WASM compilation is complete and functions have been imported
-      if (this.initPromise) {
+      if (!this.memory) {
         this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
         return;
       }
@@ -3725,9 +3718,14 @@ mixin({
       return reloc;
     },
   } ),
+  ...({
+    useObjectLinkage() {
+      // empty function used for mixin tracking
+    },
+  } ),
 });
 
-mixin({
+var pointerSynchronization = mixin({
   updatePointerAddresses(args) {
     // first, collect all the pointers
     const pointerMap = new Map();
@@ -3852,7 +3850,7 @@ mixin({
   },
 });
 
-mixin({
+var runtimeSafety = mixin({
   addRuntimeCheck(getAccessor) {
     return function (access, member) {
       const accessor = getAccessor.call(this, access, member);
@@ -3868,11 +3866,6 @@ mixin({
       return accessor;
     };
   },
-  ...({
-    imports: {
-      isRuntimeSafetyActive: { argType: '', returnType: 'b' },
-    },
-  } ),
 });
 
 function getIntRange(member) {
@@ -3891,7 +3884,7 @@ function getIntRange(member) {
   }
 }
 
-mixin({
+var streamRedirection = mixin({
   consoleObject: null,
   consolePending: [],
   consoleTimeout: 0,
@@ -3944,7 +3937,7 @@ mixin({
   } ),
 });
 
-mixin({
+var structureAcquisition = mixin({
   comptime: false,
   slots: {},
   structures: [],
@@ -4098,6 +4091,9 @@ mixin({
     const ArgStruct = this.defineFactoryArgStruct();
     const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
     this.comptime = true;
+    if (!this.mixinUsage) {
+      this.mixinUsage = new Map();
+    }
     this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
   },
@@ -4157,7 +4153,7 @@ mixin({
   useStructures() {
     const module = this.getRootModule();
     // add fixed memory object to list so they can be unlinked
-    const objects = findAllObjects(this.structures, SLOTS);
+    const objects = findObjects(this.structures, SLOTS);
     for (const object of objects) {
       if (object[MEMORY]?.[FIXED]) {
         this.variables.push({ object });
@@ -4216,7 +4212,7 @@ function isElectron() {
       && !!process.versions?.electron;
 }
 
-mixin({
+var viewManagement = mixin({
   viewMap: new Map(),
 
   extractView(structure, arg, onError = throwError) {
@@ -4384,7 +4380,7 @@ function throwError(structure) {
 
 [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : /* c8 ignore next */ 8;
 
-mixin({
+var wasiSupport = mixin({
   ...({
     customWASI: null,
 
@@ -4479,7 +4475,10 @@ mixin({
   } ),
 });
 
-mixin({
+var writeProtection = mixin({
+});
+
+var all$1 = mixin({
   defineMember(member, applyTransform = true) {
     if (!member) {
       return {};
@@ -4522,19 +4521,19 @@ function bindSlot(slot, { get, set }) {
   }
 }
 
-mixin({
+var bool = mixin({
   defineMemberBool(member) {
     return this.defineMemberUsing(member, this.getAccessor);
   },
 });
 
-mixin({
+var float = mixin({
   defineMemberFloat(member) {
     return this.defineMemberUsing(member, this.getAccessor);
   },
 });
 
-mixin({
+var int = mixin({
   defineMemberInt(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
@@ -4545,7 +4544,7 @@ mixin({
   },
 });
 
-mixin({
+var literal = mixin({
   defineMemberLiteral(member) {
     const { slot } = member;
     return bindSlot(slot, { get: getLiteral });
@@ -4557,7 +4556,7 @@ function getLiteral(slot) {
   return object.string;
 }
 
-mixin({
+var _null = mixin({
   defineMemberNull(member) {
     return {
       get: function() {
@@ -4567,7 +4566,7 @@ mixin({
   },
 });
 
-mixin({
+var object = mixin({
   defineMemberObject(member) {
     return bindSlot(member.slot, {
       get: (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
@@ -4591,7 +4590,7 @@ function setValue(slot, value) {
   object.$ = value;
 }
 
-mixin({
+var pointerInArray = mixin({
   defineVisitorArray(structure) {
     const value = function visitPointers(cb, options = {}) {
       const {
@@ -4620,7 +4619,7 @@ mixin({
   },
 });
 
-mixin({
+var pointerInStruct = mixin({
   defineVisitorStruct(structure, visitorOptions = {}) {
     const {
       isChildActive = always,
@@ -4665,7 +4664,7 @@ mixin({
   }
 });
 
-mixin({
+var primitive$1 = mixin({
   ...({
     defineMemberUsing(member, getAccessor) {
       const { littleEndian } = this;
@@ -4729,7 +4728,7 @@ mixin({
   } ),
 });
 
-mixin({
+var sentinel = mixin({
   defineSentinel(structure) {
     const {
       byteSize,
@@ -4803,7 +4802,7 @@ mixin({
   } ),
 });
 
-mixin({
+var specialMethods = mixin({
   defineSpecialMethods() {
     return {
       toJSON: defineValue(convertToJSON),
@@ -4891,7 +4890,7 @@ function normalizeObject(object, forJSON) {
   return process(object);
 }
 
-mixin({
+var specialProps = mixin({
   defineSpecialProperties(structure) {
     const descriptors = {};
     const thisEnv = this;
@@ -4985,7 +4984,7 @@ function markAsSpecial({ get, set }) {
   return { get, set };
 }
 
-mixin({
+var type = mixin({
   defineMemberType(member, env) {
     const { slot } = member;
     return bindSlot(slot, { get: getType });
@@ -4998,7 +4997,7 @@ function getType(slot) {
   return structure?.constructor;
 }
 
-mixin({
+var uint = mixin({
   defineMemberUint(member) {
     let getAccessor = this.getAccessor;
     if (this.runtimeSafety) {
@@ -5009,7 +5008,7 @@ mixin({
   },
 });
 
-mixin({
+var _undefined = mixin({
   defineMemberUndefined(member) {
     return {
       get: function() {
@@ -5019,7 +5018,7 @@ mixin({
   },
 });
 
-mixin({
+var unsupported = mixin({
   defineMemberUnsupported(member) {
     const throwUnsupported = function() {
       throw new Unsupported();
@@ -5028,7 +5027,7 @@ mixin({
   },
 });
 
-mixin({
+var _void = mixin({
   defineMemberVoid(member, env) {
     const { bitOffset } = member;
     return {
@@ -5233,7 +5232,7 @@ function getErrorHandler(options) {
   : (cb) => cb();
 }
 
-mixin({
+var all = mixin({
   defineStructure(structure) {
     const {
       type,
@@ -5528,7 +5527,7 @@ mixin({
   } ),
 });
 
-mixin({
+var argStruct = mixin({
   defineArgStruct(structure, descriptors) {
     const {
       flags,
@@ -5589,7 +5588,7 @@ mixin({
   },
 });
 
-mixin({
+var arrayLike = mixin({
   defineFinalizerArray({ get, set }) {
     return {
       value() {
@@ -5677,7 +5676,7 @@ const proxyHandlers$1 = {
   },
 };
 
-mixin({
+var array = mixin({
   defineArray(structure, descriptors) {
     const {
       length,
@@ -5735,7 +5734,7 @@ mixin({
   },
 });
 
-mixin({
+var _enum = mixin({
   defineEnum(structure, descriptors) {
     const {
       instance: {
@@ -5866,7 +5865,7 @@ mixin({
   },
 });
 
-mixin({
+var errorSet = mixin({
   currentGlobalSet: undefined,
   currentErrorClass: undefined,
 
@@ -5966,6 +5965,8 @@ mixin({
           return constructor[Number(arg)];
         } else if (isErrorJSON(arg)) {
           return constructor[`Error: ${arg.error}`];
+        } else if (arg instanceof Error) {
+          return undefined;
         } else {
           return false;
         }
@@ -5980,6 +5981,7 @@ mixin({
     }
     const findError = function(value) {
       const { constructor } = structure;
+      debugger;
       const item = constructor(value);
       if (!item) {
         if (value instanceof Error) {
@@ -6003,7 +6005,7 @@ mixin({
         },
       set: (set.length === 1)
       ? function setError(value) {
-          const item = findError(value);
+        const item = findError(value);
           value = Number(item);
           set.call(this, value);
         }
@@ -6041,7 +6043,7 @@ class ZigErrorBase extends Error {
   }
 }
 
-mixin({
+var errorUnion = mixin({
   defineErrorUnion(structure, descriptors) {
     const {
       instance: { members },
@@ -6118,12 +6120,13 @@ mixin({
   },
 });
 
-mixin({
+var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
       static: { template: jsThunkConstructor },
     } = structure;
+    console.log('defineFunction');
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
@@ -6172,14 +6175,14 @@ mixin({
       return self;
     };
     // make function type a superclass of Function
-    descriptors.constructor = defineValue(Object.create(Function.prototype));
+    Object.setPrototypeOf(constructor.prototype, Function.prototype);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     return constructor;
   },
 });
 
-mixin({
+var opaque = mixin({
   defineOpaque(structure, descriptors) {
     const {
       flags,
@@ -6202,7 +6205,7 @@ mixin({
   },
 });
 
-mixin({
+var optional = mixin({
   defineOptional(structure, descriptors) {
     const {
       instance: { members },
@@ -6263,7 +6266,7 @@ mixin({
   },
 });
 
-mixin({
+var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
       name,
@@ -6489,7 +6492,7 @@ mixin({
           // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
           if (TYPED_ARRAY in Target) {
             const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+            if (tag === 'ArrayBuffer' || /* c8 ignore next */ tag === 'SharedArrayBuffer') {
               warnImplicitArrayCreation(targetStructure, arg);
             }
           }
@@ -6742,7 +6745,7 @@ function isCompatibleBuffer(arg, constructor) {
   return false;
 }
 
-mixin({
+var primitive = mixin({
   definePrimitive(structure, descriptors) {
     const {
       instance: { members: [ member ] },
@@ -6778,7 +6781,7 @@ mixin({
   },
 });
 
-mixin({
+var slice = mixin({
   defineSlice(structure, descriptors) {
     const {
       align,
@@ -6917,7 +6920,7 @@ function adjustIndex(index, len) {
   return index;
 }
 
-mixin({
+var structLike = mixin({
   defineVivificatorStruct(structure) {
     const { instance: { members } } = structure;
     const objectMembers = {};
@@ -6947,7 +6950,7 @@ mixin({
   },
 });
 
-mixin({
+var struct = mixin({
   defineStruct(structure, descriptors) {
     const {
       instance: { members },
@@ -6987,7 +6990,7 @@ mixin({
       }
       props.push(name);
     }
-    descriptors.$ = { get() { return this }, set: initializer };
+    descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = (flags & StructureFlag.IsTuple) && {
       value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
@@ -7022,7 +7025,7 @@ mixin({
   }
 });
 
-mixin({
+var union = mixin({
   defineUnion(structure, descriptors) {
     const {
       flags,
@@ -7175,7 +7178,7 @@ mixin({
   }
 });
 
-mixin({
+var variadicStruct = mixin({
   defineVariadicStruct(structure, descriptors) {
     const {
       byteSize,
@@ -7313,7 +7316,7 @@ mixin({
   },
 });
 
-mixin({
+var vector = mixin({
   defineVector(structure, descriptors) {
     const {
       length,
@@ -7363,6 +7366,79 @@ mixin({
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
   },
+});
+
+// generated by rollup.config.js
+
+var mixins = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  AccessorAll: all$2,
+  AccessorBigInt: bigInt,
+  AccessorBigUint: bigUint,
+  AccessorBool: bool$1,
+  AccessorBool1Unaligned: bool1Unaligned,
+  AccessorFloat128: float128,
+  AccessorFloat16: float16,
+  AccessorFloat80: float80,
+  AccessorInt: int$1,
+  AccessorIntUnaligned: intUnaligned,
+  AccessorJumbo: jumbo,
+  AccessorJumboInt: jumboInt,
+  AccessorJumboUint: jumboUint,
+  AccessorUint: uint$1,
+  AccessorUintUnaligned: uintUnaligned,
+  AccessorUnaligned: unaligned,
+  FeatureBaseline: baseline,
+  FeatureCallMarshalingInbound: callMarshalingInbound,
+  FeatureCallMarshalingOutbound: callMarshalingOutbound,
+  FeatureDataCopying: dataCopying,
+  FeatureIntConversion: intConversion,
+  FeatureMemoryMapping: memoryMapping,
+  FeatureModuleLoading: moduleLoading,
+  FeatureObjectLinkage: objectLinkage,
+  FeaturePointerSynchronization: pointerSynchronization,
+  FeatureRuntimeSafety: runtimeSafety,
+  FeatureStreamRedirection: streamRedirection,
+  FeatureStructureAcquisition: structureAcquisition,
+  FeatureViewManagement: viewManagement,
+  FeatureWasiSupport: wasiSupport,
+  FeatureWriteProtection: writeProtection,
+  MemberAll: all$1,
+  MemberBool: bool,
+  MemberFloat: float,
+  MemberInt: int,
+  MemberLiteral: literal,
+  MemberNull: _null,
+  MemberObject: object,
+  MemberPointerInArray: pointerInArray,
+  MemberPointerInStruct: pointerInStruct,
+  MemberPrimitive: primitive$1,
+  MemberSentinel: sentinel,
+  MemberSpecialMethods: specialMethods,
+  MemberSpecialProps: specialProps,
+  MemberType: type,
+  MemberUint: uint,
+  MemberUndefined: _undefined,
+  MemberUnsupported: unsupported,
+  MemberVoid: _void,
+  StructureAll: all,
+  StructureArgStruct: argStruct,
+  StructureArray: array,
+  StructureArrayLike: arrayLike,
+  StructureEnum: _enum,
+  StructureErrorSet: errorSet,
+  StructureErrorUnion: errorUnion,
+  StructureFunction: _function,
+  StructureOpaque: opaque,
+  StructureOptional: optional,
+  StructurePointer: pointer,
+  StructurePrimitive: primitive,
+  StructureSlice: slice,
+  StructureStruct: struct,
+  StructureStructLike: structLike,
+  StructureUnion: union,
+  StructureVariadicStruct: variadicStruct,
+  StructureVector: vector
 });
 
 const MagicNumber = 0x6d736100;
@@ -8728,7 +8804,7 @@ async function transpile(path, options) {
     sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
   });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
-  const content = await promises.readFile(outputPath);
+  const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
   const moduleOptions = {
     memoryMax,
@@ -8742,6 +8818,20 @@ async function transpile(path, options) {
   await env.initPromise;
   env.acquireStructures(compileOptions);
   const definition = env.exportStructures();
+  const usage = {};
+  for (const [ name, mixin ] of Object.entries(mixins)) {
+    if (env.mixinUsage.get(mixin)) {
+      usage[name] = true;
+    }
+  }
+  const mixinPaths = [];
+  for (const name of Object.keys(usage)) {
+    const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
+    const dir = parts.shift() + 's';
+    const filename = parts.join('-') + '.js';
+    mixinPaths.push(`${dir}/${filename}`);
+  }
+  console.log(mixinPaths);
   const runtimeURL = moduleResolver('zigar-runtime');
   let binarySource;
   if (env.hasMethods()) {
@@ -8762,14 +8852,16 @@ async function transpile(path, options) {
     topLevelAwait,
     omitExports,
     moduleOptions,
+    mixinPaths,
   });
+  console.log(code);
   return { code, exports, structures, sourcePaths };
 }
 
-function embed(path$1, dv) {
+function embed(path, dv) {
   const base64 = Buffer.from(dv.buffer, dv.byteOffset, dv.byteLength).toString('base64');
   return `(async () => {
-  // ${path.basename(path$1)}
+  // ${basename(path)}
   const binaryString = atob(${JSON.stringify(base64)});
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
@@ -8780,17 +8872,4 @@ function embed(path$1, dv) {
 })()`;
 }
 
-exports.compile = compile;
-exports.extractOptions = extractOptions;
-exports.findConfigFile = findConfigFile;
-exports.findSourceFile = findSourceFile;
-exports.generateCode = generateCode;
-exports.getArch = getArch;
-exports.getCachePath = getCachePath;
-exports.getModuleCachePath = getModuleCachePath;
-exports.getPlatform = getPlatform;
-exports.loadConfigFile = loadConfigFile;
-exports.normalizePath = normalizePath;
-exports.optionsForCompile = optionsForCompile;
-exports.optionsForTranspile = optionsForTranspile;
-exports.transpile = transpile;
+export { compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile, optionsForTranspile, transpile };
