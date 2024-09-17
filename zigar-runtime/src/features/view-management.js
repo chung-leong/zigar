@@ -166,6 +166,7 @@ export default mixin({
       }
       return this.obtainView(buffer, Number(offset), len);
     },
+    /* c8 ignore next */
   } : undefined),
 });
 

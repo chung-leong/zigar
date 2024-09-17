@@ -29,6 +29,7 @@ export default mixin({
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
+    hasCodeSource: false,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);

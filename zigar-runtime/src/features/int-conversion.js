@@ -27,8 +27,6 @@ export default mixin({
             const bigint = accessor.call(this, offset, littleEndian);
             return (min <= bigint && bigint <= max) ? Number(bigint) : bigint;
           };
-        } else {
-          return accessor;
         }
       }
       return accessor;

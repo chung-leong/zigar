@@ -1,12 +1,11 @@
 import { expect } from 'chai';
-import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import {
   ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
 } from '../../src/symbols.js';
 import { adjustAddress, defineProperties, ObjectCache } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -85,11 +84,9 @@ describe('Feature: object-linkage', function() {
       expect(object[LAST_LENGTH]).to.equal(4);
     });
     if (process.env.TARGET === 'wasm') {
-      skip.
       it('should link variables after initialization promise is fulfilled', async function() {
         const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        env.initPromise = Promise.resolve();
+        env.initPromise = delay(25);
         const cache = new ObjectCache();
         const Type = function() {};
         defineProperties(Type.prototype, {
@@ -100,8 +97,8 @@ describe('Feature: object-linkage', function() {
         const dv = object[MEMORY] = new DataView(new ArrayBuffer(4));
         dv.setUint32(0, 1234, true);
         env.variables.push({ object, reloc: 128 });
-        throw new Error('FIXME');
         env.linkVariables(true);
+        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
         await env.initPromise;
         expect(object[MEMORY]).to.not.equal(dv);
         expect(object[MEMORY].buffer).to.equal(memory.buffer);

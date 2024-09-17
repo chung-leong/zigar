@@ -252,6 +252,28 @@ describe('Feature: view-management', function() {
       expect(dv4).to.equal(dv1);
     })
   })
+  describe('registerView', function() {
+    it('should register views with their underlying buffer', function() {
+      const env = new Env();
+      const buffer = new ArrayBuffer(48);
+      const dv1 = new DataView(buffer, 4, 8);
+      env.registerView(dv1);
+      expect(env.obtainView(buffer, 4, 8)).to.equal(dv1);
+      const dv2 = new DataView(buffer, 8, 16);
+      env.registerView(dv2);
+      expect(env.obtainView(buffer, 4, 8)).to.equal(dv1);
+      expect(env.obtainView(buffer, 8, 16)).to.equal(dv2);
+      const dv3 = new DataView(buffer, 8, 32);
+      env.registerView(dv3);
+      expect(env.obtainView(buffer, 8, 32)).to.equal(dv3);
+      const dv4 = new DataView(buffer);
+      env.registerView(dv4);
+      expect(env.obtainView(buffer, 0, 48)).to.equal(dv4);
+      expect(env.obtainView(buffer, 4, 8)).to.equal(dv1);
+      expect(env.obtainView(buffer, 8, 16)).to.equal(dv2);
+      expect(env.obtainView(buffer, 8, 32)).to.equal(dv3);
+    })
+  })
   describe('assignView', function() {
     it('should assume element size of one when structure has no shape', function() {
       const env = new Env();

@@ -17,9 +17,9 @@ export default mixin({
       released: () => this.released,
       connect: (console) => this.consoleObject = console,
       multithread: (enable) => this.setMultithread?.(enable),
-      sizeOf: (T) => check(T[SIZE]),
-      alignOf: (T) => check(T[ALIGN]),
-      typeOf: (T) => structureNames[check(T[TYPE])]?.toLowerCase(),
+      sizeOf: (T) => check(T?.[SIZE]),
+      alignOf: (T) => check(T?.[ALIGN]),
+      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
     };
   },
   recreateStructures(structures, options) {
@@ -40,9 +40,7 @@ export default mixin({
           const dv = this.obtainView(array.buffer, offset, length);
           const { reloc, const: isConst } = placeholder;
           const constructor = structure?.constructor;
-          const object = placeholder.actual = (constructor)
-          ? constructor.call(ENVIRONMENT, dv)
-          : { [MEMORY]: dv };
+          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
           if (isConst) {
             // FIXME
             // object[PROTECTOR]?.();

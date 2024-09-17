@@ -37,8 +37,9 @@ describe('Feature: int-conversion', function() {
     })
     it('should put wrapper around setter', function() {
       const env = new Env();
+      let returnBig = false;
       const getAccessor = env.addIntConversion(function(access, member) {
-        return () => 1234n;
+        return () => (returnBig) ? BigInt(Number.MAX_SAFE_INTEGER) + 1n : 1234n;
       });
       const member = {
         type: MemberType.Uint,
@@ -49,8 +50,9 @@ describe('Feature: int-conversion', function() {
       };
       const get = getAccessor('get', member);
       expect(get.call(null, 1, true)).to.equal(1234);
+      returnBig = true;
+      expect(get.call(null, 1, true)).to.equal(BigInt(Number.MAX_SAFE_INTEGER) + 1n);
     })
-
   })
 })
 

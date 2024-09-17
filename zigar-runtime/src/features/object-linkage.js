@@ -7,7 +7,7 @@ export default mixin({
   linkVariables(writeBack) {
     if (process.env.TARGET === 'wasm') {
       // linkage occurs when WASM compilation is complete and functions have been imported
-      if (this.initPromise) {
+      if (!this.memory) {
         this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
         return;
       }
@@ -87,5 +87,6 @@ export default mixin({
     imports: {
       recreateAddress: null,
     },
+    /* c8 ignore next */
   } : undefined),
 });

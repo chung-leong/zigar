@@ -3,13 +3,12 @@ import 'mocha-skip-if';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { capture } from '../test-utils.js';
+import { capture, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 describe('Feature: baseline', function() {
   describe('recreateStructures', function() {
-    skip.
     it('should recreate structures based on input definition', function() {
       const env = new Env();
       const s1 = {
@@ -18,11 +17,11 @@ describe('Feature: baseline', function() {
         name: 'i32',
         byteSize: 4,
         align: 4,
-        hasPointer: false,
         instance: {
           members: [
             {
               type: MemberType.Int,
+              flags: 0,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -46,6 +45,7 @@ describe('Feature: baseline', function() {
             {
               name: 'retval',
               type: MemberType.Void,
+              flags: 0,
               bitOffset: 0,
               bitSize: 0,
               byteSize: 0,
@@ -68,6 +68,7 @@ describe('Feature: baseline', function() {
           members: [
             {
               type: MemberType.Object,
+              flags: 0,
               bitOffset: 0,
               bitSize: 64,
               byteSize: 8,
@@ -83,6 +84,32 @@ describe('Feature: baseline', function() {
         },
       };
       const s4 = {
+        type: StructureType.Function,
+        flags: 0,
+        name: 'fn () void',
+        byteSize: 0,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              flags: 0,
+              slot: 0,
+              structure: s2,
+            }
+          ],
+          template: {
+            memory: (() => {
+              const array = new Uint8Array(1);
+              return { array };
+            })(),
+            reloc: usize(0x8888),
+          },
+        },
+        static: {
+          members: []
+        },
+      };
+      const s5 = {
         type: StructureType.Struct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
@@ -93,6 +120,7 @@ describe('Feature: baseline', function() {
             {
               name: 'dog',
               type: MemberType.Int,
+              flags: 0,
               bitOffset: 0,
               bitSize: 32,
               byteSize: 4,
@@ -101,6 +129,7 @@ describe('Feature: baseline', function() {
             {
               name: 'cat',
               type: MemberType.Int,
+              flags: 0,
               bitOffset: 32,
               bitSize: 32,
               byteSize: 4,
@@ -115,6 +144,7 @@ describe('Feature: baseline', function() {
             },
             {
               name: 'type',
+              flags: 0,
               type: MemberType.Type,
               slot: 3,
               structure: {},
@@ -136,7 +166,7 @@ describe('Feature: baseline', function() {
                 2: {
                   memory: { array },
                   structure: s1,
-                  reloc: 0x1000n,
+                  reloc: usize(0x1000),
                 },
                 3: {
                   structure: s1,
@@ -149,16 +179,32 @@ describe('Feature: baseline', function() {
           members: [
             {
               type: MemberType.Object,
+              flags: 0,
               name: 'pointer',
               slot: 0,
               structure: s3,
             },
             {
               type: MemberType.Object,
+              flags: 0,
               name: 'unsupported',
               slot: 1,
               structure: {},
             },
+            {
+              type: MemberType.Object,
+              flags: MemberFlag.IsReadOnly,
+              name: 'hello',
+              slot: 2,
+              structure: s4,
+            },
+            {
+              type: MemberType.Object,
+              flags: MemberFlag.IsReadOnly,
+              name: 'world',
+              slot: 3,
+              structure: s4,
+            }
           ],
           template: {
             slots: {
@@ -176,33 +222,64 @@ describe('Feature: baseline', function() {
                       return { array };
                     })(),
                     structure: s1,
-                    reloc: 0x2000n,
+                    reloc: usize(0x2000),
                     const: true,
                   },
                 },
                 structure: s3,
-              }
-            }
+              },
+              2: {
+                memory: (() => {
+                  const array = new Uint8Array(0);
+                  return { array };
+                })(),
+                reloc: usize(0x2_8888),
+                structure: s4,
+              },
+              3: undefined,
+            },
           },
         },
       };
-      env.recreateStructures([ s1, s2, s3, s4 ]);
-      const { constructor } = s4;
+      //
+      s5.static.template.slots[3] = s5.static.template.slots[2];
+      env.recreateStructures([ s1, s2, s3, s4, s5 ]);
+      const { constructor } = s5;
       expect(constructor).to.be.a('function');
       const object = new constructor({});
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(5678);
       expect(object.ghost).to.equal(-8888);
-      let thunkId, argStruct;
-      env.invokeThunk = function(...args) {
-        thunkId = args[0];
-        argStruct = args[1];
-      };
-      throw new Error('FIXME');
+      let thunkAddress, fnAddress, argDV;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+        env.runThunk = function(...args) {
+          thunkAddress = args[0];
+          fnAddress = args[1]
+          argDV = new DataView(env.memory.buffer, args[2], s2.byteSize);
+          return true;
+        };
+      } else {
+        env.runThunk = function(...args) {
+          thunkAddress = args[0];
+          fnAddress = args[1]
+          argDV = args[2];
+          return true;
+        };
+        env.recreateAddress = function(address) {
+          return 0n + address;
+        };
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
+      env.linkVariables(false);
       expect(() => constructor.hello()).to.not.throw();
-      expect(thunkId).to.equal(34);
-      expect(argStruct[MEMORY].byteLength).to.equal(0);
-      expect(env.variables).to.have.lengthOf(2);
+      expect(() => constructor.world()).to.not.throw();
+      expect(thunkAddress).to.equal(usize(0x8888));
+      expect(fnAddress).to.equal(usize(0x2_8888));
+      expect(argDV.byteLength).to.equal(0);
+      expect(env.variables).to.have.lengthOf(4);
     })
   })
   describe('getSpecialExports', function() {
@@ -290,6 +367,7 @@ describe('Feature: baseline', function() {
       expect(sizeOf(Packed)).to.equal(4);
       expect(alignOf(Packed)).to.equal(2);
       expect(typeOf(Packed)).to.equal('struct');
+      expect(() => typeOf(undefined)).to.throw(Error);
     })
   })
 })

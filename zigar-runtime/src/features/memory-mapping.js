@@ -383,6 +383,7 @@ export default mixin({
       }
       // need shadowing
     },
+    /* c8 ignore next */
   } : undefined),
 });
 

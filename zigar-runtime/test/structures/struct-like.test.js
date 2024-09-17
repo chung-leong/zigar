@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import 'mocha-skip-if';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
