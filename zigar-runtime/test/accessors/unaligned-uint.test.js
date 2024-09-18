@@ -5,8 +5,8 @@ import '../../src/mixins.js';
 
 const Env = defineEnvironment();
 
-describe('Accessor: uint-unaligned', function() {
-  describe('getAccessorUintUnaligned', function() {
+describe('Accessor: unaligned-uint', function() {
+  describe('getAccessorUnalignedUint', function() {
     it('should return methods for accessing small misaligned uints', function() {
       const members = [
         { type: MemberType.Uint, bitSize: 2, bitOffset: 0 },
@@ -15,16 +15,16 @@ describe('Accessor: uint-unaligned', function() {
       ];
       const env = new Env();
       const dv = new DataView(new ArrayBuffer(1 + 1))
-      const get1 = env.getAccessorUintUnaligned('get', members[0]);
-      const get2 = env.getAccessorUintUnaligned('get', members[1]);
-      const get3 = env.getAccessorUintUnaligned('get', members[2]);
+      const get1 = env.getAccessorUnalignedUint('get', members[0]);
+      const get2 = env.getAccessorUnalignedUint('get', members[1]);
+      const get3 = env.getAccessorUnalignedUint('get', members[2]);
       dv.setUint8(1, 0xff);
       expect(get1.call(dv, 1)).to.equal(2 ** 2 - 1);
       expect(get2.call(dv, 1)).to.equal(2 ** 3 - 1);
       expect(get3.call(dv, 1)).to.equal(2 ** 3 - 1);
-      const set1 = env.getAccessorUintUnaligned('set', members[0]);
-      const set2 = env.getAccessorUintUnaligned('set', members[1]);
-      const set3 = env.getAccessorUintUnaligned('set', members[2]);
+      const set1 = env.getAccessorUnalignedUint('set', members[0]);
+      const set2 = env.getAccessorUnalignedUint('set', members[1]);
+      const set3 = env.getAccessorUnalignedUint('set', members[2]);
       set1.call(dv, 1, 1);
       set2.call(dv, 1, 1);
       set3.call(dv, 1, 1);

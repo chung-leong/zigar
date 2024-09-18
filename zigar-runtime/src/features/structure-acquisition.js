@@ -1,7 +1,7 @@
-import { CONST_TARGET, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
-import { MemberType, StructureFlag, StructureType } from '../constants.js';
+import { CONST_TARGET, COPY, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
+import { ExportFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, findObjects } from '../utils.js';
+import { decodeText, defineProperty, findObjects } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -102,67 +102,27 @@ export default mixin({
       }
     }
   },
-  defineFactoryArgStruct() {
-    const options = this.beginStructure({
-      type: StructureType.Struct,
-      flags: 0,
-      name: 'Options',
-      byteSize: 2,
-    })
-    this.attachMember(options, {
-      type: MemberType.Bool,
-      name: 'omitFunctions',
-      bitOffset: 0,
-      bitSize: 1,
-      byteSize: 1,
-      structure: {},
-    });
-    this.attachMember(options, {
-      type: MemberType.Bool,
-      name: 'omitVariables',
-      bitOffset: 8,
-      bitSize: 1,
-      byteSize: 1,
-      structure: {},
-    });
-    this.defineStructure(options);
-    const structure = this.beginStructure({
-      type: StructureType.ArgStruct,
-      flags: StructureFlag.HasObject | StructureFlag.HasSlot,
-      name: 'ArgFactory',
-      byteSize: 2,
-    });
-    this.attachMember(structure, {
-      type: MemberType.Void,
-      name: 'retval',
-      bitOffset: 0,
-      bitSize: 0,
-      byteSize: 0,
-      structure: {},
-    });
-    this.attachMember(structure, {
-      type: MemberType.Object,
-      name: '0',
-      bitOffset: 0,
-      bitSize: 16,
-      byteSize: 2,
-      slot: 0,
-      structure: options,
-    });
-    return this.defineStructure(structure);
-  },
   acquireStructures(options) {
-    const {
-      omitFunctions = false,
-      omitVariables = isElectron(),
-    } = options;
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
-    const ArgStruct = this.defineFactoryArgStruct();
-    const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
-    if (process.env.MIXIN === 'track') {
-      this.mixinUsage = new Map();
-    }
+    const FactoryArg = function(options) {
+      const {
+        omitFunctions = false,
+        omitVariables = isElectron(),
+      } = options;
+      const dv = new DataView(new ArrayBuffer(4));
+      let flags = 0;
+      if (omitFunctions) {
+        flags |= ExportFlag.OmitMethods;
+      }
+      if (omitVariables) {
+        flags |= ExportFlag.OmitVariables;
+      }
+      dv.setUint32(0, flags, this.littleEndian);
+      this[MEMORY] = dv;
+    };
+    defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
+    const args = new FactoryArg(options);
     this.comptime = true;
     this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;

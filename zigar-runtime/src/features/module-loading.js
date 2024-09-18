@@ -129,12 +129,20 @@ export default mixin({
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
-      const module = await f(res);
-      // const imports = w.Module.imports(module);
-      // console.log(imports);
+      const executable = await f(res);
+      const functions = this.exportFunctions();
+      const env = {}, wasi = {};
+      const empty = function() {};
+      for (const { module, name, kind } of w.Module.imports(executable)) {
+        if (kind === 'function') {
+          if (module === 'env') {
+            env[name] = functions[name] ?? empty;
+          } else if (module === 'wasi_snapshot_preview1') {
+            wasi[name] = this.getWASIHandler(name);
+          }
+        }
+      }
       this.hasCodeSource = true;
-      const wasi = this.getWASIImport();
-      const env = this.exportFunctions();
       this.memory = env.memory = new w.Memory({
         initial: memoryInitial,
         maximum: memoryMax,
@@ -147,7 +155,7 @@ export default mixin({
       this.multithreaded = multithreaded;
       this.nextTableIndex = tableInitial;
       const importObject = { env, wasi_snapshot_preview1: wasi };
-      return new w.Instance(module, importObject);
+      return new w.Instance(executable, importObject);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {

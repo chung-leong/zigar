@@ -188,4 +188,6 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
-const defaultAlign = [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : /* c8 ignore next */ 8;
+const defaultAlign = (process.env.TARGET === 'node')
+? [ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : /* c8 ignore next */ 8
+: undefined;

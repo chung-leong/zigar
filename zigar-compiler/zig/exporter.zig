@@ -643,7 +643,7 @@ pub fn createRootFactory(comptime HostT: type, comptime T: type) thunk_zig.Thunk
         fn exportStructure(ptr: ?*anyopaque, _: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
             @setEvalBranchQuota(2000000);
             const host = HostT.init(ptr);
-            const options: *const types.HostOptions = @ptrCast(arg_ptr);
+            const options: *const types.HostOptions = @ptrCast(@alignCast(arg_ptr));
             const ctx = .{ .host = host, .options = options, .tdb = tdb };
             _ = try getStructure(ctx, T);
             return;

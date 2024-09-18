@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 // handle bools in packed structs
 
 export default mixin({
-  getAccessorBool1Unaligned(access, member) {
+  getAccessorUnalignedBool1(access, member) {
     const { bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     const mask = 1 << bitPos;

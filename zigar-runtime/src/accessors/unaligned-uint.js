@@ -4,7 +4,7 @@ import { mixin } from '../environment.js';
 // other unaligned ints are handled by the mixin "unaligned"
 
 export default mixin({
-  getAccessorUintUnaligned(access, member) {
+  getAccessorUnalignedUint(access, member) {
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     if (bitPos + bitSize <= 8) {

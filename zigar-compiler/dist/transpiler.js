@@ -77,6 +77,11 @@ const MemberFlag = {
   IsBackingInt:     0x0000_0080,
 };
 
+const ExportFlag = {
+  OmitMethods: 0x0000_0001,
+  OmitVariables: 0x0000_0002,
+};
+
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
@@ -157,23 +162,6 @@ function defineProperties(object, descriptors) {
 
 function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
-}
-
-function getTypeName(member) {
-  const { type, bitSize, byteSize } = member;
-  const suffix = (type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize;
-  let name = memberNames[type] + suffix;
-  if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
-    if (bitSize <= 64) {
-      name = `Big${name}`;
-    } else {
-      name = `Jumbo${name}`;
-    }
-  }
-  if (byteSize === undefined) {
-    name += 'Unaligned';
-  }
-  return name;
 }
 
 function getPrimitiveName({ type, bitSize }) {
@@ -1587,8 +1575,9 @@ function defineClass(name, mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
       if (typeof(object) === 'function') {
         {
+          props.mixinUsage = new Map();
           const f = function(...args) {
-            this.mixinUsage?.set?.(mixin, true);
+            this.mixinUsage.set(mixin, true);
             return object.call(this, ...args);
           };
           defineProperty(prototype, name, defineValue(f));
@@ -1612,35 +1601,55 @@ function defineClass(name, mixins) {
 // handle retrieval of accessors
 
 var all$2 = mixin({
+  accessorCache: new Map(),
+
   getAccessor(access, member) {
-    const { bitOffset, byteSize } = member;
-    const typeName = getTypeName(member);
-    const accessorName = access + typeName + ((byteSize === undefined) ? `${bitOffset}` : '');
+    const { type, bitSize, bitOffset, byteSize } = member;
+    const names = [];
+    const unaligned = (byteSize === undefined) && (bitSize & 0x07 || bitOffset & 0x07);
+    if (unaligned) {
+      names.push('Unaligned');
+    }
+    let name = memberNames[type];
+    if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
+      if (bitSize <= 64) {
+        name = `Big${name}`;
+      } else {
+        name = `Jumbo${name}`;
+      }
+    }
+    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize}`);
+    if (unaligned) {
+      names.push(`@${bitOffset}`);
+    }
+    const accessorName = access + names.join('');
     // see if it's a built-in method of DataView
     let accessor = DataView.prototype[accessorName];
     if (accessor) {
       return accessor;
     }
     // check cache
-    accessor = cache.get(accessorName);
+    accessor = this.accessorCache.get(accessorName);
     if (accessor) {
       return accessor;
     }
-    accessor = this[`getAccessor${typeName}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/\d+/, '')}`]?.(access, member)
-            ?? this[`getAccessor${typeName.replace(/^\D+\d+/, '')}`]?.(access, member);
+    while (names.length > 0) {
+      const handlerName = `getAccessor${names.join('')}`;
+      if (accessor = this[handlerName]?.(access, member)) {
+        break;
+      }
+      names.pop();
+    }
     /* c8 ignore start */
     if (!accessor) {
-      throw new Error(`No accessor available: ${typeName}`);
+      throw new Error(`No accessor available: ${accessorName}`);
     }
     /* c8 ignore end */
     defineProperty(accessor, 'name', defineValue(accessorName));
-    cache.set(accessorName, accessor);
+    this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
 });
-
-const cache = new Map();
 
 var bigInt = mixin({
   getAccessorBigInt(access, member) {
@@ -1699,28 +1708,6 @@ var bool$1 = mixin({
       }
     }
   }
-});
-
-// handle bools in packed structs
-
-var bool1Unaligned = mixin({
-  getAccessorBool1Unaligned(access, member) {
-    const { bitOffset } = member;
-    const bitPos = bitOffset & 0x07;
-    const mask = 1 << bitPos;
-    if (access === 'get') {
-      return function(offset) {
-        const n = this.getInt8(offset);
-        return !!(n & mask);
-      };
-    } else {
-      return function(offset, value) {
-        const n = this.getInt8(offset);
-        const b = (value) ? n | mask : n & ~mask;
-        this.setInt8(offset, b);
-      };
-    }
-  },
 });
 
 // handles f128
@@ -1909,35 +1896,6 @@ var float80 = mixin({
   }
 });
 
-// handle ints 7-bit or smaller in packed structs that are stored in a single byte
-// other unaligned ints are handled by the mixin "unaligned"
-
-var intUnaligned = mixin({
-  getAccessorIntUnaligned(access, member) {
-    const { bitSize, bitOffset } = member;
-    const bitPos = bitOffset & 0x07;
-    if (bitPos + bitSize <= 8) {
-      const signMask = 2 ** (bitSize - 1);
-      const valueMask = signMask - 1;
-      if (access === 'get') {
-        return function(offset) {
-          const n = this.getUint8(offset);
-          const s = n >>> bitPos;
-          return (s & valueMask) - (s & signMask);
-        };
-      } else {
-        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
-        return function(offset, value) {
-          let b = this.getUint8(offset);
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          b = (b & outsideMask) | (n << bitPos);
-          this.setUint8(offset, b);
-        };
-      }
-    }
-  }
-});
-
 // handle non-standard ints 32-bit or smaller
 
 var int$1 = mixin({
@@ -2042,33 +2000,6 @@ var jumbo = mixin({
   }
 });
 
-// handle uints 7-bit or smaller in packed structs that are stored in a single byte
-// other unaligned ints are handled by the mixin "unaligned"
-
-var uintUnaligned = mixin({
-  getAccessorUintUnaligned(access, member) {
-    const { bitSize, bitOffset } = member;
-    const bitPos = bitOffset & 0x07;
-    if (bitPos + bitSize <= 8) {
-      const valueMask = (2 ** bitSize - 1);
-      if (access === 'get') {
-        return function(offset) {
-          const n = this.getUint8(offset);
-          const s = n >>> bitPos;
-          return s & valueMask;
-        };
-      } else {
-        const outsideMask = 0xFF ^ (valueMask << bitPos);
-        return function(offset, value) {
-          const n = this.getUint8(offset);
-          const b = (n & outsideMask) | ((value & valueMask) << bitPos);
-          this.setUint8(offset, b);
-        };
-      }
-    }
-  },
-});
-
 // handle non-standard uints 32-bit or smaller
 
 var uint$1 = mixin({
@@ -2090,6 +2021,84 @@ var uint$1 = mixin({
       }
     }
   }
+});
+
+// handle bools in packed structs
+
+var unalignedBool1 = mixin({
+  getAccessorUnalignedBool1(access, member) {
+    const { bitOffset } = member;
+    const bitPos = bitOffset & 0x07;
+    const mask = 1 << bitPos;
+    if (access === 'get') {
+      return function(offset) {
+        const n = this.getInt8(offset);
+        return !!(n & mask);
+      };
+    } else {
+      return function(offset, value) {
+        const n = this.getInt8(offset);
+        const b = (value) ? n | mask : n & ~mask;
+        this.setInt8(offset, b);
+      };
+    }
+  },
+});
+
+// handle ints 7-bit or smaller in packed structs that are stored in a single byte
+// other unaligned ints are handled by the mixin "unaligned"
+
+var unalignedInt = mixin({
+  getAccessorUnalignedInt(access, member) {
+    const { bitSize, bitOffset } = member;
+    const bitPos = bitOffset & 0x07;
+    if (bitPos + bitSize <= 8) {
+      const signMask = 2 ** (bitSize - 1);
+      const valueMask = signMask - 1;
+      if (access === 'get') {
+        return function(offset) {
+          const n = this.getUint8(offset);
+          const s = n >>> bitPos;
+          return (s & valueMask) - (s & signMask);
+        };
+      } else {
+        const outsideMask = 0xFF ^ ((valueMask | signMask) << bitPos);
+        return function(offset, value) {
+          let b = this.getUint8(offset);
+          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+          b = (b & outsideMask) | (n << bitPos);
+          this.setUint8(offset, b);
+        };
+      }
+    }
+  }
+});
+
+// handle uints 7-bit or smaller in packed structs that are stored in a single byte
+// other unaligned ints are handled by the mixin "unaligned"
+
+var unalignedUint = mixin({
+  getAccessorUnalignedUint(access, member) {
+    const { bitSize, bitOffset } = member;
+    const bitPos = bitOffset & 0x07;
+    if (bitPos + bitSize <= 8) {
+      const valueMask = (2 ** bitSize - 1);
+      if (access === 'get') {
+        return function(offset) {
+          const n = this.getUint8(offset);
+          const s = n >>> bitPos;
+          return s & valueMask;
+        };
+      } else {
+        const outsideMask = 0xFF ^ (valueMask << bitPos);
+        return function(offset, value) {
+          const n = this.getUint8(offset);
+          const b = (n & outsideMask) | ((value & valueMask) << bitPos);
+          this.setUint8(offset, b);
+        };
+      }
+    }
+  },
 });
 
 // handle unaligned ints and floats by copying the bits into a
@@ -2695,8 +2704,9 @@ class FixedMemoryTargetRequired extends TypeError {
 
 class Overflow extends TypeError {
   constructor(member, value) {
-    const typeName = getTypeName(member);
-    super(`${typeName} cannot represent the value given: ${value}`);
+    const { type, bitSize } = member;
+    const name = (bitSize > 32 ? 'Big' : '') + memberNames[type] + bitSize;
+    super(`${name} cannot represent the value given: ${value}`);
   }
 }
 
@@ -3469,7 +3479,7 @@ var memoryMapping = mixin({
             }
             this[MEMORY] = newDV;
             if (updateCache) {
-              this.constructor[CACHE].save(newDV, this);
+              this.constructor[CACHE]?.save?.(newDV, this);
             }
             return true;
           } else {
@@ -3614,12 +3624,20 @@ var moduleLoading = mixin({
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
-      const module = await f(res);
-      const imports = w.Module.imports(module);
-      console.log(imports);
+      const executable = await f(res);
+      const functions = this.exportFunctions();
+      const env = {}, wasi = {};
+      const empty = function() {};
+      for (const { module, name, kind } of w.Module.imports(executable)) {
+        if (kind === 'function') {
+          if (module === 'env') {
+            env[name] = functions[name] ?? empty;
+          } else if (module === 'wasi_snapshot_preview1') {
+            wasi[name] = this.getWASIHandler(name);
+          }
+        }
+      }
       this.hasCodeSource = true;
-      const wasi = this.getWASIImport();
-      const env = this.exportFunctions();
       this.memory = env.memory = new w.Memory({
         initial: memoryInitial,
         maximum: memoryMax,
@@ -3632,7 +3650,7 @@ var moduleLoading = mixin({
       this.multithreaded = multithreaded;
       this.nextTableIndex = tableInitial;
       const importObject = { env, wasi_snapshot_preview1: wasi };
-      return new w.Instance(module, importObject);
+      return new w.Instance(executable, importObject);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -4052,67 +4070,27 @@ var structureAcquisition = mixin({
       }
     }
   },
-  defineFactoryArgStruct() {
-    const options = this.beginStructure({
-      type: StructureType.Struct,
-      flags: 0,
-      name: 'Options',
-      byteSize: 2,
-    });
-    this.attachMember(options, {
-      type: MemberType.Bool,
-      name: 'omitFunctions',
-      bitOffset: 0,
-      bitSize: 1,
-      byteSize: 1,
-      structure: {},
-    });
-    this.attachMember(options, {
-      type: MemberType.Bool,
-      name: 'omitVariables',
-      bitOffset: 8,
-      bitSize: 1,
-      byteSize: 1,
-      structure: {},
-    });
-    this.defineStructure(options);
-    const structure = this.beginStructure({
-      type: StructureType.ArgStruct,
-      flags: StructureFlag.HasObject | StructureFlag.HasSlot,
-      name: 'ArgFactory',
-      byteSize: 2,
-    });
-    this.attachMember(structure, {
-      type: MemberType.Void,
-      name: 'retval',
-      bitOffset: 0,
-      bitSize: 0,
-      byteSize: 0,
-      structure: {},
-    });
-    this.attachMember(structure, {
-      type: MemberType.Object,
-      name: '0',
-      bitOffset: 0,
-      bitSize: 16,
-      byteSize: 2,
-      slot: 0,
-      structure: options,
-    });
-    return this.defineStructure(structure);
-  },
   acquireStructures(options) {
-    const {
-      omitFunctions = false,
-      omitVariables = isElectron(),
-    } = options;
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
-    const ArgStruct = this.defineFactoryArgStruct();
-    const args = new ArgStruct([ { omitFunctions, omitVariables } ]);
-    {
-      this.mixinUsage = new Map();
-    }
+    const FactoryArg = function(options) {
+      const {
+        omitFunctions = false,
+        omitVariables = isElectron(),
+      } = options;
+      const dv = new DataView(new ArrayBuffer(4));
+      let flags = 0;
+      if (omitFunctions) {
+        flags |= ExportFlag.OmitMethods;
+      }
+      if (omitVariables) {
+        flags |= ExportFlag.OmitVariables;
+      }
+      dv.setUint32(0, flags, this.littleEndian);
+      this[MEMORY] = dv;
+    };
+    defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
+    const args = new FactoryArg(options);
     this.comptime = true;
     this.invokeThunk(thunkAddress, thunkAddress, args);
     this.comptime = false;
@@ -4404,45 +4382,26 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
-[ 'arm64', 'ppc64', 'x64', 's390x' ].includes(process.arch) ? 16 : /* c8 ignore next */ 8;
-
 var wasiSupport = mixin({
   ...({
     customWASI: null,
 
     setCustomWASI(wasi) {
       if (wasi && this.hasCodeSource) {
-        throw new Error('Cannot set WASI interface after compilation has already begun (consider disabling topLevelAwait)');
+        throw new Error('Cannot set WASI interface after compilation has already begun');
       }
       this.customWASI = wasi;
     },
-    getWASIImport() {
-      if (this.customWASI) {
-        return this.customWASI.wasiImport;
-      } else {
-        const ENOSYS = 38;
-        const ENOBADF = 8;
-        const noImpl = () => ENOSYS;
-        return {
-          args_get: noImpl,
-          args_sizes_get: noImpl,
-          clock_res_get: noImpl,
-          clock_time_get: noImpl,
-          environ_get: noImpl,
-          environ_sizes_get: noImpl,
-          fd_advise: noImpl,
-          fd_allocate: noImpl,
-          fd_close: noImpl,
-          fd_datasync: noImpl,
-          fd_pread: noImpl,
-          fd_pwrite: noImpl,
-          fd_read: noImpl,
-          fd_readdir: noImpl,
-          fd_renumber: noImpl,
-          fd_seek: noImpl,
-          fd_sync: noImpl,
-          fd_tell: noImpl,
-          fd_write: (fd, iovs_ptr, iovs_count, written_ptr) => {
+    getWASIHandler(name) {
+      const custom = this.customWASI?.wasiImport?.[name];
+      if (custom) {
+        return custom;
+      }
+      const ENOSYS = 38;
+      const ENOBADF = 8;
+      switch (name) {
+        case 'fd_write':
+          return (fd, iovs_ptr, iovs_count, written_ptr) => {
             if (fd === 1 || fd === 2) {
               const dv = new DataView(this.memory.buffer);
               let written = 0;
@@ -4460,44 +4419,25 @@ var wasiSupport = mixin({
             } else {
               return ENOSYS;
             }
-          },
-          fd_fdstat_get: noImpl,
-          fd_fdstat_set_flags: noImpl,
-          fd_fdstat_set_rights: noImpl,
-          fd_filestat_get: noImpl,
-          fd_filestat_set_size: noImpl,
-          fd_filestat_set_times: noImpl,
-          fd_prestat_get: () => ENOBADF,
-          fd_prestat_dir_name: noImpl,
-          path_create_directory: noImpl,
-          path_filestat_get: noImpl,
-          path_filestat_set_times: noImpl,
-          path_link: noImpl,
-          path_open: noImpl,
-          path_readlink: noImpl,
-          path_remove_directory: noImpl,
-          path_rename: noImpl,
-          path_symlink: noImpl,
-          path_unlink_file: noImpl,
-          poll_oneoff: noImpl,
-          proc_exit: (code) => {
+          };
+        case 'fd_prestat_get':
+          return () => ENOBADF;
+        case 'proc_exit':
+          return (code) => {
             throw new Exit(code);
-          },
-          random_get: (buf, buf_len) => {
+          };
+        case 'random_get':
+          return (buf, buf_len) => {
             const dv = new DataView(this.memory.buffer, buf, buf_len);
             for (let i = 0; i < buf_len; i++) {
               dv.setUint8(i, Math.floor(256 * Math.random()));
             }
             return 0;
-          },
-          sched_yield: noImpl,
-          sock_accept: noImpl,
-          sock_recv: noImpl,
-          sock_send: noImpl,
-          sock_shutdown: noImpl,
-        };
+          };
+        default:
+          return () => ENOSYS;
       }
-    }
+    },
   } ),
 });
 
@@ -7396,18 +7336,18 @@ var mixins = /*#__PURE__*/Object.freeze({
   AccessorBigInt: bigInt,
   AccessorBigUint: bigUint,
   AccessorBool: bool$1,
-  AccessorBool1Unaligned: bool1Unaligned,
   AccessorFloat128: float128,
   AccessorFloat16: float16,
   AccessorFloat80: float80,
   AccessorInt: int$1,
-  AccessorIntUnaligned: intUnaligned,
   AccessorJumbo: jumbo,
   AccessorJumboInt: jumboInt,
   AccessorJumboUint: jumboUint,
   AccessorUint: uint$1,
-  AccessorUintUnaligned: uintUnaligned,
   AccessorUnaligned: unaligned,
+  AccessorUnalignedBool1: unalignedBool1,
+  AccessorUnalignedInt: unalignedInt,
+  AccessorUnalignedUint: unalignedUint,
   FeatureBaseline: baseline,
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
@@ -8845,7 +8785,6 @@ async function transpile(path, options) {
     }
   }
   usage.FeatureBaseline = true;
-  usage.FeatureWasiSupport = true;
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
   const mixinPaths = [];

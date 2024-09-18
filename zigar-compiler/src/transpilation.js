@@ -50,7 +50,6 @@ export async function transpile(path, options) {
     }
   }
   usage.FeatureBaseline = true;
-  usage.FeatureWasiSupport = true;
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
   const mixinPaths = [];

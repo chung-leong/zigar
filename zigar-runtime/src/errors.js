@@ -1,6 +1,6 @@
-import { StructureType } from './constants.js';
+import { memberNames, StructureType } from './constants.js';
 import { TYPED_ARRAY } from './symbols.js';
-import { getPrimitiveName, getTypeName } from './utils.js';
+import { getPrimitiveName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -316,8 +316,9 @@ export class FixedMemoryTargetRequired extends TypeError {
 
 export class Overflow extends TypeError {
   constructor(member, value) {
-    const typeName = getTypeName(member);
-    super(`${typeName} cannot represent the value given: ${value}`);
+    const { type, bitSize } = member;
+    const name = (bitSize > 32 ? 'Big' : '') + memberNames[type] + bitSize;
+    super(`${name} cannot represent the value given: ${value}`);
   }
 }
 

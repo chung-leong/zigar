@@ -68,3 +68,8 @@ export const MemberFlag = {
   IsSentinel:       0x0000_0040,
   IsBackingInt:     0x0000_0080,
 };
+
+export const ExportFlag = {
+  OmitMethods: 0x0000_0001,
+  OmitVariables: 0x0000_0002,
+};

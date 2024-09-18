@@ -1,4 +1,4 @@
-import { memberNames, MemberType } from './constants.js';
+import { MemberType } from './constants.js';
 import { LENGTH, PROXY } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
@@ -32,23 +32,6 @@ export function defineProperties(object, descriptors) {
 
 export function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
-}
-
-export function getTypeName(member) {
-  const { type, bitSize, byteSize } = member;
-  const suffix = (type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize;
-  let name = memberNames[type] + suffix;
-  if (bitSize > 32 && (type === MemberType.Int || type === MemberType.Uint)) {
-    if (bitSize <= 64) {
-      name = `Big${name}`;
-    } else {
-      name = `Jumbo${name}`;
-    }
-  }
-  if (byteSize === undefined) {
-    name += 'Unaligned';
-  }
-  return name;
 }
 
 export function getPrimitiveName({ type, bitSize }) {

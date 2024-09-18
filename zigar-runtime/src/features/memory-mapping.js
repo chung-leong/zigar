@@ -296,7 +296,7 @@ export default mixin({
             }
             this[MEMORY] = newDV;
             if (updateCache) {
-              this.constructor[CACHE].save(newDV, this);
+              this.constructor[CACHE]?.save?.(newDV, this);
             }
             return true;
           } else {

@@ -25,9 +25,10 @@ pub const Error = error{
     too_many_arguments,
 };
 
-pub const HostOptions = struct {
+pub const HostOptions = packed struct(u32) {
     omit_methods: bool = false,
     omit_variables: bool = false,
+    _: u30 = 0,
 };
 
 pub const StructureType = enum(u32) {

@@ -4,9 +4,7 @@ import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { WASI } from 'wasi';
 import { defineEnvironment } from '../../src/environment.js';
-import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { capture } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -258,7 +256,7 @@ describe('Feature: module-loading', function() {
           flushStdout: () => {},
           garbage: () => {},
           createJsThunk: () => {},
-          isRuntimeSafetyActive: () => {},
+          getModuleAttributes: () => {},
         };
         env.importFunctions(exports);
         expect(env.allocateExternMemory).to.be.a('function');
@@ -328,101 +326,6 @@ describe('Feature: module-loading', function() {
         const { get } = Object.getOwnPropertyDescriptor(env, 'released');
         expect(get).to.be.an('function');
         expect(env.released).to.be.false;
-      })
-    })
-    describe('getWASIImport', function() {
-      it('should write to console when fd_write is invoked', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        const [ line ] = await capture(() => {
-          wasi.fd_write(1, bufferAddress, 1, writtenAddress);
-        });
-        expect(line).to.equal(text.trim());
-        const written = dv.getUint32(writtenAddress, true);
-        expect(written).to.equal(4);
-      })
-      it('should write to console when call to fd_write is directed at stderr', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        const [ line ] = await capture(() => {
-          wasi.fd_write(2, bufferAddress, 1, writtenAddress);
-        });
-        expect(line).to.equal(text.trim());
-        const written = dv.getUint32(writtenAddress, true);
-        expect(written).to.equal(4);
-      })
-      it('should return error code when file descriptor is not stdout or stderr', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        let result;
-        const [ line ] = await capture(() => {
-          result = wasi.fd_write(3, bufferAddress, 1, writtenAddress);
-        });
-        expect(result).to.not.equal(0);
-        expect(line).to.be.undefined;
-      })
-      it('should fill a buffer with random bytes when random_get is invoked', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const bufferAddress = 16;
-        const bufferLength = 8;
-        const dv = new DataView(memory.buffer);
-        wasi.random_get(bufferAddress, bufferLength);
-        let allZeroes = true;
-        for (let i = 0; i < bufferLength; i++) {
-          const byte = dv.getUint8(bufferAddress + i);
-          if (byte !== 0) {
-            allZeroes = false;
-          }
-        }
-        expect(allZeroes).to.be.false;
-      })
-      it('should do nothing when when unsupported functions are invoked', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        expect(() => wasi.path_open()).to.not.throw();
-        expect(() => wasi.fd_read()).to.not.throw();
-        expect(() => wasi.fd_close()).to.not.throw();
-        expect(() => wasi.fd_prestat_get()).to.not.throw();
-      })
-      it('should throw exit error when proc_exit is called', async function() {
-        const env = new Env();
-        const wasi = env.getWASIImport();
-        expect(() => wasi.proc_exit()).to.throw(Exit);
       })
     })
   } else if (process.env.TARGET === 'node') {

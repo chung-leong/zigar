@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { ExportFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -239,31 +239,21 @@ describe('Feature: structure-acquisition', function() {
       const object = env.castView(1234, 8, true, structure);
     })
   })
-  describe('defineFactoryArgStruct', function() {
-    it('should return constructor for factory function argument struct', function() {
-      const env = new Env();
-      const ArgStruct = env.defineFactoryArgStruct();
-      const args = new ArgStruct([ { omitFunctions: true } ]);
-      expect(args[0]).to.be.an('Options');
-      expect(args.retval).to.be.undefined;
-      const options = args[0];
-      expect(options.omitFunctions).to.be.true;
-    })
-  })
   describe('acquireStructures', function() {
     it('should invoke the factory thunk', function() {
       const env = new Env();
       env.getFactoryThunk = function() {
         return 0x1234;
       };
-      let thunkAddress, options;
+      let thunkAddress, optionsDV;
       env.invokeThunk = function(...args) {
         thunkAddress = args[0];
-        options = args[2][0];
+        optionsDV = args[2][MEMORY];
       };
       env.acquireStructures({ omitFunctions: true });
       expect(thunkAddress).to.equal(0x1234);
-      expect(options.omitFunctions).to.be.true;
+      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitMethods)).to.be.true;
+      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.false;
     })
   })
   describe('getRootModule', function() {

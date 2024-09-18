@@ -31,6 +31,9 @@ describe('Feature: object-linkage', function() {
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
       env.variables.push({ object, reloc: 128 });
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      }
       env.linkVariables(true);
       expect(object[MEMORY]).to.not.equal(dv);
       expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
@@ -79,6 +82,9 @@ describe('Feature: object-linkage', function() {
       });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       env.variables.push({ object, reloc: 128 });
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      }
       env.linkVariables(false);
       expect(object[LAST_ADDRESS]).to.equal(usize(0x4000));
       expect(object[LAST_LENGTH]).to.equal(4);

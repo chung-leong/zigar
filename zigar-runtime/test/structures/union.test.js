@@ -1762,6 +1762,7 @@ describe('Structure: union', function() {
             argDV.setInt8(4, 0);
             debugger;
           }
+          return true;
         };
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else if (process.env.TARGET === 'node') {
@@ -1776,6 +1777,7 @@ describe('Structure: union', function() {
             argDV.setInt32(0, 0, true);
             argDV.setInt8(4, 0);
           }
+          return true;
         };
         env.getBufferAddress = function(buffer) {
           return 0x1000n;

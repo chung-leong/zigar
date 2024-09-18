@@ -9,6 +9,8 @@ const plugins = [
     values: {
       'process.env.DEV': 'false',
       'process.env.TARGET': '"wasm"',
+      'process.env.BITS': '"32"',
+      'process.env.MIXIN': '""',
     },
   })
 ];
