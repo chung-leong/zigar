@@ -1,4 +1,4 @@
-import { MemberFlag } from '../constants.js';
+import { PrimitiveFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidIntConversion } from '../errors.js';
 
@@ -20,7 +20,8 @@ export default mixin({
           accessor.call(this, offset, number, littleEndian);
         };
       } else {
-        if ((flags & MemberFlag.IsSize) && bitSize > 32) {
+        const { flags: structureFlags } = member.structure;
+        if ((structureFlags & PrimitiveFlag.IsSize) && bitSize > 32) {
           const max = BigInt(Number.MAX_SAFE_INTEGER);
           const min = BigInt(Number.MIN_SAFE_INTEGER);
           return function(offset, littleEndian) {

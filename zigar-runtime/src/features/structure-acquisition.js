@@ -105,6 +105,7 @@ export default mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
+    const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
         omitFunctions = false,
@@ -118,7 +119,7 @@ export default mixin({
       if (omitVariables) {
         flags |= ExportFlag.OmitVariables;
       }
-      dv.setUint32(0, flags, this.littleEndian);
+      dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));

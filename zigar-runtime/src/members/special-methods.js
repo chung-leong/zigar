@@ -1,4 +1,4 @@
-import { StructureFlag, StructureType } from '../constants.js';
+import { StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ENTRIES, FLAGS, TYPE } from '../symbols.js';
 import { defineValue } from '../utils.js';
@@ -52,9 +52,12 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
+          entries = value[ENTRIES];
+          result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
+          break;
         case StructureType.Union:
           entries = value[ENTRIES];
-          result = (value.constructor[FLAGS] & StructureFlag.IsTuple) ? [] : {};
+          result = {};
           break;
         case StructureType.Array:
         case StructureType.Vector:

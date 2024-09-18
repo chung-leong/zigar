@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { ArrayFlag, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -524,7 +524,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -562,7 +562,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 22,
@@ -600,7 +600,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -630,7 +630,6 @@ describe('Structure: array', function() {
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
-        flags: StructureFlag.IsString,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -640,7 +639,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -669,7 +668,6 @@ describe('Structure: array', function() {
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
-        flags: StructureFlag.IsString,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -679,7 +677,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -705,7 +703,6 @@ describe('Structure: array', function() {
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
-        flags: StructureFlag.IsString,
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
@@ -747,7 +744,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -780,7 +777,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -819,7 +816,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -1216,7 +1213,7 @@ describe('Structure: array', function() {
       env.endStructure(structStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
       });
@@ -1375,7 +1372,7 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1446,7 +1443,7 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1502,7 +1499,7 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1518,7 +1515,7 @@ describe('Structure: array', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,

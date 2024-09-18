@@ -1,4 +1,4 @@
-import { MemberFlag, StructureFlag } from '../constants.js';
+import { MemberFlag, StructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import {
@@ -49,10 +49,10 @@ export default mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
-    descriptors.length = (flags & StructureFlag.IsTuple) && {
+    descriptors.length = (flags & StructFlag.IsTuple) && {
       value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
     };
-    descriptors.entries = (flags & StructureFlag.IsTuple) && {
+    descriptors.entries = (flags & StructFlag.IsTuple) && {
       value: getVectorEntries,
     };
     // allow conversion of packed struct to number when there's a backing int
@@ -65,9 +65,9 @@ export default mixin({
     };
     // add iterator
     descriptors[Symbol.iterator] = defineValue(
-      (flags & StructureFlag.IsIterator)
+      (flags & StructFlag.IsIterator)
       ? getZigIterator
-      : (flags & StructureFlag.IsTuple)
+      : (flags & StructFlag.IsTuple)
         ? getVectorIterator
         : getStructIterator
     );
@@ -76,7 +76,7 @@ export default mixin({
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
-    descriptors[ENTRIES] = { get: (flags & StructureFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
     return constructor;
   }

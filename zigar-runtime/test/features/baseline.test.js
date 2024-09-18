@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { capture, usize } from '../test-utils.js';
@@ -61,7 +61,7 @@ describe('Feature: baseline', function() {
       };
       const s3 = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         instance: {

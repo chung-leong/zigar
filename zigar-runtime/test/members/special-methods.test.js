@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberType, StructureFlag, StructureType, UnionFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 
@@ -140,7 +140,7 @@ describe('Member: special-methods', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer | StructureFlag.HasInaccessible,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer | UnionFlag.HasInaccessible,
         name: 'Union',
         byteSize: 8,
       });
@@ -173,6 +173,7 @@ describe('Member: special-methods', function() {
       env.endStructure(structure);
       const object = new Complex({ donut: 3.5 });
       expect(object.valueOf().goat).to.be.a('symbol');
+      JSON.stringify(object);
       expect(JSON.stringify(object)).to.equal(JSON.stringify({ donut: 3.5, turkey: 3.5 }));
     })
   })

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { ExportFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { ExportFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -234,7 +234,7 @@ describe('Feature: structure-acquisition', function() {
             // [PROTECTOR]: () => {},
           };
         },
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       };
       const object = env.castView(1234, 8, true, structure);
     })
@@ -422,7 +422,7 @@ describe('Feature: structure-acquisition', function() {
       env.finalizeStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: addressByteSize,
       });

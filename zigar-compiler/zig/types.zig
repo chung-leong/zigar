@@ -49,33 +49,137 @@ pub const StructureType = enum(u32) {
     function,
 };
 
-pub const StructureFlags = packed struct(u32) {
-    has_value: bool = false,
-    has_object: bool = false,
-    has_pointer: bool = false,
-    has_slot: bool = false,
-    has_length: bool = false,
-    has_selector: bool = false,
-    has_tag: bool = false,
-    has_sentinel: bool = false,
-
-    is_const: bool = false,
-    is_multiple: bool = false,
-    is_single: bool = false,
-    is_extern: bool = false,
-    is_string: bool = false,
-    is_packed: bool = false,
-    is_iterator: bool = false,
-    is_throwing: bool = false,
-
-    has_inaccessible: bool = false,
-    _: u7 = 0,
-
-    is_tuple: bool = false,
-    is_nullable: bool = false,
-    is_open_ended: bool = false,
-    is_variandic: bool = false,
-    __: u4 = 0,
+pub const StructureFlags = extern union {
+    primitive: packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        is_size: bool = false,
+        _: u27 = 0,
+    },
+    array: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        is_string: bool = false,
+        _: u27 = 0,
+    },
+    @"struct": packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        is_extern: bool = false,
+        is_packed: bool = false,
+        is_iterator: bool = false,
+        is_tuple: bool = false,
+        _: u24 = 0,
+    },
+    @"union": packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_selector: bool = false,
+        has_tag: bool = false,
+        has_inaccessible: bool = false,
+        is_extern: bool = false,
+        is_packed: bool = false,
+        is_iterator: bool = false,
+        _: u22 = 0,
+    },
+    error_union: packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        _: u28 = 0,
+    },
+    error_set: packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        _: u28 = 0,
+    },
+    @"enum": packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        is_open_ended: bool = false,
+        is_iterator: bool = false,
+        _: u26 = 0,
+    },
+    optional: packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_selector: bool = false,
+        _: u27 = 0,
+    },
+    pointer: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+        has_length: bool = false,
+        is_multiple: bool = false,
+        is_single: bool = false,
+        is_const: bool = false,
+        is_nullable: bool = false,
+        _: u23 = 0,
+    },
+    slice: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_sentinel: bool = false,
+        is_string: bool = false,
+        _: u26 = 0,
+    },
+    vector: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        _: u28 = 0,
+    },
+    @"opaque": packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        is_iterator: bool = false,
+        _: u27 = 0,
+    },
+    arg_struct: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+        is_throwing: bool = false,
+        _: u27 = 0,
+    },
+    variadic_struct: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+        is_throwing: bool = false,
+        _: u27 = 0,
+    },
+    function: packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        _: u28 = 0,
+    },
 };
 
 pub const MemberType = enum(u32) {
@@ -95,13 +199,14 @@ pub const MemberType = enum(u32) {
 pub const MemberFlags = packed struct(u32) {
     is_required: bool = false,
     is_read_only: bool = false,
-    is_size: bool = false,
     is_part_of_set: bool = false,
     is_selector: bool = false,
+
     is_method: bool = false,
     is_sentinel: bool = false,
     is_backing_int: bool = false,
-    _: u24 = 0,
+
+    _: u25 = 0,
 };
 
 pub const Value = *opaque {};
@@ -453,10 +558,7 @@ pub const TypeData = struct {
     }
 
     pub fn getStructureFlags(comptime self: @This()) StructureFlags {
-        var s_flags: StructureFlags = .{
-            .has_pointer = self.attrs.has_pointer,
-        };
-        switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.Type)) {
             .Bool,
             .Int,
             .ComptimeInt,
@@ -467,76 +569,111 @@ pub const TypeData = struct {
             .Void,
             .Type,
             .EnumLiteral,
-            .ErrorSet,
-            => {
-                s_flags.has_value = true;
-                s_flags.has_slot = self.attrs.is_comptime_only;
+            => .{
+                .primitive = .{
+                    .has_slot = self.attrs.is_comptime_only,
+                    .is_size = self.Type == usize or self.Type == isize,
+                },
             },
-            .Struct => |st| {
-                s_flags.is_extern = st.layout == .@"extern";
-                s_flags.is_packed = st.layout == .@"packed";
-                s_flags.is_tuple = st.is_tuple;
-                if (self.attrs.is_arguments) {
-                    s_flags.is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion;
-                } else if (self.attrs.is_slice) {
-                    s_flags.has_sentinel = self.Type.sentinel != null;
-                    s_flags.is_string = self.Type.ElementType == u8 or self.Type.ElementType == u16;
-                }
-                s_flags.has_object = inline for (st.fields) |field| {
+            .Struct => |st| get: {
+                const has_object = inline for (st.fields) |field| {
                     if (isObject(.{ .Type = field.type })) break true;
                 } else false;
-                s_flags.has_slot = inline for (st.fields) |field| {
+                const has_slot = inline for (st.fields) |field| {
                     if (isObject(.{ .Type = field.type }) or field.is_comptime) break true;
                 } else false;
-                s_flags.is_iterator = self.isIterator();
+                break :get if (self.attrs.is_arguments) .{
+                    .arg_struct = .{
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = self.attrs.has_pointer,
+                        .is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion,
+                    },
+                } else if (self.attrs.is_slice) .{
+                    .slice = .{
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = self.attrs.has_pointer,
+                        .has_sentinel = self.Type.sentinel != null,
+                        .is_string = self.Type.ElementType == u8 or self.Type.ElementType == u16,
+                    },
+                } else .{
+                    .@"struct" = .{
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = self.attrs.has_pointer,
+                        .is_extern = st.layout == .@"extern",
+                        .is_packed = st.layout == .@"packed",
+                        .is_tuple = st.is_tuple,
+                        .is_iterator = self.isIterator(),
+                    },
+                };
             },
-            .Union => |un| {
-                s_flags.is_extern = un.layout == .@"extern";
-                s_flags.has_tag = un.tag_type != null;
-                s_flags.has_inaccessible = un.tag_type == null and self.attrs.has_pointer;
-                s_flags.has_selector = self.getSelectorType() != null;
-                s_flags.has_object = inline for (un.fields) |field| {
+            .Union => |un| get: {
+                const has_object = inline for (un.fields) |field| {
                     if (isObject(.{ .Type = field.type })) break true;
                 } else false;
-                s_flags.has_slot = s_flags.has_object;
-                s_flags.is_iterator = self.isIterator();
+                break :get .{
+                    .@"union" = .{
+                        .has_object = has_object,
+                        .has_slot = has_object,
+                        .has_pointer = self.attrs.has_pointer,
+                        .has_tag = un.tag_type != null,
+                        .has_inaccessible = un.tag_type == null and self.attrs.has_pointer,
+                        .has_selector = self.getSelectorType() != null,
+                        .is_extern = un.layout == .@"extern",
+                        .is_packed = un.layout == .@"packed",
+                        .is_iterator = self.isIterator(),
+                    },
+                };
             },
-            .ErrorUnion => |eu| {
-                s_flags.has_value = true;
-                s_flags.has_selector = true;
-                s_flags.has_object = isObject(.{ .Type = eu.payload });
-                s_flags.has_slot = s_flags.has_object;
+            .ErrorUnion => |eu| .{
+                .error_union = .{
+                    .has_object = isObject(.{ .Type = eu.payload }),
+                    .has_slot = isObject(.{ .Type = eu.payload }),
+                    .has_pointer = self.attrs.has_pointer,
+                },
             },
-            .Optional => |op| {
-                s_flags.has_value = true;
-                s_flags.has_selector = self.getSelectorType() != null;
-                s_flags.has_object = isObject(.{ .Type = op.child });
-                s_flags.has_slot = s_flags.has_object;
+            .Optional => |op| .{
+                .optional = .{
+                    .has_object = isObject(.{ .Type = op.child }),
+                    .has_slot = isObject(.{ .Type = op.child }),
+                    .has_pointer = self.attrs.has_pointer,
+                    .has_selector = self.getSelectorType() != null,
+                },
             },
-            .Enum => |en| {
-                s_flags.has_value = true;
-                s_flags.is_open_ended = !en.is_exhaustive;
-                s_flags.is_iterator = self.isIterator();
+            .Enum => |en| .{
+                .@"enum" = .{
+                    .is_open_ended = !en.is_exhaustive,
+                    .is_iterator = self.isIterator(),
+                },
             },
-            .Array => |ar| {
-                s_flags.has_object = isObject(.{ .Type = ar.child });
-                s_flags.has_slot = s_flags.has_object;
-                s_flags.is_string = ar.child == u8 or ar.child == u16;
+            .ErrorSet => .{ .error_set = .{} },
+            .Array => |ar| .{ .array = .{
+                .has_object = isObject(.{ .Type = ar.child }),
+                .has_slot = isObject(.{ .Type = ar.child }),
+                .has_pointer = self.attrs.has_pointer,
+                .is_string = ar.child == u8 or ar.child == u16,
+            } },
+            .Vector => .{ .vector = .{} },
+            .Pointer => |pt| .{
+                .pointer = .{
+                    .has_slot = true,
+                    .has_length = pt.size == .Slice,
+                    .is_const = pt.is_const,
+                    .is_single = pt.size == .One or pt.size == .C,
+                    .is_multiple = pt.size != .One,
+                    .is_nullable = pt.is_allowzero,
+                },
             },
-            .Pointer => |pt| {
-                s_flags.has_slot = true;
-                s_flags.is_const = pt.is_const;
-                s_flags.is_single = pt.size == .One or pt.size == .C;
-                s_flags.is_multiple = pt.size != .One;
-                s_flags.is_nullable = pt.is_allowzero;
-                s_flags.has_length = pt.size == .Slice;
+            .Opaque => .{
+                .@"opaque" = .{
+                    .is_iterator = self.isIterator(),
+                },
             },
-            .Opaque => {
-                s_flags.is_iterator = self.isIterator();
-            },
-            else => {},
-        }
-        return s_flags;
+            .Fn => .{ .function = .{} },
+            else => @compileError("Unknown structure: " ++ @typeName(self.Type)),
+        };
     }
 
     test "getStructureFlags" {
@@ -544,20 +681,21 @@ pub const TypeData = struct {
             number: i32,
         };
         const a = comptime getStructureFlags(.{ .Type = A });
-        try expectCT(a.has_object == false);
+        try expectCT(a.@"struct".has_object == false);
         const B = struct {
             object: A,
         };
         const b = comptime getStructureFlags(.{ .Type = B });
-        try expectCT(b.has_object == true);
-        try expectCT(b.has_slot == true);
+        try expectCT(b.@"struct".has_object == true);
+        try expectCT(b.@"struct".has_slot == true);
         const C = struct {
             comptime number: i32 = 1234,
         };
         const c = comptime getStructureFlags(.{ .Type = C });
-        try expectCT(c.has_object == false);
-        try expectCT(c.has_slot == true);
+        try expectCT(c.@"struct".has_object == false);
+        try expectCT(c.@"struct".has_slot == true);
     }
+
     pub fn getMemberType(comptime self: @This(), comptime is_comptime: bool) MemberType {
         return switch (self.isSupported()) {
             false => .unsupported,

@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag } from '../constants.js';
+import { EnumFlag, MemberFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { EnumExpected, InvalidInitializer } from '../errors.js';
 import { CAST, INITIALIZE, NAME, SLOTS, TAG, TYPED_ARRAY } from '../symbols.js';
@@ -72,7 +72,7 @@ export default mixin({
         if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
           let item = constructor[arg];
           if (!item) {
-            if (flags & StructureFlag.IsOpenEnded && typeof(arg) !== 'string') {
+            if (flags & EnumFlag.IsOpenEnded && typeof(arg) !== 'string') {
               // create the item on-the-fly when enum is non-exhaustive
               item = new constructor(undefined);
               // write the value into memory

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
@@ -113,7 +113,7 @@ describe('Structure: variadic-struct', function() {
       env.endStructure(floatStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.IsExtern,
+        flags: StructFlag.IsExtern,
         name: 'Struct',
         byteSize: 8,
         align: 8,
@@ -198,7 +198,7 @@ describe('Structure: variadic-struct', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 4,
         align: 4,
@@ -281,7 +281,7 @@ describe('Structure: variadic-struct', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 4,
         align: 4,

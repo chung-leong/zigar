@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType } from '../../src/constants.js';
+import { MemberType, PrimitiveFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 
@@ -20,6 +20,9 @@ describe('Feature: int-conversion', function() {
         bitSize: 32,
         byteSize: 4,
         bitOffset: 1,
+        structure: {
+          flags: PrimitiveFlag.IsSize
+        }
       };
       const set1 = getAccessor('set', member1);
       const member2 = {
@@ -43,10 +46,13 @@ describe('Feature: int-conversion', function() {
       });
       const member = {
         type: MemberType.Uint,
-        flags: MemberFlag.IsSize,
+        flags: 0,
         bitSize: 64,
         byteSize: 8,
         bitOffset: 1,
+        structure: {
+          flags: PrimitiveFlag.IsSize
+        }
       };
       const get = getAccessor('get', member);
       expect(get.call(null, 1, true)).to.equal(1234);

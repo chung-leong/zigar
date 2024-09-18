@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { SliceFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -57,7 +57,7 @@ export default mixin({
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
-      } else if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
+      } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
         initializer.call(this, { string: arg }, fixed);
       } else if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
@@ -132,7 +132,7 @@ export default mixin({
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
-    staticDescriptors[SENTINEL] = (flags & StructureFlag.HasSentinel) && this.defineSentinel(structure);
+    staticDescriptors[SENTINEL] = (flags & SliceFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });
 

@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag } from '../constants.js';
+import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
 import {
@@ -140,6 +140,6 @@ export default mixin({
   },
   finalizeVariadicStruct(structure, staticDescriptors) {
     const { flags } = structure;
-    staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
+    staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
 });

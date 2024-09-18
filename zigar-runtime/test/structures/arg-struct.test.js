@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch } from '../../src/errors.js';
 import '../../src/mixins.js';
@@ -226,7 +226,7 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });

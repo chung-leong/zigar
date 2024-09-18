@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { EnumFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -68,7 +68,6 @@ describe('Structure: enum', function() {
             [SLOTS]: {},
           }
         },
-        flags: StructureFlag.HasSelector,
       };
       structure.instance.members = [
         {
@@ -91,7 +90,6 @@ describe('Structure: enum', function() {
         byteSize: 1,
         instance: {},
         static: {},
-        flags: StructureFlag.HasSelector,
       };
       structure.instance.members = [
         {
@@ -193,7 +191,7 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        flags: StructureFlag.IsOpenEnded,
+        flags: EnumFlag.IsOpenEnded,
         name: 'Hello',
         byteSize: 4,
       });

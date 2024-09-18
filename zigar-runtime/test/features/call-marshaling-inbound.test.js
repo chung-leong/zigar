@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { ArgStructFlag, MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { CallResult } from '../../src/features/call-marshaling-inbound.js';
 import '../../src/mixins.js';
@@ -353,7 +353,7 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(errorStructure);
       const unionStructure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
+        flags: StructureFlag.HasValue,
         name: 'ErrorUnion',
         byteSize: 6,
       });
@@ -376,7 +376,7 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(unionStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsThrowing,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
         name: 'Hello',
         byteSize: 6 + 4 * 2,
       });
@@ -470,7 +470,7 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(errorStructure);
       const unionStructure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasSelector | StructureFlag.HasValue,
+        flags: StructureFlag.HasValue,
         name: 'ErrorUnion',
         byteSize: 6,
       });
@@ -493,7 +493,7 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(unionStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsThrowing,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
         name: 'Hello',
         byteSize: 6 + 4 * 2,
       });

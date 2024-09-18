@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import {
@@ -100,7 +100,7 @@ describe('Structure: union', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Union,
-        flags: StructureFlag.HasTag,
+        flags: UnionFlag.HasTag,
         name: 'Hello',
         byteSize: 4,
         instance: {},
@@ -146,7 +146,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.IsExtern,
+        flags: UnionFlag.IsExtern,
         name: 'Hello',
         byteSize: 4,
       });
@@ -184,7 +184,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.IsExtern,
+        flags: UnionFlag.IsExtern,
         name: 'Hello',
         byteSize: 4,
       });
@@ -215,7 +215,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.IsExtern,
+        flags: UnionFlag.IsExtern,
         name: 'Hello',
         byteSize: 4,
       });
@@ -243,7 +243,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -293,7 +293,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -336,7 +336,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -374,7 +374,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -415,7 +415,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 6,
       });
@@ -456,7 +456,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 6,
       });
@@ -521,7 +521,7 @@ describe('Structure: union', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: structStructure.byteSize * 8 + 32,
       });
@@ -577,7 +577,7 @@ describe('Structure: union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -625,7 +625,7 @@ describe('Structure: union', function() {
       env.endStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasInaccessible,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasSelector | UnionFlag.HasInaccessible,
         name: 'Hello',
         byteSize: 8 * 4,
       });
@@ -730,7 +730,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector,
+        flags: UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 6,
       });
@@ -821,7 +821,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector,
+        flags: UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -874,7 +874,7 @@ describe('Structure: union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -924,7 +924,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 10,
       });
@@ -980,7 +980,7 @@ describe('Structure: union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1030,7 +1030,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 10,
       });
@@ -1086,7 +1086,7 @@ describe('Structure: union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1136,7 +1136,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 10,
       });
@@ -1194,7 +1194,7 @@ describe('Structure: union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -1244,7 +1244,7 @@ describe('Structure: union', function() {
       env.endStructure(enumStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 10,
       });
@@ -1305,7 +1305,7 @@ describe('Structure: union', function() {
     //   env.endStructure(intStructure);
     //   const ptrStructure = env.beginStructure({
     //     type: StructureType.Pointer,
-    //     flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+    //     flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
     //     name: '*i32',
     //     byteSize: 8,
     //   });
@@ -1349,7 +1349,7 @@ describe('Structure: union', function() {
     //   env.endStructure(enumStructure);
     //   const structure = env.beginStructure({
     //     type: StructureType.Union,
-    //     flags: StructureFlag.HasTag | StructureFlag.HasSelector | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+    //     flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
     //     name: 'Hello',
     //     byteSize: 10,
     //   });
@@ -1396,7 +1396,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1437,7 +1437,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1475,7 +1475,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1514,7 +1514,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1552,7 +1552,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1592,7 +1592,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.HasSelector,
+        flags: UnionFlag.HasSelector,
         name: 'Hello',
         byteSize: 8,
       });
@@ -1632,7 +1632,7 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: StructureFlag.IsExtern | StructureFlag.IsIterator,
+        flags: UnionFlag.IsExtern | UnionFlag.IsIterator,
         name: 'Hello',
         byteSize: 4,
       });
@@ -1647,7 +1647,7 @@ describe('Structure: union', function() {
       const Hello = env.defineStructure(structure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
       });
@@ -1663,7 +1663,7 @@ describe('Structure: union', function() {
       env.endStructure(ptrStructure);
       const optStructure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasValue | StructureFlag.HasSelector | StructureFlag.HasSlot,
+        flags: StructureFlag.HasValue | StructureFlag.HasSlot | UnionFlag.HasSelector,
         name: '?i32',
         byteSize: 5,
       });

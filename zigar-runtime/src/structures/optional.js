@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag } from '../constants.js';
+import { MemberType, OptionalFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { COPY, FIXED, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
@@ -42,7 +42,7 @@ export default mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & StructureFlag.HasSelector || !this[MEMORY][FIXED]) {
+        if (flags & OptionalFlag.HasSelector || !this[MEMORY][FIXED]) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
@@ -57,7 +57,7 @@ export default mixin({
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
+    descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
     return constructor;

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -11,7 +11,7 @@ describe('Structure: error-union', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasSelector,
+        flags: 0,
         name: 'Hello',
         byteSize: 8,
         instance: {},
@@ -42,7 +42,7 @@ describe('Structure: error-union', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasSelector,
+        flags: 0,
         name: 'Hello',
         byteSize: 8,
         instance: {},
@@ -112,7 +112,7 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        flags: StructureFlag.HasSelector,
+        flags: 0,
         name: 'Hello',
         byteSize: 10,
       });
@@ -556,7 +556,7 @@ describe('Structure: error-union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
       });
@@ -654,7 +654,7 @@ describe('Structure: error-union', function() {
       env.endStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        flags: StructureFlag.IsString,
+        flags: SliceFlag.IsString,
         name: '[_]u8',
         byteSize: 1,
       })
@@ -668,7 +668,7 @@ describe('Structure: error-union', function() {
       env.endStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: 16,
       });
@@ -768,7 +768,7 @@ describe('Structure: error-union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
       });
@@ -864,7 +864,7 @@ describe('Structure: error-union', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
       });

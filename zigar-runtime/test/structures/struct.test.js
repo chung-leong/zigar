@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, OptionalFlag, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, ENVIRONMENT, FIXED, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
@@ -1149,9 +1149,9 @@ describe('Structure: struct', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
+        flags: StructureFlag.HasSlot | StructFlag.IsTuple,
         name: 'zig.super.Hello',
         byteSize: 0,
-        flags: StructureFlag.IsTuple | StructureFlag.HasSlot,
       });
       env.attachMember(structure, {
         name: '0',
@@ -1184,9 +1184,9 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
+        flags: StructFlag.IsTuple,
         name: 'zig.super.Hello',
         byteSize: 0,
-        flags: StructureFlag.IsTuple,
       });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
@@ -1197,9 +1197,9 @@ describe('Structure: struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
         name: 'i32',
         byteSize: 4,
-        flags: StructureFlag.HasValue,
       });
       env.attachMember(intStructure, {
         type: MemberType.Uint,
@@ -1214,7 +1214,7 @@ describe('Structure: struct', function() {
         type: StructureType.Pointer,
         name: '*i32',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1297,7 +1297,7 @@ describe('Structure: struct', function() {
         type: StructureType.Pointer,
         name: '*i32',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1384,7 +1384,7 @@ describe('Structure: struct', function() {
         type: StructureType.Pointer,
         name: '*i32',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
@@ -1435,7 +1435,7 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.IsIterator,
+        flags: StructFlag.IsIterator,
         name: 'Hello',
         byteSize: 4,
       });
@@ -1450,7 +1450,7 @@ describe('Structure: struct', function() {
       const Hello = env.defineStructure(structure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
       });
@@ -1466,7 +1466,7 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const optStructure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasValue | StructureFlag.HasSelector | StructureFlag.HasSlot,
+        flags: StructureFlag.HasValue | StructureFlag.HasSlot | OptionalFlag.HasSelector,
         name: '?i32',
         byteSize: 5,
       });

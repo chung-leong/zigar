@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, OpaqueFlag, OptionalFlag, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -70,14 +70,14 @@ describe('Structure: opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Opaque,
-        flags: StructureFlag.IsIterator,
+        flags: OpaqueFlag.IsIterator,
         name: 'Hello',
         byteSize: 4,
       });
       const Hello = env.defineStructure(structure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
       });
@@ -93,7 +93,7 @@ describe('Structure: opaque', function() {
       env.endStructure(ptrStructure);
       const optStructure = env.beginStructure({
         type: StructureType.Optional,
-        flags: StructureFlag.HasValue | StructureFlag.HasSelector,
+        flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         name: '?i32',
         byteSize: 5,
       });

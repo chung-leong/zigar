@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { StructureFlag, UnionFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
@@ -15,12 +15,12 @@ export default mixin({
       flags,
       instance: { members },
     } = structure;
-    const exclusion = !!(flags & StructureFlag.HasSelector);
+    const exclusion = !!(flags & UnionFlag.HasSelector);
     const valueMembers = (exclusion) ? members.slice(0, -1) : members;
     const selectorMember = (exclusion) ? members[members.length - 1] : null;
     const { get: getSelector, set: setSelector } = this.defineMember(selectorMember);
     const { get: getSelectorNumber } = this.defineMember(selectorMember, false);
-    const getActiveField = (flags & StructureFlag.HasTag)
+    const getActiveField = (flags & UnionFlag.HasTag)
     ? function() {
         const item = getSelector.call(this);
         return item[NAME];
@@ -29,7 +29,7 @@ export default mixin({
         const index = getSelector.call(this);
         return valueMembers[index].name;
       };
-    const setActiveField = (flags & StructureFlag.HasTag)
+    const setActiveField = (flags & UnionFlag.HasTag)
     ? function(name) {
         const { constructor } = selectorMember.structure;
         setSelector.call(this, constructor[name]);
@@ -74,7 +74,7 @@ export default mixin({
       ? function() {
           const currentName = getActiveField.call(this);
           if (name !== currentName) {
-            if (flags & StructureFlag.HasTag) {
+            if (flags & UnionFlag.HasTag) {
               // tagged union allows inactive member to be queried
               return null;
             } else {
@@ -111,9 +111,9 @@ export default mixin({
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
     descriptors[Symbol.iterator] = {
-      value: (flags & StructureFlag.IsIterator) ? getZigIterator : getUnionIterator,
+      value: (flags & UnionFlag.IsIterator) ? getZigIterator : getUnionIterator,
     };
-    descriptors[Symbol.toPrimitive] = (flags & StructureFlag.HasTag) && {
+    descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {
       value(hint) {
         switch (hint) {
           case 'string':
@@ -124,17 +124,17 @@ export default mixin({
         }
       }
     };
-    descriptors[MODIFY] = (flags & StructureFlag.HasInaccessible && !this.comptime) && {
+    descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
         this[VISIT]('disable', { vivificate: true });
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[TAG] = (flags & StructureFlag.HasTag) && { get: getSelector, set : setSelector };
+    descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
-      isChildActive: (flags & StructureFlag.HasTag)
+      isChildActive: (flags & UnionFlag.HasTag)
       ? function(child) {
           const name = getActiveField.call(this);
           const active = getters[name].call(this);
@@ -143,7 +143,7 @@ export default mixin({
       : () => false,
     });
     descriptors[ENTRIES] = { get: getUnionEntries };
-    descriptors[PROPS] = (flags & StructureFlag.HasTag) ? {
+    descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
         return [ getActiveField.call(this) ];
       }
@@ -156,7 +156,7 @@ export default mixin({
       flags,
       instance: { members },
     } = structure;
-    if (flags & StructureFlag.HasTag) {
+    if (flags & UnionFlag.HasTag) {
       staticDescriptors.tag = defineValue(members[members.length - 1].structure.constructor);
     }
   }

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, StructureFlag, StructureType } from '../src/constants.js';
+import { MemberType, PointerFlag, StructureFlag, StructureType } from '../src/constants.js';
 import {
   AccessingOpaque,
   AlignmentConflict,
@@ -428,7 +428,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],
@@ -443,7 +443,7 @@ describe('Error functions', function() {
       const structure = {
         name: '[]const u8',
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         byteSize: 1,
         instance: {
           members: [],
@@ -524,7 +524,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],
@@ -549,7 +549,7 @@ describe('Error functions', function() {
       const structure = {
         name: '*Hello',
         type: StructureType.SinglePointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         instance: {
           members: [],

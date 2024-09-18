@@ -138,8 +138,6 @@ export function formatProjectConfig(config) {
   return lines.join('\n');
 }
 
-const wasmMainFn = `int main(void) { return 0; }`;
-
 export async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);

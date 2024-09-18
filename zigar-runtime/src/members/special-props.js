@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { ArrayFlag, SliceFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { MEMORY, RESTORE, SENTINEL } from '../symbols.js';
@@ -48,7 +48,9 @@ export default mixin({
           thisEnv.assignView(this, dv, structure, true, fixed);
         },
       });
-      if (structure.flags & StructureFlag.IsString) {
+      const { type, flags } = structure;
+      if ((type === StructureType.Array || flags & ArrayFlag.IsString)
+       || (type === StructureType.Slice || flags & SliceFlag.IsString)) {
         const { byteSize } = structure.instance.members[0];
         const encoding = `utf-${byteSize * 8}`;
         descriptors.string = markAsSpecial({

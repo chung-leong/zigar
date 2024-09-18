@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { ArrayFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -33,7 +33,7 @@ export default mixin({
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else {
-        if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
+        if (typeof(arg) === 'string' && flags & ArrayFlag.IsString) {
           arg = { string: arg };
         }
         if (arg?.[Symbol.iterator]) {

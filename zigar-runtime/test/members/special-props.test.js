@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { ArrayFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 
@@ -25,7 +25,7 @@ describe('Member: special-props', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -66,7 +66,7 @@ describe('Member: special-props', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -114,7 +114,7 @@ describe('Member: special-props', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: StructureFlag.IsString,
+        flags: ArrayFlag.IsString,
         name: '[11]u8',
         length: 11,
         byteSize: 11,

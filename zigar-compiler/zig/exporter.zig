@@ -65,9 +65,7 @@ fn addPrimitiveMember(ctx: anytype, structure: Value, comptime td: TypeData) !vo
     const member_type = td.getMemberType(false);
     try ctx.host.attachMember(structure, .{
         .member_type = member_type,
-        .member_flags = .{
-            .is_size = td.Type == usize or td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_size = td.getBitSize(),
         .bit_offset = 0,
         .byte_size = td.getByteSize(),
@@ -80,9 +78,7 @@ fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(false),
-        .member_flags = .{
-            .is_size = child_td.Type == usize or child_td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = child_td.getByteSize(),
         .structure = try getStructure(ctx, child_td.Type),
@@ -93,9 +89,7 @@ fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(false),
-        .member_flags = .{
-            .is_size = child_td.Type == usize or child_td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = child_td.getByteSize(),
         .structure = try getStructure(ctx, child_td.Type),
@@ -123,9 +117,7 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(false),
-        .member_flags = .{
-            .is_size = child_td.Type == usize or child_td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = if (td.isBitVector()) null else child_td.getByteSize(),
         .structure = try getStructure(ctx, child_td.Type),
@@ -158,7 +150,6 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
             .member_flags = .{
                 .is_read_only = !is_actual,
                 .is_required = field.default_value == null,
-                .is_size = field_td.Type == usize or field_td.Type == isize,
             },
             .bit_offset = if (is_actual) @bitOffsetOf(td.Type, field.name) else null,
             .bit_size = if (is_actual) field_td.getBitSize() else null,
@@ -172,10 +163,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         const int_td = ctx.tdb.get(IT);
         try ctx.host.attachMember(structure, .{
             .member_type = int_td.getMemberType(false),
-            .member_flags = .{
-                .is_backing_int = true,
-                .is_size = int_td.Type == usize or int_td.Type == isize,
-            },
+            .member_flags = .{ .is_backing_int = true },
             .bit_offset = 0,
             .bit_size = int_td.getBitSize(),
             .byte_size = int_td.getByteSize(),
@@ -243,9 +231,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
         try ctx.host.attachMember(structure, .{
             .name = field.name,
             .member_type = field_td.getMemberType(false),
-            .member_flags = .{
-                .is_size = field_td.Type == usize or field_td.Type == isize,
-            },
+            .member_flags = .{},
             .bit_offset = td.getContentBitOffset(),
             .bit_size = field_td.getBitSize(),
             .byte_size = field_td.getByteSize(),
@@ -271,9 +257,7 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
     const child_td = ctx.tdb.get(@typeInfo(td.Type).Optional.child);
     try ctx.host.attachMember(structure, .{
         .member_type = child_td.getMemberType(false),
-        .member_flags = .{
-            .is_size = child_td.Type == usize or child_td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_offset = 0,
         .bit_size = child_td.getBitSize(),
         .byte_size = child_td.getByteSize(),
@@ -296,9 +280,7 @@ fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !
     const payload_td = ctx.tdb.get(@typeInfo(td.Type).ErrorUnion.payload);
     try ctx.host.attachMember(structure, .{
         .member_type = payload_td.getMemberType(false),
-        .member_flags = .{
-            .is_size = payload_td.Type == usize or payload_td.Type == isize,
-        },
+        .member_flags = .{},
         .bit_offset = td.getContentBitOffset(),
         .bit_size = payload_td.getBitSize(),
         .byte_size = payload_td.getByteSize(),

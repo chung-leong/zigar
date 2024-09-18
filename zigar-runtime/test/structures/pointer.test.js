@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import '../../src/mixins.js';
@@ -109,7 +109,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -153,7 +153,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -192,7 +192,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -231,7 +231,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -269,7 +269,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
       });
@@ -308,7 +308,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -370,7 +370,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -426,7 +426,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -478,7 +478,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -529,7 +529,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -582,7 +582,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const Hello',
         byteSize: 4,
       });
@@ -636,7 +636,7 @@ describe('Structure: pointer', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 4,
       });
@@ -653,7 +653,7 @@ describe('Structure: pointer', function() {
       const { constructor: HelloPtr } = structure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const Hello',
         byteSize: 4,
       });
@@ -707,7 +707,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: 8,
         hasPointer: true,
@@ -725,7 +725,7 @@ describe('Structure: pointer', function() {
       const { constructor: HelloPtr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '**Hello',
         byteSize: 8,
         hasPointer: true,
@@ -768,7 +768,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const i32',
         byteSize: 8,
       });
@@ -808,7 +808,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -866,7 +866,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -908,7 +908,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
         hasPointer: true,
@@ -971,7 +971,7 @@ describe('Structure: pointer', function() {
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: 16,
       });
@@ -1038,7 +1038,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
         hasPointer: true,
@@ -1094,7 +1094,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
         hasPointer: true,
@@ -1155,7 +1155,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 8,
         hasPointer: true,
@@ -1218,7 +1218,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]bool',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -1295,7 +1295,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32Array } = arrayStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -1352,7 +1352,7 @@ describe('Structure: pointer', function() {
       const { constructor: U8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -1415,7 +1415,7 @@ describe('Structure: pointer', function() {
       const { constructor: I8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i8',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -1499,7 +1499,7 @@ describe('Structure: pointer', function() {
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -1567,7 +1567,7 @@ describe('Structure: pointer', function() {
       const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const u8',
         byteSize: addressByteSize * 2,
       });
@@ -1583,7 +1583,7 @@ describe('Structure: pointer', function() {
       env.endStructure(constStructure);
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: 8,
         isConst: false,
@@ -1649,7 +1649,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const u8',
         byteSize: addressByteSize * 2,
       });
@@ -1665,7 +1665,7 @@ describe('Structure: pointer', function() {
       env.endStructure(constStructure);
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: addressByteSize * 2,
       });
@@ -1725,7 +1725,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const Target',
         byteSize: addressByteSize * 2,
       });
@@ -1764,7 +1764,7 @@ describe('Structure: pointer', function() {
       env.endStructure(structStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Target',
         byteSize: addressByteSize,
       });
@@ -1780,7 +1780,7 @@ describe('Structure: pointer', function() {
       env.endStructure(ptrStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const *Target',
         byteSize: addressByteSize,
       });
@@ -1835,7 +1835,7 @@ describe('Structure: pointer', function() {
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: addressByteSize,
       });
@@ -1880,7 +1880,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -1918,7 +1918,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -1967,7 +1967,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const i32',
         byteSize: addressByteSize,
       });
@@ -2018,7 +2018,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         name: '*const i32',
         byteSize: addressByteSize,
       });
@@ -2091,7 +2091,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
       });
@@ -2161,7 +2161,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -2201,7 +2201,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -2247,7 +2247,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -2287,7 +2287,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -2344,7 +2344,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -2402,7 +2402,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
         hasPointer: true,
@@ -2444,7 +2444,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        flags: StructureFlag.HasSentinel,
+        flags: SliceFlag.HasSentinel,
         name: '[_:0]Int32',
         byteSize: 4,
         hasPointer: false,
@@ -2470,7 +2470,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasSentinel,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*:0]Int32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -2543,7 +2543,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
       });
@@ -2647,7 +2647,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
       });
@@ -2722,7 +2722,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*]Hello',
         byteSize: addressByteSize,
       });
@@ -2808,7 +2808,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*]Hello',
         byteSize: addressByteSize,
       });
@@ -2857,7 +2857,7 @@ describe('Structure: pointer', function() {
       env.endStructure(byteStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*u8',
         byteSize: addressByteSize,
       });
@@ -2887,7 +2887,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*anyopaque',
         byteSize: addressByteSize,
       });
@@ -2941,7 +2941,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
       });
@@ -2978,7 +2978,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -3008,7 +3008,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3070,7 +3070,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]Hello',
         byteSize: addressByteSize,
       });
@@ -3129,7 +3129,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]Hello',
         byteSize: addressByteSize,
       });
@@ -3169,7 +3169,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
       });
@@ -3199,7 +3199,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3253,7 +3253,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -3270,7 +3270,7 @@ describe('Structure: pointer', function() {
       env.endStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3325,7 +3325,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
         hasPointer: true,
@@ -3342,7 +3342,7 @@ describe('Structure: pointer', function() {
       env.endStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
       });
@@ -3396,7 +3396,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -3413,7 +3413,7 @@ describe('Structure: pointer', function() {
       env.endStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
       });
@@ -3467,7 +3467,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
       });
@@ -3544,7 +3544,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructureWS);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
       });
@@ -3560,7 +3560,7 @@ describe('Structure: pointer', function() {
       env.endStructure(spStructure);
       const muStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*:0]i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3599,7 +3599,7 @@ describe('Structure: pointer', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3669,7 +3669,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsMultiple | StructureFlag.HasLength,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
         hasPointer: true,
@@ -3743,7 +3743,7 @@ describe('Structure: pointer', function() {
       env.endStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle | StructureFlag.IsMultiple | StructureFlag.IsNullable,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
         hasPointer: true,
@@ -3800,7 +3800,7 @@ describe('Structure: pointer', function() {
     env.endStructure(intStructure);
     const structure = env.beginStructure({
       type: StructureType.Pointer,
-      flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.IsSingle,
+      flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       name: '*i32',
       byteSize: 8,
       hasPointer: true,

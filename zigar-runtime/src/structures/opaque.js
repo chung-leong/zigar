@@ -1,4 +1,4 @@
-import { StructureFlag } from '../constants.js';
+import { OpaqueFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { AccessingOpaque, CreatingOpaque } from '../errors.js';
 import { getZigIterator } from '../iterators.js';
@@ -14,7 +14,7 @@ export default mixin({
     const valueAccessor = () => { throw new AccessingOpaque(structure) };
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: valueAccessor, set: valueAccessor };
-    descriptors[Symbol.iterator] = (flags & StructureFlag.IsIterator) && {
+    descriptors[Symbol.iterator] = (flags & OpaqueFlag.IsIterator) && {
       value: getZigIterator
     };
     descriptors[Symbol.toPrimitive] = {

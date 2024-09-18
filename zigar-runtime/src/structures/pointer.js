@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
@@ -27,7 +27,7 @@ export default mixin({
       byteSize: targetSuze = 1
     } = targetStructure;
     // length for slice can be zero or undefined
-    const addressSize = (flags & StructureFlag.HasLength) ? byteSize / 2 : byteSize;
+    const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
     const { get: readAddress, set: writeAddress } = this.defineMember({
       type: MemberType.Uint,
       bitOffset: 0,
@@ -35,7 +35,7 @@ export default mixin({
       byteSize: addressSize,
       structure: { byteSize: addressSize },
     });
-    const { get: readLength, set: writeLength } = (flags & StructureFlag.HasLength) ? this.defineMember({
+    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
       type: MemberType.Uint,
       flags: MemberFlag.IsSize,
       bitOffset: addressSize * 8,
@@ -48,9 +48,9 @@ export default mixin({
         if (active) {
           const Target = constructor.child;
           const address = readAddress.call(this);
-          const length = (flags & StructureFlag.HasLength)
+          const length = (flags & PointerFlag.HasLength)
           ? readLength.call(this)
-          : (flags & StructureFlag.HasSentinel)
+          : (targetFlags & SliceFlag.HasSentinel)
             ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
@@ -59,7 +59,7 @@ export default mixin({
             this[SLOTS][0] = newTarget;
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
-            if (flags & StructureFlag.HasLength) {
+            if (flags & PointerFlag.HasLength) {
               this[MAX_LENGTH] = undefined;
             }
             return newTarget;
@@ -74,7 +74,7 @@ export default mixin({
       writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
-    const setLength = (flags & StructureFlag.HasLength || flags & StructureFlag.HasSentinel)
+    const setLength = (flags & PointerFlag.HasLength || targetFlags & SliceFlag.HasSentinel)
     ? function(length) {
         writeLength?.call?.(this, length);
         this[LAST_LENGTH] = length;
@@ -84,12 +84,12 @@ export default mixin({
       const pointer = this[POINTER] ?? this;
       const target = updateTarget.call(pointer, false);
       if (!target) {
-        if (flags & StructureFlag.IsNullable) {
+        if (flags & PointerFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (flags & StructureFlag.IsConst) ? getConstProxy(target) : target;
+      return (flags & PointerFlag.IsConst) ? getConstProxy(target) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
@@ -112,7 +112,7 @@ export default mixin({
         setLength?.call?.(this, 0);
       }
       pointer[SLOTS][0] = arg ?? null;
-      if (flags & StructureFlag.HasLength) {
+      if (flags & PointerFlag.HasLength) {
         pointer[MAX_LENGTH] = undefined;
       }
     };
@@ -122,7 +122,7 @@ export default mixin({
         return target.$;
       }
     : getTargetObject;
-    const setTarget = (flags & StructureFlag.IsConst)
+    const setTarget = (flags & PointerFlag.IsConst)
     ? throwReadOnly
     : function(value) {
         const target = getTargetObject.call(this);
@@ -147,7 +147,7 @@ export default mixin({
       // determine the maximum length
       let max;
       if (!fixed) {
-        if (flags & StructureFlag.HasLength) {
+        if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
           max = (bytesAvailable / targetSuze) | 0;
@@ -171,11 +171,11 @@ export default mixin({
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         // initialize with the other pointer'structure target
-        if (!(flags & StructureFlag.IsConst) && arg.constructor.const) {
+        if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
         arg = arg[SLOTS][0];
-      } else if (flags & StructureFlag.IsMultiple) {
+      } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
@@ -199,13 +199,13 @@ export default mixin({
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
-          if (flags & StructureFlag.IsConst) {
+          if (flags & PointerFlag.IsConst) {
             arg = constTarget;
           } else {
             throw new ReadOnlyTarget(structure);
           }
         }0
-      } else if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple && arg instanceof Target.child) {
+      } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
@@ -213,7 +213,7 @@ export default mixin({
         const dv = thisEnv.extractView(targetStructure, arg);
         arg = Target(dv);
       } else if (arg != undefined && !arg[MEMORY]) {
-        if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple) {
+        if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple) {
           // C pointer
           if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
             let single = true;
@@ -246,7 +246,7 @@ export default mixin({
         }
         arg = autoObj;
       } else if (arg !== undefined) {
-        if (!(flags & StructureFlag.IsNullable) || arg !== null) {
+        if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
         }
       }
@@ -313,7 +313,7 @@ export default mixin({
       // deal with self-referencing pointer
       get() { return targetStructure.constructor }
     };
-    staticDescriptors.const = defineValue(!!(flags & StructureFlag.IsConst));
+    staticDescriptors.const = defineValue(!!(flags & PointerFlag.IsConst));
     staticDescriptors[CAST] = {
       value(arg, options) {
         if (this === ENVIRONMENT || this === PARENT || arg instanceof constructor) {
@@ -394,10 +394,10 @@ function isPointerOf(arg, Target) {
 }
 
 function isCompatiblePointer(arg, Target, flags) {
-  if (flags & StructureFlag.IsMultiple) {
+  if (flags & PointerFlag.IsMultiple) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;
-    } else if (flags & StructureFlag.IsSingle && isPointerOf(arg, Target.child)) {
+    } else if (flags & PointerFlag.IsSingle && isPointerOf(arg, Target.child)) {
       // C pointer
       return true;
     }
