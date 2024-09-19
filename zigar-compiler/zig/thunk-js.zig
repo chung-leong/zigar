@@ -30,7 +30,7 @@ const native = struct {
 
     pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkConstructor {
         const ft_ns = struct {
-            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) anyerror!usize {
+            fn construct(ptr: ?*anyopaque, id: usize) anyerror!usize {
                 const host = HostT.init(ptr);
                 const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
                 const instance = try closure_factory.alloc(caller, .{
@@ -89,21 +89,14 @@ const wasm = struct {
                 } else false;
             }
 
-            fn tryConstruction(host: HostT, id: usize) !usize {
-                // try to use the preallocated thunks first; if they've been used up,
-                // ask the host to create a new instance of this module and get a new
-                // thunk from that
-                const thunk_ptr = alloc(id) orelse try host.allocateJsThunk(slot);
-                const thunk: *const FT = @ptrCast(thunk_ptr);
-                return @intFromPtr(thunk);
-            }
-
-            fn construct(ptr: ?*anyopaque, id: usize) callconv(.C) ?usize {
+            fn construct(ptr: ?*anyopaque, id: usize) !usize {
                 // try to use the preallocated thunks first; if they've been used up,
                 // ask the host to create a new instance of this module and get a new
                 // thunk from that
                 const host = HostT.init(ptr);
-                return tryConstruction(host, id) catch 0;
+                const thunk_ptr = alloc(id) orelse try host.allocateJsThunk(slot);
+                const thunk: *const FT = @ptrCast(thunk_ptr);
+                return @intFromPtr(thunk);
             }
         };
         // export these functions so they can be called from the JS side

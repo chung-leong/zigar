@@ -22,7 +22,6 @@ export default mixin({
     };
     const isValueVoid = members[0].type === MemberType.Void;
     const isChildActive = function () {
-
       return !!getPresent.call(this);
     };
     const initializer = function(arg) {
@@ -46,7 +45,7 @@ export default mixin({
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
-          setPresent.call(this, 1);
+          setPresent.call(this, 5);
         }
       }
     };

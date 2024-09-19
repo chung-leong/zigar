@@ -335,6 +335,7 @@ pub fn createJsThunk(
     func_id: usize,
     dest: *usize,
 ) callconv(.C) Result {
+    std.debug.print("{any} {any}\n", .{ constructor_address, func_id });
     const constructor: thunk_js.ThunkConstructor = @ptrFromInt(constructor_address);
     if (constructor(md, func_id)) |thunk_address| {
         dest.* = thunk_address;

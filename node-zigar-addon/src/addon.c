@@ -560,8 +560,6 @@ napi_value get_factory_thunk(napi_env env,
     return result;
 }
 
-#include <stdio.h>
-
 napi_value run_thunk(napi_env env,
                      napi_callback_info info) {
     module_data* md;

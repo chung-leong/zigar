@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch } from '../errors.js';
-import { MEMORY, VARIANTS } from '../symbols.js';
-import { defineProperties, defineValue, ObjectCache } from '../utils.js';
+import { FIXED, MEMORY, VARIANTS } from '../symbols.js';
+import { defineProperties, defineValue, getSelf, ObjectCache } from '../utils.js';
 
 export default mixin({
   defineFunction(structure, descriptors) {
@@ -33,6 +33,9 @@ export default mixin({
       if (existing = cache.find(dv)) {
         return existing;
       }
+      if (dv[FIXED]?.address === 1n) {
+        throw new Error('WTF?');
+      }
       const argCount = ArgStruct.prototype.length;
       const { self, method, binary } = (creating)
       ? thisEnv.createInboundCallers(arg, ArgStruct)
@@ -60,6 +63,7 @@ export default mixin({
     Object.setPrototypeOf(constructor.prototype, Function.prototype);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
+    descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     return constructor;
   },
 });
