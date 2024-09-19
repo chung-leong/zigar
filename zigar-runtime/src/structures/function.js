@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch } from '../errors.js';
-import { FIXED, MEMORY, VARIANTS } from '../symbols.js';
+import { MEMORY, VARIANTS } from '../symbols.js';
 import { defineProperties, defineValue, getSelf, ObjectCache } from '../utils.js';
 
 export default mixin({
@@ -32,9 +32,6 @@ export default mixin({
       let existing;
       if (existing = cache.find(dv)) {
         return existing;
-      }
-      if (dv[FIXED]?.address === 1n) {
-        throw new Error('WTF?');
       }
       const argCount = ArgStruct.prototype.length;
       const { self, method, binary } = (creating)

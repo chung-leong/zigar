@@ -1251,8 +1251,7 @@ pub const TypeDataCollector = struct {
                     if (field_attrs.is_comptime_only) {
                         td.attrs.is_comptime_only = true;
                     }
-                    if (field_attrs.has_pointer and un.tag_type != null) {
-                        // we can only handle pointers in tagged unions
+                    if (field_attrs.has_pointer) {
                         td.attrs.has_pointer = true;
                     }
                 }
@@ -1519,9 +1518,9 @@ pub fn Slice(comptime T: type, comptime s: ?Sentinel(T)) type {
         else => T,
     };
     return struct {
-        const ElementType = ET;
-        const sentinel = s;
-        const is_opaque = ET != T;
+        pub const ElementType = ET;
+        pub const sentinel = s;
+        pub const is_opaque = ET != T;
 
         element: ET,
     };

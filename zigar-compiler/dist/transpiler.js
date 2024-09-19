@@ -6225,6 +6225,7 @@ var _function = mixin({
     Object.setPrototypeOf(constructor.prototype, Function.prototype);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
+    descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     return constructor;
   },
 });
@@ -6271,7 +6272,6 @@ var optional = mixin({
     };
     const isValueVoid = members[0].type === MemberType.Void;
     const isChildActive = function () {
-
       return !!getPresent.call(this);
     };
     const initializer = function(arg) {
@@ -6295,7 +6295,7 @@ var optional = mixin({
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
-          setPresent.call(this, 1);
+          setPresent.call(this, 5);
         }
       }
     };
