@@ -167,8 +167,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -180,7 +180,6 @@ describe('Structure: enum', function() {
       expect(Hello.Dog.toString()).to.equal('Dog');
       expect(Hello.Dog === Hello.Dog).to.be.true;
       expect(Hello.Dog === Hello.Cat).to.be.false;
-      throw new Error('FIXME');
       expect(() => Hello.Dog.$ = Hello.Dog).to.throw(TypeError);
       const e = new Hello(Hello.Cat);
       expect(e.$).to.equal(Hello.Cat);
@@ -223,8 +222,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -269,8 +268,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -310,8 +309,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -366,8 +365,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -405,8 +404,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -444,8 +443,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -484,8 +483,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 123 ])),
-          1: instanceOf(structure, new Uint32Array([ 456 ])),
+          0: createInstance(env, structure, new Uint32Array([ 123 ])),
+          1: createInstance(env, structure, new Uint32Array([ 456 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -525,8 +524,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new BigUint64Array([ 1234n ])),
-          1: instanceOf(structure, new BigUint64Array([ 4567n ])),
+          0: createInstance(env, structure, new BigUint64Array([ 1234n ])),
+          1: createInstance(env, structure, new BigUint64Array([ 4567n ])),
         },
       }, true);
       env.endStructure(structure);
@@ -565,8 +564,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -609,8 +608,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -648,8 +647,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -687,8 +686,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 0 ])),
-          1: instanceOf(structure, new Uint32Array([ 1 ])),
+          0: createInstance(env, structure, new Uint32Array([ 0 ])),
+          1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -769,8 +768,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 456 ])),
-          1: instanceOf(structure, new Uint32Array([ 123 ])),
+          0: createInstance(env, structure, new Uint32Array([ 456 ])),
+          1: createInstance(env, structure, new Uint32Array([ 123 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -808,8 +807,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 456 ])),
-          1: instanceOf(structure, new Uint32Array([ 123 ])),
+          0: createInstance(env, structure, new Uint32Array([ 456 ])),
+          1: createInstance(env, structure, new Uint32Array([ 123 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -846,8 +845,8 @@ describe('Structure: enum', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: instanceOf(structure, new Uint32Array([ 456 ])),
-          1: instanceOf(structure, new Uint32Array([ 123 ])),
+          0: createInstance(env, structure, new Uint32Array([ 456 ])),
+          1: createInstance(env, structure, new Uint32Array([ 123 ])),
         },
       }, true);
       env.endStructure(structure);
@@ -866,9 +865,10 @@ describe('Structure: enum', function() {
   })
 })
 
-function instanceOf(structure, ta) {
+function createInstance(env, structure, ta) {
   const { constructor } = structure;
   const dv = new DataView(ta.buffer);
   const object = constructor.call(ENVIRONMENT, dv);
+  env.makeReadOnly(object);
   return object;
 }

@@ -84,9 +84,8 @@ export default mixin({
       // acquire targets of pointers
       this.updatePointerTargets(object);
     }
-    if (copy) {
-      // FIXME
-      // object[PROTECTOR]();
+    if (copy && len > 0) {
+      this.makeReadOnly?.(object);
     }
     return object;
   },

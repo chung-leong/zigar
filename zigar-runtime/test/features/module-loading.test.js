@@ -356,6 +356,9 @@ describe('Feature: module-loading', function() {
           createJsThunk: () => {},
           recreateAddress: () => {},
           findSentinel: () => {},
+          obtainExternBuffer: () => {},
+          loadModule: () => {},
+          getMemoryOffset: () => {},
         };
         env.importFunctions(exports);
         expect(env.allocateExternMemory).to.be.a('function');

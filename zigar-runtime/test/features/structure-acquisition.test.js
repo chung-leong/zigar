@@ -214,9 +214,7 @@ describe('Feature: structure-acquisition', function() {
         constructor: function(dv) {
           recv = this;
           arg = dv;
-          return {
-            // [PROTECTOR]: () => {},
-          };
+          return {};
         }
       };
       const object = env.castView(1234, 0, true, structure);
@@ -231,7 +229,6 @@ describe('Feature: structure-acquisition', function() {
         constructor: function(dv) {
           return {
             [VISIT]: function(f) { visitor = f },
-            // [PROTECTOR]: () => {},
           };
         },
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -273,31 +270,6 @@ describe('Feature: structure-acquisition', function() {
       env.endStructure(s2);
       const constructor = env.getRootModule();
       expect(constructor).to.equal(s2.constructor);
-    })
-  })
-  describe('hasMethods', function() {
-    skip.
-    it('should return true when some structures have methods', function() {
-      const env = new Env();
-      const s1 = {
-        instance: { members: [], methods: [] },
-        static: { members: [], methods: [] },
-        constructor: function() {},
-      };
-      env.endStructure(s1);
-      const s2 = {
-        instance: { members: [], methods: [] },
-        static: { members: [], methods: [
-          {
-            name: 'hello',
-            argStruct: {},
-          }
-        ] },
-        constructor: function() {},
-      };
-      env.endStructure(s2);
-      const presence = env.hasMethods();
-      expect(presence).to.be.true;
     })
   })
   describe('exportStructures', function() {

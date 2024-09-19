@@ -24,33 +24,59 @@ const StructureType = {
   VariadicStruct: 13,
   Function: 14,
 };
-const StructureFlag = {
-  HasValue:         0x0000_0001,
-  HasObject:        0x0000_0002,
-  HasPointer:       0x0000_0004,
-  HasSlot:          0x0000_0008,
-  HasLength:        0x0000_0010,
-  HasSelector:      0x0000_0020,
-  HasTag:           0x0000_0040,
-  HasSentinel:      0x0000_0080,
-
-  IsConst:          0x0000_0100,
-  IsMultiple:       0x0000_0200,
-  IsSingle:         0x0000_0400,
-  IsExtern:         0x0000_0800,
-  IsString:         0x0000_1000,
-  IsPacked:         0x0000_2000,
-  IsIterator:       0x0000_4000,
-  IsThrowing:       0x0000_8000,
-
-  HasInaccessible:  0x0001_0000,
-
-  IsTuple:          0x0100_0000,
-  IsNullable:       0x0200_0000,
-  IsOpenEnded:      0x0400_0000,
-  IsVariandic:      0x0800_0000,
-};
 const structureNames = Object.keys(StructureType);
+const StructureFlag = {
+  HasValue:         0x0001,
+  HasObject:        0x0002,
+  HasPointer:       0x0004,
+  HasSlot:          0x0008,
+};
+const PrimitiveFlag = {
+  IsSize:           0x0010,
+};
+const ArrayFlag = {
+  IsString:         0x0010,
+};
+const StructFlag = {
+  IsExtern:         0x0010,
+  IsPacked:         0x0020,
+  IsIterator:       0x0040,
+  IsTuple:          0x0040,
+};
+const UnionFlag = {
+  HasSelector:      0x0010,
+  HasTag:           0x0020,
+  HasInaccessible:  0x0040,
+  IsExtern:         0x0080,
+
+  IsPacked:         0x0100,
+  IsIterator:       0x0200,
+};
+const EnumFlag = {
+  IsOpenEnded:      0x0010,
+  IsIterator:       0x0020,
+};
+const OptionalFlag = {
+  HasSelector:      0x0010,
+};
+const PointerFlag = {
+  HasLength:        0x0010,
+  IsMultiple:       0x0020,
+  IsSingle:         0x0040,
+  IsConst:          0x0080,
+
+  IsNullable:       0x0100,
+};
+const SliceFlag = {
+  HasSentinel:      0x0010,
+  IsString:         0x0020,
+};
+const OpaqueFlag = {
+  IsIterator:       0x0010,
+};
+const ArgStructFlag = {
+  IsThrowing:       0x0010,
+};
 
 const MemberType = {
   Void: 0,
@@ -67,19 +93,18 @@ const MemberType = {
 };
 const memberNames = Object.keys(MemberType);
 const MemberFlag = {
-  IsRequired:       0x0000_0001,
-  IsReadOnly:       0x0000_0002,
-  IsSize:           0x0000_0004,
-  IsPartOfSet:      0x0000_0008,
-  IsSelector:       0x0000_0010,
-  IsMethod:         0x0000_0020,
-  IsSentinel:       0x0000_0040,
-  IsBackingInt:     0x0000_0080,
+  IsRequired:       0x0001,
+  IsReadOnly:       0x0002,
+  IsPartOfSet:      0x0004,
+  IsSelector:       0x0008,
+  IsMethod:         0x0010,
+  IsSentinel:       0x0020,
+  IsBackingInt:     0x0040,
 };
 
 const ExportFlag = {
-  OmitMethods: 0x0000_0001,
-  OmitVariables: 0x0000_0002,
+  OmitMethods:      0x0001,
+  OmitVariables:    0x0002,
 };
 
 const MEMORY = Symbol('memory');
@@ -2247,6 +2272,9 @@ var baseline = mixin({
           const { reloc, const: isConst } = placeholder;
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          if (isConst) {
+            this.makeReadOnly(object);
+          }
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);
           }
@@ -3178,7 +3206,8 @@ var intConversion = mixin({
           accessor.call(this, offset, number, littleEndian);
         };
       } else {
-        if ((flags & MemberFlag.IsSize) && bitSize > 32) {
+        const { flags: structureFlags } = member.structure;
+        if ((structureFlags & PrimitiveFlag.IsSize) && bitSize > 32) {
           const max = BigInt(Number.MAX_SAFE_INTEGER);
           const min = BigInt(Number.MIN_SAFE_INTEGER);
           return function(offset, littleEndian) {
@@ -4056,6 +4085,9 @@ var structureAcquisition = mixin({
       // acquire targets of pointers
       this.updatePointerTargets(object);
     }
+    if (copy && len > 0) {
+      this.makeReadOnly?.(object);
+    }
     return object;
   },
   acquireDefaultPointers() {
@@ -4073,6 +4105,7 @@ var structureAcquisition = mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
+    const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
         omitFunctions = false,
@@ -4086,7 +4119,7 @@ var structureAcquisition = mixin({
       if (omitVariables) {
         flags |= ExportFlag.OmitVariables;
       }
-      dv.setUint32(0, flags, this.littleEndian);
+      dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
@@ -4442,7 +4475,52 @@ var wasiSupport = mixin({
 });
 
 var writeProtection = mixin({
+  makeReadOnly(object) {
+    protect(object);
+  }
 });
+
+const gp = Object.getOwnPropertyDescriptors;
+const df = Object.defineProperty;
+
+function protect(object) {
+  const pointer = object[POINTER];
+  if (pointer) {
+    protectProperties(pointer);
+  } else {
+    const array = object[ARRAY];
+    if (array) {
+      protectProperties(array);
+      protectElements(array);
+    } else {
+      protectProperties(object);
+    }
+  }
+}
+
+function protectProperties(object) {
+  const descriptors = gp(object.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (descriptor.set) {
+      descriptor.set = throwReadOnly;
+      df(object, name, descriptor);
+    }
+  }
+  df(object, CONST_TARGET, { value: object });
+}
+
+function protectElements(array) {
+  df(array, 'set', { value: throwReadOnly });
+  const get = array.get;
+  const getReadOnly = function(index) {
+    const element = get.call(this, index);
+    if (element?.[CONST_TARGET] === null) {
+      protect(element);
+    }
+    return element;
+  };
+  df(array, 'get', { value: getReadOnly });
+}
 
 var all$1 = mixin({
   defineMember(member, applyTransform = true) {
@@ -4817,9 +4895,12 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
+          entries = value[ENTRIES];
+          result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
+          break;
         case StructureType.Union:
           entries = value[ENTRIES];
-          result = (value.constructor[FLAGS] & StructureFlag.IsTuple) ? [] : {};
+          result = {};
           break;
         case StructureType.Array:
         case StructureType.Vector:
@@ -4900,7 +4981,9 @@ var specialProps = mixin({
           thisEnv.assignView(this, dv, structure, true, fixed);
         },
       });
-      if (structure.flags & StructureFlag.IsString) {
+      const { type, flags } = structure;
+      if ((type === StructureType.Array || flags & ArrayFlag.IsString)
+       || (type === StructureType.Slice || flags & SliceFlag.IsString)) {
         const { byteSize } = structure.instance.members[0];
         const encoding = `utf-${byteSize * 8}`;
         descriptors.string = markAsSpecial({
@@ -5545,7 +5628,7 @@ var argStruct = mixin({
   },
   finalizeArgStruct(structure, staticDescriptors) {
     const { flags } = structure;
-    staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
+    staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
 });
 
@@ -5655,7 +5738,7 @@ var array = mixin({
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else {
-        if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
+        if (typeof(arg) === 'string' && flags & ArrayFlag.IsString) {
           arg = { string: arg };
         }
         if (arg?.[Symbol.iterator]) {
@@ -5763,7 +5846,7 @@ var _enum = mixin({
         if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
           let item = constructor[arg];
           if (!item) {
-            if (flags & StructureFlag.IsOpenEnded && typeof(arg) !== 'string') {
+            if (flags & EnumFlag.IsOpenEnded && typeof(arg) !== 'string') {
               // create the item on-the-fly when enum is non-exhaustive
               item = new constructor(undefined);
               // write the value into memory
@@ -6151,7 +6234,7 @@ var opaque = mixin({
     const valueAccessor = () => { throw new AccessingOpaque(structure) };
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: valueAccessor, set: valueAccessor };
-    descriptors[Symbol.iterator] = (flags & StructureFlag.IsIterator) && {
+    descriptors[Symbol.iterator] = (flags & OpaqueFlag.IsIterator) && {
       value: getZigIterator
     };
     descriptors[Symbol.toPrimitive] = {
@@ -6204,7 +6287,7 @@ var optional = mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & StructureFlag.HasSelector || !this[MEMORY][FIXED]) {
+        if (flags & OptionalFlag.HasSelector || !this[MEMORY][FIXED]) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
@@ -6219,7 +6302,7 @@ var optional = mixin({
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[RESET] = (flags & StructureFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
+    descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
     return constructor;
@@ -6241,7 +6324,7 @@ var pointer = mixin({
       byteSize: targetSuze = 1
     } = targetStructure;
     // length for slice can be zero or undefined
-    const addressSize = (flags & StructureFlag.HasLength) ? byteSize / 2 : byteSize;
+    const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
     const { get: readAddress, set: writeAddress } = this.defineMember({
       type: MemberType.Uint,
       bitOffset: 0,
@@ -6249,22 +6332,24 @@ var pointer = mixin({
       byteSize: addressSize,
       structure: { byteSize: addressSize },
     });
-    const { get: readLength, set: writeLength } = (flags & StructureFlag.HasLength) ? this.defineMember({
+    const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
       type: MemberType.Uint,
-      flags: MemberFlag.IsSize,
       bitOffset: addressSize * 8,
       bitSize: addressSize * 8,
       byteSize: addressSize,
-      structure: { byteSize: addressSize },
+      structure: {
+        flags: PrimitiveFlag.IsSize,
+        byteSize: addressSize
+      },
     }) : {};
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
           const Target = constructor.child;
           const address = readAddress.call(this);
-          const length = (flags & StructureFlag.HasLength)
+          const length = (flags & PointerFlag.HasLength)
           ? readLength.call(this)
-          : (flags & StructureFlag.HasSentinel)
+          : (targetFlags & SliceFlag.HasSentinel)
             ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
@@ -6273,7 +6358,7 @@ var pointer = mixin({
             this[SLOTS][0] = newTarget;
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
-            if (flags & StructureFlag.HasLength) {
+            if (flags & PointerFlag.HasLength) {
               this[MAX_LENGTH] = undefined;
             }
             return newTarget;
@@ -6288,7 +6373,7 @@ var pointer = mixin({
       writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
-    const setLength = (flags & StructureFlag.HasLength || flags & StructureFlag.HasSentinel)
+    const setLength = (flags & PointerFlag.HasLength || targetFlags & SliceFlag.HasSentinel)
     ? function(length) {
         writeLength?.call?.(this, length);
         this[LAST_LENGTH] = length;
@@ -6298,12 +6383,12 @@ var pointer = mixin({
       const pointer = this[POINTER] ?? this;
       const target = updateTarget.call(pointer, false);
       if (!target) {
-        if (flags & StructureFlag.IsNullable) {
+        if (flags & PointerFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (flags & StructureFlag.IsConst) ? getConstProxy(target) : target;
+      return (flags & PointerFlag.IsConst) ? getConstProxy(target) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
@@ -6326,7 +6411,7 @@ var pointer = mixin({
         setLength?.call?.(this, 0);
       }
       pointer[SLOTS][0] = arg ?? null;
-      if (flags & StructureFlag.HasLength) {
+      if (flags & PointerFlag.HasLength) {
         pointer[MAX_LENGTH] = undefined;
       }
     };
@@ -6336,7 +6421,7 @@ var pointer = mixin({
         return target.$;
       }
     : getTargetObject;
-    const setTarget = (flags & StructureFlag.IsConst)
+    const setTarget = (flags & PointerFlag.IsConst)
     ? throwReadOnly
     : function(value) {
         const target = getTargetObject.call(this);
@@ -6361,7 +6446,7 @@ var pointer = mixin({
       // determine the maximum length
       let max;
       if (!fixed) {
-        if (flags & StructureFlag.HasLength) {
+        if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
           max = (bytesAvailable / targetSuze) | 0;
@@ -6385,11 +6470,11 @@ var pointer = mixin({
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         // initialize with the other pointer'structure target
-        if (!(flags & StructureFlag.IsConst) && arg.constructor.const) {
+        if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
         arg = arg[SLOTS][0];
-      } else if (flags & StructureFlag.IsMultiple) {
+      } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
@@ -6413,12 +6498,12 @@ var pointer = mixin({
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
-          if (flags & StructureFlag.IsConst) {
+          if (flags & PointerFlag.IsConst) {
             arg = constTarget;
           } else {
             throw new ReadOnlyTarget(structure);
           }
-        }      } else if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple && arg instanceof Target.child) {
+        }      } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
@@ -6426,7 +6511,7 @@ var pointer = mixin({
         const dv = thisEnv.extractView(targetStructure, arg);
         arg = Target(dv);
       } else if (arg != undefined && !arg[MEMORY]) {
-        if (flags & StructureFlag.IsSingle && flags & StructureFlag.IsMultiple) {
+        if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple) {
           // C pointer
           if (typeof(arg) === 'object' && !arg[Symbol.iterator]) {
             let single = true;
@@ -6459,7 +6544,7 @@ var pointer = mixin({
         }
         arg = autoObj;
       } else if (arg !== undefined) {
-        if (!(flags & StructureFlag.IsNullable) || arg !== null) {
+        if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
         }
       }
@@ -6526,7 +6611,7 @@ var pointer = mixin({
       // deal with self-referencing pointer
       get() { return targetStructure.constructor }
     };
-    staticDescriptors.const = defineValue(!!(flags & StructureFlag.IsConst));
+    staticDescriptors.const = defineValue(!!(flags & PointerFlag.IsConst));
     staticDescriptors[CAST] = {
       value(arg, options) {
         if (this === ENVIRONMENT || this === PARENT || arg instanceof constructor) {
@@ -6596,10 +6681,10 @@ function isPointerOf(arg, Target) {
 }
 
 function isCompatiblePointer(arg, Target, flags) {
-  if (flags & StructureFlag.IsMultiple) {
+  if (flags & PointerFlag.IsMultiple) {
     if (arg?.constructor?.child?.child === Target.child && arg['*']) {
       return true;
-    } else if (flags & StructureFlag.IsSingle && isPointerOf(arg, Target.child)) {
+    } else if (flags & PointerFlag.IsSingle && isPointerOf(arg, Target.child)) {
       // C pointer
       return true;
     }
@@ -6782,7 +6867,7 @@ var slice = mixin({
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
-      } else if (typeof(arg) === 'string' && flags & StructureFlag.IsString) {
+      } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
         initializer.call(this, { string: arg }, fixed);
       } else if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
@@ -6857,7 +6942,7 @@ var slice = mixin({
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
-    staticDescriptors[SENTINEL] = (flags & StructureFlag.HasSentinel) && this.defineSentinel(structure);
+    staticDescriptors[SENTINEL] = (flags & SliceFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });
 
@@ -6952,10 +7037,10 @@ var struct = mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
-    descriptors.length = (flags & StructureFlag.IsTuple) && {
+    descriptors.length = (flags & StructFlag.IsTuple) && {
       value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
     };
-    descriptors.entries = (flags & StructureFlag.IsTuple) && {
+    descriptors.entries = (flags & StructFlag.IsTuple) && {
       value: getVectorEntries,
     };
     // allow conversion of packed struct to number when there's a backing int
@@ -6968,9 +7053,9 @@ var struct = mixin({
     };
     // add iterator
     descriptors[Symbol.iterator] = defineValue(
-      (flags & StructureFlag.IsIterator)
+      (flags & StructFlag.IsIterator)
       ? getZigIterator
-      : (flags & StructureFlag.IsTuple)
+      : (flags & StructFlag.IsTuple)
         ? getVectorIterator
         : getStructIterator
     );
@@ -6979,7 +7064,7 @@ var struct = mixin({
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
-    descriptors[ENTRIES] = { get: (flags & StructureFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
     return constructor;
   }
@@ -6991,12 +7076,12 @@ var union = mixin({
       flags,
       instance: { members },
     } = structure;
-    const exclusion = !!(flags & StructureFlag.HasSelector);
+    const exclusion = !!(flags & UnionFlag.HasSelector);
     const valueMembers = (exclusion) ? members.slice(0, -1) : members;
     const selectorMember = (exclusion) ? members[members.length - 1] : null;
     const { get: getSelector, set: setSelector } = this.defineMember(selectorMember);
     const { get: getSelectorNumber } = this.defineMember(selectorMember, false);
-    const getActiveField = (flags & StructureFlag.HasTag)
+    const getActiveField = (flags & UnionFlag.HasTag)
     ? function() {
         const item = getSelector.call(this);
         return item[NAME];
@@ -7005,7 +7090,7 @@ var union = mixin({
         const index = getSelector.call(this);
         return valueMembers[index].name;
       };
-    const setActiveField = (flags & StructureFlag.HasTag)
+    const setActiveField = (flags & UnionFlag.HasTag)
     ? function(name) {
         const { constructor } = selectorMember.structure;
         setSelector.call(this, constructor[name]);
@@ -7050,7 +7135,7 @@ var union = mixin({
       ? function() {
           const currentName = getActiveField.call(this);
           if (name !== currentName) {
-            if (flags & StructureFlag.HasTag) {
+            if (flags & UnionFlag.HasTag) {
               // tagged union allows inactive member to be queried
               return null;
             } else {
@@ -7087,9 +7172,9 @@ var union = mixin({
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
     descriptors[Symbol.iterator] = {
-      value: (flags & StructureFlag.IsIterator) ? getZigIterator : getUnionIterator,
+      value: (flags & UnionFlag.IsIterator) ? getZigIterator : getUnionIterator,
     };
-    descriptors[Symbol.toPrimitive] = (flags & StructureFlag.HasTag) && {
+    descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {
       value(hint) {
         switch (hint) {
           case 'string':
@@ -7100,17 +7185,17 @@ var union = mixin({
         }
       }
     };
-    descriptors[MODIFY] = (flags & StructureFlag.HasInaccessible && !this.comptime) && {
+    descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
         this[VISIT]('disable', { vivificate: true });
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[TAG] = (flags & StructureFlag.HasTag) && { get: getSelector, set : setSelector };
+    descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
-      isChildActive: (flags & StructureFlag.HasTag)
+      isChildActive: (flags & UnionFlag.HasTag)
       ? function(child) {
           const name = getActiveField.call(this);
           const active = getters[name].call(this);
@@ -7119,7 +7204,7 @@ var union = mixin({
       : () => false,
     });
     descriptors[ENTRIES] = { get: getUnionEntries };
-    descriptors[PROPS] = (flags & StructureFlag.HasTag) ? {
+    descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
         return [ getActiveField.call(this) ];
       }
@@ -7132,7 +7217,7 @@ var union = mixin({
       flags,
       instance: { members },
     } = structure;
-    if (flags & StructureFlag.HasTag) {
+    if (flags & UnionFlag.HasTag) {
       staticDescriptors.tag = defineValue(members[members.length - 1].structure.constructor);
     }
   }
@@ -7272,7 +7357,7 @@ var variadicStruct = mixin({
   },
   finalizeVariadicStruct(structure, staticDescriptors) {
     const { flags } = structure;
-    staticDescriptors[THROWING] = defineValue(!!(flags & StructureFlag.IsThrowing));
+    staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
 });
 

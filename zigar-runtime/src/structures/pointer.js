@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
+import { MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
@@ -37,11 +37,13 @@ export default mixin({
     });
     const { get: readLength, set: writeLength } = (flags & PointerFlag.HasLength) ? this.defineMember({
       type: MemberType.Uint,
-      flags: MemberFlag.IsSize,
       bitOffset: addressSize * 8,
       bitSize: addressSize * 8,
       byteSize: addressSize,
-      structure: { byteSize: addressSize },
+      structure: {
+        flags: PrimitiveFlag.IsSize,
+        byteSize: addressSize
+      },
     }) : {};
     const updateTarget = function(all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {

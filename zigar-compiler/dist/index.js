@@ -39,14 +39,13 @@ const MemberType = {
   Unsupported: 10,
 };
 const MemberFlag = {
-  IsRequired:       0x0000_0001,
-  IsReadOnly:       0x0000_0002,
-  IsSize:           0x0000_0004,
-  IsPartOfSet:      0x0000_0008,
-  IsSelector:       0x0000_0010,
-  IsMethod:         0x0000_0020,
-  IsSentinel:       0x0000_0040,
-  IsBackingInt:     0x0000_0080,
+  IsRequired:       0x0001,
+  IsReadOnly:       0x0002,
+  IsPartOfSet:      0x0004,
+  IsSelector:       0x0008,
+  IsMethod:         0x0010,
+  IsSentinel:       0x0020,
+  IsBackingInt:     0x0040,
 };
 
 (process.env.BITS === '64')

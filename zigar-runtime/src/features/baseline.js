@@ -42,8 +42,7 @@ export default mixin({
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
           if (isConst) {
-            // FIXME
-            // object[PROTECTOR]?.();
+            this.makeReadOnly(object);
           }
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);

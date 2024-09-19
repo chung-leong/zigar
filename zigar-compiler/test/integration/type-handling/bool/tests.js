@@ -7,7 +7,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Bool', function() {
     it('should import bool as static variables', async function() {
       this.timeout(300000);
@@ -43,17 +43,17 @@ export function addTests(importModule, options) {
     })
     it('should handle bool in array', async function() {
       this.timeout(300000);
-      const { default: module, array_const, print } = await importTest('array-of');      
+      const { default: module, array_const, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect([ ...module.array ]).to.eql([ true, false, false, true ]);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('{ true, false, false, true }');
       module.array[2] = true;
-      const [ after1 ] = await capture(() => print());      
+      const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('{ true, false, true, true }');
       module.array = [ true, true, true, true ];
-      const [ after2 ] = await capture(() => print());      
-      expect(after2).to.equal('{ true, true, true, true }');      
+      const [ after2 ] = await capture(() => print());
+      expect(after2).to.equal('{ true, true, true, true }');
       expect(() => array_const[0] = true).to.throw();
       expect(() => module.array_const = [ false, false, false, false ]).to.throw();
       expect(() => module.array = [ false, false, false ]).to.throw();
@@ -156,17 +156,17 @@ export function addTests(importModule, options) {
     })
     it('should handle bool in vector', async function() {
       this.timeout(300000);
-      const { default: module, vector_const, print } = await importTest('vector-of');      
+      const { default: module, vector_const, print } = await importTest('vector-of');
       expect(module.vector.length).to.equal(4);
       expect([ ...module.vector ]).to.eql([ true, false, false, true ]);
       const [ before ] = await capture(() => print());
       expect(before).to.equal('{ true, false, false, true }');
       module.vector[2] = true;
-      const [ after1 ] = await capture(() => print());      
+      const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('{ true, false, true, true }');
       module.vector = [ true, true, true, true ];
-      const [ after2 ] = await capture(() => print());      
-      expect(after2).to.equal('{ true, true, true, true }');      
+      const [ after2 ] = await capture(() => print());
+      expect(after2).to.equal('{ true, true, true, true }');
       expect(() => vector_const[0] = true).to.throw();
       expect(() => module.vector_const = [ false, false, false, false ]).to.throw();
       expect(() => module.vector = [ false, false, false ]).to.throw();
