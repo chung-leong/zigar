@@ -16,16 +16,16 @@ const ModuleData = opaque {};
 // struct for C
 const StructureC = extern struct {
     name: ?[*:0]const u8,
-    structure_type: types.StructureType,
-    structure_flags: types.StructureFlags,
+    type: types.StructureType,
+    flags: types.StructureFlags,
     length: usize,
     byte_size: usize,
     alignment: u16,
 };
 const MemberC = extern struct {
     name: ?[*:0]const u8,
-    member_type: types.MemberType,
-    member_flags: types.MemberFlags,
+    type: types.MemberType,
+    flags: types.MemberFlags,
     bit_offset: usize,
     bit_size: usize,
     byte_size: usize,
@@ -121,8 +121,8 @@ pub const Host = struct {
     pub fn beginStructure(self: Host, def: types.Structure) !Value {
         const def_c: StructureC = .{
             .name = if (def.name) |p| @ptrCast(p) else null,
-            .structure_type = def.structure_type,
-            .structure_flags = def.structure_flags,
+            .type = def.type,
+            .flags = def.flags,
             .length = def.length orelse missing(usize),
             .byte_size = def.byte_size orelse missing(usize),
             .alignment = def.alignment orelse missing(u16),
@@ -137,8 +137,8 @@ pub const Host = struct {
     pub fn attachMember(self: Host, structure: Value, member: types.Member, is_static: bool) !void {
         const member_c: MemberC = .{
             .name = if (member.name) |p| @ptrCast(p) else null,
-            .member_type = member.member_type,
-            .member_flags = member.member_flags,
+            .type = member.type,
+            .flags = member.flags,
             .bit_offset = member.bit_offset orelse missing(usize),
             .bit_size = member.bit_size orelse missing(usize),
             .byte_size = member.byte_size orelse missing(usize),

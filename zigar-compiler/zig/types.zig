@@ -213,8 +213,8 @@ pub const Value = *opaque {};
 
 pub const Structure = struct {
     name: ?[]const u8 = null,
-    structure_type: StructureType,
-    structure_flags: StructureFlags,
+    type: StructureType,
+    flags: StructureFlags,
     length: ?usize,
     byte_size: ?usize,
     alignment: ?u16,
@@ -229,8 +229,8 @@ pub const ModuleAttributes = packed struct(u32) {
 
 pub const Member = struct {
     name: ?[]const u8 = null,
-    member_type: MemberType,
-    member_flags: MemberFlags,
+    type: MemberType,
+    flags: MemberFlags,
     bit_offset: ?usize = null,
     bit_size: ?usize = null,
     byte_size: ?usize = null,

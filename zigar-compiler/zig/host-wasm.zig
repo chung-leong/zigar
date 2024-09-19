@@ -235,8 +235,8 @@ pub const Host = struct {
     pub fn beginStructure(_: Host, structure: types.Structure) !Value {
         const def = beginDefinition();
         try insertProperty(def, "name", structure.name);
-        try insertProperty(def, "type", structure.structure_type);
-        try insertProperty(def, "flags", structure.structure_flags);
+        try insertProperty(def, "type", structure.type);
+        try insertProperty(def, "flags", structure.flags);
         try insertProperty(def, "length", structure.length);
         try insertProperty(def, "byteSize", structure.byte_size);
         try insertProperty(def, "align", structure.alignment);
@@ -246,8 +246,8 @@ pub const Host = struct {
 
     pub fn attachMember(_: Host, structure: Value, member: types.Member, is_static: bool) !void {
         const def = beginDefinition();
-        try insertProperty(def, "type", member.member_type);
-        try insertProperty(def, "flags", member.member_flags);
+        try insertProperty(def, "type", member.type);
+        try insertProperty(def, "flags", member.flags);
         try insertProperty(def, "bitOffset", member.bit_offset);
         try insertProperty(def, "bitSize", member.bit_size);
         try insertProperty(def, "byteSize", member.byte_size);
