@@ -227,7 +227,7 @@ pub const Host = struct {
             .Int => _insertInteger(container, key_str, @intCast(value)),
             .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
             .Bool => _insertBoolean(container, key_str, value),
-            .Struct => _insertInteger(container, key_str, @bitCast(value)),
+            .Struct, .Union => _insertInteger(container, key_str, @bitCast(value)),
             else => @compileError("No support for value type: " ++ @typeName(T)),
         }
     }

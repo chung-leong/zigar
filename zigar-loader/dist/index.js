@@ -13,6 +13,7 @@ module.exports.raw = true;
 
 async function loader(content, map, meta) {
   const path = this.resourcePath;
+  const { transpile, optionsForCompile, optionsForTranspile } = await import('zigar-compiler/transpiler');
   const options = this.getOptions({
     type: 'object',
     default: {},
@@ -24,7 +25,6 @@ async function loader(content, map, meta) {
       ...optionsForTranspile,
     },
   });
-  const { transpile, optionsForCompile, optionsForTranspile } = await import('zigar-compiler/transpiler');
   const {
     useReadFile = (this.target === 'node'),
     embedWASM = false,
