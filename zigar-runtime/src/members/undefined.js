@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { throwReadOnly } from '../errors.js';
 
 export default mixin({
   defineMemberUndefined(member) {
@@ -6,6 +7,7 @@ export default mixin({
       get: function() {
         return undefined;
       },
+      set: throwReadOnly,
     };
   },
 });

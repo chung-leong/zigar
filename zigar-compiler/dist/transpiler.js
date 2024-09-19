@@ -41,7 +41,7 @@ const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
   IsIterator:       0x0040,
-  IsTuple:          0x0040,
+  IsTuple:          0x0080,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
@@ -4591,14 +4591,15 @@ var int = mixin({
 var literal = mixin({
   defineMemberLiteral(member) {
     const { slot } = member;
-    return bindSlot(slot, { get: getLiteral });
+    return bindSlot(slot, {
+      get(slot) {
+        const object = this[SLOTS][slot];
+        return object.string;
+      },
+      set: throwReadOnly,
+    });
   },
 });
-
-function getLiteral(slot) {
-  const object = this[SLOTS][slot];
-  return object.string;
-}
 
 var _null = mixin({
   defineMemberNull(member) {
@@ -4606,6 +4607,7 @@ var _null = mixin({
       get: function() {
         return null;
       },
+      set: throwReadOnly,
     };
   },
 });
@@ -4614,7 +4616,7 @@ var object = mixin({
   defineMemberObject(member) {
     return bindSlot(member.slot, {
       get: (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
-      set: (member.flags & MemberFlag.IsReadOnly) ? undefined : setValue,
+      set: (member.flags & MemberFlag.IsReadOnly) ? throwReadOnly : setValue,
     });
   }
 });
@@ -5036,15 +5038,16 @@ function markAsSpecial({ get, set }) {
 var type = mixin({
   defineMemberType(member, env) {
     const { slot } = member;
-    return bindSlot(slot, { get: getType });
+    return bindSlot(slot, {
+      get(slot) {
+        // unsupported types will have undefined structure
+        const structure = this[SLOTS][slot];
+        return structure?.constructor;
+      },
+      set: throwReadOnly,
+    });
   }
 });
-
-function getType(slot) {
-  // unsupported types will have undefined structure
-  const structure = this[SLOTS][slot];
-  return structure?.constructor;
-}
 
 var uint = mixin({
   defineMemberUint(member) {
@@ -5063,6 +5066,7 @@ var _undefined = mixin({
       get: function() {
         return undefined;
       },
+      set: throwReadOnly,
     };
   },
 });
@@ -5640,7 +5644,7 @@ var arrayLike = mixin({
         defineProperties(this, {
           [PROXY]: { value },
           get: { value: get.bind(this) },
-          set: { value: set.bind(this) },
+          set: set && { value: set.bind(this) },
         });
         return value;
       },
@@ -8872,6 +8876,7 @@ async function transpile(path, options) {
   usage.FeatureBaseline = true;
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
+  usage.FeaturePointerSynchronization = usage.FeatureCallMarshalingOutbound;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {

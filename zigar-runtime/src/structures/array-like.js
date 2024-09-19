@@ -10,7 +10,7 @@ export default mixin({
         defineProperties(this, {
           [PROXY]: { value },
           get: { value: get.bind(this) },
-          set: { value: set.bind(this) },
+          set: set && { value: set.bind(this) },
         });
         return value;
       },

@@ -33,7 +33,7 @@ export const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
   IsIterator:       0x0040,
-  IsTuple:          0x0040,
+  IsTuple:          0x0080,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,

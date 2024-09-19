@@ -6,7 +6,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Undefined', function() {
     it('should handle undefined as static variables', async function() {
       this.timeout(300000);
@@ -32,7 +32,7 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const { default: module, StructA } = await importTest('in-struct');
       expect(() => new StructA({ empty1: undefined })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');
+        .with.property('message').that.contains('read-only');
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
     })
@@ -58,7 +58,7 @@ export function addTests(importModule, options) {
       expect(TagType(module.union_a)).to.equal(TagType.empty);
       expect(module.union_a.number).to.be.null;
       expect(() => new UnionA({ empty: undefined })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');
+        .with.property('message').that.contains('read-only');
       const b = new UnionA({ number: 123 });
       expect(b.valueOf()).to.eql({ number: 123 });
     })

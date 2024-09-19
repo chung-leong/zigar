@@ -507,236 +507,6 @@ pub const TypeData = struct {
         return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
     }
 
-    pub fn getStructureType(comptime self: @This()) StructureType {
-        return if (self.attrs.is_arguments)
-            switch (self.attrs.is_variadic) {
-                false => .arg_struct,
-                true => .variadic_struct,
-            }
-        else if (self.attrs.is_slice)
-            .slice
-        else switch (@typeInfo(self.Type)) {
-            .Bool,
-            .Int,
-            .ComptimeInt,
-            .Float,
-            .ComptimeFloat,
-            .Null,
-            .Undefined,
-            .Void,
-            .Type,
-            .EnumLiteral,
-            => .primitive,
-            .Struct => .@"struct",
-            .Union => .@"union",
-            .ErrorUnion => .error_union,
-            .ErrorSet => .error_set,
-            .Optional => .optional,
-            .Enum => .@"enum",
-            .Array => .array,
-            .Pointer => .pointer,
-            .Vector => .vector,
-            .Opaque => .@"opaque",
-            .Fn => .function,
-            else => @compileError("Unsupported type: " ++ @typeName(self.Type)),
-        };
-    }
-
-    test "getStructureType" {
-        const Enum = enum { apple, banana };
-        const TaggedUnion = union(Enum) {
-            apple: i32,
-            banana: i32,
-        };
-        const BareUnion = union {};
-        const ExternUnion = extern union {};
-        try expectCT(getStructureType(.{ .Type = i32 }) == .primitive);
-        try expectCT(getStructureType(.{ .Type = Enum }) == .@"enum");
-        try expectCT(getStructureType(.{ .Type = BareUnion }) == .@"union");
-        try expectCT(getStructureType(.{ .Type = TaggedUnion }) == .@"union");
-        try expectCT(getStructureType(.{ .Type = ExternUnion }) == .@"union");
-    }
-
-    pub fn getStructureFlags(comptime self: @This()) StructureFlags {
-        return switch (@typeInfo(self.Type)) {
-            .Bool,
-            .Int,
-            .ComptimeInt,
-            .Float,
-            .ComptimeFloat,
-            .Null,
-            .Undefined,
-            .Void,
-            .Type,
-            .EnumLiteral,
-            => .{
-                .primitive = .{
-                    .has_slot = self.attrs.is_comptime_only,
-                    .is_size = self.Type == usize or self.Type == isize,
-                },
-            },
-            .Struct => |st| get: {
-                const has_object = inline for (st.fields) |field| {
-                    if (isObject(.{ .Type = field.type })) break true;
-                } else false;
-                const has_slot = inline for (st.fields) |field| {
-                    if (isObject(.{ .Type = field.type }) or field.is_comptime) break true;
-                } else false;
-                break :get if (self.attrs.is_arguments) .{
-                    .arg_struct = .{
-                        .has_object = has_object,
-                        .has_slot = has_slot,
-                        .has_pointer = self.attrs.has_pointer,
-                        .is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion,
-                    },
-                } else if (self.attrs.is_slice) .{
-                    .slice = .{
-                        .has_object = has_object,
-                        .has_slot = has_slot,
-                        .has_pointer = self.attrs.has_pointer,
-                        .has_sentinel = self.Type.sentinel != null,
-                        .is_string = self.Type.ElementType == u8 or self.Type.ElementType == u16,
-                    },
-                } else .{
-                    .@"struct" = .{
-                        .has_object = has_object,
-                        .has_slot = has_slot,
-                        .has_pointer = self.attrs.has_pointer,
-                        .is_extern = st.layout == .@"extern",
-                        .is_packed = st.layout == .@"packed",
-                        .is_tuple = st.is_tuple,
-                        .is_iterator = self.isIterator(),
-                    },
-                };
-            },
-            .Union => |un| get: {
-                const has_object = inline for (un.fields) |field| {
-                    if (isObject(.{ .Type = field.type })) break true;
-                } else false;
-                break :get .{
-                    .@"union" = .{
-                        .has_object = has_object,
-                        .has_slot = has_object,
-                        .has_pointer = self.attrs.has_pointer,
-                        .has_tag = un.tag_type != null,
-                        .has_inaccessible = un.tag_type == null and self.attrs.has_pointer,
-                        .has_selector = self.getSelectorType() != null,
-                        .is_extern = un.layout == .@"extern",
-                        .is_packed = un.layout == .@"packed",
-                        .is_iterator = self.isIterator(),
-                    },
-                };
-            },
-            .ErrorUnion => |eu| .{
-                .error_union = .{
-                    .has_object = isObject(.{ .Type = eu.payload }),
-                    .has_slot = isObject(.{ .Type = eu.payload }),
-                    .has_pointer = self.attrs.has_pointer,
-                },
-            },
-            .Optional => |op| .{
-                .optional = .{
-                    .has_object = isObject(.{ .Type = op.child }),
-                    .has_slot = isObject(.{ .Type = op.child }),
-                    .has_pointer = self.attrs.has_pointer,
-                    .has_selector = self.getSelectorType() != null,
-                },
-            },
-            .Enum => |en| .{
-                .@"enum" = .{
-                    .is_open_ended = !en.is_exhaustive,
-                    .is_iterator = self.isIterator(),
-                },
-            },
-            .ErrorSet => .{ .error_set = .{} },
-            .Array => |ar| .{ .array = .{
-                .has_object = isObject(.{ .Type = ar.child }),
-                .has_slot = isObject(.{ .Type = ar.child }),
-                .has_pointer = self.attrs.has_pointer,
-                .is_string = ar.child == u8 or ar.child == u16,
-            } },
-            .Vector => .{ .vector = .{} },
-            .Pointer => |pt| .{
-                .pointer = .{
-                    .has_slot = true,
-                    .has_length = pt.size == .Slice,
-                    .is_const = pt.is_const,
-                    .is_single = pt.size == .One or pt.size == .C,
-                    .is_multiple = pt.size != .One,
-                    .is_nullable = pt.is_allowzero,
-                },
-            },
-            .Opaque => .{
-                .@"opaque" = .{
-                    .is_iterator = self.isIterator(),
-                },
-            },
-            .Fn => .{ .function = .{} },
-            else => @compileError("Unknown structure: " ++ @typeName(self.Type)),
-        };
-    }
-
-    test "getStructureFlags" {
-        const A = struct {
-            number: i32,
-        };
-        const a = comptime getStructureFlags(.{ .Type = A });
-        try expectCT(a.@"struct".has_object == false);
-        const B = struct {
-            object: A,
-        };
-        const b = comptime getStructureFlags(.{ .Type = B });
-        try expectCT(b.@"struct".has_object == true);
-        try expectCT(b.@"struct".has_slot == true);
-        const C = struct {
-            comptime number: i32 = 1234,
-        };
-        const c = comptime getStructureFlags(.{ .Type = C });
-        try expectCT(c.@"struct".has_object == false);
-        try expectCT(c.@"struct".has_slot == true);
-    }
-
-    pub fn getMemberType(comptime self: @This(), comptime is_comptime: bool) MemberType {
-        return switch (self.isSupported()) {
-            false => .unsupported,
-            true => switch (is_comptime) {
-                true => .object,
-                false => switch (@typeInfo(self.Type)) {
-                    .Bool => .bool,
-                    .Int => |int| if (int.signedness == .signed) .int else .uint,
-                    .Float => .float,
-                    .Enum => |en| if (@typeInfo(en.tag_type).Int.signedness == .signed) .int else .uint,
-                    .ErrorSet => .uint,
-                    .Struct,
-                    .Union,
-                    .Array,
-                    .ErrorUnion,
-                    .Optional,
-                    .Pointer,
-                    .Vector,
-                    .Fn,
-                    .ComptimeInt,
-                    .ComptimeFloat,
-                    => .object,
-                    .Type => .type,
-                    .EnumLiteral => .literal,
-                    .Void => .void,
-                    .Null => .null,
-                    else => .undefined,
-                },
-            },
-        };
-    }
-
-    test "getMemberType" {
-        try expectCT(getMemberType(.{ .Type = i32, .attrs = .{ .is_supported = true } }, false) == .int);
-        try expectCT(getMemberType(.{ .Type = u32, .attrs = .{ .is_supported = true } }, false) == .uint);
-        try expectCT(getMemberType(.{ .Type = *u32, .attrs = .{ .is_supported = true } }, false) == .object);
-        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, false) == .type);
-        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = true } }, true) == .object);
-        try expectCT(getMemberType(.{ .Type = type, .attrs = .{ .is_supported = false } }, true) == .unsupported);
-    }
-
     pub fn getElementType(comptime self: @This()) type {
         return if (self.attrs.is_slice)
             self.Type.ElementType
@@ -1123,6 +893,10 @@ pub const TypeData = struct {
         try expect(isMethodOf(.{ .Type = u32 }, B) == false);
     }
 
+    pub fn hasPointer(comptime self: @This()) bool {
+        return self.attrs.has_pointer;
+    }
+
     pub fn isPointer(comptime self: @This()) bool {
         return switch (@typeInfo(self.Type)) {
             .Pointer => true,
@@ -1139,6 +913,10 @@ pub const TypeData = struct {
 
     pub fn isArguments(comptime self: @This()) bool {
         return self.attrs.is_arguments;
+    }
+
+    pub fn isSlice(comptime self: @This()) bool {
+        return self.attrs.is_slice;
     }
 
     pub fn isSupported(comptime self: @This()) bool {

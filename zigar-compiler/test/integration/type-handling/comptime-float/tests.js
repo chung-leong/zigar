@@ -38,7 +38,7 @@ export function addTests(importModule, options) {
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 1.1, number2: 2.2 });
       expect(() => new StructA({ number1: 1 })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');
+        .with.property('message').that.contains('read-only');
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 0.1, number2: 0.2 });
       const [ line ] = await capture(() => print());
@@ -70,7 +70,7 @@ export function addTests(importModule, options) {
       expect(TagType(module.union_a)).to.equal(TagType.number);
       expect(module.union_a.state).to.be.null;
       expect(() => new UnionA({ number: 0.1 })).to.throw(TypeError)
-        .with.property('message').that.contains('Comptime');
+        .with.property('message').that.contains('read-only');
       const b = new UnionA({ state: true });
       expect(b.valueOf()).to.eql({ state: true });
     })

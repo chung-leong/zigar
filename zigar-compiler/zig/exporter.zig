@@ -9,6 +9,209 @@ const Value = types.Value;
 const Memory = types.Memory;
 const TypeData = types.TypeData;
 
+pub fn getStructureType(comptime _: anytype, comptime td: TypeData) types.StructureType {
+    return if (td.attrs.is_arguments)
+        switch (td.attrs.is_variadic) {
+            false => .arg_struct,
+            true => .variadic_struct,
+        }
+    else if (td.attrs.is_slice)
+        .slice
+    else switch (@typeInfo(td.Type)) {
+        .Bool,
+        .Int,
+        .ComptimeInt,
+        .Float,
+        .ComptimeFloat,
+        .Null,
+        .Undefined,
+        .Void,
+        .Type,
+        .EnumLiteral,
+        => .primitive,
+        .Struct => .@"struct",
+        .Union => .@"union",
+        .ErrorUnion => .error_union,
+        .ErrorSet => .error_set,
+        .Optional => .optional,
+        .Enum => .@"enum",
+        .Array => .array,
+        .Pointer => .pointer,
+        .Vector => .vector,
+        .Opaque => .@"opaque",
+        .Fn => .function,
+        else => @compileError("Unsupported type: " ++ @typeName(td.Type)),
+    };
+}
+
+pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.StructureFlags {
+    return switch (@typeInfo(td.Type)) {
+        .Bool,
+        .Int,
+        .ComptimeInt,
+        .Float,
+        .ComptimeFloat,
+        .Null,
+        .Undefined,
+        .Void,
+        .Type,
+        .EnumLiteral,
+        => .{
+            .primitive = .{
+                .has_slot = td.isComptimeOnly(),
+                .is_size = td.Type == usize or td.Type == isize,
+            },
+        },
+        .Struct => |st| get: {
+            const has_object = inline for (st.fields) |field| {
+                const field_td = tdb.get(field.type);
+                if (field_td.isObject()) break true;
+            } else false;
+            const has_slot = inline for (st.fields) |field| {
+                const field_td = tdb.get(field.type);
+                if (field_td.isObject() or field_td.isComptimeOnly() or field.is_comptime) break true;
+            } else false;
+            break :get if (comptime td.isArguments()) .{
+                .arg_struct = .{
+                    .has_object = has_object,
+                    .has_slot = has_slot,
+                    .has_pointer = td.hasPointer(),
+                    .is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion,
+                },
+            } else if (comptime td.isSlice()) .{
+                .slice = .{
+                    .has_object = has_object,
+                    .has_slot = has_slot,
+                    .has_pointer = td.hasPointer(),
+                    .has_sentinel = td.Type.sentinel != null,
+                    .is_string = td.Type.ElementType == u8 or td.Type.ElementType == u16,
+                },
+            } else .{
+                .@"struct" = .{
+                    .has_object = has_object,
+                    .has_slot = has_slot,
+                    .has_pointer = td.hasPointer(),
+                    .is_extern = st.layout == .@"extern",
+                    .is_packed = st.layout == .@"packed",
+                    .is_tuple = st.is_tuple,
+                    .is_iterator = td.isIterator(),
+                },
+            };
+        },
+        .Union => |un| get: {
+            const has_object = inline for (un.fields) |field| {
+                const field_td = tdb.get(field.type);
+                if (field_td.isObject()) break true;
+            } else false;
+            const has_slot = inline for (un.fields) |field| {
+                const field_td = tdb.get(field.type);
+                if (field_td.isObject() or field_td.isComptimeOnly()) break true;
+            } else false;
+            break :get .{
+                .@"union" = .{
+                    .has_object = has_object,
+                    .has_slot = has_slot,
+                    .has_pointer = td.hasPointer(),
+                    .has_tag = un.tag_type != null,
+                    .has_inaccessible = un.tag_type == null and td.hasPointer(),
+                    .has_selector = td.getSelectorType() != null,
+                    .is_extern = un.layout == .@"extern",
+                    .is_packed = un.layout == .@"packed",
+                    .is_iterator = td.isIterator(),
+                },
+            };
+        },
+        .ErrorUnion => |eu| get: {
+            const payload_td = tdb.get(eu.payload);
+            break :get .{
+                .error_union = .{
+                    .has_object = payload_td.isObject(),
+                    .has_slot = payload_td.isObject() or payload_td.isComptimeOnly(),
+                    .has_pointer = td.hasPointer(),
+                },
+            };
+        },
+        .Optional => |op| get: {
+            const child_td = tdb.get(op.child);
+            break :get .{
+                .optional = .{
+                    .has_object = child_td.isObject(),
+                    .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                    .has_pointer = td.hasPointer(),
+                    .has_selector = td.getSelectorType() != null,
+                },
+            };
+        },
+        .Enum => |en| .{
+            .@"enum" = .{
+                .is_open_ended = !en.is_exhaustive,
+                .is_iterator = td.isIterator(),
+            },
+        },
+        .ErrorSet => .{ .error_set = .{} },
+        .Array => |ar| get: {
+            const child_td = tdb.get(ar.child);
+            break :get .{
+                .array = .{
+                    .has_object = child_td.isObject(),
+                    .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                    .has_pointer = td.attrs.has_pointer,
+                    .is_string = ar.child == u8 or ar.child == u16,
+                },
+            };
+        },
+        .Vector => .{ .vector = .{} },
+        .Pointer => |pt| .{
+            .pointer = .{
+                .has_length = pt.size == .Slice,
+                .is_const = pt.is_const,
+                .is_single = pt.size == .One or pt.size == .C,
+                .is_multiple = pt.size != .One,
+                .is_nullable = pt.is_allowzero,
+            },
+        },
+        .Opaque => .{
+            .@"opaque" = .{
+                .is_iterator = td.isIterator(),
+            },
+        },
+        .Fn => .{ .function = .{} },
+        else => @compileError("Unknown structure: " ++ @typeName(td.Type)),
+    };
+}
+
+pub fn getMemberType(comptime _: anytype, comptime td: TypeData, comptime is_comptime: bool) types.MemberType {
+    return switch (td.isSupported()) {
+        false => .unsupported,
+        true => switch (is_comptime) {
+            true => .object,
+            false => switch (@typeInfo(td.Type)) {
+                .Bool => .bool,
+                .Int => |int| if (int.signedness == .signed) .int else .uint,
+                .Float => .float,
+                .Enum => |en| if (@typeInfo(en.tag_type).Int.signedness == .signed) .int else .uint,
+                .ErrorSet => .uint,
+                .Struct,
+                .Union,
+                .Array,
+                .ErrorUnion,
+                .Optional,
+                .Pointer,
+                .Vector,
+                .Fn,
+                .ComptimeInt,
+                .ComptimeFloat,
+                => .object,
+                .Type => .type,
+                .EnumLiteral => .literal,
+                .Void => .void,
+                .Null => .null,
+                else => .undefined,
+            },
+        },
+    };
+}
+
 // NOTE: error type has to be specified here since the function is called recursively
 // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
 fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
@@ -17,8 +220,8 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
     return ctx.host.readSlot(null, slot) catch create: {
         const def: types.Structure = .{
             .name = td.getName(),
-            .structure_type = td.getStructureType(),
-            .structure_flags = td.getStructureFlags(),
+            .structure_type = getStructureType(ctx.tdb, td),
+            .structure_flags = getStructureFlags(ctx.tdb, td),
             .length = td.getLength(),
             .byte_size = td.getByteSize(),
             .alignment = td.getAlignment(),
@@ -38,7 +241,7 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
 }
 
 fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    switch (comptime td.getStructureType()) {
+    switch (comptime getStructureType(ctx.tdb, td)) {
         .primitive,
         .error_set,
         .@"enum",
@@ -62,9 +265,8 @@ fn addMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
 }
 
 fn addPrimitiveMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
-    const member_type = td.getMemberType(false);
     try ctx.host.attachMember(structure, .{
-        .member_type = member_type,
+        .member_type = getMemberType(ctx.tdb, td, false),
         .member_flags = .{},
         .bit_size = td.getBitSize(),
         .bit_offset = 0,
@@ -77,7 +279,7 @@ fn addPrimitiveMember(ctx: anytype, structure: Value, comptime td: TypeData) !vo
 fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
-        .member_type = child_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, child_td, false),
         .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = child_td.getByteSize(),
@@ -88,7 +290,7 @@ fn addArrayMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
 fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
-        .member_type = child_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, child_td, false),
         .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = child_td.getByteSize(),
@@ -96,7 +298,7 @@ fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     }, false);
     if (td.getSentinel()) |sentinel| {
         try ctx.host.attachMember(structure, .{
-            .member_type = child_td.getMemberType(false),
+            .member_type = getMemberType(ctx.tdb, child_td, false),
             .member_flags = .{
                 .is_sentinel = true,
                 .is_required = sentinel.is_required,
@@ -116,7 +318,7 @@ fn addSliceMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
 fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const child_td = ctx.tdb.get(td.getElementType());
     try ctx.host.attachMember(structure, .{
-        .member_type = child_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, child_td, false),
         .member_flags = .{},
         .bit_size = child_td.getBitSize(),
         .byte_size = if (td.isBitVector()) null else child_td.getByteSize(),
@@ -127,7 +329,7 @@ fn addVectorMember(ctx: anytype, structure: Value, comptime td: TypeData) !void 
 fn addPointerMember(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const TT = td.getTargetType();
     try ctx.host.attachMember(structure, .{
-        .member_type = td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, td, false),
         .member_flags = .{},
         .bit_size = td.getBitSize(),
         .byte_size = td.getByteSize(),
@@ -146,7 +348,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         const supported = comptime field_td.isSupported();
         try ctx.host.attachMember(structure, .{
             .name = field.name,
-            .member_type = field_td.getMemberType(field.is_comptime),
+            .member_type = getMemberType(ctx.tdb, field_td, field.is_comptime),
             .member_flags = .{
                 .is_read_only = !is_actual,
                 .is_required = field.default_value == null,
@@ -162,7 +364,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
         // add member for backing int
         const int_td = ctx.tdb.get(IT);
         try ctx.host.attachMember(structure, .{
-            .member_type = int_td.getMemberType(false),
+            .member_type = getMemberType(ctx.tdb, int_td, false),
             .member_flags = .{ .is_backing_int = true },
             .bit_offset = 0,
             .bit_size = int_td.getBitSize(),
@@ -230,8 +432,10 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
         const supported = comptime field_td.isSupported();
         try ctx.host.attachMember(structure, .{
             .name = field.name,
-            .member_type = field_td.getMemberType(false),
-            .member_flags = .{},
+            .member_type = getMemberType(ctx.tdb, field_td, false),
+            .member_flags = .{
+                .is_read_only = field_td.isComptimeOnly(),
+            },
             .bit_offset = td.getContentBitOffset(),
             .bit_size = field_td.getBitSize(),
             .byte_size = field_td.getByteSize(),
@@ -242,7 +446,7 @@ fn addUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void 
     if (td.getSelectorType()) |TT| {
         const selector_td = ctx.tdb.get(TT);
         try ctx.host.attachMember(structure, .{
-            .member_type = selector_td.getMemberType(false),
+            .member_type = getMemberType(ctx.tdb, selector_td, false),
             .member_flags = .{ .is_selector = true },
             .bit_offset = td.getSelectorBitOffset(),
             .bit_size = selector_td.getBitSize(),
@@ -256,7 +460,7 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
     // value always comes first
     const child_td = ctx.tdb.get(@typeInfo(td.Type).Optional.child);
     try ctx.host.attachMember(structure, .{
-        .member_type = child_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, child_td, false),
         .member_flags = .{},
         .bit_offset = 0,
         .bit_size = child_td.getBitSize(),
@@ -267,7 +471,7 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
     const ST = td.getSelectorType().?;
     const selector_td = ctx.tdb.get(ST);
     try ctx.host.attachMember(structure, .{
-        .member_type = selector_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, selector_td, false),
         .member_flags = .{ .is_selector = true },
         .bit_offset = td.getSelectorBitOffset(),
         .bit_size = selector_td.getBitSize(),
@@ -279,7 +483,7 @@ fn addOptionalMembers(ctx: anytype, structure: Value, comptime td: TypeData) !vo
 fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
     const payload_td = ctx.tdb.get(@typeInfo(td.Type).ErrorUnion.payload);
     try ctx.host.attachMember(structure, .{
-        .member_type = payload_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, payload_td, false),
         .member_flags = .{},
         .bit_offset = td.getContentBitOffset(),
         .bit_size = payload_td.getBitSize(),
@@ -289,7 +493,7 @@ fn addErrorUnionMembers(ctx: anytype, structure: Value, comptime td: TypeData) !
     }, false);
     const error_td = ctx.tdb.get(@typeInfo(td.Type).ErrorUnion.error_set);
     try ctx.host.attachMember(structure, .{
-        .member_type = error_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, error_td, false),
         .member_flags = .{ .is_selector = true },
         .bit_offset = td.getErrorBitOffset(),
         .bit_size = error_td.getBitSize(),
@@ -302,7 +506,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
     const FT = types.Uninlined(td.Type);
     const arg_td = ctx.tdb.get(types.ArgumentStruct(FT));
     try ctx.host.attachMember(structure, .{
-        .member_type = arg_td.getMemberType(false),
+        .member_type = getMemberType(ctx.tdb, arg_td, false),
         .member_flags = .{},
         .bit_size = arg_td.getBitSize(),
         .byte_size = arg_td.getByteSize(),
