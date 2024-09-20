@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { capture } from '../capture.js';
+import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;

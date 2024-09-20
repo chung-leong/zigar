@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { capture } from '../../capture.js';
+import { capture } from '../../test-utils.js';
 
 export function addTests(importModule, options) {
   const { optimize, addressSize } = options;

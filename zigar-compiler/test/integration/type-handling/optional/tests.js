@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { capture } from '../../capture.js';
+import { capture } from '../../test-utils.js';
 
 export function addTests(importModule, options) {
   const { optimize } = options;
@@ -7,7 +7,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Optional', function() {
     it('should import optional as static variables', async function() {
       this.timeout(300000);
@@ -42,7 +42,7 @@ export function addTests(importModule, options) {
       });
       expect(lines).to.eql([
         '221',
-        'null' 
+        'null'
       ]);
     })
     it('should return optional', async function() {

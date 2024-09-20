@@ -40,42 +40,47 @@ export default mixin({
     };
     const binary = (dv, asyncCallHandle) => {
       let result = CallResult.OK;
-      const argStruct = ArgStruct(dv);
-      const args = [];
-      for (let i = 0; i < argStruct.length; i++) {
-        args.push(argStruct[i]);
-      }
-      const onError = (err) => {
-        if (ArgStruct[THROWING] && err instanceof Error) {
-          // see if the error is part of the error set of the error union returned by function
-          try {
-            argStruct.retval = err;
-            return;
-          } catch (_) {
-            console.error(err);
-          }
-        }
-        console.error(err);
-        result = CallResult.Failure;
-      };
+      let awaiting = false;
       try {
-        const retval = fn(...args);
-        if (retval?.[Symbol.toStringTag] === 'Promise') {
-          if (asyncCallHandle) {
-            retval.then(value => argStruct.retval = value, onError).then(() => {
-              this.finalizeAsyncCall(asyncCallHandle, result);
-            });
-            return CallResult.OK;
-          } else {
-            return CallResult.Deadlock;
-          }
-        } else {
-          argStruct.retval = retval;
+        const argStruct = ArgStruct(dv);
+        const args = [];
+        for (let i = 0; i < argStruct.length; i++) {
+          args.push(argStruct[i]);
         }
-      } catch (err) {
-        onError(err);
+        const onError = (err) => {
+          if (ArgStruct[THROWING] && err instanceof Error) {
+            // see if the error is part of the error set of the error union returned by function
+            try {
+              argStruct.retval = err;
+              return;
+            } catch (_) {
+            }
+          }
+          console.error(err);
+          result = CallResult.Failure;
+        };
+        try {
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (asyncCallHandle) {
+              retval.then(value => argStruct.retval = value, onError).then(() => {
+                this.finalizeAsyncCall(asyncCallHandle, result);
+              });
+              awaiting = true;
+              result = CallResult.OK;
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          onError(err);
+        }
+      } catch(err) {
+        result = CallResult.Failure;
       }
-      if (asyncCallHandle) {
+      if (asyncCallHandle && !awaiting) {
         this.finalizeAsyncCall(asyncCallHandle, result);
       }
       return result;

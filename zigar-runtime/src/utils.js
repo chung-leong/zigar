@@ -137,11 +137,11 @@ export function findSortedIndex(array, value, cb) {
 
 export const isMisaligned = (process.env.BITS === '64')
 ? function(address, align) {
-    return (align !== undefined) ? !!(address & BigInt(align - 1)) : false;
+    return (align) ? !!(address & BigInt(align - 1)) : false;
   }
 : (process.env.BITS === '32')
 ? function(address, align) {
-    return (align !== undefined) ? !!(address & (align - 1)) : false;
+    return (align) ? !!(address & (align - 1)) : false;
   }
   /* c8 ignore next */
 : undefined;

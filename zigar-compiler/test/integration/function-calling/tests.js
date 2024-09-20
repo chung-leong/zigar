@@ -3,7 +3,7 @@ import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
 import { WASI } from 'wasi';
-import { capture, captureWarning } from '../capture.js';
+import { capture, captureWarning } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;

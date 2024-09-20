@@ -1,6 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { capture } from '../../capture.js';
+import { capture } from '../../test-utils.js';
 
 use(chaiAsPromised);
 

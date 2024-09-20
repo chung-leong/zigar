@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
-import os from 'os';
 import 'mocha-skip-if';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { capture } from '../capture.js';
+import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const importTest = async (name) => {
@@ -60,7 +60,7 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const { kNucleotide } = await importTest('k-nucleotide');
       const n = 250000;
-      const lines = await loadData(`fasta-${n}`, 'utf-8'); 
+      const lines = await loadData(`fasta-${n}`, 'utf-8');
       const start = lines.findIndex(l => l.startsWith('>THREE'));
       if (start === -1) {
         throw new Error('Unable to find starting position');

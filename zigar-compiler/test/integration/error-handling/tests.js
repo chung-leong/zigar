@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { capture } from '../capture.js';
+import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -25,7 +25,7 @@ export function addTests(importModule, options) {
               .and.contains('error-trace.d');
         } else {
           expect(fail).to.not.throw();
-        }    
+        }
       });
       expect(line).to.equal('reached unreachable code');
     })

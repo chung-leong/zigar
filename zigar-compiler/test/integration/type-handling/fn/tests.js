@@ -1,6 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { capture } from '../../capture.js';
+import { capture, captureError } from '../../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -52,8 +52,10 @@ export function addTests(importModule, options) {
         call1(jsFn1);
       });
       expect(lines2).to.eql([ 'hello', 'world' ]);
-      expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
+      await captureError(() => {
+        expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
         .with.property('message').that.equal('Unexpected');
+      })
       const jsFn2 = (number) => {
         console.log(`number = ${number}`);
         return number * 2;

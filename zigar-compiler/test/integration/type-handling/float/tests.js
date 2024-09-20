@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { capture } from '../../capture.js';
+import { capture } from '../../test-utils.js';
 
 export function addTests(importModule, options) {
   const { optimize, compilerVersion } = options;
@@ -7,7 +7,7 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Float', function() {
     it('should import float as static variables', async function() {
       this.timeout(300000);
@@ -38,7 +38,7 @@ export function addTests(importModule, options) {
         expect(lines).to.eql([
           '3.140625 3.1415927410125732',
           '3.141592653589793 3.141592653589793e+00 3.141592653589793e+00',
-        ]); 
+        ]);
       } else {
         expect(lines).to.eql([
           '3.14 3.1415927',

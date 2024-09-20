@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { capture } from '../../capture.js';
+import { capture } from '../../test-utils.js';
 
 export function addTests(importModule, options) {
   const { optimize, compilerVersion } = options;
@@ -7,13 +7,13 @@ export function addTests(importModule, options) {
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
-  };    
+  };
   describe('Union', function() {
     it('should import union as static variables', async function() {
       this.timeout(300000);
-      const { 
-        default: module, 
-        printVariant, 
+      const {
+        default: module,
+        printVariant,
         printVariantPtr,
       } = await importTest('as-static-variables');
       expect(module.variant_a.string.string).to.equal('apple');
@@ -45,7 +45,7 @@ export function addTests(importModule, options) {
       expect(module.variant_c.valueOf()).to.eql({ float: 3.14 });
       expect(JSON.stringify(module.variant_c)).to.equal('{"float":3.14}');
       expect(JSON.stringify(module.variant_a)).to.equal('{"string":[97,112,112,108,101]}');
-      expect(module.extern_union.valueOf()).to.eql({ 
+      expect(module.extern_union.valueOf()).to.eql({
         dog: 100,
         cat: 100,
         pig: 4.94e-322,
@@ -61,16 +61,16 @@ export function addTests(importModule, options) {
         print({ string: "Hello" })
       });
       if (compilerVersion === '0.11.0') {
-        expect(lines).to.eql([ 
+        expect(lines).to.eql([
           'as-function-parameters.Variant{ .integer = 200 }',
-          'as-function-parameters.Variant{ .float = 3.14e+00 }', 
-          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }', 
+          'as-function-parameters.Variant{ .float = 3.14e+00 }',
+          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }',
         ]);
       } else {
-        expect(lines).to.eql([ 
+        expect(lines).to.eql([
           'as-function-parameters.Variant{ .integer = 200 }',
-          'as-function-parameters.Variant{ .float = 3.14e0 }', 
-          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }', 
+          'as-function-parameters.Variant{ .float = 3.14e0 }',
+          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }',
         ]);
       }
     })
@@ -84,7 +84,7 @@ export function addTests(importModule, options) {
     })
     it('should handle union in array', async function() {
       this.timeout(300000);
-      const { default: module, print } = await importTest('array-of');      
+      const { default: module, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array.valueOf()).to.eql([
         { integer: 123 },
@@ -206,7 +206,7 @@ export function addTests(importModule, options) {
     })
     it('should not compile code containing union vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;      
-    })   
+      await expect(importTest('vector-of')).to.eventually.be.rejected;
+    })
   })
 }

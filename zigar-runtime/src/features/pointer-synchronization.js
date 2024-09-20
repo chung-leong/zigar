@@ -51,12 +51,14 @@ export default mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      const cluster = clusterMap.get(target);
-      const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
-      // update the pointer
-      pointer[ADDRESS] = address;
-      if (LENGTH in pointer) {
-        pointer[LENGTH] = target.length;
+      if (!pointer[MEMORY][FIXED]) {
+        const cluster = clusterMap.get(target);
+        const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
+        // update the pointer
+        pointer[ADDRESS] = address;
+        if (LENGTH in pointer) {
+          pointer[LENGTH] = target.length;
+        }
       }
     }
   },
