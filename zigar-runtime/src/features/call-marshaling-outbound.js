@@ -60,14 +60,14 @@ export default mixin({
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
-        const address = this.getShadowAddress(args);
+        const argAddress = this.getShadowAddress(args);
         const attrs = args[ATTRIBUTES];
         // get address of attributes if function variadic
         const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
         this.updateShadows();
         const success = (attrs)
-        ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
-        : this.runThunk(thunkAddress, fnAddress, address);
+        ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+        : this.runThunk(thunkAddress, fnAddress, argAddress);
         if (!success) {
           throw new ZigError();
         }

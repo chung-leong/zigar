@@ -14,7 +14,7 @@ const df = Object.defineProperty;
 function protect(object) {
   const pointer = object[POINTER];
   if (pointer) {
-    protectProperties(pointer);
+    protectProperties(pointer, [ 'length' ]);
   } else {
     const array = object[ARRAY];
     if (array) {
@@ -26,10 +26,10 @@ function protect(object) {
   }
 }
 
-function protectProperties(object) {
+function protectProperties(object, exclude = []) {
   const descriptors = gp(object.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor.set) {
+    if (descriptor.set && !exclude.includes(name)) {
       descriptor.set = throwReadOnly;
       df(object, name, descriptor);
     }

@@ -2947,14 +2947,14 @@ var callMarshalingOutbound = mixin({
           this.updatePointerAddresses(args);
         }
         // return address of shadow for argumnet struct
-        const address = this.getShadowAddress(args);
+        const argAddress = this.getShadowAddress(args);
         const attrs = args[ATTRIBUTES];
         // get address of attributes if function variadic
         const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
         this.updateShadows();
         const success = (attrs)
-        ? this.runVariadicThunk(thunkAddress, fnAddress, address, attrAddress, attrs.length)
-        : this.runThunk(thunkAddress, fnAddress, address);
+        ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+        : this.runThunk(thunkAddress, fnAddress, argAddress);
         if (!success) {
           throw new ZigError();
         }
@@ -4037,11 +4037,11 @@ var structureAcquisition = mixin({
     return {
       constructor: null,
       type,
+      flags,
       name,
       length,
       byteSize,
       align,
-      flags,
       instance: {
         members: [],
         template: null,
@@ -4486,7 +4486,7 @@ const df = Object.defineProperty;
 function protect(object) {
   const pointer = object[POINTER];
   if (pointer) {
-    protectProperties(pointer);
+    protectProperties(pointer, [ 'length' ]);
   } else {
     const array = object[ARRAY];
     if (array) {
@@ -4498,10 +4498,10 @@ function protect(object) {
   }
 }
 
-function protectProperties(object) {
+function protectProperties(object, exclude = []) {
   const descriptors = gp(object.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor.set) {
+    if (descriptor.set && !exclude.includes(name)) {
       descriptor.set = throwReadOnly;
       df(object, name, descriptor);
     }
@@ -6353,7 +6353,7 @@ var pointer = mixin({
           const address = readAddress.call(this);
           const length = (flags & PointerFlag.HasLength)
           ? readLength.call(this)
-          : (targetFlags & SliceFlag.HasSentinel)
+          : (targetType === StructureType.Slice && targetFlags & SliceFlag.HasSentinel)
             ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
