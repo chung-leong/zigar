@@ -52,7 +52,7 @@ export default mixin({
           const address = readAddress.call(this);
           const length = (flags & PointerFlag.HasLength)
           ? readLength.call(this)
-          : (targetFlags & SliceFlag.HasSentinel)
+          : (targetType === StructureType.Slice && targetFlags & SliceFlag.HasSentinel)
             ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {

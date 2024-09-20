@@ -530,6 +530,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
 }
 
 fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void {
+    if (td.isSlice()) return;
     var template_maybe: ?Value = null;
     // add declared static members
     comptime var offset = 0;

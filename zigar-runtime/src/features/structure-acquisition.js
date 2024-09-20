@@ -36,11 +36,11 @@ export default mixin({
     return {
       constructor: null,
       type,
+      flags,
       name,
       length,
       byteSize,
       align,
-      flags,
       instance: {
         members: [],
         template: null,
