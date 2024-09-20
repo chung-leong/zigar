@@ -116,7 +116,7 @@ export default mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && {
+    descriptors[VISIT] = {
       value(cb, options = {}) {
         const {
           vivificate = false,

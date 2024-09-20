@@ -5844,7 +5844,7 @@
 "      });\n"
 "      descriptors[COPY] = this.defineCopier(undefined, true);\n"
 "      descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);\n"
-"      descriptors[VISIT] = (flags & StructureFlag.HasPointer) && {\n"
+"      descriptors[VISIT] = {\n"
 "        value(cb, options = {}) {\n"
 "          const {\n"
 "            vivificate = false,\n"
