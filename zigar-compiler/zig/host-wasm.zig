@@ -313,6 +313,15 @@ pub fn runVariadicThunk(
     return if (thunk(null, fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 
+pub fn createJsThunk(constructor_address: usize, fn_id: usize) usize {
+    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(constructor_address);
+    if (constructor(null, fn_id)) |thunk_address| {
+        return thunk_address;
+    } else |_| {
+        return 0;
+    }
+}
+
 pub fn getFactoryThunk(comptime T: type) usize {
     const factory = exporter.createRootFactory(Host, T);
     return @intFromPtr(factory);

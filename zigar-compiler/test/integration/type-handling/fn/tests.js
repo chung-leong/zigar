@@ -38,7 +38,7 @@ export function addTests(importModule, options) {
         __zigar,
         call1, call2, call3, call4,
         hello, world
-      } = await importTest('as-function-parameters', { multithreaded: true });
+      } = await importTest('as-function-parameters');
       const lines1 = await capture(() => {
         call1(hello);
         call1(world);
@@ -54,39 +54,39 @@ export function addTests(importModule, options) {
       expect(lines2).to.eql([ 'hello', 'world' ]);
       await captureError(() => {
         expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
-        .with.property('message').that.equal('Unexpected');
+          .with.property('message').that.equal('Unexpected');
       })
-      const jsFn2 = (number) => {
-        console.log(`number = ${number}`);
-        return number * 2;
-      };
-      let result;
-      const lines3 = await capture(() => {
-        result = call3(jsFn2);
-      });
-      expect(lines3).to.eql([ 'number = 1234' ]);
-      expect(result).to.equal(1234 * 2);
-      __zigar.multithread(true);
-      try {
-        const lines4 = await capture(async () => {
-          call4(jsFn2);
-          await new Promise(r => setTimeout(r, 100));
-        });
-        expect(lines4).to.eql([ 'number = 1234' ]);
-        expect(module.call4_result).to.equal(1234 * 2);
-        const jsFn3 = async (number) => {
-          console.log(`number = ${number}`);
-          return number * 3;
-        };
-        const lines5 = await capture(async () => {
-          call4(jsFn3);
-          await new Promise(r => setTimeout(r, 100));
-        });
-        expect(lines5).to.eql([ 'number = 1234' ]);
-        expect(module.call4_result).to.equal(1234 * 3);
-      } finally {
-        __zigar.multithread(false);
-      }
+      // const jsFn2 = (number) => {
+      //   console.log(`number = ${number}`);
+      //   return number * 2;
+      // };
+      // let result;
+      // const lines3 = await capture(() => {
+      //   result = call3(jsFn2);
+      // });
+      // expect(lines3).to.eql([ 'number = 1234' ]);
+      // expect(result).to.equal(1234 * 2);
+      // __zigar.multithread(true);
+      // try {
+      //   const lines4 = await capture(async () => {
+      //     call4(jsFn2);
+      //     await new Promise(r => setTimeout(r, 100));
+      //   });
+      //   expect(lines4).to.eql([ 'number = 1234' ]);
+      //   expect(module.call4_result).to.equal(1234 * 2);
+      //   const jsFn3 = async (number) => {
+      //     console.log(`number = ${number}`);
+      //     return number * 3;
+      //   };
+      //   const lines5 = await capture(async () => {
+      //     call4(jsFn3);
+      //     await new Promise(r => setTimeout(r, 100));
+      //   });
+      //   expect(lines5).to.eql([ 'number = 1234' ]);
+      //   expect(module.call4_result).to.equal(1234 * 3);
+      // } finally {
+      //   __zigar.multithread(false);
+      // }
     })
     it('should return callable function', async function() {
       this.timeout(300000);

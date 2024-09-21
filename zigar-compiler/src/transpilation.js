@@ -51,8 +51,9 @@ export async function transpile(path, options) {
   }
   usage.FeatureBaseline = true;
   usage.FeatureStructureAcquisition = false;
-  usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
-  usage.FeaturePointerSynchronization = usage.FeatureCallMarshalingOutbound;
+  usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
+  usage.FeatureCallMarshalingOutbound = env.usingFunction;
+  usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {

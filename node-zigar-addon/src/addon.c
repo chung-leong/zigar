@@ -636,7 +636,7 @@ napi_value create_js_thunk(napi_env env,
     napi_value result;
     if (md->mod->imports->create_js_thunk(md, constructor_address, fn_id, &thunk_address) != OK
      || napi_create_uintptr(env, thunk_address, &result) != napi_ok) {
-        return throw_error(env, "Unable to create thunk");
+        napi_create_uintptr(env, 0, &result);
     }
     return result;
 }

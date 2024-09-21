@@ -26,6 +26,9 @@ export default mixin({
     if (dv === undefined) {
       const constructorAddr = this.getViewAddress(jsThunkConstructor[MEMORY]);
       const thunkAddr = this.createJsThunk(constructorAddr, funcId);
+      if (!thunkAddr) {
+        throw new Error('Unable to create function thunk');
+      }
       dv = this.obtainFixedView(thunkAddr, 0);
       this.jsFunctionThunkMap.set(funcId, dv);
     }
@@ -107,8 +110,9 @@ export default mixin({
     allocateJsThunk() {
       // TODO
     },
-    performJsCall() {
-      // TODO
+    performJsCall(id, argAddress, argSize) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      this.runFunction(id, dv, 0);
     },
   } : process.env.TARGET === 'node' ? {
     exports: {

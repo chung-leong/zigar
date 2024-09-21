@@ -12,7 +12,7 @@ pub const CallResult = enum(u32) {
     disabled,
 };
 
-pub const ThunkConstructor = *const fn (*anyopaque, usize) anyerror!usize;
+pub const ThunkConstructor = *const fn (?*anyopaque, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch) {
     .wasm32, .wasm64 => wasm,

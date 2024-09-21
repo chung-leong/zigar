@@ -1193,7 +1193,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
-    multithreaded = isWASM ? false : true,
+    multithreaded = true,
     maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
   } = options;
   const src = parse(srcPath ?? '');
@@ -2349,6 +2349,9 @@ var callMarshalingInbound = mixin({
     if (dv === undefined) {
       const constructorAddr = this.getViewAddress(jsThunkConstructor[MEMORY]);
       const thunkAddr = this.createJsThunk(constructorAddr, funcId);
+      if (!thunkAddr) {
+        throw new Error('Unable to create function thunk');
+      }
       dv = this.obtainFixedView(thunkAddr, 0);
       this.jsFunctionThunkMap.set(funcId, dv);
     }
@@ -2430,8 +2433,9 @@ var callMarshalingInbound = mixin({
     allocateJsThunk() {
       // TODO
     },
-    performJsCall() {
-      // TODO
+    performJsCall(id, argAddress, argSize) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      this.runFunction(id, dv, 0);
     },
   } ),
 });
@@ -6041,7 +6045,6 @@ var errorSet = mixin({
     }
     const findError = function(value) {
       const { constructor } = structure;
-      debugger;
       const item = constructor(value);
       if (!item) {
         if (value instanceof Error) {
@@ -6231,6 +6234,11 @@ var _function = mixin({
       Object.setPrototypeOf(self, constructor.prototype);
       self[MEMORY] = dv;
       cache.save(dv, self);
+      {
+        if (!creating) {
+          thisEnv.usingFunction = true;
+        }
+      }
       return self;
     };
     // make function type a superclass of Function
@@ -6238,8 +6246,17 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
+    {
+      if (jsThunkConstructor) {
+        this.usingFunctionPointer = true;
+      }
+    }
     return constructor;
   },
+  ...({
+    usingFunction: false,
+    usingFunctionPointer: false,
+  } ),
 });
 
 var opaque = mixin({
@@ -6283,6 +6300,7 @@ var optional = mixin({
       }
     };
     const isValueVoid = members[0].type === MemberType.Void;
+    const isChildPointer = members[0].structure.type === StructureType.Pointer;
     const isChildActive = function () {
       return !!getPresent.call(this);
     };
@@ -6303,11 +6321,11 @@ var optional = mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & OptionalFlag.HasSelector || !this[MEMORY][FIXED]) {
+        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][FIXED])) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
-          setPresent.call(this, 5);
+          setPresent.call(this, 1);
         }
       }
     };
@@ -8888,8 +8906,9 @@ async function transpile(path, options) {
   }
   usage.FeatureBaseline = true;
   usage.FeatureStructureAcquisition = false;
-  usage.FeatureCallMarshalingOutbound = !!usage.StructureFunction;
-  usage.FeaturePointerSynchronization = usage.FeatureCallMarshalingOutbound;
+  usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
+  usage.FeatureCallMarshalingOutbound = env.usingFunction;
+  usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
