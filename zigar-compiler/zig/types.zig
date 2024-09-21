@@ -392,18 +392,12 @@ test "IntType" {
     try expectCT(IntType(-123) == i8);
 }
 
-pub fn ErrorIntType() type {
-    return @Type(.{
-        .Int = .{
-            .signedness = .unsigned,
-            .bits = @bitSizeOf(anyerror),
-        },
-    });
-}
-
-test "ErrorIntType" {
-    try expectCT(ErrorIntType() == u16);
-}
+pub const ErrorIntType = @Type(.{
+    .Int = .{
+        .signedness = .unsigned,
+        .bits = @bitSizeOf(anyerror),
+    },
+});
 
 pub fn Uninlined(comptime FT: type) type {
     return switch (@typeInfo(FT)) {
@@ -634,7 +628,7 @@ pub const TypeData = struct {
             },
             .Optional => |op| switch (@typeInfo(op.child)) {
                 .Pointer => usize, // size of the pointer itself
-                .ErrorSet => ErrorIntType(),
+                .ErrorSet => ErrorIntType,
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -1089,7 +1083,7 @@ pub const TypeDataCollector = struct {
                 }
                 self.add(usize);
             },
-            .ErrorSet => self.add(ErrorIntType()),
+            .ErrorSet => self.add(ErrorIntType),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
             .Fn => |f| if (!f.is_generic) {
                 if (f.calling_convention == .Inline) {

@@ -277,7 +277,6 @@ export default mixin({
     getBufferAddress(buffer) {
       if (process.env.DEV) {
         if (buffer !== this.memory.buffer) {
-          debugger;
           throw new Error('Cannot obtain address of relocatable buffer');
         }
       }

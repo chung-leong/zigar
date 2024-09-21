@@ -280,7 +280,7 @@ function findSortedIndex(array, value, cb) {
 }
 
 const isMisaligned = function(address, align) {
-    return (align !== undefined) ? !!(address & (align - 1)) : false;
+    return (align) ? !!(address & (align - 1)) : false;
   }
   /* c8 ignore next */
 ;
@@ -2363,42 +2363,47 @@ var callMarshalingInbound = mixin({
     };
     const binary = (dv, asyncCallHandle) => {
       let result = CallResult.OK;
-      const argStruct = ArgStruct(dv);
-      const args = [];
-      for (let i = 0; i < argStruct.length; i++) {
-        args.push(argStruct[i]);
-      }
-      const onError = (err) => {
-        if (ArgStruct[THROWING] && err instanceof Error) {
-          // see if the error is part of the error set of the error union returned by function
-          try {
-            argStruct.retval = err;
-            return;
-          } catch (_) {
-            console.error(err);
-          }
-        }
-        console.error(err);
-        result = CallResult.Failure;
-      };
+      let awaiting = false;
       try {
-        const retval = fn(...args);
-        if (retval?.[Symbol.toStringTag] === 'Promise') {
-          if (asyncCallHandle) {
-            retval.then(value => argStruct.retval = value, onError).then(() => {
-              this.finalizeAsyncCall(asyncCallHandle, result);
-            });
-            return CallResult.OK;
-          } else {
-            return CallResult.Deadlock;
-          }
-        } else {
-          argStruct.retval = retval;
+        const argStruct = ArgStruct(dv);
+        const args = [];
+        for (let i = 0; i < argStruct.length; i++) {
+          args.push(argStruct[i]);
         }
-      } catch (err) {
-        onError(err);
+        const onError = (err) => {
+          if (ArgStruct[THROWING] && err instanceof Error) {
+            // see if the error is part of the error set of the error union returned by function
+            try {
+              argStruct.retval = err;
+              return;
+            } catch (_) {
+            }
+          }
+          console.error(err);
+          result = CallResult.Failure;
+        };
+        try {
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (asyncCallHandle) {
+              retval.then(value => argStruct.retval = value, onError).then(() => {
+                this.finalizeAsyncCall(asyncCallHandle, result);
+              });
+              awaiting = true;
+              result = CallResult.OK;
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            argStruct.retval = retval;
+          }
+        } catch (err) {
+          onError(err);
+        }
+      } catch(err) {
+        result = CallResult.Failure;
       }
-      if (asyncCallHandle) {
+      if (asyncCallHandle && !awaiting) {
         this.finalizeAsyncCall(asyncCallHandle, result);
       }
       return result;
@@ -3840,12 +3845,14 @@ var pointerSynchronization = mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      const cluster = clusterMap.get(target);
-      const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
-      // update the pointer
-      pointer[ADDRESS] = address;
-      if (LENGTH in pointer) {
-        pointer[LENGTH] = target.length;
+      if (!pointer[MEMORY][FIXED]) {
+        const cluster = clusterMap.get(target);
+        const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
+        // update the pointer
+        pointer[ADDRESS] = address;
+        if (LENGTH in pointer) {
+          pointer[LENGTH] = target.length;
+        }
       }
     }
   },
@@ -4248,6 +4255,11 @@ function isElectron() {
       && typeof(process?.versions) === 'object'
       && !!process.versions?.electron;
 }
+
+var threadSupport = mixin({
+  ...({
+  } ) ,
+});
 
 var viewManagement = mixin({
   viewMap: new Map(),
@@ -7337,7 +7349,7 @@ var variadicStruct = mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && {
+    descriptors[VISIT] = {
       value(cb, options = {}) {
         const {
           vivificate = false,
@@ -7449,6 +7461,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
+  FeatureThreadSupport: threadSupport,
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,

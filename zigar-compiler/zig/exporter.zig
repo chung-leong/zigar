@@ -138,7 +138,7 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                     .has_object = child_td.isObject(),
                     .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
                     .has_pointer = td.hasPointer(),
-                    .has_selector = !child_td.isPointer(),
+                    .has_selector = td.getSelectorBitOffset() != 0,
                 },
             };
         },

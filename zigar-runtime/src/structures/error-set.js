@@ -122,7 +122,6 @@ export default mixin({
     }
     const findError = function(value) {
       const { constructor } = structure;
-      debugger;
       const item = constructor(value);
       if (!item) {
         if (value instanceof Error) {
