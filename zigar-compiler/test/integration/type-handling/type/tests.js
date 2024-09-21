@@ -51,7 +51,7 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const { default: module, StructA, Uint8, Uint16, print } = await importTest('in-struct');
       expect(module.struct_a.Type1).to.equal(Uint8);
-      // expect(module.struct_a.Type2).to.equal(Uint16);
+      expect(module.struct_a.Type2).to.equal(Uint16);
       expect(() => new StructA({ Type1: Uint8 })).to.throw(TypeError)
         .with.property('message').that.contains('read-only');
       const b = new StructA({});

@@ -351,7 +351,7 @@ fn addStructMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
             .type = getMemberType(ctx.tdb, field_td, field.is_comptime),
             .flags = .{
                 .is_read_only = !is_actual,
-                .is_required = field.default_value == null,
+                .is_required = is_actual and field.default_value == null,
             },
             .bit_offset = if (is_actual) @bitOffsetOf(td.Type, field.name) else null,
             .bit_size = if (is_actual) field_td.getBitSize() else null,
