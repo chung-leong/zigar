@@ -114,7 +114,7 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                     .has_pointer = td.hasPointer(),
                     .has_tag = un.tag_type != null,
                     .has_inaccessible = un.tag_type == null and td.hasPointer(),
-                    .has_selector = td.getSelectorType() != null,
+                    .has_selector = td.hasSelector(),
                     .is_extern = un.layout == .@"extern",
                     .is_packed = un.layout == .@"packed",
                     .is_iterator = td.isIterator(),
@@ -138,7 +138,7 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                     .has_object = child_td.isObject(),
                     .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
                     .has_pointer = td.hasPointer(),
-                    .has_selector = td.getSelectorBitOffset() != 0,
+                    .has_selector = td.hasSelector(),
                 },
             };
         },

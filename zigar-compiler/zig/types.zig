@@ -620,6 +620,17 @@ pub const TypeData = struct {
         try expectCT(getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
     }
 
+    pub fn hasSelector(comptime self: @This()) bool {
+        return switch (@typeInfo(self.Type)) {
+            .Union => self.getSelectorType() != null,
+            .Optional => |op| switch (@typeInfo(op.child)) {
+                .Pointer, .ErrorSet => false,
+                else => true,
+            },
+            else => @compileError("Not a union or optional"),
+        };
+    }
+
     pub fn getSelectorType(comptime self: @This()) ?type {
         return switch (@typeInfo(self.Type)) {
             .Union => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
