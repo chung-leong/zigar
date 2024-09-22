@@ -36,8 +36,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "devDependencies": {
-    "@rollup/plugin-replace": "^5.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-replace": "^5.0.7",
     "c8": "^10.1.2",
     "chai": "^5.1.1",
     "chai-as-promised": "^8.0.0",

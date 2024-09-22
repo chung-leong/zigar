@@ -3,9 +3,10 @@ import { openSync, readSync, closeSync, writeFileSync } from 'fs';
 import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, resolve, isAbsolute } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
+import { Worker } from 'worker_threads';
 
 const StructureType = {
   Primitive: 0,
@@ -1193,7 +1194,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
-    multithreaded = true,
+    multithreaded = (isWASM) ? false : true,
     maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
   } = options;
   const src = parse(srcPath ?? '');
@@ -2464,8 +2465,8 @@ var callMarshalingInbound = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const instance = new w.Instance(this.executable, imports);
-      const { createJsThunk } = instance.exports;
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -3559,9 +3560,6 @@ var memoryMapping = mixin({
     },
     obtainExternView(address, len) {
       const { buffer } = this.memory;
-      if (!buffer[FIXED]) {
-        buffer[FIXED] = { address: 0, len: buffer.byteLength };
-      }
       return this.obtainView(buffer, address, len);
     },
     getTargetAddress(target, cluster) {
@@ -3750,6 +3748,8 @@ var moduleLoading = mixin({
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+          } else if (module === 'wasi' && name === 'thread-spawn') {
+            wasi[name] = this.getThreadHandler();
           }
         }
       }
@@ -3761,6 +3761,7 @@ var moduleLoading = mixin({
       this.table = env.__indirect_function_table = new w.Table({
         initial: tableInitial,
         element: 'anyfunc',
+        shared: multithreaded,
       });
       return new w.Instance(executable, imports);
     },
@@ -3776,8 +3777,8 @@ var moduleLoading = mixin({
       })();
     },
     displayPanic(address, len) {
-      const array = new UintArray8(this.message.buffer, address, len);
-      const msg = encodeText(array);
+      const array = new Uint8Array(this.memory.buffer, address, len);
+      const msg = decodeText(array);
       console.error(`Zig panic: ${msg}`);
     },
     trackInstance(instance) {
@@ -4337,6 +4338,23 @@ function isElectron() {
 
 var threadSupport = mixin({
   ...({
+    nextThreadId: 1,
+    getThreadHandler() {
+      return this.spawnThread.bind(this);
+    },
+    spawnThread(arg) {
+      const tid = this.nextThreadId;
+      this.nextThreadId++;
+      const url = pathToFileURL('/home/cleong/zigar/zigar-runtime/src/thread-test.js');
+      const { executable, memory, table, options } = this;
+      const workerData = { executable, memory, table, options, tid, arg };
+      const worker = new Worker(url, { workerData });
+      worker.on('message', (evt) => this.onWorkerMessage(evt));
+      return tid;
+    },
+    onWorkerMessage({ target: worker, data: msg }) {
+      console.log(msg);
+    },
   } ) ,
 });
 
@@ -4451,12 +4469,12 @@ var viewManagement = mixin({
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
-    const fixed = buffer[FIXED];
-    if (fixed) {
-      // attach address to view of fixed buffer
-      dv[FIXED] = { address: adjustAddress(fixed.address, offset), len };
+    {
+      if (buffer === this.memory?.buffer) {
+        dv[FIXED] = { address: offset, len };
+      }
+      return dv;
     }
-    return dv;
   },
   registerView(dv) {
     if (!dv[FIXED]) {

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { encodeText } from '../utils.js';
+import { decodeText } from '../utils.js';
 
 export default mixin({
   released: false,
@@ -39,6 +39,7 @@ export default mixin({
     executable: null,
     memory: null,
     table: null,
+    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -136,7 +137,7 @@ export default mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
@@ -144,6 +145,8 @@ export default mixin({
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+          } else if (module === 'wasi' && name === 'thread-spawn') {
+            wasi[name] = this.getThreadHandler();
           }
         }
       }
@@ -155,8 +158,9 @@ export default mixin({
       this.table = env.__indirect_function_table = new w.Table({
         initial: tableInitial,
         element: 'anyfunc',
+        shared: multithreaded,
       });
-      return new w.Instance(executable, imports);
+      return new w.Instance(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -170,8 +174,8 @@ export default mixin({
       })();
     },
     displayPanic(address, len) {
-      const array = new UintArray8(this.message.buffer, address, len);
-      const msg = encodeText(array);
+      const array = new Uint8Array(this.memory.buffer, address, len);
+      const msg = decodeText(array);
       console.error(`Zig panic: ${msg}`);
     },
     trackInstance(instance) {

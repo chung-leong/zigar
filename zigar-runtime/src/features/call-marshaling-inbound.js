@@ -141,8 +141,8 @@ export default mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const instance = new w.Instance(this.executable, imports);
-      const { createJsThunk } = instance.exports;
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,

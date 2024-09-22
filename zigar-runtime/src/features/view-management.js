@@ -119,10 +119,17 @@ export default mixin({
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
-    const fixed = buffer[FIXED];
-    if (fixed) {
-      // attach address to view of fixed buffer
-      dv[FIXED] = { address: adjustAddress(fixed.address, offset), len };
+    if (process.env.TARGET === 'wasm') {
+      if (buffer === this.memory?.buffer) {
+        dv[FIXED] = { address: offset, len };
+      }
+      return dv;
+    } else if (process.env.TARGET === 'node') {
+      const fixed = buffer[FIXED];
+      if (fixed) {
+        // attach address to view of fixed buffer
+        dv[FIXED] = { address: adjustAddress(fixed.address, offset), len };
+      }
     }
     return dv;
   },

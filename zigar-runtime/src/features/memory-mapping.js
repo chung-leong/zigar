@@ -259,9 +259,6 @@ export default mixin({
     },
     obtainExternView(address, len) {
       const { buffer } = this.memory;
-      if (!buffer[FIXED]) {
-        buffer[FIXED] = { address: 0, len: buffer.byteLength };
-      }
       return this.obtainView(buffer, address, len);
     },
     getTargetAddress(target, cluster) {
