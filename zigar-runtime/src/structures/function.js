@@ -7,7 +7,7 @@ export default mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
-      static: { template: jsThunkConstructor },
+      static: { template: jsThunkController },
     } = structure;
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
@@ -24,7 +24,7 @@ export default mixin({
           throw new TypeMismatch('function', arg);
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, jsThunkConstructor);
+        dv = thisEnv.getFunctionThunk(arg, jsThunkController);
       } else {
         // casting a memory pointing to Zig binary
         dv = arg;
@@ -67,7 +67,7 @@ export default mixin({
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     if (process.env.MIXIN === 'track') {
-      if (jsThunkConstructor) {
+      if (jsThunkController) {
         this.usingFunctionPointer = true;
       }
     }

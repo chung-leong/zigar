@@ -6,7 +6,7 @@ export default mixin({
     customWASI: null,
 
     setCustomWASI(wasi) {
-      if (wasi && this.hasCodeSource) {
+      if (wasi && this.executable) {
         throw new Error('Cannot set WASI interface after compilation has already begun');
       }
       this.customWASI = wasi;

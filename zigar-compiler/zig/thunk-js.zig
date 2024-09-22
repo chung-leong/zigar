@@ -11,8 +11,12 @@ pub const CallResult = enum(u32) {
     deadlock,
     disabled,
 };
+pub const Action = enum(u32) {
+    create,
+    destroy,
+};
 
-pub const ThunkConstructor = *const fn (?*anyopaque, usize) anyerror!usize;
+pub const ThunkController = *const fn (?*anyopaque, Action, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch) {
     .wasm32, .wasm64 => wasm,
@@ -28,29 +32,38 @@ const native = struct {
     const Closure = closure.Instance(Context);
     threadlocal var closure_factory = closure.Factory(Context).init();
 
-    pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkConstructor {
+    pub fn createThunkController(comptime HostT: type, comptime FT: type, comptime _: usize) ThunkController {
         const ft_ns = struct {
-            fn construct(ptr: ?*anyopaque, id: usize) anyerror!usize {
+            fn control(ptr: ?*anyopaque, action: Action, arg: usize) anyerror!usize {
                 const host = HostT.init(ptr);
-                const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
-                const instance = try closure_factory.alloc(caller, .{
-                    .ptr = host.context,
-                    .id = id,
-                });
-                const thunk = instance.function(FT);
-                return @intFromPtr(thunk);
+                switch (action) {
+                    .create => {
+                        const caller = createCaller(FT, Context, Closure.getContext, HostT.handleJsCall);
+                        const instance = try closure_factory.alloc(caller, .{
+                            .ptr = host.context,
+                            .id = arg,
+                        });
+                        const thunk = instance.function(FT);
+                        return @intFromPtr(thunk);
+                    },
+                    .destroy => {
+                        // TODO
+                        return 0;
+                    },
+                }
             }
         };
-        return ft_ns.construct;
+        return ft_ns.control;
     }
 };
 const wasm = struct {
     pub const Context = struct {
         id: usize = 0,
     };
-    const count = 16;
+    pub const Error = error{ unable_to_create_thunk, unable_to_find_thunk };
+    const count = 32;
 
-    pub fn createThunkConstructor(comptime HostT: type, comptime FT: type, comptime slot: usize) ThunkConstructor {
+    pub fn createThunkController(comptime HostT: type, comptime FT: type, comptime slot: usize) ThunkController {
         const ft_ns = struct {
             var contexts: [count]Context = init: {
                 var array: [count]Context = undefined;
@@ -89,14 +102,23 @@ const wasm = struct {
                 } else false;
             }
 
-            fn construct(ptr: ?*anyopaque, id: usize) !usize {
-                // try to use the preallocated thunks first; if they've been used up,
-                // ask the host to create a new instance of this module and get a new
-                // thunk from that
-                const host = HostT.init(ptr);
-                const thunk_ptr = alloc(id) orelse try host.allocateJsThunk(slot);
-                const thunk: *const FT = @ptrCast(thunk_ptr);
-                return @intFromPtr(thunk);
+            fn control(_: ?*anyopaque, action: Action, arg: usize) !usize {
+                switch (action) {
+                    .create => {
+                        if (alloc(arg)) |thunk_ptr| {
+                            return @intFromPtr(thunk_ptr);
+                        } else {
+                            return Error.unable_to_create_thunk;
+                        }
+                    },
+                    .destroy => {
+                        if (free(@ptrFromInt(arg))) {
+                            return 0;
+                        } else {
+                            return Error.unable_to_find_thunk;
+                        }
+                    },
+                }
             }
         };
         // export these functions so they can be called from the JS side
@@ -108,7 +130,7 @@ const wasm = struct {
             .name = std.fmt.comptimePrint("@freeFn{d}", .{slot}),
             .linkage = .strong,
         });
-        return ft_ns.construct;
+        return ft_ns.control;
     }
 };
 

@@ -26,6 +26,7 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
+      initialize: { argType: '' },
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
     exports: {
@@ -34,7 +35,10 @@ export default mixin({
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
-    hasCodeSource: false,
+    options: null,
+    executable: null,
+    memory: null,
+    table: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -124,25 +128,25 @@ export default mixin({
         memoryMax,
         tableInitial,
         multithreaded,
-      } = options;
+      } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
-      const executable = await f(res);
+      const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
-      const env = {}, wasi = {};
+      const env = {}, wasi = {}, wasiPreview = {};
+      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
-            wasi[name] = this.getWASIHandler(name);
+            wasiPreview[name] = this.getWASIHandler(name);
           }
         }
       }
-      this.hasCodeSource = true;
       this.memory = env.memory = new w.Memory({
         initial: memoryInitial,
         maximum: memoryMax,
@@ -152,10 +156,7 @@ export default mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      this.multithreaded = multithreaded;
-      this.nextTableIndex = tableInitial;
-      const importObject = { env, wasi_snapshot_preview1: wasi };
-      return new w.Instance(executable, importObject);
+      return new w.Instance(executable, imports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -164,6 +165,7 @@ export default mixin({
         this.importFunctions(exports);
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
+        this.initialize();
         // this.runtimeSafety = ;
       })();
     },

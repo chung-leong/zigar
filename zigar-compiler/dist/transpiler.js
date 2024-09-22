@@ -2340,15 +2340,15 @@ var callMarshalingInbound = mixin({
     }
     return id;
   },
-  getFunctionThunk(fn, jsThunkConstructor) {
+  getFunctionThunk(fn, jsThunkController) {
     const funcId = this.getFunctionId(fn);
     if (!this.jsFunctionThunkMap) {
       this.jsFunctionThunkMap = new Map();
     }
     let dv = this.jsFunctionThunkMap.get(funcId);
     if (dv === undefined) {
-      const constructorAddr = this.getViewAddress(jsThunkConstructor[MEMORY]);
-      const thunkAddr = this.createJsThunk(constructorAddr, funcId);
+      const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
+      const thunkAddr = this.createJsThunk(controllerAddr, funcId);
       if (!thunkAddr) {
         throw new Error('Unable to create function thunk');
       }
@@ -2424,18 +2424,91 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      allocateJsThunk: { argType: 'i', returnType: 'i' },
+      allocateJsThunk: { argType: 'ii', returnType: 'i' },
+      freeJsThunk: { argType: 'ii', returnType: 'b' },
       performJsCall: { argType: 'iii', returnType: 'i' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
+      destroyJsThunk: { argType: 'ii', returnType: 'b' },
     },
-    allocateJsThunk() {
+    thunkSources: [],
+    addJsThunkSource() {
+      const {
+        memoryInitial,
+        memoryMax,
+        tableInitial,
+        multithreaded,
+      } = this.options;
+      const w = WebAssembly;
+      const env = {}, wasi = {}, wasiPreview = {};
+      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const empty = function() {};
+      for (const { module, name, kind } of w.Module.imports(this.executable)) {
+        if (kind === 'function') {
+          if (module === 'env') {
+            env[name] = empty;
+          } else if (module === 'wasi_snapshot_preview1') {
+            wasiPreview[name] = empty;
+          } else if (module === 'wasi') {
+            wasi[name] = empty;
+          }
+        }
+      }
+      env.memory = new w.Memory({
+        initial: memoryInitial,
+        maximum: memoryMax,
+        shared: multithreaded,
+      });
+      const table = env.__indirect_function_table = new w.Table({
+        initial: tableInitial,
+        element: 'anyfunc',
+      });
+      const instance = new w.Instance(this.executable, imports);
+      const { createJsThunk } = instance.exports;
+      const source = {
+        thunkCount: 0,
+        createJsThunk,
+        table,
+      };
+      this.thunkSources.unshift(source);
+      return source;
+    },
+    allocateJsThunk(controllerAddress, funcId) {
+      let source, sourceAddress = 0;
+      for (source of this.thunkSources) {
+        sourceAddress = source.createJsThunk(controllerAddress, funcId);
+        break;
+      }
+      if (!source) {
+        source = this.addJsThunkSource();
+        sourceAddress = source.createJsThunk(controllerAddress, funcId);
+      }
+      // sourceAddress is an index into the function table of the source instance
+      // we need to get the function object and place it into the main instance's
+      // function table
+      const thunkObject = source.table.get(sourceAddress);
+      let thunkAddress = 0;
+      for (let i = this.table.length - 1; i >= this.initialTableLength; i--) {
+        if (!this.table.get(i)) {
+          thunkAddress = i;
+          break;
+        }
+      }
+      if (!thunkAddress) {
+        thunkAddress = this.table.length;
+        this.table.grow(8);
+      }
+      this.table.set(thunkAddress, thunkObject);
+      source.thunkCount++;
+      return thunkAddress;
+    },
+    freeJsThunk(controllerAddress, thunkAddress) {
       // TODO
     },
     performJsCall(id, argAddress, argSize) {
       const dv = this.obtainFixedView(argAddress, argSize);
-      this.runFunction(id, dv, 0);
+      return this.runFunction(id, dv, 0);
     },
   } ),
 });
@@ -3569,6 +3642,7 @@ var moduleLoading = mixin({
   },
   ...({
     imports: {
+      initialize: { argType: '' },
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
     exports: {
@@ -3577,7 +3651,10 @@ var moduleLoading = mixin({
     nextValueIndex: 1,
     valueMap: new Map(),
     valueIndices: new Map(),
-    hasCodeSource: false,
+    options: null,
+    executable: null,
+    memory: null,
+    table: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -3657,25 +3734,25 @@ var moduleLoading = mixin({
         memoryMax,
         tableInitial,
         multithreaded,
-      } = options;
+      } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
-      const executable = await f(res);
+      const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
-      const env = {}, wasi = {};
+      const env = {}, wasi = {}, wasiPreview = {};
+      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
-            wasi[name] = this.getWASIHandler(name);
+            wasiPreview[name] = this.getWASIHandler(name);
           }
         }
       }
-      this.hasCodeSource = true;
       this.memory = env.memory = new w.Memory({
         initial: memoryInitial,
         maximum: memoryMax,
@@ -3685,10 +3762,7 @@ var moduleLoading = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      this.multithreaded = multithreaded;
-      this.nextTableIndex = tableInitial;
-      const importObject = { env, wasi_snapshot_preview1: wasi };
-      return new w.Instance(executable, importObject);
+      return new w.Instance(executable, imports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -3697,6 +3771,7 @@ var moduleLoading = mixin({
         this.importFunctions(exports);
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
+        this.initialize();
         // this.runtimeSafety = ;
       })();
     },
@@ -4436,7 +4511,7 @@ var wasiSupport = mixin({
     customWASI: null,
 
     setCustomWASI(wasi) {
-      if (wasi && this.hasCodeSource) {
+      if (wasi && this.executable) {
         throw new Error('Cannot set WASI interface after compilation has already begun');
       }
       this.customWASI = wasi;
@@ -6187,7 +6262,7 @@ var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
-      static: { template: jsThunkConstructor },
+      static: { template: jsThunkController },
     } = structure;
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
@@ -6204,7 +6279,7 @@ var _function = mixin({
           throw new TypeMismatch('function', arg);
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, jsThunkConstructor);
+        dv = thisEnv.getFunctionThunk(arg, jsThunkController);
       } else {
         // casting a memory pointing to Zig binary
         dv = arg;
@@ -6247,7 +6322,7 @@ var _function = mixin({
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     {
-      if (jsThunkConstructor) {
+      if (jsThunkController) {
         this.usingFunctionPointer = true;
       }
     }

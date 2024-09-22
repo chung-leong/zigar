@@ -56,16 +56,17 @@ export function addTests(importModule, options) {
         expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
           .with.property('message').that.equal('Unexpected');
       })
-      // const jsFn2 = (number) => {
-      //   console.log(`number = ${number}`);
-      //   return number * 2;
-      // };
-      // let result;
-      // const lines3 = await capture(() => {
-      //   result = call3(jsFn2);
-      // });
-      // expect(lines3).to.eql([ 'number = 1234' ]);
-      // expect(result).to.equal(1234 * 2);
+      const jsFn2 = (number) => {
+        console.log(`number = ${number}`);
+        return number * 2;
+      };
+      let result;
+      const lines3 = await capture(() => {
+        result = call3(jsFn2);
+      });
+      call3(() => 0);
+      expect(lines3).to.eql([ 'number = 1234' ]);
+      expect(result).to.equal(1234 * 2);
       // __zigar.multithread(true);
       // try {
       //   const lines4 = await capture(async () => {

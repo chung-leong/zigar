@@ -31,87 +31,19 @@ extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
 extern fn _defineStructure(structure: Value) ?Value;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
-extern fn _allocateJsThunk(slot: usize) ?*const anyopaque;
+extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
+extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) bool;
 extern fn _performJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.CallResult;
 extern fn _getArgAttributes() *anyopaque;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
-const allocator: std.mem.Allocator = .{
-    .ptr = undefined,
-    .vtable = &std.heap.WasmAllocator.vtable,
-};
-const ScratchAllocator = struct {
-    const Self = @This();
+var main_thread: bool = false;
 
-    fallback: std.mem.Allocator,
-    fba: std.heap.FixedBufferAllocator,
-
-    pub fn init(fallback: std.mem.Allocator, size: usize) Self {
-        const buf = fallback.alloc(u8, size) catch unreachable;
-        return .{
-            .fallback = fallback,
-            .fba = std.heap.FixedBufferAllocator.init(buf),
-        };
-    }
-
-    pub fn allocator(self: *Self) std.mem.Allocator {
-        return .{
-            .ptr = self,
-            .vtable = &.{
-                .alloc = alloc,
-                .resize = resize,
-                .free = free,
-            },
-        };
-    }
-
-    fn alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ra: usize) ?[*]u8 {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        const fixed = self.fba.allocator();
-        if (fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
-            return buf;
-        } else {
-            return self.fallback.rawAlloc(len, log2_ptr_align, ra);
-        }
-    }
-
-    fn resize(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, new_len: usize, ra: usize) bool {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        if (self.fba.ownsPtr(buf.ptr)) {
-            const fixed = self.fba.allocator();
-            return fixed.rawResize(buf, log2_buf_align, new_len, ra);
-        } else {
-            return self.fallback.rawResize(buf, log2_buf_align, new_len, ra);
-        }
-    }
-
-    fn free(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, ra: usize) void {
-        const self: *Self = @ptrCast(@alignCast(ctx));
-        if (self.fba.ownsPtr(buf.ptr)) {
-            const fixed = self.fba.allocator();
-            return fixed.rawFree(buf, log2_buf_align, ra);
-        } else {
-            return self.fallback.rawFree(buf, log2_buf_align, ra);
-        }
-    }
-};
-var sfa: ?ScratchAllocator = null;
-var scratch_allocator: ?std.mem.Allocator = null;
-
-pub fn getAllocator(bin: MemoryType) std.mem.Allocator {
-    return switch (bin) {
-        .scratch => get: {
-            if (scratch_allocator == null) {
-                sfa = ScratchAllocator.init(allocator, 64 * 1024);
-                scratch_allocator = sfa.?.allocator();
-            }
-            break :get scratch_allocator.?;
-        },
-        else => allocator,
-    };
+export fn initialize() void {
+    main_thread = true;
 }
 
-pub fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 {
+export fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 {
     const a = getAllocator(bin);
     const ptr_align = getPtrAlign(alignment);
     if (a.rawAlloc(len, ptr_align, 0)) |bytes| {
@@ -124,29 +56,77 @@ pub fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 
     }
 }
 
-pub fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment: u16) void {
+export fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment: u16) void {
     const a = getAllocator(bin);
     const ptr_align = getPtrAlign(alignment);
     a.rawFree(bytes[0..len], ptr_align, 0);
 }
 
-fn clearBytes(bytes: [*]u8, len: usize) void {
-    var start: usize = 0;
-    inline for (.{ usize, u8 }) |T| {
-        const mask = ~(@as(usize, @sizeOf(T)) - 1);
-        const remaining = len - start;
-        const count = remaining & mask;
-        if (count > 0) {
-            const end = start + count;
-            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
-            start += count;
-            if (start == len) break;
-        }
+export fn runThunk(
+    thunk_address: usize,
+    fn_address: usize,
+    args: *anyopaque,
+) bool {
+    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(null, fn_ptr, args)) true else |_| false;
+}
+
+export fn runVariadicThunk(
+    thunk_address: usize,
+    fn_address: usize,
+    arg_ptr: *anyopaque,
+    attr_ptr: *const anyopaque,
+    arg_count: usize,
+) bool {
+    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
+    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    return if (thunk(null, fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
+}
+
+export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
+    // try to use preallocated thunks within module first; if they've been used up,
+    // ask JavaScript to create a new instance of this module and get a new
+    // thunk from that
+    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    if (controller(null, thunk_js.Action.create, fn_id)) |thunk_address| {
+        return thunk_address;
+    } else |_| {
+        return if (main_thread) _allocateJsThunk(controller_address, fn_id) else 0;
     }
 }
 
-pub fn getPtrAlign(alignment: u16) u8 {
-    return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
+export fn destroyJsThunk(controller_address: usize, fn_id: usize) bool {
+    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    if (controller(null, thunk_js.Action.destroy, fn_id)) |_| {
+        return true;
+    } else |_| {
+        return if (main_thread) _freeJsThunk(controller_address, fn_id) else false;
+    }
+    return false;
+}
+
+export fn flushStdout() void {
+    if (builtin.link_libc) {
+        const c = @cImport({
+            @cInclude("stdio.h");
+        });
+        _ = c.fflush(c.stdout);
+    }
+}
+
+export fn getModuleAttributes() i32 {
+    return @bitCast(exporter.getModuleAttributes());
+}
+
+pub fn getFactoryThunk(comptime T: type) usize {
+    const factory = exporter.createRootFactory(Host, T);
+    return @intFromPtr(factory);
+}
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    _displayPanic(msg.ptr, msg.len);
+    std.process.abort();
 }
 
 pub const Host = struct {
@@ -281,66 +261,101 @@ pub const Host = struct {
         return self.captureString(memory) catch null;
     }
 
-    pub fn allocateJsThunk(_: Host, slot: usize) !*const anyopaque {
-        return _allocateJsThunk(slot) orelse
-            Error.unable_to_create_function;
-    }
-
     pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) thunk_js.CallResult {
         return _performJsCall(ctx.id, arg_ptr, arg_size);
     }
 };
 
-pub fn runThunk(
-    thunk_address: usize,
-    fn_address: usize,
-    args: *anyopaque,
-) bool {
-    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
-    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(null, fn_ptr, args)) true else |_| false;
+const allocator: std.mem.Allocator = .{
+    .ptr = undefined,
+    .vtable = &std.heap.WasmAllocator.vtable,
+};
+const ScratchAllocator = struct {
+    const Self = @This();
+
+    fallback: std.mem.Allocator,
+    fba: std.heap.FixedBufferAllocator,
+
+    pub fn init(fallback: std.mem.Allocator, size: usize) Self {
+        const buf = fallback.alloc(u8, size) catch unreachable;
+        return .{
+            .fallback = fallback,
+            .fba = std.heap.FixedBufferAllocator.init(buf),
+        };
+    }
+
+    pub fn allocator(self: *Self) std.mem.Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = resize,
+                .free = free,
+            },
+        };
+    }
+
+    fn alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ra: usize) ?[*]u8 {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        const fixed = self.fba.allocator();
+        if (fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
+            return buf;
+        } else {
+            return self.fallback.rawAlloc(len, log2_ptr_align, ra);
+        }
+    }
+
+    fn resize(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, new_len: usize, ra: usize) bool {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fba.ownsPtr(buf.ptr)) {
+            const fixed = self.fba.allocator();
+            return fixed.rawResize(buf, log2_buf_align, new_len, ra);
+        } else {
+            return self.fallback.rawResize(buf, log2_buf_align, new_len, ra);
+        }
+    }
+
+    fn free(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, ra: usize) void {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fba.ownsPtr(buf.ptr)) {
+            const fixed = self.fba.allocator();
+            return fixed.rawFree(buf, log2_buf_align, ra);
+        } else {
+            return self.fallback.rawFree(buf, log2_buf_align, ra);
+        }
+    }
+};
+var sfa: ?ScratchAllocator = null;
+var scratch_allocator: ?std.mem.Allocator = null;
+
+fn getAllocator(bin: MemoryType) std.mem.Allocator {
+    return switch (bin) {
+        .scratch => get: {
+            if (scratch_allocator == null) {
+                sfa = ScratchAllocator.init(allocator, 64 * 1024);
+                scratch_allocator = sfa.?.allocator();
+            }
+            break :get scratch_allocator.?;
+        },
+        else => allocator,
+    };
 }
 
-pub fn runVariadicThunk(
-    thunk_address: usize,
-    fn_address: usize,
-    arg_ptr: *anyopaque,
-    attr_ptr: *const anyopaque,
-    arg_count: usize,
-) bool {
-    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
-    const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(null, fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
-}
-
-pub fn createJsThunk(constructor_address: usize, fn_id: usize) usize {
-    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(constructor_address);
-    if (constructor(null, fn_id)) |thunk_address| {
-        return thunk_address;
-    } else |_| {
-        return 0;
+fn clearBytes(bytes: [*]u8, len: usize) void {
+    var start: usize = 0;
+    inline for (.{ usize, u8 }) |T| {
+        const mask = ~(@as(usize, @sizeOf(T)) - 1);
+        const remaining = len - start;
+        const count = remaining & mask;
+        if (count > 0) {
+            const end = start + count;
+            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
+            start += count;
+            if (start == len) break;
+        }
     }
 }
 
-pub fn getFactoryThunk(comptime T: type) usize {
-    const factory = exporter.createRootFactory(Host, T);
-    return @intFromPtr(factory);
-}
-
-pub fn flushStdout() void {
-    if (builtin.link_libc) {
-        const c = @cImport({
-            @cInclude("stdio.h");
-        });
-        _ = c.fflush(c.stdout);
-    }
-}
-
-pub fn getModuleAttributes() i32 {
-    return @bitCast(exporter.getModuleAttributes());
-}
-
-pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
-    _displayPanic(msg.ptr, msg.len);
-    std.process.abort();
+pub fn getPtrAlign(alignment: u16) u8 {
+    return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }

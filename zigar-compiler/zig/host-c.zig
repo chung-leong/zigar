@@ -331,12 +331,12 @@ pub fn runVariadicThunk(
 
 pub fn createJsThunk(
     md: *ModuleData,
-    constructor_address: usize,
+    controller_address: usize,
     fn_id: usize,
     dest: *usize,
 ) callconv(.C) Result {
-    const constructor: thunk_js.ThunkConstructor = @ptrFromInt(constructor_address);
-    if (constructor(md, fn_id)) |thunk_address| {
+    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    if (controller(md, thunk_js.Action.create, fn_id)) |thunk_address| {
         dest.* = thunk_address;
         return .ok;
     } else |_| {
