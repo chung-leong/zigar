@@ -42,6 +42,7 @@ export function addTests(importModule, options) {
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print({ number1: 11, number2: 44 }));
       expect(lines).to.eql([ 'as-function-parameters.Struct{ .number1 = 11, .number2 = 44 }' ]);
+      expect(() => print(undefined)).to.throw();
     })
     it('should return struct', async function() {
       this.timeout(300000);

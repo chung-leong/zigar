@@ -48,6 +48,7 @@ export function addTests(importModule, options) {
         '221 -1234',
         '1fffffffffffffff aaaaaaaaaaaaaaaaaaaaaaab'
       ]);
+      expect(() => print1(221, undefined)).to.throw();
     })
     it('should return int', async function() {
       this.timeout(300000);

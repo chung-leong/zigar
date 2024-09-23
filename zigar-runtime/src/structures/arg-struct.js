@@ -1,6 +1,6 @@
 import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ArgumentCountMismatch, adjustArgumentError } from '../errors.js';
+import { ArgumentCountMismatch, UndefinedArgument, adjustArgumentError } from '../errors.js';
 import { MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue, never } from '../utils.js';
 
@@ -13,8 +13,8 @@ export default mixin({
       instance: { members },
     } = structure;
     const thisEnv = this;
-    const argKeys = members.slice(1).map(m => m.name);
-    const argCount = argKeys.length;
+    const argMembers = members.slice(1);
+    const argCount = argMembers.length;
     const constructor = function(args, name, offset) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -33,11 +33,18 @@ export default mixin({
         if (args.length !== argCount) {
           throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
         }
-        for (const [ index, key ] of argKeys.entries()) {
+        for (let i = 0; i < argCount; i++) {
           try {
-            this[key] = args[index];
+            const arg = args[i];
+            if (arg === undefined) {
+              const { type } = argMembers[i];
+              if (type !== MemberType.Void) {
+                throw new UndefinedArgument();
+              }
+            }
+            this[i] = arg;
           } catch (err) {
-            throw adjustArgumentError(name, index - offset, argCount - offset, err);
+            throw adjustArgumentError(name, i - offset, argCount - offset, err);
           }
         }
       } else {

@@ -1,6 +1,6 @@
 import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
+import { ArgumentCountMismatch, InvalidVariadicArgument, UndefinedArgument, adjustArgumentError } from '../errors.js';
 import {
   ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING, VISIT, VIVIFICATE
 } from '../symbols.js';
@@ -16,7 +16,6 @@ export default mixin({
     } = structure;
     const argMembers = members.slice(1);
     const argCount = argMembers.length;
-    const argKeys = argMembers.map(m => m.name);
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
     const constructor = function(args, name, offset) {
@@ -53,11 +52,18 @@ export default mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
-      for (const [ index, key ] of argKeys.entries()) {
+      for (let i = 0; i < argCount; i++) {
         try {
-          this[key] = args[index];
+          const arg = args[i];
+          if (arg === undefined) {
+            const { type } = argMembers[i];
+            if (type !== MemberType.Void) {
+              throw new UndefinedArgument();
+            }
+          }
+          this[i] = arg;
         } catch (err) {
-          throw adjustArgumentError(name, index - offset, argCount - offset, err);
+          throw adjustArgumentError(name, i - offset, argCount - offset, err);
         }
       }
       // set attributes of retval and fixed args

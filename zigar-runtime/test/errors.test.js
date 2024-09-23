@@ -37,6 +37,7 @@ import {
   OutOfBound,
   Overflow,
   TypeMismatch,
+  UndefinedArgument,
   Unsupported,
   adjustArgumentError,
   adjustRangeError,
@@ -635,6 +636,11 @@ describe('Error functions', function() {
       expect(err2.message).to.contain('(..., args[1], ...)');
       const err3 = adjustArgumentError('hello', 2, 3, err);
       expect(err3.message).to.contain('(..., args[2])');
+    })
+    it('should return error of the same class', function() {
+      const err = new UndefinedArgument();
+      const err1 = adjustArgumentError('hello', 0, 3, err);
+      expect(() => { throw err1 }).to.throw(UndefinedArgument);
     })
   })
   describe('adjustRangeError', function() {

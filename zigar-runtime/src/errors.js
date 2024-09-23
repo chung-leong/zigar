@@ -232,6 +232,12 @@ export class ArgumentCountMismatch extends Error {
   }
 }
 
+export class UndefinedArgument extends Error {
+  constructor() {
+    super(`Undefined argument`);
+  }
+}
+
 export class NoCastingToPointer extends TypeError {
   constructor(structure) {
     super(`Non-slice pointers can only be created with the help of the new operator`);

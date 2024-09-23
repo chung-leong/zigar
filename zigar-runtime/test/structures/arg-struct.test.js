@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { ArgumentCountMismatch } from '../../src/errors.js';
+import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { VISIT } from '../../src/symbols.js';
 
@@ -107,7 +107,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'cat',
+        name: '0',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
@@ -115,7 +115,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'dog',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -127,8 +127,8 @@ describe('Structure: arg-struct', function() {
       expect(ArgStruct).to.be.a('function');
       const object = new ArgStruct([ 123, 456 ], 'hello', 0);
       object.retval = 777;
-      expect(object.cat).to.equal(123);
-      expect(object.dog).to.equal(456);
+      expect(object[0]).to.equal(123);
+      expect(object[1]).to.equal(456);
       expect(object.retval).to.equal(777);
     })
     it('should define an argument struct that contains a struct', function() {
@@ -186,7 +186,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'pet',
+        name: '0',
         type: MemberType.Object,
         bitSize: childStructure.byteSize * 8,
         bitOffset: 32,
@@ -195,7 +195,7 @@ describe('Structure: arg-struct', function() {
         structure: childStructure,
       });
       env.attachMember(structure, {
-        name: 'number',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32 + childStructure.byteSize * 8,
@@ -205,8 +205,8 @@ describe('Structure: arg-struct', function() {
       const ArgStruct = env.defineStructure(structure);
       env.endStructure(structure);
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ], 'hello', 0);
-      object.pet.valueOf();
-      expect(object.pet.valueOf()).to.eql({ dog: 1234, cat: 4567 });
+      object[0].valueOf();
+      expect(object[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define an argument struct with pointer as return value', function() {
       const env = new Env();
@@ -309,7 +309,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'cat',
+        name: '0',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
@@ -317,7 +317,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'dog',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -328,6 +328,57 @@ describe('Structure: arg-struct', function() {
       env.endStructure(structure);
       expect(() => new ArgStruct([ 123 ], 'hello', 0)).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456, 789 ], 'hello', 0)).to.throw(ArgumentCountMismatch);
+      expect(() => new ArgStruct([ 123, 456 ], 'hello', 0)).to.not.throw();
+    })
+    it('should throw when initialized with undefined arguments', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: 4 * 3,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '1',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 64,
+        byteSize: 0,
+        structure: {},
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new ArgStruct([ undefined, undefined ], 'hello', 0)).to.throw(UndefinedArgument);
+      expect(() => new ArgStruct([ 123, undefined ], 'hello', 0)).to.not.throw();
     })
     it('should throw with argument name in error message when an invalid argument is encountered', function() {
       const env = new Env();

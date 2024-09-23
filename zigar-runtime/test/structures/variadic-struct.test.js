@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { ArgumentCountMismatch, InvalidVariadicArgument } from '../../src/errors.js';
+import { ArgumentCountMismatch, InvalidVariadicArgument, UndefinedArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { MEMORY, VISIT } from '../../src/symbols.js';
 
@@ -143,7 +143,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'cat',
+        name: '0',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 32,
@@ -151,7 +151,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.attachMember(structure, {
-        name: 'dog',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -163,8 +163,8 @@ describe('Structure: variadic-struct', function() {
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 123, 456 ], 'hello', 0);
       args1.retval = 777;
-      expect(args1.cat).to.equal(123);
-      expect(args1.dog).to.equal(456);
+      expect(args1[0]).to.equal(123);
+      expect(args1[1]).to.equal(456);
       expect(args1.retval).to.equal(777);
       expect(args1[MEMORY].byteLength).to.equal(12);
       const args2 = new VariadicStruct([ 123, 456, new Int32(1), new Int32(2) ], 'hello', 0);
@@ -174,6 +174,7 @@ describe('Structure: variadic-struct', function() {
       const args4 = new VariadicStruct([ 123, 456, new Int32(1), new Struct({ number: 123 }) ], 'hello', 0);
       expect(args4[MEMORY].byteLength).to.equal(24);
       expect(() => new VariadicStruct([ 123 ], 'hello', 0)).to.throw(ArgumentCountMismatch);
+      expect(() => new VariadicStruct([ undefined, 2 ], 'hello', 0)).to.throw(UndefinedArgument);
       expect(() => new VariadicStruct([ 123, 0xFFFF_FFFF_FFFFn ], 'hello', 0)).to.throw(TypeError);
       expect(() => new VariadicStruct([ 123, 456, 1, 2 ], 'hello', 0)).to.throw(InvalidVariadicArgument)
         .with.property('message').that.contains('args[2]');
@@ -229,7 +230,7 @@ describe('Structure: variadic-struct', function() {
         slot: 0,
       });
       env.attachMember(structure, {
-        name: 'pointer',
+        name: '0',
         type: MemberType.Object,
         bitSize: 32,
         bitOffset: 32,
@@ -238,7 +239,7 @@ describe('Structure: variadic-struct', function() {
         slot: 1,
       });
       env.attachMember(structure, {
-        name: 'number',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
@@ -312,7 +313,7 @@ describe('Structure: variadic-struct', function() {
         slot: 0,
       });
       env.attachMember(structure, {
-        name: 'pointer',
+        name: '0',
         type: MemberType.Object,
         bitSize: 32,
         bitOffset: 32,
@@ -321,7 +322,7 @@ describe('Structure: variadic-struct', function() {
         slot: 1,
       });
       env.attachMember(structure, {
-        name: 'number',
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 64,
