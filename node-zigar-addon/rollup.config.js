@@ -1,3 +1,4 @@
+import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 // import Terser from '@rollup/plugin-terser';
 
@@ -5,6 +6,7 @@ export default [
   {
     input: 'src/addon.js',
     plugins: [
+      NodeResolve(),
       Replace({
         preventAssignment: true,
         values: {
@@ -28,6 +30,7 @@ export default [
   {
     input: 'src/addon.js',
     plugins: [
+      NodeResolve(),
       Replace({
         preventAssignment: true,
         values: {
@@ -52,7 +55,7 @@ export default [
 function CPPString() {
   // place JS code into a C++ raw string
   return {
-    name: 'C++ string',
+    name: 'cpp_string',
     renderChunk (code) {
       const iife = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
       const lines = iife.split(/(?<=\n)/);

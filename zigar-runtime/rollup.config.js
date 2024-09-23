@@ -1,8 +1,10 @@
 import Replace from '@rollup/plugin-replace';
+import Terser from '@rollup/plugin-terser';
+import URL from '@rollup/plugin-url';
+
 import { readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join, sep } from 'path';
 
-const config = [];
 const plugins = [
   Replace({
     preventAssignment: true,
@@ -12,7 +14,24 @@ const plugins = [
       'process.env.BITS': '"32"',
       'process.env.MIXIN': '""',
     },
-  })
+  }),
+  URL({
+    // embed worker.min.js as data-URI
+    include: '**/worker.min.js',
+  }),
+];
+const config = [
+  {
+    // minify worker.js
+    external: path => true,
+    input: './src/worker.js',
+    output: {
+      file: './src/worker.min.js',
+      format: 'esm',
+      plugins: [ Terser() ],
+    },
+    plugins,
+  }
 ];
 const mixins = {};
 
@@ -27,15 +46,18 @@ for (const subpath of readdirSync('./src', { recursive: true })) {
                               .replace(/^./, m => m.toUpperCase());
       mixins[name] = `./${subpath.split(sep).join('/')}`;
     }
-    config.push({
-      external: () => true,
-      input: join('./src', subpath),
-      output: {
-        file: join('./dist', subpath),
-        format: 'esm',
-      },
-      plugins,
-    });
+    if (!filename.startsWith('worker')) {
+      config.push({
+        input: join('./src', subpath),
+        output: {
+          file: join('./dist', subpath),
+          format: 'esm',
+          inlineDynamicImports: true,
+        },
+        plugins,
+        external: path => !path.endsWith('.min.js'),
+      });
+    }
   }
 }
 

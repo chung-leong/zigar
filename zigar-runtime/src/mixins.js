@@ -28,6 +28,7 @@ export { default as FeatureRuntimeSafety } from './features/runtime-safety.js';
 export { default as FeatureStreamRedirection } from './features/stream-redirection.js';
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';
 export { default as FeatureThreadSupport } from './features/thread-support.js';
+export { default as FeatureThunkAllocation } from './features/thunk-allocation.js';
 export { default as FeatureViewManagement } from './features/view-management.js';
 export { default as FeatureWasiSupport } from './features/wasi-support.js';
 export { default as FeatureWriteProtection } from './features/write-protection.js';

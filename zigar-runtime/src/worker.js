@@ -1,10 +1,18 @@
-import { parentPort, workerData } from 'worker_threads';
 
-function postMessage(msg) {
-  parentPort.postMessage(msg);
-}
+let postMessage;
 
-start(workerData);
+(async () => {
+  if (typeof(self) === 'object') {
+    // web worker
+    onmessage = evt => start(evt.data);
+    postMessage = msg => self.postMessage(msg);
+  } else {
+    // Node.js worker-thread
+    const { parentPort, workerData } = await import('worker_threads');
+    postMessage = msg => parentPort.postMessage(msg);
+    start(workerData);
+  }
+})();
 
 function start({ executable, memory, options, tid, arg }) {
   const w = WebAssembly;
@@ -23,7 +31,7 @@ function start({ executable, memory, options, tid, arg }) {
     }
   }
   const { tableInitial } = options;
-  const table = env.__indirect_function_table = new w.Table({
+  env.__indirect_function_table = new w.Table({
     initial: tableInitial,
     element: 'anyfunc',
   });
@@ -33,11 +41,19 @@ function start({ executable, memory, options, tid, arg }) {
 }
 
 function createRouter(module, name) {
-  const array = new Int32Array(new SharedArrayBuffer(8));
-  return function(...args) {
-    array[0] = 0;
-    postMessage({ type: 'call', module, name, args, array });
-    Atomics.wait(array, 0, 0);
-    return array[1];
+  if (name === '_queueJsCall') {
+    // waiting occurs in WASM when queueJsCall() gets called
+    return function(...args) {
+      postMessage({ type: 'call', module, name, args });
+      return 0;
+    };
+  } else {
+    const array = new Int32Array(new SharedArrayBuffer(8));
+    return function(...args) {
+      array[0] = 0;
+      postMessage({ type: 'call', module, name, args, array });
+      Atomics.wait(array, 0, 0);
+      return array[1];
+    };
   }
 }

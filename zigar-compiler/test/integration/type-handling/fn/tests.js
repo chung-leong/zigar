@@ -79,12 +79,12 @@ export function addTests(importModule, options) {
           console.log(`number = ${number}`);
           return number * 3;
         };
-        // const lines5 = await capture(async () => {
-        //   call4(jsFn3);
-        //   await new Promise(r => setTimeout(r, 100));
-        // });
-        // expect(lines5).to.eql([ 'number = 1234' ]);
-        // expect(module.call4_result).to.equal(1234 * 3);
+        const lines5 = await capture(async () => {
+          call4(jsFn3);
+          await new Promise(r => setTimeout(r, 100));
+        });
+        expect(lines5).to.eql([ 'number = 1234' ]);
+        expect(module.call4_result).to.equal(1234 * 3);
       } finally {
         __zigar.multithread(false);
       }

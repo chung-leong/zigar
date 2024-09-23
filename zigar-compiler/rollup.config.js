@@ -1,7 +1,6 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 
-
 export default [
   {
     input: './src/index.js',

@@ -2425,91 +2425,23 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      allocateJsThunk: { argType: 'ii', returnType: 'i' },
-      freeJsThunk: { argType: 'ii', returnType: 'b' },
       performJsCall: { argType: 'iii', returnType: 'i' },
+      queueJsCall: { argType: 'iii', returnType: 'i' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
       destroyJsThunk: { argType: 'ii', returnType: 'b' },
     },
-    thunkSources: [],
-    addJsThunkSource() {
-      const {
-        memoryInitial,
-        memoryMax,
-        tableInitial,
-        multithreaded,
-      } = this.options;
-      const w = WebAssembly;
-      const env = {}, wasi = {}, wasiPreview = {};
-      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      const empty = function() {};
-      for (const { module, name, kind } of w.Module.imports(this.executable)) {
-        if (kind === 'function') {
-          if (module === 'env') {
-            env[name] = empty;
-          } else if (module === 'wasi_snapshot_preview1') {
-            wasiPreview[name] = empty;
-          } else if (module === 'wasi') {
-            wasi[name] = empty;
-          }
-        }
-      }
-      env.memory = new w.Memory({
-        initial: memoryInitial,
-        maximum: memoryMax,
-        shared: multithreaded,
-      });
-      const table = env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-      });
-      const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk } = exports;
-      const source = {
-        thunkCount: 0,
-        createJsThunk,
-        table,
-      };
-      this.thunkSources.unshift(source);
-      return source;
-    },
-    allocateJsThunk(controllerAddress, funcId) {
-      let source, sourceAddress = 0;
-      for (source of this.thunkSources) {
-        sourceAddress = source.createJsThunk(controllerAddress, funcId);
-        break;
-      }
-      if (!source) {
-        source = this.addJsThunkSource();
-        sourceAddress = source.createJsThunk(controllerAddress, funcId);
-      }
-      // sourceAddress is an index into the function table of the source instance
-      // we need to get the function object and place it into the main instance's
-      // function table
-      const thunkObject = source.table.get(sourceAddress);
-      let thunkAddress = 0;
-      for (let i = this.table.length - 1; i >= this.initialTableLength; i--) {
-        if (!this.table.get(i)) {
-          thunkAddress = i;
-          break;
-        }
-      }
-      if (!thunkAddress) {
-        thunkAddress = this.table.length;
-        this.table.grow(8);
-      }
-      this.table.set(thunkAddress, thunkObject);
-      source.thunkCount++;
-      return thunkAddress;
-    },
-    freeJsThunk(controllerAddress, thunkAddress) {
-      // TODO
-    },
     performJsCall(id, argAddress, argSize) {
       const dv = this.obtainFixedView(argAddress, argSize);
       return this.runFunction(id, dv, 0);
+    },
+    queueJsCall(id, argAddress, argSize, futexHandle) {
+      // in the main thread, this method is never called from WASM;
+      // the implementation of queueJsCall() in worker.js, call this
+      // through postMessage() when it is called the worker's WASM instance
+      const result = this.performJsCall(id, argAddress, argSize);
+      this.finalizeAsyncCall(futexHandle, result);
     },
   } ),
 });
@@ -3653,6 +3585,7 @@ var moduleLoading = mixin({
     executable: null,
     memory: null,
     table: null,
+    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -3740,7 +3673,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
@@ -3763,7 +3696,7 @@ var moduleLoading = mixin({
         element: 'anyfunc',
         shared: multithreaded,
       });
-      return new w.Instance(executable, imports);
+      return new w.Instance(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -4338,24 +4271,118 @@ function isElectron() {
 
 var threadSupport = mixin({
   ...({
+    imports: {
+      finalizeAsyncCall: { argType: 'ii' },
+    },
     nextThreadId: 1,
+
     getThreadHandler() {
       return this.spawnThread.bind(this);
     },
     spawnThread(arg) {
       const tid = this.nextThreadId;
       this.nextThreadId++;
-      const url = pathToFileURL('/home/cleong/zigar/zigar-runtime/src/thread-test.js');
-      const { executable, memory, table, options } = this;
-      const workerData = { executable, memory, table, options, tid, arg };
+      const url = pathToFileURL('/home/cleong/zigar/zigar-runtime/src/worker.js');
+      const { executable, memory, options } = this;
+      const workerData = { executable, memory, options, tid, arg };
       const worker = new Worker(url, { workerData });
-      worker.on('message', (evt) => this.onWorkerMessage(evt));
+      worker.on('message', (msg) => {
+        if (msg.type === 'call') {
+          const { module, name, args, array } = msg;
+          const fn = this.exportedModules[module]?.[name];
+          if (array) {
+            array[1] = fn?.(...args) | 0;
+            array[0] = 1;
+            Atomics.notify(array, 0, 1);
+          }
+        }
+      });
       return tid;
     },
-    onWorkerMessage({ target: worker, data: msg }) {
-      console.log(msg);
-    },
   } ) ,
+});
+
+var thunkAllocation = mixin({
+  ...({
+    exports: {
+      allocateJsThunk: { argType: 'ii', returnType: 'i' },
+      freeJsThunk: { argType: 'ii', returnType: 'b' },
+    },
+    thunkSources: [],
+    addJsThunkSource() {
+      const {
+        memoryInitial,
+        memoryMax,
+        tableInitial,
+        multithreaded,
+      } = this.options;
+      const w = WebAssembly;
+      const env = {}, wasi = {}, wasiPreview = {};
+      const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const empty = function() {};
+      for (const { module, name, kind } of w.Module.imports(this.executable)) {
+        if (kind === 'function') {
+          if (module === 'env') {
+            env[name] = empty;
+          } else if (module === 'wasi_snapshot_preview1') {
+            wasiPreview[name] = empty;
+          } else if (module === 'wasi') {
+            wasi[name] = empty;
+          }
+        }
+      }
+      env.memory = new w.Memory({
+        initial: memoryInitial,
+        maximum: memoryMax,
+        shared: multithreaded,
+      });
+      const table = env.__indirect_function_table = new w.Table({
+        initial: tableInitial,
+        element: 'anyfunc',
+      });
+      const { exports } = new w.Instance(this.executable, imports);
+      const { createJsThunk } = exports;
+      const source = {
+        thunkCount: 0,
+        createJsThunk,
+        table,
+      };
+      this.thunkSources.unshift(source);
+      return source;
+    },
+    allocateJsThunk(controllerAddress, funcId) {
+      let source, sourceAddress = 0;
+      for (source of this.thunkSources) {
+        sourceAddress = source.createJsThunk(controllerAddress, funcId);
+        break;
+      }
+      if (!source) {
+        source = this.addJsThunkSource();
+        sourceAddress = source.createJsThunk(controllerAddress, funcId);
+      }
+      // sourceAddress is an index into the function table of the source instance
+      // we need to get the function object and place it into the main instance's
+      // function table
+      const thunkObject = source.table.get(sourceAddress);
+      let thunkAddress = 0;
+      for (let i = this.table.length - 1; i >= this.initialTableLength; i--) {
+        if (!this.table.get(i)) {
+          thunkAddress = i;
+          break;
+        }
+      }
+      if (!thunkAddress) {
+        thunkAddress = this.table.length;
+        this.table.grow(8);
+      }
+      this.table.set(thunkAddress, thunkObject);
+      source.thunkCount++;
+      return thunkAddress;
+    },
+    freeJsThunk(controllerAddress, thunkAddress) {
+      // TODO
+    },
+  } ),
 });
 
 var viewManagement = mixin({
@@ -7573,6 +7600,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThreadSupport: threadSupport,
+  FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,
@@ -9001,10 +9029,12 @@ async function transpile(path, options) {
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
+  usage.FeatureThunkAllocation = env.usingFunctionPointer && !moduleOptions.multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
+      // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
       const dir = parts.shift() + 's';
       const filename = parts.join('-') + '.js';

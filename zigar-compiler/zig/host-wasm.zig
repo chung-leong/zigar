@@ -34,10 +34,11 @@ extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) bool;
 extern fn _performJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.CallResult;
+extern fn _queueJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize, futex_handle: usize) thunk_js.CallResult;
 extern fn _getArgAttributes() *anyopaque;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
-var main_thread: bool = false;
+threadlocal var main_thread: bool = false;
 
 export fn initialize() void {
     main_thread = true;
@@ -92,7 +93,11 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     if (controller(null, thunk_js.Action.create, fn_id)) |thunk_address| {
         return thunk_address;
     } else |_| {
-        return if (main_thread) _allocateJsThunk(controller_address, fn_id) else 0;
+        if (builtin.single_threaded and main_thread) {
+            return _allocateJsThunk(controller_address, fn_id);
+        } else {
+            return 0;
+        }
     }
 }
 
@@ -101,7 +106,11 @@ export fn destroyJsThunk(controller_address: usize, fn_id: usize) bool {
     if (controller(null, thunk_js.Action.destroy, fn_id)) |_| {
         return true;
     } else |_| {
-        return if (main_thread) _freeJsThunk(controller_address, fn_id) else false;
+        if (builtin.single_threaded and main_thread) {
+            return _freeJsThunk(controller_address, fn_id);
+        } else {
+            return false;
+        }
     }
     return false;
 }
@@ -112,6 +121,20 @@ export fn flushStdout() void {
             @cInclude("stdio.h");
         });
         _ = c.fflush(c.stdout);
+    }
+}
+
+const Futex = struct {
+    value: std.atomic.Value(u32),
+    handle: usize = undefined,
+};
+
+export fn finalizeAsyncCall(futex_handle: usize, value: u32) void {
+    // make sure futex address is valid
+    const ptr: *Futex = @ptrFromInt(futex_handle);
+    if (ptr.handle == futex_handle) {
+        ptr.value.store(value, .release);
+        std.Thread.Futex.wake(&ptr.value, 1);
     }
 }
 
@@ -261,8 +284,25 @@ pub const Host = struct {
         return self.captureString(memory) catch null;
     }
 
-    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) thunk_js.CallResult {
-        return _performJsCall(ctx.id, arg_ptr, arg_size);
+    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
+        if (main_thread) {
+            return _performJsCall(ctx.id, arg_ptr, arg_size);
+        } else {
+            const initial_value = 0xffff_ffff;
+            var futex: Futex = undefined;
+            var futex_handle: usize = 0;
+            if (wait) {
+                futex.value = std.atomic.Value(u32).init(initial_value);
+                futex.handle = @intFromPtr(&futex);
+                futex_handle = futex.handle;
+            }
+            var result = _queueJsCall(ctx.id, arg_ptr, arg_size, futex_handle);
+            if (result == .ok and wait) {
+                std.Thread.Futex.wait(&futex.value, initial_value);
+                result = @enumFromInt(futex.value.load(.acquire));
+            }
+            return result;
+        }
     }
 };
 

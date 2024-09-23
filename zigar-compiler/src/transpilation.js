@@ -53,10 +53,12 @@ export async function transpile(path, options) {
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
+  usage.FeatureThunkAllocation = env.usingFunctionPointer && !moduleOptions.multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
+      // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
       const dir = parts.shift() + 's';
       const filename = parts.join('-') + '.js';
