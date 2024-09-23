@@ -7,10 +7,12 @@ const is_wasm = switch (builtin.target.cpu.arch) {
     else => false,
 };
 
+threadlocal var instance_address: usize = 0;
+
 pub fn Instance(comptime T: type) type {
     return struct {
         const code_size = switch (builtin.target.cpu.arch) {
-            .x86_64 => 22,
+            .x86_64 => 36,
             .aarch64 => 36,
             .riscv64 => 42,
             .powerpc64le => 48,
@@ -27,29 +29,7 @@ pub fn Instance(comptime T: type) type {
         }
 
         pub inline fn fromBinding() *const @This() {
-            const address = switch (builtin.target.cpu.arch) {
-                .x86_64 => asm (""
-                    : [ret] "={r10}" (-> usize),
-                ),
-                .aarch64 => asm (""
-                    : [ret] "={x9}" (-> usize),
-                ),
-                .riscv64 => asm (""
-                    : [ret] "={x5}" (-> usize),
-                ),
-                .powerpc64le => asm (""
-                    : [ret] "={r11}" (-> usize),
-                ),
-                .x86 => asm (""
-                    : [ret] "={eax}" (-> usize),
-                ),
-                .arm => asm (""
-                    : [ret] "={r4}" (-> usize),
-                ),
-                else => unreachable,
-            };
-            const ptr: *const @This() = @ptrFromInt(address);
-            return ptr;
+            return @ptrFromInt(instance_address);
         }
 
         pub fn fromFunction(fn_ptr: *const anyopaque) *@This() {
@@ -72,29 +52,55 @@ pub fn Instance(comptime T: type) type {
             const fn_addr = @intFromPtr(fn_ptr);
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    const MOV = packed struct {
-                        rex: u8 = 0x4B, // W + X
-                        reg: u3,
-                        opc: u5 = 0x17,
+                    const REX = packed struct {
+                        b: u1 = 0,
+                        x: u1 = 0,
+                        r: u1 = 0,
+                        w: u1 = 1,
+                        pat: u4 = 4,
+                    };
+                    const ModRM = packed struct {
+                        rm: u3 = 0,
+                        reg: u3 = 0,
+                        mod: u2 = 0,
+                    };
+                    const MOV1 = packed struct {
+                        rex: REX = .{},
+                        opc: u8 = 0xb8,
                         imm64: usize,
                     };
+                    const MOV2 = packed struct {
+                        rex: REX = .{},
+                        opc: u8 = 0x89,
+                        mod_rm: ModRM,
+                    };
                     const JMP = packed struct {
-                        rex: u8 = 0x4B,
+                        rex: REX = .{},
                         opc: u8 = 0xff,
-                        rm: u3,
-                        ope: u3 = 0x4,
-                        mod: u2 = 0x3,
+                        mod_rm: ModRM,
                     };
-                    @as(*align(1) MOV, @ptrCast(&ip[0])).* = .{
+                    // mov r11, self_addr
+                    @as(*align(1) MOV1, @ptrCast(&ip[0])).* = .{
+                        .rex = .{ .b = 1 },
+                        .opc = 0xb8 + 3,
                         .imm64 = self_addr,
-                        .reg = 2, // r10
                     };
-                    @as(*align(1) MOV, @ptrCast(&ip[10])).* = .{
+                    // mov rax, &instance_address
+                    @as(*align(1) MOV1, @ptrCast(&ip[10])).* = .{
+                        .imm64 = @intFromPtr(&instance_address),
+                    };
+                    // mov [rax], r11
+                    @as(*align(1) MOV2, @ptrCast(&ip[20])).* = .{
+                        .rex = .{ .r = 1 },
+                        .mod_rm = .{ .reg = 3 },
+                    };
+                    // mov rax, fn_addr
+                    @as(*align(1) MOV1, @ptrCast(&ip[23])).* = .{
                         .imm64 = fn_addr,
-                        .reg = 3, // r11
                     };
-                    @as(*align(1) JMP, @ptrCast(&ip[20])).* = .{
-                        .rm = 3, // r11
+                    // jmp rax
+                    @as(*align(1) JMP, @ptrCast(&ip[33])).* = .{
+                        .mod_rm = .{ .rm = 0, .reg = 4, .mod = 3 },
                     };
                 },
                 .aarch64 => {
