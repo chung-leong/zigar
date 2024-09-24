@@ -16,7 +16,7 @@ pub fn Instance(comptime T: type) type {
             .aarch64 => 36,
             .riscv64 => 42,
             .powerpc64le => 48,
-            .x86 => 12,
+            .x86 => 19,
             .arm => 20,
             else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
@@ -50,6 +50,7 @@ pub fn Instance(comptime T: type) type {
             const ip = &self.bytes;
             const self_addr = @intFromPtr(self);
             const fn_addr = @intFromPtr(fn_ptr);
+            const ia_addr = @intFromPtr(&instance_address);
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
                     const REX = packed struct {
@@ -85,9 +86,9 @@ pub fn Instance(comptime T: type) type {
                         .opc = 0xb8 + 3,
                         .imm64 = self_addr,
                     };
-                    // mov rax, &instance_address
+                    // mov rax, ia_addr
                     @as(*align(1) MOV1, @ptrCast(&ip[10])).* = .{
-                        .imm64 = @intFromPtr(&instance_address),
+                        .imm64 = ia_addr,
                     };
                     // mov [rax], r11
                     @as(*align(1) MOV2, @ptrCast(&ip[20])).* = .{
@@ -98,9 +99,9 @@ pub fn Instance(comptime T: type) type {
                     @as(*align(1) MOV1, @ptrCast(&ip[23])).* = .{
                         .imm64 = fn_addr,
                     };
-                    // jmp rax
+                    // jmp [rax]
                     @as(*align(1) JMP, @ptrCast(&ip[33])).* = .{
-                        .mod_rm = .{ .rm = 0, .reg = 4, .mod = 3 },
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
                     };
                 },
                 .aarch64 => {
@@ -373,27 +374,43 @@ pub fn Instance(comptime T: type) type {
                     @as(*align(1) BCTRL, @ptrCast(&ip[44])).* = .{};
                 },
                 .x86 => {
-                    const MOV = packed struct {
-                        reg: u3,
-                        opc: u5 = 0x17,
+                    const ModRM = packed struct {
+                        rm: u3 = 0,
+                        reg: u3 = 0,
+                        mod: u2 = 0,
+                    };
+                    const MOV1 = packed struct {
+                        opc: u8 = 0xb8,
                         imm32: usize,
+                    };
+                    const MOV2 = packed struct {
+                        opc: u8 = 0x89,
+                        mod_rm: ModRM,
                     };
                     const JMP = packed struct {
                         opc: u8 = 0xff,
-                        rm: u3,
-                        ope: u3 = 0x4,
-                        mod: u2 = 0x3,
+                        mod_rm: ModRM,
                     };
-                    @as(*align(1) MOV, @ptrCast(&ip[0])).* = .{
+                    // mov edx, self_addr
+                    @as(*align(1) MOV1, @ptrCast(&ip[0])).* = .{
+                        .opc = 0xb8 + 3,
                         .imm32 = self_addr,
-                        .reg = 0, // eax
                     };
-                    @as(*align(1) MOV, @ptrCast(&ip[5])).* = .{
+                    // mov eax, self_addr
+                    @as(*align(1) MOV1, @ptrCast(&ip[5])).* = .{
+                        .imm32 = ia_addr,
+                    };
+                    // mov [eax], edx
+                    @as(*align(1) MOV2, @ptrCast(&ip[10])).* = .{
+                        .mod_rm = .{ .reg = 3 },
+                    };
+                    // mov eax, fn_addr
+                    @as(*align(1) MOV1, @ptrCast(&ip[12])).* = .{
                         .imm32 = fn_addr,
-                        .reg = 2, // edx
                     };
-                    @as(*align(1) JMP, @ptrCast(&ip[10])).* = .{
-                        .rm = 2, // edx
+                    // jmp [eax]
+                    @as(*align(1) JMP, @ptrCast(&ip[17])).* = .{
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
                     };
                 },
                 .arm => {
