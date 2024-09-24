@@ -15,7 +15,7 @@ pub fn Instance(comptime T: type) type {
             .x86_64 => 36,
             .aarch64 => 36,
             .riscv64 => 66,
-            .powerpc64le => 48,
+            .powerpc64le => 72,
             .x86 => 19,
             .arm => 20,
             else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
@@ -288,6 +288,13 @@ pub fn Instance(comptime T: type) type {
                         rs: u5,
                         opc: u6 = 0x1e,
                     };
+                    const STD = packed struct {
+                        _: u2 = 0,
+                        ds: u14 = 0,
+                        ra: u5,
+                        rs: u5,
+                        opc: u6 = 0x3e,
+                    };
                     const MTCTR = packed struct {
                         _: u1 = 0,
                         func: u10 = 467,
@@ -304,70 +311,60 @@ pub fn Instance(comptime T: type) type {
                         bo: u5 = 0x14,
                         opc: u6 = 0x13,
                     };
-                    const self_addr_16_0 = (self_addr >> 0 & 0xFFFF);
-                    const self_addr_31_16 = (self_addr >> 16 & 0xFFFF) + (self_addr >> 15 & 1);
-                    const self_addr_47_32 = (self_addr >> 32 & 0xFFFF) + (self_addr >> 31 & 1);
-                    const self_addr_63_48 = (self_addr >> 48 & 0xFFFF) + (self_addr >> 47 & 1);
-                    @as(*align(1) ADDI, @ptrCast(&ip[0])).* = .{
-                        .rt = 11,
-                        .ra = 0,
-                        .simm = @truncate(self_addr_47_32),
+                    const MOV_IMM64 = packed struct {
+                        addi1: ADDI,
+                        addis1: ADDIS,
+                        rldic: RLDIC,
+                        addi2: ADDI,
+                        addis2: ADDIS,
+
+                        fn init(rt: u5, imm64: usize) @This() {
+                            const imm64_16_0 = (imm64 >> 0 & 0xFFFF);
+                            const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
+                            const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 1);
+                            const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
+                            return .{
+                                .addi1 = .{
+                                    .rt = rt,
+                                    .ra = 0,
+                                    .simm = @truncate(imm64_47_32),
+                                },
+                                .addis1 = .{
+                                    .rt = rt,
+                                    .ra = rt,
+                                    .simm = @truncate(imm64_63_48),
+                                },
+                                .rldic = .{
+                                    .rs = rt,
+                                    .ra = rt,
+                                    .sh = 0,
+                                    .sh2 = 1,
+                                },
+                                .addi2 = .{
+                                    .rt = rt,
+                                    .ra = rt,
+                                    .simm = @truncate(imm64_16_0),
+                                },
+                                .addis2 = .{
+                                    .rt = rt,
+                                    .ra = rt,
+                                    .simm = @truncate(imm64_31_16),
+                                },
+                            };
+                        }
                     };
-                    @as(*align(1) ADDIS, @ptrCast(&ip[4])).* = .{
-                        .rt = 11,
-                        .ra = 11,
-                        .simm = @truncate(self_addr_63_48),
-                    };
-                    @as(*align(1) RLDIC, @ptrCast(&ip[8])).* = .{
-                        .rs = 11,
-                        .ra = 11,
-                        .sh = 0,
-                        .sh2 = 1,
-                    };
-                    @as(*align(1) ADDI, @ptrCast(&ip[12])).* = .{
-                        .rt = 11,
-                        .ra = 11,
-                        .simm = @truncate(self_addr_16_0),
-                    };
-                    @as(*align(1) ADDIS, @ptrCast(&ip[16])).* = .{
-                        .rt = 11,
-                        .ra = 11,
-                        .simm = @truncate(self_addr_31_16),
-                    };
-                    const fn_addr_16_0 = (fn_addr >> 0 & 0xFFFF);
-                    const fn_addr_31_16 = (fn_addr >> 16 & 0xFFFF) + (fn_addr >> 15 & 1);
-                    const fn_addr_47_32 = (fn_addr >> 32 & 0xFFFF) + (fn_addr >> 31 & 1);
-                    const fn_addr_63_48 = (fn_addr >> 48 & 0xFFFF) + (fn_addr >> 47 & 1);
-                    @as(*align(1) ADDI, @ptrCast(&ip[20])).* = .{
-                        .rt = 12,
-                        .ra = 0,
-                        .simm = @truncate(fn_addr_47_32),
-                    };
-                    @as(*align(1) ADDIS, @ptrCast(&ip[24])).* = .{
-                        .rt = 12,
-                        .ra = 12,
-                        .simm = @truncate(fn_addr_63_48),
-                    };
-                    @as(*align(1) RLDIC, @ptrCast(&ip[28])).* = .{
-                        .rs = 12,
-                        .ra = 12,
-                        .sh = 0,
-                        .sh2 = 1,
-                    };
-                    @as(*align(1) ADDI, @ptrCast(&ip[32])).* = .{
-                        .rt = 12,
-                        .ra = 0,
-                        .simm = @truncate(fn_addr_16_0),
-                    };
-                    @as(*align(1) ADDIS, @ptrCast(&ip[36])).* = .{
-                        .rt = 12,
-                        .ra = 12,
-                        .simm = @truncate(fn_addr_31_16),
-                    };
-                    @as(*align(1) MTCTR, @ptrCast(&ip[40])).* = .{
-                        .rs = 12,
-                    };
-                    @as(*align(1) BCTRL, @ptrCast(&ip[44])).* = .{};
+                    // mov r11, self_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(11, self_addr);
+                    // mov r12, ia_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[20])).* = MOV_IMM64.init(12, ia_addr);
+                    // std [r12], r11
+                    @as(*align(1) STD, @ptrCast(&ip[40])).* = .{ .ra = 12, .rs = 11 };
+                    // mov r12, fn_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[44])).* = MOV_IMM64.init(12, fn_addr);
+                    // mtctr r12
+                    @as(*align(1) MTCTR, @ptrCast(&ip[64])).* = .{ .rs = 12 };
+                    // bctrl
+                    @as(*align(1) BCTRL, @ptrCast(&ip[68])).* = .{};
                 },
                 .x86 => {
                     const ModRM = packed struct {
