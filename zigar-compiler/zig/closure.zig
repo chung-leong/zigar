@@ -14,7 +14,7 @@ pub fn Instance(comptime T: type) type {
         const code_size = switch (builtin.target.cpu.arch) {
             .x86_64 => 36,
             .aarch64 => 36,
-            .riscv64 => 42,
+            .riscv64 => 66,
             .powerpc64le => 48,
             .x86 => 19,
             .arm => 20,
@@ -182,6 +182,14 @@ pub fn Instance(comptime T: type) type {
                         rs: u5,
                         imm12: u12,
                     };
+                    const SD = packed struct(u32) {
+                        opc: u7 = 0x23,
+                        offset_4_0: u5 = 0,
+                        func: u3 = 0x3,
+                        rs1: u5,
+                        rs2: u5,
+                        offset_11_5: u7 = 0,
+                    };
                     const C_SLLI = packed struct {
                         opc: u2 = 0x2,
                         imm5: u5,
@@ -203,71 +211,59 @@ pub fn Instance(comptime T: type) type {
                         func1: u1 = 0,
                         func2: u3 = 0x4,
                     };
-                    const self_addr_11_0 = (self_addr >> 0 & 0xFFF);
-                    const self_addr_31_12 = (self_addr >> 12 & 0xFFFFF) + (self_addr >> 11 & 1);
-                    const self_addr_43_32 = (self_addr >> 32 & 0xFFF) + (self_addr >> 31 & 1);
-                    const self_addr_63_44 = (self_addr >> 44 & 0xFFFFF) + (self_addr >> 43 & 1);
-                    @as(*align(1) LUI, @ptrCast(&ip[0])).* = .{
-                        .imm20 = @truncate(self_addr_63_44),
-                        .rd = 5,
+                    const MOV_IMM64 = packed struct {
+                        lui1: LUI,
+                        addi1: ADDI,
+                        lui2: LUI,
+                        addi2: ADDI,
+                        slli: C_SLLI,
+                        add: C_ADD,
+
+                        fn init(rd: u5, rtmp: u5, imm64: usize) @This() {
+                            const imm64_11_0 = (imm64 >> 0 & 0xFFF);
+                            const imm64_31_12 = (imm64 >> 12 & 0xFFFFF) + (imm64 >> 11 & 1);
+                            const imm64_43_32 = (imm64 >> 32 & 0xFFF) + (imm64 >> 31 & 1);
+                            const imm64_63_44 = (imm64 >> 44 & 0xFFFFF) + (imm64 >> 43 & 1);
+                            return .{
+                                // lui rd, imm64_63_44
+                                .lui1 = .{
+                                    .imm20 = @truncate(imm64_63_44),
+                                    .rd = rd,
+                                },
+                                // addi rd, imm64_43_32
+                                .addi1 = .{
+                                    .imm12 = @truncate(imm64_43_32),
+                                    .rd = rd,
+                                    .rs = rd,
+                                },
+                                // lui rtmp, imm64_31_12
+                                .lui2 = .{
+                                    .imm20 = @truncate(imm64_31_12),
+                                    .rd = rtmp,
+                                },
+                                // addi rtmp, imm64_11_0
+                                .addi2 = .{
+                                    .imm12 = @truncate(imm64_11_0),
+                                    .rd = rtmp,
+                                    .rs = rtmp,
+                                },
+                                // shift rd, 32
+                                .slli = .{ .imm1 = 1, .imm5 = 0, .rd = rd },
+                                // add rd, rtmp
+                                .add = .{ .rd = rd, .rs = rtmp },
+                            };
+                        }
                     };
-                    @as(*align(1) ADDI, @ptrCast(&ip[4])).* = .{
-                        .imm12 = @truncate(self_addr_43_32),
-                        .rd = 5,
-                        .rs = 5,
-                    };
-                    @as(*align(1) LUI, @ptrCast(&ip[8])).* = .{
-                        .imm20 = @truncate(self_addr_31_12),
-                        .rd = 7,
-                    };
-                    @as(*align(1) ADDI, @ptrCast(&ip[12])).* = .{
-                        .imm12 = @truncate(self_addr_11_0),
-                        .rd = 7,
-                        .rs = 7,
-                    };
-                    @as(*align(1) C_SLLI, @ptrCast(&ip[16])).* = .{
-                        .imm5 = 0,
-                        .imm1 = 1, // imm1 << 5 | imm5 = 32
-                        .rd = 5,
-                    };
-                    @as(*align(1) C_ADD, @ptrCast(&ip[18])).* = .{
-                        .rs = 7,
-                        .rd = 5,
-                    };
-                    const fn_addr_11_0 = (fn_addr >> 0 & 0xFFF);
-                    const fn_addr_31_12 = (fn_addr >> 12 & 0xFFFFF) + (fn_addr >> 11 & 1);
-                    const fn_addr_43_32 = (fn_addr >> 32 & 0xFFF) + (fn_addr >> 31 & 1);
-                    const fn_addr_63_44 = (fn_addr >> 44 & 0xFFFFF) + (fn_addr >> 43 & 1);
-                    @as(*align(1) LUI, @ptrCast(&ip[20])).* = .{
-                        .imm20 = @truncate(fn_addr_63_44),
-                        .rd = 6,
-                    };
-                    @as(*align(1) ADDI, @ptrCast(&ip[24])).* = .{
-                        .imm12 = @truncate(fn_addr_43_32),
-                        .rd = 6,
-                        .rs = 6,
-                    };
-                    @as(*align(1) LUI, @ptrCast(&ip[28])).* = .{
-                        .imm20 = @truncate(fn_addr_31_12),
-                        .rd = 7,
-                    };
-                    @as(*align(1) ADDI, @ptrCast(&ip[32])).* = .{
-                        .imm12 = @truncate(fn_addr_11_0),
-                        .rd = 7,
-                        .rs = 7,
-                    };
-                    @as(*align(1) C_SLLI, @ptrCast(&ip[36])).* = .{
-                        .imm5 = 0,
-                        .imm1 = 1,
-                        .rd = 6,
-                    };
-                    @as(*align(1) C_ADD, @ptrCast(&ip[38])).* = .{
-                        .rs = 7,
-                        .rd = 6,
-                    };
-                    @as(*align(1) C_JR, @ptrCast(&ip[40])).* = .{
-                        .rs = 6,
-                    };
+                    // mov x5, self_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(5, 7, self_addr);
+                    // mov x6, ia_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[20])).* = MOV_IMM64.init(6, 7, ia_addr);
+                    // sd [x6], x5
+                    @as(*align(1) SD, @ptrCast(&ip[40])).* = .{ .rs1 = 6, .rs2 = 5 };
+                    // mov x5, fn_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[44])).* = MOV_IMM64.init(5, 7, fn_addr);
+                    // jmp [x5]
+                    @as(*align(1) C_JR, @ptrCast(&ip[64])).* = .{ .rs = 5 };
                 },
                 .powerpc64le => {
                     const ADDI = packed struct {
