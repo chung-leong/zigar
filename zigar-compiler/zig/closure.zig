@@ -2,11 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
-const is_wasm = switch (builtin.target.cpu.arch) {
-    .wasm32, .wasm64 => true,
-    else => false,
-};
-
 threadlocal var instance_address: usize = 0;
 
 pub fn Instance(comptime T: type) type {
@@ -18,7 +13,7 @@ pub fn Instance(comptime T: type) type {
             .powerpc64le => 72,
             .x86 => 19,
             .arm => 32,
-            else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
+            else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
 
         context: ?T,
@@ -458,69 +453,77 @@ pub fn Instance(comptime T: type) type {
                 else => unreachable,
             }
         }
-    };
-}
 
-test "Instance.construct" {
-    const Closure = Instance(usize);
-    const ns = struct {
-        fn check(
-            number_ptr: *usize,
-            a1: usize,
-            a2: usize,
-            a3: usize,
-            a4: usize,
-            a5: usize,
-            a6: usize,
-            a7: usize,
-        ) usize {
-            number_ptr.* = Closure.getContext();
-            return 777 + a1 + a2 + a3 + a4 + a5 + a6 + a7;
+        test "construct" {
+            const bytes = try std.posix.mmap(
+                null,
+                1024 * 4,
+                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+                -1,
+                0,
+            );
+            defer std.posix.munmap(bytes);
+            const closure: *@This() = @ptrCast(bytes);
+            const context = T.create(1234);
+            const ns1 = struct {
+                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize) usize {
+                    if (getContext().check()) {
+                        number_ptr.* = a7;
+                        return a1 + a2 + a3 + a4 + a5 + a6 + a7;
+                    } else {
+                        return 0;
+                    }
+                }
+            };
+            closure.construct(&ns1.check, context);
+            const f1 = closure.function(@TypeOf(ns1.check));
+            var number1: usize = 0;
+            const result1 = f1(&number1, 1, 2, 3, 4, 5, 6, 7);
+            try expect(result1 == 1 + 2 + 3 + 4 + 5 + 6 + 7);
+            try expect(number1 == 7);
+            // pass enough arguments to ensure we're exhausting available registers
+            const ns2 = struct {
+                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize, a8: usize, a9: usize, a10: usize, a11: usize, a12: usize, a13: usize, a14: usize) usize {
+                    if (getContext().check()) {
+                        number_ptr.* = a14;
+                        return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
+                    } else {
+                        return 0;
+                    }
+                }
+            };
+            closure.construct(&ns2.check, context);
+            const f2 = closure.function(@TypeOf(ns2.check));
+            var number2: usize = 0;
+            const result2 = f2(&number2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+            try expect(result2 == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
+            try expect(number2 == 14);
+        }
+
+        test "fromFunction()" {
+            const bytes = try std.posix.mmap(
+                null,
+                1024 * 4,
+                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+                -1,
+                0,
+            );
+            defer std.posix.munmap(bytes);
+            const ns = struct {
+                fn check() bool {
+                    return getContext().check();
+                }
+            };
+            const closure: *@This() = @ptrCast(bytes);
+            const context = T.create(1234);
+            closure.construct(&ns.check, context);
+            const f = closure.function(@TypeOf(ns.check));
+            const result = fromFunction(f);
+            try expect(result == closure);
         }
     };
-    const bytes = try std.posix.mmap(
-        null,
-        1024 * 4,
-        std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-        .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-        -1,
-        0,
-    );
-    defer std.posix.munmap(bytes);
-    const closure: *Closure = @ptrCast(bytes);
-    const context: usize = switch (@sizeOf(usize)) {
-        4 => 0xABCD_1230,
-        else => 0xAAAA_BBBB_CCCC_1230,
-    };
-    closure.construct(&ns.check, context);
-    const f = closure.function(@TypeOf(ns.check));
-    var number: usize = undefined;
-    const result = f(&number, 1, 2, 3, 4, 5, 6, 7);
-    try expect(result == 777 + 1 + 2 + 3 + 4 + 5 + 6 + 7);
-    try expect(number == context);
-}
-
-test "Instance.fromFunction()" {
-    const Closure = Instance(usize);
-    const ns = struct {
-        fn check() usize {
-            return 777 + Closure.getContext();
-        }
-    };
-    const bytes = try std.posix.mmap(
-        null,
-        1024 * 4,
-        std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-        .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-        -1,
-        0,
-    );
-    defer std.posix.munmap(bytes);
-    const closure: *Closure = @ptrCast(bytes);
-    closure.construct(&ns.check, 1234);
-    const f = closure.function(@TypeOf(ns.check));
-    const result = Closure.fromFunction(f);
-    try expect(result == closure);
 }
 
 fn Chunk(comptime T: type) type {
@@ -577,46 +580,46 @@ fn Chunk(comptime T: type) type {
             const end = start + @sizeOf(Instance(T)) * self.instances.len;
             return start <= addr and addr < end;
         }
+
+        test "use" {
+            var bytes: [512]u8 = undefined;
+            const chunk = Chunk(T).use(&bytes);
+            try expect(@intFromPtr(chunk) == @intFromPtr(&bytes));
+            try expect(chunk.instances.len > 0);
+        }
+
+        test "getInstance" {
+            var bytes: [512]u8 = undefined;
+            const chunk = Chunk(T).use(&bytes);
+            while (chunk.getInstance()) |_| {}
+            try expect(chunk.used == chunk.instances.len);
+        }
+
+        test "freeInstance" {
+            var bytes: [512]u8 = undefined;
+            const chunk = Chunk(T).use(&bytes);
+            const instance1 = chunk.getInstance().?;
+            const result1 = chunk.freeInstance(instance1);
+            try expect(result1);
+            try expect(chunk.freed == 1);
+            var instance2: *Instance(T) = undefined;
+            while (chunk.getInstance()) |i| {
+                instance2 = i;
+            }
+            try expect(instance2 == instance1);
+            try expect(chunk.freed == 0);
+        }
+
+        test "contains" {
+            var bytes: [512]u8 = undefined;
+            const chunk = Chunk(T).use(&bytes);
+            const instance = chunk.getInstance().?;
+            const f = instance.function(fn () void);
+            try expect(chunk.contains(instance));
+            try expect(chunk.contains(f));
+            try expect(!chunk.contains(@ptrFromInt(0xAAAA)));
+        }
     };
-}
-
-test "Chunk.use" {
-    var bytes: [512]u8 = undefined;
-    const chunk = Chunk(usize).use(&bytes);
-    try expect(@intFromPtr(chunk) == @intFromPtr(&bytes));
-    try expect(chunk.instances.len > 0);
-}
-
-test "Chunk.getInstance" {
-    var bytes: [512]u8 = undefined;
-    const chunk = Chunk(usize).use(&bytes);
-    while (chunk.getInstance()) |_| {}
-    try expect(chunk.used == chunk.instances.len);
-}
-
-test "Chunk.freeInstance" {
-    var bytes: [512]u8 = undefined;
-    const chunk = Chunk(usize).use(&bytes);
-    const instance1 = chunk.getInstance().?;
-    const result1 = chunk.freeInstance(instance1);
-    try expect(result1);
-    try expect(chunk.freed == 1);
-    var instance2: *Instance(usize) = undefined;
-    while (chunk.getInstance()) |i| {
-        instance2 = i;
-    }
-    try expect(instance2 == instance1);
-    try expect(chunk.freed == 0);
-}
-
-test "Chunk.contains" {
-    var bytes: [512]u8 = undefined;
-    const chunk = Chunk(usize).use(&bytes);
-    const instance = chunk.getInstance().?;
-    const f = instance.function(fn () void);
-    try expect(chunk.contains(instance));
-    try expect(chunk.contains(f));
-    try expect(!chunk.contains(@ptrFromInt(0xAAAA)));
 }
 
 pub fn Factory(comptime T: type) type {
@@ -687,53 +690,67 @@ pub fn Factory(comptime T: type) type {
                 }
             } else false;
         }
+
+        test "alloc" {
+            const Closure = Instance(T);
+            const ns = struct {
+                fn check() bool {
+                    return Closure.getContext().check();
+                }
+            };
+            var factory = init();
+            for (0..1000) |index| {
+                const context = T.create(index);
+                const instance = try factory.alloc(&ns.check, context);
+                const f = instance.function(@TypeOf(ns.check));
+                const result = f();
+                try expect(result == true);
+            }
+            try expect(factory.chunk_count > 1);
+        }
+
+        test "free" {
+            const ns = struct {
+                fn exist() void {}
+            };
+            var factory = init();
+            var instances: [1000]*Instance(T) = undefined;
+            for (&instances, 0..) |*p, index| {
+                const context = T.create(index);
+                p.* = try factory.alloc(&ns.exist, context);
+            }
+            for (instances) |instance| {
+                const result = factory.free(instance);
+                try expect(result);
+            }
+            try expect(factory.chunk_count == 0);
+        }
+
+        test "contains" {
+            const ns = struct {
+                fn exist() void {}
+            };
+            var factory = init();
+            const context = T.create(1234);
+            const instance = try factory.alloc(&ns.exist, context);
+            const f = instance.function(@TypeOf(ns.exist));
+            try expect(factory.contains(f));
+            try expect(!factory.contains(&ns.exist));
+        }
     };
 }
 
-test "Factory.alloc" {
-    const Closure = Instance(usize);
-    const ns = struct {
-        fn check() usize {
-            return 777 + Closure.getContext();
-        }
-    };
-    var factory = Factory(usize).init();
-    for (0..1000) |index| {
-        const instance = try factory.alloc(&ns.check, index);
-        const f = instance.function(@TypeOf(ns.check));
-        const result = f();
-        try expect(result == 777 + index);
-    }
-    try expect(factory.chunk_count > 1);
-}
+test {
+    _ = Factory(struct {
+        index: usize,
+        id: usize = 1234,
 
-test "Factory.free" {
-    const ns = struct {
-        fn check() usize {
-            return 777;
+        pub fn create(index: usize) @This() {
+            return .{ .index = index };
         }
-    };
-    var factory = Factory(usize).init();
-    var instances: [1000]*Instance(usize) = undefined;
-    for (&instances, 0..) |*p, index| {
-        p.* = try factory.alloc(&ns.check, index);
-    }
-    for (instances) |instance| {
-        const result = factory.free(instance);
-        try expect(result);
-    }
-    try expect(factory.chunk_count == 0);
-}
 
-test "Factory.contains" {
-    const ns = struct {
-        fn check() usize {
-            return 777;
+        pub fn check(self: @This()) bool {
+            return self.id == 1234;
         }
-    };
-    var factory = Factory(usize).init();
-    const instance = try factory.alloc(&ns.check, 1234);
-    const f = instance.function(@TypeOf(ns.check));
-    try expect(factory.contains(f));
-    try expect(!factory.contains(&ns.check));
+    });
 }
