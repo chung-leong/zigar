@@ -17,7 +17,7 @@ pub fn Instance(comptime T: type) type {
             .riscv64 => 66,
             .powerpc64le => 72,
             .x86 => 19,
-            .arm => 20,
+            .arm => 32,
             else => @compileError("Closure not supported on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
 
@@ -410,6 +410,13 @@ pub fn Instance(comptime T: type) type {
                         opc: u8 = 0x34,
                         _: u4 = 0,
                     };
+                    const STR = packed struct {
+                        imm12: u12 = 0,
+                        rt: u4,
+                        rn: u4,
+                        opc: u8 = 0x58,
+                        _: u4 = 0,
+                    };
                     const BX = packed struct {
                         rm: u4,
                         flags: u4 = 0x1,
@@ -417,29 +424,36 @@ pub fn Instance(comptime T: type) type {
                         opc: u8 = 0x12,
                         _: u4 = 0,
                     };
-                    @as(*align(1) MOVW, @ptrCast(&ip[0])).* = .{
-                        .imm12 = @truncate(self_addr >> 0 & 0xFFF),
-                        .imm4 = @truncate(self_addr >> 12 & 0xF),
-                        .rd = 4,
+                    const MOV_IMM32 = packed struct {
+                        movw: MOVW,
+                        movt: MOVT,
+
+                        fn init(rd: u4, imm32: usize) @This() {
+                            const imm16s: [2]u16 = @bitCast(imm32);
+                            return .{
+                                .movw = .{
+                                    .imm12 = @truncate(imm16s[0] & 0xFFF),
+                                    .imm4 = @truncate(imm16s[0] >> 12 & 0xF),
+                                    .rd = rd,
+                                },
+                                .movt = .{
+                                    .imm12 = @truncate(imm16s[1] & 0xFFF),
+                                    .imm4 = @truncate(imm16s[1] >> 12 & 0xF),
+                                    .rd = rd,
+                                },
+                            };
+                        }
                     };
-                    @as(*align(1) MOVT, @ptrCast(&ip[4])).* = .{
-                        .imm12 = @truncate(self_addr >> 16 & 0xFFF),
-                        .imm4 = @truncate(self_addr >> 28 & 0xF),
-                        .rd = 4,
-                    };
-                    @as(*align(1) MOVW, @ptrCast(&ip[8])).* = .{
-                        .imm12 = @truncate(fn_addr >> 0 & 0xFFF),
-                        .imm4 = @truncate(fn_addr >> 12 & 0xF),
-                        .rd = 5,
-                    };
-                    @as(*align(1) MOVT, @ptrCast(&ip[12])).* = .{
-                        .imm12 = @truncate(fn_addr >> 16 & 0xFFF),
-                        .imm4 = @truncate(fn_addr >> 28 & 0xF),
-                        .rd = 5,
-                    };
-                    @as(*align(1) BX, @ptrCast(&ip[16])).* = .{
-                        .rm = 5,
-                    };
+                    // mov x4, self_addr
+                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[0])).* = MOV_IMM32.init(4, self_addr);
+                    // mov x5, ia_addr
+                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[8])).* = MOV_IMM32.init(5, ia_addr);
+                    // mov [x5], x4
+                    @as(*align(1) STR, @ptrCast(&ip[16])).* = .{ .rn = 5, .rt = 4 };
+                    // mov x4, fn_addr
+                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[20])).* = MOV_IMM32.init(4, fn_addr);
+                    // bx [x4]
+                    @as(*align(1) BX, @ptrCast(&ip[28])).* = .{ .rm = 4 };
                 },
                 else => unreachable,
             }
