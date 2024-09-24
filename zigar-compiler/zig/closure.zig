@@ -13,7 +13,7 @@ pub fn Instance(comptime T: type) type {
     return struct {
         const code_size = switch (builtin.target.cpu.arch) {
             .x86_64 => 36,
-            .aarch64 => 36,
+            .aarch64 => 56,
             .riscv64 => 66,
             .powerpc64le => 72,
             .x86 => 19,
@@ -117,6 +117,12 @@ pub fn Instance(comptime T: type) type {
                         hw: u2,
                         opc: u9 = 0x1e5,
                     };
+                    const STR = packed struct {
+                        rt: u5,
+                        rn: u5,
+                        imm12: u12 = 0,
+                        opc: u10 = 0x3e4,
+                    };
                     const BR = packed struct {
                         op4: u5 = 0,
                         rn: u5,
@@ -125,49 +131,32 @@ pub fn Instance(comptime T: type) type {
                         opc: u4 = 0,
                         ope: u7 = 0x6b,
                     };
-                    @as(*align(1) MOVZ, @ptrCast(&ip[0])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&self_addr))[0],
-                        .hw = 0,
-                        .rd = 9,
+                    const MOV_IMM64 = packed struct {
+                        movz: MOVZ,
+                        movk1: MOVK,
+                        movk2: MOVK,
+                        movk3: MOVK,
+
+                        fn init(rd: u5, imm64: usize) @This() {
+                            const imm16s: [4]u16 = @bitCast(imm64);
+                            return .{
+                                .movz = .{ .imm16 = imm16s[0], .hw = 0, .rd = rd },
+                                .movk1 = .{ .imm16 = imm16s[1], .hw = 1, .rd = rd },
+                                .movk2 = .{ .imm16 = imm16s[2], .hw = 2, .rd = rd },
+                                .movk3 = .{ .imm16 = imm16s[3], .hw = 3, .rd = rd },
+                            };
+                        }
                     };
-                    @as(*align(1) MOVK, @ptrCast(&ip[4])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&self_addr))[1],
-                        .hw = 1,
-                        .rd = 9,
-                    };
-                    @as(*align(1) MOVK, @ptrCast(&ip[8])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&self_addr))[2],
-                        .hw = 2,
-                        .rd = 9,
-                    };
-                    @as(*align(1) MOVK, @ptrCast(&ip[12])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&self_addr))[3],
-                        .hw = 3,
-                        .rd = 9,
-                    };
-                    @as(*align(1) MOVZ, @ptrCast(&ip[16])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&fn_addr))[0],
-                        .hw = 0,
-                        .rd = 10,
-                    };
-                    @as(*align(1) MOVK, @ptrCast(&ip[20])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&fn_addr))[1],
-                        .hw = 1,
-                        .rd = 10,
-                    };
-                    @as(*align(1) MOVK, @ptrCast(&ip[24])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&fn_addr))[2],
-                        .hw = 2,
-                        .rd = 10,
-                    };
-                    @as(*align(1) MOVK, @ptrCast(&ip[28])).* = .{
-                        .imm16 = @as([*]const u16, @ptrCast(&fn_addr))[3],
-                        .hw = 3,
-                        .rd = 10,
-                    };
-                    @as(*align(1) BR, @ptrCast(&ip[32])).* = .{
-                        .rn = 10,
-                    };
+                    // mov x9, self_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(9, self_addr);
+                    // mov x10, ia_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[16])).* = MOV_IMM64.init(10, ia_addr);
+                    // sd [x10], x9
+                    @as(*align(1) STR, @ptrCast(&ip[32])).* = .{ .rn = 10, .rt = 9 };
+                    // mov x9, fn_addr
+                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[36])).* = MOV_IMM64.init(9, fn_addr);
+                    // br x9
+                    @as(*align(1) BR, @ptrCast(&ip[52])).* = .{ .rn = 9 };
                 },
                 .riscv64 => {
                     const LUI = packed struct {
