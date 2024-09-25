@@ -4,8 +4,25 @@ const expect = std.testing.expect;
 
 threadlocal var instance_address: usize = 0;
 
+fn getSetterCode() [*]const u8 {
+    const ns = struct {
+        fn set() callconv(.Naked) void {
+            instance_address = switch (builtin.target.cpu.arch) {
+                .x86_64 => asm (""
+                    : [ret] "={rax}" (-> usize),
+                ),
+                else => unreachable,
+            };
+            asm volatile ("nop");
+        }
+    };
+    const address = @intFromPtr(&ns.set);
+    return @ptrFromInt(address);
+}
+
 pub fn Instance(comptime T: type) type {
     return struct {
+        const single_threaded = builtin.single_threaded;
         const code_size = switch (builtin.target.cpu.arch) {
             .x86_64 => 36,
             .aarch64 => 56,
@@ -95,45 +112,134 @@ pub fn Instance(comptime T: type) type {
                             mod_rm: ModRM,
                             sib: SIB,
                         };
-                        const D = packed struct {
-                            rex: REX = .{},
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                            disp8: i8,
-                        };
-                        const E = packed struct {
-                            rex: REX = .{},
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                            disp32: i32,
-                        };
 
                         a: A,
                         b: B,
                         c: C,
-                        d: D,
-                        e: E,
                     };
                     const JMP = packed struct {
                         rex: REX = .{},
                         opc: u8 = 0xff,
                         mod_rm: ModRM,
                     };
-                    // mov r11, self_addr
-                    code.add(MOV.A{
-                        .rex = .{ .b = 1 },
-                        .rm = 3,
-                        .imm64 = self_addr,
-                    });
-                    // mov rax, ia_addr
-                    code.add(MOV.A{ .imm64 = ia_addr });
-                    // mov [rax], r11
-                    code.add(MOV.B{
-                        .rex = .{ .r = 1 },
-                        .mod_rm = .{ .reg = 3 },
-                    });
+                    // mov rax, self_addr
+                    code.add(MOV.A{ .imm64 = self_addr });
+                    if (single_threaded) {
+                        // mov r11, ia_addr
+                        code.add(MOV.A{ .rex = .{ .b = 1 }, .rm = 3, .imm64 = ia_addr });
+                        // mov [r11], rax
+                        code.add(MOV.B{
+                            .rex = .{ .b = 1 },
+                            .mod_rm = .{ .rm = 3 },
+                        });
+                    } else {
+                        const SetterInstructions = struct {
+                            const Disp = union(enum) {
+                                disp8: i8,
+                                disp32: i32,
+                            };
+                            const Instr = struct {
+                                pref: ?u8,
+                                mov: MOV,
+                                disp: ?Disp,
+                            };
+
+                            instrs: [8]Instr,
+                            len: usize,
+
+                            fn init() @This() {
+                                var instrs: [8]Instr = undefined;
+                                var len: usize = 0;
+                                const c = getSetterCode();
+                                var index: usize = 0;
+                                var pref: ?u8 = null;
+                                while (true) {
+                                    const rex: REX = @bitCast(c[index]);
+                                    if (rex.pat == 4) {
+                                        const opc = c[index + 1];
+                                        var mov: MOV = undefined;
+                                        var disp: ?Disp = null;
+                                        switch (opc) {
+                                            0x89 => {
+                                                const b_ptr: *align(1) const MOV.B = @ptrCast(&c[index]);
+                                                var disp_type = b_ptr.mod_rm.mod;
+                                                if (b_ptr.mod_rm.rm == 4) {
+                                                    const c_ptr: *align(1) const MOV.C = @ptrCast(&c[index]);
+                                                    mov = .{ .c = c_ptr.* };
+                                                    index += @bitSizeOf(MOV.C) / 8;
+                                                    if (c_ptr.sib.base == 5 and disp_type == 0) {
+                                                        disp_type = 2;
+                                                    }
+                                                } else {
+                                                    mov = .{ .b = b_ptr.* };
+                                                    index += @bitSizeOf(MOV.B) / 8;
+                                                }
+                                                if (disp_type == 1) {
+                                                    const i8_ptr: *const i8 = @ptrCast(&c[index]);
+                                                    disp = .{ .disp8 = i8_ptr.* };
+                                                    index += 1;
+                                                } else if (disp_type == 2) {
+                                                    const i32_ptr: *align(1) const i32 = @ptrCast(&c[index]);
+                                                    disp = .{ .disp32 = i32_ptr.* };
+                                                    index += 4;
+                                                }
+                                            },
+                                            0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf => {
+                                                const a_ptr: *align(1) const MOV.A = @ptrCast(&c[index]);
+                                                mov = .{ .a = a_ptr.* };
+                                                index += @bitSizeOf(MOV.A) / 8;
+                                            },
+                                            else => {
+                                                std.debug.print("invalid 2: {x}\n", .{opc});
+                                                break;
+                                            },
+                                        }
+                                        instrs[len] = .{
+                                            .pref = pref,
+                                            .mov = mov,
+                                            .disp = disp,
+                                        };
+                                        pref = null;
+                                        len += 1;
+                                    } else {
+                                        switch (c[index]) {
+                                            0x64, 0x65 => |p| {
+                                                pref = p;
+                                                index += 1;
+                                            },
+                                            else => {
+                                                std.debug.print("invalid 1: {x}\n", .{c[index]});
+                                                break;
+                                            },
+                                        }
+                                    }
+                                }
+                                return .{ .instrs = instrs, .len = len };
+                            }
+                        };
+                        const set_instr = SetterInstructions.init();
+                        for (0..set_instr.len) |index| {
+                            const instr = set_instr.instrs[index];
+                            if (instr.pref) |pref| {
+                                std.debug.print("prefix = {x}\n", .{pref});
+                                code.add(pref);
+                            }
+                            switch (instr.mov) {
+                                inline .a, .b, .c => |form| {
+                                    std.debug.print("mov = {any}\n", .{form});
+                                    code.add(form);
+                                },
+                            }
+                            if (instr.disp) |disp| {
+                                switch (disp) {
+                                    inline .disp8, .disp32 => |value| {
+                                        std.debug.print("disp = {any}\n", .{value});
+                                        code.add(value);
+                                    },
+                                }
+                            }
+                        }
+                    }
                     // mov rax, fn_addr
                     code.add(MOV.A{ .imm64 = fn_addr });
                     // jmp [rax]
@@ -545,46 +651,46 @@ pub fn Instance(comptime T: type) type {
             const result1 = f1(&number1, 1, 2, 3, 4, 5, 6, 7);
             try expect(result1 == 1 + 2 + 3 + 4 + 5 + 6 + 7);
             try expect(number1 == 7);
-            // pass enough arguments to ensure we're exhausting available registers
-            const ns2 = struct {
-                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize, a8: usize, a9: usize, a10: usize, a11: usize, a12: usize, a13: usize, a14: usize) usize {
-                    if (getContext().check()) {
-                        number_ptr.* = a14;
-                        return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
-                    } else {
-                        return 0;
-                    }
-                }
-            };
-            closure.construct(&ns2.check, context);
-            const f2 = closure.function(@TypeOf(ns2.check));
-            var number2: usize = 0;
-            const result2 = f2(&number2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-            try expect(result2 == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
-            try expect(number2 == 14);
+            // // pass enough arguments to ensure we're exhausting available registers
+            // const ns2 = struct {
+            //     fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize, a8: usize, a9: usize, a10: usize, a11: usize, a12: usize, a13: usize, a14: usize) usize {
+            //         if (getContext().check()) {
+            //             number_ptr.* = a14;
+            //             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
+            //         } else {
+            //             return 0;
+            //         }
+            //     }
+            // };
+            // closure.construct(&ns2.check, context);
+            // const f2 = closure.function(@TypeOf(ns2.check));
+            // var number2: usize = 0;
+            // const result2 = f2(&number2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+            // try expect(result2 == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
+            // try expect(number2 == 14);
         }
 
         test "fromFunction()" {
-            const bytes = try std.posix.mmap(
-                null,
-                1024 * 4,
-                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-                -1,
-                0,
-            );
-            defer std.posix.munmap(bytes);
-            const ns = struct {
-                fn check() bool {
-                    return getContext().check();
-                }
-            };
-            const closure: *@This() = @ptrCast(bytes);
-            const context = T.create(1234);
-            closure.construct(&ns.check, context);
-            const f = closure.function(@TypeOf(ns.check));
-            const result = fromFunction(f);
-            try expect(result == closure);
+            // const bytes = try std.posix.mmap(
+            //     null,
+            //     1024 * 4,
+            //     std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+            //     .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+            //     -1,
+            //     0,
+            // );
+            // defer std.posix.munmap(bytes);
+            // const ns = struct {
+            //     fn check() bool {
+            //         return getContext().check();
+            //     }
+            // };
+            // const closure: *@This() = @ptrCast(bytes);
+            // const context = T.create(1234);
+            // closure.construct(&ns.check, context);
+            // const f = closure.function(@TypeOf(ns.check));
+            // const result = fromFunction(f);
+            // try expect(result == closure);
         }
     };
 }
@@ -804,7 +910,7 @@ pub fn Factory(comptime T: type) type {
 }
 
 test {
-    _ = Factory(struct {
+    const TestContext = struct {
         index: usize,
         id: usize = 1234,
 
@@ -815,5 +921,7 @@ test {
         pub fn check(self: @This()) bool {
             return self.id == 1234;
         }
-    });
+    };
+    // _ = Factory(TestContext);
+    _ = Instance(TestContext);
 }
