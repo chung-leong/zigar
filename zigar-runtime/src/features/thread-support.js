@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 
 export default mixin({
-  ...(process.env.TARGET === 'wasm' ? {
+  ...(process.env.TARGET === 'wasm' && process.env.MIXIN !== 'track' ? {
     imports: {
       finalizeAsyncCall: { argType: 'ii' },
     },

@@ -3,10 +3,9 @@ import { openSync, readSync, closeSync, writeFileSync } from 'fs';
 import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, resolve, isAbsolute } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
-import { Worker } from 'worker_threads';
 
 const StructureType = {
   Primitive: 0,
@@ -2426,7 +2425,7 @@ var callMarshalingInbound = mixin({
   ...({
     exports: {
       performJsCall: { argType: 'iii', returnType: 'i' },
-      queueJsCall: { argType: 'iii', returnType: 'i' },
+      queueJsCall: { argType: 'iiii', returnType: 'i' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
@@ -2440,8 +2439,8 @@ var callMarshalingInbound = mixin({
       // in the main thread, this method is never called from WASM;
       // the implementation of queueJsCall() in worker.js, call this
       // through postMessage() when it is called the worker's WASM instance
-      const result = this.performJsCall(id, argAddress, argSize);
-      this.finalizeAsyncCall(futexHandle, result);
+      const dv = this.obtainFixedView(argAddress, argSize);
+      this.runFunction(id, dv, futexHandle);
     },
   } ),
 });
@@ -2667,6 +2666,12 @@ class ArgumentCountMismatch extends Error {
   constructor(name, expected, actual) {
     const s = (expected !== 1) ? 's' : '';
     super(`${name}() expects ${expected} argument${s}, received ${actual}`);
+  }
+}
+
+class UndefinedArgument extends Error {
+  constructor() {
+    super(`Undefined argument`);
   }
 }
 
@@ -4270,36 +4275,7 @@ function isElectron() {
 }
 
 var threadSupport = mixin({
-  ...({
-    imports: {
-      finalizeAsyncCall: { argType: 'ii' },
-    },
-    nextThreadId: 1,
-
-    getThreadHandler() {
-      return this.spawnThread.bind(this);
-    },
-    spawnThread(arg) {
-      const tid = this.nextThreadId;
-      this.nextThreadId++;
-      const url = pathToFileURL('/home/cleong/zigar/zigar-runtime/src/worker.js');
-      const { executable, memory, options } = this;
-      const workerData = { executable, memory, options, tid, arg };
-      const worker = new Worker(url, { workerData });
-      worker.on('message', (msg) => {
-        if (msg.type === 'call') {
-          const { module, name, args, array } = msg;
-          const fn = this.exportedModules[module]?.[name];
-          if (array) {
-            array[1] = fn?.(...args) | 0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
-          }
-        }
-      });
-      return tid;
-    },
-  } ) ,
+  ...(undefined) ,
 });
 
 var thunkAllocation = mixin({
@@ -5720,8 +5696,8 @@ var argStruct = mixin({
       instance: { members },
     } = structure;
     const thisEnv = this;
-    const argKeys = members.slice(1).map(m => m.name);
-    const argCount = argKeys.length;
+    const argMembers = members.slice(1);
+    const argCount = argMembers.length;
     const constructor = function(args, name, offset) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -5740,11 +5716,18 @@ var argStruct = mixin({
         if (args.length !== argCount) {
           throw new ArgumentCountMismatch(name, argCount - offset, args.length - offset);
         }
-        for (const [ index, key ] of argKeys.entries()) {
+        for (let i = 0; i < argCount; i++) {
           try {
-            this[key] = args[index];
+            const arg = args[i];
+            if (arg === undefined) {
+              const { type } = argMembers[i];
+              if (type !== MemberType.Void) {
+                throw new UndefinedArgument();
+              }
+            }
+            this[i] = arg;
           } catch (err) {
-            throw adjustArgumentError(name, index - offset, argCount - offset, err);
+            throw adjustArgumentError(name, i - offset, argCount - offset, err);
           }
         }
       } else {
@@ -7387,7 +7370,6 @@ var variadicStruct = mixin({
     } = structure;
     const argMembers = members.slice(1);
     const argCount = argMembers.length;
-    const argKeys = argMembers.map(m => m.name);
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
     const constructor = function(args, name, offset) {
@@ -7424,11 +7406,18 @@ var variadicStruct = mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
-      for (const [ index, key ] of argKeys.entries()) {
+      for (let i = 0; i < argCount; i++) {
         try {
-          this[key] = args[index];
+          const arg = args[i];
+          if (arg === undefined) {
+            const { type } = argMembers[i];
+            if (type !== MemberType.Void) {
+              throw new UndefinedArgument();
+            }
+          }
+          this[i] = arg;
         } catch (err) {
-          throw adjustArgumentError(name, index - offset, argCount - offset, err);
+          throw adjustArgumentError(name, i - offset, argCount - offset, err);
         }
       }
       // set attributes of retval and fixed args
