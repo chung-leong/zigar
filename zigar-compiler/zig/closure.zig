@@ -71,15 +71,50 @@ pub fn Instance(comptime T: type) type {
                         reg: u3 = 0,
                         mod: u2 = 0,
                     };
-                    const MOV1 = packed struct {
-                        rex: REX = .{},
-                        opc: u8 = 0xb8,
-                        imm64: usize,
+                    const SIB = packed struct {
+                        base: u3 = 0,
+                        index: u3 = 0,
+                        scale: u2 = 0,
                     };
-                    const MOV2 = packed struct {
-                        rex: REX = .{},
-                        opc: u8 = 0x89,
-                        mod_rm: ModRM,
+                    const MOV = union(enum) {
+                        const A = packed struct {
+                            rex: REX = .{},
+                            // rm is basically stored as part of the opcode
+                            rm: u3 = 0,
+                            opc: u5 = 0xb8 >> 3,
+                            imm64: usize,
+                        };
+                        const B = packed struct {
+                            rex: REX = .{},
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                        };
+                        const C = packed struct {
+                            rex: REX = .{},
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                        };
+                        const D = packed struct {
+                            rex: REX = .{},
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                            disp8: i8,
+                        };
+                        const E = packed struct {
+                            rex: REX = .{},
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                            disp32: i32,
+                        };
+
+                        a: A,
+                        b: B,
+                        c: C,
+                        d: D,
+                        e: E,
                     };
                     const JMP = packed struct {
                         rex: REX = .{},
@@ -87,20 +122,20 @@ pub fn Instance(comptime T: type) type {
                         mod_rm: ModRM,
                     };
                     // mov r11, self_addr
-                    code.add(MOV1{
+                    code.add(MOV.A{
                         .rex = .{ .b = 1 },
-                        .opc = 0xb8 + 3,
+                        .rm = 3,
                         .imm64 = self_addr,
                     });
                     // mov rax, ia_addr
-                    code.add(MOV1{ .imm64 = ia_addr });
+                    code.add(MOV.A{ .imm64 = ia_addr });
                     // mov [rax], r11
-                    code.add(MOV2{
+                    code.add(MOV.B{
                         .rex = .{ .r = 1 },
                         .mod_rm = .{ .reg = 3 },
                     });
                     // mov rax, fn_addr
-                    code.add(MOV1{ .imm64 = fn_addr });
+                    code.add(MOV.A{ .imm64 = fn_addr });
                     // jmp [rax]
                     code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
                 },
@@ -361,29 +396,60 @@ pub fn Instance(comptime T: type) type {
                         reg: u3 = 0,
                         mod: u2 = 0,
                     };
-                    const MOV1 = packed struct {
-                        opc: u8 = 0xb8,
-                        imm32: usize,
+                    const SIB = packed struct {
+                        base: u3 = 0,
+                        index: u3 = 0,
+                        scale: u2 = 0,
                     };
-                    const MOV2 = packed struct {
-                        opc: u8 = 0x89,
-                        mod_rm: ModRM,
+                    const MOV = union(enum) {
+                        const A = packed struct {
+                            rm: u3 = 0,
+                            opc: u5 = 0xb8 >> 3,
+                            imm32: usize,
+                        };
+                        const B = packed struct {
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                        };
+                        const C = packed struct {
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                        };
+                        const D = packed struct {
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                            disp8: i8,
+                        };
+                        const E = packed struct {
+                            opc: u8 = 0x89,
+                            mod_rm: ModRM,
+                            sib: SIB,
+                            disp32: i32,
+                        };
+
+                        a: A,
+                        b: B,
+                        c: C,
+                        d: D,
+                        e: E,
                     };
                     const JMP = packed struct {
                         opc: u8 = 0xff,
                         mod_rm: ModRM,
                     };
                     // mov edx, self_addr
-                    code.add(MOV1{
-                        .opc = 0xb8 + 3,
+                    code.add(MOV.A{
+                        .rm = 3,
                         .imm32 = self_addr,
                     });
                     // mov eax, self_addr
-                    code.add(MOV1{ .imm32 = ia_addr });
+                    code.add(MOV.A{ .imm32 = ia_addr });
                     // mov [eax], edx
-                    code.add(MOV2{ .mod_rm = .{ .reg = 3 } });
+                    code.add(MOV.B{ .mod_rm = .{ .reg = 3 } });
                     // mov eax, fn_addr
-                    code.add(MOV1{ .imm32 = fn_addr });
+                    code.add(MOV.A{ .imm32 = fn_addr });
                     // jmp [eax]
                     code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
                 },
