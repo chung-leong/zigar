@@ -15,6 +15,17 @@ pub fn Instance(comptime T: type) type {
             .arm => 32,
             else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
+        const Writer = struct {
+            bytes: [*]u8,
+            len: usize = 0,
+
+            fn add(self: *@This(), instr: anytype) void {
+                const IT = @TypeOf(instr);
+                const ptr: *align(1) IT = @ptrCast(&self.bytes[self.len]);
+                ptr.* = instr;
+                self.len += @bitSizeOf(IT) / 8;
+            }
+        };
 
         context: ?T,
         bytes: [code_size]u8 = undefined,
@@ -42,7 +53,7 @@ pub fn Instance(comptime T: type) type {
         }
 
         fn createInstructions(self: *@This(), fn_ptr: *const anyopaque) void {
-            const ip = &self.bytes;
+            var code: Writer = .{ .bytes = &self.bytes };
             const self_addr = @intFromPtr(self);
             const fn_addr = @intFromPtr(fn_ptr);
             const ia_addr = @intFromPtr(&instance_address);
@@ -76,28 +87,22 @@ pub fn Instance(comptime T: type) type {
                         mod_rm: ModRM,
                     };
                     // mov r11, self_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[0])).* = .{
+                    code.add(MOV1{
                         .rex = .{ .b = 1 },
                         .opc = 0xb8 + 3,
                         .imm64 = self_addr,
-                    };
+                    });
                     // mov rax, ia_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[10])).* = .{
-                        .imm64 = ia_addr,
-                    };
+                    code.add(MOV1{ .imm64 = ia_addr });
                     // mov [rax], r11
-                    @as(*align(1) MOV2, @ptrCast(&ip[20])).* = .{
+                    code.add(MOV2{
                         .rex = .{ .r = 1 },
                         .mod_rm = .{ .reg = 3 },
-                    };
+                    });
                     // mov rax, fn_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[23])).* = .{
-                        .imm64 = fn_addr,
-                    };
+                    code.add(MOV1{ .imm64 = fn_addr });
                     // jmp [rax]
-                    @as(*align(1) JMP, @ptrCast(&ip[33])).* = .{
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    };
+                    code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
                 },
                 .aarch64 => {
                     const MOVZ = packed struct {
@@ -143,15 +148,15 @@ pub fn Instance(comptime T: type) type {
                         }
                     };
                     // mov x9, self_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(9, self_addr);
+                    code.add(MOV_IMM64.init(9, self_addr));
                     // mov x10, ia_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[16])).* = MOV_IMM64.init(10, ia_addr);
+                    code.add(MOV_IMM64.init(10, ia_addr));
                     // sd [x10], x9
-                    @as(*align(1) STR, @ptrCast(&ip[32])).* = .{ .rn = 10, .rt = 9 };
+                    code.add(STR{ .rn = 10, .rt = 9 });
                     // mov x9, fn_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[36])).* = MOV_IMM64.init(9, fn_addr);
+                    code.add(MOV_IMM64.init(9, fn_addr));
                     // br x9
-                    @as(*align(1) BR, @ptrCast(&ip[52])).* = .{ .rn = 9 };
+                    code.add(BR{ .rn = 9 });
                 },
                 .riscv64 => {
                     const LUI = packed struct {
@@ -239,15 +244,15 @@ pub fn Instance(comptime T: type) type {
                         }
                     };
                     // mov x5, self_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(5, 7, self_addr);
+                    code.add(MOV_IMM64.init(5, 7, self_addr));
                     // mov x6, ia_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[20])).* = MOV_IMM64.init(6, 7, ia_addr);
+                    code.add(MOV_IMM64.init(6, 7, ia_addr));
                     // sd [x6], x5
-                    @as(*align(1) SD, @ptrCast(&ip[40])).* = .{ .rs1 = 6, .rs2 = 5 };
+                    code.add(SD{ .rs1 = 6, .rs2 = 5 });
                     // mov x5, fn_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[44])).* = MOV_IMM64.init(5, 7, fn_addr);
+                    code.add(MOV_IMM64.init(5, 7, fn_addr));
                     // jmp [x5]
-                    @as(*align(1) C_JR, @ptrCast(&ip[64])).* = .{ .rs = 5 };
+                    code.add(C_JR{ .rs = 5 });
                 },
                 .powerpc64le => {
                     const ADDI = packed struct {
@@ -338,17 +343,17 @@ pub fn Instance(comptime T: type) type {
                         }
                     };
                     // mov r11, self_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[0])).* = MOV_IMM64.init(11, self_addr);
+                    code.add(MOV_IMM64.init(11, self_addr));
                     // mov r12, ia_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[20])).* = MOV_IMM64.init(12, ia_addr);
+                    code.add(MOV_IMM64.init(12, ia_addr));
                     // std [r12], r11
-                    @as(*align(1) STD, @ptrCast(&ip[40])).* = .{ .ra = 12, .rs = 11 };
+                    code.add(STD{ .ra = 12, .rs = 11 });
                     // mov r12, fn_addr
-                    @as(*align(1) MOV_IMM64, @ptrCast(&ip[44])).* = MOV_IMM64.init(12, fn_addr);
+                    code.add(MOV_IMM64.init(12, fn_addr));
                     // mtctr r12
-                    @as(*align(1) MTCTR, @ptrCast(&ip[64])).* = .{ .rs = 12 };
+                    code.add(MTCTR{ .rs = 12 });
                     // bctrl
-                    @as(*align(1) BCTRL, @ptrCast(&ip[68])).* = .{};
+                    code.add(BCTRL{});
                 },
                 .x86 => {
                     const ModRM = packed struct {
@@ -369,26 +374,18 @@ pub fn Instance(comptime T: type) type {
                         mod_rm: ModRM,
                     };
                     // mov edx, self_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[0])).* = .{
+                    code.add(MOV1{
                         .opc = 0xb8 + 3,
                         .imm32 = self_addr,
-                    };
+                    });
                     // mov eax, self_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[5])).* = .{
-                        .imm32 = ia_addr,
-                    };
+                    code.add(MOV1{ .imm32 = ia_addr });
                     // mov [eax], edx
-                    @as(*align(1) MOV2, @ptrCast(&ip[10])).* = .{
-                        .mod_rm = .{ .reg = 3 },
-                    };
+                    code.add(MOV2{ .mod_rm = .{ .reg = 3 } });
                     // mov eax, fn_addr
-                    @as(*align(1) MOV1, @ptrCast(&ip[12])).* = .{
-                        .imm32 = fn_addr,
-                    };
+                    code.add(MOV1{ .imm32 = fn_addr });
                     // jmp [eax]
-                    @as(*align(1) JMP, @ptrCast(&ip[17])).* = .{
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    };
+                    code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
                 },
                 .arm => {
                     const MOVW = packed struct {
@@ -440,15 +437,15 @@ pub fn Instance(comptime T: type) type {
                         }
                     };
                     // mov x4, self_addr
-                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[0])).* = MOV_IMM32.init(4, self_addr);
+                    code.add(MOV_IMM32.init(4, self_addr));
                     // mov x5, ia_addr
-                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[8])).* = MOV_IMM32.init(5, ia_addr);
+                    code.add(MOV_IMM32.init(5, ia_addr));
                     // mov [x5], x4
-                    @as(*align(1) STR, @ptrCast(&ip[16])).* = .{ .rn = 5, .rt = 4 };
+                    code.add(STR{ .rn = 5, .rt = 4 });
                     // mov x4, fn_addr
-                    @as(*align(1) MOV_IMM32, @ptrCast(&ip[20])).* = MOV_IMM32.init(4, fn_addr);
+                    code.add(MOV_IMM32.init(4, fn_addr));
                     // bx [x4]
-                    @as(*align(1) BX, @ptrCast(&ip[28])).* = .{ .rm = 4 };
+                    code.add(BX{ .rm = 4 });
                 },
                 else => unreachable,
             }
