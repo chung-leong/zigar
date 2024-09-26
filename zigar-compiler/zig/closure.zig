@@ -14,6 +14,8 @@ fn getSetterCode() [*]const u8 {
                 else => unreachable,
             };
             asm volatile ("nop");
+            asm volatile ("nop");
+            asm volatile ("nop");
         }
     };
     const address = @intFromPtr(&ns.set);
@@ -31,17 +33,6 @@ pub fn Instance(comptime T: type) type {
             .x86 => 19,
             .arm => 32,
             else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
-        };
-        const Writer = struct {
-            bytes: [*]u8,
-            len: usize = 0,
-
-            fn add(self: *@This(), instr: anytype) void {
-                const IT = @TypeOf(instr);
-                const ptr: *align(1) IT = @ptrCast(&self.bytes[self.len]);
-                ptr.* = instr;
-                self.len += @bitSizeOf(IT) / 8;
-            }
         };
 
         context: ?T,
@@ -70,554 +61,364 @@ pub fn Instance(comptime T: type) type {
         }
 
         fn createInstructions(self: *@This(), fn_ptr: *const anyopaque) void {
-            var code: Writer = .{ .bytes = &self.bytes };
+            var code: InstructionEncoder = .{ .bytes = &self.bytes };
             const self_addr = @intFromPtr(self);
             const fn_addr = @intFromPtr(fn_ptr);
             const ia_addr = @intFromPtr(&instance_address);
+            const I = Instruction;
+            const O = I.Opcode;
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    const REX = packed struct {
-                        b: u1 = 0,
-                        x: u1 = 0,
-                        r: u1 = 0,
-                        w: u1 = 1,
-                        pat: u4 = 4,
-                    };
-                    const ModRM = packed struct {
-                        rm: u3 = 0,
-                        reg: u3 = 0,
-                        mod: u2 = 0,
-                    };
-                    const SIB = packed struct {
-                        base: u3 = 0,
-                        index: u3 = 0,
-                        scale: u2 = 0,
-                    };
-                    const MOV = union(enum) {
-                        const A = packed struct {
-                            rex: REX = .{},
-                            // rm is basically stored as part of the opcode
-                            rm: u3 = 0,
-                            opc: u5 = 0xb8 >> 3,
-                            imm64: usize,
-                        };
-                        const B = packed struct {
-                            rex: REX = .{},
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                        };
-                        const C = packed struct {
-                            rex: REX = .{},
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                        };
-
-                        a: A,
-                        b: B,
-                        c: C,
-                    };
-                    const JMP = packed struct {
-                        rex: REX = .{},
-                        opc: u8 = 0xff,
-                        mod_rm: ModRM,
-                    };
                     // mov rax, self_addr
-                    code.add(MOV.A{ .imm64 = self_addr });
+                    code.add(I{
+                        .rex = .{},
+                        .opcode = O.MOV_AX,
+                        .imm64 = self_addr,
+                    });
                     if (single_threaded) {
                         // mov r11, ia_addr
-                        code.add(MOV.A{ .rex = .{ .b = 1 }, .rm = 3, .imm64 = ia_addr });
-                        // mov [r11], rax
-                        code.add(MOV.B{
+                        code.add(I{
                             .rex = .{ .b = 1 },
+                            .opcode = O.MOV_BX,
+                            .imm64 = ia_addr,
+                        });
+                        // mov [r11], rax
+                        code.add(I{
+                            .rex = .{ .b = 1 },
+                            .opcode = O.MOV,
                             .mod_rm = .{ .rm = 3 },
                         });
                     } else {
-                        const SetterInstructions = struct {
-                            const Disp = union(enum) {
-                                disp8: i8,
-                                disp32: i32,
-                            };
-                            const Instr = struct {
-                                pref: ?u8,
-                                mov: MOV,
-                                disp: ?Disp,
-                            };
-
-                            instrs: [8]Instr,
-                            len: usize,
-
-                            fn init() @This() {
-                                var instrs: [8]Instr = undefined;
-                                var len: usize = 0;
-                                const c = getSetterCode();
-                                var index: usize = 0;
-                                var pref: ?u8 = null;
-                                while (true) {
-                                    const rex: REX = @bitCast(c[index]);
-                                    if (rex.pat == 4) {
-                                        const opc = c[index + 1];
-                                        var mov: MOV = undefined;
-                                        var disp: ?Disp = null;
-                                        switch (opc) {
-                                            0x89 => {
-                                                const b_ptr: *align(1) const MOV.B = @ptrCast(&c[index]);
-                                                var disp_type = b_ptr.mod_rm.mod;
-                                                if (b_ptr.mod_rm.rm == 4) {
-                                                    const c_ptr: *align(1) const MOV.C = @ptrCast(&c[index]);
-                                                    mov = .{ .c = c_ptr.* };
-                                                    index += @bitSizeOf(MOV.C) / 8;
-                                                    if (c_ptr.sib.base == 5 and disp_type == 0) {
-                                                        disp_type = 2;
-                                                    }
-                                                } else {
-                                                    mov = .{ .b = b_ptr.* };
-                                                    index += @bitSizeOf(MOV.B) / 8;
-                                                }
-                                                if (disp_type == 1) {
-                                                    const i8_ptr: *const i8 = @ptrCast(&c[index]);
-                                                    disp = .{ .disp8 = i8_ptr.* };
-                                                    index += 1;
-                                                } else if (disp_type == 2) {
-                                                    const i32_ptr: *align(1) const i32 = @ptrCast(&c[index]);
-                                                    disp = .{ .disp32 = i32_ptr.* };
-                                                    index += 4;
-                                                }
-                                            },
-                                            0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf => {
-                                                const a_ptr: *align(1) const MOV.A = @ptrCast(&c[index]);
-                                                mov = .{ .a = a_ptr.* };
-                                                index += @bitSizeOf(MOV.A) / 8;
-                                            },
-                                            else => {
-                                                std.debug.print("invalid 2: {x}\n", .{opc});
-                                                break;
-                                            },
-                                        }
-                                        instrs[len] = .{
-                                            .pref = pref,
-                                            .mov = mov,
-                                            .disp = disp,
-                                        };
-                                        pref = null;
-                                        len += 1;
-                                    } else {
-                                        switch (c[index]) {
-                                            0x64, 0x65 => |p| {
-                                                pref = p;
-                                                index += 1;
-                                            },
-                                            else => {
-                                                std.debug.print("invalid 1: {x}\n", .{c[index]});
-                                                break;
-                                            },
-                                        }
-                                    }
-                                }
-                                return .{ .instrs = instrs, .len = len };
-                            }
-                        };
-                        const set_instr = SetterInstructions.init();
-                        for (0..set_instr.len) |index| {
-                            const instr = set_instr.instrs[index];
-                            if (instr.pref) |pref| {
-                                std.debug.print("prefix = {x}\n", .{pref});
-                                code.add(pref);
-                            }
-                            switch (instr.mov) {
-                                inline .a, .b, .c => |form| {
-                                    std.debug.print("mov = {any}\n", .{form});
-                                    code.add(form);
-                                },
-                            }
-                            if (instr.disp) |disp| {
-                                switch (disp) {
-                                    inline .disp8, .disp32 => |value| {
-                                        std.debug.print("disp = {any}\n", .{value});
-                                        code.add(value);
-                                    },
-                                }
-                            }
-                        }
+                        var instr_buffer: [8]I = undefined;
+                        const instrs = I.parse(getSetterCode(), &instr_buffer, instr_buffer.len);
+                        code.add(instrs);
                     }
                     // mov rax, fn_addr
-                    code.add(MOV.A{ .imm64 = fn_addr });
+                    code.add(I{
+                        .rex = .{},
+                        .opcode = O.MOV_AX,
+                        .imm64 = fn_addr,
+                    });
                     // jmp [rax]
-                    code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
+                    code.add(I{
+                        .rex = .{},
+                        .opcode = O.JMP,
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
+                    });
                 },
                 .aarch64 => {
-                    const MOVZ = packed struct {
-                        rd: u5,
-                        imm16: u16,
-                        hw: u2,
-                        opc: u9 = 0x1a5,
-                    };
-                    const MOVK = packed struct {
-                        rd: u5,
-                        imm16: u16,
-                        hw: u2,
-                        opc: u9 = 0x1e5,
-                    };
-                    const STR = packed struct {
-                        rt: u5,
-                        rn: u5,
-                        imm12: u12 = 0,
-                        opc: u10 = 0x3e4,
-                    };
-                    const BR = packed struct {
-                        op4: u5 = 0,
-                        rn: u5,
-                        op3: u6 = 0,
-                        op2: u5 = 0x1f,
-                        opc: u4 = 0,
-                        ope: u7 = 0x6b,
-                    };
-                    const MOV_IMM64 = packed struct {
-                        movz: MOVZ,
-                        movk1: MOVK,
-                        movk2: MOVK,
-                        movk3: MOVK,
+                    // const MOV_IMM64 = packed struct {
+                    //     movz: MOVZ,
+                    //     movk1: MOVK,
+                    //     movk2: MOVK,
+                    //     movk3: MOVK,
 
-                        fn init(rd: u5, imm64: usize) @This() {
-                            const imm16s: [4]u16 = @bitCast(imm64);
-                            return .{
-                                .movz = .{ .imm16 = imm16s[0], .hw = 0, .rd = rd },
-                                .movk1 = .{ .imm16 = imm16s[1], .hw = 1, .rd = rd },
-                                .movk2 = .{ .imm16 = imm16s[2], .hw = 2, .rd = rd },
-                                .movk3 = .{ .imm16 = imm16s[3], .hw = 3, .rd = rd },
-                            };
-                        }
-                    };
-                    // mov x9, self_addr
-                    code.add(MOV_IMM64.init(9, self_addr));
-                    // mov x10, ia_addr
-                    code.add(MOV_IMM64.init(10, ia_addr));
-                    // sd [x10], x9
-                    code.add(STR{ .rn = 10, .rt = 9 });
-                    // mov x9, fn_addr
-                    code.add(MOV_IMM64.init(9, fn_addr));
-                    // br x9
-                    code.add(BR{ .rn = 9 });
+                    //     fn init(rd: u5, imm64: usize) @This() {
+                    //         const imm16s: [4]u16 = @bitCast(imm64);
+                    //         return .{
+                    //             .movz = .{ .imm16 = imm16s[0], .hw = 0, .rd = rd },
+                    //             .movk1 = .{ .imm16 = imm16s[1], .hw = 1, .rd = rd },
+                    //             .movk2 = .{ .imm16 = imm16s[2], .hw = 2, .rd = rd },
+                    //             .movk3 = .{ .imm16 = imm16s[3], .hw = 3, .rd = rd },
+                    //         };
+                    //     }
+                    // };
+                    // // mov x9, self_addr
+                    // code.add(MOV_IMM64.init(9, self_addr));
+                    // // mov x10, ia_addr
+                    // code.add(MOV_IMM64.init(10, ia_addr));
+                    // // sd [x10], x9
+                    // code.add(STR{ .rn = 10, .rt = 9 });
+                    // // mov x9, fn_addr
+                    // code.add(MOV_IMM64.init(9, fn_addr));
+                    // // br x9
+                    // code.add(BR{ .rn = 9 });
                 },
                 .riscv64 => {
-                    const LUI = packed struct {
-                        opc: u7 = 0x37,
-                        rd: u5,
-                        imm20: u20,
-                    };
-                    const ADDI = packed struct {
-                        opc: u7 = 0x1b,
-                        rd: u5,
-                        func: u3 = 0,
-                        rs: u5,
-                        imm12: u12,
-                    };
-                    const SD = packed struct(u32) {
-                        opc: u7 = 0x23,
-                        offset_4_0: u5 = 0,
-                        func: u3 = 0x3,
-                        rs1: u5,
-                        rs2: u5,
-                        offset_11_5: u7 = 0,
-                    };
-                    const C_SLLI = packed struct {
-                        opc: u2 = 0x2,
-                        imm5: u5,
-                        rd: u5,
-                        imm1: u1,
-                        func: u3 = 0,
-                    };
-                    const C_ADD = packed struct {
-                        opc: u2 = 0x2,
-                        rs: u5,
-                        rd: u5,
-                        func1: u1 = 1,
-                        func2: u3 = 0x4,
-                    };
-                    const C_JR = packed struct {
-                        opc: u2 = 0x2,
-                        rs2: u5 = 0,
-                        rs: u5,
-                        func1: u1 = 0,
-                        func2: u3 = 0x4,
-                    };
-                    const MOV_IMM64 = packed struct {
-                        lui1: LUI,
-                        addi1: ADDI,
-                        lui2: LUI,
-                        addi2: ADDI,
-                        slli: C_SLLI,
-                        add: C_ADD,
+                    // const LUI = packed struct {
+                    //     opc: u7 = 0x37,
+                    //     rd: u5,
+                    //     imm20: u20,
+                    // };
+                    // const ADDI = packed struct {
+                    //     opc: u7 = 0x1b,
+                    //     rd: u5,
+                    //     func: u3 = 0,
+                    //     rs: u5,
+                    //     imm12: u12,
+                    // };
+                    // const SD = packed struct(u32) {
+                    //     opc: u7 = 0x23,
+                    //     offset_4_0: u5 = 0,
+                    //     func: u3 = 0x3,
+                    //     rs1: u5,
+                    //     rs2: u5,
+                    //     offset_11_5: u7 = 0,
+                    // };
+                    // const C_SLLI = packed struct {
+                    //     opc: u2 = 0x2,
+                    //     imm5: u5,
+                    //     rd: u5,
+                    //     imm1: u1,
+                    //     func: u3 = 0,
+                    // };
+                    // const C_ADD = packed struct {
+                    //     opc: u2 = 0x2,
+                    //     rs: u5,
+                    //     rd: u5,
+                    //     func1: u1 = 1,
+                    //     func2: u3 = 0x4,
+                    // };
+                    // const C_JR = packed struct {
+                    //     opc: u2 = 0x2,
+                    //     rs2: u5 = 0,
+                    //     rs: u5,
+                    //     func1: u1 = 0,
+                    //     func2: u3 = 0x4,
+                    // };
+                    // const MOV_IMM64 = packed struct {
+                    //     lui1: LUI,
+                    //     addi1: ADDI,
+                    //     lui2: LUI,
+                    //     addi2: ADDI,
+                    //     slli: C_SLLI,
+                    //     add: C_ADD,
 
-                        fn init(rd: u5, rtmp: u5, imm64: usize) @This() {
-                            const imm64_11_0 = (imm64 >> 0 & 0xFFF);
-                            const imm64_31_12 = (imm64 >> 12 & 0xFFFFF) + (imm64 >> 11 & 1);
-                            const imm64_43_32 = (imm64 >> 32 & 0xFFF) + (imm64 >> 31 & 1);
-                            const imm64_63_44 = (imm64 >> 44 & 0xFFFFF) + (imm64 >> 43 & 1);
-                            return .{
-                                // lui rd, imm64_63_44
-                                .lui1 = .{
-                                    .imm20 = @truncate(imm64_63_44),
-                                    .rd = rd,
-                                },
-                                // addi rd, imm64_43_32
-                                .addi1 = .{
-                                    .imm12 = @truncate(imm64_43_32),
-                                    .rd = rd,
-                                    .rs = rd,
-                                },
-                                // lui rtmp, imm64_31_12
-                                .lui2 = .{
-                                    .imm20 = @truncate(imm64_31_12),
-                                    .rd = rtmp,
-                                },
-                                // addi rtmp, imm64_11_0
-                                .addi2 = .{
-                                    .imm12 = @truncate(imm64_11_0),
-                                    .rd = rtmp,
-                                    .rs = rtmp,
-                                },
-                                // shift rd, 32
-                                .slli = .{ .imm1 = 1, .imm5 = 0, .rd = rd },
-                                // add rd, rtmp
-                                .add = .{ .rd = rd, .rs = rtmp },
-                            };
-                        }
-                    };
-                    // mov x5, self_addr
-                    code.add(MOV_IMM64.init(5, 7, self_addr));
-                    // mov x6, ia_addr
-                    code.add(MOV_IMM64.init(6, 7, ia_addr));
-                    // sd [x6], x5
-                    code.add(SD{ .rs1 = 6, .rs2 = 5 });
-                    // mov x5, fn_addr
-                    code.add(MOV_IMM64.init(5, 7, fn_addr));
-                    // jmp [x5]
-                    code.add(C_JR{ .rs = 5 });
+                    //     fn init(rd: u5, rtmp: u5, imm64: usize) @This() {
+                    //         const imm64_11_0 = (imm64 >> 0 & 0xFFF);
+                    //         const imm64_31_12 = (imm64 >> 12 & 0xFFFFF) + (imm64 >> 11 & 1);
+                    //         const imm64_43_32 = (imm64 >> 32 & 0xFFF) + (imm64 >> 31 & 1);
+                    //         const imm64_63_44 = (imm64 >> 44 & 0xFFFFF) + (imm64 >> 43 & 1);
+                    //         return .{
+                    //             // lui rd, imm64_63_44
+                    //             .lui1 = .{
+                    //                 .imm20 = @truncate(imm64_63_44),
+                    //                 .rd = rd,
+                    //             },
+                    //             // addi rd, imm64_43_32
+                    //             .addi1 = .{
+                    //                 .imm12 = @truncate(imm64_43_32),
+                    //                 .rd = rd,
+                    //                 .rs = rd,
+                    //             },
+                    //             // lui rtmp, imm64_31_12
+                    //             .lui2 = .{
+                    //                 .imm20 = @truncate(imm64_31_12),
+                    //                 .rd = rtmp,
+                    //             },
+                    //             // addi rtmp, imm64_11_0
+                    //             .addi2 = .{
+                    //                 .imm12 = @truncate(imm64_11_0),
+                    //                 .rd = rtmp,
+                    //                 .rs = rtmp,
+                    //             },
+                    //             // shift rd, 32
+                    //             .slli = .{ .imm1 = 1, .imm5 = 0, .rd = rd },
+                    //             // add rd, rtmp
+                    //             .add = .{ .rd = rd, .rs = rtmp },
+                    //         };
+                    //     }
+                    // };
+                    // // mov x5, self_addr
+                    // code.add(MOV_IMM64.init(5, 7, self_addr));
+                    // // mov x6, ia_addr
+                    // code.add(MOV_IMM64.init(6, 7, ia_addr));
+                    // // sd [x6], x5
+                    // code.add(SD{ .rs1 = 6, .rs2 = 5 });
+                    // // mov x5, fn_addr
+                    // code.add(MOV_IMM64.init(5, 7, fn_addr));
+                    // // jmp [x5]
+                    // code.add(C_JR{ .rs = 5 });
                 },
                 .powerpc64le => {
-                    const ADDI = packed struct {
-                        simm: u16,
-                        ra: u5,
-                        rt: u5,
-                        opc: u6 = 0x0e,
-                    };
-                    const ADDIS = packed struct {
-                        simm: u16,
-                        ra: u5,
-                        rt: u5,
-                        opc: u6 = 0x0f,
-                    };
-                    const RLDIC = packed struct {
-                        rc: u1 = 0,
-                        sh2: u1,
-                        _: u3 = 0,
-                        mb: u6 = 0,
-                        sh: u5,
-                        ra: u5,
-                        rs: u5,
-                        opc: u6 = 0x1e,
-                    };
-                    const STD = packed struct {
-                        _: u2 = 0,
-                        ds: u14 = 0,
-                        ra: u5,
-                        rs: u5,
-                        opc: u6 = 0x3e,
-                    };
-                    const MTCTR = packed struct {
-                        _: u1 = 0,
-                        func: u10 = 467,
-                        spr: u10 = 0x120,
-                        rs: u5,
-                        opc: u6 = 0x1f,
-                    };
-                    const BCTRL = packed struct {
-                        lk: u1 = 0,
-                        func: u10 = 528,
-                        bh: u2 = 0,
-                        _: u3 = 0,
-                        bi: u5 = 0,
-                        bo: u5 = 0x14,
-                        opc: u6 = 0x13,
-                    };
-                    const MOV_IMM64 = packed struct {
-                        addi1: ADDI,
-                        addis1: ADDIS,
-                        rldic: RLDIC,
-                        addi2: ADDI,
-                        addis2: ADDIS,
+                    // const ADDI = packed struct {
+                    //     simm: u16,
+                    //     ra: u5,
+                    //     rt: u5,
+                    //     opc: u6 = 0x0e,
+                    // };
+                    // const ADDIS = packed struct {
+                    //     simm: u16,
+                    //     ra: u5,
+                    //     rt: u5,
+                    //     opc: u6 = 0x0f,
+                    // };
+                    // const RLDIC = packed struct {
+                    //     rc: u1 = 0,
+                    //     sh2: u1,
+                    //     _: u3 = 0,
+                    //     mb: u6 = 0,
+                    //     sh: u5,
+                    //     ra: u5,
+                    //     rs: u5,
+                    //     opc: u6 = 0x1e,
+                    // };
+                    // const STD = packed struct {
+                    //     _: u2 = 0,
+                    //     ds: u14 = 0,
+                    //     ra: u5,
+                    //     rs: u5,
+                    //     opc: u6 = 0x3e,
+                    // };
+                    // const MTCTR = packed struct {
+                    //     _: u1 = 0,
+                    //     func: u10 = 467,
+                    //     spr: u10 = 0x120,
+                    //     rs: u5,
+                    //     opc: u6 = 0x1f,
+                    // };
+                    // const BCTRL = packed struct {
+                    //     lk: u1 = 0,
+                    //     func: u10 = 528,
+                    //     bh: u2 = 0,
+                    //     _: u3 = 0,
+                    //     bi: u5 = 0,
+                    //     bo: u5 = 0x14,
+                    //     opc: u6 = 0x13,
+                    // };
+                    // const MOV_IMM64 = packed struct {
+                    //     addi1: ADDI,
+                    //     addis1: ADDIS,
+                    //     rldic: RLDIC,
+                    //     addi2: ADDI,
+                    //     addis2: ADDIS,
 
-                        fn init(rt: u5, imm64: usize) @This() {
-                            const imm64_16_0 = (imm64 >> 0 & 0xFFFF);
-                            const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
-                            const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 1);
-                            const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
-                            return .{
-                                .addi1 = .{
-                                    .rt = rt,
-                                    .ra = 0,
-                                    .simm = @truncate(imm64_47_32),
-                                },
-                                .addis1 = .{
-                                    .rt = rt,
-                                    .ra = rt,
-                                    .simm = @truncate(imm64_63_48),
-                                },
-                                .rldic = .{
-                                    .rs = rt,
-                                    .ra = rt,
-                                    .sh = 0,
-                                    .sh2 = 1,
-                                },
-                                .addi2 = .{
-                                    .rt = rt,
-                                    .ra = rt,
-                                    .simm = @truncate(imm64_16_0),
-                                },
-                                .addis2 = .{
-                                    .rt = rt,
-                                    .ra = rt,
-                                    .simm = @truncate(imm64_31_16),
-                                },
-                            };
-                        }
-                    };
-                    // mov r11, self_addr
-                    code.add(MOV_IMM64.init(11, self_addr));
-                    // mov r12, ia_addr
-                    code.add(MOV_IMM64.init(12, ia_addr));
-                    // std [r12], r11
-                    code.add(STD{ .ra = 12, .rs = 11 });
-                    // mov r12, fn_addr
-                    code.add(MOV_IMM64.init(12, fn_addr));
-                    // mtctr r12
-                    code.add(MTCTR{ .rs = 12 });
-                    // bctrl
-                    code.add(BCTRL{});
+                    //     fn init(rt: u5, imm64: usize) @This() {
+                    //         const imm64_16_0 = (imm64 >> 0 & 0xFFFF);
+                    //         const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
+                    //         const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 1);
+                    //         const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
+                    //         return .{
+                    //             .addi1 = .{
+                    //                 .rt = rt,
+                    //                 .ra = 0,
+                    //                 .simm = @truncate(imm64_47_32),
+                    //             },
+                    //             .addis1 = .{
+                    //                 .rt = rt,
+                    //                 .ra = rt,
+                    //                 .simm = @truncate(imm64_63_48),
+                    //             },
+                    //             .rldic = .{
+                    //                 .rs = rt,
+                    //                 .ra = rt,
+                    //                 .sh = 0,
+                    //                 .sh2 = 1,
+                    //             },
+                    //             .addi2 = .{
+                    //                 .rt = rt,
+                    //                 .ra = rt,
+                    //                 .simm = @truncate(imm64_16_0),
+                    //             },
+                    //             .addis2 = .{
+                    //                 .rt = rt,
+                    //                 .ra = rt,
+                    //                 .simm = @truncate(imm64_31_16),
+                    //             },
+                    //         };
+                    //     }
+                    // };
+                    // // mov r11, self_addr
+                    // code.add(MOV_IMM64.init(11, self_addr));
+                    // // mov r12, ia_addr
+                    // code.add(MOV_IMM64.init(12, ia_addr));
+                    // // std [r12], r11
+                    // code.add(STD{ .ra = 12, .rs = 11 });
+                    // // mov r12, fn_addr
+                    // code.add(MOV_IMM64.init(12, fn_addr));
+                    // // mtctr r12
+                    // code.add(MTCTR{ .rs = 12 });
+                    // // bctrl
+                    // code.add(BCTRL{});
                 },
                 .x86 => {
-                    const ModRM = packed struct {
-                        rm: u3 = 0,
-                        reg: u3 = 0,
-                        mod: u2 = 0,
-                    };
-                    const SIB = packed struct {
-                        base: u3 = 0,
-                        index: u3 = 0,
-                        scale: u2 = 0,
-                    };
-                    const MOV = union(enum) {
-                        const A = packed struct {
-                            rm: u3 = 0,
-                            opc: u5 = 0xb8 >> 3,
-                            imm32: usize,
-                        };
-                        const B = packed struct {
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                        };
-                        const C = packed struct {
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                        };
-                        const D = packed struct {
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                            disp8: i8,
-                        };
-                        const E = packed struct {
-                            opc: u8 = 0x89,
-                            mod_rm: ModRM,
-                            sib: SIB,
-                            disp32: i32,
-                        };
-
-                        a: A,
-                        b: B,
-                        c: C,
-                        d: D,
-                        e: E,
-                    };
-                    const JMP = packed struct {
-                        opc: u8 = 0xff,
-                        mod_rm: ModRM,
-                    };
-                    // mov edx, self_addr
-                    code.add(MOV.A{
-                        .rm = 3,
+                    // mov rax, self_addr
+                    code.add(I{
+                        .opcode = O.MOV_AX,
                         .imm32 = self_addr,
                     });
-                    // mov eax, self_addr
-                    code.add(MOV.A{ .imm32 = ia_addr });
-                    // mov [eax], edx
-                    code.add(MOV.B{ .mod_rm = .{ .reg = 3 } });
+                    if (single_threaded) {
+                        // mov rcx, ia_addr
+                        code.add(I{
+                            .opcode = O.MOV_CX,
+                            .imm32 = ia_addr,
+                        });
+                        // mov [rcx], rax
+                        code.add(I{
+                            .opcode = O.MOV,
+                            .mod_rm = .{ .rm = 1 },
+                        });
+                    }
                     // mov eax, fn_addr
-                    code.add(MOV.A{ .imm32 = fn_addr });
+                    code.add(I{
+                        .opcode = O.MOV_AX,
+                        .imm32 = fn_addr,
+                    });
                     // jmp [eax]
-                    code.add(JMP{ .mod_rm = .{ .reg = 4, .mod = 3 } });
+                    code.add(I{
+                        .opcode = O.JMP,
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
+                    });
                 },
                 .arm => {
-                    const MOVW = packed struct {
-                        imm12: u12,
-                        rd: u4,
-                        imm4: u4,
-                        opc: u8 = 0x30,
-                        _: u4 = 0,
-                    };
-                    const MOVT = packed struct {
-                        imm12: u12,
-                        rd: u4,
-                        imm4: u4,
-                        opc: u8 = 0x34,
-                        _: u4 = 0,
-                    };
-                    const STR = packed struct {
-                        imm12: u12 = 0,
-                        rt: u4,
-                        rn: u4,
-                        opc: u8 = 0x58,
-                        _: u4 = 0,
-                    };
-                    const BX = packed struct {
-                        rm: u4,
-                        flags: u4 = 0x1,
-                        imm12: u12 = 0xfff,
-                        opc: u8 = 0x12,
-                        _: u4 = 0,
-                    };
-                    const MOV_IMM32 = packed struct {
-                        movw: MOVW,
-                        movt: MOVT,
+                    // const MOVW = packed struct {
+                    //     imm12: u12,
+                    //     rd: u4,
+                    //     imm4: u4,
+                    //     opc: u8 = 0x30,
+                    //     _: u4 = 0,
+                    // };
+                    // const MOVT = packed struct {
+                    //     imm12: u12,
+                    //     rd: u4,
+                    //     imm4: u4,
+                    //     opc: u8 = 0x34,
+                    //     _: u4 = 0,
+                    // };
+                    // const STR = packed struct {
+                    //     imm12: u12 = 0,
+                    //     rt: u4,
+                    //     rn: u4,
+                    //     opc: u8 = 0x58,
+                    //     _: u4 = 0,
+                    // };
+                    // const BX = packed struct {
+                    //     rm: u4,
+                    //     flags: u4 = 0x1,
+                    //     imm12: u12 = 0xfff,
+                    //     opc: u8 = 0x12,
+                    //     _: u4 = 0,
+                    // };
+                    // const MOV_IMM32 = packed struct {
+                    //     movw: MOVW,
+                    //     movt: MOVT,
 
-                        fn init(rd: u4, imm32: usize) @This() {
-                            const imm16s: [2]u16 = @bitCast(imm32);
-                            return .{
-                                .movw = .{
-                                    .imm12 = @truncate(imm16s[0] & 0xFFF),
-                                    .imm4 = @truncate(imm16s[0] >> 12 & 0xF),
-                                    .rd = rd,
-                                },
-                                .movt = .{
-                                    .imm12 = @truncate(imm16s[1] & 0xFFF),
-                                    .imm4 = @truncate(imm16s[1] >> 12 & 0xF),
-                                    .rd = rd,
-                                },
-                            };
-                        }
-                    };
-                    // mov x4, self_addr
-                    code.add(MOV_IMM32.init(4, self_addr));
-                    // mov x5, ia_addr
-                    code.add(MOV_IMM32.init(5, ia_addr));
-                    // mov [x5], x4
-                    code.add(STR{ .rn = 5, .rt = 4 });
-                    // mov x4, fn_addr
-                    code.add(MOV_IMM32.init(4, fn_addr));
-                    // bx [x4]
-                    code.add(BX{ .rm = 4 });
+                    //     fn init(rd: u4, imm32: usize) @This() {
+                    //         const imm16s: [2]u16 = @bitCast(imm32);
+                    //         return .{
+                    //             .movw = .{
+                    //                 .imm12 = @truncate(imm16s[0] & 0xFFF),
+                    //                 .imm4 = @truncate(imm16s[0] >> 12 & 0xF),
+                    //                 .rd = rd,
+                    //             },
+                    //             .movt = .{
+                    //                 .imm12 = @truncate(imm16s[1] & 0xFFF),
+                    //                 .imm4 = @truncate(imm16s[1] >> 12 & 0xF),
+                    //                 .rd = rd,
+                    //             },
+                    //         };
+                    //     }
+                    // };
+                    // // mov x4, self_addr
+                    // code.add(MOV_IMM32.init(4, self_addr));
+                    // // mov x5, ia_addr
+                    // code.add(MOV_IMM32.init(5, ia_addr));
+                    // // mov [x5], x4
+                    // code.add(STR{ .rn = 5, .rt = 4 });
+                    // // mov x4, fn_addr
+                    // code.add(MOV_IMM32.init(4, fn_addr));
+                    // // bx [x4]
+                    // code.add(BX{ .rm = 4 });
                 },
                 else => unreachable,
             }
@@ -651,23 +452,23 @@ pub fn Instance(comptime T: type) type {
             const result1 = f1(&number1, 1, 2, 3, 4, 5, 6, 7);
             try expect(result1 == 1 + 2 + 3 + 4 + 5 + 6 + 7);
             try expect(number1 == 7);
-            // // pass enough arguments to ensure we're exhausting available registers
-            // const ns2 = struct {
-            //     fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize, a8: usize, a9: usize, a10: usize, a11: usize, a12: usize, a13: usize, a14: usize) usize {
-            //         if (getContext().check()) {
-            //             number_ptr.* = a14;
-            //             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
-            //         } else {
-            //             return 0;
-            //         }
-            //     }
-            // };
-            // closure.construct(&ns2.check, context);
-            // const f2 = closure.function(@TypeOf(ns2.check));
-            // var number2: usize = 0;
-            // const result2 = f2(&number2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-            // try expect(result2 == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
-            // try expect(number2 == 14);
+            // pass enough arguments to ensure we're exhausting available registers
+            const ns2 = struct {
+                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, a7: usize, a8: usize, a9: usize, a10: usize, a11: usize, a12: usize, a13: usize, a14: usize) usize {
+                    if (getContext().check()) {
+                        number_ptr.* = a14;
+                        return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
+                    } else {
+                        return 0;
+                    }
+                }
+            };
+            closure.construct(&ns2.check, context);
+            const f2 = closure.function(@TypeOf(ns2.check));
+            var number2: usize = 0;
+            const result2 = f2(&number2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+            try expect(result2 == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
+            try expect(number2 == 14);
         }
 
         test "fromFunction()" {
@@ -909,6 +710,276 @@ pub fn Factory(comptime T: type) type {
     };
 }
 
+const Instruction = switch (builtin.target.cpu.arch) {
+    .x86, .x86_64 => struct {
+        pub const Opcode = enum(u8) {
+            MOV = 0x89,
+            MOV_M = 0x8b,
+            LEA = 0x8d,
+            NOP = 0x90,
+            MOV_AX = 0xb8,
+            MOV_CX = 0xb9,
+            MOV_DX = 0xba,
+            MOV_BX = 0xbb,
+            MOV_SP = 0xbc,
+            MOV_BP = 0xbd,
+            MOV_SI = 0xbe,
+            MOV_DI = 0xbf,
+            CALL = 0xe8,
+            JMP = 0xff,
+            _,
+        };
+        pub const Prefix = enum(u8) {
+            ES = 0x26,
+            CS = 0x2e,
+            SS = 0x36,
+            DS = 0x3e,
+            FS = 0x64,
+            GS = 0x65,
+            OS = 0x66,
+            AS = 0x67,
+            F2 = 0xf2,
+            F3 = 0xf3,
+        };
+        const REX = packed struct {
+            b: u1 = 0,
+            x: u1 = 0,
+            r: u1 = 0,
+            w: u1 = 1,
+            pat: u4 = 4,
+        };
+        const ModRM = packed struct {
+            rm: u3 = 0,
+            reg: u3 = 0,
+            mod: u2 = 0,
+        };
+        const SIB = packed struct {
+            base: u3 = 0,
+            index: u3 = 0,
+            scale: u2 = 0,
+        };
+
+        prefix: ?Prefix = null,
+        rex: ?REX = null,
+        opcode: Opcode = .NOP,
+        mod_rm: ?ModRM = null,
+        sib: ?SIB = null,
+        disp8: ?i8 = null,
+        disp32: ?i32 = null,
+        imm32: ?u32 = null,
+        imm64: ?u64 = null,
+
+        pub fn parse(bytes: [*]const u8, instrs: [*]@This(), max_len: usize) []@This() {
+            var len: usize = 0;
+            var i: usize = 0;
+            while (len < max_len) {
+                var instr: @This() = .{};
+                if (std.meta.intToEnum(Prefix, bytes[i])) |p| {
+                    instr.prefix = p;
+                    i += 1;
+                } else |_| {}
+                const rex: REX = @bitCast(bytes[i]);
+                if (rex.pat == 4) {
+                    instr.rex = rex;
+                    i += 1;
+                }
+                instr.opcode = @enumFromInt(bytes[i]);
+                const wide = if (instr.rex) |r| r.w == 1 else false;
+                var has_mod_rm: bool = false;
+                var has_sib: bool = false;
+                var disp_size: ?u8 = null;
+                var imm_size: ?u8 = null;
+                switch (instr.opcode) {
+                    .MOV,
+                    .MOV_M,
+                    .LEA,
+                    .JMP,
+                    => has_mod_rm = true,
+                    .MOV_AX,
+                    .MOV_CX,
+                    .MOV_DX,
+                    .MOV_BX,
+                    .MOV_SP,
+                    .MOV_BP,
+                    .MOV_SI,
+                    .MOV_DI,
+                    => imm_size = if (wide) 64 else 32,
+                    .CALL => imm_size = 32,
+                    else => {
+                        std.debug.print("unrecognized: {x}\n", .{instr.opcode});
+                        for (0..i) |index| {
+                            std.debug.print("{x} ", .{bytes[index]});
+                        }
+                        std.debug.print("\n", .{});
+                        for (i..i + 16) |index| {
+                            std.debug.print("{x} ", .{bytes[index]});
+                        }
+                        std.debug.print("\n", .{});
+                        break;
+                    },
+                }
+                i += 1;
+                if (has_mod_rm) {
+                    const mod_rm: ModRM = @bitCast(bytes[i]);
+                    i += 1;
+                    if (mod_rm.mod == 2 or (mod_rm.mod == 0 and mod_rm.rm == 5)) {
+                        disp_size = 32;
+                    } else if (mod_rm.mod == 1) {
+                        disp_size = 8;
+                    }
+                    has_sib = mod_rm.rm == 4;
+                    instr.mod_rm = mod_rm;
+                }
+                if (has_sib) {
+                    const sib: SIB = @bitCast(bytes[i]);
+                    i += 1;
+                    if (sib.base == 5) {
+                        disp_size = 32;
+                    }
+                    instr.sib = sib;
+                }
+                if (disp_size) |size| {
+                    if (size == 8) {
+                        instr.disp8 = std.mem.bytesToValue(i8, bytes[i .. i + 1]);
+                        i += 1;
+                    } else if (size == 32) {
+                        instr.disp32 = std.mem.bytesToValue(i32, bytes[i .. i + 4]);
+                        i += 4;
+                    }
+                }
+                if (imm_size) |size| {
+                    if (size == 32) {
+                        instr.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
+                        i += 4;
+                    } else if (size == 32) {
+                        instr.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
+                        i += 8;
+                    }
+                }
+                instrs[len] = instr;
+                std.debug.print("{any}\n", .{instr});
+                len += 1;
+            }
+            return instrs[0..len];
+        }
+    },
+    .aarch64 => union {
+        const MOVZ = packed struct {
+            rd: u5,
+            imm16: u16,
+            hw: u2,
+            opc: u9 = 0x1a5,
+        };
+        const MOVK = packed struct {
+            rd: u5,
+            imm16: u16,
+            hw: u2,
+            opc: u9 = 0x1e5,
+        };
+        const STR = packed struct {
+            rt: u5,
+            rn: u5,
+            imm12: u12,
+            opc: u10 = 0x3e4,
+        };
+        const BR = packed struct {
+            op4: u5 = 0,
+            rn: u5,
+            op3: u6 = 0,
+            op2: u5 = 0x1f,
+            opc: u4 = 0,
+            ope: u7 = 0x6b,
+        };
+        const ANY = packed struct {
+            bits: u32,
+        };
+
+        movz: MOVZ,
+        movk: MOVK,
+        str: STR,
+        br: BR,
+        unknown: ANY,
+    },
+    .riscv64 => void,
+    .powerpc64le => void,
+    .arm => void,
+    else => void,
+};
+
+const InstructionEncoder = struct {
+    bytes: [*]u8,
+    len: usize = 0,
+
+    pub fn add(self: *@This(), instr: anytype) void {
+        switch (@typeInfo(@TypeOf(instr))) {
+            .Struct => |st| {
+                if (st.layout == .@"packed") {
+                    self.write(instr);
+                } else {
+                    inline for (st.fields) |field| {
+                        self.add(@field(instr, field.name));
+                    }
+                }
+            },
+            .Union => |un| {
+                const Tag = un.tag_type orelse @compileError("Cannot handle untagged union");
+                const tag: Tag = instr;
+                return self.add(@field(instr, @tagName(tag)));
+            },
+            .Array => for (instr) |element| self.add(element),
+            .Pointer => |pt| {
+                switch (pt.size) {
+                    .Slice => for (instr) |element| self.add(element),
+                    else => @compileError("Cannot handle non-slice pointers"),
+                }
+            },
+            .Optional => if (instr) |value| self.add(value),
+            .Enum => self.add(@intFromEnum(instr)),
+            .Int, .Float, .Bool => self.write(instr),
+            else => @compileError("Cannot handle " ++ @typeName(@TypeOf(instr))),
+        }
+    }
+
+    test "add" {
+        var bytes: [32]u8 = undefined;
+        var encoder: InstructionEncoder = .{ .bytes = &bytes };
+        const u: u32 = 123;
+        encoder.add(u);
+        const o: ?u32 = null;
+        encoder.add(o);
+        const s: packed struct {
+            a: u32 = 456,
+            b: u32 = 789,
+        } = .{};
+        encoder.add(s);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
+    }
+
+    fn write(self: *@This(), instr: anytype) void {
+        const T = @TypeOf(instr);
+        const ptr: *align(1) T = @ptrCast(&self.bytes[self.len]);
+        ptr.* = instr;
+        self.len += @bitSizeOf(T) / 8;
+    }
+
+    test "write" {
+        var bytes: [32]u8 = undefined;
+        var encoder: InstructionEncoder = .{ .bytes = &bytes };
+        const u: u32 = 123;
+        encoder.write(u);
+        const s: packed struct {
+            a: u32 = 456,
+            b: u32 = 789,
+        } = .{};
+        encoder.write(s);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
+        try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
+    }
+};
+
 test {
     const TestContext = struct {
         index: usize,
@@ -924,4 +995,5 @@ test {
     };
     // _ = Factory(TestContext);
     _ = Instance(TestContext);
+    _ = InstructionEncoder;
 }
