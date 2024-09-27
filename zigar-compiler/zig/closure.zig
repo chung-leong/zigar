@@ -8,11 +8,11 @@ pub fn Instance(comptime T: type) type {
         const single_threaded = builtin.single_threaded;
         const code_size = switch (builtin.target.cpu.arch) {
             .x86_64 => 49,
-            .aarch64 => 56,
+            .aarch64 => 72,
             .riscv64 => 66,
             .powerpc64le => 72,
             .x86 => 43,
-            .arm => 32,
+            .arm => 52,
             else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
 
@@ -51,7 +51,7 @@ pub fn Instance(comptime T: type) type {
         fn construct(self: *@This(), comptime handler: anytype, ctx: T) *const FunctionOf(handler) {
             self.* = .{ .context = ctx };
             self.createInstructions(handler);
-            return @ptrCast(&self.bytes);
+            return @ptrCast(@alignCast(&self.bytes));
         }
 
         test "construct" {
@@ -111,9 +111,9 @@ pub fn Instance(comptime T: type) type {
             const caller = createCaller(handler, signature);
             const caller_addr = @intFromPtr(&caller);
             const I = Instruction;
-            const O = I.Opcode;
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
+                    const O = I.Opcode;
                     // mov rax, signature
                     code.add(I{
                         .rex = .{},
@@ -155,14 +155,44 @@ pub fn Instance(comptime T: type) type {
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     });
                 },
-                .aarch64 => {},
+                .aarch64 => {
+                    // sub x10, sp, signature_offset
+                    code.add(I.SUB{
+                        .rd = 10,
+                        .rn = 31,
+                        .imm12 = signature_offset,
+                    });
+                    code.add(I.SUB{
+                        .rd = 11,
+                        .rn = 31,
+                        .imm12 = signature_offset,
+                    });
+                    code.add(I.SUB{
+                        .rd = 12,
+                        .rn = 31,
+                        .imm12 = 0,
+                    });
+                    // mov x9, signature
+                    code.add(I.MOV_IMM64.init(9, signature));
+                    // sd [x10], x9
+                    code.add(I.STR{ .rn = 10, .rt = 9 });
+                    // mov x9, self_addr
+                    code.add(I.MOV_IMM64.init(9, self_addr));
+                    // sd [x10 + 8], x9
+                    code.add(I.STR{ .rn = 10, .rt = 9, .imm12 = 1 });
+                    // mov x9, caller_addr
+                    code.add(I.MOV_IMM64.init(9, caller_addr));
+                    // br x9
+                    code.add(I.BR{ .rn = 9 });
+                },
                 .riscv64 => {},
                 .powerpc64le => {},
                 .x86 => {
+                    const O = I.Opcode;
                     // mov eax, (signature & 0xffffffff)
                     code.add(I{
                         .opcode = O.MOV_AX,
-                        .imm32 = @truncate(signature & 0xffff_ffff),
+                        .imm32 = signature & 0xffff_ffff,
                     });
                     // mov [esp - signature_offset], eax
                     code.add(I{
@@ -174,7 +204,7 @@ pub fn Instance(comptime T: type) type {
                     // mov eax, (signature >> 32)
                     code.add(I{
                         .opcode = O.MOV_AX,
-                        .imm32 = @truncate(signature >> 32),
+                        .imm32 = signature >> 32,
                     });
                     // mov [esp - signature_offset + 4], eax
                     code.add(I{
@@ -206,7 +236,30 @@ pub fn Instance(comptime T: type) type {
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     });
                 },
-                .arm => {},
+                .arm => {
+                    // sub r5, sp, signature_offset
+                    code.add(I.SUB{
+                        .rd = 5,
+                        .rn = 13,
+                        .imm12 = comptime I.imm12(signature_offset),
+                    });
+                    // mov r4, (signature & 0xffffffff)
+                    code.add(I.MOV_IMM32.init(4, signature & 0xffff_ffff));
+                    // str [r5], r4
+                    code.add(I.STR{ .rn = 5, .rt = 4 });
+                    // mov r4, (signature >> 32)
+                    code.add(I.MOV_IMM32.init(4, signature >> 32));
+                    // str [r5 + 4], r4
+                    code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 4 });
+                    // mov r4, self_addr
+                    code.add(I.MOV_IMM32.init(4, self_addr));
+                    // str [r5 + 8], r4
+                    code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 8 });
+                    // mov r4, caller_addr
+                    code.add(I.MOV_IMM32.init(4, caller_addr));
+                    // bx [r4]
+                    code.add(I.BX{ .rm = 4 });
+                },
                 else => unreachable,
             }
         }
@@ -228,7 +281,9 @@ pub fn Instance(comptime T: type) type {
                         .x86 => asm (""
                             : [ret] "={esp}" (-> usize),
                         ),
-                        else => unreachable,
+                        else => asm (""
+                            : [ret] "={sp}" (-> usize),
+                        ),
                     };
                     // look for context pointer in memory above the stack
                     const ptr: [*]usize = @ptrFromInt(sp_address - 1024);
@@ -525,7 +580,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm32: ?u32 = null,
         imm64: ?u64 = null,
     },
-    .aarch64 => union {
+    .aarch64 => struct {
         const MOVZ = packed struct {
             rd: u5,
             imm16: u16,
@@ -538,10 +593,16 @@ const Instruction = switch (builtin.target.cpu.arch) {
             hw: u2,
             opc: u9 = 0x1e5,
         };
+        const SUB = packed struct {
+            rd: u5,
+            rn: u5,
+            imm12: u12,
+            opc: u10 = 0x344,
+        };
         const STR = packed struct {
             rt: u5,
             rn: u5,
-            imm12: u12,
+            imm12: u12 = 0,
             opc: u10 = 0x3e4,
         };
         const BR = packed struct {
@@ -552,10 +613,95 @@ const Instruction = switch (builtin.target.cpu.arch) {
             opc: u4 = 0,
             ope: u7 = 0x6b,
         };
+        const MOV_IMM64 = packed struct {
+            movz: MOVZ,
+            movk1: MOVK,
+            movk2: MOVK,
+            movk3: MOVK,
+
+            fn init(rd: u5, imm64: usize) @This() {
+                const imm16s: [4]u16 = @bitCast(imm64);
+                return .{
+                    .movz = .{ .imm16 = imm16s[0], .hw = 0, .rd = rd },
+                    .movk1 = .{ .imm16 = imm16s[1], .hw = 1, .rd = rd },
+                    .movk2 = .{ .imm16 = imm16s[2], .hw = 2, .rd = rd },
+                    .movk3 = .{ .imm16 = imm16s[3], .hw = 3, .rd = rd },
+                };
+            }
+        };
     },
     .riscv64 => void,
     .powerpc64le => void,
-    .arm => void,
+    .arm => struct {
+        const MOVW = packed struct {
+            imm12: u12,
+            rd: u4,
+            imm4: u4,
+            opc: u8 = 0x30,
+            _: u4 = 0,
+        };
+        const MOVT = packed struct {
+            imm12: u12,
+            rd: u4,
+            imm4: u4,
+            opc: u8 = 0x34,
+            _: u4 = 0,
+        };
+        const SUB = packed struct {
+            imm12: u12,
+            rd: u4,
+            rn: u4,
+            opc: u8 = 0x24,
+            _: u4 = 0,
+        };
+        const STR = packed struct {
+            imm12: u12 = 0,
+            rt: u4,
+            rn: u4,
+            opc: u8 = 0x58,
+            _: u4 = 0,
+        };
+        const BX = packed struct {
+            rm: u4,
+            flags: u4 = 0x1,
+            imm12: u12 = 0xfff,
+            opc: u8 = 0x12,
+            _: u4 = 0,
+        };
+        const MOV_IMM32 = packed struct {
+            movw: MOVW,
+            movt: MOVT,
+
+            fn init(rd: u4, imm32: usize) @This() {
+                const imm16s: [2]u16 = @bitCast(imm32);
+                return .{
+                    .movw = .{
+                        .imm12 = @truncate(imm16s[0] & 0xFFF),
+                        .imm4 = @truncate(imm16s[0] >> 12 & 0xF),
+                        .rd = rd,
+                    },
+                    .movt = .{
+                        .imm12 = @truncate(imm16s[1] & 0xFFF),
+                        .imm4 = @truncate(imm16s[1] >> 12 & 0xF),
+                        .rd = rd,
+                    },
+                };
+            }
+        };
+        fn imm12(comptime value: u32) u12 {
+            var r: u32 = 0;
+            var v: u32 = value;
+            // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
+            while (v & ~@as(u32, 0xff) != 0) {
+                v = (v << 2) | (v >> 30);
+                r += 1;
+                if (r > 15) {
+                    @compileError("Cannot encode value as imm12");
+                }
+            }
+            return r << 8 | v;
+        }
+    },
     else => void,
 };
 
