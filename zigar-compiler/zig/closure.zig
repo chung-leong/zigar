@@ -1,13 +1,45 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const fn_transform = @import("./fn-transform.zig");
+const fn_template = @import("./fn-template.zig");
 const expect = std.testing.expect;
 
-pub fn Instance(comptime T: type) type {
+pub fn HandlerOf(comptime FT: type, comptime CT: type) type {
+    const f = @typeInfo(FT).Fn;
+    if (f.is_generic or f.is_var_args) {
+        @compileError("Cannot create closure of generic or variadic function");
+    }
+    if (f.return_type == null) {
+        @compileError("Cannot create closre of function without fixed return type");
+    }
+    var handler_params: [f.params.len + 1]std.builtin.Type.Fn.Param = undefined;
+    inline for (f.params, 0..) |param, index| {
+        handler_params[index] = param;
+    }
+    handler_params[f.params.len] = .{
+        .is_generic = false,
+        .is_noalias = false,
+        .type = *const CT,
+    };
+    return @Type(.{
+        .Fn = .{
+            .calling_convention = f.calling_convention,
+            .params = &handler_params,
+            .is_generic = false,
+            .is_var_args = false,
+            .return_type = f.return_type,
+        },
+    });
+}
+
+pub fn Instance(comptime CT: type) type {
     return struct {
-        const single_threaded = builtin.single_threaded;
-        const code_size = switch (builtin.target.cpu.arch) {
-            .x86_64 => 49,
+        pub const InstanceError = error{
+            unable_to_find_context_placeholder,
+            unable_to_find_function_placeholder,
+        };
+
+        const code_len = switch (builtin.target.cpu.arch) {
+            .x86_64 => 128,
             .aarch64 => 72,
             .riscv64 => 66,
             .powerpc64le => 72,
@@ -16,45 +48,118 @@ pub fn Instance(comptime T: type) type {
             else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
 
-        context: ?T,
-        bytes: [code_size]u8 = undefined,
+        context: ?CT,
+        bytes: [code_len]u8 align(@alignOf(fn () void)) = undefined,
 
         pub fn fromFn(fn_ptr: *const anyopaque) *@This() {
-            const bytes: *const [code_size]u8 = @ptrCast(fn_ptr);
+            const bytes: *const [code_len]u8 = @ptrCast(fn_ptr);
             return @alignCast(@fieldParentPtr("bytes", @constCast(bytes)));
         }
 
         test "fromFn()" {}
 
-        pub fn FunctionOf(comptime handler: anytype) type {
-            const FT = @TypeOf(handler);
-            switch (@typeInfo(FT)) {
-                .Fn => |f| {
-                    const valid = switch (f.params.len) {
-                        0 => false,
-                        else => if (f.params[f.params.len - 1].type) |PT| switch (@typeInfo(PT)) {
-                            .Pointer => |pt| pt.child == T and pt.is_const,
-                            else => false,
-                        } else false,
-                    };
-                    if (!valid) {
-                        @compileError("The last parameter must be " ++ @typeName(*const T));
-                    }
-                },
-                else => @compileError("Handler must be a function"),
-            }
-            var f = @typeInfo(FT).Fn;
-            f.params = f.params[0 .. f.params.len - 1];
-            return @Type(.{ .Fn = f });
-        }
-
-        fn construct(self: *@This(), comptime handler: anytype, ctx: T) *const FunctionOf(handler) {
+        fn construct(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !*const FT {
             self.* = .{ .context = ctx };
-            self.createInstructions(handler);
-            return @ptrCast(@alignCast(&self.bytes));
+            try self.writeInstructions(FT, handler);
+            return @ptrCast(&self.bytes);
         }
 
         test "construct" {
+            // const bytes = try std.posix.mmap(
+            //     null,
+            //     1024 * 4,
+            //     std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+            //     .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+            //     -1,
+            //     0,
+            // );
+            // defer std.posix.munmap(bytes);
+            // const closure: *@This() = @ptrCast(bytes);
+            // const context = CT.create(1234);
+            // // simple case
+            // const ns1 = struct {
+            //     fn check(number_ptr: *usize, a1: usize, a2: usize, ctx: *const CT) usize {
+            //         if (ctx.check()) {
+            //             number_ptr.* = a1;
+            //             return a1 + a2;
+            //         } else {
+            //             return 0;
+            //         }
+            //     }
+            // };
+            // const FT = fn (*usize, usize, usize) usize;
+            // const f1 = try closure.construct(FT, ns1.check, context);
+            // var number1: usize = 0;
+            // const result1 = f1(&number1, 123, 456);
+            // try expect(result1 == 123 + 456);
+            // try expect(number1 == 123);
+            // try expect(f1(&number1, 123, 456) == result1);
+            // // stack usage
+            // const ns2 = struct {
+            //     fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, ctx: *const CT) usize {
+            //         if (ctx.check()) {
+            //             number_ptr.* = a1;
+            //             return a1 + a2 + a3 + a4 + a5 + a6;
+            //         } else {
+            //             return 0;
+            //         }
+            //     }
+            // };
+            // const f2 = closure.construct(ns2.check, context);
+            // var number2: usize = 0;
+            // const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
+            // try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
+            // try expect(number2 == 123);
+            // try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result1);
+        }
+
+        fn writeInstructions(self: *@This(), comptime FT: type, handler: anytype) !void {
+            const context_address = @intFromPtr(&self.context);
+            const handler_address = @intFromPtr(&handler);
+            const code_ptr = fn_template.get(FT, @TypeOf(handler));
+            var instr_buffer: [256]Instruction = undefined;
+            const instrs = Instruction.decode(code_ptr, &instr_buffer);
+            var context_replaced = false;
+            var fn_replaced = false;
+            for (instrs) |*instr| {
+                switch (builtin.target.cpu.arch) {
+                    .x86_64 => {
+                        switch (instr.opcode) {
+                            .MOV_AX_IMM,
+                            .MOV_CX_IMM,
+                            .MOV_DX_IMM,
+                            .MOV_BX_IMM,
+                            .MOV_SP_IMM,
+                            .MOV_BP_IMM,
+                            .MOV_SI_IMM,
+                            .MOV_DI_IMM,
+                            => {
+                                if (instr.imm64.? == fn_template.context_placeholder) {
+                                    instr.imm64 = context_address;
+                                    context_replaced = true;
+                                } else if (instr.imm64.? == fn_template.fn_placeholder) {
+                                    instr.imm64 = handler_address;
+                                    fn_replaced = true;
+                                }
+                            },
+                            else => {},
+                        }
+                    },
+                    else => unreachable,
+                }
+            }
+            if (!context_replaced) {
+                return InstanceError.unable_to_find_context_placeholder;
+            } else if (!fn_replaced) {
+                return InstanceError.unable_to_find_function_placeholder;
+            }
+            var encoder: InstructionEncoder = .{ .bytes = &self.bytes };
+            encoder.encode(instrs);
+            std.debug.print("Decoding encoded binary:\n", .{});
+            _ = Instruction.decode(&self.bytes, &instr_buffer);
+        }
+
+        test "writeInstructions" {
             const bytes = try std.posix.mmap(
                 null,
                 1024 * 4,
@@ -65,319 +170,25 @@ pub fn Instance(comptime T: type) type {
             );
             defer std.posix.munmap(bytes);
             const closure: *@This() = @ptrCast(bytes);
-            const context = T.create(1234);
-            // simple case
             const ns1 = struct {
-                fn check(number_ptr: *usize, a1: usize, a2: usize, ctx: *const T) usize {
+                fn check(a1: i32, a2: i32, a3: i32, ctx: *const CT) i32 {
                     if (ctx.check()) {
-                        number_ptr.* = a1;
-                        return a1 + a2;
+                        return a1 + a2 + a3;
                     } else {
                         return 0;
                     }
                 }
             };
-            const f1 = closure.construct(ns1.check, context);
-            var number1: usize = 0;
-            const result1 = f1(&number1, 123, 456);
-            try expect(result1 == 123 + 456);
-            try expect(number1 == 123);
-            try expect(f1(&number1, 123, 456) == result1);
-            // stack usage
-            const ns2 = struct {
-                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, ctx: *const T) usize {
-                    if (ctx.check()) {
-                        number_ptr.* = a1;
-                        return a1 + a2 + a3 + a4 + a5 + a6;
-                    } else {
-                        return 0;
-                    }
-                }
-            };
-            const f2 = closure.construct(ns2.check, context);
-            var number2: usize = 0;
-            const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
-            try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
-            try expect(number2 == 123);
-            try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result1);
-        }
-
-        fn createInstructions(self: *@This(), comptime handler: anytype) void {
-            var code: InstructionEncoder = .{ .bytes = &self.bytes };
-            // create a unique signature so that we can find the context pointer in unused stack space
-            const signature = comptime createSignature(handler);
-            // this number need to be larger than the stack frame of functions from createCaller()
-            const signature_offset = 1024;
-            const self_addr = @intFromPtr(self);
-            const caller = createCaller(handler, signature);
-            const caller_addr = @intFromPtr(&caller);
-            const I = Instruction;
-            switch (builtin.target.cpu.arch) {
-                .x86_64 => {
-                    const O = I.Opcode;
-                    // mov rax, signature
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.MOV_AX,
-                        .imm64 = signature,
-                    });
-                    // mov [rsp - signature_offset], rax
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.MOV,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset,
-                    });
-                    // mov rax, self_addr
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.MOV_AX,
-                        .imm64 = self_addr,
-                    });
-                    // mov [rsp - signature_offset + 8], rax
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.MOV,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 8,
-                    });
-                    // mov rax, caller_addr
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.MOV_AX,
-                        .imm64 = caller_addr,
-                    });
-                    // jmp [rax]
-                    code.add(I{
-                        .rex = .{},
-                        .opcode = O.JMP,
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    });
-                },
-                .aarch64 => {
-                    // sub x10, sp, signature_offset
-                    code.add(I.SUB{
-                        .rd = 10,
-                        .rn = 31,
-                        .imm12 = signature_offset,
-                    });
-                    // mov x9, signature
-                    code.add(I.MOV_IMM64.init(9, signature));
-                    // str [x10], x9
-                    code.add(I.STR{ .rn = 10, .rt = 9 });
-                    // mov x9, self_addr
-                    code.add(I.MOV_IMM64.init(9, self_addr));
-                    // str [x10 + 8], x9
-                    code.add(I.STR{ .rn = 10, .rt = 9, .imm12 = 1 });
-                    // mov x9, caller_addr
-                    code.add(I.MOV_IMM64.init(9, caller_addr));
-                    // br x9
-                    code.add(I.BR{ .rn = 9 });
-                },
-                .riscv64 => {
-                    // lui x5, signature_offset
-                    code.add(I.LUI{
-                        .rd = 5,
-                        .imm20 = signature_offset,
-                    });
-                    // sub x6, sp, x5
-                    code.add(I.SUB{
-                        .rd = 6,
-                        .rs1 = 2,
-                        .rs2 = 5,
-                    });
-                    // mov x5, signature
-                    code.add(I.MOV_IMM64.init(5, 7, signature));
-                    // sd [x6], x5
-                    code.add(I.SD{ .rs1 = 6, .rs2 = 5 });
-                    // mov x5, self_addr
-                    code.add(I.MOV_IMM64.init(5, 7, self_addr));
-                    // sd [x6 + 8], x5
-                    code.add(I.SD{ .rs1 = 6, .rs2 = 5, .offset_4_0 = 8 });
-                    // mov x5, caller_addr
-                    code.add(I.MOV_IMM64.init(5, 7, caller_addr));
-                    // jmp [x5]
-                    code.add(I.C_JR{ .rs = 5 });
-                },
-                .powerpc64le => {
-                    // mov r11, signature
-                    code.add(I.MOV_IMM64.init(11, 0xCCCC_DDDD));
-                    // std [sp + signature_offset], r11
-                    code.add(I.STD{
-                        .ra = 1,
-                        .rs = 11,
-                        .ds = signature_offset / 4,
-                    });
-                    // addi r13, sp, 0
-                    code.add(I.ADDI{
-                        .simm = 0,
-                        .ra = 3,
-                        .rt = 1,
-                    });
-                    code.add(I.STD{
-                        .ra = 3,
-                        .rs = 11,
-                        .ds = signature_offset / 4,
-                    });
-                    code.add(I.MOV_IMM64.init(11, self_addr));
-                    // std [sp + signature_offset + 8], r11
-                    code.add(I.STD{
-                        .ra = 1,
-                        .rs = 11,
-                        .ds = signature_offset + 8,
-                    });
-                    // mov r11, caller_addr
-                    code.add(I.MOV_IMM64.init(12, caller_addr));
-                    // mtctr r11
-                    code.add(I.MTCTR{ .rs = 12 });
-                    // bctrl
-                    code.add(I.BCTRL{});
-                },
-                .x86 => {
-                    const O = I.Opcode;
-                    // mov eax, (signature & 0xffffffff)
-                    code.add(I{
-                        .opcode = O.MOV_AX,
-                        .imm32 = signature & 0xffff_ffff,
-                    });
-                    // mov [esp - signature_offset], eax
-                    code.add(I{
-                        .opcode = O.MOV,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset,
-                    });
-                    // mov eax, (signature >> 32)
-                    code.add(I{
-                        .opcode = O.MOV_AX,
-                        .imm32 = signature >> 32,
-                    });
-                    // mov [esp - signature_offset + 4], eax
-                    code.add(I{
-                        .opcode = O.MOV,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 4,
-                    });
-                    // mov eax, self_addr
-                    code.add(I{
-                        .opcode = O.MOV_AX,
-                        .imm32 = self_addr,
-                    });
-                    // mov [esp - signature_offset + 8], rax
-                    code.add(I{
-                        .opcode = O.MOV,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 8,
-                    });
-                    // mov eax, caller_addr
-                    code.add(I{
-                        .opcode = O.MOV_AX,
-                        .imm32 = caller_addr,
-                    });
-                    // jmp [eax]
-                    code.add(I{
-                        .opcode = O.JMP,
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    });
-                },
-                .arm => {
-                    // sub r5, sp, signature_offset
-                    code.add(I.SUB{
-                        .rd = 5,
-                        .rn = 13,
-                        .imm12 = comptime I.imm12(signature_offset),
-                    });
-                    // mov r4, (signature & 0xffffffff)
-                    code.add(I.MOV_IMM32.init(4, signature & 0xffff_ffff));
-                    // str [r5], r4
-                    code.add(I.STR{ .rn = 5, .rt = 4 });
-                    // mov r4, (signature >> 32)
-                    code.add(I.MOV_IMM32.init(4, signature >> 32));
-                    // str [r5 + 4], r4
-                    code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 4 });
-                    // mov r4, self_addr
-                    code.add(I.MOV_IMM32.init(4, self_addr));
-                    // str [r5 + 8], r4
-                    code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 8 });
-                    // mov r4, caller_addr
-                    code.add(I.MOV_IMM32.init(4, caller_addr));
-                    // bx [r4]
-                    code.add(I.BX{ .rm = 4 });
-                },
-                else => unreachable,
-            }
-        }
-
-        fn createCaller(comptime handler: anytype, comptime signature: u64) FunctionOf(handler) {
-            const HT = @TypeOf(handler);
-            const FT = FunctionOf(handler);
-            const f = @typeInfo(FT).Fn;
-            const RT = f.return_type orelse @compileError("Handler must have a fixed return type");
-            const cc = f.calling_convention;
-            const ns = struct {
-                var context_pos: ?usize = null;
-
-                fn call(args: std.meta.ArgsTuple(FT)) RT {
-                    const sp_address = switch (builtin.target.cpu.arch) {
-                        .x86_64, .powerpc64le => asm (""
-                            : [ret] "={rsp}" (-> usize),
-                        ),
-                        .x86 => asm (""
-                            : [ret] "={esp}" (-> usize),
-                        ),
-                        else => asm (""
-                            : [ret] "={sp}" (-> usize),
-                        ),
-                    };
-                    // look for context pointer in memory above the stack
-                    const ptr: [*]usize = @ptrFromInt(sp_address - 1024);
-                    const index = context_pos orelse search_result: {
-                        var index: usize = 0;
-                        while (index >= 0) {
-                            const match = switch (@bitSizeOf(usize)) {
-                                64 => ptr[index] == signature,
-                                32 => ptr[index] == (signature & 0xffff_ffff) and ptr[index + 1] == (signature >> 32),
-                                else => unreachable,
-                            };
-                            index += 1;
-                            if (match) {
-                                if (@bitSizeOf(usize) == 32) {
-                                    index += 1;
-                                }
-                                // the context pointer is right below the signature (larger address)
-                                context_pos = index;
-                                break :search_result index;
-                            }
-                        }
-                    };
-                    const context_address = ptr[index];
-                    var arg_tuple: std.meta.ArgsTuple(HT) = undefined;
-                    inline for (args, 0..) |arg, i| {
-                        arg_tuple[i] = arg;
-                    }
-                    // the last argument is the context pointer
-                    arg_tuple[args.len] = @ptrFromInt(context_address);
-                    return @call(.never_inline, handler, arg_tuple);
-                }
-            };
-            return fn_transform.spreadArgs(ns.call, cc);
-        }
-
-        fn createSignature(_: anytype) u64 {
-            // TODO: use a fixed constant for now
-            return 0xbc51_10c3_592d_717e;
+            const FT = fn (i32, i32, i32) i32;
+            try closure.writeInstructions(FT, ns1.check);
         }
     };
 }
 
-fn Chunk(comptime T: type) type {
+fn Chunk(comptime CT: type) type {
     return struct {
         bytes: []u8,
-        instances: []Instance(T),
+        instances: []Instance(CT),
         used: usize = 0,
         freed: usize = 0,
         prev_chunk: ?*@This() = null,
@@ -386,9 +197,9 @@ fn Chunk(comptime T: type) type {
         fn use(bytes: []u8) *@This() {
             const self: *@This() = @ptrCast(@alignCast(bytes));
             const addr = @intFromPtr(bytes.ptr);
-            const instance_addr = std.mem.alignForward(usize, addr + @sizeOf(@This()), @alignOf(Instance(T)));
-            const capacity = (bytes.len - (instance_addr - addr)) / @sizeOf(Instance(T));
-            const instance_ptr: [*]Instance(T) = @ptrFromInt(instance_addr);
+            const instance_addr = std.mem.alignForward(usize, addr + @sizeOf(@This()), @alignOf(Instance(CT)));
+            const capacity = (bytes.len - (instance_addr - addr)) / @sizeOf(Instance(CT));
+            const instance_ptr: [*]Instance(CT) = @ptrFromInt(instance_addr);
             self.* = .{
                 .bytes = bytes,
                 .instances = instance_ptr[0..capacity],
@@ -396,7 +207,7 @@ fn Chunk(comptime T: type) type {
             return self;
         }
 
-        fn getInstance(self: *@This()) ?*Instance(T) {
+        fn getInstance(self: *@This()) ?*Instance(CT) {
             if (self.used < self.instances.len) {
                 const index = self.used;
                 self.used += 1;
@@ -413,7 +224,7 @@ fn Chunk(comptime T: type) type {
             return null;
         }
 
-        fn freeInstance(self: *@This(), instance: *Instance(T)) bool {
+        fn freeInstance(self: *@This(), instance: *Instance(CT)) bool {
             if (self.contains(instance)) {
                 instance.context = null;
                 self.freed += 1;
@@ -425,32 +236,32 @@ fn Chunk(comptime T: type) type {
         fn contains(self: *@This(), ptr: *const anyopaque) bool {
             const addr = @intFromPtr(ptr);
             const start = @intFromPtr(self.instances.ptr);
-            const end = start + @sizeOf(Instance(T)) * self.instances.len;
+            const end = start + @sizeOf(Instance(CT)) * self.instances.len;
             return start <= addr and addr < end;
         }
 
         test "use" {
             var bytes: [512]u8 = undefined;
-            const chunk = Chunk(T).use(&bytes);
+            const chunk = use(&bytes);
             try expect(@intFromPtr(chunk) == @intFromPtr(&bytes));
             try expect(chunk.instances.len > 0);
         }
 
         test "getInstance" {
             var bytes: [512]u8 = undefined;
-            const chunk = Chunk(T).use(&bytes);
+            const chunk = use(&bytes);
             while (chunk.getInstance()) |_| {}
             try expect(chunk.used == chunk.instances.len);
         }
 
         test "freeInstance" {
             var bytes: [512]u8 = undefined;
-            const chunk = Chunk(T).use(&bytes);
+            const chunk = use(&bytes);
             const instance1 = chunk.getInstance().?;
             const result1 = chunk.freeInstance(instance1);
             try expect(result1);
             try expect(chunk.freed == 1);
-            var instance2: *Instance(T) = undefined;
+            var instance2: *Instance(CT) = undefined;
             while (chunk.getInstance()) |i| {
                 instance2 = i;
             }
@@ -460,7 +271,7 @@ fn Chunk(comptime T: type) type {
 
         test "contains" {
             var bytes: [512]u8 = undefined;
-            const chunk = Chunk(T).use(&bytes);
+            const chunk = use(&bytes);
             const instance = chunk.getInstance().?;
             const f = instance.function(fn () void);
             try expect(chunk.contains(instance));
@@ -470,16 +281,16 @@ fn Chunk(comptime T: type) type {
     };
 }
 
-pub fn Factory(comptime T: type) type {
+pub fn Factory(comptime CT: type) type {
     return struct {
-        last_chunk: ?*Chunk(T) = null,
+        last_chunk: ?*Chunk(CT) = null,
         chunk_count: usize = 0,
 
         pub fn init() @This() {
             return .{};
         }
 
-        pub fn alloc(self: *@This(), fn_ptr: *const anyopaque, context: T) !*Instance(T) {
+        pub fn alloc(self: *@This(), fn_ptr: *const anyopaque, context: CT) !*Instance(CT) {
             var chunk = self.last_chunk;
             const instance = while (chunk) |c| : (chunk = c.prev_chunk) {
                 if (c.getInstance()) |instance| {
@@ -495,7 +306,7 @@ pub fn Factory(comptime T: type) type {
                     -1,
                     0,
                 );
-                const new_chunk = Chunk(T).use(bytes);
+                const new_chunk = Chunk(CT).use(bytes);
                 if (self.last_chunk) |lc| {
                     lc.next_chunk = new_chunk;
                     new_chunk.prev_chunk = lc;
@@ -508,7 +319,7 @@ pub fn Factory(comptime T: type) type {
             return instance;
         }
 
-        pub fn free(self: *@This(), instance: *Instance(T)) bool {
+        pub fn free(self: *@This(), instance: *Instance(CT)) bool {
             var chunk = self.last_chunk;
             return while (chunk) |c| : (chunk = c.prev_chunk) {
                 if (c.freeInstance(instance)) {
@@ -540,7 +351,7 @@ pub fn Factory(comptime T: type) type {
         }
 
         test "alloc" {
-            const Closure = Instance(T);
+            const Closure = Instance(CT);
             const ns = struct {
                 fn check() bool {
                     return Closure.getContext().check();
@@ -548,7 +359,7 @@ pub fn Factory(comptime T: type) type {
             };
             var factory = init();
             for (0..1000) |index| {
-                const context = T.create(index);
+                const context = CT.create(index);
                 const instance = try factory.alloc(&ns.check, context);
                 const f = instance.function(@TypeOf(ns.check));
                 const result = f();
@@ -562,9 +373,9 @@ pub fn Factory(comptime T: type) type {
                 fn exist() void {}
             };
             var factory = init();
-            var instances: [1000]*Instance(T) = undefined;
+            var instances: [1000]*Instance(CT) = undefined;
             for (&instances, 0..) |*p, index| {
-                const context = T.create(index);
+                const context = CT.create(index);
                 p.* = try factory.alloc(&ns.exist, context);
             }
             for (instances) |instance| {
@@ -579,7 +390,7 @@ pub fn Factory(comptime T: type) type {
                 fn exist() void {}
             };
             var factory = init();
-            const context = T.create(1234);
+            const context = CT.create(1234);
             const instance = try factory.alloc(&ns.exist, context);
             const f = instance.function(@TypeOf(ns.exist));
             try expect(factory.contains(f));
@@ -591,14 +402,59 @@ pub fn Factory(comptime T: type) type {
 const Instruction = switch (builtin.target.cpu.arch) {
     .x86, .x86_64 => struct {
         pub const Opcode = enum(u8) {
-            MOV = 0x89,
+            ADD_AX_IMM8 = 0x04,
+            ADD_AX_IMM32 = 0x05,
+            SUB_AX_IMM8 = 0x2c,
+            SUB_AX_IMM32 = 0x2d,
+            PUSH_AX = 0x50,
+            PUSH_CX = 0x51,
+            PUSH_DX = 0x52,
+            PUSH_BX = 0x53,
+            PUSH_SP = 0x54,
+            PUSH_BP = 0x55,
+            PUSH_SI = 0x56,
+            PUSH_DI = 0x57,
+            POP_AX = 0x58,
+            POP_CX = 0x59,
+            POP_DX = 0x5a,
+            POP_BX = 0x5b,
+            POP_SP = 0x5c,
+            POP_BP = 0x5d,
+            POP_SI = 0x5e,
+            POP_DI = 0x5f,
+            PUSH_IMM32 = 0x68,
+            ADD_RM_IMM32 = 0x80,
+            ADD_RM_IMM8 = 0x83,
+            MOV_RM_R = 0x89,
+            MOV_R_M = 0x8b,
+            LEA_RM_R = 0x8d,
             NOP = 0x90,
-            MOV_AX = 0xb8,
-            JMP = 0xff,
+            MOV_AX_IMM = 0xb8,
+            MOV_CX_IMM = 0xb9,
+            MOV_DX_IMM = 0xba,
+            MOV_BX_IMM = 0xbb,
+            MOV_SP_IMM = 0xbc,
+            MOV_BP_IMM = 0xbd,
+            MOV_SI_IMM = 0xbe,
+            MOV_DI_IMM = 0xbf,
+            RET = 0xc3,
+            CALL_IMM32 = 0xe8,
+            JMP_IMM8 = 0xeb,
+            JMP_IMM32 = 0xe9,
+            JMP_RM = 0xff,
             _,
         };
         pub const Prefix = enum(u8) {
-            _,
+            ES = 0x26,
+            CS = 0x2e,
+            SS = 0x36,
+            DS = 0x3e,
+            FS = 0x64,
+            GS = 0x65,
+            OS = 0x66,
+            AS = 0x67,
+            F2 = 0xf2,
+            F3 = 0xf3,
         };
         const REX = packed struct {
             b: u1 = 0,
@@ -621,12 +477,139 @@ const Instruction = switch (builtin.target.cpu.arch) {
         prefix: ?Prefix = null,
         rex: ?REX = null,
         opcode: Opcode = .NOP,
+        opcode_ext: ?u8 = null,
         mod_rm: ?ModRM = null,
         sib: ?SIB = null,
         disp8: ?i8 = null,
         disp32: ?i32 = null,
+        imm8: ?u8 = null,
         imm32: ?u32 = null,
         imm64: ?u64 = null,
+
+        pub fn decode(bytes: [*]const u8, buffer: []@This()) []@This() {
+            var len: usize = 0;
+            var i: usize = 0;
+            while (len < buffer.len) {
+                var instr: @This() = .{};
+                // look for legacy prefix
+                instr.prefix = result: {
+                    const prefix = std.meta.intToEnum(Prefix, bytes[i]) catch null;
+                    if (prefix != null) i += 1;
+                    break :result prefix;
+                };
+                // look for rex prefix
+                instr.rex = result: {
+                    const rex: REX = @bitCast(bytes[i]);
+                    if (rex.pat == 4) {
+                        i += 1;
+                        break :result rex;
+                    } else {
+                        break :result rex;
+                    }
+                };
+                // see if op has ModR/M byte
+                instr.opcode = @enumFromInt(bytes[i]);
+                if (instr.opcode == .LEA_RM_R) {
+                    std.debug.print("\nMystery LEA:\n", .{});
+                    for (0..16) |offset| {
+                        std.debug.print("{x} ", .{bytes[i + offset]});
+                    }
+                    std.debug.print("\n\n", .{});
+                }
+
+                i += 1;
+                const has_mod_rm = switch (instr.opcode) {
+                    .ADD_RM_IMM32,
+                    .ADD_RM_IMM8,
+                    .PUSH_IMM32,
+                    .MOV_RM_R,
+                    .MOV_R_M,
+                    .LEA_RM_R,
+                    => true,
+                    else => false,
+                };
+                var has_sib = false;
+                var disp_size: ?u8 = null;
+                if (has_mod_rm) {
+                    // decode ModR/M
+                    const mod_rm: ModRM = @bitCast(bytes[i]);
+                    i += 1;
+                    if (mod_rm.mod == 2 or (mod_rm.mod == 0 and mod_rm.rm == 5)) {
+                        disp_size = 32;
+                    } else if (mod_rm.mod == 1) {
+                        disp_size = 8;
+                    }
+                    has_sib = mod_rm.rm == 4;
+                    instr.mod_rm = mod_rm;
+                }
+                if (has_sib) {
+                    // decode SIB
+                    const sib: SIB = @bitCast(bytes[i]);
+                    i += 1;
+                    if (sib.base == 5) {
+                        disp_size = 32;
+                    }
+                    instr.sib = sib;
+                }
+                if (disp_size) |size| {
+                    // get displacement
+                    if (size == 8) {
+                        instr.disp8 = std.mem.bytesToValue(i8, bytes[i .. i + 1]);
+                        i += 1;
+                    } else if (size == 32) {
+                        instr.disp32 = std.mem.bytesToValue(i32, bytes[i .. i + 4]);
+                        i += 4;
+                    }
+                }
+                // get size of immediate (if any)
+                const wide = if (instr.rex) |rex| rex.w == 1 else false;
+                const imm_size: ?u8 = switch (instr.opcode) {
+                    .ADD_AX_IMM8,
+                    .SUB_AX_IMM8,
+                    .ADD_RM_IMM8,
+                    .JMP_IMM8,
+                    => 8,
+                    .ADD_AX_IMM32,
+                    .SUB_AX_IMM32,
+                    .ADD_RM_IMM32,
+                    .PUSH_IMM32,
+                    .CALL_IMM32,
+                    .JMP_IMM32,
+                    => 32,
+                    .MOV_AX_IMM,
+                    .MOV_CX_IMM,
+                    .MOV_DX_IMM,
+                    .MOV_BX_IMM,
+                    .MOV_SP_IMM,
+                    .MOV_BP_IMM,
+                    .MOV_SI_IMM,
+                    .MOV_DI_IMM,
+                    => if (wide) 64 else 32,
+                    else => null,
+                };
+                if (imm_size) |size| {
+                    switch (size) {
+                        8 => instr.imm8 = bytes[i],
+                        32 => instr.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]),
+                        64 => instr.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]),
+                        else => {},
+                    }
+                    i += size / 8;
+                }
+                buffer[len] = instr;
+                std.debug.print("{any}\n", .{instr});
+                len += 1;
+                switch (instr.opcode) {
+                    .RET,
+                    .JMP_IMM32,
+                    .JMP_IMM8,
+                    .JMP_RM,
+                    => break,
+                    else => {},
+                }
+            }
+            return buffer[0..len];
+        }
     },
     .aarch64 => struct {
         const MOVZ = packed struct {
@@ -942,48 +925,48 @@ const InstructionEncoder = struct {
     bytes: [*]u8,
     len: usize = 0,
 
-    pub fn add(self: *@This(), instr: anytype) void {
+    pub fn encode(self: *@This(), instr: anytype) void {
         switch (@typeInfo(@TypeOf(instr))) {
             .Struct => |st| {
                 if (st.layout == .@"packed") {
                     self.write(instr);
                 } else {
                     inline for (st.fields) |field| {
-                        self.add(@field(instr, field.name));
+                        self.encode(@field(instr, field.name));
                     }
                 }
             },
             .Union => |un| {
                 const Tag = un.tag_type orelse @compileError("Cannot handle untagged union");
                 const tag: Tag = instr;
-                return self.add(@field(instr, @tagName(tag)));
+                return self.encode(@field(instr, @tagName(tag)));
             },
-            .Array => for (instr) |element| self.add(element),
+            .Array => for (instr) |element| self.encode(element),
             .Pointer => |pt| {
                 switch (pt.size) {
-                    .Slice => for (instr) |element| self.add(element),
+                    .Slice => for (instr) |element| self.encode(element),
                     else => @compileError("Cannot handle non-slice pointers"),
                 }
             },
-            .Optional => if (instr) |value| self.add(value),
-            .Enum => self.add(@intFromEnum(instr)),
+            .Optional => if (instr) |value| self.encode(value),
+            .Enum => self.encode(@intFromEnum(instr)),
             .Int, .Float, .Bool => self.write(instr),
             else => @compileError("Cannot handle " ++ @typeName(@TypeOf(instr))),
         }
     }
 
-    test "add" {
+    test "encode" {
         var bytes: [32]u8 = undefined;
         var encoder: InstructionEncoder = .{ .bytes = &bytes };
         const u: u32 = 123;
-        encoder.add(u);
+        encoder.encode(u);
         const o: ?u32 = null;
-        encoder.add(o);
+        encoder.encode(o);
         const s: packed struct {
             a: u32 = 456,
             b: u32 = 789,
         } = .{};
-        encoder.add(s);
+        encoder.encode(s);
         try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
         try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
         try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
