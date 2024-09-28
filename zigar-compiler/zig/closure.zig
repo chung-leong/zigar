@@ -99,6 +99,7 @@ pub fn Instance(comptime T: type) type {
             const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
             try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
             try expect(number2 == 123);
+            try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result1);
         }
 
         fn createInstructions(self: *@This(), comptime handler: anytype) void {
@@ -162,31 +163,78 @@ pub fn Instance(comptime T: type) type {
                         .rn = 31,
                         .imm12 = signature_offset,
                     });
-                    code.add(I.SUB{
-                        .rd = 11,
-                        .rn = 31,
-                        .imm12 = signature_offset,
-                    });
-                    code.add(I.SUB{
-                        .rd = 12,
-                        .rn = 31,
-                        .imm12 = 0,
-                    });
                     // mov x9, signature
                     code.add(I.MOV_IMM64.init(9, signature));
-                    // sd [x10], x9
+                    // str [x10], x9
                     code.add(I.STR{ .rn = 10, .rt = 9 });
                     // mov x9, self_addr
                     code.add(I.MOV_IMM64.init(9, self_addr));
-                    // sd [x10 + 8], x9
+                    // str [x10 + 8], x9
                     code.add(I.STR{ .rn = 10, .rt = 9, .imm12 = 1 });
                     // mov x9, caller_addr
                     code.add(I.MOV_IMM64.init(9, caller_addr));
                     // br x9
                     code.add(I.BR{ .rn = 9 });
                 },
-                .riscv64 => {},
-                .powerpc64le => {},
+                .riscv64 => {
+                    // lui x5, signature_offset
+                    code.add(I.LUI{
+                        .rd = 5,
+                        .imm20 = signature_offset,
+                    });
+                    // sub x6, sp, x5
+                    code.add(I.SUB{
+                        .rd = 6,
+                        .rs1 = 2,
+                        .rs2 = 5,
+                    });
+                    // mov x5, signature
+                    code.add(I.MOV_IMM64.init(5, 7, signature));
+                    // sd [x6], x5
+                    code.add(I.SD{ .rs1 = 6, .rs2 = 5 });
+                    // mov x5, self_addr
+                    code.add(I.MOV_IMM64.init(5, 7, self_addr));
+                    // sd [x6 + 8], x5
+                    code.add(I.SD{ .rs1 = 6, .rs2 = 5, .offset_4_0 = 8 });
+                    // mov x5, caller_addr
+                    code.add(I.MOV_IMM64.init(5, 7, caller_addr));
+                    // jmp [x5]
+                    code.add(I.C_JR{ .rs = 5 });
+                },
+                .powerpc64le => {
+                    // mov r11, signature
+                    code.add(I.MOV_IMM64.init(11, 0xCCCC_DDDD));
+                    // std [sp + signature_offset], r11
+                    code.add(I.STD{
+                        .ra = 1,
+                        .rs = 11,
+                        .ds = signature_offset / 4,
+                    });
+                    // addi r13, sp, 0
+                    code.add(I.ADDI{
+                        .simm = 0,
+                        .ra = 3,
+                        .rt = 1,
+                    });
+                    code.add(I.STD{
+                        .ra = 3,
+                        .rs = 11,
+                        .ds = signature_offset / 4,
+                    });
+                    code.add(I.MOV_IMM64.init(11, self_addr));
+                    // std [sp + signature_offset + 8], r11
+                    code.add(I.STD{
+                        .ra = 1,
+                        .rs = 11,
+                        .ds = signature_offset + 8,
+                    });
+                    // mov r11, caller_addr
+                    code.add(I.MOV_IMM64.init(12, caller_addr));
+                    // mtctr r11
+                    code.add(I.MTCTR{ .rs = 12 });
+                    // bctrl
+                    code.add(I.BCTRL{});
+                },
                 .x86 => {
                     const O = I.Opcode;
                     // mov eax, (signature & 0xffffffff)
@@ -275,7 +323,7 @@ pub fn Instance(comptime T: type) type {
 
                 fn call(args: std.meta.ArgsTuple(FT)) RT {
                     const sp_address = switch (builtin.target.cpu.arch) {
-                        .x86_64 => asm (""
+                        .x86_64, .powerpc64le => asm (""
                             : [ret] "={rsp}" (-> usize),
                         ),
                         .x86 => asm (""
@@ -630,8 +678,193 @@ const Instruction = switch (builtin.target.cpu.arch) {
             }
         };
     },
-    .riscv64 => void,
-    .powerpc64le => void,
+    .riscv64 => struct {
+        const LUI = packed struct {
+            opc: u7 = 0x37,
+            rd: u5,
+            imm20: u20,
+        };
+        const ADDI = packed struct {
+            opc: u7 = 0x1b,
+            rd: u5,
+            func: u3 = 0,
+            rs: u5,
+            imm12: u12,
+        };
+        const SD = packed struct(u32) {
+            opc: u7 = 0x23,
+            offset_4_0: u5 = 0,
+            func: u3 = 0x3,
+            rs1: u5,
+            rs2: u5,
+            offset_11_5: u7 = 0,
+        };
+        const SUB = packed struct(u32) {
+            opc: u7 = 0x33,
+            rd: u5,
+            func: u3 = 0,
+            rs1: u5,
+            rs2: u5,
+            offset_11_5: u7 = 0x20,
+        };
+        const C_SLLI = packed struct {
+            opc: u2 = 0x2,
+            imm5: u5,
+            rd: u5,
+            imm1: u1,
+            func: u3 = 0,
+        };
+        const C_ADD = packed struct {
+            opc: u2 = 0x2,
+            rs: u5,
+            rd: u5,
+            func1: u1 = 1,
+            func2: u3 = 0x4,
+        };
+        const C_JR = packed struct {
+            opc: u2 = 0x2,
+            rs2: u5 = 0,
+            rs: u5,
+            func1: u1 = 0,
+            func2: u3 = 0x4,
+        };
+        const MOV_IMM64 = packed struct {
+            lui1: LUI,
+            addi1: ADDI,
+            lui2: LUI,
+            addi2: ADDI,
+            slli: C_SLLI,
+            add: C_ADD,
+
+            fn init(rd: u5, rtmp: u5, imm64: usize) @This() {
+                const imm64_11_0 = (imm64 >> 0 & 0xFFF);
+                const imm64_31_12 = (imm64 >> 12 & 0xFFFFF) + (imm64 >> 11 & 1);
+                const imm64_43_32 = (imm64 >> 32 & 0xFFF) + (imm64 >> 31 & 1);
+                const imm64_63_44 = (imm64 >> 44 & 0xFFFFF) + (imm64 >> 43 & 1);
+                return .{
+                    // lui rd, imm64_63_44
+                    .lui1 = .{
+                        .imm20 = @truncate(imm64_63_44),
+                        .rd = rd,
+                    },
+                    // addi rd, imm64_43_32
+                    .addi1 = .{
+                        .imm12 = @truncate(imm64_43_32),
+                        .rd = rd,
+                        .rs = rd,
+                    },
+                    // lui rtmp, imm64_31_12
+                    .lui2 = .{
+                        .imm20 = @truncate(imm64_31_12),
+                        .rd = rtmp,
+                    },
+                    // addi rtmp, imm64_11_0
+                    .addi2 = .{
+                        .imm12 = @truncate(imm64_11_0),
+                        .rd = rtmp,
+                        .rs = rtmp,
+                    },
+                    // shift rd, 32
+                    .slli = .{ .imm1 = 1, .imm5 = 0, .rd = rd },
+                    // add rd, rtmp
+                    .add = .{ .rd = rd, .rs = rtmp },
+                };
+            }
+        };
+    },
+    .powerpc64le => struct {
+        const ADDI = packed struct {
+            simm: u16,
+            ra: u5,
+            rt: u5,
+            opc: u6 = 0x0e,
+        };
+        const ADDIS = packed struct {
+            simm: u16,
+            ra: u5,
+            rt: u5,
+            opc: u6 = 0x0f,
+        };
+        const RLDIC = packed struct {
+            rc: u1 = 0,
+            sh2: u1,
+            _: u3 = 0,
+            mb: u6 = 0,
+            sh: u5,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x1e,
+        };
+        const STD = packed struct {
+            _: u2 = 0,
+            ds: u14 = 0,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x3e,
+        };
+        const MTCTR = packed struct {
+            _: u1 = 0,
+            func: u10 = 467,
+            spr: u10 = 0x120,
+            rs: u5,
+            opc: u6 = 0x1f,
+        };
+        const BCTRL = packed struct {
+            lk: u1 = 0,
+            func: u10 = 528,
+            bh: u2 = 0,
+            _: u3 = 0,
+            bi: u5 = 0,
+            bo: u5 = 0x14,
+            opc: u6 = 0x13,
+        };
+        const MOV_IMM64 = packed struct {
+            addi1: ADDI,
+            addis1: ADDIS,
+            rldic: RLDIC,
+            addi2: ADDI,
+            addis2: ADDIS,
+
+            fn init(rt: u5, imm64: usize) @This() {
+                const imm64_16_0 = (imm64 >> 0 & 0xFFFF);
+                const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
+                const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 0);
+                const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
+                std.debug.print("imm64 = {x}\n", .{imm64});
+                std.debug.print("{d}\n", .{imm64 >> 15 & 1});
+                std.debug.print("{d}\n", .{imm64 >> 31 & 1});
+                std.debug.print("{d}\n", .{imm64 >> 47 & 1});
+                return .{
+                    .addi1 = .{
+                        .rt = rt,
+                        .ra = 0,
+                        .simm = @truncate(imm64_47_32),
+                    },
+                    .addis1 = .{
+                        .rt = rt,
+                        .ra = rt,
+                        .simm = @truncate(imm64_63_48),
+                    },
+                    .rldic = .{
+                        .rs = rt,
+                        .ra = rt,
+                        .sh = 0,
+                        .sh2 = 1,
+                    },
+                    .addi2 = .{
+                        .rt = rt,
+                        .ra = rt,
+                        .simm = @truncate(imm64_16_0),
+                    },
+                    .addis2 = .{
+                        .rt = rt,
+                        .ra = rt,
+                        .simm = @truncate(imm64_31_16),
+                    },
+                };
+            }
+        };
+    },
     .arm => struct {
         const MOVW = packed struct {
             imm12: u12,
