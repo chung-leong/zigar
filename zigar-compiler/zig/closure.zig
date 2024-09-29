@@ -39,21 +39,13 @@ pub fn HandlerOf(comptime FT: type, comptime CT: type) type {
 
 pub fn Instance(comptime CT: type) type {
     return struct {
-        pub const InstanceError = error{
+        pub const Error = error{
             unable_to_find_context_placeholder,
             unable_to_find_function_placeholder,
         };
 
-        const code_len = switch (builtin.target.cpu.arch) {
-            .x86_64 => 128,
-            .aarch64 => 72,
-            .riscv64 => 66,
-            .powerpc64le => 72,
-            .x86 => 43,
-            .arm => 52,
-            else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
-        };
         const code_align = @alignOf(fn () void);
+        const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
         const context_placeholder: usize = switch (@bitSizeOf(usize)) {
             32 => 0xbad_beef_0,
             64 => 0xdead_beef_bad_00000,
@@ -65,29 +57,38 @@ pub fn Instance(comptime CT: type) type {
             else => unreachable,
         };
 
+        signature: u64 = instance_signature,
         context: ?CT,
-        bytes: [code_len]u8 align(code_align) = undefined,
+        bytes: [0]u8 align(code_align) = undefined,
 
         pub fn function(self: *@This(), comptime FT: type) *const FT {
             return @ptrCast(&self.bytes);
         }
 
-        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) *@This() {
-            const bytes: *align(code_align) const [code_len]u8 = @ptrCast(fn_ptr);
-            return @fieldParentPtr("bytes", @constCast(bytes));
+        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
+            const bytes: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
+            const self: *@This() = @fieldParentPtr("bytes", @constCast(bytes));
+            return if (self.signature == instance_signature) self else null;
         }
 
         test "fromFunction()" {}
 
-        fn construct(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !void {
-            self.* = .{ .context = ctx };
-            const context_address = @intFromPtr(&self.context);
-            const handler_address = @intFromPtr(&handler);
+        fn init(allocator: std.mem.Allocator, comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !*@This() {
             const code_ptr = getTemplate(FT);
             var buffer: [256]Instruction = undefined;
             var decoder: InstructionDecoder = .{ .instructions = &buffer };
             const instr_count = decoder.decode(code_ptr);
             const instrs = buffer[0..instr_count];
+            // determine the code len by doing a dry-run of the encoding process
+            var encoder: InstructionEncoder = .{};
+            const code_len = encoder.encode(instrs);
+            const instance_size = @offsetOf(@This(), "bytes") + code_len;
+            const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
+            const self: *@This() = @ptrCast(new_bytes);
+            self.* = .{ .context = ctx };
+            // replace placeholders with actual address
+            const context_address = @intFromPtr(&self.context);
+            const handler_address = @intFromPtr(&handler);
             var context_replaced = false;
             var fn_replaced = false;
             for (instrs) |*instr| {
@@ -118,25 +119,29 @@ pub fn Instance(comptime CT: type) type {
                 }
             }
             if (!context_replaced) {
-                return InstanceError.unable_to_find_context_placeholder;
+                return Error.unable_to_find_context_placeholder;
             } else if (!fn_replaced) {
-                return InstanceError.unable_to_find_function_placeholder;
+                return Error.unable_to_find_function_placeholder;
             }
-            var encoder: InstructionEncoder = .{ .bytes = &self.bytes };
+            // encode the instructions (for real this time)
+            encoder.bytes = @ptrCast(&self.bytes);
             _ = encoder.encode(instrs);
+            return self;
         }
 
-        test "construct" {
-            const bytes = try std.posix.mmap(
-                null,
-                1024 * 4,
-                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-                -1,
-                0,
-            );
-            defer std.posix.munmap(bytes);
-            const closure: *@This() = @ptrCast(bytes);
+        fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+            self.signature = 0;
+            allocator.free(self);
+        }
+
+        test "init" {
+            var gpa = std.heap.GeneralPurposeAllocator(.{}){
+                .backing_allocator = .{
+                    .ptr = undefined,
+                    .vtable = &ExecutablePageAllocator.vtable,
+                },
+            };
+            const allocator = gpa.allocator();
             const context = CT.create(1234);
             // simple case
             const ns1 = struct {
@@ -150,8 +155,8 @@ pub fn Instance(comptime CT: type) type {
                 }
             };
             const FT1 = fn (*usize, usize, usize) usize;
-            try closure.construct(FT1, ns1.check, context);
-            const f1 = closure.function(FT1);
+            const closure1: *@This() = try init(allocator, FT1, ns1.check, context);
+            const f1 = closure1.function(FT1);
             var number1: usize = 0;
             const result1 = f1(&number1, 123, 456);
             try expect(result1 == 123 + 456);
@@ -169,8 +174,8 @@ pub fn Instance(comptime CT: type) type {
                 }
             };
             const FT2 = fn (*usize, usize, usize, usize, usize, usize, usize) usize;
-            try closure.construct(FT2, ns2.check, context);
-            const f2 = closure.function(FT2);
+            const closure2: *@This() = try init(allocator, FT2, ns2.check, context);
+            const f2 = closure2.function(FT2);
             var number2: usize = 0;
             const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
             try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
@@ -199,169 +204,27 @@ pub fn Instance(comptime CT: type) type {
     };
 }
 
-fn Chunk(comptime CT: type) type {
-    return struct {
-        bytes: []u8,
-        instances: []Instance(CT),
-        used: usize = 0,
-        freed: usize = 0,
-        prev_chunk: ?*@This() = null,
-        next_chunk: ?*@This() = null,
-
-        fn use(bytes: []u8) *@This() {
-            const self: *@This() = @ptrCast(@alignCast(bytes));
-            const addr = @intFromPtr(bytes.ptr);
-            const instance_addr = std.mem.alignForward(usize, addr + @sizeOf(@This()), @alignOf(Instance(CT)));
-            const capacity = (bytes.len - (instance_addr - addr)) / @sizeOf(Instance(CT));
-            const instance_ptr: [*]Instance(CT) = @ptrFromInt(instance_addr);
-            self.* = .{
-                .bytes = bytes,
-                .instances = instance_ptr[0..capacity],
-            };
-            return self;
-        }
-
-        fn getInstance(self: *@This()) ?*Instance(CT) {
-            if (self.used < self.instances.len) {
-                const index = self.used;
-                self.used += 1;
-                return &self.instances[index];
-            }
-            if (self.freed > 0) {
-                for (self.instances) |*instance| {
-                    if (instance.context == null) {
-                        self.freed -= 1;
-                        return instance;
-                    }
-                }
-            }
-            return null;
-        }
-
-        fn freeInstance(self: *@This(), instance: *Instance(CT)) bool {
-            if (self.contains(instance)) {
-                instance.context = null;
-                self.freed += 1;
-                return true;
-            }
-            return false;
-        }
-
-        fn contains(self: *@This(), ptr: *const anyopaque) bool {
-            const addr = @intFromPtr(ptr);
-            const start = @intFromPtr(self.instances.ptr);
-            const end = start + @sizeOf(Instance(CT)) * self.instances.len;
-            return start <= addr and addr < end;
-        }
-
-        test "use" {
-            var bytes: [512]u8 = undefined;
-            const chunk = use(&bytes);
-            try expect(@intFromPtr(chunk) == @intFromPtr(&bytes));
-            try expect(chunk.instances.len > 0);
-        }
-
-        test "getInstance" {
-            var bytes: [512]u8 = undefined;
-            const chunk = use(&bytes);
-            while (chunk.getInstance()) |_| {}
-            try expect(chunk.used == chunk.instances.len);
-        }
-
-        test "freeInstance" {
-            var bytes: [512]u8 = undefined;
-            const chunk = use(&bytes);
-            const instance1 = chunk.getInstance().?;
-            const result1 = chunk.freeInstance(instance1);
-            try expect(result1);
-            try expect(chunk.freed == 1);
-            var instance2: *Instance(CT) = undefined;
-            while (chunk.getInstance()) |i| {
-                instance2 = i;
-            }
-            try expect(instance2 == instance1);
-            try expect(chunk.freed == 0);
-        }
-
-        test "contains" {
-            var bytes: [512]u8 = undefined;
-            const chunk = use(&bytes);
-            const instance = chunk.getInstance().?;
-            const f = instance.function(fn () void);
-            try expect(chunk.contains(instance));
-            try expect(chunk.contains(f));
-            try expect(!chunk.contains(@ptrFromInt(0xAAAA)));
-        }
-    };
-}
-
 pub fn Factory(comptime CT: type) type {
     return struct {
-        last_chunk: ?*Chunk(CT) = null,
-        chunk_count: usize = 0,
+        gpa: std.heap.GeneralPurposeAllocator,
 
         pub fn init() @This() {
-            return .{};
-        }
-
-        pub fn alloc(self: *@This(), fn_ptr: *const anyopaque, context: CT) !*Instance(CT) {
-            var chunk = self.last_chunk;
-            const instance = while (chunk) |c| : (chunk = c.prev_chunk) {
-                if (c.getInstance()) |instance| {
-                    break instance;
-                }
-            } else alloc: {
-                const byte_count = 1024 * 8;
-                const bytes = try std.posix.mmap(
-                    null,
-                    byte_count,
-                    std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-                    .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-                    -1,
-                    0,
-                );
-                const new_chunk = Chunk(CT).use(bytes);
-                if (self.last_chunk) |lc| {
-                    lc.next_chunk = new_chunk;
-                    new_chunk.prev_chunk = lc;
-                }
-                self.last_chunk = new_chunk;
-                self.chunk_count += 1;
-                break :alloc new_chunk.getInstance().?;
+            return .{
+                .gpa = std.heap.GeneralPurposeAllocator(.{}){
+                    .backing_allocator = .{
+                        .ptr = undefined,
+                        .vtable = &ExecutablePageAllocator.vtable,
+                    },
+                },
             };
-            instance.construct(fn_ptr, context);
-            return instance;
         }
 
-        pub fn free(self: *@This(), instance: *Instance(CT)) bool {
-            var chunk = self.last_chunk;
-            return while (chunk) |c| : (chunk = c.prev_chunk) {
-                if (c.freeInstance(instance)) {
-                    if (c.freed == c.used) {
-                        if (c.prev_chunk) |pc| {
-                            pc.next_chunk = c.next_chunk;
-                        }
-                        if (c.next_chunk) |nc| {
-                            nc.prev_chunk = c.prev_chunk;
-                        }
-                        if (self.last_chunk == c) {
-                            self.last_chunk = c.prev_chunk;
-                        }
-                        std.posix.munmap(@alignCast(c.bytes));
-                        self.chunk_count -= 1;
-                    }
-                    break true;
-                }
-            } else false;
+        pub fn create(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), context: CT) !*Instance(CT) {
+            return Instance(CT).init(self.gpa.allocator(), FT, handler, context);
         }
 
-        pub fn contains(self: *@This(), fn_ptr: *const anyopaque) bool {
-            var chunk = self.last_chunk;
-            return while (chunk) |c| : (chunk = c.prev_chunk) {
-                if (c.contains(fn_ptr)) {
-                    break true;
-                }
-            } else false;
+        pub fn destroy(self: *@This(), instance: *Instance(CT)) bool {
+            return instance.deinit(self.gpa.allocator());
         }
 
         test "alloc" {
@@ -397,18 +260,6 @@ pub fn Factory(comptime CT: type) type {
                 try expect(result);
             }
             try expect(factory.chunk_count == 0);
-        }
-
-        test "contains" {
-            const ns = struct {
-                fn exist() void {}
-            };
-            var factory = init();
-            const context = CT.create(1234);
-            const instance = try factory.alloc(&ns.exist, context);
-            const f = instance.function(@TypeOf(ns.exist));
-            try expect(factory.contains(f));
-            try expect(!factory.contains(&ns.exist));
         }
     };
 }
@@ -815,6 +666,7 @@ const InstructionDecoder = struct {
         switch (builtin.target.cpu.arch) {
             .x86, .x86_64 => {
                 const Code = Instruction.Op.Code;
+                // determine what classes a op belongs to based on its name
                 const mod_rm_codes, const imm8_codes, const imm32_codes, const imm64_codes = comptime result: {
                     @setEvalBranchQuota(10000);
                     const opcode_fields = @typeInfo(Code).Enum.fields;
@@ -829,18 +681,22 @@ const InstructionDecoder = struct {
                     for (opcode_fields) |field| {
                         const opcode: Code = @enumFromInt(field.value);
                         for (.{ "_RM_", "_R_" }) |substr| {
+                            // uses a register/memory reference
                             if (std.mem.indexOf(u8, field.name, substr) != null) {
                                 list1[len1] = opcode;
                                 len1 += 1;
                             }
                         }
                         if (std.mem.indexOf(u8, field.name, "_IMM8") != null) {
+                            // has an 8-bit immediate
                             list2[len2] = opcode;
                             len2 += 1;
                         } else if (std.mem.indexOf(u8, field.name, "_IMM32") != null) {
+                            // has an 32-bit immediate
                             list3[len3] = opcode;
                             len3 += 1;
                         } else if (std.mem.indexOf(u8, field.name, "_IMM") != null) {
+                            // has an 32/64-bit immediate
                             if (@bitSizeOf(usize) == 64) {
                                 list4[len4] = opcode;
                                 len4 += 1;
@@ -1031,6 +887,57 @@ const InstructionEncoder = struct {
         try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
         try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
         try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
+    }
+};
+
+const assert = std.debug.assert;
+const maxInt = std.math.maxInt;
+const mem = std.mem;
+const native_os = builtin.os.tag;
+const windows = std.os.windows;
+const posix = std.posix;
+
+const ExecutablePageAllocator = struct {
+    const vtable: std.mem.Allocator.VTable = .{
+        .alloc = alloc,
+        .resize = std.heap.PageAllocator.vtable.resize,
+        .free = std.heap.PageAllocator.vtable.free,
+    };
+
+    fn alloc(_: *anyopaque, n: usize, log2_align: u8, ra: usize) ?[*]u8 {
+        _ = ra;
+        _ = log2_align;
+        assert(n > 0);
+        if (n > maxInt(usize) - (mem.page_size - 1)) return null;
+
+        if (native_os == .windows) {
+            const addr = windows.VirtualAlloc(
+                null,
+
+                // VirtualAlloc will round the length to a multiple of page size.
+                // VirtualAlloc docs: If the lpAddress parameter is NULL, this value is rounded up to the next page boundary
+                n,
+
+                windows.MEM_COMMIT | windows.MEM_RESERVE,
+                windows.PAGE_EXECUTE_READWRITE,
+            ) catch return null;
+            return @ptrCast(addr);
+        }
+
+        const aligned_len = mem.alignForward(usize, n, mem.page_size);
+        const hint = @atomicLoad(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, .unordered);
+        const slice = posix.mmap(
+            hint,
+            aligned_len,
+            posix.PROT.READ | posix.PROT.WRITE | std.posix.PROT.EXEC,
+            .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+            -1,
+            0,
+        ) catch return null;
+        assert(mem.isAligned(@intFromPtr(slice.ptr), mem.page_size));
+        const new_hint: [*]align(mem.page_size) u8 = @alignCast(slice.ptr + aligned_len);
+        _ = @cmpxchgStrong(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, hint, new_hint, .monotonic, .monotonic);
+        return slice.ptr;
     }
 };
 
