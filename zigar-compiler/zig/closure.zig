@@ -1,7 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const fn_template = @import("./fn-template.zig");
+const fn_transform = @import("./fn-transform.zig");
 const expect = std.testing.expect;
+
+comptime {
+    if (builtin.mode == .Debug) {
+        @compileError("This file cannot be compiled at optimize=Debug");
+    }
+}
 
 pub fn HandlerOf(comptime FT: type, comptime CT: type) type {
     const f = @typeInfo(FT).Fn;
@@ -9,7 +15,7 @@ pub fn HandlerOf(comptime FT: type, comptime CT: type) type {
         @compileError("Cannot create closure of generic or variadic function");
     }
     if (f.return_type == null) {
-        @compileError("Cannot create closre of function without fixed return type");
+        @compileError("Cannot create closre of function without static return type");
     }
     var handler_params: [f.params.len + 1]std.builtin.Type.Fn.Param = undefined;
     inline for (f.params, 0..) |param, index| {
@@ -47,76 +53,93 @@ pub fn Instance(comptime CT: type) type {
             .arm => 52,
             else => @compileError("No support for closure on this architecture: " ++ @tagName(builtin.target.cpu.arch)),
         };
+        const code_align = @alignOf(fn () void);
+        const context_placeholder: usize = switch (@bitSizeOf(usize)) {
+            32 => 0xbad_beef_0,
+            64 => 0xdead_beef_bad_00000,
+            else => unreachable,
+        };
+        const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
+            32 => 0xbad_ee15_0,
+            64 => 0xdead_ee15_bad_00000,
+            else => unreachable,
+        };
 
         context: ?CT,
-        bytes: [code_len]u8 align(@alignOf(fn () void)) = undefined,
+        bytes: [code_len]u8 align(code_align) = undefined,
 
-        pub fn fromFn(fn_ptr: *const anyopaque) *@This() {
-            const bytes: *const [code_len]u8 = @ptrCast(fn_ptr);
-            return @alignCast(@fieldParentPtr("bytes", @constCast(bytes)));
-        }
-
-        test "fromFn()" {}
-
-        fn construct(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !*const FT {
-            self.* = .{ .context = ctx };
-            try self.writeInstructions(FT, handler);
+        pub fn function(self: *@This(), comptime FT: type) *const FT {
             return @ptrCast(&self.bytes);
         }
 
+        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) *@This() {
+            const bytes: *align(code_align) const [code_len]u8 = @ptrCast(fn_ptr);
+            return @fieldParentPtr("bytes", @constCast(bytes));
+        }
+
+        test "fromFunction()" {}
+
+        fn construct(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !void {
+            self.* = .{ .context = ctx };
+            try self.writeInstructions(FT, handler);
+        }
+
         test "construct" {
-            // const bytes = try std.posix.mmap(
-            //     null,
-            //     1024 * 4,
-            //     std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
-            //     .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
-            //     -1,
-            //     0,
-            // );
-            // defer std.posix.munmap(bytes);
-            // const closure: *@This() = @ptrCast(bytes);
-            // const context = CT.create(1234);
-            // // simple case
-            // const ns1 = struct {
-            //     fn check(number_ptr: *usize, a1: usize, a2: usize, ctx: *const CT) usize {
-            //         if (ctx.check()) {
-            //             number_ptr.* = a1;
-            //             return a1 + a2;
-            //         } else {
-            //             return 0;
-            //         }
-            //     }
-            // };
-            // const FT = fn (*usize, usize, usize) usize;
-            // const f1 = try closure.construct(FT, ns1.check, context);
-            // var number1: usize = 0;
-            // const result1 = f1(&number1, 123, 456);
-            // try expect(result1 == 123 + 456);
-            // try expect(number1 == 123);
-            // try expect(f1(&number1, 123, 456) == result1);
-            // // stack usage
-            // const ns2 = struct {
-            //     fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, ctx: *const CT) usize {
-            //         if (ctx.check()) {
-            //             number_ptr.* = a1;
-            //             return a1 + a2 + a3 + a4 + a5 + a6;
-            //         } else {
-            //             return 0;
-            //         }
-            //     }
-            // };
-            // const f2 = closure.construct(ns2.check, context);
-            // var number2: usize = 0;
-            // const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
-            // try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
-            // try expect(number2 == 123);
-            // try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result1);
+            const bytes = try std.posix.mmap(
+                null,
+                1024 * 4,
+                std.posix.PROT.READ | std.posix.PROT.WRITE | std.posix.PROT.EXEC,
+                .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+                -1,
+                0,
+            );
+            defer std.posix.munmap(bytes);
+            const closure: *@This() = @ptrCast(bytes);
+            const context = CT.create(1234);
+            // simple case
+            const ns1 = struct {
+                fn check(number_ptr: *usize, a1: usize, a2: usize, ctx: *const CT) usize {
+                    if (ctx.check()) {
+                        number_ptr.* = a1;
+                        return a1 + a2;
+                    } else {
+                        return 0;
+                    }
+                }
+            };
+            const FT1 = fn (*usize, usize, usize) usize;
+            try closure.construct(FT1, ns1.check, context);
+            const f1 = closure.function(FT1);
+            var number1: usize = 0;
+            const result1 = f1(&number1, 123, 456);
+            try expect(result1 == 123 + 456);
+            try expect(number1 == 123);
+            try expect(f1(&number1, 123, 456) == result1);
+            // stack usage
+            const ns2 = struct {
+                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, ctx: *const CT) usize {
+                    if (ctx.check()) {
+                        number_ptr.* = a1;
+                        return a1 + a2 + a3 + a4 + a5 + a6;
+                    } else {
+                        return 0;
+                    }
+                }
+            };
+            const FT2 = fn (*usize, usize, usize, usize, usize, usize, usize) usize;
+            try closure.construct(FT2, ns2.check, context);
+            const f2 = closure.function(FT2);
+            var number2: usize = 0;
+            const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
+            try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
+            try expect(number2 == 123);
+            try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result2);
         }
 
         fn writeInstructions(self: *@This(), comptime FT: type, handler: anytype) !void {
             const context_address = @intFromPtr(&self.context);
             const handler_address = @intFromPtr(&handler);
-            const code_ptr = fn_template.get(FT, @TypeOf(handler));
+            const code_ptr = getTemplate(FT);
             var instr_buffer: [256]Instruction = undefined;
             const instrs = Instruction.decode(code_ptr, &instr_buffer);
             var context_replaced = false;
@@ -134,10 +157,10 @@ pub fn Instance(comptime CT: type) type {
                             .MOV_SI_IMM,
                             .MOV_DI_IMM,
                             => {
-                                if (instr.imm64.? == fn_template.context_placeholder) {
+                                if (instr.imm64.? == context_placeholder) {
                                     instr.imm64 = context_address;
                                     context_replaced = true;
-                                } else if (instr.imm64.? == fn_template.fn_placeholder) {
+                                } else if (instr.imm64.? == fn_placeholder) {
                                     instr.imm64 = handler_address;
                                     fn_replaced = true;
                                 }
@@ -155,8 +178,7 @@ pub fn Instance(comptime CT: type) type {
             }
             var encoder: InstructionEncoder = .{ .bytes = &self.bytes };
             encoder.encode(instrs);
-            std.debug.print("Decoding encoded binary:\n", .{});
-            _ = Instruction.decode(&self.bytes, &instr_buffer);
+            std.debug.print("len = {d}\n", .{encoder.len});
         }
 
         test "writeInstructions" {
@@ -181,6 +203,25 @@ pub fn Instance(comptime CT: type) type {
             };
             const FT = fn (i32, i32, i32) i32;
             try closure.writeInstructions(FT, ns1.check);
+        }
+
+        fn getTemplate(comptime FT: type) [*]const u8 {
+            const HT = HandlerOf(FT, CT);
+            const h = @typeInfo(FT).Fn;
+            const ns = struct {
+                fn call(args: std.meta.ArgsTuple(FT)) h.return_type.? {
+                    const handler: *const HT = @ptrFromInt(fn_placeholder);
+                    var handle_args: std.meta.ArgsTuple(HT) = undefined;
+                    inline for (args, 0..) |arg, i| {
+                        handle_args[i] = arg;
+                    }
+                    // last argument is the context pointer
+                    handle_args[handle_args.len - 1] = @ptrFromInt(context_placeholder);
+                    return @call(.auto, handler, handle_args);
+                }
+            };
+            const caller = fn_transform.spreadArgs(ns.call, h.calling_convention);
+            return @ptrCast(&caller);
         }
     };
 }
@@ -438,10 +479,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             MOV_SI_IMM = 0xbe,
             MOV_DI_IMM = 0xbf,
             RET = 0xc3,
-            CALL_IMM32 = 0xe8,
-            JMP_IMM8 = 0xeb,
-            JMP_IMM32 = 0xe9,
-            JMP_RM = 0xff,
+            OP_RM = 0xff,
             _,
         };
         pub const Prefix = enum(u8) {
@@ -477,7 +515,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         prefix: ?Prefix = null,
         rex: ?REX = null,
         opcode: Opcode = .NOP,
-        opcode_ext: ?u8 = null,
         mod_rm: ?ModRM = null,
         sib: ?SIB = null,
         disp8: ?i8 = null,
@@ -504,19 +541,11 @@ const Instruction = switch (builtin.target.cpu.arch) {
                         i += 1;
                         break :result rex;
                     } else {
-                        break :result rex;
+                        break :result null;
                     }
                 };
                 // see if op has ModR/M byte
                 instr.opcode = @enumFromInt(bytes[i]);
-                if (instr.opcode == .LEA_RM_R) {
-                    std.debug.print("\nMystery LEA:\n", .{});
-                    for (0..16) |offset| {
-                        std.debug.print("{x} ", .{bytes[i + offset]});
-                    }
-                    std.debug.print("\n\n", .{});
-                }
-
                 i += 1;
                 const has_mod_rm = switch (instr.opcode) {
                     .ADD_RM_IMM32,
@@ -525,6 +554,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
                     .MOV_RM_R,
                     .MOV_R_M,
                     .LEA_RM_R,
+                    .OP_RM,
                     => true,
                     else => false,
                 };
@@ -567,14 +597,11 @@ const Instruction = switch (builtin.target.cpu.arch) {
                     .ADD_AX_IMM8,
                     .SUB_AX_IMM8,
                     .ADD_RM_IMM8,
-                    .JMP_IMM8,
                     => 8,
                     .ADD_AX_IMM32,
                     .SUB_AX_IMM32,
                     .ADD_RM_IMM32,
                     .PUSH_IMM32,
-                    .CALL_IMM32,
-                    .JMP_IMM32,
                     => 32,
                     .MOV_AX_IMM,
                     .MOV_CX_IMM,
@@ -597,14 +624,17 @@ const Instruction = switch (builtin.target.cpu.arch) {
                     i += size / 8;
                 }
                 buffer[len] = instr;
-                std.debug.print("{any}\n", .{instr});
                 len += 1;
                 switch (instr.opcode) {
-                    .RET,
-                    .JMP_IMM32,
-                    .JMP_IMM8,
-                    .JMP_RM,
-                    => break,
+                    .RET => break,
+                    .OP_RM => switch (instr.mod_rm.?.reg) {
+                        0 => {}, // inc
+                        1 => {}, // dec
+                        2, 3 => {}, // call
+                        4, 5 => break, // jmp
+                        6 => {}, // push quad
+                        else => {},
+                    },
                     else => {},
                 }
             }
@@ -813,10 +843,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
                 const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
                 const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 0);
                 const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
-                std.debug.print("imm64 = {x}\n", .{imm64});
-                std.debug.print("{d}\n", .{imm64 >> 15 & 1});
-                std.debug.print("{d}\n", .{imm64 >> 31 & 1});
-                std.debug.print("{d}\n", .{imm64 >> 47 & 1});
                 return .{
                     .addi1 = .{
                         .rt = rt,
