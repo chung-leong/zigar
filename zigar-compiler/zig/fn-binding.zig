@@ -43,11 +43,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         64 => 0xdead_ee15_bad_00000,
         else => unreachable,
     };
-
-    return struct {
+    const Header = struct {
         signature: u64 = instance_signature,
         size: usize,
         context: ?CT,
+    };
+
+    return struct {
+        header: Header,
         code: [0]u8 align(code_align) = undefined,
 
         pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
@@ -79,11 +82,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 @field(context, field.name) = @field(vars, field.name);
             }
             self.* = .{
-                .context = context,
-                .size = instance_size,
+                .header = .{
+                    .size = instance_size,
+                    .context = context,
+                },
             };
             // replace placeholders with actual address
-            const context_address = @intFromPtr(&self.context);
+            const context_address = @intFromPtr(&self.header.context);
             const fn_ptr = opaquePointerOf(func);
             const fn_address = @intFromPtr(fn_ptr);
             var context_replaced = false;
@@ -127,8 +132,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-            self.signature = 0;
-            const ptr: []u8 = @as([*]u8, @ptrCast(self))[0..self.size];
+            self.header.signature = 0;
+            const ptr: []u8 = @as([*]u8, @ptrCast(self))[0..self.header.size];
             allocator.free(ptr);
         }
 
@@ -137,7 +142,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         test "function" {
-            const b: @This() = .{ .context = undefined, .size = 0 };
+            const b: @This() = .{ .header = .{ .context = undefined, .size = 0 } };
             const func = b.function();
             try expect(@TypeOf(func) == *const BFT);
         }
@@ -145,11 +150,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
             const code: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
             const self: *@This() = @alignCast(@fieldParentPtr("code", @constCast(code)));
-            return if (self.signature == instance_signature) self else null;
+            return if (self.header.signature == instance_signature) self else null;
         }
 
         test "fromFunction" {
-            const b: @This() = .{ .context = undefined, .size = 0 };
+            const b: @This() = .{ .header = .{ .context = undefined, .size = 0 } };
             const func = b.function();
             const ptr1 = fromFunction(func);
             try expect(ptr1 == &b);
