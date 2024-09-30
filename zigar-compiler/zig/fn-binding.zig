@@ -46,13 +46,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
     return struct {
         signature: u64 = instance_signature,
-        context: ?CT,
         size: usize,
+        context: ?CT,
         code: [0]u8 align(code_align) = undefined,
 
-        pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !BFT {
+        pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
             const binding = try init(allocator, func, vars);
             return binding.function();
+        }
+
+        pub fn unbind(allocator: std.mem.Allocator, func: *const BFT) void {
+            if (fromFunction(func)) |self| {
+                self.deinit(allocator);
+            }
         }
 
         pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
@@ -120,42 +126,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             return self;
         }
 
-        test "init" {
-            var gpa = executable();
-            const allocator = gpa.allocator();
-            const ns = struct {
-                var called = false;
-
-                fn call() void {
-                    called = true;
-                }
-            };
-            const binding = try init(allocator, @ptrCast(&ns.call), .{});
-            defer binding.deinit(allocator);
-            const func = binding.function();
-            const args: std.meta.ArgsTuple(BFT) = undefined;
-            _ = @call(.auto, func, args);
-            try expect(ns.called == true);
-        }
-
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             self.signature = 0;
             const ptr: []u8 = @as([*]u8, @ptrCast(self))[0..self.size];
             allocator.free(ptr);
-        }
-
-        test "deinit" {
-            var gpa = executable();
-            const allocator = gpa.allocator();
-            const ns = struct {
-                var called = false;
-
-                fn call() void {
-                    called = true;
-                }
-            };
-            const binding = try init(allocator, @ptrCast(&ns.call), .{});
-            defer binding.deinit(allocator);
         }
 
         pub fn function(self: *const @This()) *const BFT {
@@ -221,12 +195,59 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     };
 }
 
-test "Binding" {
-    const T = *const fn (i8, i16, i32, i64) i64;
-    const TT = struct {
-        @"-1": i64 = 1234,
+test "Binding (basic)" {
+    const ns1 = struct {
+        var called = false;
+
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) callconv(.C) i64 {
+            called = true;
+            return a1 + a2 + a3 + a4;
+        }
     };
-    _ = Binding(T, TT);
+    var number: i64 = 1234;
+    const vars1 = .{ .@"-1" = number };
+    const Binding1 = Binding(@TypeOf(ns1.add), @TypeOf(vars1));
+    var gpa = executable();
+    const bf1 = try Binding1.bind(gpa.allocator(), ns1.add, vars1);
+    try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
+    defer Binding1.unbind(gpa.allocator(), bf1);
+    const sum1 = bf1(1, 2, 3);
+    try expect(ns1.called == true);
+    try expect(sum1 == 1 + 2 + 3 + 1234);
+    const ns2 = struct {
+        var called = false;
+
+        fn add(a1: *i64, a2: i64, a3: i64, a4: i64) void {
+            a1.* = a2 + a3 + a4;
+        }
+    };
+    const vars2 = .{&number};
+    const Binding2 = Binding(@TypeOf(ns2.add), @TypeOf(vars2));
+    const bf2 = try Binding2.bind(gpa.allocator(), ns2.add, vars2);
+    defer Binding2.unbind(gpa.allocator(), bf2);
+    bf2(1, 2, 3);
+    try expect(number == 1 + 2 + 3);
+    try expect(bf1(1, 2, 3) == 1 + 2 + 3 + 1234);
+}
+
+test "Binding (stack usage)" {
+    const ns = struct {
+        var called = false;
+
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64) callconv(.C) i64 {
+            called = true;
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
+        }
+    };
+    var number: i64 = 10;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var gpa = executable();
+    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
+    defer Binding1.unbind(gpa.allocator(), bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
