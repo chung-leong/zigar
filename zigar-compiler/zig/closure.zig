@@ -3,112 +3,103 @@ const builtin = @import("builtin");
 const fn_transform = @import("./fn-transform.zig");
 const expect = std.testing.expect;
 
-comptime {
-    if (builtin.mode == .Debug) {
-        @compileError("This file cannot be compiled at optimize=Debug");
-    }
-}
+pub const BindingError = error{
+    context_placeholder_not_found,
+    function_placeholder_not_found,
+};
 
-pub fn HandlerOf(comptime FT: type, comptime CT: type) type {
-    const f = @typeInfo(FT).Fn;
-    if (f.is_generic or f.is_var_args) {
-        @compileError("Cannot create closure of generic or variadic function");
-    }
-    if (f.return_type == null) {
-        @compileError("Cannot create closure of function without static return type");
-    }
-    var handler_params: [f.params.len + 1]std.builtin.Type.Fn.Param = undefined;
-    inline for (f.params, 0..) |param, index| {
-        handler_params[index] = param;
-    }
-    handler_params[f.params.len] = .{
-        .is_generic = false,
-        .is_noalias = false,
-        .type = *const CT,
-    };
-    return @Type(.{
-        .Fn = .{
-            .calling_convention = f.calling_convention,
-            .params = &handler_params,
-            .is_generic = false,
-            .is_var_args = false,
-            .return_type = f.return_type,
+pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
+    return std.heap.GeneralPurposeAllocator(.{}){
+        .backing_allocator = .{
+            .ptr = undefined,
+            .vtable = &ExecutablePageAllocator.vtable,
         },
-    });
+    };
 }
 
-pub fn Instance(comptime CT: type) type {
+test "executable" {
+    var gpa = executable();
+    var allocator = gpa.allocator();
+    try expect(@TypeOf(gpa) == std.heap.GeneralPurposeAllocator(.{}));
+    const memory = try allocator.alloc(u8, 256);
+    allocator.free(memory);
+}
+
+pub fn Binding(comptime T: type, comptime TT: type) type {
+    const FT = FnType(T);
+    const CT = ContextType(TT);
+    const BFT = BoundFunction(FT, CT);
+    const arg_mapping = getArgumentMapping(FT, CT);
+    const ctx_mapping = getContextMapping(FT, CT);
+    const code_align = @alignOf(fn () void);
+    const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
+    const context_placeholder: usize = switch (@bitSizeOf(usize)) {
+        32 => 0xbad_beef_0,
+        64 => 0xdead_beef_bad_00000,
+        else => unreachable,
+    };
+    const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
+        32 => 0xbad_ee15_0,
+        64 => 0xdead_ee15_bad_00000,
+        else => unreachable,
+    };
+
     return struct {
-        pub const Error = error{
-            unable_to_find_context_placeholder,
-            unable_to_find_function_placeholder,
-        };
-
-        const code_align = @alignOf(fn () void);
-        const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
-        const context_placeholder: usize = switch (@bitSizeOf(usize)) {
-            32 => 0xbad_beef_0,
-            64 => 0xdead_beef_bad_00000,
-            else => unreachable,
-        };
-        const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
-            32 => 0xbad_ee15_0,
-            64 => 0xdead_ee15_bad_00000,
-            else => unreachable,
-        };
-
         signature: u64 = instance_signature,
         context: ?CT,
-        bytes: [0]u8 align(code_align) = undefined,
+        size: usize,
+        code: [0]u8 align(code_align) = undefined,
 
-        pub fn function(self: *@This(), comptime FT: type) *const FT {
-            return @ptrCast(&self.bytes);
+        pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !BFT {
+            const binding = try init(allocator, func, vars);
+            return binding.function();
         }
 
-        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
-            const bytes: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
-            const self: *@This() = @fieldParentPtr("bytes", @constCast(bytes));
-            return if (self.signature == instance_signature) self else null;
-        }
-
-        test "fromFunction()" {}
-
-        fn init(allocator: std.mem.Allocator, comptime FT: type, handler: HandlerOf(FT, CT), ctx: CT) !*@This() {
-            const code_ptr = getTemplate(FT);
+        pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
+            const code_ptr = getTemplate();
             var buffer: [256]Instruction = undefined;
-            var decoder: InstructionDecoder = .{ .instructions = &buffer };
-            const instr_count = decoder.decode(code_ptr);
+            var decoder: InstructionDecoder = .{};
+            const instr_count = decoder.decode(code_ptr, &buffer);
             const instrs = buffer[0..instr_count];
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
-            const code_len = encoder.encode(instrs);
-            const instance_size = @offsetOf(@This(), "bytes") + code_len;
+            const code_len = encoder.encode(instrs, null);
+            const instance_size = @offsetOf(@This(), "code") + code_len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
             const self: *@This() = @ptrCast(new_bytes);
-            self.* = .{ .context = ctx };
+            var context: CT = undefined;
+            const fields = @typeInfo(CT).Struct.fields;
+            inline for (fields) |field| {
+                @field(context, field.name) = @field(vars, field.name);
+            }
+            self.* = .{
+                .context = context,
+                .size = instance_size,
+            };
             // replace placeholders with actual address
             const context_address = @intFromPtr(&self.context);
-            const handler_address = @intFromPtr(&handler);
+            const fn_ptr = opaquePointerOf(func);
+            const fn_address = @intFromPtr(fn_ptr);
             var context_replaced = false;
             var fn_replaced = false;
             for (instrs) |*instr| {
                 switch (builtin.target.cpu.arch) {
                     .x86_64 => {
                         switch (instr.op.code) {
-                            .MOV_AX_IMM,
-                            .MOV_CX_IMM,
-                            .MOV_DX_IMM,
-                            .MOV_BX_IMM,
-                            .MOV_SP_IMM,
-                            .MOV_BP_IMM,
-                            .MOV_SI_IMM,
-                            .MOV_DI_IMM,
+                            .mov_ax_imm,
+                            .mov_cx_imm,
+                            .mov_dx_imm,
+                            .mov_bx_imm,
+                            .mov_sp_imm,
+                            .mov_bp_imm,
+                            .mov_si_imm,
+                            .mov_di_imm,
                             => {
                                 if (instr.op.imm64.? == context_placeholder) {
                                     instr.op.imm64 = context_address;
                                     context_replaced = true;
                                 } else if (instr.op.imm64.? == fn_placeholder) {
-                                    instr.op.imm64 = handler_address;
+                                    instr.op.imm64 = fn_address;
                                     fn_replaced = true;
                                 }
                             },
@@ -119,149 +110,327 @@ pub fn Instance(comptime CT: type) type {
                 }
             }
             if (!context_replaced) {
-                return Error.unable_to_find_context_placeholder;
+                return BindingError.context_placeholder_not_found;
             } else if (!fn_replaced) {
-                return Error.unable_to_find_function_placeholder;
+                return BindingError.function_placeholder_not_found;
             }
             // encode the instructions (for real this time)
-            encoder.bytes = @ptrCast(&self.bytes);
-            _ = encoder.encode(instrs);
+            const output = @as([*]u8, @ptrCast(&self.code))[0..code_len];
+            _ = encoder.encode(instrs, output);
             return self;
         }
 
-        fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-            self.signature = 0;
-            allocator.free(self);
-        }
-
         test "init" {
-            var gpa = std.heap.GeneralPurposeAllocator(.{}){
-                .backing_allocator = .{
-                    .ptr = undefined,
-                    .vtable = &ExecutablePageAllocator.vtable,
-                },
-            };
+            var gpa = executable();
             const allocator = gpa.allocator();
-            const context = CT.create(1234);
-            // simple case
-            const ns1 = struct {
-                fn check(number_ptr: *usize, a1: usize, a2: usize, ctx: *const CT) usize {
-                    if (ctx.check()) {
-                        number_ptr.* = a1;
-                        return a1 + a2;
-                    } else {
-                        return 0;
-                    }
+            const ns = struct {
+                var called = false;
+
+                fn call() void {
+                    called = true;
                 }
             };
-            const FT1 = fn (*usize, usize, usize) usize;
-            const closure1: *@This() = try init(allocator, FT1, ns1.check, context);
-            const f1 = closure1.function(FT1);
-            var number1: usize = 0;
-            const result1 = f1(&number1, 123, 456);
-            try expect(result1 == 123 + 456);
-            try expect(number1 == 123);
-            try expect(f1(&number1, 123, 456) == result1);
-            // stack usage
-            const ns2 = struct {
-                fn check(number_ptr: *usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize, ctx: *const CT) usize {
-                    if (ctx.check()) {
-                        number_ptr.* = a1;
-                        return a1 + a2 + a3 + a4 + a5 + a6;
-                    } else {
-                        return 0;
-                    }
-                }
-            };
-            const FT2 = fn (*usize, usize, usize, usize, usize, usize, usize) usize;
-            const closure2: *@This() = try init(allocator, FT2, ns2.check, context);
-            const f2 = closure2.function(FT2);
-            var number2: usize = 0;
-            const result2 = f2(&number2, 123, 456, 3, 4, 5, 6);
-            try expect(result2 == 123 + 456 + 3 + 4 + 5 + 6);
-            try expect(number2 == 123);
-            try expect(f2(&number2, 123, 456, 3, 4, 5, 6) == result2);
+            const binding = try init(allocator, @ptrCast(&ns.call), .{});
+            defer binding.deinit(allocator);
+            const func = binding.function();
+            const args: std.meta.ArgsTuple(BFT) = undefined;
+            _ = @call(.auto, func, args);
+            try expect(ns.called == true);
         }
 
-        fn getTemplate(comptime FT: type) [*]const u8 {
-            const HT = HandlerOf(FT, CT);
-            const h = @typeInfo(FT).Fn;
+        pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+            self.signature = 0;
+            const ptr: []u8 = @as([*]u8, @ptrCast(self))[0..self.size];
+            allocator.free(ptr);
+        }
+
+        test "deinit" {
+            var gpa = executable();
+            const allocator = gpa.allocator();
             const ns = struct {
-                fn call(args: std.meta.ArgsTuple(FT)) h.return_type.? {
-                    const handler: *const HT = @ptrFromInt(fn_placeholder);
-                    var handle_args: std.meta.ArgsTuple(HT) = undefined;
-                    inline for (args, 0..) |arg, i| {
-                        handle_args[i] = arg;
-                    }
-                    // last argument is the context pointer
-                    handle_args[handle_args.len - 1] = @ptrFromInt(context_placeholder);
-                    return @call(.auto, handler, handle_args);
+                var called = false;
+
+                fn call() void {
+                    called = true;
                 }
             };
-            const caller = fn_transform.spreadArgs(ns.call, h.calling_convention);
+            const binding = try init(allocator, @ptrCast(&ns.call), .{});
+            defer binding.deinit(allocator);
+        }
+
+        pub fn function(self: *const @This()) *const BFT {
+            return @ptrCast(&self.code);
+        }
+
+        test "function" {
+            const b: @This() = .{ .context = undefined, .size = 0 };
+            const func = b.function();
+            try expect(@TypeOf(func) == *const BFT);
+        }
+
+        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
+            const code: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
+            const self: *@This() = @alignCast(@fieldParentPtr("code", @constCast(code)));
+            return if (self.signature == instance_signature) self else null;
+        }
+
+        test "fromFunction" {
+            const b: @This() = .{ .context = undefined, .size = 0 };
+            const func = b.function();
+            const ptr1 = fromFunction(func);
+            try expect(ptr1 == &b);
+            const ns = struct {
+                fn hello() void {}
+            };
+            const ptr2 = fromFunction(&ns.hello);
+            try expect(ptr2 == null);
+        }
+
+        fn getTemplate() [*]const u8 {
+            const caller = getTemplateFn();
             return @ptrCast(&caller);
+        }
+
+        test "getTemplate" {
+            _ = getTemplate();
+        }
+
+        fn getTemplateFn() BFT {
+            const f = @typeInfo(FT).Fn;
+            const ns = struct {
+                fn call(bf_args: std.meta.ArgsTuple(BFT)) f.return_type.? {
+                    var args: std.meta.ArgsTuple(FT) = undefined;
+                    inline for (arg_mapping) |m| {
+                        @field(args, m.dest) = @field(bf_args, m.src);
+                    }
+                    const cxt: *const CT = @ptrFromInt(context_placeholder);
+                    inline for (ctx_mapping) |m| {
+                        @field(args, m.dest) = @field(cxt, m.src);
+                    }
+                    const func: *const FT = @ptrFromInt(fn_placeholder);
+                    return @call(.auto, func, args);
+                }
+            };
+            return fn_transform.spreadArgs(ns.call, f.calling_convention);
+        }
+
+        test "getTemplateFn" {
+            const func = getTemplateFn();
+            try expect(@TypeOf(func) == BFT);
         }
     };
 }
 
-pub fn Factory(comptime CT: type) type {
-    return struct {
-        gpa: std.heap.GeneralPurposeAllocator,
+test "Binding" {
+    const T = *const fn (i8, i16, i32, i64) i64;
+    const TT = struct {
+        @"-1": i64 = 1234,
+    };
+    _ = Binding(T, TT);
+}
 
-        pub fn init() @This() {
-            return .{
-                .gpa = std.heap.GeneralPurposeAllocator(.{}){
-                    .backing_allocator = .{
-                        .ptr = undefined,
-                        .vtable = &ExecutablePageAllocator.vtable,
-                    },
-                },
-            };
+pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
+    const f = @typeInfo(FT).Fn;
+    const params = @typeInfo(FT).Fn.params;
+    const fields = @typeInfo(CT).Struct.fields;
+    const context_mapping = getContextMapping(FT, CT);
+    var new_params: [params.len - fields.len]std.builtin.Type.Fn.Param = undefined;
+    var index = 0;
+    for (params, 0..) |param, number| {
+        const name = std.fmt.comptimePrint("{d}", .{number});
+        if (!isMapped(&context_mapping, name)) {
+            new_params[index] = param;
+            index += 1;
         }
+    }
+    var new_f = f;
+    new_f.params = &new_params;
+    return @Type(.{ .Fn = new_f });
+}
 
-        pub fn create(self: *@This(), comptime FT: type, handler: HandlerOf(FT, CT), context: CT) !*Instance(CT) {
-            return Instance(CT).init(self.gpa.allocator(), FT, handler, context);
+test "BoundFunction" {
+    const FT = fn (i8, i16, i32, i64) i64;
+    const CT = struct {
+        @"2": i32,
+    };
+    const BFT = BoundFunction(FT, CT);
+    try expect(BFT == fn (i8, i16, i64) i64);
+}
+
+fn ContextType(comptime TT: type) type {
+    const fields = switch (@typeInfo(TT)) {
+        .Struct => |st| st.fields,
+        else => @compileError("Not a tuple or struct"),
+    };
+    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+    var index: usize = 0;
+    for (fields) |field| {
+        if (field.type != @TypeOf(undefined)) {
+            new_fields[index] = field;
+            index += 1;
         }
+    }
+    return @Type(.{
+        .Struct = .{
+            .layout = .auto,
+            .fields = new_fields[0..index],
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+}
 
-        pub fn destroy(self: *@This(), instance: *Instance(CT)) bool {
-            return instance.deinit(self.gpa.allocator());
+test "ContextType" {
+    var number: i32 = 5;
+    _ = &number;
+    const args1 = .{ number, 1 };
+    const CT1 = ContextType(@TypeOf(args1));
+    const fields1 = @typeInfo(CT1).Struct.fields;
+    try expect(fields1.len == 2);
+    try expect(fields1[0].is_comptime == false);
+    try expect(fields1[1].is_comptime == true);
+    const args2 = .{ undefined, 123, undefined, 456 };
+    const CT2 = ContextType(@TypeOf(args2));
+    const fields2 = @typeInfo(CT2).Struct.fields;
+    try expect(fields2.len == 2);
+    try expect(fields2[0].name[0] == '1');
+    try expect(fields2[1].name[0] == '3');
+}
+
+const Mapping = struct {
+    src: [:0]const u8,
+    dest: [:0]const u8,
+};
+
+fn getArgumentMapping(comptime FT: type, comptime CT: type) return_type: {
+    const params = @typeInfo(FT).Fn.params;
+    const fields = @typeInfo(CT).Struct.fields;
+    break :return_type [params.len - fields.len]Mapping;
+} {
+    const params = @typeInfo(FT).Fn.params;
+    const fields = @typeInfo(CT).Struct.fields;
+    const context_mapping = getContextMapping(FT, CT);
+    var mapping: [params.len - fields.len]Mapping = undefined;
+    var src_index = params.len - fields.len;
+    var dest_index = params.len;
+    while (dest_index >= 1) {
+        dest_index -= 1;
+        const dest_name = std.fmt.comptimePrint("{d}", .{dest_index});
+        if (!isMapped(&context_mapping, dest_name)) {
+            src_index -= 1;
+            const src_name = std.fmt.comptimePrint("{d}", .{src_index});
+            mapping[src_index] = .{ .src = src_name, .dest = dest_name };
         }
+    }
+    return mapping;
+}
 
-        test "alloc" {
-            const Closure = Instance(CT);
-            const ns = struct {
-                fn check() bool {
-                    return Closure.getContext().check();
-                }
-            };
-            var factory = init();
-            for (0..1000) |index| {
-                const context = CT.create(index);
-                const instance = try factory.alloc(&ns.check, context);
-                const f = instance.function(@TypeOf(ns.check));
-                const result = f();
-                try expect(result == true);
+test "getArgumentMapping" {
+    const FT = fn (i32, i32, i32, i32) i32;
+    const CT = @TypeOf(.{
+        .@"1" = @as(i32, 123),
+    });
+    const mapping = comptime getArgumentMapping(FT, CT);
+    try expect(mapping[0].src[0] == '0');
+    try expect(mapping[0].dest[0] == '0');
+    try expect(mapping[1].src[0] == '1');
+    try expect(mapping[1].dest[0] == '2');
+    try expect(mapping[2].src[0] == '2');
+    try expect(mapping[2].dest[0] == '3');
+}
+
+fn getContextMapping(comptime FT: type, comptime CT: type) return_type: {
+    const fields = @typeInfo(CT).Struct.fields;
+    break :return_type [fields.len]Mapping;
+} {
+    const params = @typeInfo(FT).Fn.params;
+    const fields = @typeInfo(CT).Struct.fields;
+    var mapping: [fields.len]Mapping = undefined;
+    for (fields, 0..) |field, index| {
+        var number = std.fmt.parseInt(isize, field.name, 10) catch @compileError("Invalid argument specifier");
+        if (number >= params.len) {
+            @compileError("Index exceeds argument count");
+        } else if (number < 0) {
+            number = @as(i32, @intCast(params.len)) + number;
+            if (number < 0) {
+                @compileError("Negative index points to non-existing argument");
             }
-            try expect(factory.chunk_count > 1);
         }
+        const dest_name = std.fmt.comptimePrint("{d}", .{number});
+        mapping[index] = .{ .src = field.name, .dest = dest_name };
+    }
+    return mapping;
+}
 
-        test "free" {
-            const ns = struct {
-                fn exist() void {}
-            };
-            var factory = init();
-            var instances: [1000]*Instance(CT) = undefined;
-            for (&instances, 0..) |*p, index| {
-                const context = CT.create(index);
-                p.* = try factory.alloc(&ns.exist, context);
-            }
-            for (instances) |instance| {
-                const result = factory.free(instance);
-                try expect(result);
-            }
-            try expect(factory.chunk_count == 0);
+test "getContextMapping" {
+    const CT = @TypeOf(.{
+        .@"1" = @as(i32, 123),
+        .@"-1" = 456,
+    });
+    const FT = fn (i32, i32, i32, i32) i32;
+    const mapping = comptime getContextMapping(FT, CT);
+    try expect(mapping[0].src[0] == '1');
+    try expect(mapping[0].dest[0] == '1');
+    try expect(mapping[1].src[0] == '-');
+    try expect(mapping[1].dest[0] == '3');
+}
+
+fn isMapped(mapping: []const Mapping, name: [:0]const u8) bool {
+    return for (mapping) |m| {
+        if (std.mem.orderZ(u8, m.dest, name) == .eq) {
+            break true;
+        }
+    } else false;
+}
+
+test "isMapped" {
+    const CT = @TypeOf(.{
+        .@"1" = @as(i32, 123),
+        .@"-1" = 456,
+    });
+    const FT = fn (i32, i32, i32, i32) i32;
+    const mapping = comptime getContextMapping(FT, CT);
+    try expect(isMapped(&mapping, "1") == true);
+    try expect(isMapped(&mapping, "3") == true);
+    try expect(isMapped(&mapping, "2") == false);
+}
+
+fn FnType(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Fn => T,
+        .Pointer => |pt| switch (@typeInfo(pt.child)) {
+            .Fn => pt.child,
+            else => @compileError("Not a function pointer"),
+        },
+        else => @compileError("Not a function"),
+    };
+}
+
+test "FnType" {
+    const ns = struct {
+        fn foo(arg: i32) i32 {
+            return arg;
         }
     };
+    try expect(FnType(@TypeOf(ns.foo)) == fn (i32) i32);
+    try expect(FnType(@TypeOf(&ns.foo)) == fn (i32) i32);
+}
+
+fn opaquePointerOf(func: anytype) *const anyopaque {
+    return switch (@typeInfo(@TypeOf(func))) {
+        .Pointer => func,
+        else => &func,
+    };
+}
+
+test "opaquePointerOf" {
+    const ns = struct {
+        fn foo(arg: i32) i32 {
+            return arg;
+        }
+    };
+    try expect(opaquePointerOf(ns.foo) == @as(*const anyopaque, &ns.foo));
+    try expect(opaquePointerOf(&ns.foo) == @as(*const anyopaque, &ns.foo));
 }
 
 const Instruction = struct {
@@ -271,56 +440,56 @@ const Instruction = struct {
     const Op = switch (builtin.target.cpu.arch) {
         .x86, .x86_64 => struct {
             pub const Code = enum(u8) {
-                ADD_AX_IMM8 = 0x04,
-                ADD_AX_IMM32 = 0x05,
-                SUB_AX_IMM8 = 0x2c,
-                SUB_AX_IMM32 = 0x2d,
-                PUSH_AX = 0x50,
-                PUSH_CX = 0x51,
-                PUSH_DX = 0x52,
-                PUSH_BX = 0x53,
-                PUSH_SP = 0x54,
-                PUSH_BP = 0x55,
-                PUSH_SI = 0x56,
-                PUSH_DI = 0x57,
-                POP_AX = 0x58,
-                POP_CX = 0x59,
-                POP_DX = 0x5a,
-                POP_BX = 0x5b,
-                POP_SP = 0x5c,
-                POP_BP = 0x5d,
-                POP_SI = 0x5e,
-                POP_DI = 0x5f,
-                PUSH_IMM32 = 0x68,
-                ADD_RM_IMM32 = 0x80,
-                ADD_RM_IMM8 = 0x83,
-                MOV_RM_R = 0x89,
-                MOV_R_M = 0x8b,
-                LEA_RM_R = 0x8d,
-                NOP = 0x90,
-                MOV_AX_IMM = 0xb8,
-                MOV_CX_IMM = 0xb9,
-                MOV_DX_IMM = 0xba,
-                MOV_BX_IMM = 0xbb,
-                MOV_SP_IMM = 0xbc,
-                MOV_BP_IMM = 0xbd,
-                MOV_SI_IMM = 0xbe,
-                MOV_DI_IMM = 0xbf,
-                RET = 0xc3,
-                OP_RM = 0xff,
+                add_ax_imm8 = 0x04,
+                add_ax_imm32 = 0x05,
+                sub_ax_imm8 = 0x2c,
+                sub_ax_imm32 = 0x2d,
+                push_ax = 0x50,
+                push_cx = 0x51,
+                push_dx = 0x52,
+                push_bx = 0x53,
+                push_sp = 0x54,
+                push_bp = 0x55,
+                push_si = 0x56,
+                push_di = 0x57,
+                pop_ax = 0x58,
+                pop_cx = 0x59,
+                pop_dx = 0x5a,
+                pop_bx = 0x5b,
+                pop_sp = 0x5c,
+                pop_bp = 0x5d,
+                pop_si = 0x5e,
+                pop_di = 0x5f,
+                push_imm32 = 0x68,
+                add_rm_imm32 = 0x80,
+                add_rm_imm8 = 0x83,
+                mov_rm_r = 0x89,
+                mov_r_m = 0x8b,
+                lea_rm_r = 0x8d,
+                nop = 0x90,
+                mov_ax_imm = 0xb8,
+                mov_cx_imm = 0xb9,
+                mov_dx_imm = 0xba,
+                mov_bx_imm = 0xbb,
+                mov_sp_imm = 0xbc,
+                mov_bp_imm = 0xbd,
+                mov_si_imm = 0xbe,
+                mov_di_imm = 0xbf,
+                ret = 0xc3,
+                mux_rm = 0xff,
                 _,
             };
             pub const Prefix = enum(u8) {
-                ES = 0x26,
-                CS = 0x2e,
-                SS = 0x36,
-                DS = 0x3e,
-                FS = 0x64,
-                GS = 0x65,
-                OS = 0x66,
-                AS = 0x67,
-                F2 = 0xf2,
-                F3 = 0xf3,
+                es = 0x26,
+                cs = 0x2e,
+                ss = 0x36,
+                ds = 0x3e,
+                fs = 0x64,
+                gs = 0x65,
+                os = 0x66,
+                as = 0x67,
+                f2 = 0xf2,
+                f3 = 0xf3,
             };
             const REX = packed struct {
                 b: u1 = 0,
@@ -342,7 +511,7 @@ const Instruction = struct {
 
             prefix: ?Prefix = null,
             rex: ?REX = null,
-            code: Code = .NOP,
+            code: Code = .nop,
             mod_rm: ?ModRM = null,
             sib: ?SIB = null,
             disp8: ?i8 = null,
@@ -659,9 +828,7 @@ const Instruction = struct {
 };
 
 const InstructionDecoder = struct {
-    instructions: ?[]Instruction = null,
-
-    pub fn decode(self: *@This(), bytes: [*]const u8) usize {
+    pub fn decode(_: *@This(), bytes: [*]const u8, output: ?[]Instruction) usize {
         var len: usize = 0;
         switch (builtin.target.cpu.arch) {
             .x86, .x86_64 => {
@@ -680,22 +847,20 @@ const InstructionDecoder = struct {
                     var len4: usize = 0;
                     for (opcode_fields) |field| {
                         const opcode: Code = @enumFromInt(field.value);
-                        for (.{ "_RM_", "_R_" }) |substr| {
-                            // uses a register/memory reference
-                            if (std.mem.indexOf(u8, field.name, substr) != null) {
-                                list1[len1] = opcode;
-                                len1 += 1;
-                            }
+                        // uses a register/memory reference
+                        if (std.mem.indexOf(u8, field.name, "_r") != null) {
+                            list1[len1] = opcode;
+                            len1 += 1;
                         }
-                        if (std.mem.indexOf(u8, field.name, "_IMM8") != null) {
+                        if (std.mem.indexOf(u8, field.name, "_imm8") != null) {
                             // has an 8-bit immediate
                             list2[len2] = opcode;
                             len2 += 1;
-                        } else if (std.mem.indexOf(u8, field.name, "_IMM32") != null) {
+                        } else if (std.mem.indexOf(u8, field.name, "_imm32") != null) {
                             // has an 32-bit immediate
                             list3[len3] = opcode;
                             len3 += 1;
-                        } else if (std.mem.indexOf(u8, field.name, "_IMM") != null) {
+                        } else if (std.mem.indexOf(u8, field.name, "_imm") != null) {
                             // has an 32/64-bit immediate
                             if (@bitSizeOf(usize) == 64) {
                                 list4[len4] = opcode;
@@ -784,11 +949,15 @@ const InstructionDecoder = struct {
                         op.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
                         i += 8;
                     }
-                    if (self.instructions) |b| b[len] = .{ .offset = offset, .op = op };
+                    if (output) |buffer| {
+                        if (len < buffer.len) {
+                            buffer[len] = .{ .offset = offset, .op = op };
+                        }
+                    }
                     len += 1;
                     switch (op.code) {
-                        .RET => break,
-                        .OP_RM => switch (op.mod_rm.?.reg) {
+                        .ret => break,
+                        .mux_rm => switch (op.mod_rm.?.reg) {
                             0 => {}, // inc
                             1 => {}, // dec
                             2, 3 => {}, // call
@@ -796,6 +965,7 @@ const InstructionDecoder = struct {
                             6 => {}, // push quad
                             else => {},
                         },
+                        @as(Code, @enumFromInt(0)) => break,
                         else => {},
                     }
                 }
@@ -807,10 +977,11 @@ const InstructionDecoder = struct {
 };
 
 const InstructionEncoder = struct {
-    bytes: ?[*]u8 = null,
+    output: ?[]u8 = null,
     len: usize = 0,
 
-    pub fn encode(self: *@This(), instrs: []Instruction) usize {
+    pub fn encode(self: *@This(), instrs: []Instruction, output: ?[]u8) usize {
+        self.output = output;
         self.len = 0;
         for (instrs) |instr| {
             self.add(instr.op);
@@ -850,7 +1021,7 @@ const InstructionEncoder = struct {
 
     test "add" {
         var bytes: [32]u8 = undefined;
-        var encoder: InstructionEncoder = .{ .bytes = &bytes };
+        var encoder: InstructionEncoder = .{ .output = &bytes };
         const u: u32 = 123;
         encoder.add(u);
         const o: ?u32 = null;
@@ -867,16 +1038,20 @@ const InstructionEncoder = struct {
 
     fn write(self: *@This(), instr: anytype) void {
         const T = @TypeOf(instr);
-        if (self.bytes) |b| {
-            const ptr: *align(1) T = @ptrCast(&b[self.len]);
-            ptr.* = instr;
+        // get size of struct without alignment padding
+        const size = @bitSizeOf(T) / 8;
+        if (self.output) |buffer| {
+            const bytes = std.mem.toBytes(instr);
+            if (self.len + size <= buffer.len) {
+                @memcpy(buffer[self.len .. self.len + size], bytes[0..size]);
+            }
         }
-        self.len += @bitSizeOf(T) / 8;
+        self.len += size;
     }
 
     test "write" {
         var bytes: [32]u8 = undefined;
-        var encoder: InstructionEncoder = .{ .bytes = &bytes };
+        var encoder: InstructionEncoder = .{ .output = &bytes };
         const u: u32 = 123;
         encoder.write(u);
         const s: packed struct {
@@ -890,6 +1065,10 @@ const InstructionEncoder = struct {
     }
 };
 
+test "InstructionEncoder" {
+    _ = InstructionEncoder;
+}
+
 const assert = std.debug.assert;
 const maxInt = std.math.maxInt;
 const mem = std.mem;
@@ -897,7 +1076,7 @@ const native_os = builtin.os.tag;
 const windows = std.os.windows;
 const posix = std.posix;
 
-const ExecutablePageAllocator = struct {
+pub const ExecutablePageAllocator = struct {
     const vtable: std.mem.Allocator.VTable = .{
         .alloc = alloc,
         .resize = std.heap.PageAllocator.vtable.resize,
@@ -940,21 +1119,3 @@ const ExecutablePageAllocator = struct {
         return slice.ptr;
     }
 };
-
-test {
-    const TestContext = struct {
-        index: usize,
-        id: usize = 1234,
-
-        pub fn create(index: usize) @This() {
-            return .{ .index = index };
-        }
-
-        pub fn check(self: @This()) bool {
-            return self.id == 1234;
-        }
-    };
-    // _ = Factory(TestContext);
-    _ = Instance(TestContext);
-    _ = InstructionEncoder;
-}
