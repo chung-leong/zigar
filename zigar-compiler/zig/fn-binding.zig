@@ -4,6 +4,7 @@ const fn_transform = @import("./fn-transform.zig");
 const expect = std.testing.expect;
 
 pub const BindingError = error{
+    too_many_instructions,
     context_placeholder_not_found,
     function_placeholder_not_found,
 };
@@ -69,6 +70,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             var buffer: [256]Instruction = undefined;
             var decoder: InstructionDecoder = .{};
             const instr_count = decoder.decode(code_ptr, &buffer);
+            if (instr_count > buffer.len) {
+                return BindingError.too_many_instructions;
+            }
             const instrs = buffer[0..instr_count];
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
@@ -96,25 +100,25 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             for (instrs) |*instr| {
                 switch (builtin.target.cpu.arch) {
                     .x86_64 => {
-                        switch (instr.op.code) {
-                            .mov_ax_imm,
-                            .mov_cx_imm,
-                            .mov_dx_imm,
-                            .mov_bx_imm,
-                            .mov_sp_imm,
-                            .mov_bp_imm,
-                            .mov_si_imm,
-                            .mov_di_imm,
-                            => {
-                                if (instr.op.imm64.? == context_placeholder) {
-                                    instr.op.imm64 = context_address;
-                                    context_replaced = true;
-                                } else if (instr.op.imm64.? == fn_placeholder) {
-                                    instr.op.imm64 = fn_address;
-                                    fn_replaced = true;
-                                }
-                            },
-                            else => {},
+                        if (instr.op.code == .mov_ax_imm) {
+                            if (instr.op.imm64.? == context_placeholder) {
+                                instr.op.imm64 = context_address;
+                                context_replaced = true;
+                            } else if (instr.op.imm64.? == fn_placeholder) {
+                                instr.op.imm64 = fn_address;
+                                fn_replaced = true;
+                            }
+                        }
+                    },
+                    .x86 => {
+                        if (instr.op.code == .mov_ax_imm) {
+                            if (instr.op.imm32.? == context_placeholder) {
+                                instr.op.imm32 = context_address;
+                                context_replaced = true;
+                            } else if (instr.op.imm32.? == fn_placeholder) {
+                                instr.op.imm32 = fn_address;
+                                fn_replaced = true;
+                            }
                         }
                     },
                     else => unreachable,
@@ -133,7 +137,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             self.header.signature = 0;
-            const ptr: []u8 = @as([*]u8, @ptrCast(self))[0..self.header.size];
+            // free memory using correct alignment to avoid warning
+            const alignment = @alignOf(@This());
+            const ST = []align(alignment) u8;
+            const MT = [*]align(alignment) u8;
+            const ptr: ST = @as(MT, @ptrCast(self))[0..self.header.size];
             allocator.free(ptr);
         }
 
@@ -166,6 +174,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn getTemplate() [*]const u8 {
+            if (builtin.mode == .Debug) {
+                @compileError("This file cannot be compiled at optimize=Debug");
+            }
             const caller = getTemplateFn();
             return @ptrCast(&caller);
         }
@@ -182,12 +193,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    const cxt: *const CT = @ptrFromInt(context_placeholder);
+                    const ctx_address = loadConstant(context_placeholder);
+                    const ctx: *const CT = @ptrFromInt(ctx_address);
                     inline for (ctx_mapping) |m| {
-                        @field(args, m.dest) = @field(cxt, m.src);
+                        @field(args, m.dest) = @field(ctx, m.src);
                     }
-                    const func: *const FT = @ptrFromInt(fn_placeholder);
-                    return @call(.auto, func, args);
+                    const func_address = loadConstant(fn_placeholder);
+                    const func: *const FT = @ptrFromInt(func_address);
+                    return @call(.never_inline, func, args);
                 }
             };
             return fn_transform.spreadArgs(ns.call, f.calling_convention);
@@ -196,6 +209,21 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         test "getTemplateFn" {
             const func = getTemplateFn();
             try expect(@TypeOf(func) == BFT);
+        }
+
+        inline fn loadConstant(comptime constant: usize) usize {
+            // use inline assembly to guarantee the generation of expected op(s)
+            return switch (builtin.target.cpu.arch) {
+                .x86_64 => asm (""
+                    : [ret] "={rax}" (-> usize),
+                    : [constant] "{rax}" (constant),
+                ),
+                .x86 => asm (""
+                    : [ret] "={eax}" (-> usize),
+                    : [constant] "{eax}" (constant),
+                ),
+                else => unreachable,
+            };
         }
     };
 }
@@ -219,6 +247,7 @@ test "Binding (basic)" {
     const sum1 = bf1(1, 2, 3);
     try expect(ns1.called == true);
     try expect(sum1 == 1 + 2 + 3 + 1234);
+    _ = &number;
     const ns2 = struct {
         var called = false;
 
@@ -502,6 +531,7 @@ const Instruction = struct {
                 mov_si_imm = 0xbe,
                 mov_di_imm = 0xbf,
                 ret = 0xc3,
+                call_imm32 = 0xe8,
                 mux_rm = 0xff,
                 _,
             };
@@ -942,7 +972,7 @@ const InstructionDecoder = struct {
                         } else if (mod_rm.mod == 1) {
                             disp_size = 8;
                         }
-                        sib_present = mod_rm.rm == 4;
+                        sib_present = mod_rm.mod != 3 and mod_rm.rm == 4;
                         op.mod_rm = mod_rm;
                     }
                     if (sib_present) {
@@ -980,6 +1010,26 @@ const InstructionDecoder = struct {
                             buffer[len] = .{ .offset = offset, .op = op };
                         }
                     }
+                    // std.debug.print("{any}\n", .{op.code});
+                    // if (op.mod_rm) |mod_rm| {
+                    //     std.debug.print("{any}\n", .{mod_rm});
+                    // }
+                    // if (op.disp8) |disp8| {
+                    //     std.debug.print("disp8 = {any}\n", .{disp8});
+                    // }
+                    // if (op.disp32) |disp32| {
+                    //     std.debug.print("disp32 = {any}\n", .{disp32});
+                    // }
+                    // if (op.imm8) |imm8| {
+                    //     std.debug.print("imm8 = {any}\n", .{imm8});
+                    // }
+                    // if (op.imm32) |imm32| {
+                    //     std.debug.print("imm32 = {any}\n", .{imm32});
+                    // }
+                    // if (op.imm64) |imm64| {
+                    //     std.debug.print("imm64 = {any}\n", .{imm64});
+                    // }
+                    // std.debug.print("\n", .{});
                     len += 1;
                     switch (op.code) {
                         .ret => break,
