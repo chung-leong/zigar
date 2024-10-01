@@ -35,13 +35,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const code_align = @alignOf(fn () void);
     const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
     const context_placeholder: usize = switch (@bitSizeOf(usize)) {
-        32 => 0xbad_beef_0,
-        64 => 0xdead_beef_bad_00000,
+        32 => 0xbaad_beef,
+        64 => 0xdead_beef_baad_f00d,
         else => unreachable,
     };
     const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
-        32 => 0xbad_ee15_0,
-        64 => 0xdead_ee15_bad_00000,
+        32 => 0xfeed_face,
+        64 => 0xfeed_face_decaf_ee1,
         else => unreachable,
     };
     const Header = struct {
@@ -121,6 +121,29 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             }
                         }
                     },
+                    .aarch64 => {
+                        switch (instr.op) {
+                            .movz => |*op| {
+                                if (op.imm16 == (context_placeholder & @as(usize, 0xffff))) {
+                                    op.imm16 = @truncate(context_address & @as(usize, 0xffff));
+                                } else if (op.imm16 == (fn_placeholder & @as(usize, 0xffff))) {
+                                    op.imm16 = @truncate(fn_address & @as(usize, 0xffff));
+                                }
+                            },
+                            .movk => |*op| {
+                                inline for (1..4) |index| {
+                                    if (op.imm16 == ((context_placeholder >> (index * 16)) & @as(usize, 0xffff))) {
+                                        op.imm16 = @truncate((context_address >> (index * 16)) & @as(usize, 0xffff));
+                                        context_replaced = true;
+                                    } else if (op.imm16 == ((fn_placeholder >> (index * 16)) & @as(usize, 0xffff))) {
+                                        op.imm16 = @truncate((fn_address >> (index * 16)) & @as(usize, 0xffff));
+                                        fn_replaced = true;
+                                    }
+                                }
+                            },
+                            else => {},
+                        }
+                    },
                     else => unreachable,
                 }
             }
@@ -188,7 +211,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         fn getTemplateFn() BFT {
             const f = @typeInfo(FT).Fn;
             const ns = struct {
-                fn call(bf_args: std.meta.ArgsTuple(BFT)) f.return_type.? {
+                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) f.return_type.? {
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -221,6 +244,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .x86 => asm (""
                     : [ret] "={eax}" (-> usize),
                     : [constant] "{eax}" (constant),
+                ),
+                .aarch64 => asm (""
+                    : [ret] "={x8}" (-> usize),
+                    : [constant] "{x8}" (constant),
                 ),
                 else => unreachable,
             };
@@ -576,7 +603,7 @@ const Instruction = struct {
             imm32: ?u32 = null,
             imm64: ?u64 = null,
         },
-        .aarch64 => struct {
+        .aarch64 => union(enum) {
             const MOVZ = packed struct {
                 rd: u5,
                 imm16: u16,
@@ -589,42 +616,25 @@ const Instruction = struct {
                 hw: u2,
                 opc: u9 = 0x1e5,
             };
-            const SUB = packed struct {
-                rd: u5,
-                rn: u5,
-                imm12: u12,
-                opc: u10 = 0x344,
-            };
-            const STR = packed struct {
-                rt: u5,
-                rn: u5,
-                imm12: u12 = 0,
-                opc: u10 = 0x3e4,
-            };
             const BR = packed struct {
-                op4: u5 = 0,
+                rm: u5 = 0,
                 rn: u5,
-                op3: u6 = 0,
-                op2: u5 = 0x1f,
-                opc: u4 = 0,
-                ope: u7 = 0x6b,
+                opc: u22 = 0x35_87c0,
             };
-            const MOV_IMM64 = packed struct {
-                movz: MOVZ,
-                movk1: MOVK,
-                movk2: MOVK,
-                movk3: MOVK,
+            const RET = packed struct {
+                rm: u5 = 0,
+                rn: u5,
+                opc: u22 = 0x35_97c0,
+            };
+            const UNKNOWN = packed struct {
+                bits: u32,
+            };
 
-                fn init(rd: u5, imm64: usize) @This() {
-                    const imm16s: [4]u16 = @bitCast(imm64);
-                    return .{
-                        .movz = .{ .imm16 = imm16s[0], .hw = 0, .rd = rd },
-                        .movk1 = .{ .imm16 = imm16s[1], .hw = 1, .rd = rd },
-                        .movk2 = .{ .imm16 = imm16s[2], .hw = 2, .rd = rd },
-                        .movk3 = .{ .imm16 = imm16s[3], .hw = 3, .rd = rd },
-                    };
-                }
-            };
+            movz: MOVZ,
+            movk: MOVK,
+            br: BR,
+            ret: RET,
+            unknown: UNKNOWN,
         },
         .riscv64 => struct {
             const LUI = packed struct {
@@ -940,7 +950,6 @@ const InstructionDecoder = struct {
 
                 var i: usize = 0;
                 while (true) {
-                    const offset = i;
                     var op: Instruction.Op = .{};
                     // look for legacy prefix
                     op.prefix = result: {
@@ -1007,29 +1016,9 @@ const InstructionDecoder = struct {
                     }
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .offset = i, .op = op };
                         }
                     }
-                    // std.debug.print("{any}\n", .{op.code});
-                    // if (op.mod_rm) |mod_rm| {
-                    //     std.debug.print("{any}\n", .{mod_rm});
-                    // }
-                    // if (op.disp8) |disp8| {
-                    //     std.debug.print("disp8 = {any}\n", .{disp8});
-                    // }
-                    // if (op.disp32) |disp32| {
-                    //     std.debug.print("disp32 = {any}\n", .{disp32});
-                    // }
-                    // if (op.imm8) |imm8| {
-                    //     std.debug.print("imm8 = {any}\n", .{imm8});
-                    // }
-                    // if (op.imm32) |imm32| {
-                    //     std.debug.print("imm32 = {any}\n", .{imm32});
-                    // }
-                    // if (op.imm64) |imm64| {
-                    //     std.debug.print("imm64 = {any}\n", .{imm64});
-                    // }
-                    // std.debug.print("\n", .{});
                     len += 1;
                     switch (op.code) {
                         .ret => break,
@@ -1041,7 +1030,31 @@ const InstructionDecoder = struct {
                             6 => {}, // push quad
                             else => {},
                         },
-                        @as(Code, @enumFromInt(0)) => break,
+                        else => {},
+                    }
+                }
+            },
+            .aarch64 => {
+                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
+                var i: usize = 0;
+                while (true) {
+                    const Op = Instruction.Op;
+                    const un = @typeInfo(Op).Union;
+                    const op: Op = inline for (un.fields) |field| {
+                        const specific_op: field.type = @bitCast(words[i]);
+                        if (matchDefault(specific_op)) {
+                            break @unionInit(Op, field.name, specific_op);
+                        }
+                    } else unreachable;
+                    i += 1;
+                    if (output) |buffer| {
+                        if (len < buffer.len) {
+                            buffer[len] = .{ .offset = i * @sizeOf(u32), .op = op };
+                        }
+                    }
+                    len += 1;
+                    switch (op) {
+                        .ret, .br => break,
                         else => {},
                     }
                 }
@@ -1079,7 +1092,12 @@ const InstructionEncoder = struct {
             .Union => |un| {
                 const Tag = un.tag_type orelse @compileError("Cannot handle untagged union");
                 const tag: Tag = instr;
-                return self.add(@field(instr, @tagName(tag)));
+                inline for (un.fields) |field| {
+                    if (tag == @field(Tag, field.name)) {
+                        self.add(@field(instr, field.name));
+                        break;
+                    }
+                }
             },
             .Array => for (instr) |element| self.add(element),
             .Pointer => |pt| {
@@ -1143,6 +1161,32 @@ const InstructionEncoder = struct {
 
 test "InstructionEncoder" {
     _ = InstructionEncoder;
+}
+
+fn matchDefault(s: anytype) bool {
+    const fields = switch (@typeInfo(@TypeOf(s))) {
+        .Struct => |st| st.fields,
+        else => @compileError("Not a struct"),
+    };
+    return inline for (fields) |field| {
+        if (field.default_value) |opaque_ptr| {
+            const default_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+            if (@field(s, field.name) != default_ptr.*) {
+                return false;
+            }
+        }
+    } else true;
+}
+
+test "matchDefault" {
+    const S = struct {
+        number1: i32 = 123,
+        number2: i32,
+    };
+    const s1: S = .{ .number2 = 456 };
+    try expect(matchDefault(s1) == true);
+    const s2: S = .{ .number1 = 100, .number2 = 456 };
+    try expect(matchDefault(s2) == false);
 }
 
 const assert = std.debug.assert;
