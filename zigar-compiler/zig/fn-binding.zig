@@ -32,7 +32,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
     const code_align = @alignOf(fn () void);
-    const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
+    const binding_signature: u64 = 0xef20_90b6_415d_2fe3;
     const context_placeholder: usize = switch (@bitSizeOf(usize)) {
         32 => 0xbaad_beef,
         // high word of 64 bit signature needs to be odd for PowerPC,
@@ -45,14 +45,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         64 => 0xbabe_feed_decaf_ee1,
         else => unreachable,
     };
-    const Header = struct {
-        signature: u64 = instance_signature,
-        size: usize,
-        context: ?CT,
-    };
 
-    return struct {
-        header: Header,
+    return extern struct {
+        signature: u64 = binding_signature,
+        size: usize,
+        context_bytes: [@sizeOf(CT)]u8 align(@alignOf(CT)),
         code: [0]u8 align(code_align) = undefined,
 
         pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
@@ -93,14 +90,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 @field(context, field.name) = @field(vars, field.name);
             }
             self.* = .{
-                .header = .{
-                    .size = instance_size,
-                    .context = context,
-                },
+                .size = instance_size,
+                .context_bytes = std.mem.toBytes(context),
             };
             const fn_ptr = opaquePointerOf(func);
             // replace placeholders with actual address
-            const context_address = @intFromPtr(&self.header.context);
+            const context_address = @intFromPtr(&self.context_bytes);
             const fn_address = @intFromPtr(fn_ptr);
             var replacements: [2]struct {
                 placeholder: usize,
@@ -259,12 +254,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-            self.header.signature = 0;
+            self.signature = 0;
             // free memory using correct alignment to avoid warning
             const alignment = @alignOf(@This());
             const ST = []align(alignment) u8;
             const MT = [*]align(alignment) u8;
-            const ptr: ST = @as(MT, @ptrCast(self))[0..self.header.size];
+            const ptr: ST = @as(MT, @ptrCast(self))[0..self.size];
             allocator.free(ptr);
         }
 
@@ -273,7 +268,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         test "function" {
-            const b: @This() = .{ .header = .{ .context = undefined, .size = 0 } };
+            const b: @This() = .{ .context_bytes = undefined, .size = 0 };
             const func = b.function();
             try expect(@TypeOf(func) == *const BFT);
         }
@@ -281,11 +276,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
             const code: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
             const self: *@This() = @alignCast(@fieldParentPtr("code", @constCast(code)));
-            return if (self.header.signature == instance_signature) self else null;
+            return if (self.signature == binding_signature) self else null;
         }
 
         test "fromFunction" {
-            const b: @This() = .{ .header = .{ .context = undefined, .size = 0 } };
+            const b: @This() = .{ .context_bytes = undefined, .size = 0 };
             const func = b.function();
             const ptr1 = fromFunction(func);
             try expect(ptr1 == &b);
