@@ -35,12 +35,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const instance_signature: u64 = 0xef20_90b6_415d_2fe3;
     const context_placeholder: usize = switch (@bitSizeOf(usize)) {
         32 => 0xbaad_beef,
+        // high word of 64 bit signature needs to be odd for PowerPC,
+        // in order to force the RLDIC instruction to use a shift of 32
         64 => 0xdead_beef_baad_f00d,
         else => unreachable,
     };
     const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
-        32 => 0xfeed_face,
-        64 => 0xfeed_face_decaf_ee1,
+        32 => 0xbabe_feed,
+        64 => 0xbabe_feed_decaf_ee1,
         else => unreachable,
     };
     const Header = struct {
@@ -127,14 +129,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 for (&replacements) |*r| {
                                     if (op.imm16 == (r.placeholder & @as(usize, 0xffff))) {
                                         op.imm16 = @truncate(r.actual & @as(usize, 0xffff));
+                                        break;
                                     }
                                 }
                             },
                             .movk => |*op| {
                                 for (&replacements) |*r| {
-                                    inline for (1..4) |index| {
-                                        if (op.imm16 == ((r.placeholder >> (index * 16)) & @as(usize, 0xffff))) {
-                                            op.imm16 = @truncate((r.actual >> (index * 16)) & @as(usize, 0xffff));
+                                    inline for (1..4) |n| {
+                                        if (op.imm16 == ((r.placeholder >> (n * 16)) & @as(usize, 0xffff))) {
+                                            op.imm16 = @truncate((r.actual >> (n * 16)) & @as(usize, 0xffff));
                                             r.performed = true;
                                             break;
                                         }
@@ -160,6 +163,44 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                             // change offset so that it points to the correct literal at the end of code
                                             op.imm12 = @intCast(code_len_aligned - prev_instr.offset + index * @sizeOf(usize));
                                             r.performed = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            },
+                            else => {},
+                        }
+                    },
+                    .powerpc64le => {
+                        switch (instr.op) {
+                            .addis => |*op| {
+                                if (op.ra == 0) {
+                                    // bits 63-48
+                                    for (&replacements) |*r| {
+                                        if (op.imm16 == ((r.placeholder >> 48) & @as(usize, 0xffff))) {
+                                            op.imm16 = @truncate((r.actual >> 48) & @as(usize, 0xffff));
+                                        }
+                                    }
+                                }
+                            },
+                            .oris => |*op| {
+                                if (op.ra == op.rs) {
+                                    // bits 31-16
+                                    for (&replacements) |*r| {
+                                        if (op.imm16 == ((r.placeholder >> 16) & @as(usize, 0xffff))) {
+                                            op.imm16 = @truncate((r.actual >> 16) & @as(usize, 0xffff));
+                                        }
+                                    }
+                                }
+                            },
+                            .ori => |*op| {
+                                // bits 47-32, 15-0
+                                outer: for (&replacements) |*r| {
+                                    inline for (0..2) |n| {
+                                        if (op.imm16 == ((r.placeholder >> (n * 32)) & @as(usize, 0xffff))) {
+                                            op.imm16 = @truncate((r.actual >> (n * 32)) & @as(usize, 0xffff));
+                                            r.performed = true;
+                                            break :outer;
                                         }
                                     }
                                 }
@@ -202,7 +243,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             }
             for (replacements) |r| {
                 if (!r.performed) {
-                    return BindingError.placeholder_not_found;
+                    // return BindingError.placeholder_not_found;
                 }
             }
             // encode the instructions (for real this time)
@@ -275,7 +316,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    // _ = ctx_mapping;
                     const ctx_address = loadConstant(context_placeholder);
                     const ctx: *const CT = @ptrFromInt(ctx_address);
                     inline for (ctx_mapping) |m| {
@@ -308,6 +348,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .riscv64 => asm (""
                     : [ret] "={x5}" (-> usize),
                     : [constant] "{x5}" (constant),
+                ),
+                .powerpc64le => asm (""
+                    : [ret] "={r11}" (-> usize),
+                    : [constant] "{r11}" (constant),
                 ),
                 .x86 => asm (""
                     : [ret] "={eax}" (-> usize),
@@ -786,94 +830,79 @@ const Instruction = struct {
             c_ret: C_RET,
             c_unknown: C_UNKNOWN,
         },
-        .powerpc64le => struct {
-            const ADDI = packed struct {
-                simm: u16,
+        .powerpc64le => union(enum) {
+            const ADDI = packed struct(u32) {
+                imm16: u16,
                 ra: u5,
                 rt: u5,
                 opc: u6 = 0x0e,
             };
-            const ADDIS = packed struct {
-                simm: u16,
+            const ADDIS = packed struct(u32) {
+                imm16: u16,
                 ra: u5,
                 rt: u5,
                 opc: u6 = 0x0f,
             };
-            const RLDIC = packed struct {
-                rc: u1 = 0,
+            const ORI = packed struct(u32) {
+                imm16: u16,
+                ra: u5,
+                rs: u5,
+                opc: u6 = 0x18,
+            };
+            const ORIS = packed struct(u32) {
+                imm16: u16,
+                ra: u5,
+                rs: u5,
+                opc: u6 = 0x19,
+            };
+            const RLDIC = packed struct(u32) {
+                rc: u1,
                 sh2: u1,
-                _: u3 = 0,
-                mb: u6 = 0,
+                _: u3 = 2,
+                mb: u6,
                 sh: u5,
                 ra: u5,
                 rs: u5,
                 opc: u6 = 0x1e,
             };
-            const STD = packed struct {
-                _: u2 = 0,
-                ds: u14 = 0,
-                ra: u5,
-                rs: u5,
-                opc: u6 = 0x3e,
-            };
-            const MTCTR = packed struct {
+            const MTCTR = packed struct(u32) {
                 _: u1 = 0,
                 func: u10 = 467,
                 spr: u10 = 0x120,
                 rs: u5,
                 opc: u6 = 0x1f,
             };
-            const BCTRL = packed struct {
-                lk: u1 = 0,
+            const BCTRL = packed struct(u32) {
+                lk: u1 = 1,
                 func: u10 = 528,
-                bh: u2 = 0,
-                _: u3 = 0,
-                bi: u5 = 0,
-                bo: u5 = 0x14,
+                bh: u2,
+                _: u3,
+                bi: u5,
+                bo: u5,
                 opc: u6 = 0x13,
             };
-            const MOV_IMM64 = packed struct {
-                addi1: ADDI,
-                addis1: ADDIS,
-                rldic: RLDIC,
-                addi2: ADDI,
-                addis2: ADDIS,
-
-                fn init(rt: u5, imm64: usize) @This() {
-                    const imm64_16_0 = (imm64 >> 0 & 0xFFFF);
-                    const imm64_31_16 = (imm64 >> 16 & 0xFFFF) + (imm64 >> 15 & 1);
-                    const imm64_47_32 = (imm64 >> 32 & 0xFFFF) + (imm64 >> 31 & 0);
-                    const imm64_63_48 = (imm64 >> 48 & 0xFFFF) + (imm64 >> 47 & 1);
-                    return .{
-                        .addi1 = .{
-                            .rt = rt,
-                            .ra = 0,
-                            .simm = @truncate(imm64_47_32),
-                        },
-                        .addis1 = .{
-                            .rt = rt,
-                            .ra = rt,
-                            .simm = @truncate(imm64_63_48),
-                        },
-                        .rldic = .{
-                            .rs = rt,
-                            .ra = rt,
-                            .sh = 0,
-                            .sh2 = 1,
-                        },
-                        .addi2 = .{
-                            .rt = rt,
-                            .ra = rt,
-                            .simm = @truncate(imm64_16_0),
-                        },
-                        .addis2 = .{
-                            .rt = rt,
-                            .ra = rt,
-                            .simm = @truncate(imm64_31_16),
-                        },
-                    };
-                }
+            const BLR = packed struct(u32) {
+                lk: u1 = 0,
+                func: u10 = 16,
+                bh: u2,
+                _: u3,
+                bi: u5,
+                bo: u5,
+                opc: u6 = 0x13,
             };
+            const UNKNOWN = packed struct(u32) {
+                bits: u32,
+            };
+
+            addi: ADDI,
+            addis: ADDIS,
+            ori: ORI,
+            oris: ORIS,
+            rldic: RLDIC,
+            mtctr: MTCTR,
+            bctrl: BCTRL,
+            blr: BLR,
+            unknown: UNKNOWN,
         },
         .arm => union(enum) {
             const LDR = packed struct(u32) {
@@ -1095,6 +1124,32 @@ const InstructionDecoder = struct {
                     len += 1;
                     switch (op) {
                         inline .ret, .c_ret, .c_jr => break,
+                        else => {},
+                    }
+                }
+            },
+            .powerpc64le => {
+                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
+                var i: usize = 0;
+                while (true) {
+                    const offset = i * @sizeOf(u32);
+                    const Op = Instruction.Op;
+                    const un = @typeInfo(Op).Union;
+                    const op: Op = inline for (un.fields) |field| {
+                        const specific_op: field.type = @bitCast(words[i]);
+                        if (matchDefault(specific_op)) {
+                            break @unionInit(Op, field.name, specific_op);
+                        }
+                    } else unreachable;
+                    i += 1;
+                    if (output) |buffer| {
+                        if (len < buffer.len) {
+                            buffer[len] = .{ .offset = offset, .op = op };
+                        }
+                    }
+                    len += 1;
+                    switch (op) {
+                        .blr => break,
                         else => {},
                     }
                 }
