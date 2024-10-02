@@ -66,7 +66,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
         pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
             const code_ptr = getTemplate();
-            var buffer: [256]Instruction = undefined;
+            var buffer: [1024]Instruction = undefined;
             var decoder: InstructionDecoder = .{};
             const instr_count = decoder.decode(code_ptr, &buffer);
             if (instr_count > buffer.len) {
@@ -79,7 +79,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const code_len_aligned = std.mem.alignForward(usize, code_len, @alignOf(usize));
             const extra = switch (builtin.target.cpu.arch) {
                 // extra space for constants
-                .riscv64 => @sizeOf(usize) * 2,
+                .arm, .riscv64 => @sizeOf(usize) * 2,
                 else => 0,
             };
             const instance_size = @offsetOf(@This(), "code") + code_len_aligned + extra;
@@ -157,7 +157,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                         if (constant == r.placeholder) {
                                             // replace lui with auipc for pc-relative addressing
                                             prev_instr.op = .{ .auipc = .{ .imm20 = 0, .rd = prev_op.lui.rd } };
-                                            // change offset so that it pointer to the correct literal at the end of code
+                                            // change offset so that it points to the correct literal at the end of code
                                             op.imm12 = @intCast(code_len_aligned - prev_instr.offset + index * @sizeOf(usize));
                                             r.performed = true;
                                         }
@@ -178,12 +178,31 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             }
                         }
                     },
+                    .arm => {
+                        switch (instr.op) {
+                            .ldr => |*op| {
+                                if (op.rn == 15) {
+                                    // ARM quirk: pc points to the instruction AFTER the next one, hence the +8
+                                    const ptr: *const usize = @ptrCast(@alignCast(&code_ptr[instr.offset + 8 + op.imm12]));
+                                    const constant = ptr.*;
+                                    for (&replacements, 0..) |*r, index| {
+                                        if (constant == r.placeholder) {
+                                            // change offset so that it points to the correct literal at the end of code
+                                            op.imm12 = @intCast(code_len_aligned - instr.offset - 8 + index * @sizeOf(usize));
+                                            r.performed = true;
+                                        }
+                                    }
+                                }
+                            },
+                            else => {},
+                        }
+                    },
                     else => unreachable,
                 }
             }
             for (replacements) |r| {
                 if (!r.performed) {
-                    // return BindingError.placeholder_not_found;
+                    return BindingError.placeholder_not_found;
                 }
             }
             // encode the instructions (for real this time)
@@ -191,8 +210,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             _ = encoder.encode(instrs, output_ptr[0..code_len]);
             if (extra > 0) {
                 // add constants
-                @memcpy(output_ptr[code_len_aligned + 0 .. code_len_aligned + 8], &std.mem.toBytes(context_address));
-                @memcpy(output_ptr[code_len_aligned + 8 .. code_len_aligned + 16], &std.mem.toBytes(fn_address));
+                const literal_ptr = @as([*]usize, @ptrCast(@alignCast(&output_ptr[code_len_aligned])));
+                literal_ptr[0] = context_address;
+                literal_ptr[1] = fn_address;
             }
             return self;
         }
@@ -255,6 +275,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
+                    // _ = ctx_mapping;
                     const ctx_address = loadConstant(context_placeholder);
                     const ctx: *const CT = @ptrFromInt(ctx_address);
                     inline for (ctx_mapping) |m| {
@@ -280,10 +301,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     : [ret] "={rax}" (-> usize),
                     : [constant] "{rax}" (constant),
                 ),
-                .x86 => asm (""
-                    : [ret] "={eax}" (-> usize),
-                    : [constant] "{eax}" (constant),
-                ),
                 .aarch64 => asm (""
                     : [ret] "={x8}" (-> usize),
                     : [constant] "{x8}" (constant),
@@ -291,6 +308,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .riscv64 => asm (""
                     : [ret] "={x5}" (-> usize),
                     : [constant] "{x5}" (constant),
+                ),
+                .x86 => asm (""
+                    : [ret] "={eax}" (-> usize),
+                    : [constant] "{eax}" (constant),
+                ),
+                .arm => asm (""
+                    : [ret] "={r0}" (-> usize),
+                    : [constant] "{r0}" (constant),
                 ),
                 else => unreachable,
             };
@@ -850,75 +875,32 @@ const Instruction = struct {
                 }
             };
         },
-        .arm => struct {
-            const MOVW = packed struct {
+        .arm => union(enum) {
+            const LDR = packed struct(u32) {
                 imm12: u12,
-                rd: u4,
-                imm4: u4,
-                opc: u8 = 0x30,
-                _: u4 = 0,
-            };
-            const MOVT = packed struct {
-                imm12: u12,
-                rd: u4,
-                imm4: u4,
-                opc: u8 = 0x34,
-                _: u4 = 0,
-            };
-            const SUB = packed struct {
-                imm12: u12,
-                rd: u4,
-                rn: u4,
-                opc: u8 = 0x24,
-                _: u4 = 0,
-            };
-            const STR = packed struct {
-                imm12: u12 = 0,
                 rt: u4,
                 rn: u4,
-                opc: u8 = 0x58,
-                _: u4 = 0,
+                opc: u8 = 0x59,
+                _: u4,
             };
-            const BX = packed struct {
-                rm: u4,
-                flags: u4 = 0x1,
-                imm12: u12 = 0xfff,
-                opc: u8 = 0x12,
-                _: u4 = 0,
+            const PUSH = packed struct(u32) {
+                reg_set: u16,
+                opc: u12 = 0x92d,
+                _: u4,
             };
-            const MOV_IMM32 = packed struct {
-                movw: MOVW,
-                movt: MOVT,
+            const POP = packed struct(u32) {
+                reg_set: u16,
+                opc: u12 = 0x8bd,
+                _: u4,
+            };
+            const UNKNOWN = packed struct(u32) {
+                bits: u32,
+            };
 
-                fn init(rd: u4, imm32: usize) @This() {
-                    const imm16s: [2]u16 = @bitCast(imm32);
-                    return .{
-                        .movw = .{
-                            .imm12 = @truncate(imm16s[0] & 0xFFF),
-                            .imm4 = @truncate(imm16s[0] >> 12 & 0xF),
-                            .rd = rd,
-                        },
-                        .movt = .{
-                            .imm12 = @truncate(imm16s[1] & 0xFFF),
-                            .imm4 = @truncate(imm16s[1] >> 12 & 0xF),
-                            .rd = rd,
-                        },
-                    };
-                }
-            };
-            fn imm12(comptime value: u32) u12 {
-                var r: u32 = 0;
-                var v: u32 = value;
-                // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
-                while (v & ~@as(u32, 0xff) != 0) {
-                    v = (v << 2) | (v >> 30);
-                    r += 1;
-                    if (r > 15) {
-                        @compileError("Cannot encode value as imm12");
-                    }
-                }
-                return r << 8 | v;
-            }
+            ldr: LDR,
+            push: PUSH,
+            pop: POP,
+            unknown: UNKNOWN,
         },
         else => void,
     };
@@ -1113,6 +1095,32 @@ const InstructionDecoder = struct {
                     len += 1;
                     switch (op) {
                         inline .ret, .c_ret, .c_jr => break,
+                        else => {},
+                    }
+                }
+            },
+            .arm => {
+                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
+                var i: usize = 0;
+                while (true) {
+                    const offset = i * @sizeOf(u32);
+                    const Op = Instruction.Op;
+                    const un = @typeInfo(Op).Union;
+                    const op: Op = inline for (un.fields) |field| {
+                        const specific_op: field.type = @bitCast(words[i]);
+                        if (matchDefault(specific_op)) {
+                            break @unionInit(Op, field.name, specific_op);
+                        }
+                    } else unreachable;
+                    i += 1;
+                    if (output) |buffer| {
+                        if (len < buffer.len) {
+                            buffer[len] = .{ .offset = offset, .op = op };
+                        }
+                    }
+                    len += 1;
+                    switch (op) {
+                        .pop => break,
                         else => {},
                     }
                 }
