@@ -5,8 +5,7 @@ const expect = std.testing.expect;
 
 pub const BindingError = error{
     too_many_instructions,
-    context_placeholder_not_found,
-    function_placeholder_not_found,
+    placeholder_not_found,
 };
 
 pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
@@ -77,7 +76,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
             const code_len = encoder.encode(instrs, null);
-            const instance_size = @offsetOf(@This(), "code") + code_len;
+            const code_len_aligned = std.mem.alignForward(usize, code_len, @alignOf(usize));
+            const extra = switch (builtin.target.cpu.arch) {
+                // extra space for constants
+                .riscv64 => @sizeOf(usize) * 2,
+                else => 0,
+            };
+            const instance_size = @offsetOf(@This(), "code") + code_len_aligned + extra;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
             const self: *@This() = @ptrCast(new_bytes);
             var context: CT = undefined;
@@ -91,70 +96,104 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .context = context,
                 },
             };
+            const fn_ptr = opaquePointerOf(func);
             // replace placeholders with actual address
             const context_address = @intFromPtr(&self.header.context);
-            const fn_ptr = opaquePointerOf(func);
             const fn_address = @intFromPtr(fn_ptr);
-            var context_replaced = false;
-            var fn_replaced = false;
-            for (instrs) |*instr| {
+            var replacements: [2]struct {
+                placeholder: usize,
+                actual: usize,
+                performed: bool = false,
+            } = .{
+                .{ .placeholder = context_placeholder, .actual = context_address },
+                .{ .placeholder = fn_placeholder, .actual = fn_address },
+            };
+            for (instrs, 0..) |*instr, instr_index| {
                 switch (builtin.target.cpu.arch) {
                     .x86_64 => {
                         if (instr.op.code == .mov_ax_imm) {
-                            if (instr.op.imm64.? == context_placeholder) {
-                                instr.op.imm64 = context_address;
-                                context_replaced = true;
-                            } else if (instr.op.imm64.? == fn_placeholder) {
-                                instr.op.imm64 = fn_address;
-                                fn_replaced = true;
-                            }
-                        }
-                    },
-                    .x86 => {
-                        if (instr.op.code == .mov_ax_imm) {
-                            if (instr.op.imm32.? == context_placeholder) {
-                                instr.op.imm32 = context_address;
-                                context_replaced = true;
-                            } else if (instr.op.imm32.? == fn_placeholder) {
-                                instr.op.imm32 = fn_address;
-                                fn_replaced = true;
+                            for (&replacements) |*r| {
+                                if (instr.op.imm64.? == r.placeholder) {
+                                    instr.op.imm64 = r.actual;
+                                    r.performed = true;
+                                    break;
+                                }
                             }
                         }
                     },
                     .aarch64 => {
                         switch (instr.op) {
                             .movz => |*op| {
-                                if (op.imm16 == (context_placeholder & @as(usize, 0xffff))) {
-                                    op.imm16 = @truncate(context_address & @as(usize, 0xffff));
-                                } else if (op.imm16 == (fn_placeholder & @as(usize, 0xffff))) {
-                                    op.imm16 = @truncate(fn_address & @as(usize, 0xffff));
+                                for (&replacements) |*r| {
+                                    if (op.imm16 == (r.placeholder & @as(usize, 0xffff))) {
+                                        op.imm16 = @truncate(r.actual & @as(usize, 0xffff));
+                                    }
                                 }
                             },
                             .movk => |*op| {
-                                inline for (1..4) |index| {
-                                    if (op.imm16 == ((context_placeholder >> (index * 16)) & @as(usize, 0xffff))) {
-                                        op.imm16 = @truncate((context_address >> (index * 16)) & @as(usize, 0xffff));
-                                        context_replaced = true;
-                                    } else if (op.imm16 == ((fn_placeholder >> (index * 16)) & @as(usize, 0xffff))) {
-                                        op.imm16 = @truncate((fn_address >> (index * 16)) & @as(usize, 0xffff));
-                                        fn_replaced = true;
+                                for (&replacements) |*r| {
+                                    inline for (1..4) |index| {
+                                        if (op.imm16 == ((r.placeholder >> (index * 16)) & @as(usize, 0xffff))) {
+                                            op.imm16 = @truncate((r.actual >> (index * 16)) & @as(usize, 0xffff));
+                                            r.performed = true;
+                                            break;
+                                        }
                                     }
                                 }
                             },
                             else => {},
                         }
                     },
+                    .riscv64 => {
+                        switch (instr.op) {
+                            .ld => |*op| if (instr_index > 0) {
+                                const prev_instr = &instrs[instr_index - 1];
+                                const prev_op = prev_instr.op;
+                                if (prev_op == .lui and prev_op.lui.rd == op.rs) {
+                                    const ptr_address: usize = @bitCast((@as(isize, prev_op.lui.imm20) << 12) + @as(isize, @intCast(op.imm12)));
+                                    const ptr: *const usize = @ptrFromInt(ptr_address);
+                                    const constant = ptr.*;
+                                    for (&replacements, 0..) |*r, index| {
+                                        if (constant == r.placeholder) {
+                                            // replace lui with auipc for pc-relative addressing
+                                            prev_instr.op = .{ .auipc = .{ .imm20 = 0, .rd = prev_op.lui.rd } };
+                                            // change offset so that it pointer to the correct literal at the end of code
+                                            op.imm12 = @intCast(code_len_aligned - prev_instr.offset + index * @sizeOf(usize));
+                                            r.performed = true;
+                                        }
+                                    }
+                                }
+                            },
+                            else => {},
+                        }
+                    },
+                    .x86 => {
+                        if (instr.op.code == .mov_ax_imm) {
+                            for (&replacements) |*r| {
+                                if (instr.op.imm32.? == r.placeholder) {
+                                    instr.op.imm32 = r.actual;
+                                    r.performed = true;
+                                    break;
+                                }
+                            }
+                        }
+                    },
                     else => unreachable,
                 }
             }
-            if (!context_replaced) {
-                return BindingError.context_placeholder_not_found;
-            } else if (!fn_replaced) {
-                return BindingError.function_placeholder_not_found;
+            for (replacements) |r| {
+                if (!r.performed) {
+                    // return BindingError.placeholder_not_found;
+                }
             }
             // encode the instructions (for real this time)
-            const output = @as([*]u8, @ptrCast(&self.code))[0..code_len];
-            _ = encoder.encode(instrs, output);
+            const output_ptr = @as([*]u8, @ptrCast(&self.code));
+            _ = encoder.encode(instrs, output_ptr[0..code_len]);
+            if (extra > 0) {
+                // add constants
+                @memcpy(output_ptr[code_len_aligned + 0 .. code_len_aligned + 8], &std.mem.toBytes(context_address));
+                @memcpy(output_ptr[code_len_aligned + 8 .. code_len_aligned + 16], &std.mem.toBytes(fn_address));
+            }
             return self;
         }
 
@@ -221,8 +260,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     inline for (ctx_mapping) |m| {
                         @field(args, m.dest) = @field(ctx, m.src);
                     }
-                    const func_address = loadConstant(fn_placeholder);
-                    const func: *const FT = @ptrFromInt(func_address);
+                    const fn_address = loadConstant(fn_placeholder);
+                    const func: *const FT = @ptrFromInt(fn_address);
                     return @call(.never_inline, func, args);
                 }
             };
@@ -248,6 +287,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .aarch64 => asm (""
                     : [ret] "={x8}" (-> usize),
                     : [constant] "{x8}" (constant),
+                ),
+                .riscv64 => asm (""
+                    : [ret] "={x5}" (-> usize),
+                    : [constant] "{x5}" (constant),
                 ),
                 else => unreachable,
             };
@@ -604,29 +647,29 @@ const Instruction = struct {
             imm64: ?u64 = null,
         },
         .aarch64 => union(enum) {
-            const MOVZ = packed struct {
+            const MOVZ = packed struct(u32) {
                 rd: u5,
                 imm16: u16,
                 hw: u2,
                 opc: u9 = 0x1a5,
             };
-            const MOVK = packed struct {
+            const MOVK = packed struct(u32) {
                 rd: u5,
                 imm16: u16,
                 hw: u2,
                 opc: u9 = 0x1e5,
             };
-            const BR = packed struct {
+            const BR = packed struct(u32) {
                 rm: u5 = 0,
                 rn: u5,
                 opc: u22 = 0x35_87c0,
             };
-            const RET = packed struct {
+            const RET = packed struct(u32) {
                 rm: u5 = 0,
                 rn: u5,
                 opc: u22 = 0x35_97c0,
             };
-            const UNKNOWN = packed struct {
+            const UNKNOWN = packed struct(u32) {
                 bits: u32,
             };
 
@@ -636,99 +679,87 @@ const Instruction = struct {
             ret: RET,
             unknown: UNKNOWN,
         },
-        .riscv64 => struct {
-            const LUI = packed struct {
+        .riscv64 => union(enum) {
+            const LUI = packed struct(u32) {
                 opc: u7 = 0x37,
                 rd: u5,
                 imm20: u20,
             };
-            const ADDI = packed struct {
-                opc: u7 = 0x1b,
+            const AUIPC = packed struct(u32) {
+                opc: u7 = 0x17,
                 rd: u5,
-                func: u3 = 0,
-                rs: u5,
-                imm12: u12,
+                imm20: u20,
             };
-            const SD = packed struct(u32) {
-                opc: u7 = 0x23,
-                offset_4_0: u5 = 0,
+            const LD = packed struct(u32) {
+                opc: u7 = 0x3,
+                rd: u5,
                 func: u3 = 0x3,
-                rs1: u5,
-                rs2: u5,
-                offset_11_5: u7 = 0,
-            };
-            const SUB = packed struct(u32) {
-                opc: u7 = 0x33,
-                rd: u5,
-                func: u3 = 0,
-                rs1: u5,
-                rs2: u5,
-                offset_11_5: u7 = 0x20,
-            };
-            const C_SLLI = packed struct {
-                opc: u2 = 0x2,
-                imm5: u5,
-                rd: u5,
-                imm1: u1,
-                func: u3 = 0,
-            };
-            const C_ADD = packed struct {
-                opc: u2 = 0x2,
                 rs: u5,
-                rd: u5,
-                func1: u1 = 1,
-                func2: u3 = 0x4,
+                imm12: i12,
             };
-            const C_JR = packed struct {
+            const RET = packed struct(u32) {
+                opc: u7 = 0x67,
+                rd: u5 = 0,
+                func: u3 = 0,
+                rs: u5 = 1,
+                imm12: u12 = 0,
+            };
+            const JALR = packed struct(u32) {
+                opc: u7 = 0x67,
+                rd: u5,
+                func: u3 = 0,
+                rs: u5,
+                imm12: u12 = 0,
+            };
+            const UNKNOWN = packed struct(u32) {
+                opc_1_0: u2 = 0x3,
+                opc_6_2: u5,
+                bits: u25,
+            };
+            const C_LD = packed struct(u16) {
+                opc: u2 = 0,
+                rd: u3,
+                uimm_7_6: u2,
+                rs: u3,
+                uimm_5_3: u3,
+                func: u3 = 0x3,
+            };
+            const C_RET = packed struct(u16) {
+                opc: u2 = 0x2,
+                rs2: u5 = 0,
+                rs: u5 = 1,
+                func1: u1 = 0,
+                func2: u3 = 0x6,
+            };
+            const C_JR = packed struct(u16) {
                 opc: u2 = 0x2,
                 rs2: u5 = 0,
                 rs: u5,
                 func1: u1 = 0,
                 func2: u3 = 0x4,
             };
-            const MOV_IMM64 = packed struct {
-                lui1: LUI,
-                addi1: ADDI,
-                lui2: LUI,
-                addi2: ADDI,
-                slli: C_SLLI,
-                add: C_ADD,
-
-                fn init(rd: u5, rtmp: u5, imm64: usize) @This() {
-                    const imm64_11_0 = (imm64 >> 0 & 0xFFF);
-                    const imm64_31_12 = (imm64 >> 12 & 0xFFFFF) + (imm64 >> 11 & 1);
-                    const imm64_43_32 = (imm64 >> 32 & 0xFFF) + (imm64 >> 31 & 1);
-                    const imm64_63_44 = (imm64 >> 44 & 0xFFFFF) + (imm64 >> 43 & 1);
-                    return .{
-                        // lui rd, imm64_63_44
-                        .lui1 = .{
-                            .imm20 = @truncate(imm64_63_44),
-                            .rd = rd,
-                        },
-                        // addi rd, imm64_43_32
-                        .addi1 = .{
-                            .imm12 = @truncate(imm64_43_32),
-                            .rd = rd,
-                            .rs = rd,
-                        },
-                        // lui rtmp, imm64_31_12
-                        .lui2 = .{
-                            .imm20 = @truncate(imm64_31_12),
-                            .rd = rtmp,
-                        },
-                        // addi rtmp, imm64_11_0
-                        .addi2 = .{
-                            .imm12 = @truncate(imm64_11_0),
-                            .rd = rtmp,
-                            .rs = rtmp,
-                        },
-                        // shift rd, 32
-                        .slli = .{ .imm1 = 1, .imm5 = 0, .rd = rd },
-                        // add rd, rtmp
-                        .add = .{ .rd = rd, .rs = rtmp },
-                    };
-                }
+            const C_JALR = packed struct(u16) {
+                opc: u2 = 0x2,
+                rs2: u5 = 0,
+                rs: u5,
+                func1: u1 = 1,
+                func2: u3 = 0x6,
             };
+            const C_UNKNOWN = packed struct(u16) {
+                bits: u16,
+            };
+
+            lui: LUI,
+            auipc: AUIPC,
+            ld: LD,
+            ret: RET,
+            jalr: JALR,
+            unknown: UNKNOWN,
+            c_ld: C_LD,
+            c_jr: C_JR,
+            c_jalr: C_JALR,
+            c_ret: C_RET,
+            c_unknown: C_UNKNOWN,
         },
         .powerpc64le => struct {
             const ADDI = packed struct {
@@ -950,6 +981,7 @@ const InstructionDecoder = struct {
 
                 var i: usize = 0;
                 while (true) {
+                    const offset = i;
                     var op: Instruction.Op = .{};
                     // look for legacy prefix
                     op.prefix = result: {
@@ -1016,7 +1048,7 @@ const InstructionDecoder = struct {
                     }
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = i, .op = op };
+                            buffer[len] = .{ .offset = offset, .op = op };
                         }
                     }
                     len += 1;
@@ -1038,6 +1070,7 @@ const InstructionDecoder = struct {
                 const words: [*]const u32 = @ptrCast(@alignCast(bytes));
                 var i: usize = 0;
                 while (true) {
+                    const offset = i * @sizeOf(u32);
                     const Op = Instruction.Op;
                     const un = @typeInfo(Op).Union;
                     const op: Op = inline for (un.fields) |field| {
@@ -1049,12 +1082,37 @@ const InstructionDecoder = struct {
                     i += 1;
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = i * @sizeOf(u32), .op = op };
+                            buffer[len] = .{ .offset = offset, .op = op };
                         }
                     }
                     len += 1;
                     switch (op) {
                         .ret, .br => break,
+                        else => {},
+                    }
+                }
+            },
+            .riscv64 => {
+                var i: usize = 0;
+                while (true) {
+                    const offset = i;
+                    const Op = Instruction.Op;
+                    const un = @typeInfo(Op).Union;
+                    const op: Op, const op_size: usize = inline for (un.fields) |field| {
+                        const specific_op_ptr: *align(2) const field.type = @alignCast(@ptrCast(&bytes[i]));
+                        if (matchDefault(specific_op_ptr.*)) {
+                            break .{ @unionInit(Op, field.name, specific_op_ptr.*), @sizeOf(field.type) };
+                        }
+                    } else unreachable;
+                    i += op_size;
+                    if (output) |buffer| {
+                        if (len < buffer.len) {
+                            buffer[len] = .{ .offset = offset, .op = op };
+                        }
+                    }
+                    len += 1;
+                    switch (op) {
+                        inline .ret, .c_ret, .c_jr => break,
                         else => {},
                     }
                 }
