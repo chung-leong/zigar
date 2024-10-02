@@ -204,11 +204,10 @@ pub const Host = struct {
         try self.writeToConsole(dv);
     }
 
-    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.CallResult {
-        var call: JsCall = .{ .id = ctx.id, .arg_ptr = arg_ptr, .arg_size = arg_size, .retval_size = retval_size };
-        const md: *ModuleData = @ptrCast(ctx.ptr);
+    pub fn handleJsCall(self: Host, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.CallResult {
+        var call: JsCall = .{ .id = fn_id, .arg_ptr = arg_ptr, .arg_size = arg_size, .retval_size = retval_size };
         if (main_thread) {
-            return imports.perform_js_call(md, &call);
+            return imports.perform_js_call(self.context, &call);
         } else {
             const initial_value = 0xffff_ffff;
             var futex: Futex = undefined;
@@ -217,7 +216,7 @@ pub const Host = struct {
                 futex.handle = @intFromPtr(&futex);
                 call.futex_handle = futex.handle;
             }
-            var result = imports.queue_js_call(md, &call);
+            var result = imports.queue_js_call(self.context, &call);
             if (result == .ok and wait) {
                 std.Thread.Futex.wait(&futex.value, initial_value);
                 result = @enumFromInt(futex.value.load(.acquire));

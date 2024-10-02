@@ -1464,9 +1464,8 @@ pub const TypeDataCollector = struct {
         try expectCT(tdc.get(ns.A).attrs.has_pointer == false);
         try expectCT(tdc.get(ns.B).attrs.has_pointer == false);
         try expectCT(tdc.get(ns.C).attrs.has_pointer == true);
-        // pointers in union are inaccessible
-        try expectCT(tdc.get(ns.D).attrs.has_pointer == false);
-        // // comptime fields should be ignored
+        try expectCT(tdc.get(ns.D).attrs.has_pointer == true);
+        // comptime fields should be ignored
         try expectCT(tdc.get(ns.E).attrs.has_pointer == false);
     }
 

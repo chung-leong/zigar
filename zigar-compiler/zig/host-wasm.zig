@@ -284,9 +284,9 @@ pub const Host = struct {
         return self.captureString(memory) catch null;
     }
 
-    pub fn handleJsCall(ctx: thunk_js.Context, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
+    pub fn handleJsCall(_: Host, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
         if (main_thread) {
-            return _performJsCall(ctx.id, arg_ptr, arg_size);
+            return _performJsCall(fn_id, arg_ptr, arg_size);
         } else {
             const initial_value = 0xffff_ffff;
             var futex: Futex = undefined;
@@ -296,7 +296,7 @@ pub const Host = struct {
                 futex.handle = @intFromPtr(&futex);
                 futex_handle = futex.handle;
             }
-            var result = _queueJsCall(ctx.id, arg_ptr, arg_size, futex_handle);
+            var result = _queueJsCall(fn_id, arg_ptr, arg_size, futex_handle);
             if (result == .ok and wait) {
                 std.Thread.Futex.wait(&futex.value, initial_value);
                 result = @enumFromInt(futex.value.load(.acquire));
