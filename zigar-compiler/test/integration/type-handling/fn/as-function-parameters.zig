@@ -12,7 +12,7 @@ pub fn call1(cb: *const fn () void) void {
     cb();
 }
 
-pub fn call2(cb: *const fn () error{unexpected}!void) !void {
+pub fn call2(cb: *const fn () error{Unexpected}!void) !void {
     try cb();
 }
 

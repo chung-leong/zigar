@@ -39,7 +39,6 @@ const native = struct {
                 const CHT = CallHandler(BFT);
                 const Binding = binding.Binding(CHT, @TypeOf(vars));
                 const caller = getJsCallHandler(HostT, BFT);
-
                 switch (action) {
                     .create => {
                         if (Binding.bind(gpa.allocator(), caller, vars)) |thunk| {
@@ -236,9 +235,7 @@ fn getJsCallHandler(comptime HostT: type, comptime BFT: type) CallHandler(BFT) {
                 .deadlock => @panic("Promise encountered in main thread"),
                 .disabled => @panic("Multithreading not enabled"),
                 .failure => {
-                    if (comptime hasError(RT, "unexpected")) {
-                        return error.unexpected;
-                    } else if (comptime hasError(RT, "Unexpected")) {
+                    if (comptime hasError(RT, "Unexpected")) {
                         return error.Unexpected;
                     } else {
                         @panic("JavaScript function failed");
@@ -289,15 +286,15 @@ test "getJsCallHandler (error handling)" {
     const ch1 = getJsCallHandler(Host, BFT1);
     const result1 = ch1(777, 3.14, null, 1);
     try expect(result1 == ES1.Unexpected);
-    const ES2 = error{ unexpected, cow };
+    const ES2 = error{ Unexpected, cow };
     const BFT2 = fn (i32, f64) ES2!usize;
     const ch2 = getJsCallHandler(Host, BFT2);
     const result2 = ch2(777, 3.14, null, 2);
-    try expect(result2 == ES2.unexpected);
+    try expect(result2 == ES2.Unexpected);
     const BFT3 = fn (i32, f64) anyerror!usize;
     const ch3 = getJsCallHandler(Host, BFT3);
     const result3 = ch3(777, 3.14, null, 3);
-    try expect(result3 == ES2.unexpected);
+    try expect(result3 == ES2.Unexpected);
 }
 
 fn hasError(comptime T: type, comptime name: []const u8) bool {
