@@ -218,10 +218,10 @@ export function addTests(importModule, options) {
       } else {
         expect(before).to.equal('3.14e0');
       }
-      module.error_union = Error.goldfish_died;
-      expect(() => module.error_union).to.throw(Error.goldfish_died);
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('error.goldfish_died');
+      expect(after).to.equal('error.GoldfishDied');
       module.error_union = 8.12;
       expect(module.error_union).to.equal(8.12);
     })

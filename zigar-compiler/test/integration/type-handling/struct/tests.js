@@ -159,10 +159,10 @@ export function addTests(importModule, options) {
       expect(module.error_union.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ before ] = await capture(() => print());
       expect(before).to.equal('in-error-union.Struct{ .number1 = 100, .number2 = 200 }');
-      module.error_union = Error.goldfish_died;
-      expect(() => module.error_union).to.throw(Error.goldfish_died);
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('error.goldfish_died');
+      expect(after).to.equal('error.GoldfishDied');
       module.error_union = { number1: 1, number2: 2 };
       expect(module.error_union.valueOf()).to.eql({ number1: 1, number2: 2 });
     })

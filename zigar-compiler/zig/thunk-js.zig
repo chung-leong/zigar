@@ -16,7 +16,7 @@ pub const Action = enum(u32) {
     create,
     destroy,
 };
-pub const Error = error{ unable_to_create_thunk, unable_to_find_thunk };
+pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
 pub const ThunkController = *const fn (?*anyopaque, Action, usize) anyerror!usize;
 
@@ -45,7 +45,7 @@ const native = struct {
                         if (Binding.bind(gpa.allocator(), caller, vars)) |thunk| {
                             return @intFromPtr(thunk);
                         } else |_| {
-                            return Error.unable_to_create_thunk;
+                            return Error.UnableToCreateThunk;
                         }
                     },
                     .destroy => {
@@ -149,14 +149,14 @@ const wasm = struct {
                         if (alloc(arg)) |thunk_ptr| {
                             return @intFromPtr(thunk_ptr);
                         } else {
-                            return Error.unable_to_create_thunk;
+                            return Error.UnableToCreateThunk;
                         }
                     },
                     .destroy => {
                         if (free(@ptrFromInt(arg))) {
                             return 0;
                         } else {
-                            return Error.unable_to_find_thunk;
+                            return Error.UnableToFindThunk;
                         }
                     },
                 }
@@ -320,9 +320,9 @@ fn hasError(comptime T: type, comptime name: []const u8) bool {
 }
 
 test "hasError" {
-    try expect(hasError(error{ hello, world }!i32, "hello"));
-    try expect(hasError(anyerror!i32, "cow"));
-    try expect(!hasError(error{ hello, world }!i32, "cow"));
+    try expect(hasError(error{ Hello, World }!i32, "Hello"));
+    try expect(hasError(anyerror!i32, "Cow"));
+    try expect(!hasError(error{ Hello, World }!i32, "Cow"));
 }
 
 fn isNoWait(comptime T: type) bool {

@@ -61,21 +61,21 @@ pub const Host = struct {
     pub fn allocateMemory(self: Host, size: usize, alignment: u16) !Memory {
         var memory: Memory = undefined;
         if (imports.allocate_host_memory(self.context, size, alignment, &memory) != .ok) {
-            return Error.unable_to_allocate_memory;
+            return Error.UnableToAllocateMemory;
         }
         return memory;
     }
 
     pub fn freeMemory(self: Host, memory: Memory) !void {
         if (imports.free_host_memory(self.context, &memory) != .ok) {
-            return Error.unable_to_free_memory;
+            return Error.UnableToFreeMemory;
         }
     }
 
     pub fn captureString(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
         if (imports.capture_string(self.context, &memory, &value) != .ok) {
-            return Error.unable_to_create_object;
+            return Error.UnableToCreateObject;
         }
         return value;
     }
@@ -83,7 +83,7 @@ pub const Host = struct {
     pub fn captureView(self: Host, memory: Memory) !Value {
         var value: Value = undefined;
         if (imports.capture_view(self.context, &memory, &value) != .ok) {
-            return Error.unable_to_create_data_view;
+            return Error.UnableToCreateDataView;
         }
         return value;
     }
@@ -91,7 +91,7 @@ pub const Host = struct {
     pub fn castView(self: Host, memory: Memory, structure: Value) !Value {
         var value: Value = undefined;
         if (imports.cast_view(self.context, &memory, structure, &value) != .ok) {
-            return Error.unable_to_create_object;
+            return Error.UnableToCreateObject;
         }
         return value;
     }
@@ -99,7 +99,7 @@ pub const Host = struct {
     pub fn getSlotNumber(self: Host, scope: u32, key: u32) !usize {
         var result: u32 = undefined;
         if (imports.get_slot_number(self.context, scope, key, &result) != .ok) {
-            return Error.unable_to_obtain_slot;
+            return Error.UnableToObtainSlot;
         }
         return result;
     }
@@ -107,14 +107,14 @@ pub const Host = struct {
     pub fn readSlot(self: Host, target: ?Value, id: usize) !Value {
         var result: Value = undefined;
         if (imports.read_slot(self.context, target, id, &result) != .ok) {
-            return Error.unable_to_retrieve_object;
+            return Error.UnableToRetrieveObject;
         }
         return result;
     }
 
     pub fn writeSlot(self: Host, target: ?Value, id: usize, value: ?Value) !void {
         if (imports.write_slot(self.context, target, id, value) != .ok) {
-            return Error.unable_to_insert_object;
+            return Error.UnableToInsertObject;
         }
     }
 
@@ -129,7 +129,7 @@ pub const Host = struct {
         };
         var structure: Value = undefined;
         if (imports.begin_structure(self.context, &def_c, &structure) != .ok) {
-            return Error.unable_to_start_structure_definition;
+            return Error.UnableToStartStructureDefinition;
         }
         return structure;
     }
@@ -147,37 +147,37 @@ pub const Host = struct {
         };
         if (imports.attach_member(self.context, structure, &member_c, is_static) != .ok) {
             if (is_static) {
-                return Error.unable_to_add_static_member;
+                return Error.UnableToAddStaticMember;
             } else {
-                return Error.unable_to_add_structure_member;
+                return Error.UnableToAddStructureMember;
             }
         }
     }
 
     pub fn attachTemplate(self: Host, structure: Value, template: Value, is_static: bool) !void {
         if (imports.attach_template(self.context, structure, template, is_static) != .ok) {
-            return Error.unable_to_add_structure_template;
+            return Error.UnableToAddStructureTemplate;
         }
     }
 
     pub fn defineStructure(self: Host, structure: Value) !Value {
         var value: Value = undefined;
         if (imports.define_structure(self.context, structure, &value) != .ok) {
-            return Error.unable_to_define_structure;
+            return Error.UnableToDefineStructure;
         }
         return value;
     }
 
     pub fn endStructure(self: Host, structure: Value) !void {
         if (imports.end_structure(self.context, structure) != .ok) {
-            return Error.unable_to_define_structure;
+            return Error.UnableToDefineStructure;
         }
     }
 
     pub fn createTemplate(self: Host, dv: ?Value) !Value {
         var value: Value = undefined;
         if (imports.create_template(self.context, dv, &value) != .ok) {
-            return Error.unable_to_create_structure_template;
+            return Error.UnableToCreateStructureTemplate;
         }
         return value;
     }
@@ -190,7 +190,7 @@ pub const Host = struct {
 
     pub fn writeToConsole(self: Host, dv: Value) !void {
         if (imports.write_to_console(self.context, dv) != .ok) {
-            return Error.unable_to_write_to_console;
+            return Error.UnableToWriteToConsole;
         }
     }
 

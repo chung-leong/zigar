@@ -74,7 +74,7 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union1).to.be.null;
-      expect(() => module.error_union2).to.throw(Error.goldfish_died);
+      expect(() => module.error_union2).to.throw(Error.GoldfishDied);
       const [ text ] = await capture(() => print());
       expect(text).to.equal('null');
     })

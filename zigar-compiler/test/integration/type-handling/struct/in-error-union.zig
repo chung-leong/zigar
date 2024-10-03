@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 pub const Struct = packed struct {
     number1: i12,
     number2: i12,

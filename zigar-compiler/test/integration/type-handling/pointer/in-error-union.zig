@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 
 pub var error_union: Error![]const u8 = "Hello";
 pub var alt_text: []const u8 = "World";

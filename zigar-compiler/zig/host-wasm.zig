@@ -167,7 +167,7 @@ pub const Host = struct {
                 .len = size,
             };
         } else {
-            return Error.unable_to_allocate_memory;
+            return Error.UnableToAllocateMemory;
         }
     }
 
@@ -179,22 +179,22 @@ pub const Host = struct {
 
     pub fn captureString(_: Host, memory: Memory) !Value {
         return _captureString(memory.bytes, memory.len) orelse
-            Error.unable_to_create_string;
+            Error.UnableToCreateString;
     }
 
     pub fn captureView(_: Host, memory: Memory) !Value {
         return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
-            Error.unable_to_create_data_view;
+            Error.UnableToCreateDataView;
     }
 
     pub fn castView(_: Host, memory: Memory, structure: Value) !Value {
         return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
-            Error.unable_to_create_object;
+            Error.UnableToCreateObject;
     }
 
     pub fn readSlot(_: Host, container: ?Value, slot: usize) !Value {
         return _readSlot(container, slot) orelse
-            Error.unable_to_retrieve_object;
+            Error.UnableToRetrieveObject;
     }
 
     pub fn writeSlot(_: Host, container: ?Value, slot: usize, value: ?Value) !void {
@@ -212,7 +212,7 @@ pub const Host = struct {
             return;
         }
         const key_str = _captureString(key.ptr, key.len) orelse {
-            return Error.unable_to_create_string;
+            return Error.UnableToCreateString;
         };
         switch (@typeInfo(T)) {
             .Pointer => {
@@ -244,7 +244,7 @@ pub const Host = struct {
         try insertProperty(def, "byteSize", structure.byte_size);
         try insertProperty(def, "align", structure.alignment);
         return _beginStructure(def) orelse
-            Error.unable_to_start_structure_definition;
+            Error.UnableToStartStructureDefinition;
     }
 
     pub fn attachMember(_: Host, structure: Value, member: types.Member, is_static: bool) !void {
@@ -262,7 +262,7 @@ pub const Host = struct {
 
     pub fn defineStructure(_: Host, structure: Value) !Value {
         return _defineStructure(structure) orelse
-            Error.unable_to_define_structure;
+            Error.UnableToDefineStructure;
     }
 
     pub fn attachTemplate(_: Host, structure: Value, template: Value, is_static: bool) !void {
@@ -275,7 +275,7 @@ pub const Host = struct {
 
     pub fn createTemplate(_: Host, dv: ?Value) !Value {
         return _createTemplate(dv) orelse
-            Error.unable_to_create_structure_template;
+            Error.UnableToCreateStructureTemplate;
     }
 
     pub fn createMessage(self: Host, err: anyerror) ?Value {

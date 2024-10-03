@@ -3,26 +3,26 @@ const builtin = @import("builtin");
 const expect = std.testing.expect;
 
 pub const Error = error{
-    unknown,
-    unable_to_allocate_memory,
-    unable_to_free_memory,
-    unable_to_retrieve_memory_location,
-    unable_to_create_data_view,
-    unable_to_create_object,
-    unable_to_obtain_slot,
-    unable_to_retrieve_object,
-    unable_to_insert_object,
-    unable_to_start_structure_definition,
-    unable_to_add_structure_member,
-    unable_to_add_static_member,
-    unable_to_add_method,
-    unable_to_create_structure_template,
-    unable_to_create_string,
-    unable_to_add_structure_template,
-    unable_to_define_structure,
-    unable_to_write_to_console,
-    unable_to_create_function,
-    too_many_arguments,
+    Unknown,
+    UnableToAllocateMemory,
+    UnableToFreeMemory,
+    UnableToRetrieveMemoryLocation,
+    UnableToCreateDataView,
+    UnableToCreateObject,
+    UnableToObtainSlot,
+    UnableToRetrieveObject,
+    UnableToInsertObject,
+    UnableToStartStructureDefinition,
+    UnableToAddStructureMember,
+    UnableToAddStaticMember,
+    UnableToAddMethod,
+    UnableToCreateStructureTemplate,
+    UnableToCreateString,
+    UnableToAddStructureTemplate,
+    UnableToDefineStructure,
+    UnableToWriteToConsole,
+    UnableToCreateFunction,
+    TooManyArguments,
 };
 
 pub const HostOptions = packed struct(u32) {
@@ -1473,7 +1473,7 @@ pub const TypeDataCollector = struct {
         @setEvalBranchQuota(10000);
         const ns = struct {
             pub const tuple = .{.tuple};
-            pub const Error = error{ a, b, c };
+            pub const Error = error{ A, B, C };
             pub const AnyError = anyerror;
         };
         comptime var tdc = init(0);

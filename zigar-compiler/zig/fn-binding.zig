@@ -6,8 +6,8 @@ const expect = std.testing.expect;
 usingnamespace fn_transform;
 
 pub const BindingError = error{
-    too_many_instructions,
-    placeholder_not_found,
+    TooManyInstructions,
+    PlaceholderNotFound,
 };
 
 pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
@@ -71,7 +71,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             var decoder: InstructionDecoder = .{};
             const instr_count = decoder.decode(code_ptr, &buffer);
             if (instr_count > buffer.len) {
-                return BindingError.too_many_instructions;
+                return BindingError.TooManyInstructions;
             }
             const instrs = buffer[0..instr_count];
             // determine the code len by doing a dry-run of the encoding process
@@ -240,7 +240,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             }
             for (replacements) |r| {
                 if (!r.performed) {
-                    // return BindingError.placeholder_not_found;
+                    // return BindingError.PlaceholderNotFound;
                 }
             }
             // encode the instructions (for real this time)

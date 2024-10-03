@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 pub const Fn = *const fn () void;
 
 fn hello() void {
@@ -17,7 +17,7 @@ pub fn getFunction(index: usize) Error!Fn {
     return switch (index) {
         0 => hello,
         1 => world,
-        2 => Error.goldfish_died,
-        else => Error.no_money,
+        2 => Error.GoldfishDied,
+        else => Error.NoMoney,
     };
 }

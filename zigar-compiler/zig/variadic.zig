@@ -1985,7 +1985,7 @@ fn ArgAllocation(comptime abi: Abi, comptime FT: type) type {
                     const value = std.mem.bytesToValue(T, bytes);
                     break self.processValue(value, kind);
                 }
-            } else Error.unsupported_argument_type;
+            } else Error.UnsupportedArgumentType;
         }
 
         fn processValue(self: *@This(), value: anytype, comptime kind: ArgKind) !void {
@@ -2021,7 +2021,7 @@ fn ArgAllocation(comptime abi: Abi, comptime FT: type) type {
                         }
                         return;
                     } else {
-                        return Error.too_many_arguments;
+                        return Error.TooManyArguments;
                     }
                 } else {
                     if (self.stack_offset != stack_initial_offset) {
@@ -2047,7 +2047,7 @@ fn ArgAllocation(comptime abi: Abi, comptime FT: type) type {
                 self.int_offset = end;
                 return;
             } else {
-                return Error.too_many_arguments;
+                return Error.TooManyArguments;
             }
         }
     };

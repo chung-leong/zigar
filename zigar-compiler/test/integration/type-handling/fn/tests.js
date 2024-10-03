@@ -213,8 +213,8 @@ export function addTests(importModule, options) {
         result2['*']();
       });
       expect(lines3).to.eql([ 'world' ]);
-      expect(() => getFunction(2)).to.throw(Error.gold_fish_died);
-      expect(() => getFunction(4)).to.throw(Error.no_money);
+      expect(() => getFunction(2)).to.throw(Error.GoldfishDied);
+      expect(() => getFunction(4)).to.throw(Error.NoMoney);
     })
     it('should not compile code containing function vector', async function() {
       this.timeout(300000);

@@ -96,7 +96,7 @@ export function addTests(importModule, options) {
       expect(module.error_union1).to.be.a('function');
       const [ line ] = await capture(() => print());
       expect(line).to.equal('bool');
-      expect(() => module.error_union2).to.throw(Error.goldfish_died);
+      expect(() => module.error_union2).to.throw(Error.GoldfishDied);
     })
     it('should not compile code with type vector', async function() {
       this.timeout(300000);

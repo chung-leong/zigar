@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 const ValueType = enum { string, integer, float };
 pub const Variant = union(ValueType) {
     string: []const u8,

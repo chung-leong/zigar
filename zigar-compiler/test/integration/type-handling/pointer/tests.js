@@ -214,10 +214,10 @@ export function addTests(importModule, options) {
       expect(module.error_union.string).to.equal('Hello');
       const [ before ] = await capture(() => print());
       expect(before).to.equal('{ 72, 101, 108, 108, 111 }');
-      module.error_union = Error.goldfish_died;
-      expect(() => module.error_union).to.throw(Error.goldfish_died);
+      module.error_union = Error.GoldfishDied;
+      expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after1 ] = await capture(() => print());
-      expect(after1).to.equal('error.goldfish_died');
+      expect(after1).to.equal('error.GoldfishDied');
       module.error_union = module.alt_text;
       expect(module.error_union.string).to.equal('World');
       const [ after2 ] = await capture(() => print());
