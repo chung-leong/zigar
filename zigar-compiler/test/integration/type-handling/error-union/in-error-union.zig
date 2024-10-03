@@ -1,7 +1,7 @@
 const std = @import("std");
 
-pub const Error = error{ goldfish_died, no_money };
-pub const FileError = error{corrupted};
+pub const Error = error{ GoldfishDied, NoMoney };
+pub const FileError = error{Corrupted};
 
 pub var error_union: Error!FileError!i32 = 3000;
 

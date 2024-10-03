@@ -1,5 +1,5 @@
 pub const TagType = enum { state, number };
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 
 pub const UnionA = union(TagType) {
     state: bool,

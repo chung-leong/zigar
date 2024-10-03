@@ -1,4 +1,4 @@
-pub const Error = error{ goldfish_died, no_money };
+pub const Error = error{ GoldfishDied, NoMoney };
 
 pub const UnionA = union {
     state: bool,
