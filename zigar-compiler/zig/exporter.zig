@@ -1,8 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const types = @import("./types.zig");
-const thunk_zig = @import("./thunk-zig.zig");
-const thunk_js = @import("./thunk-js.zig");
+const types = @import("types.zig");
+const thunk_zig = @import("thunk-zig.zig");
+const thunk_js = @import("thunk-js.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;

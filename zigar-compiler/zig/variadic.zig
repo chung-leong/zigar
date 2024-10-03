@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const types = @import("./types.zig");
+const types = @import("types.zig");
 const expect = std.testing.expect;
 
 pub const Error = error{

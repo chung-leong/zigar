@@ -1,20 +1,31 @@
 const std = @import("std");
-const cfg = @import("./build-cfg.zig");
+const cfg = @import("build-cfg.zig");
+
+const host_type = if (cfg.is_wasm) "wasm" else "c";
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = cfg.stub_path },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub-" ++ host_type ++ ".zig" },
         .target = target,
         .optimize = optimize,
         .single_threaded = !cfg.multithreaded,
     });
-    const zigar = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.zigar_path },
+    lib.root_module.addImport("zigar", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar-" ++ host_type ++ ".zig" },
+    }));
+    const fn_transform = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "fn-transform.zig" },
     });
-    lib.root_module.addImport("zigar", zigar);
+    lib.root_module.addImport("fn-transform.zig", fn_transform);
+    const fn_binding = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "fn-binding.zig" },
+        .optimize = .ReleaseSmall,
+    });
+    fn_binding.addImport("fn-transform.zig", fn_transform);
+    lib.root_module.addImport("fn-binding.zig", fn_binding);
     const imports = .{};
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },

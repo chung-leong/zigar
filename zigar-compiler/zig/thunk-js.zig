@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const types = @import("./types.zig");
-const fn_transform = @import("./fn-transform.zig");
+const types = @import("types.zig");
+const fn_transform = @import("fn-transform.zig");
 const expect = std.testing.expect;
 
 const Memory = types.Memory;
@@ -26,7 +26,7 @@ pub usingnamespace switch (builtin.target.cpu.arch) {
 };
 
 const native = struct {
-    const binding = @import("./fn-binding.zig");
+    const binding = @import("fn-binding.zig");
     var gpa = binding.executable();
 
     pub fn createThunkController(comptime HostT: type, comptime BFT: type) ThunkController {

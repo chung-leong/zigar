@@ -1,6 +1,6 @@
 const std = @import("std");
-const types = @import("./types.zig");
-const variadic = @import("./variadic.zig");
+const types = @import("types.zig");
+const variadic = @import("variadic.zig");
 const expect = std.testing.expect;
 
 const Memory = types.Memory;

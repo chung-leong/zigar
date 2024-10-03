@@ -2,7 +2,7 @@ import ChildProcess from 'child_process';
 import { writeFileSync } from 'fs';
 import { readFile, readdir, stat, writeFile } from 'fs/promises';
 import os from 'os';
-import { basename, isAbsolute, join, parse, resolve } from 'path';
+import { basename, isAbsolute, join, parse } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 import {
@@ -126,8 +126,8 @@ class MissingModule extends Error {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'stubPath', 'outputPath', 'useLibc', 'isWASM',
-    'zigarPath', 'multithreaded', 'maxMemory',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
+    'multithreaded', 'maxMemory',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -248,9 +248,8 @@ export function createConfig(srcPath, modPath, options = {}) {
       zigArgs.push(`-Dcpu=bleeding_edge`);
     }
   }
-  const stubPath = absolute(`../zig/stub-${isWASM ? 'wasm' : 'c'}.zig`);
-  const zigarPath = absolute(`../zig/zigar.zig`);
-  const buildFilePath = absolute(`../zig/build.zig`);
+  const zigarSrcPath = fileURLToPath(new URL('../zig/', import.meta.url));
+  const buildFilePath = join(zigarSrcPath, `build.zig`);
   return {
     platform,
     arch,
@@ -259,8 +258,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     modulePath,
     moduleDir,
     moduleBuildDir,
-    stubPath,
-    zigarPath,
+    zigarSrcPath,
     buildDir,
     buildDirSize,
     buildFilePath,
@@ -274,17 +272,6 @@ export function createConfig(srcPath, modPath, options = {}) {
     multithreaded,
     maxMemory,
   };
-}
-
-function absolute(relpath) {
-  // import.meta.url don't always yield the right URL when transpiled to CommonJS
-  // just use __dirname as it's going to be there
-  /* c8 ignore next 2 */
-  if (typeof(__dirname) === 'string') {
-    return resolve(__dirname, relpath);
-  } else {
-    return fileURLToPath(new URL(relpath, import.meta.url));
-  }
 }
 
 async function getManifestLists(buildPath) {

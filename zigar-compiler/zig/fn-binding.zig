@@ -1,7 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const fn_transform = @import("./fn-transform.zig");
+const fn_transform = @import("fn-transform.zig");
 const expect = std.testing.expect;
+
+usingnamespace fn_transform;
 
 pub const BindingError = error{
     too_many_instructions,
