@@ -69,11 +69,40 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const code_ptr = getTemplate();
             var buffer: [1024]Instruction = undefined;
             var decoder: InstructionDecoder = .{};
-            const instr_count = decoder.decode(code_ptr, &buffer);
+            var instr_count = decoder.decode(code_ptr, &buffer);
             if (instr_count > buffer.len) {
                 return BindingError.TooManyInstructions;
             }
-            const instrs = buffer[0..instr_count];
+            var instrs = buffer[0..instr_count];
+            const max_jmp: usize = result: {
+                // look for backward jumps
+                var max_offset: usize = 0;
+                for (instrs) |instr| {
+                    const pc_rel: ?isize = switch (builtin.target.cpu.arch) {
+                        .x86, .x86_64 => switch (instr.op.code) {
+                            .jmp_imm8 => @intCast(@as(i8, @bitCast(instr.op.imm8.?))),
+                            else => null,
+                        },
+                        else => null,
+                    };
+                    if (pc_rel) |diff| {
+                        if (diff > 0) {
+                            const offset = instr.pc_offset + @as(usize, @intCast(diff));
+                            max_offset = @max(max_offset, offset);
+                        }
+                    }
+                }
+                break :result max_offset;
+            };
+            if (max_jmp != 0) {
+                const end_offset: usize = instrs[instrs.len - 1].pc_offset;
+                if (max_jmp >= end_offset) {
+                    const extra_code_ptr: [*]const u8 = @ptrCast(&code_ptr[end_offset]);
+                    const extra_instr_count = decoder.decode(extra_code_ptr, buffer[instr_count..buffer.len]);
+                    instr_count += extra_instr_count;
+                    instrs = buffer[0..instr_count];
+                }
+            }
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
             const code_len = encoder.encode(instrs, null);
@@ -112,7 +141,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .x86_64 => {
                         if (instr.op.code == .mov_ax_imm) {
                             for (&replacements) |*r| {
-                                if (instr.op.imm64.? == r.placeholder) {
+                                if (instr.op.imm64 != null and instr.op.imm64.? == r.placeholder) {
                                     instr.op.imm64 = r.actual;
                                     r.performed = true;
                                     break;
@@ -153,12 +182,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     const ptr_address: usize = @bitCast((@as(isize, prev_op.lui.imm20) << 12) + @as(isize, @intCast(op.imm12)));
                                     const ptr: *const usize = @ptrFromInt(ptr_address);
                                     const constant = ptr.*;
+                                    const prev_instr_offset = if (instr_index > 1) instrs[instr_index - 2].pc_offset else 0;
                                     for (&replacements, 0..) |*r, index| {
                                         if (constant == r.placeholder) {
                                             // replace lui with auipc for pc-relative addressing
                                             prev_instr.op = .{ .auipc = .{ .imm20 = 0, .rd = prev_op.lui.rd } };
                                             // change offset so that it points to the correct literal at the end of code
-                                            op.imm12 = @intCast(code_len_aligned - prev_instr.offset + index * @sizeOf(usize));
+                                            op.imm12 = @intCast(code_len_aligned - prev_instr_offset + index * @sizeOf(usize));
                                             r.performed = true;
                                             break;
                                         }
@@ -208,7 +238,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .x86 => {
                         if (instr.op.code == .mov_ax_imm) {
                             for (&replacements) |*r| {
-                                if (instr.op.imm32.? == r.placeholder) {
+                                if (instr.op.imm32 != null and instr.op.imm32.? == r.placeholder) {
                                     instr.op.imm32 = r.actual;
                                     r.performed = true;
                                     break;
@@ -220,13 +250,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         switch (instr.op) {
                             .ldr => |*op| {
                                 if (op.rn == 15) {
-                                    // ARM quirk: pc points to the instruction AFTER the next one, hence the +8
-                                    const ptr: *const usize = @ptrCast(@alignCast(&code_ptr[instr.offset + 8 + op.imm12]));
+                                    // ARM quirk: pc points to the instruction AFTER the next one, hence the +4
+                                    const ptr: *const usize = @ptrCast(@alignCast(&code_ptr[instr.pc_offset + 4 + op.imm12]));
                                     const constant = ptr.*;
                                     for (&replacements, 0..) |*r, index| {
                                         if (constant == r.placeholder) {
                                             // change offset so that it points to the correct literal at the end of code
-                                            op.imm12 = @intCast(code_len_aligned - instr.offset - 8 + index * @sizeOf(usize));
+                                            op.imm12 = @intCast(code_len_aligned - instr.pc_offset - 4 + index * @sizeOf(usize));
                                             r.performed = true;
                                         }
                                     }
@@ -295,7 +325,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
         fn getTemplate() [*]const u8 {
             if (builtin.mode == .Debug) {
-                @compileError("This file cannot be compiled at optimize=Debug");
+                // @compileError("This file cannot be compiled at optimize=Debug");
             }
             const caller = getTemplateFn();
             return @ptrCast(&caller);
@@ -626,15 +656,39 @@ test "opaquePointerOf" {
 
 const Instruction = struct {
     op: Op,
-    offset: usize,
+    pc_offset: usize,
 
     const Op = switch (builtin.target.cpu.arch) {
         .x86, .x86_64 => struct {
-            pub const Code = enum(u8) {
+            pub const Code = enum(u16) {
+                add_rm8_r8 = 0x00,
                 add_ax_imm8 = 0x04,
                 add_ax_imm32 = 0x05,
+                or_ax_imm8 = 0x0c,
+                or_ax_imm32 = 0x0d,
+                push_ss = 0x16,
+                pop_ss = 0x17,
+                sub_rm_r = 0x28,
                 sub_ax_imm8 = 0x2c,
                 sub_ax_imm32 = 0x2d,
+                xor_rm8_r8 = 0x30,
+                xor_rm_r = 0x31,
+                xor_r8_rm8 = 0x32,
+                xor_r_rm = 0x33,
+                cmp_rm8_r8 = 0x38,
+                cmp_rm_r = 0x39,
+                cmp_r8_rm8 = 0x3a,
+                cmp_r_rm = 0x3b,
+                cmp_al_imm8 = 0x3c,
+                cmp_ax_imm32 = 0x3d,
+                dec_ax = 0x48,
+                dec_cx = 0x49,
+                dec_dx = 0x4a,
+                dec_bx = 0x4b,
+                dec_sp = 0x4c,
+                dec_bp = 0x4d,
+                dec_si = 0x4e,
+                dec_di = 0x4f,
                 push_ax = 0x50,
                 push_cx = 0x51,
                 push_dx = 0x52,
@@ -651,13 +705,52 @@ const Instruction = struct {
                 pop_bp = 0x5d,
                 pop_si = 0x5e,
                 pop_di = 0x5f,
+                push_all = 0x60,
+                pop_all = 0x61,
+                arpl = 0x63,
                 push_imm32 = 0x68,
+                jo_imm8 = 0x70,
+                jno_imm8 = 0x71,
+                jb_imm8 = 0x72,
+                jnb_imm8 = 0x73,
+                jz_imm8 = 0x74,
+                jnz_imm8 = 0x75,
+                jbe_imm8 = 0x76,
+                jnbe_imm8 = 0x77,
+                js_imm8 = 0x78,
+                jns_imm8 = 0x79,
+                jp_imm8 = 0x7a,
+                jnp_imm8 = 0x7b,
+                jl_imm8 = 0x7c,
+                jnl_imm8 = 0x7d,
+                jle_imm8 = 0x7e,
+                jnle_imm8 = 0x7f,
                 add_rm_imm32 = 0x80,
+                mux_rm_imm8 = 0x81,
                 add_rm_imm8 = 0x83,
+                xchg_rm_r = 0x87,
+                mov_rm8_r8 = 0x88,
                 mov_rm_r = 0x89,
                 mov_r_m = 0x8b,
                 lea_rm_r = 0x8d,
                 nop = 0x90,
+                xchg_cx_ax = 0x91,
+                xchg_dx_ax = 0x92,
+                xchg_bx_ax = 0x93,
+                xchg_sp_ax = 0x94,
+                xchg_bp_ax = 0x95,
+                xchg_si_ax = 0x96,
+                xchg_di_ax = 0x97,
+                test_al_imm8 = 0xa8,
+                test_ax_imm32 = 0xa9,
+                mov_ax_imm8 = 0xb0,
+                mov_cx_imm8 = 0xb1,
+                mov_dx_imm8 = 0xb2,
+                mov_bx_imm8 = 0xb3,
+                mov_sp_imm8 = 0xb4,
+                mov_bp_imm8 = 0xb5,
+                mov_si_imm8 = 0xb6,
+                mov_di_imm8 = 0xb7,
                 mov_ax_imm = 0xb8,
                 mov_cx_imm = 0xb9,
                 mov_dx_imm = 0xba,
@@ -666,10 +759,28 @@ const Instruction = struct {
                 mov_bp_imm = 0xbd,
                 mov_si_imm = 0xbe,
                 mov_di_imm = 0xbf,
+                bw_rm_imm8 = 0xc1,
+                enter_imm8 = 0xc8,
+                leave = 0xc9,
                 ret = 0xc3,
-                call_imm32 = 0xe8,
+                mov_rm_imm32 = 0xc7,
+                call_rel = 0xe8,
+                jmp_rel = 0xe9,
+                jmp_imm8 = 0xeb,
+                clc = 0xf8,
                 mux_rm = 0xff,
+                hint_nop_rm = 0x0f1f,
                 _,
+
+                pub fn write(self: @This(), output: anytype) void {
+                    const value = @intFromEnum(self);
+                    if (@intFromEnum(self) <= 255) {
+                        output.write(@as(u8, @intCast(value)));
+                    } else {
+                        output.write(@as(u8, @intCast(value & 0xff)));
+                        output.write(@as(u8, @intCast(value >> 8)));
+                    }
+                }
             };
             pub const Prefix = enum(u8) {
                 es = 0x26,
@@ -701,7 +812,10 @@ const Instruction = struct {
                 scale: u2 = 0,
             };
 
-            prefix: ?Prefix = null,
+            prefix1: ?Prefix = null,
+            prefix2: ?Prefix = null,
+            prefix3: ?Prefix = null,
+            prefix4: ?Prefix = null,
             rex: ?REX = null,
             code: Code = .nop,
             mod_rm: ?ModRM = null,
@@ -709,6 +823,7 @@ const Instruction = struct {
             disp8: ?i8 = null,
             disp32: ?i32 = null,
             imm8: ?u8 = null,
+            imm16: ?u16 = null,
             imm32: ?u32 = null,
             imm64: ?u64 = null,
         },
@@ -939,64 +1054,76 @@ const InstructionDecoder = struct {
             .x86, .x86_64 => {
                 const Code = Instruction.Op.Code;
                 // determine what classes a op belongs to based on its name
-                const mod_rm_codes, const imm8_codes, const imm32_codes, const imm64_codes = comptime result: {
+                // const mod_rm_codes, const imm8_codes, const imm32_codes, const imm_codes, const sz_codes =
+                const codes_rel, const codes_mod_rm, const codes_imm8, const codes_imm32, const codes_imm = comptime result: {
                     @setEvalBranchQuota(10000);
                     const opcode_fields = @typeInfo(Code).Enum.fields;
-                    var list1: [opcode_fields.len]Code = undefined;
-                    var list2: [opcode_fields.len]Code = undefined;
-                    var list3: [opcode_fields.len]Code = undefined;
-                    var list4: [opcode_fields.len]Code = undefined;
-                    var len1: usize = 0;
-                    var len2: usize = 0;
-                    var len3: usize = 0;
-                    var len4: usize = 0;
+                    var rel_list: [opcode_fields.len]Code = undefined;
+                    var mod_rm_list: [opcode_fields.len]Code = undefined;
+                    var imm8_list: [opcode_fields.len]Code = undefined;
+                    var imm32_list: [opcode_fields.len]Code = undefined;
+                    var imm_list: [opcode_fields.len]Code = undefined;
+                    var mod_rm_len: usize = 0;
+                    var imm8_len: usize = 0;
+                    var imm32_len: usize = 0;
+                    var imm_len: usize = 0;
+                    var rel_len: usize = 0;
                     for (opcode_fields) |field| {
                         const opcode: Code = @enumFromInt(field.value);
-                        // uses a register/memory reference
-                        if (std.mem.indexOf(u8, field.name, "_r") != null) {
-                            list1[len1] = opcode;
-                            len1 += 1;
+                        if (std.mem.indexOf(u8, field.name, "_rel") != null) {
+                            // uses a relative offset
+                            rel_list[rel_len] = opcode;
+                            rel_len += 1;
+                        } else if (std.mem.indexOf(u8, field.name, "_r") != null) {
+                            // uses a register/memory reference
+                            mod_rm_list[mod_rm_len] = opcode;
+                            mod_rm_len += 1;
                         }
                         if (std.mem.indexOf(u8, field.name, "_imm8") != null) {
                             // has an 8-bit immediate
-                            list2[len2] = opcode;
-                            len2 += 1;
+                            imm8_list[imm8_len] = opcode;
+                            imm8_len += 1;
                         } else if (std.mem.indexOf(u8, field.name, "_imm32") != null) {
                             // has an 32-bit immediate
-                            list3[len3] = opcode;
-                            len3 += 1;
+                            imm32_list[imm32_len] = opcode;
+                            imm32_len += 1;
                         } else if (std.mem.indexOf(u8, field.name, "_imm") != null) {
-                            // has an 32/64-bit immediate
-                            if (@bitSizeOf(usize) == 64) {
-                                list4[len4] = opcode;
-                                len4 += 1;
-                            } else {
-                                list3[len3] = opcode;
-                                len3 += 1;
-                            }
+                            imm_list[imm_len] = opcode;
+                            imm_len += 1;
                         }
                     }
-                    var array1: [len1]Code = undefined;
-                    var array2: [len2]Code = undefined;
-                    var array3: [len3]Code = undefined;
-                    var array4: [len4]Code = undefined;
-                    @memcpy(&array1, list1[0..len1]);
-                    @memcpy(&array2, list2[0..len2]);
-                    @memcpy(&array3, list3[0..len3]);
-                    @memcpy(&array4, list4[0..len4]);
-                    break :result .{ array1, array2, array3, array4 };
+                    var rel_array: [rel_len]Code = undefined;
+                    var mod_rm_array: [mod_rm_len]Code = undefined;
+                    var imm8_array: [imm8_len]Code = undefined;
+                    var imm32_array: [imm32_len]Code = undefined;
+                    var imm_array: [imm_len]Code = undefined;
+                    @memcpy(&rel_array, rel_list[0..rel_len]);
+                    @memcpy(&mod_rm_array, mod_rm_list[0..mod_rm_len]);
+                    @memcpy(&imm8_array, imm8_list[0..imm8_len]);
+                    @memcpy(&imm32_array, imm32_list[0..imm32_len]);
+                    @memcpy(&imm_array, imm_list[0..imm_len]);
+                    break :result .{
+                        rel_array,
+                        mod_rm_array,
+                        imm8_array,
+                        imm32_array,
+                        imm_array,
+                    };
                 };
 
                 var i: usize = 0;
                 while (true) {
-                    const offset = i;
                     var op: Instruction.Op = .{};
-                    // look for legacy prefix
-                    op.prefix = result: {
-                        const prefix = std.meta.intToEnum(Instruction.Op.Prefix, bytes[i]) catch null;
-                        if (prefix != null) i += 1;
-                        break :result prefix;
-                    };
+                    // look for legacy prefixes
+                    inline for (1..5) |num| {
+                        if (std.meta.intToEnum(Instruction.Op.Prefix, bytes[i]) catch null) |prefix| {
+                            const name = std.fmt.comptimePrint("prefix{d}", .{num});
+                            @field(op, name) = prefix;
+                            i += 1;
+                        } else {
+                            break;
+                        }
+                    }
                     // look for rex prefix
                     op.rex = result: {
                         const rex: Instruction.Op.REX = @bitCast(bytes[i]);
@@ -1008,11 +1135,18 @@ const InstructionDecoder = struct {
                         }
                     };
                     // see if op has ModR/M byte
-                    op.code = @enumFromInt(bytes[i]);
-                    i += 1;
+                    op.code = result: {
+                        var value: u16 = bytes[i];
+                        i += 1;
+                        if (value == 0x0f) {
+                            value = (value << 8) | bytes[i];
+                            i += 1;
+                        }
+                        break :result @enumFromInt(value);
+                    };
                     var sib_present = false;
                     var disp_size: ?u8 = null;
-                    if (std.mem.indexOfScalar(Code, &mod_rm_codes, op.code) != null) {
+                    if (std.mem.indexOfScalar(Code, &codes_mod_rm, op.code) != null) {
                         // decode ModR/M
                         const mod_rm: Instruction.Op.ModRM = @bitCast(bytes[i]);
                         i += 1;
@@ -1043,20 +1177,40 @@ const InstructionDecoder = struct {
                             i += 4;
                         }
                     }
+                    // copy 16-bit offset (if there's one)
+                    if (op.code == .enter_imm8) {
+                        op.imm16 = std.mem.bytesToValue(u16, bytes[i .. i + 2]);
+                        i += 2;
+                    }
+                    // copy relative address
+                    if (std.mem.indexOfScalar(Code, &codes_rel, op.code) != null) {
+                        if (@bitSizeOf(usize) == 32) {
+                            op.imm16 = std.mem.bytesToValue(u16, bytes[i .. i + 2]);
+                            i += 2;
+                        } else if (@bitSizeOf(usize) == 64) {
+                            op.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
+                            i += 4;
+                        }
+                    }
                     // copy immediate (if any)
-                    if (std.mem.indexOfScalar(Code, &imm8_codes, op.code) != null) {
+                    if (std.mem.indexOfScalar(Code, &codes_imm8, op.code) != null) {
                         op.imm8 = bytes[i];
                         i += 1;
-                    } else if (std.mem.indexOfScalar(Code, &imm32_codes, op.code) != null) {
+                    } else if (std.mem.indexOfScalar(Code, &codes_imm32, op.code) != null) {
                         op.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
                         i += 4;
-                    } else if (std.mem.indexOfScalar(Code, &imm64_codes, op.code) != null) {
-                        op.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
-                        i += 8;
+                    } else if (std.mem.indexOfScalar(Code, &codes_imm, op.code) != null) {
+                        if (op.rex != null and op.rex.?.w == 1) {
+                            op.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
+                            i += 8;
+                        } else {
+                            op.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
+                            i += 4;
+                        }
                     }
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .pc_offset = i, .op = op };
                         }
                     }
                     len += 1;
@@ -1070,6 +1224,14 @@ const InstructionDecoder = struct {
                             6 => {}, // push quad
                             else => {},
                         },
+                        .jmp_imm8 => {
+                            const offset: i8 = @bitCast(op.imm8.?);
+                            if (offset < 0) {
+                                if (i < @as(usize, @intCast(-offset))) {
+                                    break;
+                                }
+                            }
+                        },
                         else => {},
                     }
                 }
@@ -1078,7 +1240,6 @@ const InstructionDecoder = struct {
                 const words: [*]const u32 = @ptrCast(@alignCast(bytes));
                 var i: usize = 0;
                 while (true) {
-                    const offset = i * @sizeOf(u32);
                     const Op = Instruction.Op;
                     const un = @typeInfo(Op).Union;
                     const op: Op = inline for (un.fields) |field| {
@@ -1090,7 +1251,7 @@ const InstructionDecoder = struct {
                     i += 1;
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .pc_offset = i * @sizeOf(u32), .op = op };
                         }
                     }
                     len += 1;
@@ -1103,7 +1264,6 @@ const InstructionDecoder = struct {
             .riscv64 => {
                 var i: usize = 0;
                 while (true) {
-                    const offset = i;
                     const Op = Instruction.Op;
                     const un = @typeInfo(Op).Union;
                     const op: Op, const op_size: usize = inline for (un.fields) |field| {
@@ -1115,7 +1275,7 @@ const InstructionDecoder = struct {
                     i += op_size;
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .pc_offset = i, .op = op };
                         }
                     }
                     len += 1;
@@ -1129,7 +1289,6 @@ const InstructionDecoder = struct {
                 const words: [*]const u32 = @ptrCast(@alignCast(bytes));
                 var i: usize = 0;
                 while (true) {
-                    const offset = i * @sizeOf(u32);
                     const Op = Instruction.Op;
                     const un = @typeInfo(Op).Union;
                     const op: Op = inline for (un.fields) |field| {
@@ -1141,7 +1300,7 @@ const InstructionDecoder = struct {
                     i += 1;
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .pc_offset = i * @sizeOf(u32), .op = op };
                         }
                     }
                     len += 1;
@@ -1155,7 +1314,6 @@ const InstructionDecoder = struct {
                 const words: [*]const u32 = @ptrCast(@alignCast(bytes));
                 var i: usize = 0;
                 while (true) {
-                    const offset = i * @sizeOf(u32);
                     const Op = Instruction.Op;
                     const un = @typeInfo(Op).Union;
                     const op: Op = inline for (un.fields) |field| {
@@ -1167,7 +1325,7 @@ const InstructionDecoder = struct {
                     i += 1;
                     if (output) |buffer| {
                         if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
+                            buffer[len] = .{ .pc_offset = i * @sizeOf(u32), .op = op };
                         }
                     }
                     len += 1;
@@ -1197,7 +1355,8 @@ const InstructionEncoder = struct {
     }
 
     fn add(self: *@This(), instr: anytype) void {
-        switch (@typeInfo(@TypeOf(instr))) {
+        const T = @TypeOf(instr);
+        switch (@typeInfo(T)) {
             .Struct => |st| {
                 if (st.layout == .@"packed") {
                     self.write(instr);
@@ -1225,7 +1384,13 @@ const InstructionEncoder = struct {
                 }
             },
             .Optional => if (instr) |value| self.add(value),
-            .Enum => self.add(@intFromEnum(instr)),
+            .Enum => {
+                if (@hasDecl(T, "write")) {
+                    instr.write(self);
+                } else {
+                    self.add(@intFromEnum(instr));
+                }
+            },
             .Int, .Float, .Bool => self.write(instr),
             else => @compileError("Cannot handle " ++ @typeName(@TypeOf(instr))),
         }
