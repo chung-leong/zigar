@@ -109,7 +109,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
         pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
             const code: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
-            const self: *@This() = @alignCast(@fieldParentPtr("code", @constCast(code)));
+            const ptr: *align(1) @This() = @fieldParentPtr("code", @constCast(code));
+            if (!std.mem.isAligned(@intFromPtr(ptr), @alignOf(@This()))) return null;
+            const self: *@This() = @alignCast(ptr);
             return if (self.signature == binding_signature) self else null;
         }
 
@@ -125,13 +127,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             try expect(ptr2 == null);
         }
 
+        fn dummy() i64 {
+            // return asm (""
+            //     : [ret] "={x11}" (-> i64),
+            // );
+        }
+
         fn getInstructions(self_address: usize, caller_address: usize) return_type: {
             const count = switch (builtin.target.cpu.arch) {
                 .x86_64 => 6,
-                .aarch64 => 9,
+                .aarch64 => 10,
                 .riscv64 => 10,
                 .powerpc64le => 0,
-                .x86 => 0,
+                .x86 => 8,
                 .arm => 0,
                 else => unreachable,
             };
@@ -185,19 +193,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         },
                     },
                     .{ // ldr x9, [pc + 24] (signature)
-                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 6 + 0 },
+                        .ldr = .{ .rt = 9, .imm19 = 6 + 0 },
                     },
                     .{ // str [x10], x9
                         .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
                     },
-                    .{ // ldr x9, [pc + 24] (self_address)
-                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 4 + 8 },
+                    .{ // ldr x11, [pc + 24] (self_address)
+                        .ldr = .{ .rt = 11, .imm19 = 4 + 2 },
                     },
                     .{ // str [x10 + 8], x9
-                        .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
+                        .str = .{ .rn = 10, .rt = 11, .imm12 = 1 },
                     },
                     .{ // ldr x9, [pc + 24] (caller_address)
-                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 2 + 16 },
+                        .ldr = .{ .rt = 9, .imm19 = 2 + 4 },
                     },
                     .{ // br [x9]
                         .br = .{ .rn = 9 },
@@ -239,7 +247,46 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .{ .literal = caller_address },
                 },
                 .powerpc64le => .{},
-                .x86 => .{},
+                .x86 => .{
+                    .{ // mov ax, signature
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm32 = signature & 0xffff_ffff,
+                    },
+                    .{ // mov [sp - signature_offset], ax
+                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .sib = .{ .base = 4, .index = 4 },
+                        .disp32 = -signature_offset,
+                    },
+                    .{ // mov ax, signature
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm32 = signature >> 32,
+                    },
+                    .{ // mov [sp - signature_offset + 4], ax
+                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .sib = .{ .base = 4, .index = 4 },
+                        .disp32 = -signature_offset + 4,
+                    },
+                    .{ // mov ax, self_address
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm32 = self_address,
+                    },
+                    .{ // mov [sp - signature_offset + 8], ax
+                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .sib = .{ .base = 4, .index = 4 },
+                        .disp32 = -signature_offset + 8,
+                    },
+                    .{ // mov ax, caller_address
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm32 = caller_address,
+                    },
+                    .{ // jmp [ax]
+                        .opcode = Instruction.Opcode.mux_rm,
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
+                    },
+                },
                 .arm => .{},
                 else => .{},
             };
@@ -311,7 +358,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn getSignatureOffset() comptime_int {
-            return 4096;
+            return 2048;
         }
     };
 }
