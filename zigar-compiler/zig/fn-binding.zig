@@ -35,22 +35,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const ctx_mapping = getContextMapping(FT, CT);
     const code_align = @alignOf(fn () void);
     const binding_signature: u64 = 0xef20_90b6_415d_2fe3;
-    const context_placeholder: usize = switch (@bitSizeOf(usize)) {
-        32 => 0xbaad_beef,
-        // high word of 64 bit signature needs to be odd for PowerPC,
-        // in order to force the RLDIC instruction to use a shift of 32
-        64 => 0xdead_beef_baad_f00d,
-        else => unreachable,
-    };
-    const fn_placeholder: usize = switch (@bitSizeOf(usize)) {
-        32 => 0xbabe_feed,
-        64 => 0xbabe_feed_decaf_ee1,
-        else => unreachable,
-    };
 
     return extern struct {
         signature: u64 = binding_signature,
         size: usize,
+        fn_address: usize,
         context_bytes: [@sizeOf(CT)]u8 align(@alignOf(CT)),
         code: [0]u8 align(code_align) = undefined,
 
@@ -66,24 +55,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
-            const code_ptr = getTemplate();
-            var buffer: [1024]Instruction = undefined;
-            var decoder: InstructionDecoder = .{};
-            const instr_count = decoder.decode(code_ptr, &buffer);
-            if (instr_count > buffer.len) {
-                return BindingError.TooManyInstructions;
-            }
-            const instrs = buffer[0..instr_count];
+            var instrs = getInstructions(0, 0);
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
-            const code_len = encoder.encode(instrs, null);
-            const code_len_aligned = std.mem.alignForward(usize, code_len, @alignOf(usize));
-            const extra = switch (builtin.target.cpu.arch) {
-                // extra space for constants
-                .arm, .riscv64 => @sizeOf(usize) * 2,
-                else => 0,
-            };
-            const instance_size = @offsetOf(@This(), "code") + code_len_aligned + extra;
+            const code_len = encoder.encode(&instrs, null);
+            const instance_size = @offsetOf(@This(), "code") + code_len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
             const self: *@This() = @ptrCast(new_bytes);
             var context: CT = undefined;
@@ -91,167 +67,23 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             inline for (fields) |field| {
                 @field(context, field.name) = @field(vars, field.name);
             }
+            const fn_ptr = switch (@typeInfo(T)) {
+                .Fn => &func,
+                .Pointer => func,
+                else => unreachable,
+            };
             self.* = .{
                 .size = instance_size,
+                .fn_address = @intFromPtr(fn_ptr),
                 .context_bytes = std.mem.toBytes(context),
             };
-            const fn_ptr = opaquePointerOf(func);
-            // replace placeholders with actual address
-            const context_address = @intFromPtr(&self.context_bytes);
-            const fn_address = @intFromPtr(fn_ptr);
-            var replacements: [2]struct {
-                placeholder: usize,
-                actual: usize,
-                performed: bool = false,
-            } = .{
-                .{ .placeholder = context_placeholder, .actual = context_address },
-                .{ .placeholder = fn_placeholder, .actual = fn_address },
-            };
-            for (instrs, 0..) |*instr, instr_index| {
-                switch (builtin.target.cpu.arch) {
-                    .x86_64 => {
-                        if (instr.op.code == .mov_ax_imm) {
-                            for (&replacements) |*r| {
-                                if (instr.op.imm64.? == r.placeholder) {
-                                    instr.op.imm64 = r.actual;
-                                    r.performed = true;
-                                    break;
-                                }
-                            }
-                        }
-                    },
-                    .aarch64 => {
-                        switch (instr.op) {
-                            .movz => |*op| {
-                                for (&replacements) |*r| {
-                                    if (op.imm16 == (r.placeholder & @as(usize, 0xffff))) {
-                                        op.imm16 = @truncate(r.actual & @as(usize, 0xffff));
-                                        break;
-                                    }
-                                }
-                            },
-                            .movk => |*op| {
-                                for (&replacements) |*r| {
-                                    inline for (1..4) |n| {
-                                        if (op.imm16 == ((r.placeholder >> (n * 16)) & @as(usize, 0xffff))) {
-                                            op.imm16 = @truncate((r.actual >> (n * 16)) & @as(usize, 0xffff));
-                                            r.performed = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            },
-                            else => {},
-                        }
-                    },
-                    .riscv64 => {
-                        switch (instr.op) {
-                            .ld => |*op| if (instr_index > 0) {
-                                const prev_instr = &instrs[instr_index - 1];
-                                const prev_op = prev_instr.op;
-                                if (prev_op == .lui and prev_op.lui.rd == op.rs) {
-                                    const ptr_address: usize = @bitCast((@as(isize, prev_op.lui.imm20) << 12) + @as(isize, @intCast(op.imm12)));
-                                    const ptr: *const usize = @ptrFromInt(ptr_address);
-                                    const constant = ptr.*;
-                                    for (&replacements, 0..) |*r, index| {
-                                        if (constant == r.placeholder) {
-                                            // replace lui with auipc for pc-relative addressing
-                                            prev_instr.op = .{ .auipc = .{ .imm20 = 0, .rd = prev_op.lui.rd } };
-                                            // change offset so that it points to the correct literal at the end of code
-                                            op.imm12 = @intCast(code_len_aligned - prev_instr.offset + index * @sizeOf(usize));
-                                            r.performed = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            },
-                            else => {},
-                        }
-                    },
-                    .powerpc64le => {
-                        switch (instr.op) {
-                            .addis => |*op| {
-                                if (op.ra == 0) {
-                                    // bits 63-48
-                                    for (&replacements) |*r| {
-                                        if (op.imm16 == ((r.placeholder >> 48) & @as(usize, 0xffff))) {
-                                            op.imm16 = @truncate((r.actual >> 48) & @as(usize, 0xffff));
-                                        }
-                                    }
-                                }
-                            },
-                            .oris => |*op| {
-                                if (op.ra == op.rs) {
-                                    // bits 31-16
-                                    for (&replacements) |*r| {
-                                        if (op.imm16 == ((r.placeholder >> 16) & @as(usize, 0xffff))) {
-                                            op.imm16 = @truncate((r.actual >> 16) & @as(usize, 0xffff));
-                                        }
-                                    }
-                                }
-                            },
-                            .ori => |*op| {
-                                // bits 47-32, 15-0
-                                outer: for (&replacements) |*r| {
-                                    inline for (0..2) |n| {
-                                        if (op.imm16 == ((r.placeholder >> (n * 32)) & @as(usize, 0xffff))) {
-                                            op.imm16 = @truncate((r.actual >> (n * 32)) & @as(usize, 0xffff));
-                                            r.performed = true;
-                                            break :outer;
-                                        }
-                                    }
-                                }
-                            },
-                            else => {},
-                        }
-                    },
-                    .x86 => {
-                        if (instr.op.code == .mov_ax_imm) {
-                            for (&replacements) |*r| {
-                                if (instr.op.imm32.? == r.placeholder) {
-                                    instr.op.imm32 = r.actual;
-                                    r.performed = true;
-                                    break;
-                                }
-                            }
-                        }
-                    },
-                    .arm => {
-                        switch (instr.op) {
-                            .ldr => |*op| {
-                                if (op.rn == 15) {
-                                    // ARM quirk: pc points to the instruction AFTER the next one, hence the +8
-                                    const ptr: *const usize = @ptrCast(@alignCast(&code_ptr[instr.offset + 8 + op.imm12]));
-                                    const constant = ptr.*;
-                                    for (&replacements, 0..) |*r, index| {
-                                        if (constant == r.placeholder) {
-                                            // change offset so that it points to the correct literal at the end of code
-                                            op.imm12 = @intCast(code_len_aligned - instr.offset - 8 + index * @sizeOf(usize));
-                                            r.performed = true;
-                                        }
-                                    }
-                                }
-                            },
-                            else => {},
-                        }
-                    },
-                    else => unreachable,
-                }
-            }
-            for (replacements) |r| {
-                if (!r.performed) {
-                    // return BindingError.PlaceholderNotFound;
-                }
-            }
+            const self_address = @intFromPtr(self);
+            const caller = getCaller();
+            const caller_address = @intFromPtr(&caller);
+            instrs = getInstructions(self_address, caller_address);
             // encode the instructions (for real this time)
             const output_ptr = @as([*]u8, @ptrCast(&self.code));
-            _ = encoder.encode(instrs, output_ptr[0..code_len]);
-            if (extra > 0) {
-                // add constants
-                const literal_ptr = @as([*]usize, @ptrCast(@alignCast(&output_ptr[code_len_aligned])));
-                literal_ptr[0] = context_address;
-                literal_ptr[1] = fn_address;
-            }
+            _ = encoder.encode(&instrs, output_ptr[0..code_len]);
             return self;
         }
 
@@ -270,7 +102,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         test "function" {
-            const b: @This() = .{ .context_bytes = undefined, .size = 0 };
+            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
             const func = b.function();
             try expect(@TypeOf(func) == *const BFT);
         }
@@ -282,7 +114,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         test "fromFunction" {
-            const b: @This() = .{ .context_bytes = undefined, .size = 0 };
+            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
             const func = b.function();
             const ptr1 = fromFunction(func);
             try expect(ptr1 == &b);
@@ -293,73 +125,193 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             try expect(ptr2 == null);
         }
 
-        fn getTemplate() [*]const u8 {
-            if (builtin.mode == .Debug) {
-                @compileError("This file cannot be compiled at optimize=Debug");
-            }
-            const caller = getTemplateFn();
-            return @ptrCast(&caller);
+        fn getInstructions(self_address: usize, caller_address: usize) return_type: {
+            const count = switch (builtin.target.cpu.arch) {
+                .x86_64 => 6,
+                .aarch64 => 9,
+                .riscv64 => 10,
+                .powerpc64le => 0,
+                .x86 => 0,
+                .arm => 0,
+                else => unreachable,
+            };
+            break :return_type [count]Instruction;
+        } {
+            const signature = comptime getSignature();
+            const signature_offset = comptime getSignatureOffset();
+            return switch (builtin.target.cpu.arch) {
+                .x86_64 => .{
+                    .{ // mov rax, signature
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm64 = signature,
+                    },
+                    .{ // mov [rsp - signature_offset], rax
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .sib = .{ .base = 4, .index = 4 },
+                        .disp32 = -signature_offset,
+                    },
+                    .{ // mov rax, self_address
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm64 = self_address,
+                    },
+                    .{ // mov [rsp - signature_offset + 8], rax
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .sib = .{ .base = 4, .index = 4 },
+                        .disp32 = -signature_offset + 8,
+                    },
+                    .{ // mov rax, caller_address
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .imm64 = caller_address,
+                    },
+                    .{ // jmp [rax]
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.mux_rm,
+                        .mod_rm = .{ .reg = 4, .mod = 3 },
+                    },
+                },
+                .aarch64 => .{
+                    .{ // sub x10, sp, signature_offset
+                        .sub = .{
+                            .rd = 10,
+                            .rn = 31,
+                            .imm12 = signature_offset,
+                        },
+                    },
+                    .{ // ldr x9, [pc + 24] (signature)
+                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 6 + 0 },
+                    },
+                    .{ // str [x10], x9
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
+                    },
+                    .{ // ldr x9, [pc + 24] (self_address)
+                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 4 + 8 },
+                    },
+                    .{ // str [x10 + 8], x9
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
+                    },
+                    .{ // ldr x9, [pc + 24] (caller_address)
+                        .ldr = .{ .rd = 9, .rs = 0, .imm12 = @sizeOf(u32) * 2 + 16 },
+                    },
+                    .{ // br [x9]
+                        .br = .{ .rn = 9 },
+                    },
+                    .{ .literal = signature },
+                    .{ .literal = self_address },
+                    .{ .literal = caller_address },
+                },
+                .riscv64 => .{
+                    .{ // lui x5, signature_offset
+                        .lui = .{ .rd = 5, .imm20 = signature_offset },
+                    },
+                    .{ // sub x6, sp, x5
+                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                    },
+                    .{ // auipc x7, [pc + 24]
+                        .auipc = .{ .rd = 7, .imm20 = @sizeOf(u32) * 6 },
+                    },
+                    .{ // ld x5, [x7] (signature)
+                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 0 },
+                    },
+                    .{ // sd [x6], x5
+                        .sd = .{ .rn = 6, .rs = 5, .imm12 = 0 },
+                    },
+                    .{ // ld x5, [x7 + 8] (self_address)
+                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 8 },
+                    },
+                    .{ // sd [x6 + 8], x5
+                        .sd = .{ .rn = 6, .rs = 5, .imm12 = 8 },
+                    },
+                    .{ // ld x5, [x7 + 16] (caller_address)
+                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 16 },
+                    },
+                    .{ // jmp [x5]
+                        .jr = .{ .rs = 5 },
+                    },
+                    .{ .literal = signature },
+                    .{ .literal = self_address },
+                    .{ .literal = caller_address },
+                },
+                .powerpc64le => .{},
+                .x86 => .{},
+                .arm => .{},
+                else => .{},
+            };
         }
 
-        test "getTemplate" {
-            _ = getTemplate();
-        }
-
-        fn getTemplateFn() BFT {
-            const f = @typeInfo(FT).Fn;
+        fn getCaller() BFT {
+            const bf = @typeInfo(BFT).Fn;
+            const RT = bf.return_type.?;
+            const cc = bf.calling_convention;
+            const Self = @This();
             const ns = struct {
-                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) f.return_type.? {
+                var context_pos: ?usize = null;
+
+                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
+                    const sp_address = switch (builtin.target.cpu.arch) {
+                        .x86_64, .powerpc64le => asm (""
+                            : [ret] "={rsp}" (-> usize),
+                        ),
+                        .x86 => asm (""
+                            : [ret] "={esp}" (-> usize),
+                        ),
+                        else => asm (""
+                            : [ret] "={sp}" (-> usize),
+                        ),
+                    };
+                    // look for context pointer in memory above the stack
+                    const signature = comptime getSignature();
+                    const signature_offset = comptime getSignatureOffset();
+                    const ptr: [*]usize = @ptrFromInt(sp_address - signature_offset);
+                    const index = context_pos orelse search_result: {
+                        var index: usize = 0;
+                        while (index >= 0) {
+                            const match = switch (@bitSizeOf(usize)) {
+                                64 => ptr[index] == signature,
+                                32 => ptr[index] == (signature & 0xffff_ffff) and ptr[index + 1] == (signature >> 32),
+                                else => unreachable,
+                            };
+                            index += 1;
+                            if (match) {
+                                if (@bitSizeOf(usize) == 32) {
+                                    index += 1;
+                                }
+                                // the context pointer is right below the signature (larger address)
+                                context_pos = index;
+                                break :search_result index;
+                            }
+                        }
+                    };
+                    const self_address = ptr[index];
+                    const self: *const Self = @ptrFromInt(self_address);
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    const ctx_address = loadConstant(context_placeholder);
-                    const ctx: *const CT = @ptrFromInt(ctx_address);
+                    const ctx: *const CT = @ptrCast(&self.context_bytes);
                     inline for (ctx_mapping) |m| {
                         @field(args, m.dest) = @field(ctx, m.src);
                     }
-                    const fn_address = loadConstant(fn_placeholder);
-                    const func: *const FT = @ptrFromInt(fn_address);
-                    return @call(.never_inline, func, args);
+                    const fn_ptr: *const FT = @ptrFromInt(self.fn_address);
+                    return @call(.never_inline, fn_ptr, args);
                 }
             };
-            return fn_transform.spreadArgs(ns.call, f.calling_convention);
+            return fn_transform.spreadArgs(ns.call, cc);
         }
 
-        test "getTemplateFn" {
-            const func = getTemplateFn();
-            try expect(@TypeOf(func) == BFT);
+        fn getSignature() u64 {
+            // TODO: use a fixed constant for now
+            return 0xbc51_10c3_592d_717e;
         }
 
-        inline fn loadConstant(comptime constant: usize) usize {
-            // use inline assembly to guarantee the generation of expected op(s)
-            return switch (builtin.target.cpu.arch) {
-                .x86_64 => asm (""
-                    : [ret] "={rax}" (-> usize),
-                    : [constant] "{rax}" (constant),
-                ),
-                .aarch64 => asm (""
-                    : [ret] "={x8}" (-> usize),
-                    : [constant] "{x8}" (constant),
-                ),
-                .riscv64 => asm (""
-                    : [ret] "={x5}" (-> usize),
-                    : [constant] "{x5}" (constant),
-                ),
-                .powerpc64le => asm (""
-                    : [ret] "={r11}" (-> usize),
-                    : [constant] "{r11}" (constant),
-                ),
-                .x86 => asm (""
-                    : [ret] "={eax}" (-> usize),
-                    : [constant] "{eax}" (constant),
-                ),
-                .arm => asm (""
-                    : [ret] "={r0}" (-> usize),
-                    : [constant] "{r0}" (constant),
-                ),
-                else => unreachable,
-            };
+        fn getSignatureOffset() comptime_int {
+            return 4096;
         }
     };
 }
@@ -607,580 +559,220 @@ test "FnType" {
     try expect(FnType(@TypeOf(&ns.foo)) == fn (i32) i32);
 }
 
-fn opaquePointerOf(func: anytype) *const anyopaque {
-    return switch (@typeInfo(@TypeOf(func))) {
-        .Pointer => func,
-        else => &func,
-    };
-}
+const Instruction = switch (builtin.target.cpu.arch) {
+    .x86, .x86_64 => struct {
+        pub const Opcode = enum(u8) {
+            mov_rm_r = 0x89,
+            nop = 0x90,
+            mov_ax_imm = 0xb8,
+            mux_rm = 0xff,
+            _,
+        };
+        pub const Prefix = enum(u8) {
+            _,
+        };
+        const REX = packed struct {
+            b: u1 = 0,
+            x: u1 = 0,
+            r: u1 = 0,
+            w: u1 = 1,
+            pat: u4 = 4,
+        };
+        const ModRM = packed struct {
+            rm: u3 = 0,
+            reg: u3 = 0,
+            mod: u2 = 0,
+        };
+        const SIB = packed struct {
+            base: u3 = 0,
+            index: u3 = 0,
+            scale: u2 = 0,
+        };
 
-test "opaquePointerOf" {
-    const ns = struct {
-        fn foo(arg: i32) i32 {
-            return arg;
-        }
-    };
-    try expect(opaquePointerOf(ns.foo) == @as(*const anyopaque, &ns.foo));
-    try expect(opaquePointerOf(&ns.foo) == @as(*const anyopaque, &ns.foo));
-}
+        prefix: ?Prefix = null,
+        rex: ?REX = null,
+        opcode: Opcode = .nop,
+        mod_rm: ?ModRM = null,
+        sib: ?SIB = null,
+        disp8: ?i8 = null,
+        disp32: ?i32 = null,
+        imm8: ?u8 = null,
+        imm32: ?u32 = null,
+        imm64: ?u64 = null,
+    },
+    .aarch64 => union(enum) {
+        const SUB = packed struct {
+            rd: u5,
+            rn: u5,
+            imm12: u12,
+            opc: u10 = 0x344,
+        };
+        const LDR = packed struct {
+            rt: u5,
+            imm19: u19,
+            opc: u8 = 0x58,
+        };
+        const STR = packed struct {
+            rt: u5,
+            rn: u5,
+            imm12: u12 = 0,
+            opc: u10 = 0x3e4,
+        };
+        const BR = packed struct(u32) {
+            rm: u5 = 0,
+            rn: u5,
+            opc: u22 = 0x35_87c0,
+        };
 
-const Instruction = struct {
-    op: Op,
-    offset: usize,
+        sub: SUB,
+        ldr: LDR,
+        str: STR,
+        br: BR,
+        literal: usize,
+    },
+    .riscv64 => union(enum) {
+        const LUI = packed struct(u32) {
+            opc: u7 = 0x37,
+            rd: u5,
+            imm20: u20 = 0,
+        };
+        const AUIPC = packed struct(u32) {
+            opc: u7 = 0x17,
+            rd: u5,
+            imm20: u20 = 0,
+        };
+        const LD = packed struct(u32) {
+            opc: u7 = 0x3,
+            rd: u5,
+            func: u3 = 0x3,
+            rs: u5,
+            imm12: i12 = 0,
+        };
+        const SD = packed struct(u32) {
+            opc: u7 = 0x23,
+            offset_4_0: u5 = 0,
+            func: u3 = 0x3,
+            rs1: u5,
+            rs2: u5,
+            offset_11_5: u7 = 0,
+        };
+        const JALR = packed struct(u32) {
+            opc: u7 = 0x67,
+            rd: u5,
+            func: u3 = 0,
+            rs: u5,
+            imm12: u12 = 0,
+        };
 
-    const Op = switch (builtin.target.cpu.arch) {
-        .x86, .x86_64 => struct {
-            pub const Code = enum(u8) {
-                add_ax_imm8 = 0x04,
-                add_ax_imm32 = 0x05,
-                sub_ax_imm8 = 0x2c,
-                sub_ax_imm32 = 0x2d,
-                push_ax = 0x50,
-                push_cx = 0x51,
-                push_dx = 0x52,
-                push_bx = 0x53,
-                push_sp = 0x54,
-                push_bp = 0x55,
-                push_si = 0x56,
-                push_di = 0x57,
-                pop_ax = 0x58,
-                pop_cx = 0x59,
-                pop_dx = 0x5a,
-                pop_bx = 0x5b,
-                pop_sp = 0x5c,
-                pop_bp = 0x5d,
-                pop_si = 0x5e,
-                pop_di = 0x5f,
-                push_imm32 = 0x68,
-                add_rm_imm32 = 0x80,
-                add_rm_imm8 = 0x83,
-                mov_rm_r = 0x89,
-                mov_r_m = 0x8b,
-                lea_rm_r = 0x8d,
-                nop = 0x90,
-                mov_ax_imm = 0xb8,
-                mov_cx_imm = 0xb9,
-                mov_dx_imm = 0xba,
-                mov_bx_imm = 0xbb,
-                mov_sp_imm = 0xbc,
-                mov_bp_imm = 0xbd,
-                mov_si_imm = 0xbe,
-                mov_di_imm = 0xbf,
-                ret = 0xc3,
-                call_imm32 = 0xe8,
-                mux_rm = 0xff,
-                _,
-            };
-            pub const Prefix = enum(u8) {
-                es = 0x26,
-                cs = 0x2e,
-                ss = 0x36,
-                ds = 0x3e,
-                fs = 0x64,
-                gs = 0x65,
-                os = 0x66,
-                as = 0x67,
-                f2 = 0xf2,
-                f3 = 0xf3,
-            };
-            const REX = packed struct {
-                b: u1 = 0,
-                x: u1 = 0,
-                r: u1 = 0,
-                w: u1 = 1,
-                pat: u4 = 4,
-            };
-            const ModRM = packed struct {
-                rm: u3 = 0,
-                reg: u3 = 0,
-                mod: u2 = 0,
-            };
-            const SIB = packed struct {
-                base: u3 = 0,
-                index: u3 = 0,
-                scale: u2 = 0,
-            };
+        lui: LUI,
+        auipc: AUIPC,
+        ld: LD,
+        sd: SD,
+        jalr: JALR,
+        literal: usize,
+    },
+    .powerpc64le => union(enum) {
+        const ADDI = packed struct(u32) {
+            imm16: u16,
+            ra: u5,
+            rt: u5,
+            opc: u6 = 0x0e,
+        };
+        const ADDIS = packed struct(u32) {
+            imm16: u16,
+            ra: u5,
+            rt: u5,
+            opc: u6 = 0x0f,
+        };
+        const ORI = packed struct(u32) {
+            imm16: u16,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x18,
+        };
+        const ORIS = packed struct(u32) {
+            imm16: u16,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x19,
+        };
+        const RLDIC = packed struct(u32) {
+            rc: u1,
+            sh2: u1,
+            _: u3 = 2,
+            mb: u6,
+            sh: u5,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x1e,
+        };
+        const MTCTR = packed struct(u32) {
+            _: u1 = 0,
+            func: u10 = 467,
+            spr: u10 = 0x120,
+            rs: u5,
+            opc: u6 = 0x1f,
+        };
+        const BCTRL = packed struct(u32) {
+            lk: u1 = 1,
+            func: u10 = 528,
+            bh: u2,
+            _: u3,
+            bi: u5,
+            bo: u5,
+            opc: u6 = 0x13,
+        };
+        const BLR = packed struct(u32) {
+            lk: u1 = 0,
+            func: u10 = 16,
+            bh: u2,
+            _: u3,
+            bi: u5,
+            bo: u5,
+            opc: u6 = 0x13,
+        };
+        const UNKNOWN = packed struct(u32) {
+            bits: u32,
+        };
 
-            prefix: ?Prefix = null,
-            rex: ?REX = null,
-            code: Code = .nop,
-            mod_rm: ?ModRM = null,
-            sib: ?SIB = null,
-            disp8: ?i8 = null,
-            disp32: ?i32 = null,
-            imm8: ?u8 = null,
-            imm32: ?u32 = null,
-            imm64: ?u64 = null,
-        },
-        .aarch64 => union(enum) {
-            const MOVZ = packed struct(u32) {
-                rd: u5,
-                imm16: u16,
-                hw: u2,
-                opc: u9 = 0x1a5,
-            };
-            const MOVK = packed struct(u32) {
-                rd: u5,
-                imm16: u16,
-                hw: u2,
-                opc: u9 = 0x1e5,
-            };
-            const BR = packed struct(u32) {
-                rm: u5 = 0,
-                rn: u5,
-                opc: u22 = 0x35_87c0,
-            };
-            const RET = packed struct(u32) {
-                rm: u5 = 0,
-                rn: u5,
-                opc: u22 = 0x35_97c0,
-            };
-            const UNKNOWN = packed struct(u32) {
-                bits: u32,
-            };
+        addi: ADDI,
+        addis: ADDIS,
+        ori: ORI,
+        oris: ORIS,
+        rldic: RLDIC,
+        mtctr: MTCTR,
+        bctrl: BCTRL,
+        blr: BLR,
+        unknown: UNKNOWN,
+    },
+    .arm => union(enum) {
+        const LDR = packed struct(u32) {
+            imm12: u12,
+            rt: u4,
+            rn: u4,
+            opc: u8 = 0x59,
+            _: u4 = 0,
+        };
+        const PUSH = packed struct(u32) {
+            reg_set: u16,
+            opc: u12 = 0x92d,
+            _: u4 = 0,
+        };
+        const POP = packed struct(u32) {
+            reg_set: u16,
+            opc: u12 = 0x8bd,
+            _: u4 = 0,
+        };
+        const UNKNOWN = packed struct(u32) {
+            bits: u32,
+        };
 
-            movz: MOVZ,
-            movk: MOVK,
-            br: BR,
-            ret: RET,
-            unknown: UNKNOWN,
-        },
-        .riscv64 => union(enum) {
-            const LUI = packed struct(u32) {
-                opc: u7 = 0x37,
-                rd: u5,
-                imm20: u20,
-            };
-            const AUIPC = packed struct(u32) {
-                opc: u7 = 0x17,
-                rd: u5,
-                imm20: u20,
-            };
-            const LD = packed struct(u32) {
-                opc: u7 = 0x3,
-                rd: u5,
-                func: u3 = 0x3,
-                rs: u5,
-                imm12: i12,
-            };
-            const RET = packed struct(u32) {
-                opc: u7 = 0x67,
-                rd: u5 = 0,
-                func: u3 = 0,
-                rs: u5 = 1,
-                imm12: u12 = 0,
-            };
-            const JALR = packed struct(u32) {
-                opc: u7 = 0x67,
-                rd: u5,
-                func: u3 = 0,
-                rs: u5,
-                imm12: u12 = 0,
-            };
-            const UNKNOWN = packed struct(u32) {
-                opc_1_0: u2 = 0x3,
-                opc_6_2: u5,
-                bits: u25,
-            };
-            const C_LD = packed struct(u16) {
-                opc: u2 = 0,
-                rd: u3,
-                uimm_7_6: u2,
-                rs: u3,
-                uimm_5_3: u3,
-                func: u3 = 0x3,
-            };
-            const C_RET = packed struct(u16) {
-                opc: u2 = 0x2,
-                rs2: u5 = 0,
-                rs: u5 = 1,
-                func1: u1 = 0,
-                func2: u3 = 0x6,
-            };
-            const C_JR = packed struct(u16) {
-                opc: u2 = 0x2,
-                rs2: u5 = 0,
-                rs: u5,
-                func1: u1 = 0,
-                func2: u3 = 0x4,
-            };
-            const C_JALR = packed struct(u16) {
-                opc: u2 = 0x2,
-                rs2: u5 = 0,
-                rs: u5,
-                func1: u1 = 1,
-                func2: u3 = 0x6,
-            };
-            const C_UNKNOWN = packed struct(u16) {
-                bits: u16,
-            };
-
-            lui: LUI,
-            auipc: AUIPC,
-            ld: LD,
-            ret: RET,
-            jalr: JALR,
-            unknown: UNKNOWN,
-            c_ld: C_LD,
-            c_jr: C_JR,
-            c_jalr: C_JALR,
-            c_ret: C_RET,
-            c_unknown: C_UNKNOWN,
-        },
-        .powerpc64le => union(enum) {
-            const ADDI = packed struct(u32) {
-                imm16: u16,
-                ra: u5,
-                rt: u5,
-                opc: u6 = 0x0e,
-            };
-            const ADDIS = packed struct(u32) {
-                imm16: u16,
-                ra: u5,
-                rt: u5,
-                opc: u6 = 0x0f,
-            };
-            const ORI = packed struct(u32) {
-                imm16: u16,
-                ra: u5,
-                rs: u5,
-                opc: u6 = 0x18,
-            };
-            const ORIS = packed struct(u32) {
-                imm16: u16,
-                ra: u5,
-                rs: u5,
-                opc: u6 = 0x19,
-            };
-            const RLDIC = packed struct(u32) {
-                rc: u1,
-                sh2: u1,
-                _: u3 = 2,
-                mb: u6,
-                sh: u5,
-                ra: u5,
-                rs: u5,
-                opc: u6 = 0x1e,
-            };
-            const MTCTR = packed struct(u32) {
-                _: u1 = 0,
-                func: u10 = 467,
-                spr: u10 = 0x120,
-                rs: u5,
-                opc: u6 = 0x1f,
-            };
-            const BCTRL = packed struct(u32) {
-                lk: u1 = 1,
-                func: u10 = 528,
-                bh: u2,
-                _: u3,
-                bi: u5,
-                bo: u5,
-                opc: u6 = 0x13,
-            };
-            const BLR = packed struct(u32) {
-                lk: u1 = 0,
-                func: u10 = 16,
-                bh: u2,
-                _: u3,
-                bi: u5,
-                bo: u5,
-                opc: u6 = 0x13,
-            };
-            const UNKNOWN = packed struct(u32) {
-                bits: u32,
-            };
-
-            addi: ADDI,
-            addis: ADDIS,
-            ori: ORI,
-            oris: ORIS,
-            rldic: RLDIC,
-            mtctr: MTCTR,
-            bctrl: BCTRL,
-            blr: BLR,
-            unknown: UNKNOWN,
-        },
-        .arm => union(enum) {
-            const LDR = packed struct(u32) {
-                imm12: u12,
-                rt: u4,
-                rn: u4,
-                opc: u8 = 0x59,
-                _: u4,
-            };
-            const PUSH = packed struct(u32) {
-                reg_set: u16,
-                opc: u12 = 0x92d,
-                _: u4,
-            };
-            const POP = packed struct(u32) {
-                reg_set: u16,
-                opc: u12 = 0x8bd,
-                _: u4,
-            };
-            const UNKNOWN = packed struct(u32) {
-                bits: u32,
-            };
-
-            ldr: LDR,
-            push: PUSH,
-            pop: POP,
-            unknown: UNKNOWN,
-        },
-        else => void,
-    };
-};
-
-const InstructionDecoder = struct {
-    pub fn decode(_: *@This(), bytes: [*]const u8, output: ?[]Instruction) usize {
-        var len: usize = 0;
-        switch (builtin.target.cpu.arch) {
-            .x86, .x86_64 => {
-                const Code = Instruction.Op.Code;
-                // determine what classes a op belongs to based on its name
-                const mod_rm_codes, const imm8_codes, const imm32_codes, const imm64_codes = comptime result: {
-                    @setEvalBranchQuota(10000);
-                    const opcode_fields = @typeInfo(Code).Enum.fields;
-                    var list1: [opcode_fields.len]Code = undefined;
-                    var list2: [opcode_fields.len]Code = undefined;
-                    var list3: [opcode_fields.len]Code = undefined;
-                    var list4: [opcode_fields.len]Code = undefined;
-                    var len1: usize = 0;
-                    var len2: usize = 0;
-                    var len3: usize = 0;
-                    var len4: usize = 0;
-                    for (opcode_fields) |field| {
-                        const opcode: Code = @enumFromInt(field.value);
-                        // uses a register/memory reference
-                        if (std.mem.indexOf(u8, field.name, "_r") != null) {
-                            list1[len1] = opcode;
-                            len1 += 1;
-                        }
-                        if (std.mem.indexOf(u8, field.name, "_imm8") != null) {
-                            // has an 8-bit immediate
-                            list2[len2] = opcode;
-                            len2 += 1;
-                        } else if (std.mem.indexOf(u8, field.name, "_imm32") != null) {
-                            // has an 32-bit immediate
-                            list3[len3] = opcode;
-                            len3 += 1;
-                        } else if (std.mem.indexOf(u8, field.name, "_imm") != null) {
-                            // has an 32/64-bit immediate
-                            if (@bitSizeOf(usize) == 64) {
-                                list4[len4] = opcode;
-                                len4 += 1;
-                            } else {
-                                list3[len3] = opcode;
-                                len3 += 1;
-                            }
-                        }
-                    }
-                    var array1: [len1]Code = undefined;
-                    var array2: [len2]Code = undefined;
-                    var array3: [len3]Code = undefined;
-                    var array4: [len4]Code = undefined;
-                    @memcpy(&array1, list1[0..len1]);
-                    @memcpy(&array2, list2[0..len2]);
-                    @memcpy(&array3, list3[0..len3]);
-                    @memcpy(&array4, list4[0..len4]);
-                    break :result .{ array1, array2, array3, array4 };
-                };
-
-                var i: usize = 0;
-                while (true) {
-                    const offset = i;
-                    var op: Instruction.Op = .{};
-                    // look for legacy prefix
-                    op.prefix = result: {
-                        const prefix = std.meta.intToEnum(Instruction.Op.Prefix, bytes[i]) catch null;
-                        if (prefix != null) i += 1;
-                        break :result prefix;
-                    };
-                    // look for rex prefix
-                    op.rex = result: {
-                        const rex: Instruction.Op.REX = @bitCast(bytes[i]);
-                        if (rex.pat == 4) {
-                            i += 1;
-                            break :result rex;
-                        } else {
-                            break :result null;
-                        }
-                    };
-                    // see if op has ModR/M byte
-                    op.code = @enumFromInt(bytes[i]);
-                    i += 1;
-                    var sib_present = false;
-                    var disp_size: ?u8 = null;
-                    if (std.mem.indexOfScalar(Code, &mod_rm_codes, op.code) != null) {
-                        // decode ModR/M
-                        const mod_rm: Instruction.Op.ModRM = @bitCast(bytes[i]);
-                        i += 1;
-                        if (mod_rm.mod == 2 or (mod_rm.mod == 0 and mod_rm.rm == 5)) {
-                            disp_size = 32;
-                        } else if (mod_rm.mod == 1) {
-                            disp_size = 8;
-                        }
-                        sib_present = mod_rm.mod != 3 and mod_rm.rm == 4;
-                        op.mod_rm = mod_rm;
-                    }
-                    if (sib_present) {
-                        // decode SIB
-                        const sib: Instruction.Op.SIB = @bitCast(bytes[i]);
-                        i += 1;
-                        if (sib.base == 5) {
-                            disp_size = 32;
-                        }
-                        op.sib = sib;
-                    }
-                    if (disp_size) |size| {
-                        // get displacement
-                        if (size == 8) {
-                            op.disp8 = std.mem.bytesToValue(i8, bytes[i .. i + 1]);
-                            i += 1;
-                        } else if (size == 32) {
-                            op.disp32 = std.mem.bytesToValue(i32, bytes[i .. i + 4]);
-                            i += 4;
-                        }
-                    }
-                    // copy immediate (if any)
-                    if (std.mem.indexOfScalar(Code, &imm8_codes, op.code) != null) {
-                        op.imm8 = bytes[i];
-                        i += 1;
-                    } else if (std.mem.indexOfScalar(Code, &imm32_codes, op.code) != null) {
-                        op.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
-                        i += 4;
-                    } else if (std.mem.indexOfScalar(Code, &imm64_codes, op.code) != null) {
-                        op.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
-                        i += 8;
-                    }
-                    if (output) |buffer| {
-                        if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
-                        }
-                    }
-                    len += 1;
-                    switch (op.code) {
-                        .ret => break,
-                        .mux_rm => switch (op.mod_rm.?.reg) {
-                            0 => {}, // inc
-                            1 => {}, // dec
-                            2, 3 => {}, // call
-                            4, 5 => break, // jmp
-                            6 => {}, // push quad
-                            else => {},
-                        },
-                        else => {},
-                    }
-                }
-            },
-            .aarch64 => {
-                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
-                var i: usize = 0;
-                while (true) {
-                    const offset = i * @sizeOf(u32);
-                    const Op = Instruction.Op;
-                    const un = @typeInfo(Op).Union;
-                    const op: Op = inline for (un.fields) |field| {
-                        const specific_op: field.type = @bitCast(words[i]);
-                        if (matchDefault(specific_op)) {
-                            break @unionInit(Op, field.name, specific_op);
-                        }
-                    } else unreachable;
-                    i += 1;
-                    if (output) |buffer| {
-                        if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
-                        }
-                    }
-                    len += 1;
-                    switch (op) {
-                        .ret, .br => break,
-                        else => {},
-                    }
-                }
-            },
-            .riscv64 => {
-                var i: usize = 0;
-                while (true) {
-                    const offset = i;
-                    const Op = Instruction.Op;
-                    const un = @typeInfo(Op).Union;
-                    const op: Op, const op_size: usize = inline for (un.fields) |field| {
-                        const specific_op_ptr: *align(2) const field.type = @alignCast(@ptrCast(&bytes[i]));
-                        if (matchDefault(specific_op_ptr.*)) {
-                            break .{ @unionInit(Op, field.name, specific_op_ptr.*), @sizeOf(field.type) };
-                        }
-                    } else unreachable;
-                    i += op_size;
-                    if (output) |buffer| {
-                        if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
-                        }
-                    }
-                    len += 1;
-                    switch (op) {
-                        inline .ret, .c_ret, .c_jr => break,
-                        else => {},
-                    }
-                }
-            },
-            .powerpc64le => {
-                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
-                var i: usize = 0;
-                while (true) {
-                    const offset = i * @sizeOf(u32);
-                    const Op = Instruction.Op;
-                    const un = @typeInfo(Op).Union;
-                    const op: Op = inline for (un.fields) |field| {
-                        const specific_op: field.type = @bitCast(words[i]);
-                        if (matchDefault(specific_op)) {
-                            break @unionInit(Op, field.name, specific_op);
-                        }
-                    } else unreachable;
-                    i += 1;
-                    if (output) |buffer| {
-                        if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
-                        }
-                    }
-                    len += 1;
-                    switch (op) {
-                        .blr => break,
-                        else => {},
-                    }
-                }
-            },
-            .arm => {
-                const words: [*]const u32 = @ptrCast(@alignCast(bytes));
-                var i: usize = 0;
-                while (true) {
-                    const offset = i * @sizeOf(u32);
-                    const Op = Instruction.Op;
-                    const un = @typeInfo(Op).Union;
-                    const op: Op = inline for (un.fields) |field| {
-                        const specific_op: field.type = @bitCast(words[i]);
-                        if (matchDefault(specific_op)) {
-                            break @unionInit(Op, field.name, specific_op);
-                        }
-                    } else unreachable;
-                    i += 1;
-                    if (output) |buffer| {
-                        if (len < buffer.len) {
-                            buffer[len] = .{ .offset = offset, .op = op };
-                        }
-                    }
-                    len += 1;
-                    switch (op) {
-                        .pop => break,
-                        else => {},
-                    }
-                }
-            },
-            else => unreachable,
-        }
-        return len;
-    }
+        ldr: LDR,
+        push: PUSH,
+        pop: POP,
+        unknown: UNKNOWN,
+    },
+    else => void,
 };
 
 const InstructionEncoder = struct {
@@ -1191,7 +783,7 @@ const InstructionEncoder = struct {
         self.output = output;
         self.len = 0;
         for (instrs) |instr| {
-            self.add(instr.op);
+            self.add(instr);
         }
         return self.len;
     }
@@ -1279,32 +871,6 @@ const InstructionEncoder = struct {
 
 test "InstructionEncoder" {
     _ = InstructionEncoder;
-}
-
-fn matchDefault(s: anytype) bool {
-    const fields = switch (@typeInfo(@TypeOf(s))) {
-        .Struct => |st| st.fields,
-        else => @compileError("Not a struct"),
-    };
-    return inline for (fields) |field| {
-        if (field.default_value) |opaque_ptr| {
-            const default_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-            if (@field(s, field.name) != default_ptr.*) {
-                return false;
-            }
-        }
-    } else true;
-}
-
-test "matchDefault" {
-    const S = struct {
-        number1: i32 = 123,
-        number2: i32,
-    };
-    const s1: S = .{ .number2 = 456 };
-    try expect(matchDefault(s1) == true);
-    const s2: S = .{ .number1 = 100, .number2 = 456 };
-    try expect(matchDefault(s2) == false);
 }
 
 const assert = std.debug.assert;
