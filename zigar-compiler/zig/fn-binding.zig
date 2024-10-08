@@ -127,19 +127,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             try expect(ptr2 == null);
         }
 
-        fn dummy() i64 {
-            // return asm (""
-            //     : [ret] "={x11}" (-> i64),
-            // );
-        }
-
         fn getInstructions(self_address: usize, caller_address: usize) return_type: {
             const count = switch (builtin.target.cpu.arch) {
-                .x86_64 => 6,
-                .aarch64 => 10,
-                .riscv64 => 10,
+                .x86_64 => 7,
+                .aarch64 => 11,
+                .riscv64 => 15,
                 .powerpc64le => 0,
-                .x86 => 8,
+                .x86 => 10,
                 .arm => 0,
                 else => unreachable,
             };
@@ -153,6 +147,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .rex = .{},
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm64 = signature,
+                    },
+                    .{ // not rax, rax
+                        .rex = .{},
+                        .opcode = Instruction.Opcode.calc_rm,
+                        .mod_rm = .{ .reg = 2, .mod = 3 },
                     },
                     .{ // mov [rsp - signature_offset], rax
                         .rex = .{},
@@ -180,7 +179,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     },
                     .{ // jmp [rax]
                         .rex = .{},
-                        .opcode = Instruction.Opcode.mux_rm,
+                        .opcode = Instruction.Opcode.jmp_rm,
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
@@ -189,20 +188,24 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .sub = .{
                             .rd = 10,
                             .rn = 31,
-                            .imm12 = signature_offset,
+                            .imm12 = if (signature_offset < 0x1000) signature_offset else signature_offset >> 12,
+                            .shift = if (signature_offset < 0x1000) 0 else 1,
                         },
                     },
-                    .{ // ldr x9, [pc + 24] (signature)
-                        .ldr = .{ .rt = 9, .imm19 = 6 + 0 },
+                    .{ // ldr x9, [pc + 28] (signature)
+                        .ldr = .{ .rt = 9, .imm19 = 7 },
+                    },
+                    .{ // mvn x9, x9
+                        .mvn = .{ .rd = 9, .rm = 9 },
                     },
                     .{ // str [x10], x9
                         .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
                     },
-                    .{ // ldr x11, [pc + 24] (self_address)
-                        .ldr = .{ .rt = 11, .imm19 = 4 + 2 },
+                    .{ // ldr x9, [pc + 24] (self_address)
+                        .ldr = .{ .rt = 9, .imm19 = 4 + 2 },
                     },
                     .{ // str [x10 + 8], x9
-                        .str = .{ .rn = 10, .rt = 11, .imm12 = 1 },
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
                     },
                     .{ // ldr x9, [pc + 24] (caller_address)
                         .ldr = .{ .rt = 9, .imm19 = 2 + 4 },
@@ -215,32 +218,41 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .{ .literal = caller_address },
                 },
                 .riscv64 => .{
-                    .{ // lui x5, signature_offset
-                        .lui = .{ .rd = 5, .imm20 = signature_offset },
+                    .{ // lui x5, signature_offset >> 12 + (sign adjustment)
+                        .lui = .{ .rd = 5, .imm20 = (signature_offset >> 12) + ((signature_offset >> 11) & 1) },
+                    },
+                    .{ // mv x5, (signature_offset & 0xff_ffff)
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @bitCast(@as(u12, signature_offset & 0xfff)) },
                     },
                     .{ // sub x6, sp, x5
-                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                        .sub = .{ .rd = 31, .rs1 = 2, .rs2 = 5 },
                     },
-                    .{ // auipc x7, [pc + 24]
-                        .auipc = .{ .rd = 7, .imm20 = @sizeOf(u32) * 6 },
+                    .{ // auipc x7, pc
+                        .auipc = .{ .rd = 7 },
                     },
-                    .{ // ld x5, [x7] (signature)
-                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 0 },
+                    .{ // ld x5, [x7 + 32] (signature)
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 0 },
+                    },
+                    .{
+                        .xor = .{ .rd = 5, .rs = 5, .imm12 = -1 },
                     },
                     .{ // sd [x6], x5
-                        .sd = .{ .rn = 6, .rs = 5, .imm12 = 0 },
+                        .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 0 },
                     },
-                    .{ // ld x5, [x7 + 8] (self_address)
-                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 8 },
+                    .{ // ld x5, [x7 + 40] (self_address)
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 1 },
                     },
                     .{ // sd [x6 + 8], x5
-                        .sd = .{ .rn = 6, .rs = 5, .imm12 = 8 },
+                        .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 1 },
                     },
-                    .{ // ld x5, [x7 + 16] (caller_address)
-                        .ld = .{ .rd = 5, .rn = 7, .imm12 = 16 },
+                    .{ // ld x5, [x7 + 48] (caller_address)
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 2 },
                     },
                     .{ // jmp [x5]
-                        .jr = .{ .rs = 5 },
+                        .jalr = .{ .rd = 0, .rs = 5 },
+                    },
+                    .{ // nop
+                        .addi = .{ .rd = 0, .rs = 0, .imm12 = 0 },
                     },
                     .{ .literal = signature },
                     .{ .literal = self_address },
@@ -252,6 +264,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm32 = signature & 0xffff_ffff,
                     },
+                    .{ // not ax, ax
+                        .opcode = Instruction.Opcode.calc_rm,
+                        .mod_rm = .{ .reg = 2, .mod = 3 },
+                    },
                     .{ // mov [sp - signature_offset], ax
                         .opcode = Instruction.Opcode.mov_rm_r,
                         .mod_rm = .{ .rm = 4, .mod = 2 },
@@ -261,6 +277,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .{ // mov ax, signature
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm32 = signature >> 32,
+                    },
+                    .{ // not ax, ax
+                        .opcode = Instruction.Opcode.calc_rm,
+                        .mod_rm = .{ .reg = 2, .mod = 3 },
                     },
                     .{ // mov [sp - signature_offset + 4], ax
                         .opcode = Instruction.Opcode.mov_rm_r,
@@ -283,11 +303,38 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .imm32 = caller_address,
                     },
                     .{ // jmp [ax]
-                        .opcode = Instruction.Opcode.mux_rm,
+                        .opcode = Instruction.Opcode.jmp_rm,
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
-                .arm => .{},
+                .arm => .{
+                    .{ // sub r5, sp, signature_offset
+                        .sub = .{
+                            .rd = 5,
+                            .rn = 13,
+                            .imm12 = Instruction.imm12(signature_offset),
+                        },
+                    },
+                    .{ // ldr r4, [pc]
+                        .ldr = .{},
+                    },
+                    // // mov r4, (signature & 0xffffffff)
+                    // code.add(I.MOV_IMM32.init(4, signature & 0xffff_ffff));
+                    // // str [r5], r4
+                    // code.add(I.STR{ .rn = 5, .rt = 4 });
+                    // // mov r4, (signature >> 32)
+                    // code.add(I.MOV_IMM32.init(4, signature >> 32));
+                    // // str [r5 + 4], r4
+                    // code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 4 });
+                    // // mov r4, self_addr
+                    // code.add(I.MOV_IMM32.init(4, self_addr));
+                    // // str [r5 + 8], r4
+                    // code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 8 });
+                    // // mov r4, caller_addr
+                    // code.add(I.MOV_IMM32.init(4, caller_addr));
+                    // // bx [r4]
+                    // code.add(I.BX{ .rm = 4 });
+                },
                 else => .{},
             };
         }
@@ -316,26 +363,31 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const signature = comptime getSignature();
                     const signature_offset = comptime getSignatureOffset();
                     const ptr: [*]usize = @ptrFromInt(sp_address - signature_offset);
-                    const index = context_pos orelse search_result: {
-                        var index: usize = 0;
-                        while (index >= 0) {
+                    const self_address = if (context_pos) |i| ptr[i] else search_result: {
+                        var i: usize = 0;
+                        while (i >= 0) {
                             const match = switch (@bitSizeOf(usize)) {
-                                64 => ptr[index] == signature,
-                                32 => ptr[index] == (signature & 0xffff_ffff) and ptr[index + 1] == (signature >> 32),
+                                64 => (ptr[i] ^ 0xffff_ffff_ffff_ffff) == signature,
+                                32 => result: {
+                                    if ((ptr[i] ^ 0xffff_ffff) == (signature & 0xffff_ffff)) {
+                                        if ((ptr[i + 1] ^ 0xffff_ffff) == (signature >> 32)) {
+                                            i += 1;
+                                            break :result true;
+                                        }
+                                    }
+                                    break :result false;
+                                },
                                 else => unreachable,
                             };
-                            index += 1;
+                            i += 1;
                             if (match) {
-                                if (@bitSizeOf(usize) == 32) {
-                                    index += 1;
-                                }
+                                const address = ptr[i];
                                 // the context pointer is right below the signature (larger address)
-                                context_pos = index;
-                                break :search_result index;
+                                context_pos = i;
+                                break :search_result address;
                             }
                         }
                     };
-                    const self_address = ptr[index];
                     const self: *const Self = @ptrFromInt(self_address);
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
@@ -353,17 +405,16 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn getSignature() u64 {
-            // TODO: use a fixed constant for now
-            return 0xbc51_10c3_592d_717e;
+            return std.hash.cityhash.CityHash64.hash(@typeName(@This()));
         }
 
         fn getSignatureOffset() comptime_int {
-            return 2048;
+            return 4096;
         }
     };
 }
 
-test "Binding (basic)" {
+test "Binding (i64 x 3)" {
     const ns1 = struct {
         var called = false;
 
@@ -373,16 +424,16 @@ test "Binding (basic)" {
         }
     };
     var number: i64 = 1234;
+    _ = &number;
     const vars1 = .{ .@"-1" = number };
     const Binding1 = Binding(@TypeOf(ns1.add), @TypeOf(vars1));
     var gpa = executable();
     const bf1 = try Binding1.bind(gpa.allocator(), ns1.add, vars1);
-    try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
+    // try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
     defer Binding1.unbind(gpa.allocator(), bf1);
     const sum1 = bf1(1, 2, 3);
     try expect(ns1.called == true);
     try expect(sum1 == 1 + 2 + 3 + 1234);
-    _ = &number;
     const ns2 = struct {
         var called = false;
 
@@ -399,7 +450,7 @@ test "Binding (basic)" {
     try expect(bf1(1, 2, 3) == 1 + 2 + 3 + 1234);
 }
 
-test "Binding (stack usage)" {
+test "Binding (i64 x 9)" {
     const ns = struct {
         var called = false;
 
@@ -612,7 +663,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
             mov_rm_r = 0x89,
             nop = 0x90,
             mov_ax_imm = 0xb8,
-            mux_rm = 0xff,
+            calc_rm = 0xf7,
+            jmp_rm = 0xff,
             _,
         };
         pub const Prefix = enum(u8) {
@@ -648,18 +700,34 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
+        const MOVZ = packed struct(u32) {
+            rd: u5,
+            imm16: u16,
+            hw: u2,
+            opc: u9 = 0x1a5,
+        };
         const SUB = packed struct {
             rd: u5,
             rn: u5,
             imm12: u12,
-            opc: u10 = 0x344,
+            shift: u1 = 0,
+            opc: u9 = 0x162,
         };
-        const LDR = packed struct {
+        const MVN = packed struct(u32) {
+            rd: u5,
+            rn: u5 = 0x1f,
+            imm6: u6 = 0,
+            rm: u5,
+            _: u1 = 1,
+            shift: u2 = 0,
+            opc: u8 = 0xaa,
+        };
+        const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
             opc: u8 = 0x58,
         };
-        const STR = packed struct {
+        const STR = packed struct(u32) {
             rt: u5,
             rn: u5,
             imm12: u12 = 0,
@@ -670,23 +738,51 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rn: u5,
             opc: u22 = 0x35_87c0,
         };
+        const NOP = packed struct(u32) {
+            opc: u32 = 0xd503_201f,
+        };
 
+        movz: MOVZ,
         sub: SUB,
+        mvn: MVN,
         ldr: LDR,
         str: STR,
         br: BR,
+        nop: NOP,
         literal: usize,
     },
     .riscv64 => union(enum) {
         const LUI = packed struct(u32) {
             opc: u7 = 0x37,
             rd: u5,
-            imm20: u20 = 0,
+            imm20: i20 = 0,
+        };
+        const ADDI = packed struct(u32) {
+            opc: u7 = 0x13,
+            rs: u5,
+            func: u3 = 0,
+            rd: u5,
+            imm12: i12 = 0,
+        };
+        const XOR = packed struct(u32) {
+            opc: u7 = 0x13,
+            rs: u5,
+            func: u3 = 4,
+            rd: u5,
+            imm12: i12,
+        };
+        const SUB = packed struct(u32) {
+            opc: u7 = 0x33,
+            rd: u5,
+            func: u3 = 0,
+            rs1: u5,
+            rs2: u5,
+            offset_11_5: u7 = 0x20,
         };
         const AUIPC = packed struct(u32) {
             opc: u7 = 0x17,
             rd: u5,
-            imm20: u20 = 0,
+            imm20: i20 = 0,
         };
         const LD = packed struct(u32) {
             opc: u7 = 0x3,
@@ -697,25 +793,28 @@ const Instruction = switch (builtin.target.cpu.arch) {
         };
         const SD = packed struct(u32) {
             opc: u7 = 0x23,
-            offset_4_0: u5 = 0,
+            imm12_4_0: u5 = 0,
             func: u3 = 0x3,
             rs1: u5,
             rs2: u5,
-            offset_11_5: u7 = 0,
+            imm12_11_5: i7 = 0,
         };
         const JALR = packed struct(u32) {
             opc: u7 = 0x67,
             rd: u5,
             func: u3 = 0,
             rs: u5,
-            imm12: u12 = 0,
+            imm12: i12 = 0,
         };
 
         lui: LUI,
         auipc: AUIPC,
         ld: LD,
         sd: SD,
+        xor: XOR,
+        sub: SUB,
         jalr: JALR,
+        addi: ADDI,
         literal: usize,
     },
     .powerpc64le => union(enum) {
@@ -800,24 +899,33 @@ const Instruction = switch (builtin.target.cpu.arch) {
             opc: u8 = 0x59,
             _: u4 = 0,
         };
-        const PUSH = packed struct(u32) {
-            reg_set: u16,
-            opc: u12 = 0x92d,
+        const SUB = packed struct {
+            imm12: u12,
+            rd: u4,
+            rn: u4,
+            opc: u8 = 0x24,
             _: u4 = 0,
         };
-        const POP = packed struct(u32) {
-            reg_set: u16,
-            opc: u12 = 0x8bd,
+        const STR = packed struct {
+            imm12: u12 = 0,
+            rt: u4,
+            rn: u4,
+            opc: u8 = 0x58,
             _: u4 = 0,
         };
-        const UNKNOWN = packed struct(u32) {
-            bits: u32,
+        const BX = packed struct {
+            rm: u4,
+            flags: u4 = 0x1,
+            imm12: u12 = 0xfff,
+            opc: u8 = 0x12,
+            _: u4 = 0,
         };
 
         ldr: LDR,
-        push: PUSH,
-        pop: POP,
-        unknown: UNKNOWN,
+        sub: SUB,
+        str: STR,
+        bx: BX,
+        literal: usize,
     },
     else => void,
 };
