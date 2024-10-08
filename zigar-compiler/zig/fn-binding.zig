@@ -132,15 +132,16 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .x86_64 => 7,
                 .aarch64 => 11,
                 .riscv64 => 15,
-                .powerpc64le => 0,
+                .powerpc64le => 19,
                 .x86 => 10,
-                .arm => 0,
+                .arm => 15,
                 else => unreachable,
             };
             break :return_type [count]Instruction;
         } {
             const signature = comptime getSignature();
             const signature_offset = comptime getSignatureOffset();
+            const code_address = self_address + @offsetOf(@This(), "code");
             return switch (builtin.target.cpu.arch) {
                 .x86_64 => .{
                     .{ // mov rax, signature
@@ -148,7 +149,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm64 = signature,
                     },
-                    .{ // not rax, rax
+                    .{ // not rax
                         .rex = .{},
                         .opcode = Instruction.Opcode.calc_rm,
                         .mod_rm = .{ .reg = 2, .mod = 3 },
@@ -258,7 +259,84 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .{ .literal = self_address },
                     .{ .literal = caller_address },
                 },
-                .powerpc64le => .{},
+                .powerpc64le => .{
+                    .{ // lis r11, (code_address >> 48) & 0xffff
+                        .addi = .{
+                            .rt = 11,
+                            .ra = 0,
+                            .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
+                        },
+                    },
+                    .{ // ori r11, r11, (code_address >> 32) & 0xffff
+                        .ori = .{
+                            .ra = 11,
+                            .rs = 11,
+                            .imm16 = @truncate((code_address >> 32) & 0xffff),
+                        },
+                    },
+                    .{ // rldic r11, r11, 32
+                        .rldic = .{
+                            .rs = 11,
+                            .ra = 11,
+                            .sh = 0,
+                            .sh2 = 1,
+                        },
+                    },
+                    .{ // oris r11, r11, (code_address >> 16) & 0xffff
+                        .oris = .{
+                            .ra = 11,
+                            .rs = 11,
+                            .imm16 = @truncate((code_address >> 16) & 0xffff),
+                        },
+                    },
+                    .{ // ori r11, r11, (code_address >> 0) & 0xffff
+                        .ori = .{
+                            .ra = 11,
+                            .rs = 11,
+                            .imm16 = @truncate((code_address >> 0) & 0xffff),
+                        },
+                    },
+                    .{ // ld r12, [r11 + 48] (signature)
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 0 },
+                    },
+                    .{ // std [sp - 8], r11
+                        .std = .{ .ra = 1, .rs = 11, .ds = -2 },
+                    },
+                    .{ // lis r11. -1
+                        .addi = .{
+                            .rt = 11,
+                            .ra = 0,
+                            .imm16 = -1,
+                        },
+                    },
+                    .{ // xor r12, r12, r11
+                        .xor = .{ .ra = 12, .rs = 12, .rb = 11 },
+                    },
+                    .{ // std [sp - signature_offset], r12
+                        .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 0 },
+                    },
+                    .{ // ld r11, [sp - 8]
+                        .ld = .{ .rt = 11, .ra = 1, .ds = -2 },
+                    },
+                    .{ // ld r12, [r11 + 56] (self_address)
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 2 },
+                    },
+                    .{ // std [sp - signature_offset + 8], r12
+                        .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 2 },
+                    },
+                    .{ // ld r12, [r11 + 64] (caller_address)
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 4 },
+                    },
+                    .{ // mtctr r12
+                        .mtctr = .{ .rs = 12 },
+                    },
+                    .{ // bctrl
+                        .bctrl = .{},
+                    },
+                    .{ .literal = signature },
+                    .{ .literal = self_address },
+                    .{ .literal = caller_address },
+                },
                 .x86 => .{
                     .{ // mov ax, signature
                         .opcode = Instruction.Opcode.mov_ax_imm,
@@ -278,7 +356,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm32 = signature >> 32,
                     },
-                    .{ // not ax, ax
+                    .{ // not ax
                         .opcode = Instruction.Opcode.calc_rm,
                         .mod_rm = .{ .reg = 2, .mod = 3 },
                     },
@@ -312,28 +390,43 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .sub = .{
                             .rd = 5,
                             .rn = 13,
-                            .imm12 = Instruction.imm12(signature_offset),
+                            .imm12 = comptime Instruction.imm12(signature_offset),
                         },
                     },
-                    .{ // ldr r4, [pc]
-                        .ldr = .{},
+                    .{ // ldr r4, [pc + 32] (signature & 0xffffffff)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 8 + @sizeOf(u32) * 0) },
                     },
-                    // // mov r4, (signature & 0xffffffff)
-                    // code.add(I.MOV_IMM32.init(4, signature & 0xffff_ffff));
-                    // // str [r5], r4
-                    // code.add(I.STR{ .rn = 5, .rt = 4 });
-                    // // mov r4, (signature >> 32)
-                    // code.add(I.MOV_IMM32.init(4, signature >> 32));
-                    // // str [r5 + 4], r4
-                    // code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 4 });
-                    // // mov r4, self_addr
-                    // code.add(I.MOV_IMM32.init(4, self_addr));
-                    // // str [r5 + 8], r4
-                    // code.add(I.STR{ .rn = 5, .rt = 4, .imm12 = 8 });
-                    // // mov r4, caller_addr
-                    // code.add(I.MOV_IMM32.init(4, caller_addr));
-                    // // bx [r4]
-                    // code.add(I.BX{ .rm = 4 });
+                    .{ // not r4, r4
+                        .mvn = .{ .rd = 4, .rm = 4 },
+                    },
+                    .{ // str [r5], r4
+                        .str = .{ .rn = 5, .rt = 4 },
+                    },
+                    .{ // ldr r4, [pc + ?] (signature >> 32)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 5 + @sizeOf(u32) * 1) },
+                    },
+                    .{ // not r4, r4
+                        .mvn = .{ .rd = 4, .rm = 4 },
+                    },
+                    .{ // str [r5 + 4], r4
+                        .str = .{ .rn = 5, .rt = 4, .imm12 = 4 },
+                    },
+                    .{ // ldr r4, [pc + ?] (self_address)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 2) },
+                    },
+                    .{ // str [r5 + 8], r4
+                        .str = .{ .rn = 5, .rt = 4, .imm12 = 8 },
+                    },
+                    .{ // ldr r4, [pc + ?] (caller_addr)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 3) },
+                    },
+                    .{ // bx [r4]
+                        .bx = .{ .rm = 4 },
+                    },
+                    .{ .literal = signature & 0xffff_ffff },
+                    .{ .literal = signature >> 32 },
+                    .{ .literal = self_address },
+                    .{ .literal = caller_address },
                 },
                 else => .{},
             };
@@ -349,11 +442,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
                 inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
                     const sp_address = switch (builtin.target.cpu.arch) {
-                        .x86_64, .powerpc64le => asm (""
+                        .x86_64 => asm (""
                             : [ret] "={rsp}" (-> usize),
                         ),
                         .x86 => asm (""
                             : [ret] "={esp}" (-> usize),
+                        ),
+                        .powerpc64le => asm (""
+                            : [ret] "={r1}" (-> usize),
                         ),
                         else => asm (""
                             : [ret] "={sp}" (-> usize),
@@ -429,7 +525,7 @@ test "Binding (i64 x 3)" {
     const Binding1 = Binding(@TypeOf(ns1.add), @TypeOf(vars1));
     var gpa = executable();
     const bf1 = try Binding1.bind(gpa.allocator(), ns1.add, vars1);
-    // try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
+    try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
     defer Binding1.unbind(gpa.allocator(), bf1);
     const sum1 = bf1(1, 2, 3);
     try expect(ns1.called == true);
@@ -819,16 +915,10 @@ const Instruction = switch (builtin.target.cpu.arch) {
     },
     .powerpc64le => union(enum) {
         const ADDI = packed struct(u32) {
-            imm16: u16,
+            imm16: i16,
             ra: u5,
             rt: u5,
             opc: u6 = 0x0e,
-        };
-        const ADDIS = packed struct(u32) {
-            imm16: u16,
-            ra: u5,
-            rt: u5,
-            opc: u6 = 0x0f,
         };
         const ORI = packed struct(u32) {
             imm16: u16,
@@ -842,15 +932,37 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rs: u5,
             opc: u6 = 0x19,
         };
+        const XOR = packed struct(u32) {
+            rc: u1 = 0,
+            func: u10 = 316,
+            rb: u5,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x1f,
+        };
         const RLDIC = packed struct(u32) {
-            rc: u1,
+            rc: u1 = 0,
             sh2: u1,
             _: u3 = 2,
-            mb: u6,
+            mb: u6 = 0,
             sh: u5,
             ra: u5,
             rs: u5,
             opc: u6 = 0x1e,
+        };
+        const LD = packed struct {
+            _: u2 = 0,
+            ds: i14 = 0,
+            ra: u5,
+            rt: u5,
+            opc: u6 = 0x3a,
+        };
+        const STD = packed struct {
+            _: u2 = 0,
+            ds: i14 = 0,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x3e,
         };
         const MTCTR = packed struct(u32) {
             _: u1 = 0,
@@ -860,36 +972,25 @@ const Instruction = switch (builtin.target.cpu.arch) {
             opc: u6 = 0x1f,
         };
         const BCTRL = packed struct(u32) {
-            lk: u1 = 1,
-            func: u10 = 528,
-            bh: u2,
-            _: u3,
-            bi: u5,
-            bo: u5,
-            opc: u6 = 0x13,
-        };
-        const BLR = packed struct(u32) {
             lk: u1 = 0,
-            func: u10 = 16,
-            bh: u2,
-            _: u3,
-            bi: u5,
-            bo: u5,
+            func: u10 = 528,
+            bh: u2 = 0,
+            _: u3 = 0,
+            bi: u5 = 0,
+            bo: u5 = 0x14,
             opc: u6 = 0x13,
-        };
-        const UNKNOWN = packed struct(u32) {
-            bits: u32,
         };
 
         addi: ADDI,
-        addis: ADDIS,
         ori: ORI,
         oris: ORIS,
         rldic: RLDIC,
+        ld: LD,
+        xor: XOR,
+        std: STD,
         mtctr: MTCTR,
         bctrl: BCTRL,
-        blr: BLR,
-        unknown: UNKNOWN,
+        literal: usize,
     },
     .arm => union(enum) {
         const LDR = packed struct(u32) {
@@ -899,33 +1000,69 @@ const Instruction = switch (builtin.target.cpu.arch) {
             opc: u8 = 0x59,
             _: u4 = 0,
         };
-        const SUB = packed struct {
+        const SUB = packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
             opc: u8 = 0x24,
             _: u4 = 0,
         };
-        const STR = packed struct {
+        const MVN = packed struct(u32) {
+            rm: u4,
+            ___: u1 = 0,
+            type: u2 = 0,
+            imm5: u5 = 0,
+            rd: u4,
+            __: u4 = 0,
+            opc: u8 = 0x1e,
+            _: u4 = 0,
+        };
+        const STR = packed struct(u32) {
             imm12: u12 = 0,
             rt: u4,
             rn: u4,
             opc: u8 = 0x58,
             _: u4 = 0,
         };
-        const BX = packed struct {
+        const BX = packed struct(u32) {
             rm: u4,
             flags: u4 = 0x1,
             imm12: u12 = 0xfff,
             opc: u8 = 0x12,
             _: u4 = 0,
         };
+        const NOP = packed struct(u32) {
+            _____: u8 = 0,
+            ____: u4 = 0,
+            ___: u4 = 0xf,
+            __: u4 = 0,
+            opc: u8 = 0x32,
+            _: u4 = 0,
+        };
 
         ldr: LDR,
         sub: SUB,
+        mvn: MVN,
         str: STR,
         bx: BX,
+        nop: NOP,
         literal: usize,
+
+        fn imm12(comptime value: u32) u12 {
+            comptime {
+                var r: u32 = 0;
+                var v: u32 = value;
+                // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
+                while (v & ~@as(u32, 0xff) != 0) {
+                    v = (v << 2) | (v >> 30);
+                    r += 1;
+                    if (r > 15) {
+                        @compileError(std.fmt.comptimePrint("Cannot encode value as imm12: {d}", .{value}));
+                    }
+                }
+                return r << 8 | v;
+            }
+        }
     },
     else => void,
 };
