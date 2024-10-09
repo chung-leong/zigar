@@ -4,9 +4,9 @@ const types = @import("types.zig");
 const expect = std.testing.expect;
 
 pub const Error = error{
-    too_many_arguments,
-    unsupported_argument_type,
-    invalid_argument_attributes,
+    TooManyArguments,
+    UnsupportedArgumentType,
+    InvalidArgumentAttributes,
 };
 
 pub fn call(

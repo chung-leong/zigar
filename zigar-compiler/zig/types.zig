@@ -22,10 +22,11 @@ pub const Error = error{
     UnableToDefineStructure,
     UnableToWriteToConsole,
     UnableToCreateFunction,
+    MissingHostInstance,
     TooManyArguments,
 };
 
-pub const HostOptions = packed struct(u32) {
+pub const ExportOptions = packed struct(u32) {
     omit_methods: bool = false,
     omit_variables: bool = false,
     _: u30 = 0,

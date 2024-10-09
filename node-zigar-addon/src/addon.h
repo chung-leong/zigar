@@ -169,9 +169,9 @@ struct import_table {
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);
-    result (__cdecl *run_thunk)(module_data*, size_t, size_t, void*);
-    result (__cdecl *run_variadic_thunk)(module_data*, size_t, size_t, void*, void*, size_t);
-    result (__cdecl *create_js_thunk)(module_data*, size_t, size_t, size_t*);
+    result (__cdecl *run_thunk)(size_t, size_t, void*);
+    result (__cdecl *run_variadic_thunk)(size_t, size_t, void*, void*, size_t);
+    result (__cdecl *create_js_thunk)(size_t, size_t, size_t*);
     result (__cdecl *override_write)(const void*, size_t);
     result (__cdecl *wake_caller)(size_t, uint32_t);
 };

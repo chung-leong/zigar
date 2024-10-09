@@ -1,12 +1,13 @@
 const std = @import("std");
 const types = @import("types.zig");
 const variadic = @import("variadic.zig");
+const fn_transform = @import("fn-transform.zig");
 const expect = std.testing.expect;
 
 const Memory = types.Memory;
 
-pub const Thunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque) anyerror!void;
-pub const VariadicThunk = *const fn (?*anyopaque, *const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;
+pub const Thunk = *const fn (*const anyopaque, *anyopaque) anyerror!void;
+pub const VariadicThunk = *const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;
 
 pub fn ThunkType(comptime FT: type) type {
     return switch (@typeInfo(FT).Fn.is_var_args) {
@@ -20,12 +21,11 @@ test "ThunkType" {
     try expect(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
 }
 
-pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
+pub fn createThunk(comptime host: type, comptime FT: type) ThunkType(FT) {
     const f = @typeInfo(FT).Fn;
     const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
-        fn invokeFunction(ptr: ?*anyopaque, fn_ptr: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
-            const host = HostT.init(ptr);
+        fn invokeFunction(fn_ptr: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
             // extract arguments from argument struct
             const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
             var args: std.meta.ArgsTuple(FT) = undefined;
@@ -56,7 +56,7 @@ pub fn createThunk(comptime HostT: type, comptime FT: type) ThunkType(FT) {
         }
     };
     const ns_variadic = struct {
-        fn invokeFunction(_: ?*anyopaque, fn_ptr: *const anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) anyerror!void {
+        fn invokeFunction(fn_ptr: *const anyopaque, arg_ptr: *anyopaque, attr_ptr: *const anyopaque, arg_count: usize) anyerror!void {
             return variadic.call(FT, fn_ptr, arg_ptr, attr_ptr, arg_count);
         }
     };
@@ -109,22 +109,19 @@ test "createThunk" {
     }
 }
 
-fn createAllocator(host: anytype) std.mem.Allocator {
-    const HostT = @TypeOf(host);
+fn createAllocator(host: type) std.mem.Allocator {
     const VTable = struct {
-        fn alloc(p: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
-            const h = HostT.init(p);
+        fn alloc(_: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
             const alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align));
-            return if (h.allocateMemory(size, alignment)) |m| m.bytes else |_| null;
+            return if (host.allocateMemory(size, alignment)) |m| m.bytes else |_| null;
         }
 
         fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
             return false;
         }
 
-        fn free(p: *anyopaque, bytes: []u8, ptr_align: u8, _: usize) void {
-            const h = HostT.init(p);
-            h.freeMemory(.{
+        fn free(_: *anyopaque, bytes: []u8, ptr_align: u8, _: usize) void {
+            host.freeMemory(.{
                 .bytes = @ptrCast(bytes.ptr),
                 .len = bytes.len,
                 .attributes = .{
@@ -140,7 +137,7 @@ fn createAllocator(host: anytype) std.mem.Allocator {
         };
     };
     return .{
-        .ptr = host.context,
+        .ptr = undefined,
         .vtable = &VTable.instance,
     };
 }
@@ -151,87 +148,21 @@ pub fn uninline(comptime function: anytype) types.Uninlined(@TypeOf(function)) {
         return function;
     }
     const f = @typeInfo(FT).Fn;
-    const PT = comptime extract: {
-        var Types: [f.params.len]type = undefined;
-        for (f.params, 0..) |param, index| {
-            Types[index] = param.type orelse @compileError("Illegal argument type");
-        }
-        break :extract Types;
-    };
-    const RT = f.return_type orelse @compileError("Illegal return type");
-    const cc = f.calling_convention;
     const ns = struct {
-        fn call0() callconv(cc) RT {
-            return @call(.auto, function, .{});
-        }
-
-        fn call1(a0: PT[0]) callconv(cc) RT {
-            return @call(.auto, function, .{a0});
-        }
-
-        fn call2(a0: PT[0], a1: PT[1]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1 });
-        }
-
-        fn call3(a0: PT[0], a1: PT[1], a2: PT[2]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2 });
-        }
-
-        fn call4(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3 });
-        }
-
-        fn call5(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4 });
-        }
-
-        fn call6(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5 });
-        }
-
-        fn call7(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6 });
-        }
-
-        fn call8(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7 });
-        }
-
-        fn call9(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8 });
-        }
-
-        fn call10(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 });
-        }
-
-        fn call11(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 });
-        }
-
-        fn call12(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 });
-        }
-
-        fn call13(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 });
-        }
-
-        fn call14(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13 });
-        }
-
-        fn call15(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13], a14: PT[14]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14 });
-        }
-
-        fn call16(a0: PT[0], a1: PT[1], a2: PT[2], a3: PT[3], a4: PT[4], a5: PT[5], a6: PT[6], a7: PT[7], a8: PT[8], a9: PT[9], a10: PT[10], a11: PT[11], a12: PT[12], a13: PT[13], a14: PT[14], a15: PT[15]) callconv(cc) RT {
-            return @call(.auto, function, .{ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 });
+        inline fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
+            return @call(.auto, function, args);
         }
     };
-    const caller_name = std.fmt.comptimePrint("call{d}", .{f.params.len});
-    if (!@hasDecl(ns, caller_name)) {
-        @compileError("Too many arguments");
-    }
-    return @field(ns, caller_name);
+    return fn_transform.spreadArgs(ns.call, f.calling_convention);
+}
+
+test "uninline" {
+    const ns = struct {
+        inline fn add(a: i32, b: i32) i32 {
+            return a + b;
+        }
+    };
+    const f = uninline(ns.add);
+    const c = f(1, 2);
+    try expect(c == 3);
 }

@@ -5,8 +5,8 @@ const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const types = @import("types.zig");
 
-pub const Value = types.Value;
-pub const MemoryType = types.MemoryType;
+const Value = types.Value;
+const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 
@@ -70,7 +70,7 @@ export fn runThunk(
 ) bool {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(null, fn_ptr, args)) true else |_| false;
+    return if (thunk(fn_ptr, args)) true else |_| false;
 }
 
 export fn runVariadicThunk(
@@ -82,7 +82,7 @@ export fn runVariadicThunk(
 ) bool {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(null, fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
+    return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 
 export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
@@ -90,7 +90,8 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    if (controller(null, thunk_js.Action.create, fn_id)) |thunk_address| {
+    const ptr: *anyopaque = @ptrFromInt(0xaaaa_aaaa);
+    if (controller(ptr, thunk_js.Action.create, fn_id)) |thunk_address| {
         return thunk_address;
     } else |_| {
         if (builtin.single_threaded and main_thread) {
@@ -103,7 +104,8 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 
 export fn destroyJsThunk(controller_address: usize, fn_id: usize) bool {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    if (controller(null, thunk_js.Action.destroy, fn_id)) |_| {
+    const ptr: *anyopaque = @ptrFromInt(0xaaaa_aaaa);
+    if (controller(ptr, thunk_js.Action.destroy, fn_id)) |_| {
         return true;
     } else |_| {
         if (builtin.single_threaded and main_thread) {
@@ -143,7 +145,8 @@ export fn getModuleAttributes() i32 {
 }
 
 pub fn getFactoryThunk(comptime T: type) usize {
-    const factory = exporter.createRootFactory(Host, T);
+    const host = @This();
+    const factory = exporter.createRootFactory(host, T);
     return @intFromPtr(factory);
 }
 
@@ -152,159 +155,151 @@ pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     std.process.abort();
 }
 
-pub const Host = struct {
-    comptime context: *anyopaque = @ptrFromInt(0x1000), // dummy pointer
-
-    pub fn init(_: ?*anyopaque) Host {
-        return .{};
-    }
-
-    pub fn allocateMemory(_: Host, size: usize, alignment: u16) !Memory {
-        if (_allocateHostMemory(size, alignment)) |dv| {
-            const address = _getViewAddress(dv);
-            return .{
-                .bytes = @ptrFromInt(address),
-                .len = size,
-            };
-        } else {
-            return Error.UnableToAllocateMemory;
-        }
-    }
-
-    pub fn freeMemory(_: Host, memory: Memory) !void {
-        if (memory.bytes) |bytes| {
-            _freeHostMemory(bytes, memory.len, memory.attributes.alignment);
-        }
-    }
-
-    pub fn captureString(_: Host, memory: Memory) !Value {
-        return _captureString(memory.bytes, memory.len) orelse
-            Error.UnableToCreateString;
-    }
-
-    pub fn captureView(_: Host, memory: Memory) !Value {
-        return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
-            Error.UnableToCreateDataView;
-    }
-
-    pub fn castView(_: Host, memory: Memory, structure: Value) !Value {
-        return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
-            Error.UnableToCreateObject;
-    }
-
-    pub fn readSlot(_: Host, container: ?Value, slot: usize) !Value {
-        return _readSlot(container, slot) orelse
-            Error.UnableToRetrieveObject;
-    }
-
-    pub fn writeSlot(_: Host, container: ?Value, slot: usize, value: ?Value) !void {
-        _writeSlot(container, slot, value);
-    }
-
-    fn beginDefinition() Value {
-        return _beginDefinition();
-    }
-
-    fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
-        const T = @TypeOf(value);
-        if (@typeInfo(T) == .Optional) {
-            if (value) |v| try insertProperty(container, key, v);
-            return;
-        }
-        const key_str = _captureString(key.ptr, key.len) orelse {
-            return Error.UnableToCreateString;
+pub fn allocateMemory(size: usize, alignment: u16) !Memory {
+    if (_allocateHostMemory(size, alignment)) |dv| {
+        const address = _getViewAddress(dv);
+        return .{
+            .bytes = @ptrFromInt(address),
+            .len = size,
         };
-        switch (@typeInfo(T)) {
-            .Pointer => {
-                if (T == []const u8) {
-                    const str = _captureString(value.ptr, value.len) orelse {
-                        return Error.unable_to_create_string;
-                    };
-                    _insertString(container, key_str, str);
-                } else if (T == Value) {
-                    _insertObject(container, key_str, value);
-                } else {
-                    @compileError("No support for value type: " ++ @typeName(T));
-                }
-            },
-            .Int => _insertInteger(container, key_str, @intCast(value)),
-            .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
-            .Bool => _insertBoolean(container, key_str, value),
-            .Struct, .Union => _insertInteger(container, key_str, @bitCast(value)),
-            else => @compileError("No support for value type: " ++ @typeName(T)),
-        }
+    } else {
+        return Error.UnableToAllocateMemory;
     }
+}
 
-    pub fn beginStructure(_: Host, structure: types.Structure) !Value {
-        const def = beginDefinition();
-        try insertProperty(def, "name", structure.name);
-        try insertProperty(def, "type", structure.type);
-        try insertProperty(def, "flags", structure.flags);
-        try insertProperty(def, "length", structure.length);
-        try insertProperty(def, "byteSize", structure.byte_size);
-        try insertProperty(def, "align", structure.alignment);
-        return _beginStructure(def) orelse
-            Error.UnableToStartStructureDefinition;
+pub fn freeMemory(memory: Memory) !void {
+    if (memory.bytes) |bytes| {
+        _freeHostMemory(bytes, memory.len, memory.attributes.alignment);
     }
+}
 
-    pub fn attachMember(_: Host, structure: Value, member: types.Member, is_static: bool) !void {
-        const def = beginDefinition();
-        try insertProperty(def, "type", member.type);
-        try insertProperty(def, "flags", member.flags);
-        try insertProperty(def, "bitOffset", member.bit_offset);
-        try insertProperty(def, "bitSize", member.bit_size);
-        try insertProperty(def, "byteSize", member.byte_size);
-        try insertProperty(def, "slot", member.slot);
-        try insertProperty(def, "name", member.name);
-        try insertProperty(def, "structure", member.structure);
-        _attachMember(structure, def, is_static);
+pub fn captureString(memory: Memory) !Value {
+    return _captureString(memory.bytes, memory.len) orelse
+        Error.UnableToCreateString;
+}
+
+pub fn captureView(memory: Memory) !Value {
+    return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
+        Error.UnableToCreateDataView;
+}
+
+pub fn castView(memory: Memory, structure: Value) !Value {
+    return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
+        Error.UnableToCreateObject;
+}
+
+pub fn readSlot(container: ?Value, slot: usize) !Value {
+    return _readSlot(container, slot) orelse
+        Error.UnableToRetrieveObject;
+}
+
+pub fn writeSlot(container: ?Value, slot: usize, value: ?Value) !void {
+    _writeSlot(container, slot, value);
+}
+
+fn beginDefinition() Value {
+    return _beginDefinition();
+}
+
+fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
+    const T = @TypeOf(value);
+    if (@typeInfo(T) == .Optional) {
+        if (value) |v| try insertProperty(container, key, v);
+        return;
     }
-
-    pub fn defineStructure(_: Host, structure: Value) !Value {
-        return _defineStructure(structure) orelse
-            Error.UnableToDefineStructure;
-    }
-
-    pub fn attachTemplate(_: Host, structure: Value, template: Value, is_static: bool) !void {
-        _attachTemplate(structure, template, is_static);
-    }
-
-    pub fn endStructure(_: Host, structure: Value) !void {
-        _endStructure(structure);
-    }
-
-    pub fn createTemplate(_: Host, dv: ?Value) !Value {
-        return _createTemplate(dv) orelse
-            Error.UnableToCreateStructureTemplate;
-    }
-
-    pub fn createMessage(self: Host, err: anyerror) ?Value {
-        const err_name = @errorName(err);
-        const memory = Memory.from(err_name, true);
-        return self.captureString(memory) catch null;
-    }
-
-    pub fn handleJsCall(_: Host, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
-        if (main_thread) {
-            return _performJsCall(fn_id, arg_ptr, arg_size);
-        } else {
-            const initial_value = 0xffff_ffff;
-            var futex: Futex = undefined;
-            var futex_handle: usize = 0;
-            if (wait) {
-                futex.value = std.atomic.Value(u32).init(initial_value);
-                futex.handle = @intFromPtr(&futex);
-                futex_handle = futex.handle;
+    const key_str = _captureString(key.ptr, key.len) orelse {
+        return Error.UnableToCreateString;
+    };
+    switch (@typeInfo(T)) {
+        .Pointer => {
+            if (T == []const u8) {
+                const str = _captureString(value.ptr, value.len) orelse {
+                    return Error.UnableToCreateString;
+                };
+                _insertString(container, key_str, str);
+            } else if (T == Value) {
+                _insertObject(container, key_str, value);
+            } else {
+                @compileError("No support for value type: " ++ @typeName(T));
             }
-            var result = _queueJsCall(fn_id, arg_ptr, arg_size, futex_handle);
-            if (result == .ok and wait) {
-                std.Thread.Futex.wait(&futex.value, initial_value);
-                result = @enumFromInt(futex.value.load(.acquire));
-            }
-            return result;
-        }
+        },
+        .Int => _insertInteger(container, key_str, @intCast(value)),
+        .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
+        .Bool => _insertBoolean(container, key_str, value),
+        .Struct, .Union => _insertInteger(container, key_str, @bitCast(value)),
+        else => @compileError("No support for value type: " ++ @typeName(T)),
     }
-};
+}
+
+pub fn beginStructure(structure: types.Structure) !Value {
+    const def = beginDefinition();
+    try insertProperty(def, "name", structure.name);
+    try insertProperty(def, "type", structure.type);
+    try insertProperty(def, "flags", structure.flags);
+    try insertProperty(def, "length", structure.length);
+    try insertProperty(def, "byteSize", structure.byte_size);
+    try insertProperty(def, "align", structure.alignment);
+    return _beginStructure(def) orelse
+        Error.UnableToStartStructureDefinition;
+}
+
+pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !void {
+    const def = beginDefinition();
+    try insertProperty(def, "type", member.type);
+    try insertProperty(def, "flags", member.flags);
+    try insertProperty(def, "bitOffset", member.bit_offset);
+    try insertProperty(def, "bitSize", member.bit_size);
+    try insertProperty(def, "byteSize", member.byte_size);
+    try insertProperty(def, "slot", member.slot);
+    try insertProperty(def, "name", member.name);
+    try insertProperty(def, "structure", member.structure);
+    _attachMember(structure, def, is_static);
+}
+
+pub fn defineStructure(structure: Value) !Value {
+    return _defineStructure(structure) orelse
+        Error.UnableToDefineStructure;
+}
+
+pub fn attachTemplate(structure: Value, template: Value, is_static: bool) !void {
+    _attachTemplate(structure, template, is_static);
+}
+
+pub fn endStructure(structure: Value) !void {
+    _endStructure(structure);
+}
+
+pub fn createTemplate(dv: ?Value) !Value {
+    return _createTemplate(dv) orelse
+        Error.UnableToCreateStructureTemplate;
+}
+
+pub fn createMessage(err: anyerror) ?Value {
+    const err_name = @errorName(err);
+    const memory = Memory.from(err_name, true);
+    return captureString(memory) catch null;
+}
+
+pub fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
+    if (main_thread) {
+        return _performJsCall(fn_id, arg_ptr, arg_size);
+    } else {
+        const initial_value = 0xffff_ffff;
+        var futex: Futex = undefined;
+        var futex_handle: usize = 0;
+        if (wait) {
+            futex.value = std.atomic.Value(u32).init(initial_value);
+            futex.handle = @intFromPtr(&futex);
+            futex_handle = futex.handle;
+        }
+        var result = _queueJsCall(fn_id, arg_ptr, arg_size, futex_handle);
+        if (result == .ok and wait) {
+            std.Thread.Futex.wait(&futex.value, initial_value);
+            result = @enumFromInt(futex.value.load(.acquire));
+        }
+        return result;
+    }
+}
 
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,
@@ -396,6 +391,6 @@ fn clearBytes(bytes: [*]u8, len: usize) void {
     }
 }
 
-pub fn getPtrAlign(alignment: u16) u8 {
+fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }

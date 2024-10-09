@@ -581,7 +581,7 @@ napi_value run_thunk(napi_env env,
         // pointer might not be valid when length is zero
         args_ptr = NULL;
     }
-    bool success = md->mod->imports->run_thunk(md, thunk_address, fn_address, args_ptr) == OK;
+    bool success = md->mod->imports->run_thunk(thunk_address, fn_address, args_ptr) == OK;
     napi_value retval = NULL;
     napi_get_boolean(env, success, &retval);
     return retval;
@@ -613,7 +613,7 @@ napi_value run_variadic_thunk(napi_env env,
     if (args_len == 0) {
         args_ptr = NULL;
     }
-    bool success = md->mod->imports->run_variadic_thunk(md, thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) == OK;
+    bool success = md->mod->imports->run_variadic_thunk(thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) == OK;
     napi_value retval = NULL;
     napi_get_boolean(env, success, &retval);
     return retval;
@@ -634,7 +634,7 @@ napi_value create_js_thunk(napi_env env,
     }
     size_t thunk_address;
     napi_value result;
-    if (md->mod->imports->create_js_thunk(md, constructor_address, fn_id, &thunk_address) != OK
+    if (md->mod->imports->create_js_thunk(constructor_address, fn_id, &thunk_address) != OK
      || napi_create_uintptr(env, thunk_address, &result) != napi_ok) {
         napi_create_uintptr(env, 0, &result);
     }

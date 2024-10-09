@@ -513,7 +513,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
         .structure = try getStructure(ctx, arg_td.Type),
     }, false);
     // store thunk as instance template
-    const thunk = thunk_zig.createThunk(@TypeOf(ctx.host), FT);
+    const thunk = thunk_zig.createThunk(ctx.host, FT);
     const thunk_memory = Memory.from(thunk, false);
     const thunk_dv = try ctx.host.captureView(thunk_memory);
     const instance_template = try ctx.host.createTemplate(thunk_dv);
@@ -521,7 +521,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
     const ptr_tdb = ctx.tdb.get(*const FT);
     if (comptime ptr_tdb.isInUse()) {
         // store JS thunk controller as static template
-        const js_thunk_constructor = thunk_js.createThunkController(@TypeOf(ctx.host), FT);
+        const js_thunk_constructor = thunk_js.createThunkController(ctx.host, FT);
         const js_thunk_constructor_memory = Memory.from(js_thunk_constructor, false);
         const js_thunk_constructor_dv = try ctx.host.captureView(js_thunk_constructor_memory);
         const static_template = try ctx.host.createTemplate(js_thunk_constructor_dv);
@@ -821,16 +821,15 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
     return result;
 }
 
-pub fn createRootFactory(comptime HostT: type, comptime T: type) thunk_zig.Thunk {
+pub fn createRootFactory(comptime host: type, comptime T: type) thunk_zig.Thunk {
     @setEvalBranchQuota(2000000);
     comptime var tdc = types.TypeDataCollector.init(256);
     comptime tdc.scan(T);
     const tdb = comptime tdc.createDatabase();
     const RootFactory = struct {
-        fn exportStructure(ptr: ?*anyopaque, _: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
+        fn exportStructure(_: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
             @setEvalBranchQuota(2000000);
-            const host = HostT.init(ptr);
-            const options: *const types.HostOptions = @ptrCast(@alignCast(arg_ptr));
+            const options: *const types.ExportOptions = @ptrCast(@alignCast(arg_ptr));
             const ctx = .{ .host = host, .options = options, .tdb = tdb };
             _ = try getStructure(ctx, T);
             return;

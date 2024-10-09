@@ -1,7 +1,7 @@
 const std = @import("std");
 const cfg = @import("build-cfg.zig");
 
-const host_type = if (cfg.is_wasm) "wasm" else "c";
+const host_type = if (cfg.is_wasm) "wasm" else "napi";
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -13,26 +13,21 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .single_threaded = !cfg.multithreaded,
     });
-    lib.root_module.addImport("zigar", b.createModule(.{
+    const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar-" ++ host_type ++ ".zig" },
-    }));
-    const fn_transform = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "fn-transform.zig" },
     });
-    lib.root_module.addImport("fn-transform.zig", fn_transform);
-    const fn_binding = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "fn-binding.zig" },
-        .optimize = .ReleaseSmall,
-    });
-    fn_binding.addImport("fn-transform.zig", fn_transform);
-    lib.root_module.addImport("fn-binding.zig", fn_binding);
-    const imports = .{};
+    const imports = .{
+        .{ .name = "zigar", .module = zigar },
+    };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
         .imports = &imports,
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     lib.root_module.addImport("module", mod);
+    if (cfg.use_libc) {
+        lib.linkLibC();
+    }
     if (cfg.is_wasm) {
         // WASM needs to be compiled as exe
         lib.kind = .exe;
@@ -43,9 +38,6 @@ pub fn build(b: *std.Build) void {
         lib.import_memory = true;
         lib.import_table = true;
         lib.max_memory = cfg.max_memory;
-    }
-    if (cfg.use_libc) {
-        lib.linkLibC();
     }
     const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
         true => b.addUpdateSourceFiles(),
