@@ -61,6 +61,7 @@ enum {
     createTemplate,
     writeToConsole,
     runFunction,
+    releaseFunction,
 };
 
 bool call_js_function(module_data* md,
@@ -307,46 +308,24 @@ result write_to_console(module_data* md,
     return FAILURE;
 }
 
-void js_queue_callback(napi_env env,
-                       napi_value js_callback,
-                       void* context,
-                       void* data) {
-    module_data* md = (module_data*) context;
-    js_call* call = (js_call*) data;
-    size_t argc = 3;
-    napi_value buffer;
-    napi_value recv;
-    napi_value args[3];
-    napi_value result;
-    char* dest;
-    char* src = (char*) call->arg_ptr;
-    uintptr_t call_address = (call->futex_handle) ? (size_t) call : 0;
-    if (napi_create_uint32(env, call->id, &args[0]) == napi_ok
-     && napi_create_arraybuffer(env, call->arg_size, (void**) &dest, &buffer) == napi_ok
-     && napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) == napi_ok
-     && napi_create_uintptr(env, call_address, &args[2]) == napi_ok
-     && napi_get_null(env, &recv) == napi_ok) {
-        memcpy(dest + call->retval_size, src + call->retval_size, call->arg_size - call->retval_size);
-        if (call->retval_size > 0) {
-            napi_create_reference(env, buffer, 1, &call->arg_buf);
-        }
-        if (napi_call_function(env, recv, js_callback, argc, args, &result) == napi_ok) {
-            // JS code will wake the caller
-            return;
-        }
-    }
-    // need to wake caller since JS code won't do it
-    md->mod->imports->wake_caller(call->futex_handle, FAILURE);
-}
+void js_queue_callback(napi_env, napi_value, void*, void*);
 
 result enable_multithread(module_data* md) {
-    if (!md->ts_fn) {
-        napi_env env = md->env;
-        napi_value resource_name;
-        napi_value run_fn;
+    napi_env env = md->env;
+    napi_value resource_name;
+    napi_value run_fn;
+    if (!md->ts_run_fn) {
         if (napi_get_reference_value(env, md->js_fns[runFunction], &run_fn) != napi_ok
-         || napi_create_string_utf8(env, "call", 4, &resource_name) != napi_ok
-         || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
+         || napi_create_string_utf8(env, "runFn", 5, &resource_name) != napi_ok
+         || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_run_fn) != napi_ok) {
+            return FAILURE;
+        }
+    }
+    napi_value release_fn;
+    if (!md->ts_release_fn) {
+        if (napi_get_reference_value(env, md->js_fns[releaseFunction], &release_fn) != napi_ok
+         || napi_create_string_utf8(env, "releaseFn", 9, &resource_name) != napi_ok
+         || napi_create_threadsafe_function(env, release_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_release_fn) != napi_ok) {
             return FAILURE;
         }
     }
@@ -354,9 +333,13 @@ result enable_multithread(module_data* md) {
 }
 
 result disable_multithread(module_data* md) {
-    if (md->ts_fn) {
-        napi_release_threadsafe_function(md->ts_fn, napi_tsfn_release);
-        md->ts_fn = NULL;
+    if (md->ts_run_fn) {
+        napi_release_threadsafe_function(md->ts_run_fn, napi_tsfn_release);
+        md->ts_run_fn = NULL;
+    }
+    if (md->ts_release_fn) {
+        napi_release_threadsafe_function(md->ts_release_fn, napi_tsfn_release);
+        md->ts_release_fn = NULL;
     }
     return OK;
 }
@@ -624,20 +607,39 @@ napi_value create_js_thunk(napi_env env,
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    uintptr_t constructor_address;
+    uintptr_t controller_address;
     uint32_t fn_id;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &constructor_address) != napi_ok) {
+     || napi_get_value_uintptr(env, args[0], &controller_address) != napi_ok) {
         return throw_error(env, "Thunk address must be a number");
     } else if (napi_get_value_uint32(env, args[1], &fn_id) != napi_ok) {
         return throw_error(env, "Function id must be a number");
     }
     size_t thunk_address;
     napi_value result;
-    if (md->mod->imports->create_js_thunk(constructor_address, fn_id, &thunk_address) != OK
+    if (md->mod->imports->create_js_thunk(controller_address, fn_id, &thunk_address) != OK
      || napi_create_uintptr(env, thunk_address, &result) != napi_ok) {
         napi_create_uintptr(env, 0, &result);
     }
+    return result;
+}
+
+napi_value destroy_js_thunk(napi_env env,
+                            napi_callback_info info) {
+    module_data* md;
+    size_t argc = 2;
+    napi_value args[2];
+    uintptr_t controller_address;
+    uintptr_t fn_address;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
+     || napi_get_value_uintptr(env, args[0], &controller_address) != napi_ok) {
+        return throw_error(env, "Thunk address must be a number");
+    } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
+        return throw_error(env, "Function address must be a number");
+    }
+    md->mod->imports->destroy_js_thunk(controller_address, fn_address);
+    napi_value result;
+    napi_get_null(env, &result);
     return result;
 }
 
@@ -686,27 +688,27 @@ napi_value finalize_async_call(napi_env env,
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    size_t call_address;
+    size_t action_address;
     uint32_t result;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &call_address) != napi_ok) {
+     || napi_get_value_uintptr(env, args[0], &action_address) != napi_ok) {
         return throw_error(env, "Call address must be a number");
     } else if (napi_get_value_uint32(env, args[1], &result) != napi_ok) {
         return throw_error(env, "Result must be a number");
     }
-    js_call* call = (js_call*) call_address;
-    if (call->retval_size > 0) {
+    js_action* action = (js_action*) action_address;
+    if (action->retval_size > 0) {
         napi_value buffer;
         size_t buffer_size;
         char* dest;
-        char* src = (char*) call->arg_ptr;
-        if (napi_get_reference_value(env, call->arg_buf, &buffer) == napi_ok
-         && napi_reference_unref(env, call->arg_buf, NULL) == napi_ok
+        char* src = (char*) action->arg_ptr;
+        if (napi_get_reference_value(env, action->arg_buf, &buffer) == napi_ok
+         && napi_reference_unref(env, action->arg_buf, NULL) == napi_ok
          && napi_get_arraybuffer_info(env, buffer, (void**) &dest, &buffer_size) == napi_ok) {
-            memcpy(src, dest, call->retval_size);
+            memcpy(src, dest, action->retval_size);
         }
     }
-    if (md->mod->imports->wake_caller(call->futex_handle, result) != OK) {
+    if (md->mod->imports->wake_caller(action->futex_handle, result) != OK) {
         return throw_error(env, "Unable to wake caller");
     }
     return NULL;
@@ -732,45 +734,105 @@ napi_value set_multithread(napi_env env,
     return NULL;
 }
 
-result queue_js_call(module_data* md,
-                     js_call* call) {
-    if (!md->ts_fn) {
-        return DISABLED;
-    }
-    if (napi_call_threadsafe_function(md->ts_fn, call, napi_tsfn_nonblocking) != napi_ok) {
-        return FAILURE;
-    }
-    return OK;
-}
-
-result perform_js_call(module_data* md,
-                       js_call* call) {
+result perform_js_action(module_data* md,
+                         js_action* action) {
     napi_env env = md->env;
-    size_t argc = 3;
     napi_value buffer;
     napi_value recv;
     napi_value args[3];
     napi_value result;
     uint32_t status;
-    napi_value fn;
-    char* dest;
-    char* src = (char*) call->arg_ptr;
-    if (napi_create_uint32(env, call->id, &args[0]) == napi_ok
-     && napi_create_arraybuffer(env, call->arg_size, (void**) &dest, &buffer) == napi_ok
-     && napi_create_dataview(env, call->arg_size, buffer, 0, &args[1]) == napi_ok
-     && napi_create_uintptr(env, 0, &args[2]) == napi_ok
-     && napi_get_null(env, &recv) == napi_ok) {
-        memcpy(dest + call->retval_size, src + call->retval_size, call->arg_size - call->retval_size);
-        if (call_js_function(md, runFunction, argc, args, &result)
-         && napi_get_value_uint32(env, result, &status) == napi_ok) {
-            if (status == OK) {
-                memcpy(src, dest, call->retval_size);
+    if (action->type == CALL) {
+        char* dest;
+        char* src = (char*) action->arg_ptr;
+        size_t as = action->arg_size;
+        size_t rs = action->retval_size;
+        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
+         && napi_create_arraybuffer(env, as, (void**) &dest, &buffer) == napi_ok
+         && napi_create_dataview(env, as, buffer, 0, &args[1]) == napi_ok
+         && napi_create_uintptr(env, 0, &args[2]) == napi_ok
+         && napi_get_null(env, &recv) == napi_ok) {
+            memcpy(dest + rs, src + rs, as - rs);
+            if (call_js_function(md, runFunction, 3, args, &result)
+             && napi_get_value_uint32(env, result, &status) == napi_ok) {
+                if (status == OK) {
+                    memcpy(src, dest, rs);
+                }
+                return status;
             }
+        }
+    } else if (action->type == RELEASE) {
+        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
+         && call_js_function(md, releaseFunction, 1, args, &result)
+         && napi_get_value_uint32(env, result, &status) == napi_ok) {
             return status;
         }
-
     }
     return FAILURE;
+}
+
+result queue_js_action(module_data* md,
+                       js_action* action) {
+    napi_threadsafe_function ts_fn = NULL;
+    if (action->type == CALL) {
+        ts_fn = md->ts_run_fn;
+    } else if (action->type == RELEASE) {
+        ts_fn = md->ts_release_fn;
+    }
+    if (ts_fn) {
+        if (napi_call_threadsafe_function(ts_fn, action, napi_tsfn_nonblocking) == napi_ok) {
+            return OK;
+        } else {
+            return FAILURE;
+        }
+    } else {
+        return FAILURE_DISABLED;
+    }
+}
+
+void js_queue_callback(napi_env env,
+                       napi_value js_callback,
+                       void* context,
+                       void* data) {
+    module_data* md = (module_data*) context;
+    js_action* action = (js_action*) data;
+    napi_value buffer;
+    napi_value recv;
+    napi_value args[3];
+    napi_value result;
+    if (action->type == CALL) {
+        char* dest;
+        char* src = (char*) action->arg_ptr;
+        size_t as = action->arg_size;
+        size_t rs = action->retval_size;
+        uintptr_t action_address = (action->futex_handle) ? (size_t) action : 0;
+        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
+         && napi_create_arraybuffer(env, action->arg_size, (void**) &dest, &buffer) == napi_ok
+         && napi_create_dataview(env, action->arg_size, buffer, 0, &args[1]) == napi_ok
+         && napi_create_uintptr(env, action_address, &args[2]) == napi_ok
+         && napi_get_null(env, &recv) == napi_ok) {
+            memcpy(dest + rs, src + rs, as - rs);
+            if (rs > 0) {
+                napi_create_reference(env, buffer, 1, &action->arg_buf);
+            }
+            if (napi_call_function(env, recv, js_callback, 3, args, &result) == napi_ok) {
+                // JS code will wake the caller
+                return;
+            } else {
+                napi_reference_unref(env, action->arg_buf, NULL);
+            }
+        }
+        if (action->futex_handle) {
+            // need to wake caller since JS code won't do it
+            md->mod->imports->wake_caller(action->futex_handle, FAILURE);
+        }
+    } else if (action->type == RELEASE) {
+        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok) {
+            if (napi_call_function(env, recv, js_callback, 1, args, &result) == napi_ok) {
+                return;
+            }
+        }
+    }
 }
 
 void finalize_function(napi_env env,
@@ -801,6 +863,7 @@ struct {
     { "runThunk", run_thunk },
     { "runVariadicThunk", run_variadic_thunk },
     { "createJsThunk", create_js_thunk },
+    { "destroyJsThunk", destroy_js_thunk },
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
     { "setMultithread", set_multithread },
@@ -825,6 +888,7 @@ struct {
     { "createTemplate", createTemplate },
     { "writeToConsole", writeToConsole },
     { "runFunction", runFunction },
+    { "releaseFunction", releaseFunction }
 };
 
 bool export_functions(module_data* md,
@@ -932,8 +996,8 @@ napi_value load_module(napi_env env,
     exports->write_to_console = write_to_console;
     exports->enable_multithread = enable_multithread;
     exports->disable_multithread = disable_multithread;
-    exports->perform_js_call = perform_js_call;
-    exports->queue_js_call = queue_js_call;
+    exports->perform_js_action = perform_js_action;
+    exports->queue_js_action = queue_js_action;
 
     // run initializer
     if (mod->imports->initialize(md) != OK) {

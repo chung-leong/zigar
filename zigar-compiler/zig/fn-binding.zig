@@ -48,9 +48,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             return binding.function();
         }
 
-        pub fn unbind(allocator: std.mem.Allocator, func: *const BFT) void {
+        pub fn unbind(allocator: std.mem.Allocator, func: *const BFT) ?CT {
             if (fromFunction(func)) |self| {
-                self.deinit(allocator);
+                defer self.deinit(allocator);
+                return self.context().*;
+            } else {
+                return null;
             }
         }
 
@@ -62,10 +65,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const instance_size = @offsetOf(@This(), "code") + code_len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
             const self: *@This() = @ptrCast(new_bytes);
-            var context: CT = undefined;
+            var ctx: CT = undefined;
             const fields = @typeInfo(CT).Struct.fields;
             inline for (fields) |field| {
-                @field(context, field.name) = @field(vars, field.name);
+                @field(ctx, field.name) = @field(vars, field.name);
             }
             const fn_ptr = switch (@typeInfo(T)) {
                 .Fn => &func,
@@ -75,7 +78,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             self.* = .{
                 .size = instance_size,
                 .fn_address = @intFromPtr(fn_ptr),
-                .context_bytes = std.mem.toBytes(context),
+                .context_bytes = std.mem.toBytes(ctx),
             };
             const self_address = @intFromPtr(self);
             const caller = getCaller();
@@ -97,7 +100,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             allocator.free(ptr);
         }
 
-        pub fn function(self: *const @This()) *const BFT {
+        pub inline fn function(self: *const @This()) *const BFT {
             return @ptrCast(&self.code);
         }
 
@@ -105,6 +108,16 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
             const func = b.function();
             try expect(@TypeOf(func) == *const BFT);
+        }
+
+        pub inline fn context(self: *const @This()) *const CT {
+            return @ptrCast(&self.context_bytes);
+        }
+
+        test "context" {
+            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
+            const ctx = b.context();
+            try expect(@TypeOf(ctx) == *const CT);
         }
 
         pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
@@ -489,7 +502,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    const ctx: *const CT = @ptrCast(&self.context_bytes);
+                    const ctx = self.context();
                     inline for (ctx_mapping) |m| {
                         @field(args, m.dest) = @field(ctx, m.src);
                     }
@@ -526,7 +539,7 @@ test "Binding (i64 x 3)" {
     var gpa = executable();
     const bf1 = try Binding1.bind(gpa.allocator(), ns1.add, vars1);
     try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
-    defer Binding1.unbind(gpa.allocator(), bf1);
+    defer _ = Binding1.unbind(gpa.allocator(), bf1);
     const sum1 = bf1(1, 2, 3);
     try expect(ns1.called == true);
     try expect(sum1 == 1 + 2 + 3 + 1234);
@@ -540,7 +553,7 @@ test "Binding (i64 x 3)" {
     const vars2 = .{&number};
     const Binding2 = Binding(@TypeOf(ns2.add), @TypeOf(vars2));
     const bf2 = try Binding2.bind(gpa.allocator(), ns2.add, vars2);
-    defer Binding2.unbind(gpa.allocator(), bf2);
+    defer _ = Binding2.unbind(gpa.allocator(), bf2);
     bf2(1, 2, 3);
     try expect(number == 1 + 2 + 3);
     try expect(bf1(1, 2, 3) == 1 + 2 + 3 + 1234);

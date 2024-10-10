@@ -1,4 +1,5 @@
 const std = @import("std");
+const zigar = @import("zigar");
 
 pub fn hello() void {
     std.debug.print("hello\n", .{});
@@ -9,14 +10,17 @@ pub fn world() void {
 }
 
 pub fn call1(cb: *const fn () void) void {
+    defer zigar.function.release(cb);
     cb();
 }
 
 pub fn call2(cb: *const fn () error{Unexpected}!void) !void {
+    defer zigar.function.release(cb);
     try cb();
 }
 
 pub fn call3(cb: *const fn (i32) i32) i32 {
+    defer zigar.function.release(cb);
     return cb(1234);
 }
 

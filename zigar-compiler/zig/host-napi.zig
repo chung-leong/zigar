@@ -32,12 +32,13 @@ const MemberC = extern struct {
     slot: usize,
     structure: ?Value,
 };
-const JsCall = extern struct {
-    id: usize,
-    arg_ptr: *anyopaque,
+const Action = extern struct {
+    type: thunk_js.ActionType,
+    fn_id: usize,
+    arg_ptr: ?*anyopaque = null,
     arg_buf: ?*anyopaque = null,
-    arg_size: usize,
-    retval_size: usize,
+    arg_size: usize = 0,
+    retval_size: usize = 0,
     futex_handle: usize = 0,
 };
 
@@ -218,20 +219,26 @@ pub fn writeBytesToConsole(bytes: [*]const u8, len: usize) !void {
     try writeToConsole(dv);
 }
 
-pub fn handleJsCall(ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.CallResult {
-    var call: JsCall = .{ .id = fn_id, .arg_ptr = arg_ptr, .arg_size = arg_size, .retval_size = retval_size };
+pub fn handleJsCall(ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.ActionResult {
+    var action: Action = .{
+        .type = .call,
+        .fn_id = fn_id,
+        .arg_ptr = arg_ptr,
+        .arg_size = arg_size,
+        .retval_size = retval_size,
+    };
     const md: *ModuleData = @ptrCast(ptr);
     if (module_data == md) {
-        return imports.perform_js_call(md, &call);
+        return imports.perform_js_action(md, &action);
     } else {
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
         if (wait) {
             futex.value = std.atomic.Value(u32).init(initial_value);
             futex.handle = @intFromPtr(&futex);
-            call.futex_handle = futex.handle;
+            action.futex_handle = futex.handle;
         }
-        var result = imports.queue_js_call(md, &call);
+        var result = imports.queue_js_action(md, &action);
         if (result == .ok and wait) {
             std.Thread.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
@@ -240,7 +247,20 @@ pub fn handleJsCall(ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size
     }
 }
 
-pub fn releaseFunction(_: *const anyopaque) void {}
+pub fn releaseFunction(fn_ptr: anytype) !void {
+    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
+    const thunk_address = @intFromPtr(fn_ptr);
+    const ptr = try thunk_js.getPointer(FT, fn_ptr);
+    const md: *ModuleData = @ptrCast(ptr);
+    const control = thunk_js.createThunkController(@This(), FT);
+    const fn_id = try control(md, .destroy, thunk_address);
+    var action: Action = .{ .type = .release, .fn_id = fn_id };
+    if (module_data == md) {
+        _ = imports.perform_js_action(md, &action);
+    } else {
+        _ = imports.queue_js_action(md, &action);
+    }
+}
 
 fn initialize(md: *ModuleData) callconv(.C) Result {
     module_data = md;
@@ -334,8 +354,18 @@ fn createJsThunk(
 ) callconv(.C) Result {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
     const md = getModuleData() catch return .failure;
-    const thunk_address = controller(md, thunk_js.Action.create, fn_id) catch return .failure;
+    const thunk_address = controller(md, .create, fn_id) catch return .failure;
     dest.* = thunk_address;
+    return .ok;
+}
+
+fn destroyJsThunk(
+    controller_address: usize,
+    fn_address: usize,
+) callconv(.C) Result {
+    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const md = getModuleData() catch return .failure;
+    _ = controller(md, .destroy, fn_address) catch return .failure;
     return .ok;
 }
 
@@ -369,10 +399,10 @@ const Imports = extern struct {
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
     write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
-    enable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.CallResult,
-    disable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.CallResult,
-    perform_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
-    queue_js_call: *const fn (*ModuleData, *JsCall) callconv(.C) thunk_js.CallResult,
+    enable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
+    disable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
+    perform_js_action: *const fn (*ModuleData, *Action) callconv(.C) thunk_js.ActionResult,
+    queue_js_action: *const fn (*ModuleData, *Action) callconv(.C) thunk_js.ActionResult,
 };
 
 // pointer table that's used on the C side
@@ -384,6 +414,7 @@ const Exports = extern struct {
     run_thunk: *const fn (usize, usize, *anyopaque) callconv(.C) Result,
     run_variadic_thunk: *const fn (usize, usize, *anyopaque, *const anyopaque, usize) callconv(.C) Result,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
+    destroy_js_thunk: *const fn (usize, usize) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };
@@ -420,6 +451,7 @@ pub fn createModule(comptime T: type) Module {
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,
             .create_js_thunk = createJsThunk,
+            .destroy_js_thunk = destroyJsThunk,
             .override_write = overrideWrite,
             .wake_caller = wakeCaller,
         },

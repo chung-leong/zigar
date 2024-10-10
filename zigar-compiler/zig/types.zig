@@ -1617,6 +1617,21 @@ test "ArgumentStruct" {
     try expect(fieldsC.len == 3);
 }
 
+pub fn FnPointerTarget(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Pointer => |pt| switch (@typeInfo(pt.child)) {
+            .Fn => pt.child,
+            else => @compileError("Not a function pointer"),
+        },
+        else => @compileError("Not a function pointer"),
+    };
+}
+
+test "FnPointerTarget" {
+    const FT = FnPointerTarget(*const fn () void);
+    try expect(FT == fn () void);
+}
+
 fn expectCT(comptime value: bool) !void {
     try expect(value);
 }

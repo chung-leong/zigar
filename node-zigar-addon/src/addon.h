@@ -20,8 +20,8 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#define EXPORT_COUNT    15
-#define IMPORT_COUNT    14
+#define EXPORT_COUNT    16
+#define IMPORT_COUNT    15
 
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
@@ -56,8 +56,16 @@ typedef uint32_t result;
 enum {
     OK,
     FAILURE,
-    DEADLOCK,
-    DISABLED,
+    FAILURE_DEADLOCK,
+    FAILURE_DISABLED,
+};
+
+typedef uint32_t action;
+enum {
+    CREATE,
+    DESTROY,
+    CALL,
+    RELEASE,
 };
 
 typedef uint32_t structure_type;
@@ -127,7 +135,8 @@ typedef struct {
     napi_env env;
     napi_ref js_env;
     napi_ref js_fns[IMPORT_COUNT];
-    napi_threadsafe_function ts_fn;
+    napi_threadsafe_function ts_run_fn;
+    napi_threadsafe_function ts_release_fn;
 } module_data;
 
 typedef struct {
@@ -135,13 +144,14 @@ typedef struct {
 } addon_data;
 
 typedef struct {
-    size_t id;
+    action type;
+    size_t fn_id;
     void* arg_ptr;
     napi_ref arg_buf;
     size_t arg_size;
     size_t retval_size;
     size_t futex_handle;
-} js_call;
+} js_action;
 
 struct export_table {
     result (__cdecl *allocate_host_memory)(module_data*, size_t, uint16_t, memory*);
@@ -160,8 +170,8 @@ struct export_table {
     result (__cdecl *write_to_console)(module_data*, napi_value);
     result (__cdecl *enable_multithread)(module_data*);
     result (__cdecl *disable_multithread)(module_data*);
-    result (__cdecl *perform_js_call)(module_data*, js_call*);
-    result (__cdecl *queue_js_call)(module_data*, js_call*);
+    result (__cdecl *perform_js_action)(module_data*, js_action*);
+    result (__cdecl *queue_js_action)(module_data*, js_action*);
 };
 
 struct import_table {
@@ -172,6 +182,7 @@ struct import_table {
     result (__cdecl *run_thunk)(size_t, size_t, void*);
     result (__cdecl *run_variadic_thunk)(size_t, size_t, void*, void*, size_t);
     result (__cdecl *create_js_thunk)(size_t, size_t, size_t*);
+    result (__cdecl *destroy_js_thunk)(size_t, size_t);
     result (__cdecl *override_write)(const void*, size_t);
     result (__cdecl *wake_caller)(size_t, uint32_t);
 };

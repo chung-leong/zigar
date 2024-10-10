@@ -196,7 +196,7 @@ export default mixin({
       }
       const key = `${address}:0`;
       dv = entry[key];
-      if (!dv) {
+      if (!dv || dv[FIXED].address !== address) {
         dv = entry[key] = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
       }

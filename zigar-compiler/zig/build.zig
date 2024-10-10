@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
         .single_threaded = !cfg.multithreaded,
     });
     const zigar = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar-" ++ host_type ++ ".zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
     const imports = .{
         .{ .name = "zigar", .module = zigar },

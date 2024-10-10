@@ -1,8 +1,8 @@
-pub fn getNamespace(comptime HostT: type) type {
-    _ = HostT;
-    return struct {
-        pub fn release(fn_ptr: *const anyopaque) void {}
+const std = @import("std");
+const host = @import("root").host;
 
-        pub fn multithread(enabled: bool) void {}
-    };
-}
+pub const function = struct {
+    pub fn release(fn_ptr: anytype) void {
+        host.releaseFunction(fn_ptr) catch {};
+    }
+};

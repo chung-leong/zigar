@@ -6,19 +6,23 @@ const expect = std.testing.expect;
 
 const Memory = types.Memory;
 
-pub const CallResult = enum(u32) {
+pub const ActionResult = enum(u32) {
     ok,
     failure,
-    deadlock,
-    disabled,
+    failure_deadlock,
+    failure_disabled,
 };
-pub const Action = enum(u32) {
+pub const ActionType = enum(u32) {
+    // performed by zig:
     create,
     destroy,
+    // performed by js:
+    call,
+    release,
 };
 pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
-pub const ThunkController = *const fn (*anyopaque, Action, usize) anyerror!usize;
+pub const ThunkController = *const fn (*anyopaque, ActionType, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch) {
     .wasm32, .wasm64 => wasm,
@@ -31,7 +35,7 @@ const native = struct {
 
     pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
         const ft_ns = struct {
-            fn control(ptr: *anyopaque, action: Action, arg: usize) anyerror!usize {
+            fn control(ptr: *anyopaque, action: ActionType, arg: usize) anyerror!usize {
                 const vars = .{
                     .@"-2" = ptr,
                     .@"-1" = arg,
@@ -49,9 +53,13 @@ const native = struct {
                     },
                     .destroy => {
                         const thunk: *const BFT = @ptrFromInt(arg);
-                        Binding.unbind(gpa.allocator(), thunk);
-                        return 0;
+                        if (Binding.unbind(gpa.allocator(), thunk)) |ctx| {
+                            return ctx.@"-1";
+                        } else {
+                            return Error.UnableToFindThunk;
+                        }
                     },
+                    else => unreachable,
                 }
             }
         };
@@ -62,7 +70,7 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(module_ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) CallResult {
+            fn handleJsCall(module_ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) ActionResult {
                 if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -77,6 +85,17 @@ const native = struct {
         const thunk: *const BFT = @ptrFromInt(thunk_address);
         const result = thunk(777, 3.14);
         try expect(result == 1234);
+    }
+
+    pub fn getPointer(comptime BFT: type, fn_ptr: *const BFT) !*anyopaque {
+        const CT = struct { @"-2": *anyopaque, @"-1": usize };
+        const CHT = CallHandler(BFT);
+        const Binding = binding.Binding(CHT, CT);
+        if (Binding.fromFunction(fn_ptr)) |b| {
+            return b.context().@"-2";
+        } else {
+            return Error.UnableToFindThunk;
+        }
     }
 };
 
@@ -126,17 +145,17 @@ const wasm = struct {
                 } else null;
             }
 
-            fn free(thunk_ptr: *const anyopaque) callconv(.C) bool {
+            fn free(thunk_ptr: *const anyopaque) callconv(.C) ?usize {
                 const thunk: *const BFT = @ptrCast(thunk_ptr);
                 return for (thunks, &fn_ids) |f, *id_ptr| {
                     if (f == thunk) {
-                        id_ptr.* = 0;
-                        break true;
+                        defer id_ptr.* = 0;
+                        break id_ptr.*;
                     }
                 } else false;
             }
 
-            fn control(_: *anyopaque, action: Action, arg: usize) !usize {
+            fn control(_: *anyopaque, action: ActionType, arg: usize) !usize {
                 switch (action) {
                     .create => {
                         if (alloc(arg)) |thunk_ptr| {
@@ -146,12 +165,13 @@ const wasm = struct {
                         }
                     },
                     .destroy => {
-                        if (free(@ptrFromInt(arg))) {
-                            return 0;
+                        if (free(@ptrFromInt(arg))) |id| {
+                            return id;
                         } else {
                             return Error.UnableToFindThunk;
                         }
                     },
+                    else => unreachable,
                 }
             }
         };
@@ -162,7 +182,7 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) CallResult {
+            fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) ActionResult {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -222,8 +242,8 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
             switch (host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct), @sizeOf(RT), !isNoWait(RT))) {
-                .deadlock => @panic("Promise encountered in main thread"),
-                .disabled => @panic("Multithreading not enabled"),
+                .failure_deadlock => @panic("Promise encountered in main thread"),
+                .failure_disabled => @panic("Multithreading not enabled"),
                 .failure => {
                     if (comptime hasError(RT, "Unexpected")) {
                         return error.Unexpected;
@@ -243,7 +263,7 @@ test "getJsCallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJsCall(_: *anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) CallResult {
+        fn handleJsCall(_: *anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, _: bool) ActionResult {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .ok;
@@ -264,7 +284,7 @@ test "getJsCallHandler (error handling)" {
             return .{};
         }
 
-        fn handleJsCall(_: *anyopaque, _: usize, _: *anyopaque, _: usize, _: usize, _: bool) CallResult {
+        fn handleJsCall(_: *anyopaque, _: usize, _: *anyopaque, _: usize, _: usize, _: bool) ActionResult {
             return .failure;
         }
     };

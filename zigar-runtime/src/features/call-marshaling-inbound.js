@@ -1,8 +1,9 @@
 import { mixin } from '../environment.js';
-import { MEMORY, THROWING } from '../symbols.js';
+import { FIXED, MEMORY, THROWING } from '../symbols.js';
 
 export default mixin({
-  jsFunctionMap: null,
+  jsFunctionThunkMap: new Map(),
+  jsFunctionCallerMap: new Map(),
   jsFunctionIdMap: null,
   jsFunctionNextId: 1,
 
@@ -19,9 +20,6 @@ export default mixin({
   },
   getFunctionThunk(fn, jsThunkController) {
     const funcId = this.getFunctionId(fn);
-    if (!this.jsFunctionThunkMap) {
-      this.jsFunctionThunkMap = new Map();
-    }
     let dv = this.jsFunctionThunkMap.get(funcId);
     if (dv === undefined) {
       const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
@@ -89,15 +87,21 @@ export default mixin({
       return result;
     };
     const funcId = this.getFunctionId(fn);
-    if (!this.jsFunctionCallerMap) {
-      this.jsFunctionCallerMap = new Map();
-    }
     this.jsFunctionCallerMap.set(funcId, binary);
     return { self, method, binary };
   },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
     return caller?.(dv, futexHandle) ?? CallResult.Failure;
+  },
+  releaseFunction(id) {
+    const thunk = this.jsFunctionThunkMap.get(id);
+    if (thunk) {
+      // set address to zero so data view won't get reused
+      thunk[FIXED].address = 0;
+    }
+    this.jsFunctionThunkMap.delete(id);
+    this.jsFunctionCallerMap.delete(id);
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
@@ -122,9 +126,11 @@ export default mixin({
   } : process.env.TARGET === 'node' ? {
     exports: {
       runFunction: null,
+      releaseFunction: null,
     },
     imports: {
       createJsThunk: null,
+      destroyJsThunk: null,
     },
   } : undefined),
 });
