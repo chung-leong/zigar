@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { FIXED, MEMORY, THROWING } from '../symbols.js';
+import { MEMORY, THROWING } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -31,6 +31,15 @@ export default mixin({
       this.jsFunctionThunkMap.set(funcId, dv);
     }
     return dv;
+  },
+  freeFunctionThunk(thunk, jsThunkController) {
+    const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
+    const thunkAddr = this.getViewAddress(thunk);
+    const id = this.destroyJsThunk(controllerAddr, thunkAddr);
+    if (id) {
+      this.jsFunctionThunkMap.delete(id);
+      this.jsFunctionCallerMap.delete(id);
+    }
   },
   createInboundCallers(fn, ArgStruct) {
     const self = function(...args) {
@@ -97,31 +106,38 @@ export default mixin({
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
     if (thunk) {
-      // set address to zero so data view won't get reused
-      thunk[FIXED].address = 0;
+      this.releaseFixedView(thunk);
     }
     this.jsFunctionThunkMap.delete(id);
     this.jsFunctionCallerMap.delete(id);
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
-      performJsCall: { argType: 'iii', returnType: 'i' },
-      queueJsCall: { argType: 'iiii', returnType: 'i' },
+      performJsAction: { argType: 'iii', returnType: 'i' },
+      queueJsAction: { argType: 'iiii' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
-      destroyJsThunk: { argType: 'ii', returnType: 'b' },
+      destroyJsThunk: { argType: 'ii', returnType: 'i' },
     },
-    performJsCall(id, argAddress, argSize) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      return this.runFunction(id, dv, 0);
+    performJsAction(action, id, argAddress, argSize) {
+      if (action === Action.Call) {
+        const dv = this.obtainFixedView(argAddress, argSize);
+        return this.runFunction(id, dv, 0);
+      } else if (action === Action.Release) {
+        return this.releaseFunction(id);
+      }
     },
-    queueJsCall(id, argAddress, argSize, futexHandle) {
+    queueJsAction(action, id, argAddress, argSize, futexHandle) {
       // in the main thread, this method is never called from WASM;
-      // the implementation of queueJsCall() in worker.js, call this
+      // the implementation of queueJsAction() in worker.js, call this
       // through postMessage() when it is called the worker's WASM instance
-      const dv = this.obtainFixedView(argAddress, argSize);
-      this.runFunction(id, dv, futexHandle);
+      if (action === Action.Call) {
+        const dv = this.obtainFixedView(argAddress, argSize);
+        this.runFunction(id, dv, futexHandle);
+      } else if (action === Action.Release) {
+        this.releaseFunction(id);
+      }
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
@@ -135,9 +151,14 @@ export default mixin({
   } : undefined),
 });
 
-export const CallResult = {
+const CallResult = {
   OK: 0,
   Failure: 1,
   Deadlock: 2,
   Disabled: 3,
+};
+
+const Action = {
+  Call: 2,
+  Release: 3,
 };

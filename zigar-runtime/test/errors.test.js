@@ -27,6 +27,7 @@ import {
   MissingUnionInitializer,
   MultipleUnionInitializers,
   MustBeOverridden,
+  NoCastingToFunction,
   NoCastingToPointer,
   NoInitializer,
   NoProperty,
@@ -426,17 +427,14 @@ describe('Error functions', function() {
   })
   describe('NoCastingToPointer', function() {
     it('should have expected message', function() {
-      const structure = {
-        name: '*Hello',
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        byteSize: 8,
-        instance: {
-          members: [],
-        },
-      };
-      const err = new NoCastingToPointer(structure);
+      const err = new NoCastingToPointer();
       expect(err.message).to.contain('new operator');
+    })
+  })
+  describe('NoCastingToFunction', function() {
+    it('should have expected message', function() {
+      const err = new NoCastingToFunction();
+      expect(err.message).to.contain('not allowed');
     })
   })
   describe('ConstantConstraint', function() {

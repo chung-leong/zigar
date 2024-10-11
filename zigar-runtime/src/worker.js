@@ -41,8 +41,8 @@ function start({ executable, memory, options, tid, arg }) {
 }
 
 function createRouter(module, name) {
-  if (name === '_queueJsCall') {
-    // waiting occurs in WASM when queueJsCall() gets called
+  if (name === '_queueJsAction') {
+    // waiting occurs in WASM when queueJsAction() gets called
     return function(...args) {
       postMessage({ type: 'call', module, name, args });
       return 0;

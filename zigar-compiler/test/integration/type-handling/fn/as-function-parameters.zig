@@ -9,6 +9,8 @@ pub fn world() void {
     std.debug.print("world\n", .{});
 }
 
+pub const Callback1 = fn () void;
+
 pub fn call1(cb: *const fn () void) void {
     defer zigar.function.release(cb);
     cb();

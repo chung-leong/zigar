@@ -219,7 +219,7 @@ pub fn writeBytesToConsole(bytes: [*]const u8, len: usize) !void {
     try writeToConsole(dv);
 }
 
-pub fn handleJsCall(ptr: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.ActionResult {
+pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.ActionResult {
     var action: Action = .{
         .type = .call,
         .fn_id = fn_id,
@@ -362,10 +362,12 @@ fn createJsThunk(
 fn destroyJsThunk(
     controller_address: usize,
     fn_address: usize,
+    dest: *usize,
 ) callconv(.C) Result {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
     const md = getModuleData() catch return .failure;
-    _ = controller(md, .destroy, fn_address) catch return .failure;
+    const fn_id = controller(md, .destroy, fn_address) catch return .failure;
+    dest.* = fn_id;
     return .ok;
 }
 
@@ -414,7 +416,7 @@ const Exports = extern struct {
     run_thunk: *const fn (usize, usize, *anyopaque) callconv(.C) Result,
     run_variadic_thunk: *const fn (usize, usize, *anyopaque, *const anyopaque, usize) callconv(.C) Result,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    destroy_js_thunk: *const fn (usize, usize) callconv(.C) Result,
+    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };

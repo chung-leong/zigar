@@ -1,7 +1,10 @@
 import { mixin } from '../environment.js';
-import { AlignmentConflict, InvalidDeallocation } from '../errors.js';
+import { AlignmentConflict, InvalidDeallocation, NullPointer } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
-import { adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned } from '../utils.js';
+import {
+  adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
+  nullAddress,
+} from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
@@ -204,15 +207,21 @@ export default mixin({
     return dv;
   },
   releaseFixedView(dv) {
-    // only allocated memory would have type attached
-    if (dv[FIXED]?.type !== undefined) {
-      this.freeFixedMemory(dv);
-      dv[FIXED] = null;
+    if (dv[FIXED]?.address) {
+      // only allocated memory would have type attached
+      if (dv[FIXED]?.type !== undefined) {
+        this.freeFixedMemory(dv);
+      }
+      // set address to zero so data view won't get reused
+      dv[FIXED].address = nullAddress;
     }
   },
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
+      if (!fixed.address) {
+        throw new NullPointer();
+      }
       return fixed.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);

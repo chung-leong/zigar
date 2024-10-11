@@ -239,8 +239,14 @@ export class UndefinedArgument extends Error {
 }
 
 export class NoCastingToPointer extends TypeError {
-  constructor(structure) {
+  constructor() {
     super(`Non-slice pointers can only be created with the help of the new operator`);
+  }
+}
+
+export class NoCastingToFunction extends TypeError {
+  constructor() {
+    super(`Casting to function is not allowed`);
   }
 }
 

@@ -182,7 +182,7 @@ struct import_table {
     result (__cdecl *run_thunk)(size_t, size_t, void*);
     result (__cdecl *run_variadic_thunk)(size_t, size_t, void*, void*, size_t);
     result (__cdecl *create_js_thunk)(size_t, size_t, size_t*);
-    result (__cdecl *destroy_js_thunk)(size_t, size_t);
+    result (__cdecl *destroy_js_thunk)(size_t, size_t, size_t*);
     result (__cdecl *override_write)(const void*, size_t);
     result (__cdecl *wake_caller)(size_t, uint32_t);
 };

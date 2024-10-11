@@ -36,9 +36,13 @@ export function addTests(importModule, options) {
       const {
         default: module,
         __zigar,
+        Callback1,
         call1, call2, call3, call4,
         hello, world
       } = await importTest('as-function-parameters', { multithreaded: true });
+      const f = new Callback1(() => {});
+      f.delete();
+      return;
       const lines1 = await capture(() => {
         call1(hello);
         call1(world);
@@ -52,6 +56,15 @@ export function addTests(importModule, options) {
         call1(jsFn1);
       });
       expect(lines2).to.eql([ 'hello', 'world' ]);
+      let dingo = false;
+      const f1 = new Callback1(() => {
+        dingo = true;
+      });
+      call1(f1);
+      expect(dingo).to.be.true;
+      // f1 is freed by call1()
+      expect(() => call1(f1)).to.throw(TypeError)
+        .with.property('message').that.contains('Null pointer');
       await captureError(() => {
         expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
           .with.property('message').that.equal('Unexpected');

@@ -637,9 +637,12 @@ napi_value destroy_js_thunk(napi_env env,
     } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
         return throw_error(env, "Function address must be a number");
     }
-    md->mod->imports->destroy_js_thunk(controller_address, fn_address);
+    size_t fn_id;
     napi_value result;
-    napi_get_null(env, &result);
+    if (md->mod->imports->destroy_js_thunk(controller_address, fn_address, &fn_id) != OK
+     || napi_create_uint32(env, fn_id, &result) != napi_ok) {
+        napi_create_uint32(env, 0, &result);
+    }
     return result;
 }
 

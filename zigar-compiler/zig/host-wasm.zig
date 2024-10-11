@@ -9,6 +9,8 @@ const Value = types.Value;
 const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
+const ActionType = thunk_js.ActionType;
+const ActionResult = thunk_js.ActionResult;
 
 const Call = *anyopaque;
 
@@ -32,9 +34,9 @@ extern fn _defineStructure(structure: Value) ?Value;
 extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
-extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) bool;
-extern fn _performJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.CallResult;
-extern fn _queueJsCall(id: usize, arg_ptr: *anyopaque, arg_size: usize, futex_handle: usize) thunk_js.CallResult;
+extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
+extern fn _performJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize) ActionResult;
+extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) ActionResult;
 extern fn _getArgAttributes() *anyopaque;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
@@ -90,8 +92,7 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const ptr: *anyopaque = @ptrFromInt(0xaaaa_aaaa);
-    if (controller(ptr, thunk_js.Action.create, fn_id)) |thunk_address| {
+    if (controller(null, .create, fn_id)) |thunk_address| {
         return thunk_address;
     } else |_| {
         if (builtin.single_threaded and main_thread) {
@@ -102,19 +103,17 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     }
 }
 
-export fn destroyJsThunk(controller_address: usize, fn_id: usize) bool {
+export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const ptr: *anyopaque = @ptrFromInt(0xaaaa_aaaa);
-    if (controller(ptr, thunk_js.Action.destroy, fn_id)) |_| {
-        return true;
+    if (controller(null, .destroy, thunk_address)) |fn_id| {
+        return fn_id;
     } else |_| {
         if (builtin.single_threaded and main_thread) {
-            return _freeJsThunk(controller_address, fn_id);
+            return _freeJsThunk(controller_address, thunk_address);
         } else {
-            return false;
+            return 0;
         }
     }
-    return false;
 }
 
 export fn flushStdout() void {
@@ -280,9 +279,9 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) thunk_js.CallResult {
+pub fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) ActionResult {
     if (main_thread) {
-        return _performJsCall(fn_id, arg_ptr, arg_size);
+        return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
@@ -292,12 +291,25 @@ pub fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: 
             futex.handle = @intFromPtr(&futex);
             futex_handle = futex.handle;
         }
-        var result = _queueJsCall(fn_id, arg_ptr, arg_size, futex_handle);
+        var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex_handle);
         if (result == .ok and wait) {
             std.Thread.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }
         return result;
+    }
+}
+
+pub fn releaseFunction(fn_ptr: anytype) !void {
+    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
+    const thunk_address = @intFromPtr(fn_ptr);
+    const control = thunk_js.createThunkController(@This(), FT);
+    const controller_address = @intFromPtr(control);
+    const fn_id = destroyJsThunk(controller_address, thunk_address);
+    if (main_thread) {
+        _ = _performJsAction(.release, fn_id, null, 0);
+    } else {
+        _ = _queueJsAction(.release, fn_id, null, 0, 0);
     }
 }
 

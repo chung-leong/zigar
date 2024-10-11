@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
-import { NoInitializer, TypeMismatch } from '../errors.js';
-import { MEMORY, VARIANTS } from '../symbols.js';
+import { NoCastingToFunction, NoInitializer, TypeMismatch } from '../errors.js';
+import { ENVIRONMENT, MEMORY, VARIANTS } from '../symbols.js';
 import { defineProperties, defineValue, getSelf, ObjectCache } from '../utils.js';
 
 export default mixin({
@@ -26,6 +26,10 @@ export default mixin({
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);
       } else {
+        if (this !== ENVIRONMENT) {
+          // casting from buffer to function is allowed only if request comes from the runtime
+          throw new NoCastingToFunction();
+        }
         // casting a memory pointing to Zig binary
         dv = arg;
       }
@@ -66,6 +70,14 @@ export default mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
+    // destructor needs to free the JS thunk on Zig side as well
+    const { delete: { value: defaultDelete } } = descriptors;
+    descriptors.delete = defineValue(function() {
+      if (jsThunkController) {
+        thisEnv.freeFunctionThunk(this[MEMORY], jsThunkController);
+      }
+      defaultDelete.call(this);
+    });
     if (process.env.MIXIN === 'track') {
       if (jsThunkController) {
         this.usingFunctionPointer = true;
