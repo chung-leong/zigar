@@ -1,61 +1,61 @@
 import Replace from '@rollup/plugin-replace';
-import Terser from '@rollup/plugin-terser';
-import URL from '@rollup/plugin-url';
 
 import { readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join, sep } from 'path';
 
-const plugins = [
-  Replace({
-    preventAssignment: true,
-    values: {
-      'process.env.DEV': 'false',
-      'process.env.TARGET': '"wasm"',
-      'process.env.BITS': '"32"',
-      'process.env.MIXIN': '""',
-    },
-  }),
-  URL({
-    // embed worker.min.js as data-URI
-    include: '**/worker.min.js',
-  }),
-];
-const config = [
-  {
-    // minify worker.js
-    external: path => true,
-    input: './src/worker.js',
-    output: {
-      file: './src/worker.min.js',
-      format: 'esm',
-      plugins: [ Terser() ],
-    },
-    plugins,
-  }
-];
+const replacements = {
+  'process.env.DEV': 'false',
+  'process.env.TARGET': '"wasm"',
+  'process.env.BITS': '"32"',
+  'process.env.MIXIN': '""',
+  'process.env.COMPAT': '""',
+};
+
+const config = [];
 const mixins = {};
 
 for (const subpath of readdirSync('./src', { recursive: true })) {
   const filename = basename(subpath);
   const folder = dirname(subpath);
   if (/\.js$/.test(filename)) {
-    if (folder !== '.') {
+    if (folder !== '.' && filename !== `worker-support.js`) {
       const prefix = folder.slice(0, -1).replace(/^./, m => m.toUpperCase());
       const name = prefix + filename.slice(0, -3)
                               .replace(/\-./g, m => m.slice(1).toUpperCase())
                               .replace(/^./, m => m.toUpperCase());
       mixins[name] = `./${subpath.split(sep).join('/')}`;
     }
-    if (!filename.startsWith('worker')) {
+    config.push({
+      input: join('./src', subpath),
+      output: {
+        file: join('./dist', subpath),
+        format: 'esm',
+      },
+      plugins: [
+        Replace({
+          preventAssignment: true,
+          values: replacements,
+        }),
+      ],
+      external: path => true,
+    });
+    if (filename === `worker-support.js`) {
       config.push({
         input: join('./src', subpath),
         output: {
-          file: join('./dist', subpath),
+          file: join('./dist', subpath.replace('.js', '-compat.js')),
           format: 'esm',
-          inlineDynamicImports: true,
         },
-        plugins,
-        external: path => !path.endsWith('.min.js'),
+        plugins: [
+          Replace({
+            preventAssignment: true,
+            values: {
+              ...replacements,
+              'process.env.COMPAT': '"node"',
+            },
+          }),
+        ],
+        external: path => true,
       });
     }
   }

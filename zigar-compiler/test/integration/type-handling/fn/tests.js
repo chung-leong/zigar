@@ -35,14 +35,10 @@ export function addTests(importModule, options) {
       this.timeout(300000);
       const {
         default: module,
-        __zigar,
         Callback1,
         call1, call2, call3, call4,
         hello, world
       } = await importTest('as-function-parameters', { multithreaded: true });
-      const f = new Callback1(() => {});
-      f.delete();
-      return;
       const lines1 = await capture(() => {
         call1(hello);
         call1(world);
@@ -77,30 +73,25 @@ export function addTests(importModule, options) {
       const lines3 = await capture(() => {
         result = call3(jsFn2);
       });
-      call3(() => 0);
       expect(lines3).to.eql([ 'number = 1234' ]);
+      call3(() => 0);
       expect(result).to.equal(1234 * 2);
-      __zigar.multithread(true);
-      try {
-        const lines4 = await capture(async () => {
-          call4(jsFn2);
-          await new Promise(r => setTimeout(r, 100));
-        });
-        expect(lines4).to.eql([ 'number = 1234' ]);
-        expect(module.call4_result).to.equal(1234 * 2);
-        const jsFn3 = async (number) => {
-          console.log(`number = ${number}`);
-          return number * 3;
-        };
-        const lines5 = await capture(async () => {
-          call4(jsFn3);
-          await new Promise(r => setTimeout(r, 100));
-        });
-        expect(lines5).to.eql([ 'number = 1234' ]);
-        expect(module.call4_result).to.equal(1234 * 3);
-      } finally {
-        __zigar.multithread(false);
-      }
+      const lines4 = await capture(async () => {
+        call4(jsFn2);
+        await new Promise(r => setTimeout(r, 100));
+      });
+      expect(lines4).to.eql([ 'number = 1234' ]);
+      expect(module.call4_result).to.equal(1234 * 2);
+      const jsFn3 = async (number) => {
+        console.log(`number = ${number}`);
+        return number * 3;
+      };
+      const lines5 = await capture(async () => {
+        call4(jsFn3);
+        await new Promise(r => setTimeout(r, 100));
+      });
+      expect(lines5).to.eql([ 'number = 1234' ]);
+      expect(module.call4_result).to.equal(1234 * 3);
     })
     it('should return callable function', async function() {
       this.timeout(300000);

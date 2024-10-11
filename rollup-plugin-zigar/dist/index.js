@@ -18,7 +18,12 @@ export function verifyOptions(options, schema) {
   for (const [ name, value ] of Object.entries(options)) {
     const descriptor = schema.properties[name];
     if (!descriptor) {
-      throw new Error(`Unknown option '${name}'`);
+      // TODO: remove check after a couple versions
+      if (name === 'useReadFile') {
+        throw new Error(`Option '${name}' has been deprecated. Set 'nodeCompat' instead.`);
+      } else {
+        throw new Error(`Unknown option '${name}'`);
+      }
     } else if (descriptor.enum && !descriptor.enum.includes(value)) {
       const list = descriptor.enum.map((n, i, arr) => {
         return (i === arr.length - 1) ? `or '${n}'` : `'${n}'`;
@@ -61,7 +66,7 @@ export default function createPlugin(options = {}) {
     async load(id) {
       if (id.endsWith('.zig') || id.endsWith('.zigar')) {
         const {
-          useReadFile = false,
+          nodeCompat = false,
           embedWASM = false,
           optimize = optimizeDefault,
           ...otherOptions
@@ -76,7 +81,7 @@ export default function createPlugin(options = {}) {
             return fetchVirtualWASM(url);
           } else {
             const refID = this.emitFile({ type: 'asset', name, source });
-            if (useReadFile) {
+            if (nodeCompat) {
               return loadWASM(refID);
             } else {
               return fetchWASM(refID);
@@ -86,6 +91,7 @@ export default function createPlugin(options = {}) {
         const { code, exports, structures, sourcePaths } = await transpile(id, {
           ...otherOptions,
           optimize,
+          nodeCompat,
           wasmLoader,
           embedWASM,
         });

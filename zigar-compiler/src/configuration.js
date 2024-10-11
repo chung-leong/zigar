@@ -63,9 +63,9 @@ export const optionsForCompile = {
 };
 
 export const optionsForTranspile = {
-  useReadFile: {
+  nodeCompat: {
     type: 'boolean',
-    title: 'Enable the use of readFile() to Load WASM file when library is used in Node.js',
+    title: 'Produce code compatible with Node.js',
   },
   embedWASM: {
     type: 'boolean',

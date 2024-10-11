@@ -279,7 +279,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: *anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) ActionResult {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) ActionResult {
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {

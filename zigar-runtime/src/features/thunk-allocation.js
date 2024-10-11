@@ -4,9 +4,10 @@ export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
-      freeJsThunk: { argType: 'ii', returnType: 'b' },
+      freeJsThunk: { argType: 'ii', returnType: 'i' },
     },
     thunkSources: [],
+    thunkMap: new Map(),
     addJsThunkSource() {
       const {
         memoryInitial,
@@ -39,10 +40,11 @@ export default mixin({
         element: 'anyfunc',
       });
       const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk } = exports;
+      const { createJsThunk, destroyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
+        destroyJsThunk,
         table,
       };
       this.thunkSources.unshift(source);
@@ -75,10 +77,29 @@ export default mixin({
       }
       this.table.set(thunkAddress, thunkObject);
       source.thunkCount++;
+      // remember where the object is from
+      this.thunkMap.set(thunkObject, { source, sourceAddress });
       return thunkAddress;
     },
     freeJsThunk(controllerAddress, thunkAddress) {
-      // TODO
+      let fnId = 0;
+      try {
+        const thunkObject = this.table.get(thunkAddress);
+        const entry = this.thunkMap.get(thunkObject);
+        if (entry) {
+          const { source, sourceAddress } = entry;
+          fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
+          if (--source.thunkCount === 0) {
+            const index = this.thunkSources.indexOf(source);
+            if (index !== -1) {
+              this.thunkSources.splice(index, 1);
+            }
+          }
+          this.thunkMap.delete(thunkObject);
+        }
+        } catch (err) {
+      }
+      return fnId;
     },
   } : undefined),
 });

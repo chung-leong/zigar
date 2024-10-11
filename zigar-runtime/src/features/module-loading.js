@@ -146,7 +146,7 @@ export default mixin({
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi' && name === 'thread-spawn') {
-            wasi[name] = this.getThreadHandler();
+            wasi[name] = this.getThreadHandler?.() ?? empty;
           }
         }
       }

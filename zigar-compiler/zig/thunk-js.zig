@@ -136,40 +136,25 @@ const wasm = struct {
                 break :init array;
             };
 
-            fn alloc(id: usize) callconv(.C) ?*const anyopaque {
-                return for (&fn_ids, 0..) |*ptr, index| {
-                    if (ptr.* == 0) {
-                        ptr.* = id;
-                        break thunks[index];
-                    }
-                } else null;
-            }
-
-            fn free(thunk_ptr: *const anyopaque) callconv(.C) ?usize {
-                const thunk: *const BFT = @ptrCast(thunk_ptr);
-                return for (thunks, &fn_ids) |f, *id_ptr| {
-                    if (f == thunk) {
-                        defer id_ptr.* = 0;
-                        break id_ptr.*;
-                    }
-                } else false;
-            }
-
-            fn control(_: *anyopaque, action: ActionType, arg: usize) !usize {
+            fn control(_: ?*anyopaque, action: ActionType, arg: usize) !usize {
                 switch (action) {
                     .create => {
-                        if (alloc(arg)) |thunk_ptr| {
-                            return @intFromPtr(thunk_ptr);
-                        } else {
-                            return Error.UnableToCreateThunk;
-                        }
+                        const fn_id = arg;
+                        return for (&fn_ids, 0..) |*ptr, index| {
+                            if (ptr.* == 0) {
+                                ptr.* = fn_id;
+                                break @intFromPtr(thunks[index]);
+                            }
+                        } else Error.UnableToCreateThunk;
                     },
                     .destroy => {
-                        if (free(@ptrFromInt(arg))) |id| {
-                            return id;
-                        } else {
-                            return Error.UnableToFindThunk;
-                        }
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        return for (thunks, &fn_ids) |f, *id_ptr| {
+                            if (f == thunk) {
+                                defer id_ptr.* = 0;
+                                break id_ptr.*;
+                            }
+                        } else Error.UnableToFindThunk;
                     },
                     else => unreachable,
                 }

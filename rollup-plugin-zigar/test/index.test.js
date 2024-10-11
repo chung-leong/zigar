@@ -19,12 +19,12 @@ describe('Loader', function() {
     })
     it('should generate code that uses fetch when embedWASM is false', async function() {
       this.timeout(60000);
-      const code = await transpile(path, { embedWASM: false, useReadFile: false });
+      const code = await transpile(path, { embedWASM: false, nodeCompat: false });
       expect(code).to.contain('fetch');
     })
-    it('should generate code that uses readFile when embedWASM is false and useReadFile is true', async function() {
+    it('should generate code that uses readFile when embedWASM is false and nodeCompat is true', async function() {
       this.timeout(300000);
-      const code = await transpile(path, { embedWASM: false, useReadFile: true });
+      const code = await transpile(path, { embedWASM: false, nodeCompat: true });
       expect(code).to.contain('readFile');
     })
     it('should default to ReleaseSmall where NODE_ENV is production', async function() {
@@ -62,7 +62,7 @@ describe('Loader', function() {
       const port = 10001;
       const server = await createServer({
         root: absolute('./example'),
-        server: { host, port, watch: null },        
+        server: { host, port, watch: null },
         plugins: [
           Zigar({}),
           NodeResolve({

@@ -26,7 +26,7 @@ async function loader(content, map, meta) {
     },
   });
   const {
-    useReadFile = (this.target === 'node'),
+    nodeCompat = (this.target === 'node'),
     embedWASM = false,
     optimize = (this.mode === 'production') ? 'ReleaseSmall' : 'Debug',
     ...otherOptions
@@ -37,7 +37,7 @@ async function loader(content, map, meta) {
     const hash = md5(source);
     const outputPath = `${file.name}-${hash.slice(0, 8)}.wasm`;
     this.emitFile(outputPath, source);
-    if (useReadFile) {
+    if (nodeCompat) {
       return loadWASM(outputPath);
     } else {
       return fetchWASM(outputPath);
@@ -46,6 +46,7 @@ async function loader(content, map, meta) {
   const { code, sourcePaths } = await transpile(path, {
     ...otherOptions,
     optimize,
+    nodeCompat,
     wasmLoader,
     embedWASM,
   });

@@ -291,6 +291,8 @@ const alignForward = function(address, align) {
   /* c8 ignore next */
 ;
 
+const nullAddress = 0;
+
 const isInvalidAddress = function(address) {
     return address === 0xaaaaaaaa;
   }
@@ -1430,9 +1432,9 @@ const optionsForCompile = {
 };
 
 const optionsForTranspile = {
-  useReadFile: {
+  nodeCompat: {
     type: 'boolean',
-    title: 'Enable the use of readFile() to Load WASM file when library is used in Node.js',
+    title: 'Produce code compatible with Node.js',
   },
   embedWASM: {
     type: 'boolean',
@@ -2234,7 +2236,6 @@ var baseline = mixin({
       abandon: () => this.abandonModule?.(),
       released: () => this.released,
       connect: (console) => this.consoleObject = console,
-      multithread: (enable) => this.setMultithread?.(enable),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
@@ -2312,7 +2313,8 @@ var baseline = mixin({
 });
 
 var callMarshalingInbound = mixin({
-  jsFunctionMap: null,
+  jsFunctionThunkMap: new Map(),
+  jsFunctionCallerMap: new Map(),
   jsFunctionIdMap: null,
   jsFunctionNextId: 1,
 
@@ -2329,9 +2331,6 @@ var callMarshalingInbound = mixin({
   },
   getFunctionThunk(fn, jsThunkController) {
     const funcId = this.getFunctionId(fn);
-    if (!this.jsFunctionThunkMap) {
-      this.jsFunctionThunkMap = new Map();
-    }
     let dv = this.jsFunctionThunkMap.get(funcId);
     if (dv === undefined) {
       const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
@@ -2343,6 +2342,15 @@ var callMarshalingInbound = mixin({
       this.jsFunctionThunkMap.set(funcId, dv);
     }
     return dv;
+  },
+  freeFunctionThunk(thunk, jsThunkController) {
+    const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
+    const thunkAddr = this.getViewAddress(thunk);
+    const id = this.destroyJsThunk(controllerAddr, thunkAddr);
+    if (id) {
+      this.jsFunctionThunkMap.delete(id);
+      this.jsFunctionCallerMap.delete(id);
+    }
   },
   createInboundCallers(fn, ArgStruct) {
     const self = function(...args) {
@@ -2399,9 +2407,6 @@ var callMarshalingInbound = mixin({
       return result;
     };
     const funcId = this.getFunctionId(fn);
-    if (!this.jsFunctionCallerMap) {
-      this.jsFunctionCallerMap = new Map();
-    }
     this.jsFunctionCallerMap.set(funcId, binary);
     return { self, method, binary };
   },
@@ -2409,25 +2414,42 @@ var callMarshalingInbound = mixin({
     const caller = this.jsFunctionCallerMap.get(id);
     return caller?.(dv, futexHandle) ?? CallResult.Failure;
   },
+  releaseFunction(id) {
+    const thunk = this.jsFunctionThunkMap.get(id);
+    if (thunk) {
+      this.releaseFixedView(thunk);
+    }
+    this.jsFunctionThunkMap.delete(id);
+    this.jsFunctionCallerMap.delete(id);
+  },
   ...({
     exports: {
-      performJsCall: { argType: 'iii', returnType: 'i' },
-      queueJsCall: { argType: 'iiii', returnType: 'i' },
+      performJsAction: { argType: 'iii', returnType: 'i' },
+      queueJsAction: { argType: 'iiii' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
-      destroyJsThunk: { argType: 'ii', returnType: 'b' },
+      destroyJsThunk: { argType: 'ii', returnType: 'i' },
+      finalizeAsyncCall: { argType: 'ii' },
     },
-    performJsCall(id, argAddress, argSize) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      return this.runFunction(id, dv, 0);
+    performJsAction(action, id, argAddress, argSize) {
+      if (action === Action.Call) {
+        const dv = this.obtainFixedView(argAddress, argSize);
+        return this.runFunction(id, dv, 0);
+      } else if (action === Action.Release) {
+        return this.releaseFunction(id);
+      }
     },
-    queueJsCall(id, argAddress, argSize, futexHandle) {
+    queueJsAction(action, id, argAddress, argSize, futexHandle) {
       // in the main thread, this method is never called from WASM;
-      // the implementation of queueJsCall() in worker.js, call this
+      // the implementation of queueJsAction() in worker.js, call this
       // through postMessage() when it is called the worker's WASM instance
-      const dv = this.obtainFixedView(argAddress, argSize);
-      this.runFunction(id, dv, futexHandle);
+      if (action === Action.Call) {
+        const dv = this.obtainFixedView(argAddress, argSize);
+        this.runFunction(id, dv, futexHandle);
+      } else if (action === Action.Release) {
+        this.releaseFunction(id);
+      }
     },
   } ),
 });
@@ -2437,6 +2459,11 @@ const CallResult = {
   Failure: 1,
   Deadlock: 2,
   Disabled: 3,
+};
+
+const Action = {
+  Call: 2,
+  Release: 3,
 };
 
 class InvalidDeallocation extends ReferenceError {
@@ -2663,8 +2690,14 @@ class UndefinedArgument extends Error {
 }
 
 class NoCastingToPointer extends TypeError {
-  constructor(structure) {
+  constructor() {
     super(`Non-slice pointers can only be created with the help of the new operator`);
+  }
+}
+
+class NoCastingToFunction extends TypeError {
+  constructor() {
+    super(`Casting to function is not allowed`);
   }
 }
 
@@ -3421,7 +3454,7 @@ var memoryMapping = mixin({
       }
       const key = `${address}:0`;
       dv = entry[key];
-      if (!dv) {
+      if (!dv || dv[FIXED].address !== address) {
         dv = entry[key] = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
       }
@@ -3429,15 +3462,23 @@ var memoryMapping = mixin({
     return dv;
   },
   releaseFixedView(dv) {
-    // only allocated memory would have type attached
-    if (dv[FIXED]?.type !== undefined) {
-      this.freeFixedMemory(dv);
-      dv[FIXED] = null;
+    const fixed = dv[FIXED];
+    if (fixed?.address) {
+      // only allocated memory would have type attached
+      if (fixed.type !== undefined) {
+        this.freeFixedMemory(dv);
+      }
+      // set address to zero so data view won't get reused
+      fixed.address = nullAddress;
+      fixed.freed = true;
     }
   },
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
+      if (fixed.freed) {
+        throw new NullPointer();
+      }
       return fixed.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
@@ -3674,7 +3715,7 @@ var moduleLoading = mixin({
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi' && name === 'thread-spawn') {
-            wasi[name] = this.getThreadHandler();
+            wasi[name] = this.getThreadHandler?.() ?? empty;
           }
         }
       }
@@ -4261,17 +4302,14 @@ function isElectron() {
       && !!process.versions?.electron;
 }
 
-var threadSupport = mixin({
-  ...(undefined) ,
-});
-
 var thunkAllocation = mixin({
   ...({
     exports: {
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
-      freeJsThunk: { argType: 'ii', returnType: 'b' },
+      freeJsThunk: { argType: 'ii', returnType: 'i' },
     },
     thunkSources: [],
+    thunkMap: new Map(),
     addJsThunkSource() {
       const {
         memoryInitial,
@@ -4304,10 +4342,11 @@ var thunkAllocation = mixin({
         element: 'anyfunc',
       });
       const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk } = exports;
+      const { createJsThunk, destroyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
+        destroyJsThunk,
         table,
       };
       this.thunkSources.unshift(source);
@@ -4340,10 +4379,29 @@ var thunkAllocation = mixin({
       }
       this.table.set(thunkAddress, thunkObject);
       source.thunkCount++;
+      // remember where the object is from
+      this.thunkMap.set(thunkObject, { source, sourceAddress });
       return thunkAddress;
     },
     freeJsThunk(controllerAddress, thunkAddress) {
-      // TODO
+      let fnId = 0;
+      try {
+        const thunkObject = this.table.get(thunkAddress);
+        const entry = this.thunkMap.get(thunkObject);
+        if (entry) {
+          const { source, sourceAddress } = entry;
+          fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
+          if (--source.thunkCount === 0) {
+            const index = this.thunkSources.indexOf(source);
+            if (index !== -1) {
+              this.thunkSources.splice(index, 1);
+            }
+          }
+          this.thunkMap.delete(thunkObject);
+        }
+        } catch (err) {
+      }
+      return fnId;
     },
   } ),
 });
@@ -6296,6 +6354,10 @@ var _function = mixin({
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);
       } else {
+        if (this !== ENVIRONMENT) {
+          // casting from buffer to function is allowed only if request comes from the runtime
+          throw new NoCastingToFunction();
+        }
         // casting a memory pointing to Zig binary
         dv = arg;
       }
@@ -6336,6 +6398,14 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
+    // destructor needs to free the JS thunk on Zig side as well
+    const { delete: { value: defaultDelete } } = descriptors;
+    descriptors.delete = defineValue(function() {
+      if (jsThunkController) {
+        thisEnv.freeFunctionThunk(this[MEMORY], jsThunkController);
+      }
+      defaultDelete.call(this);
+    });
     {
       if (jsThunkController) {
         this.usingFunctionPointer = true;
@@ -7575,7 +7645,6 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
-  FeatureThreadSupport: threadSupport,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
@@ -8961,6 +9030,7 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
 
 async function transpile(path, options) {
   const {
+    nodeCompat = false,
     embedWASM = true,
     topLevelAwait = true,
     omitExports = false,
@@ -8983,11 +9053,12 @@ async function transpile(path, options) {
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
+  const multithreaded = compileOptions.multithreaded ?? false;
   const moduleOptions = {
     memoryMax,
     memoryInitial,
     tableInitial,
-    multithreaded: compileOptions.multithreaded ?? false,
+    multithreaded,
   };
   const Env = defineEnvironment();
   const env = new Env();
@@ -9005,8 +9076,13 @@ async function transpile(path, options) {
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
-  usage.FeatureThunkAllocation = env.usingFunctionPointer && !moduleOptions.multithreaded;
+  usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
+  if (nodeCompat) {
+    usage.FeatureWorkerSupportCompat = multithreaded;
+  } else {
+    usage.FeatureWorkerSupport = multithreaded;
+  }
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {

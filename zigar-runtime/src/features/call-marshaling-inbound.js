@@ -119,6 +119,7 @@ export default mixin({
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
       destroyJsThunk: { argType: 'ii', returnType: 'i' },
+      finalizeAsyncCall: { argType: 'ii' },
     },
     performJsAction(action, id, argAddress, argSize) {
       if (action === Action.Call) {
@@ -147,6 +148,7 @@ export default mixin({
     imports: {
       createJsThunk: null,
       destroyJsThunk: null,
+      finalizeAsyncCall: null,
     },
   } : undefined),
 });

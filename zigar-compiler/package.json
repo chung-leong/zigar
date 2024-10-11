@@ -44,8 +44,5 @@
     "mocha": "^10.7.3",
     "mocha-skip-if": "^1.0.4",
     "rollup": "^4.20.0"
-  },
-  "dependencies": {
-    "@rollup/plugin-url": "^8.0.2"
   }
 }

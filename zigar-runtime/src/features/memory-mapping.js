@@ -207,19 +207,21 @@ export default mixin({
     return dv;
   },
   releaseFixedView(dv) {
-    if (dv[FIXED]?.address) {
+    const fixed = dv[FIXED];
+    if (fixed?.address) {
       // only allocated memory would have type attached
-      if (dv[FIXED]?.type !== undefined) {
+      if (fixed.type !== undefined) {
         this.freeFixedMemory(dv);
       }
       // set address to zero so data view won't get reused
-      dv[FIXED].address = nullAddress;
+      fixed.address = nullAddress;
+      fixed.freed = true;
     }
   },
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
-      if (!fixed.address) {
+      if (fixed.freed) {
         throw new NullPointer();
       }
       return fixed.address;

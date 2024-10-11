@@ -70,6 +70,8 @@ const MemberFlag = {
   /* c8 ignore next */
 : undefined;
 
+(process.env.BITS === '64') ? 0n : 0;
+
 (process.env.BITS === '64')
 ? function(address) {
     return address === 0xaaaaaaaaaaaaaaaan;
@@ -1147,9 +1149,9 @@ const optionsForCompile = {
 };
 
 const optionsForTranspile = {
-  useReadFile: {
+  nodeCompat: {
     type: 'boolean',
-    title: 'Enable the use of readFile() to Load WASM file when library is used in Node.js',
+    title: 'Produce code compatible with Node.js',
   },
   embedWASM: {
     type: 'boolean',

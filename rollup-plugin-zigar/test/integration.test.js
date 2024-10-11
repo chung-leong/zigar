@@ -49,7 +49,7 @@ async function importModule(url, options) {
     plugins: [
       Zigar({
         optimize,
-        useReadFile: true,
+        nodeCompat: true,
         keepNames: optimize === 'ReleaseSafe',
         topLevelAwait,
         multithreaded,

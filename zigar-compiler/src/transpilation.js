@@ -9,6 +9,7 @@ import { extractLimits, stripUnused } from './wasm-decoding.js';
 
 export async function transpile(path, options) {
   const {
+    nodeCompat = false,
     embedWASM = true,
     topLevelAwait = true,
     omitExports = false,
@@ -31,11 +32,12 @@ export async function transpile(path, options) {
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
+  const multithreaded = compileOptions.multithreaded ?? false;
   const moduleOptions = {
     memoryMax,
     memoryInitial,
     tableInitial,
-    multithreaded: compileOptions.multithreaded ?? false,
+    multithreaded,
   };
   const Env = defineEnvironment();
   const env = new Env();
@@ -53,8 +55,13 @@ export async function transpile(path, options) {
   usage.FeatureStructureAcquisition = false;
   usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
-  usage.FeatureThunkAllocation = env.usingFunctionPointer && !moduleOptions.multithreaded;
+  usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
+  if (nodeCompat) {
+    usage.FeatureWorkerSupportCompat = multithreaded;
+  } else {
+    usage.FeatureWorkerSupport = multithreaded;
+  }
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
