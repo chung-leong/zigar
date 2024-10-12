@@ -296,7 +296,7 @@ export default mixin({
         value() {
           const dv = this[MEMORY];
           const fixed = dv?.[FIXED];
-          if (fixed && dv.buffer.byteLength === 0) {
+          if (fixed && fixed.len > 0 && dv.buffer.byteLength === 0) {
             const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
             if (fixed.align) {
               newDV[FIXED].align = fixed.align;

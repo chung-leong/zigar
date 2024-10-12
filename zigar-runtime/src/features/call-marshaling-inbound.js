@@ -101,7 +101,8 @@ export default mixin({
   },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
-    return caller?.(dv, futexHandle) ?? CallResult.Failure;
+    const result = caller?.(dv, futexHandle);
+    return result ?? CallResult.Failure;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -113,8 +114,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
-      performJsAction: { argType: 'iii', returnType: 'i' },
-      queueJsAction: { argType: 'iiii' },
+      performJsAction: { argType: 'iiii', returnType: 'i' },
+      queueJsAction: { argType: 'iiiii' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
