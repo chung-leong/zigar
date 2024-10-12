@@ -6,3 +6,9 @@ pub const function = struct {
         host.releaseFunction(fn_ptr) catch {};
     }
 };
+
+pub const thread = struct {
+    pub fn use(state: bool) !void {
+        try host.setMultithread(state);
+    }
+};

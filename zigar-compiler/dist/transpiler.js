@@ -2424,8 +2424,8 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      performJsAction: { argType: 'iii', returnType: 'i' },
-      queueJsAction: { argType: 'iiii' },
+      performJsAction: { argType: 'iiii', returnType: 'i' },
+      queueJsAction: { argType: 'iiiii' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
@@ -3546,7 +3546,7 @@ var memoryMapping = mixin({
         value() {
           const dv = this[MEMORY];
           const fixed = dv?.[FIXED];
-          if (fixed && dv.buffer.byteLength === 0) {
+          if (fixed && fixed.len > 0 && dv.buffer.byteLength === 0) {
             const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
             if (fixed.align) {
               newDV[FIXED].align = fixed.align;

@@ -20,7 +20,7 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#define EXPORT_COUNT    16
+#define EXPORT_COUNT    15
 #define IMPORT_COUNT    15
 
 #if UINTPTR_MAX == UINT64_MAX

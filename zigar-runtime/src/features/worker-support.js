@@ -2,6 +2,10 @@ import { mixin } from '../environment.js';
 
 export default mixin({
     nextThreadId: 1,
+    workers: [],
+    exports: {
+      terminateThreads: { argType: '' },
+    },
 
     getThreadHandler() {
       return this.spawnThread.bind(this);
@@ -11,7 +15,7 @@ export default mixin({
       this.nextThreadId++;
       const { executable, memory, options } = this;
       const workerData = { executable, memory, options, tid, arg };
-      const handler = (msg) => {
+      const handler = (worker, msg) => {
         if (msg.type === 'call') {
           const { module, name, args, array } = msg;
           const fn = this.exportedModules[module]?.[name];
@@ -21,6 +25,11 @@ export default mixin({
             array[0] = 1;
             Atomics.notify(array, 0, 1);
           }
+        } else if (msg.type === 'exit') {
+          const index = this.workers.indexOf(worker);
+          if (index !== -1) {
+            this.workers.splice(index, 1);
+          }
         }
       };
       const code = getWorkerCode();
@@ -28,16 +37,24 @@ export default mixin({
         // web worker
         const url = new URL('data:,' + encodeURIComponent(code));
         const worker = new Worker(url, { type: 'module', name: 'zig' });
-        worker.onmessage = evt => handler(evt.data);
+        worker.onmessage = evt => handler(worker, evt.data);
         worker.postMessage(workerData);
+        this.workers.push(worker);
       } else if (process.env.COMPAT === 'node') {
         // Node.js worker-thread
         import('worker_threads').then(({ Worker }) => {
           const worker = new Worker(code, { workerData, eval: true });
-          worker.on('message', handler);
+          worker.on('message', msg => handler(worker, msg));
+          this.workers.push(worker);
         });
       }
       return tid;
+    },
+    terminateThreads() {
+      for (const worker of this.workers) {
+        worker.terminate();
+      }
+      this.workers.splice(0);
     },
 });
 
@@ -87,6 +104,7 @@ function workerMain() {
     const { exports } = new w.Instance(executable, imports);
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);
+    postMessage({ type: 'exit' });
   }
 
   function createRouter(module, name) {

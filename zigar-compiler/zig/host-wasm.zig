@@ -37,10 +37,11 @@ extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
 extern fn _performJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize) ActionResult;
 extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) ActionResult;
-extern fn _getArgAttributes() *anyopaque;
+extern fn _terminateThreads() void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
 threadlocal var main_thread: bool = false;
+var multithread: bool = false;
 
 export fn initialize() void {
     main_thread = true;
@@ -283,6 +284,9 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
+        if (!multithread) {
+            return .failure_disabled;
+        }
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
         var futex_handle: usize = 0;
@@ -309,7 +313,22 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     if (main_thread) {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {
+        if (!multithread) {
+            return Error.MultithreadingNotEnabled;
+        }
         _ = _queueJsAction(.release, fn_id, null, 0, 0);
+    }
+}
+
+pub fn setMultithread(state: bool) !void {
+    if (!main_thread) {
+        return Error.NotInMainThread;
+    }
+    if (multithread != state) {
+        if (state == false) {
+            _terminateThreads();
+        }
+        multithread = state;
     }
 }
 

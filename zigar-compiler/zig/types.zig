@@ -22,7 +22,9 @@ pub const Error = error{
     UnableToDefineStructure,
     UnableToWriteToConsole,
     UnableToCreateFunction,
-    MissingHostInstance,
+    UnableToUseThread,
+    NotInMainThread,
+    MultithreadingNotEnabled,
     TooManyArguments,
 };
 

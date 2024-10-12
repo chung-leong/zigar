@@ -52,10 +52,11 @@ const Result = enum(u32) {
 };
 
 threadlocal var module_data: ?*ModuleData = null;
+threadlocal var multithread: bool = false;
 var imports: Imports = undefined;
 
 fn getModuleData() !*ModuleData {
-    return module_data orelse Error.MissingHostInstance;
+    return module_data orelse Error.NotInMainThread;
 }
 
 pub fn allocateMemory(size: usize, alignment: u16) !Memory {
@@ -256,9 +257,27 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     const fn_id = try control(md, .destroy, thunk_address);
     var action: Action = .{ .type = .release, .fn_id = fn_id };
     if (module_data == md) {
-        _ = imports.perform_js_action(md, &action);
+        if (imports.perform_js_action(md, &action) != .ok) {
+            return Error.Unknown;
+        }
     } else {
-        _ = imports.queue_js_action(md, &action);
+        if (imports.queue_js_action(md, &action) != .ok) {
+            return Error.MultithreadingDisabled;
+        };
+    }
+}
+
+pub fn setMultithread(state: bool) !void {
+    const md = try getModuleData();
+    if (multithread != state) {
+        const result = switch (state) {
+            true => imports.enable_multithread(md),
+            false => imports.disable_multithread(md),
+        };
+        if (result != .ok) {
+            return Error.UnableToUseThread;
+        }
+        multithread = state;
     }
 }
 

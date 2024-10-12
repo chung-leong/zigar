@@ -314,33 +314,25 @@ result enable_multithread(module_data* md) {
     napi_env env = md->env;
     napi_value resource_name;
     napi_value run_fn;
-    if (!md->ts_run_fn) {
-        if (napi_get_reference_value(env, md->js_fns[runFunction], &run_fn) != napi_ok
-         || napi_create_string_utf8(env, "runFn", 5, &resource_name) != napi_ok
-         || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_run_fn) != napi_ok) {
-            return FAILURE;
-        }
+    if (napi_get_reference_value(env, md->js_fns[runFunction], &run_fn) != napi_ok
+     || napi_create_string_utf8(env, "runFn", 5, &resource_name) != napi_ok
+     || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_run_fn) != napi_ok) {
+        return FAILURE;
     }
     napi_value release_fn;
-    if (!md->ts_release_fn) {
-        if (napi_get_reference_value(env, md->js_fns[releaseFunction], &release_fn) != napi_ok
-         || napi_create_string_utf8(env, "releaseFn", 9, &resource_name) != napi_ok
-         || napi_create_threadsafe_function(env, release_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_release_fn) != napi_ok) {
-            return FAILURE;
-        }
+    if (napi_get_reference_value(env, md->js_fns[releaseFunction], &release_fn) != napi_ok
+     || napi_create_string_utf8(env, "releaseFn", 9, &resource_name) != napi_ok
+     || napi_create_threadsafe_function(env, release_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_release_fn) != napi_ok) {
+        return FAILURE;
     }
     return OK;
 }
 
 result disable_multithread(module_data* md) {
-    if (md->ts_run_fn) {
-        napi_release_threadsafe_function(md->ts_run_fn, napi_tsfn_release);
-        md->ts_run_fn = NULL;
-    }
-    if (md->ts_release_fn) {
-        napi_release_threadsafe_function(md->ts_release_fn, napi_tsfn_release);
-        md->ts_release_fn = NULL;
-    }
+    napi_release_threadsafe_function(md->ts_run_fn, napi_tsfn_release);
+    md->ts_run_fn = NULL;
+    napi_release_threadsafe_function(md->ts_release_fn, napi_tsfn_release);
+    md->ts_release_fn = NULL;
     return OK;
 }
 
@@ -717,26 +709,6 @@ napi_value finalize_async_call(napi_env env,
     return NULL;
 }
 
-napi_value set_multithread(napi_env env,
-                           napi_callback_info info) {
-    module_data* md;
-    size_t argc = 1;
-    napi_value args[1];
-    bool enable;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_bool(env, args[0], &enable) != napi_ok) {
-        return throw_error(env, "Argument must be true/false");
-    }
-    if (enable) {
-        if (enable_multithread(md) != OK) {
-            return throw_error(env, "Unable to activate multithreading");
-        }
-    } else {
-        disable_multithread(md);
-    }
-    return NULL;
-}
-
 result perform_js_action(module_data* md,
                          js_action* action) {
     napi_env env = md->env;
@@ -869,7 +841,6 @@ struct {
     { "destroyJsThunk", destroy_js_thunk },
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
-    { "setMultithread", set_multithread },
     { "finalizeAsyncCall", finalize_async_call },
 };
 

@@ -101,8 +101,7 @@ export default mixin({
   },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
-    const result = caller?.(dv, futexHandle);
-    return result ?? CallResult.Failure;
+    return caller?.(dv, futexHandle) ?? CallResult.Failure;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);

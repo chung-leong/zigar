@@ -37,7 +37,8 @@ export function addTests(importModule, options) {
         default: module,
         Callback1,
         call1, call2, call3, call4,
-        hello, world
+        hello, world,
+        shutdown,
       } = await importTest('as-function-parameters', { multithreaded: true });
       const lines1 = await capture(() => {
         call1(hello);
@@ -76,27 +77,31 @@ export function addTests(importModule, options) {
       expect(lines3).to.eql([ 'number = 1234' ]);
       call3(() => 0);
       expect(result).to.equal(1234 * 2);
-      const jsFn3 = (number) => {
-        console.log(`number = ${number}`);
-        return number * 3;
-      };
-      const lines4 = await capture(async () => {
-        call4(jsFn3);
-        await new Promise(r => setTimeout(r, 100));
-      });
-      expect(lines4).to.eql([ 'number = 1234' ]);
-      expect(module.call4_result).to.equal(1234 * 3);
-      // async function
-      const jsFn4 = async (number) => {
-        console.log(`number = ${number}`);
-        return number * 4;
-      };
-      const lines5 = await capture(async () => {
-        call4(jsFn4);
-        await new Promise(r => setTimeout(r, 100));
-      });
-      expect(lines5).to.eql([ 'number = 1234' ]);
-      expect(module.call4_result).to.equal(1234 * 4);
+      try {
+        const jsFn3 = (number) => {
+          console.log(`number = ${number}`);
+          return number * 3;
+        };
+        const lines4 = await capture(async () => {
+          call4(jsFn3);
+          await new Promise(r => setTimeout(r, 200));
+        });
+        expect(lines4).to.eql([ 'number = 1234' ]);
+        expect(module.call4_result).to.equal(1234 * 3);
+        // async function
+        const jsFn4 = async (number) => {
+          console.log(`number = ${number}`);
+          return number * 4;
+        };
+        const lines5 = await capture(async () => {
+          call4(jsFn4);
+          await new Promise(r => setTimeout(r, 200));
+        });
+        expect(lines5).to.eql([ 'number = 1234' ]);
+        expect(module.call4_result).to.equal(1234 * 4);
+      } finally {
+        shutdown();
+      }
     })
     it('should return callable function', async function() {
       this.timeout(300000);
