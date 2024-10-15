@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { AlignmentConflict, InvalidDeallocation, NullPointer } from '../errors.js';
+import { AlignmentConflict, NullPointer } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, empty, findSortedIndex, isInvalidAddress, isMisaligned,
@@ -251,7 +251,7 @@ export default mixin({
           return null;
         }
       };
-      vtable.resize = () => false;
+      vtable.resize = Allocator.noResize;
       vtable.free = (ptr, buf, ptrAlign, retAddr) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
         const context = this.contextMap.get(contextId);
@@ -290,8 +290,6 @@ export default mixin({
     if (shadowDV) {
       this.removeShadow(context, shadowDV);
       this.freeShadowMemory(shadowDV);
-    } else {
-      throw new InvalidDeallocation(address);
     }
   },
 
