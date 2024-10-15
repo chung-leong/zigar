@@ -243,7 +243,7 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
         }
     } else {
         if (imports.queue_js_action(md, &action) != .ok) {
-            return Error.MultithreadingDisabled;
+            return Error.MultithreadingNotEnabled;
         }
     }
 }

@@ -652,7 +652,6 @@ result perform_js_action(module_data* md,
                          js_action* action) {
     napi_env env = md->env;
     napi_value buffer;
-    napi_value recv;
     napi_value args[5];
     napi_value result;
     uint32_t status;
@@ -660,8 +659,7 @@ result perform_js_action(module_data* md,
      && napi_create_uint32(env, action->fn_id, &args[1]) == napi_ok
      && napi_create_uintptr(env, action->arg_address, &args[2]) == napi_ok
      && napi_create_uint32(env, action->arg_size, &args[3]) == napi_ok
-     && napi_create_uint32(env, action->futex_handle, &args[4]) == napi_ok
-     && napi_get_null(env, &recv) == napi_ok) {
+     && napi_create_uintptr(env, action->futex_handle, &args[4]) == napi_ok) {
         if (call_js_function(md, performJsAction, 5, args, &result)
          && napi_get_value_uint32(env, result, &status) == napi_ok) {
             return status;

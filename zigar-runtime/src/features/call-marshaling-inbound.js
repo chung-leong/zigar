@@ -42,7 +42,7 @@ export default mixin({
     }
   },
   createInboundCaller(fn, ArgStruct) {
-    const handler = (dv, asyncCallHandle) => {
+    const handler = (dv, futexHandle) => {
       let result = CallResult.OK;
       let awaiting = false;
       try {
@@ -81,9 +81,9 @@ export default mixin({
         try {
           const retval = fn(...args);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (asyncCallHandle) {
+            if (futexHandle) {
               retval.then(onReturn, onError).then(() => {
-                this.finalizeAsyncCall(asyncCallHandle, result);
+                this.finalizeAsyncCall(futexHandle, result);
               });
               awaiting = true;
               result = CallResult.OK;
@@ -100,8 +100,8 @@ export default mixin({
         console.error(err);
         result = CallResult.Failure;
       }
-      if (asyncCallHandle && !awaiting) {
-        this.finalizeAsyncCall(asyncCallHandle, result);
+      if (futexHandle && !awaiting) {
+        this.finalizeAsyncCall(futexHandle, result);
       }
       return result;
     };
@@ -124,8 +124,7 @@ export default mixin({
     if (!caller) {
       return CallResult.Failure;
     }
-    const result = caller(dv, futexHandle);
-    return result;
+    return caller(dv, futexHandle);
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);

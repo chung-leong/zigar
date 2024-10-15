@@ -1671,7 +1671,7 @@ pub fn Promise(comptime T: type) type {
 }
 
 pub const AbortSignal = struct {
-    signaled: bool,
+    ptr: *const i32,
 
     const Opaque = Internal;
 };
