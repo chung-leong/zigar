@@ -76,6 +76,12 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                     .has_object = has_object,
                     .has_slot = has_slot,
                     .has_pointer = td.hasPointer(),
+                    .has_options = inline for (st.fields) |field| {
+                        const field_td = tdb.get(field.type);
+                        if (field_td.isOptional()) {
+                            break true;
+                        }
+                    } else false,
                     .is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion,
                 },
             } else if (comptime td.isSlice()) .{
@@ -95,6 +101,9 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                     .is_packed = st.layout == .@"packed",
                     .is_tuple = st.is_tuple,
                     .is_iterator = td.isIterator(),
+                    .is_allocator = td.isAllocator(),
+                    .is_promise = td.isPromise(),
+                    .is_abort_signal = td.isAbortSignal(),
                 },
             };
         },
@@ -180,6 +189,29 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
     };
 }
 
+pub fn getStructureLength(comptime tdb: anytype, comptime td: TypeData) ?usize {
+    return switch (@typeInfo(td.Type)) {
+        .Array => |ar| ar.len,
+        .Vector => |ve| ve.len,
+        .Struct => |st| switch (td.isArguments()) {
+            true => comptime req_arg_count: {
+                var len = 0;
+                for (st.fields, 0..) |field, index| {
+                    if (index == 0 or tdb.get(field.type).isOptional()) {
+                        len += 0;
+                    } else {
+                        len += 1;
+                    }
+                }
+                break :req_arg_count len;
+            },
+            false => null,
+        },
+        .Fn => getStructureLength(tdb, tdb.get(types.ArgumentStruct(td.Type))),
+        else => null,
+    };
+}
+
 pub fn getMemberType(comptime _: anytype, comptime td: TypeData, comptime is_comptime: bool) types.MemberType {
     return switch (td.isSupported()) {
         false => .unsupported,
@@ -222,7 +254,7 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
             .name = td.getName(),
             .type = getStructureType(ctx.tdb, td),
             .flags = getStructureFlags(ctx.tdb, td),
-            .length = td.getLength(),
+            .length = getStructureLength(ctx.tdb, td),
             .byte_size = td.getByteSize(),
             .alignment = td.getAlignment(),
         };
@@ -513,7 +545,7 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
         .structure = try getStructure(ctx, arg_td.Type),
     }, false);
     // store thunk as instance template
-    const thunk = thunk_zig.createThunk(ctx.host, FT);
+    const thunk = thunk_zig.createThunk(FT);
     const thunk_memory = Memory.from(thunk, false);
     const thunk_dv = try ctx.host.captureView(thunk_memory);
     const instance_template = try ctx.host.createTemplate(thunk_dv);

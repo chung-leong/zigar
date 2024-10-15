@@ -1,40 +1,25 @@
 import { mixin } from '../environment.js';
 import { Exit, ZigError } from '../errors.js';
-import { ATTRIBUTES, MEMORY, VISIT } from '../symbols.js';
+import { ATTRIBUTES, CONTEXT, MEMORY, VISIT } from '../symbols.js';
 
 export default mixin({
-  context: undefined,
-  contextStack: [],
-
-  startContext() {
-    if (this.context) {
-      this.contextStack.push(this.context);
-    }
-    this.context = new CallContext();
-  },
-  endContext() {
-    this.context = this.contextStack.pop();
-  },
-  createOutboundCallers(thunk, ArgStruct) {
-    const invoke = (argStruct) => {
-      const thunkAddr = this.getViewAddress(thunk[MEMORY]);
-      const funcAddr = this.getViewAddress(self[MEMORY]);
-      this.invokeThunk(thunkAddr, funcAddr, argStruct);
-    };
+  createOutboundCaller(thunk, ArgStruct) {
+    const thisEnv = this;
     const self = function (...args) {
-      const argStruct = new ArgStruct(args, self.name, 0);
-      invoke(argStruct);
-      return argStruct.retval;
+      try {
+        const argStruct = new ArgStruct(args);
+        const thunkAddr = thisEnv.getViewAddress(thunk[MEMORY]);
+        const funcAddr = thisEnv.getViewAddress(self[MEMORY]);
+        thisEnv.invokeThunk(thunkAddr, funcAddr, argStruct);
+        return argStruct.retval;
+      } catch (err) {
+        if ('fnName' in err) {
+          err.fnName = self.name;
+        }
+        throw err;
+      }
     };
-    const method = function(...args) {
-      const argStruct = new ArgStruct([ this, ...args ], self.name, 1);
-      invoke(argStruct);
-      return argStruct.retval;
-    };
-    const binary = function(dv) {
-      invoke(ArgStruct(dv));
-    };
-    return { self, method, binary };
+    return self;
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
@@ -54,17 +39,17 @@ export default mixin({
     },
     invokeThunkNow(thunkAddress, fnAddress, args) {
       try {
-        this.startContext();
+        const context = args[CONTEXT];
         const hasPointers = VISIT in args;
         if (hasPointers) {
-          this.updatePointerAddresses(args);
+          this.updatePointerAddresses(context, args);
         }
         // return address of shadow for argumnet struct
-        const argAddress = this.getShadowAddress(args);
+        const argAddress = this.getShadowAddress(context, args);
         const attrs = args[ATTRIBUTES];
         // get address of attributes if function variadic
-        const attrAddress = (attrs) ? this.getShadowAddress(attrs) : 0;
-        this.updateShadows();
+        const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0;
+        this.updateShadows(context);
         const success = (attrs)
         ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
         : this.runThunk(thunkAddress, fnAddress, argAddress);
@@ -72,16 +57,12 @@ export default mixin({
           throw new ZigError();
         }
         // create objects that pointers point to
-        this.updateShadowTargets();
+        this.updateShadowTargets(context);
         if (hasPointers) {
-          this.updatePointerTargets(args);
+          this.updatePointerTargets(context, args);
         }
-        this.releaseShadows();
-        // restore the previous context if there's one
-        this.endContext();
-        if (!this.context) {
-          this.flushConsole?.();
-        }
+        this.releaseShadows(context);
+        this.flushConsole?.();
         return args.retval;
       } catch (err) {
         // do nothing when exit code is 0
@@ -97,14 +78,13 @@ export default mixin({
     },
 
     invokeThunk(thunkAddress, fnAddress, args) {
-      // create an object where information concerning pointers can be stored
-      this.startContext();
-      const hasPointers = VISIT in args;
+      const context = args[CONTEXT];
       const attrs = args[ATTRIBUTES];
+      const hasPointers = VISIT in args;
       if (hasPointers) {
         // copy addresses of garbage-collectible objects into memory
-        this.updatePointerAddresses(args);
-        this.updateShadows();
+        this.updatePointerAddresses(context, args);
+        this.updateShadows(context);
       }
       const success = (attrs)
       ? this.runVariadicThunk(thunkAddress, fnAddress, args[MEMORY], attrs[MEMORY])
@@ -114,23 +94,12 @@ export default mixin({
       }
       if (hasPointers) {
         // create objects that pointers point to
-        this.updateShadowTargets();
-        this.updatePointerTargets(args);
-        this.releaseShadows();
+        this.updateShadowTargets(context);
+        this.updatePointerTargets(context, args);
+        this.releaseShadows(context);
       }
-      // restore the previous context if there's one
-      this.endContext();
-      if (!this.context) {
-        this.flushConsole?.();
-      }
+      this.flushConsole?.();
     },
     /* c8 ignore next */
   } : undefined),
 });
-
-export class CallContext {
-  pointerProcessed = new Map();
-  memoryList = [];
-  shadowMap = null;
-  call = 0;
-}

@@ -14,8 +14,6 @@ const ActionResult = thunk_js.ActionResult;
 
 const Call = *anyopaque;
 
-extern fn _allocateHostMemory(len: usize, alignment: u16) ?Value;
-extern fn _freeHostMemory(bytes: [*]u8, len: usize, alignment: u16) void;
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
 extern fn _castView(bytes: ?[*]u8, len: usize, copy: bool, structure: Value) ?Value;
@@ -155,24 +153,6 @@ pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     std.process.abort();
 }
 
-pub fn allocateMemory(size: usize, alignment: u16) !Memory {
-    if (_allocateHostMemory(size, alignment)) |dv| {
-        const address = _getViewAddress(dv);
-        return .{
-            .bytes = @ptrFromInt(address),
-            .len = size,
-        };
-    } else {
-        return Error.UnableToAllocateMemory;
-    }
-}
-
-pub fn freeMemory(memory: Memory) !void {
-    if (memory.bytes) |bytes| {
-        _freeHostMemory(bytes, memory.len, memory.attributes.alignment);
-    }
-}
-
 pub fn captureString(memory: Memory) !Value {
     return _captureString(memory.bytes, memory.len) orelse
         Error.UnableToCreateString;
@@ -280,7 +260,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: usize, wait: bool) ActionResult {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, wait: bool) ActionResult {
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {

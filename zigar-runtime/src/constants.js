@@ -34,6 +34,10 @@ export const StructFlag = {
   IsPacked:         0x0020,
   IsIterator:       0x0040,
   IsTuple:          0x0080,
+
+  IsAllocator:      0x0100,
+  IsPromise:        0x0200,
+  IsAbortSignal:    0x0400,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,
@@ -67,7 +71,8 @@ export const OpaqueFlag = {
   IsIterator:       0x0010,
 };
 export const ArgStructFlag = {
-  IsThrowing:       0x0010,
+  HasOptions:       0x0010,
+  IsThrowing:       0x0020,
 };
 
 export const MemberType = {

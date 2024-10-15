@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { MEMORY, THROWING } from '../symbols.js';
+import { MEMORY, THROWING, VISIT } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -41,21 +41,24 @@ export default mixin({
       this.jsFunctionCallerMap.delete(id);
     }
   },
-  createInboundCallers(fn, ArgStruct) {
-    const self = function(...args) {
-      return fn(...args);
-    };
-    const method = function(...args) {
-      return fn.call(this, ...args);
-    };
-    const binary = (dv, asyncCallHandle) => {
+  createInboundCaller(fn, ArgStruct) {
+    const handler = (dv, asyncCallHandle) => {
       let result = CallResult.OK;
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
+        const hasPointers = VISIT in argStruct;
+        if (hasPointers) {
+          this.updatePointerTargets(null, argStruct);
+        }
         const args = [];
         for (let i = 0; i < argStruct.length; i++) {
-          args.push(argStruct[i]);
+          // error unions will throw on access, in which case we pass the error as the argument
+          try {
+            args.push(argStruct[i]);
+          } catch (err) {
+            args.push(err);
+          }
         }
         const onError = (err) => {
           if (ArgStruct[THROWING] && err instanceof Error) {
@@ -69,11 +72,17 @@ export default mixin({
           console.error(err);
           result = CallResult.Failure;
         };
+        const onReturn = (value) => {
+          argStruct.retval = value
+          if (hasPointers) {
+            this.updatePointerAddresses(null, argStruct);
+          }
+        };
         try {
           const retval = fn(...args);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
             if (asyncCallHandle) {
-              retval.then(value => argStruct.retval = value, onError).then(() => {
+              retval.then(onReturn, onError).then(() => {
                 this.finalizeAsyncCall(asyncCallHandle, result);
               });
               awaiting = true;
@@ -82,12 +91,13 @@ export default mixin({
               result = CallResult.Deadlock;
             }
           } else {
-            argStruct.retval = retval;
+            onReturn(retval);
           }
         } catch (err) {
           onError(err);
         }
       } catch(err) {
+        console.error(err);
         result = CallResult.Failure;
       }
       if (asyncCallHandle && !awaiting) {
@@ -96,12 +106,26 @@ export default mixin({
       return result;
     };
     const funcId = this.getFunctionId(fn);
-    this.jsFunctionCallerMap.set(funcId, binary);
-    return { self, method, binary };
+    this.jsFunctionCallerMap.set(funcId, handler);
+    return function(...args) {
+      return fn(...args);
+    };
+  },
+  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    if (action === Action.Call) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      return this.runFunction(id, dv, futexHandle);
+    } else if (action === Action.Release) {
+      return this.releaseFunction(id);
+    }
   },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
-    return caller?.(dv, futexHandle) ?? CallResult.Failure;
+    if (!caller) {
+      return CallResult.Failure;
+    }
+    const result = caller(dv, futexHandle);
+    return result;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -121,29 +145,15 @@ export default mixin({
       destroyJsThunk: { argType: 'ii', returnType: 'i' },
       finalizeAsyncCall: { argType: 'ii' },
     },
-    performJsAction(action, id, argAddress, argSize) {
-      if (action === Action.Call) {
-        const dv = this.obtainFixedView(argAddress, argSize);
-        return this.runFunction(id, dv, 0);
-      } else if (action === Action.Release) {
-        return this.releaseFunction(id);
-      }
-    },
     queueJsAction(action, id, argAddress, argSize, futexHandle) {
       // in the main thread, this method is never called from WASM;
       // the implementation of queueJsAction() in worker.js, call this
       // through postMessage() when it is called the worker's WASM instance
-      if (action === Action.Call) {
-        const dv = this.obtainFixedView(argAddress, argSize);
-        this.runFunction(id, dv, futexHandle);
-      } else if (action === Action.Release) {
-        this.releaseFunction(id);
-      }
+      this.performJsAction(action, id, argAddress, argSize, futexHandle);
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      runFunction: null,
-      releaseFunction: null,
+      performJsAction: null,
     },
     imports: {
       createJsThunk: null,

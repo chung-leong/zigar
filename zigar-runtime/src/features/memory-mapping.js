@@ -2,19 +2,22 @@ import { mixin } from '../environment.js';
 import { AlignmentConflict, InvalidDeallocation, NullPointer } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
-  adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
-  nullAddress,
+  adjustAddress, alignForward, defineProperty, empty, findSortedIndex, isInvalidAddress, isMisaligned,
+  nullAddress, usize,
 } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
+  nextContextId: usize(1),
+  contextMap: new Map(),
+  defaultAllocatorVTable: null,
 
-  getShadowAddress(target, cluster) {
+  getShadowAddress(context, target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
       if (cluster.address === undefined) {
         const shadow = this.createClusterShadow(cluster);
-        cluster.address = this.getViewAddress(shadow[MEMORY]);
+        cluster.address = this.getViewAddress(context, shadow[MEMORY]);
       }
       return adjustAddress(cluster.address, dv.byteOffset - cluster.start);
     } else {
@@ -31,17 +34,17 @@ export default mixin({
     shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
     return this.addShadow(shadow, object, align);
   },
-  addShadow(shadow, object, align) {
-    const shadowMap = this.context.shadowMap ??= new Map();
+  addShadow(context, shadow, object, align) {
+    const shadowMap = context.shadowMap ??= new Map();
     if (process.env.TARGET === 'wasm') {
       defineProperty(shadow, RESTORE, this.defineRestorer(false));
     }
     shadowMap.set(shadow, object);
-    this.registerMemory(shadow[MEMORY], object[MEMORY], align);
+    this.registerMemory(context, shadow[MEMORY], object[MEMORY], align);
     return shadow;
   },
-  removeShadow(dv) {
-    const { shadowMap } = this.context;
+  removeShadow(context, dv) {
+    const { shadowMap } = context;
     if (shadowMap) {
       for (const [ shadow ] of shadowMap) {
         if (shadow[MEMORY] === dv) {
@@ -95,8 +98,8 @@ export default mixin({
     }
     return this.addShadow(shadow, source, 1);
   },
-  updateShadows() {
-    const { shadowMap } = this.context;
+  updateShadows(context) {
+    const { shadowMap } = context;
     if (!shadowMap) {
       return;
     }
@@ -104,8 +107,8 @@ export default mixin({
       shadow[COPY](object);
     }
   },
-  updateShadowTargets() {
-    const { shadowMap } = this.context;
+  updateShadowTargets(context) {
+    const { shadowMap } = context;
     if (!shadowMap) {
       return;
     }
@@ -113,8 +116,8 @@ export default mixin({
       object[COPY](shadow);
     }
   },
-  releaseShadows() {
-    const { shadowMap } = this.context;
+  releaseShadows(context) {
+    const { shadowMap } = context;
     if (!shadowMap) {
       return;
     }
@@ -122,15 +125,15 @@ export default mixin({
       this.freeShadowMemory(shadow[MEMORY]);
     }
   },
-  registerMemory(dv, targetDV = null, targetAlign = undefined) {
-    const { memoryList } = this.context;
+  registerMemory(context, dv, targetDV = null, targetAlign = undefined) {
+    const { memoryList } = context;
     const address = this.getViewAddress(dv);
     const index = findMemoryIndex(memoryList, address);
     memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV, targetAlign });
     return address;
   },
-  unregisterMemory(address) {
-    const { memoryList } = this.context;
+  unregisterMemory(context, address) {
+    const { memoryList } = context;
     const index = findMemoryIndex(memoryList, address);
     const entry = memoryList[index - 1];
     if (entry?.address === address) {
@@ -138,7 +141,7 @@ export default mixin({
       return entry.dv;
     }
   },
-  findMemory(address, count, size) {
+  findMemory(context, address, count, size) {
     if (isInvalidAddress(address)) {
       if (!count) {
         address = 0;
@@ -150,8 +153,8 @@ export default mixin({
     }
     let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)
-    if (this.context) {
-      const { memoryList } = this.context;
+    if (context) {
+      const { memoryList } = context;
       const index = findMemoryIndex(memoryList, address);
       const entry = memoryList[index - 1];
       if (entry?.address === address && entry.len === len) {
@@ -230,38 +233,77 @@ export default mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
+  createDefaultAllocator(structure, context) {
+    const { constructor: Allocator } = structure;
+    let vtable = this.defaultAllocatorVTable;
+    if (!vtable) {
+      // create vtable in fixed memory
+      const ptrStructure = structure.instance.members[1].structure;
+      const { byteSize, align, constructor: VTable } = ptrStructure.instance.members[0].structure;
+      const dv = this.allocateFixedMemory(byteSize, align);
+      vtable = this.defaultAllocatorVTable = VTable(dv);
+      vtable.alloc = (ptr, len, ptrAlign, retAddr) => {
+        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+        const context = this.contextMap.get(contextId);
+        if (context) {
+          return this.allocateHostMemory(context, len, 1 << ptrAlign);
+        } else {
+          return null;
+        }
+      };
+      vtable.resize = () => false;
+      vtable.free = (ptr, buf, ptrAlign, retAddr) => {
+        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+        const context = this.contextMap.get(contextId);
+        if (context) {
+          const address = this.getViewAddress(buf['*'][MEMORY]);
+          const len = buf.length;
+          this.freeHostMemory(context, address, len, 1 << ptrAlign);
+        }
+      };
+    }
+    const contextId = this.nextContextId++;
+    // storing context id in a fake pointer
+    const ptr = this.obtainFixedView(contextId, 0);
+    this.contextMap.set(contextId, context);
+    return new Allocator({ ptr, vtable });
+  },
+  allocateHostMemory(context, len, align) {
+    const dv = this.allocateRelocMemory(len, align);
+    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
+    // for Node, we create another DataView on the same buffer and pretend that it's fixed
+    // memory
+    const shadowDV = (process.env.TARGET === 'wasm')
+    ? this.allocateShadowMemory(len, align)
+    : this.createShadowView(dv);
+    const copier = (process.env.TARGET === 'wasm')
+    ? this.defineCopier(len).value
+    : empty;
+    const constructor = { [ALIGN]: align };
+    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
+    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
+    this.addShadow(context, shadow, object, align);
+    return shadowDV;
+  },
+  freeHostMemory(context, address, len, align) {
+    const shadowDV = this.unregisterMemory(context, address);
+    if (shadowDV) {
+      this.removeShadow(context, shadowDV);
+      this.freeShadowMemory(shadowDV);
+    } else {
+      throw new InvalidDeallocation(address);
+    }
+  },
+
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       allocateExternMemory: { argType: 'iii', returnType: 'i' },
       freeExternMemory: { argType: 'iiii' },
     },
     exports: {
-      allocateHostMemory: { argType: 'ii', returnType: 'v' },
-      freeHostMemory: { argType: 'iii' },
       getViewAddress: { argType: 'v', returnType: 'i' },
     },
 
-    allocateHostMemory(len, align) {
-      // allocate memory in both JavaScript and WASM space
-      const constructor = { [ALIGN]: align };
-      const { value: copier } = this.defineCopier(len);
-      const dv = this.allocateRelocMemory(len, align);
-      const shadowDV = this.allocateShadowMemory(len, align);
-      // create a shadow for the relocatable memory
-      const object = { constructor, [MEMORY]: dv, [COPY]: copier };
-      const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
-      this.addShadow(shadow, object, align);
-      return shadowDV;
-    },
-    freeHostMemory(address, len, align) {
-      const shadowDV = this.unregisterMemory(address);
-      if (shadowDV) {
-        this.removeShadow(shadowDV);
-        this.freeShadowMemory(shadowDV);
-      } else {
-        throw new InvalidDeallocation(address);
-      }
-    },
     allocateShadowMemory(len, align) {
       return this.allocateFixedMemory(len, align, MemoryType.Scratch);
     },
@@ -272,7 +314,7 @@ export default mixin({
       const { buffer } = this.memory;
       return this.obtainView(buffer, address, len);
     },
-    getTargetAddress(target, cluster) {
+    getTargetAddress(context, target, cluster) {
       const dv = target[MEMORY];
       if (dv[FIXED]) {
         return this.getViewAddress(dv);
@@ -327,23 +369,9 @@ export default mixin({
       obtainExternBuffer: null,
     },
     exports: {
-      allocateHostMemory: null,
-      freeHostMemory: null,
       getViewAddress: null,
     },
 
-    allocateHostMemory(len, align) {
-      const dv = this.allocateRelocMemory(len, align);
-      this.registerMemory(dv);
-      return dv;
-    },
-    freeHostMemory(address, len, align) {
-      // no freeing actually occurs--memory will await garbage collection
-      const dv = this.unregisterMemory(address);
-      if (!dv) {
-        throw new InvalidDeallocation(address);
-      }
-    },
     allocateShadowMemory(len, align) {
       // Node can read into JavaScript memory space so we can keep shadows there
       return this.allocateRelocMemory(len, align);
@@ -351,12 +379,20 @@ export default mixin({
     freeShadowMemory(dv) {
       // nothing needs to happen
     },
+    createShadowView(dv) {
+      // create a fake fixed view for bypassing pointer check
+      const address = this.getViewAddress(dv);
+      const len = dv.byteLength;
+      const shadowDV = new DataView(dv.buffer, dv.byteOffset, len);
+      shadowDV[FIXED] = { address, len };
+      return shadowDV;
+    },
     obtainExternView(address, len) {
       const buffer = this.obtainExternBuffer(address, len);
       buffer[FIXED] = { address, len };
       return this.obtainView(buffer, 0, len);
     },
-    getTargetAddress(target, cluster) {
+    getTargetAddress(context, target, cluster) {
       const dv = target[MEMORY];
       if (cluster) {
         // pointer is pointing to buffer with overlapping views
@@ -384,7 +420,7 @@ export default mixin({
         const align = target.constructor[ALIGN];
         const address = this.getViewAddress(dv);
         if (!isMisaligned(address, align)) {
-          this.registerMemory(dv);
+          this.registerMemory(context, dv);
           return address;
         }
       }

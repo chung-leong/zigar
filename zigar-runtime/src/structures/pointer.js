@@ -45,7 +45,7 @@ export default mixin({
         byteSize: addressSize
       },
     }) : {};
-    const updateTarget = function(all = true, active = true) {
+    const updateTarget = function(context, all = true, active = true) {
       if (all || this[MEMORY][FIXED]) {
         if (active) {
           const Target = constructor.child;
@@ -56,7 +56,7 @@ export default mixin({
             ? thisEnv.findSentinel(address, Target[SENTINEL].bytes) + 1
             : 1;
           if (address !== this[LAST_ADDRESS] || length !== this[LAST_LENGTH]) {
-            const dv = thisEnv.findMemory(address, length, Target[SIZE]);
+            const dv = thisEnv.findMemory(context, address, length, Target[SIZE]);
             const newTarget = (dv) ? Target.call(ENVIRONMENT, dv) : null;
             this[SLOTS][0] = newTarget;
             this[LAST_ADDRESS] = address;
@@ -84,7 +84,7 @@ export default mixin({
     : null;
     const getTargetObject = function() {
       const pointer = this[POINTER] ?? this;
-      const target = updateTarget.call(pointer, false);
+      const target = updateTarget.call(pointer, null, false);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;

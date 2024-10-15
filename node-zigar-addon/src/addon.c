@@ -47,8 +47,6 @@ void finalize_external_buffer(napi_env env,
 }
 
 enum {
-    allocateHostMemory,
-    freeHostMemory,
     captureView,
     castView,
     readSlot,
@@ -60,8 +58,7 @@ enum {
     endStructure,
     createTemplate,
     writeToConsole,
-    runFunction,
-    releaseFunction,
+    performJsAction,
 };
 
 bool call_js_function(module_data* md,
@@ -75,44 +72,6 @@ bool call_js_function(module_data* md,
     return napi_get_reference_value(env, md->js_fns[index], &fn) == napi_ok
         && napi_get_null(env, &null) == napi_ok
         && napi_call_function(env, null, fn, argc, argv, dest) == napi_ok;
-}
-
-result allocate_host_memory(module_data* md,
-                            size_t len,
-                            uint16_t align,
-                            memory* dest) {
-    napi_env env = md->env;
-    napi_value args[2];
-    napi_value result;
-    void* data;
-    size_t actual_len;
-    if (napi_create_uint32(env, len, &args[0]) == napi_ok
-     && napi_create_uint32(env, align, &args[1]) == napi_ok
-     && call_js_function(md, allocateHostMemory, 2, args, &result)
-     && napi_get_dataview_info(env, result, &actual_len, &data, NULL, NULL) == napi_ok
-     && actual_len == len) {
-        dest->bytes = (uint8_t*) data;
-        dest->len = len;
-        dest->attributes.is_const = false;
-        dest->attributes.is_comptime = false;
-        dest->attributes.align = align;
-        return OK;
-    }
-    return FAILURE;
-}
-
-result free_host_memory(module_data* md,
-                        const memory* mem) {
-    napi_env env = md->env;
-    napi_value args[3];
-    napi_value result;
-    if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
-     && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
-     && napi_create_uint32(env, mem->attributes.align, &args[2]) == napi_ok
-     && call_js_function(md, freeHostMemory, 3, args, &result)) {
-        return OK;
-    }
-    return FAILURE;
 }
 
 result capture_string(module_data* md,
@@ -313,26 +272,18 @@ void js_queue_callback(napi_env, napi_value, void*, void*);
 result enable_multithread(module_data* md) {
     napi_env env = md->env;
     napi_value resource_name;
-    napi_value run_fn;
-    if (napi_get_reference_value(env, md->js_fns[runFunction], &run_fn) != napi_ok
-     || napi_create_string_utf8(env, "runFn", 5, &resource_name) != napi_ok
-     || napi_create_threadsafe_function(env, run_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_run_fn) != napi_ok) {
-        return FAILURE;
-    }
-    napi_value release_fn;
-    if (napi_get_reference_value(env, md->js_fns[releaseFunction], &release_fn) != napi_ok
-     || napi_create_string_utf8(env, "releaseFn", 9, &resource_name) != napi_ok
-     || napi_create_threadsafe_function(env, release_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_release_fn) != napi_ok) {
+    napi_value perform_fn;
+    if (napi_get_reference_value(env, md->js_fns[performJsAction], &perform_fn) != napi_ok
+     || napi_create_string_utf8(env, "perform", 7, &resource_name) != napi_ok
+     || napi_create_threadsafe_function(env, perform_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
         return FAILURE;
     }
     return OK;
 }
 
 result disable_multithread(module_data* md) {
-    napi_release_threadsafe_function(md->ts_run_fn, napi_tsfn_release);
-    md->ts_run_fn = NULL;
-    napi_release_threadsafe_function(md->ts_release_fn, napi_tsfn_release);
-    md->ts_release_fn = NULL;
+    napi_release_threadsafe_function(md->ts_fn, napi_tsfn_release);
+    md->ts_fn = NULL;
     return OK;
 }
 
@@ -683,27 +634,15 @@ napi_value finalize_async_call(napi_env env,
     module_data* md;
     size_t argc = 2;
     napi_value args[2];
-    size_t action_address;
+    size_t futex_handle;
     uint32_t result;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &action_address) != napi_ok) {
-        return throw_error(env, "Call address must be a number");
+     || napi_get_value_uintptr(env, args[0], &futex_handle) != napi_ok) {
+        return throw_error(env, "Futex handle must be a number");
     } else if (napi_get_value_uint32(env, args[1], &result) != napi_ok) {
         return throw_error(env, "Result must be a number");
     }
-    js_action* action = (js_action*) action_address;
-    if (action->retval_size > 0) {
-        napi_value buffer;
-        size_t buffer_size;
-        char* dest;
-        char* src = (char*) action->arg_ptr;
-        if (napi_get_reference_value(env, action->arg_buf, &buffer) == napi_ok
-         && napi_reference_unref(env, action->arg_buf, NULL) == napi_ok
-         && napi_get_arraybuffer_info(env, buffer, (void**) &dest, &buffer_size) == napi_ok) {
-            memcpy(src, dest, action->retval_size);
-        }
-    }
-    if (md->mod->imports->wake_caller(action->futex_handle, result) != OK) {
+    if (md->mod->imports->wake_caller(futex_handle, result) != OK) {
         return throw_error(env, "Unable to wake caller");
     }
     return NULL;
@@ -714,31 +653,16 @@ result perform_js_action(module_data* md,
     napi_env env = md->env;
     napi_value buffer;
     napi_value recv;
-    napi_value args[3];
+    napi_value args[5];
     napi_value result;
     uint32_t status;
-    if (action->type == CALL) {
-        char* dest;
-        char* src = (char*) action->arg_ptr;
-        size_t as = action->arg_size;
-        size_t rs = action->retval_size;
-        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
-         && napi_create_arraybuffer(env, as, (void**) &dest, &buffer) == napi_ok
-         && napi_create_dataview(env, as, buffer, 0, &args[1]) == napi_ok
-         && napi_create_uintptr(env, 0, &args[2]) == napi_ok
-         && napi_get_null(env, &recv) == napi_ok) {
-            memcpy(dest + rs, src + rs, as - rs);
-            if (call_js_function(md, runFunction, 3, args, &result)
-             && napi_get_value_uint32(env, result, &status) == napi_ok) {
-                if (status == OK) {
-                    memcpy(src, dest, rs);
-                }
-                return status;
-            }
-        }
-    } else if (action->type == RELEASE) {
-        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
-         && call_js_function(md, releaseFunction, 1, args, &result)
+    if (napi_create_uint32(env, action->type, &args[0]) == napi_ok
+     && napi_create_uint32(env, action->fn_id, &args[1]) == napi_ok
+     && napi_create_uintptr(env, action->arg_address, &args[2]) == napi_ok
+     && napi_create_uint32(env, action->arg_size, &args[3]) == napi_ok
+     && napi_create_uint32(env, action->futex_handle, &args[4]) == napi_ok
+     && napi_get_null(env, &recv) == napi_ok) {
+        if (call_js_function(md, performJsAction, 5, args, &result)
          && napi_get_value_uint32(env, result, &status) == napi_ok) {
             return status;
         }
@@ -748,14 +672,8 @@ result perform_js_action(module_data* md,
 
 result queue_js_action(module_data* md,
                        js_action* action) {
-    napi_threadsafe_function ts_fn = NULL;
-    if (action->type == CALL) {
-        ts_fn = md->ts_run_fn;
-    } else if (action->type == RELEASE) {
-        ts_fn = md->ts_release_fn;
-    }
-    if (ts_fn) {
-        if (napi_call_threadsafe_function(ts_fn, action, napi_tsfn_nonblocking) == napi_ok) {
+    if (md->ts_fn) {
+        if (napi_call_threadsafe_function(md->ts_fn, action, napi_tsfn_nonblocking) == napi_ok) {
             return OK;
         } else {
             return FAILURE;
@@ -771,41 +689,11 @@ void js_queue_callback(napi_env env,
                        void* data) {
     module_data* md = (module_data*) context;
     js_action* action = (js_action*) data;
-    napi_value buffer;
-    napi_value recv;
-    napi_value args[3];
-    napi_value result;
-    if (action->type == CALL) {
-        char* dest;
-        char* src = (char*) action->arg_ptr;
-        size_t as = action->arg_size;
-        size_t rs = action->retval_size;
-        uintptr_t action_address = (action->futex_handle) ? (size_t) action : 0;
-        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok
-         && napi_create_arraybuffer(env, action->arg_size, (void**) &dest, &buffer) == napi_ok
-         && napi_create_dataview(env, action->arg_size, buffer, 0, &args[1]) == napi_ok
-         && napi_create_uintptr(env, action_address, &args[2]) == napi_ok
-         && napi_get_null(env, &recv) == napi_ok) {
-            memcpy(dest + rs, src + rs, as - rs);
-            if (rs > 0) {
-                napi_create_reference(env, buffer, 1, &action->arg_buf);
-            }
-            if (napi_call_function(env, recv, js_callback, 3, args, &result) == napi_ok) {
-                // JS code will wake the caller
-                return;
-            } else {
-                napi_reference_unref(env, action->arg_buf, NULL);
-            }
-        }
+    uint32_t status = perform_js_action(md, action);
+    if (status != OK) {
         if (action->futex_handle) {
             // need to wake caller since JS code won't do it
-            md->mod->imports->wake_caller(action->futex_handle, FAILURE);
-        }
-    } else if (action->type == RELEASE) {
-        if (napi_create_uint32(env, action->fn_id, &args[0]) == napi_ok) {
-            if (napi_call_function(env, recv, js_callback, 1, args, &result) == napi_ok) {
-                return;
-            }
+            md->mod->imports->wake_caller(action->futex_handle, status);
         }
     }
 }
@@ -848,8 +736,6 @@ struct {
     const char* name;
     int index;
 } imports[IMPORT_COUNT] = {
-    { "allocateHostMemory", allocateHostMemory },
-    { "freeHostMemory", freeHostMemory },
     { "captureView", captureView },
     { "castView", castView },
     { "readSlot", readSlot },
@@ -861,8 +747,7 @@ struct {
     { "endStructure", endStructure },
     { "createTemplate", createTemplate },
     { "writeToConsole", writeToConsole },
-    { "runFunction", runFunction },
-    { "releaseFunction", releaseFunction }
+    { "performJsAction", performJsAction },
 };
 
 bool export_functions(module_data* md,
@@ -954,8 +839,6 @@ napi_value load_module(napi_env env,
 
     // attach exports to module
     export_table* exports = mod->exports;
-    exports->allocate_host_memory = allocate_host_memory;
-    exports->free_host_memory = free_host_memory;
     exports->capture_string = capture_string;
     exports->capture_view = capture_view;
     exports->cast_view = cast_view;

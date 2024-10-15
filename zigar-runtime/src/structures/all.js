@@ -11,7 +11,7 @@ import {
   RESTORE,
   SETTERS, SHAPE, SIZE, SLOTS, TYPE,
   TYPED_ARRAY,
-  VARIANTS, VISIT
+  VISIT
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -95,7 +95,7 @@ export default mixin({
         staticDescriptors[name] = defineValue(fn);
         // provide a name if one isn't assigned yet
         if (!fn.name) {
-          defineProperty(fn, 'name', { value: name });
+          defineProperty(fn, 'name', defineValue(name));
         }
         // see if it's a getter or setter
         const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
@@ -106,7 +106,11 @@ export default mixin({
         }
         // see if it's a method
         if (member.flags & MemberFlag.IsMethod) {
-          const { method } = fn[VARIANTS];
+          const method = (...args) => fn([this, ...args]);
+          defineProperties(method, {
+            name: defineValue(name),
+            length: defineValue(fn.length - 1),
+          });
           descriptors[name] = defineValue(method);
           if (accessorType && method.length === argRequired) {
             const descriptor = descriptors[propName] ??= {};

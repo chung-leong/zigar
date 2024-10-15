@@ -21,7 +21,7 @@
 #define MISSING(T)                      ((T) -1)
 
 #define EXPORT_COUNT    15
-#define IMPORT_COUNT    15
+#define IMPORT_COUNT    12
 
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
@@ -135,8 +135,7 @@ typedef struct {
     napi_env env;
     napi_ref js_env;
     napi_ref js_fns[IMPORT_COUNT];
-    napi_threadsafe_function ts_run_fn;
-    napi_threadsafe_function ts_release_fn;
+    napi_threadsafe_function ts_fn;
 } module_data;
 
 typedef struct {
@@ -146,16 +145,12 @@ typedef struct {
 typedef struct {
     action type;
     size_t fn_id;
-    void* arg_ptr;
-    napi_ref arg_buf;
+    size_t arg_address;
     size_t arg_size;
-    size_t retval_size;
     size_t futex_handle;
 } js_action;
 
 struct export_table {
-    result (__cdecl *allocate_host_memory)(module_data*, size_t, uint16_t, memory*);
-    result (__cdecl *free_host_memory)(module_data*, const memory*);
     result (__cdecl *capture_string)(module_data*, const memory*, napi_value*);
     result (__cdecl *capture_view)(module_data*, const memory*, napi_value*);
     result (__cdecl *cast_view)(module_data*, const memory*, napi_value, napi_value*);

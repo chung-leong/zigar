@@ -30,11 +30,12 @@ export const CONST_PROXY = Symbol('constProxy');
 export const ENVIRONMENT = Symbol('environment');
 export const ATTRIBUTES = Symbol('attributes');
 export const PRIMITIVE = Symbol('primitive');
-export const VARIANTS = Symbol('variants');
 export const GETTERS = Symbol('getters');
 export const SETTERS = Symbol('setters');
 export const TYPED_ARRAY = Symbol('typedArray');
 export const THROWING = Symbol('throwing');
+export const PROMISE = Symbol('promise');
+export const CONTEXT = Symbol('context');
 
 export const UPDATE = Symbol('update');
 export const RESTORE = Symbol('restore');

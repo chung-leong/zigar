@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { NoCastingToFunction, NoInitializer, TypeMismatch } from '../errors.js';
-import { ENVIRONMENT, MEMORY, VARIANTS } from '../symbols.js';
+import { ENVIRONMENT, MEMORY } from '../symbols.js';
 import { defineProperties, defineValue, getSelf, ObjectCache } from '../utils.js';
 
 export default mixin({
@@ -38,21 +38,12 @@ export default mixin({
         return existing;
       }
       const argCount = ArgStruct.prototype.length;
-      const { self, method, binary } = (creating)
-      ? thisEnv.createInboundCallers(arg, ArgStruct)
-      : thisEnv.createOutboundCallers(thunk, ArgStruct);
+      const self = (creating)
+      ? thisEnv.createInboundCaller(arg, ArgStruct)
+      : thisEnv.createOutboundCaller(thunk, ArgStruct);
       defineProperties(self, {
         length: defineValue(argCount),
-        [VARIANTS]: defineValue({ method, binary }),
         name: defineValue(''),
-      });
-      defineProperties(method, {
-        length: defineValue(argCount - 1),
-        name: {
-          get() {
-            return self.name;
-          },
-        }
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);

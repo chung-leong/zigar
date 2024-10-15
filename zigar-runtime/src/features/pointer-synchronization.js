@@ -3,7 +3,7 @@ import { ADDRESS, FIXED, LENGTH, MEMORY, POINTER, SLOTS, UPDATE, VISIT } from '.
 import { findSortedIndex } from '../utils.js';
 
 export default mixin({
-  updatePointerAddresses(args) {
+  updatePointerAddresses(context, args) {
     // first, collect all the pointers
     const pointerMap = new Map();
     const bufferMap = new Map();
@@ -53,7 +53,8 @@ export default mixin({
     for (const [ pointer, target ] of pointerMap) {
       if (!pointer[MEMORY][FIXED]) {
         const cluster = clusterMap.get(target);
-        const address = this.getTargetAddress(target, cluster) ?? this.getShadowAddress(target, cluster);
+        const address = this.getTargetAddress(context, target, cluster)
+                     ?? this.getShadowAddress(context, target, cluster);
         // update the pointer
         pointer[ADDRESS] = address;
         if (LENGTH in pointer) {
@@ -62,7 +63,7 @@ export default mixin({
       }
     }
   },
-  updatePointerTargets(args) {
+  updatePointerTargets(context, args) {
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
@@ -72,7 +73,7 @@ export default mixin({
         const writable = !pointer.constructor.const;
         const currentTarget = pointer[SLOTS][0];
         const newTarget = (!currentTarget || isMutable(this))
-        ? pointer[UPDATE](true, isActive(this))
+        ? pointer[UPDATE](context, true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target (which could have been altered)
         currentTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });

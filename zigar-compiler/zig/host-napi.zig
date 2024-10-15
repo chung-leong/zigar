@@ -35,10 +35,8 @@ const MemberC = extern struct {
 const Action = extern struct {
     type: thunk_js.ActionType,
     fn_id: usize,
-    arg_ptr: ?*anyopaque = null,
-    arg_buf: ?*anyopaque = null,
+    arg_address: usize = 0,
     arg_size: usize = 0,
-    retval_size: usize = 0,
     futex_handle: usize = 0,
 };
 
@@ -57,22 +55,6 @@ var imports: Imports = undefined;
 
 fn getModuleData() !*ModuleData {
     return module_data orelse Error.NotInMainThread;
-}
-
-pub fn allocateMemory(size: usize, alignment: u16) !Memory {
-    const md = try getModuleData();
-    var memory: Memory = undefined;
-    if (imports.allocate_host_memory(md, size, alignment, &memory) != .ok) {
-        return Error.UnableToAllocateMemory;
-    }
-    return memory;
-}
-
-pub fn freeMemory(memory: Memory) !void {
-    const md = try getModuleData();
-    if (imports.free_host_memory(md, &memory) != .ok) {
-        return Error.UnableToFreeMemory;
-    }
 }
 
 pub fn captureString(memory: Memory) !Value {
@@ -220,13 +202,12 @@ pub fn writeBytesToConsole(bytes: [*]const u8, len: usize) !void {
     try writeToConsole(dv);
 }
 
-pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, retval_size: usize, wait: bool) thunk_js.ActionResult {
+pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, wait: bool) thunk_js.ActionResult {
     var action: Action = .{
         .type = .call,
         .fn_id = fn_id,
-        .arg_ptr = arg_ptr,
+        .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
-        .retval_size = retval_size,
     };
     const md: *ModuleData = @ptrCast(ptr);
     if (module_data == md) {
@@ -263,7 +244,7 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     } else {
         if (imports.queue_js_action(md, &action) != .ok) {
             return Error.MultithreadingDisabled;
-        };
+        }
     }
 }
 
@@ -406,8 +387,6 @@ fn wakeCaller(futex_handle: usize, value: u32) callconv(.C) Result {
 
 // pointer table that's filled on the C side
 const Imports = extern struct {
-    allocate_host_memory: *const fn (*ModuleData, usize, u16, *Memory) callconv(.C) Result,
-    free_host_memory: *const fn (*ModuleData, *const Memory) callconv(.C) Result,
     capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
     capture_view: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
     cast_view: *const fn (*ModuleData, *const Memory, Value, *Value) callconv(.C) Result,

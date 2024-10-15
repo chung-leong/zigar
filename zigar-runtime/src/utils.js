@@ -157,6 +157,16 @@ export const alignForward = (process.env.BITS === '64')
   /* c8 ignore next */
 : undefined;
 
+export const usize = (process.env.BITS === '64')
+? function(arg) {
+    return BigInt(arg);
+  }
+: (process.env.BITS === '32')
+? function(arg) {
+    return Number(arg);
+  }
+: undefined;
+
 export const nullAddress = (process.env.BITS === '64') ? 0n : 0;
 
 export const isInvalidAddress = (process.env.BITS === '64')
@@ -265,6 +275,8 @@ export function always() {
 export function never() {
   return false;
 }
+
+export function empty() {}
 
 export class ObjectCache {
   map = new WeakMap();

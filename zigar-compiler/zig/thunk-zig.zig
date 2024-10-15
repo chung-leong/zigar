@@ -21,7 +21,7 @@ test "ThunkType" {
     try expect(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
 }
 
-pub fn createThunk(comptime host: type, comptime FT: type) ThunkType(FT) {
+pub fn createThunk(comptime FT: type) ThunkType(FT) {
     const f = @typeInfo(FT).Fn;
     const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
@@ -30,26 +30,11 @@ pub fn createThunk(comptime host: type, comptime FT: type) ThunkType(FT) {
             const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
             var args: std.meta.ArgsTuple(FT) = undefined;
             const fields = @typeInfo(@TypeOf(args)).Struct.fields;
-            comptime var index = 0;
-            inline for (fields, 0..) |field, i| {
-                if (field.type == std.mem.Allocator) {
-                    args[i] = createAllocator(host);
-                } else {
-                    const name = std.fmt.comptimePrint("{d}", .{index});
-                    // get the argument only if it isn't empty
-                    if (comptime @sizeOf(@TypeOf(@field(arg_struct.*, name))) > 0) {
-                        args[i] = @field(arg_struct.*, name);
-                    }
-                    index += 1;
-                }
+            inline for (fields) |field| {
+                @field(args, field.name) = @field(arg_struct, field.name);
             }
-            // never inline the function so its name would show up in the trace (unless it's marked inline)
-            const modifier = switch (f.calling_convention) {
-                .Inline => .auto,
-                else => .never_inline,
-            };
             const function: *const FT = @ptrCast(fn_ptr);
-            const retval = @call(modifier, function, args);
+            const retval = @call(.auto, function, args);
             if (comptime @TypeOf(retval) != noreturn) {
                 arg_struct.retval = retval;
             }
@@ -68,12 +53,7 @@ pub fn createThunk(comptime host: type, comptime FT: type) ThunkType(FT) {
 }
 
 test "createThunk" {
-    const Host = struct {
-        pub fn init(_: ?*anyopaque, _: *anyopaque) @This() {
-            return .{};
-        }
-    };
-    const thunk1 = createThunk(Host, fn (i32, bool) bool);
+    const thunk1 = createThunk(fn (i32, bool) bool);
     switch (@typeInfo(@TypeOf(thunk1))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
@@ -90,7 +70,7 @@ test "createThunk" {
             try expect(false);
         },
     }
-    const thunk2 = createThunk(Host, fn (i32, bool, ...) callconv(.C) bool);
+    const thunk2 = createThunk(fn (i32, bool, ...) callconv(.C) bool);
     switch (@typeInfo(@TypeOf(thunk2))) {
         .Pointer => |pt| {
             switch (@typeInfo(pt.child)) {
@@ -107,39 +87,6 @@ test "createThunk" {
             try expect(false);
         },
     }
-}
-
-fn createAllocator(host: type) std.mem.Allocator {
-    const VTable = struct {
-        fn alloc(_: *anyopaque, size: usize, ptr_align: u8, _: usize) ?[*]u8 {
-            const alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align));
-            return if (host.allocateMemory(size, alignment)) |m| m.bytes else |_| null;
-        }
-
-        fn resize(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
-            return false;
-        }
-
-        fn free(_: *anyopaque, bytes: []u8, ptr_align: u8, _: usize) void {
-            host.freeMemory(.{
-                .bytes = @ptrCast(bytes.ptr),
-                .len = bytes.len,
-                .attributes = .{
-                    .alignment = @as(u16, 1) << @as(u4, @truncate(ptr_align)),
-                },
-            }) catch {};
-        }
-
-        const instance: std.mem.Allocator.VTable = .{
-            .alloc = alloc,
-            .resize = resize,
-            .free = free,
-        };
-    };
-    return .{
-        .ptr = undefined,
-        .vtable = &VTable.instance,
-    };
 }
 
 pub fn uninline(comptime function: anytype) types.Uninlined(@TypeOf(function)) {

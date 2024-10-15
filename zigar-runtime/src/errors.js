@@ -1,6 +1,6 @@
 import { memberNames, StructureType } from './constants.js';
 import { TYPED_ARRAY } from './symbols.js';
-import { getPrimitiveName } from './utils.js';
+import { defineProperties, defineValue, getPrimitiveName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -226,9 +226,10 @@ export class NoProperty extends TypeError {
 }
 
 export class ArgumentCountMismatch extends Error {
-  constructor(name, expected, actual) {
+  constructor(expected, actual) {
     const s = (expected !== 1) ? 's' : '';
-    super(`${name}() expects ${expected} argument${s}, received ${actual}`);
+    super(`Expecting ${expected} argument${s}, received ${actual}`);
+    adjustArgumentError.call(this);
   }
 }
 
@@ -402,16 +403,31 @@ export class Exit extends ZigError {
   }
 }
 
-export function adjustArgumentError(name, index, argCount, err) {
-  // Zig currently does not provide the argument name
-  const argName = `args[${index}]`;
-  const prefix = (index !== 0) ? '..., ' : '';
-  const suffix = (index !== argCount - 1) ? ', ...' : '';
-  const argLabel = prefix + argName + suffix;
-  const newError = Object.create(err.constructor.prototype);
-  newError.message = `${name}(${argLabel}): ${err.message}`;
-  newError.stack = err.stack;
-  return newError;
+export function adjustArgumentError(argIndex, argCount) {
+  const { message } = this;
+  defineProperties(this, {
+    fnName: defineValue(''),
+    argIndex: defineValue(argIndex),
+    argCount: defineValue(argCount),
+    message: {
+      get() {
+        let msg = message;
+        const { fnName, argIndex, argCount } = this;
+        if (fnName) {
+          let argLabel = '';
+          if (argIndex !== undefined) {
+            const argName = `args[${argIndex}]`;
+            const prefix = (argIndex !== 0) ? '..., ' : '';
+            const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
+            argLabel = prefix + argName + suffix;
+          }
+          msg = `${fnName}(${argLabel}): ${msg}`;
+        }
+        return msg;
+      }
+    }
+  });
+  return this;
 }
 
 export function adjustRangeError(member, index, err) {

@@ -58,6 +58,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         is_size: bool = false,
         _: u27 = 0,
     },
@@ -66,6 +67,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         is_string: bool = false,
         _: u27 = 0,
     },
@@ -74,21 +76,28 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         is_extern: bool = false,
         is_packed: bool = false,
         is_iterator: bool = false,
         is_tuple: bool = false,
-        _: u24 = 0,
+
+        is_allocator: bool = false,
+        is_promise: bool = false,
+        is_abort_signal: bool = false,
+        _: u21 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         has_selector: bool = false,
         has_tag: bool = false,
         has_inaccessible: bool = false,
         is_extern: bool = false,
+
         is_packed: bool = false,
         is_iterator: bool = false,
         _: u22 = 0,
@@ -98,6 +107,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         _: u28 = 0,
     },
     error_set: packed struct(u32) {
@@ -105,6 +115,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         _: u28 = 0,
     },
     @"enum": packed struct(u32) {
@@ -112,6 +123,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         is_open_ended: bool = false,
         is_iterator: bool = false,
         _: u26 = 0,
@@ -121,6 +133,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         has_selector: bool = false,
         _: u27 = 0,
     },
@@ -129,10 +142,12 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+
         has_length: bool = false,
         is_multiple: bool = false,
         is_single: bool = false,
         is_const: bool = false,
+
         is_nullable: bool = false,
         _: u23 = 0,
     },
@@ -141,6 +156,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         has_sentinel: bool = false,
         is_string: bool = false,
         _: u26 = 0,
@@ -150,6 +166,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         _: u28 = 0,
     },
     @"opaque": packed struct(u32) {
@@ -157,6 +174,7 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         is_iterator: bool = false,
         _: u27 = 0,
     },
@@ -165,22 +183,27 @@ pub const StructureFlags = extern union {
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+
+        has_options: bool = false,
         is_throwing: bool = false,
-        _: u27 = 0,
+        _: u26 = 0,
     },
     variadic_struct: packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+
+        has_options: bool = false,
         is_throwing: bool = false,
-        _: u27 = 0,
+        _: u26 = 0,
     },
     function: packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+
         _: u28 = 0,
     },
 };
@@ -595,20 +618,6 @@ pub const TypeData = struct {
         try expectCT(getAlignment(.{ .Type = u32 }) == 4);
     }
 
-    pub fn getLength(comptime self: @This()) ?usize {
-        return switch (@typeInfo(self.Type)) {
-            .Array => |ar| ar.len,
-            .Vector => |ve| ve.len,
-            else => null,
-        };
-    }
-
-    test "getLength" {
-        try expectCT(getLength(.{ .Type = [5]u8 }) == 5);
-        try expectCT(getLength(.{ .Type = u8 }) == null);
-        try expectCT(getLength(.{ .Type = @Vector(3, f32) }) == 3);
-    }
-
     pub fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
         return switch (self.attrs.is_slice) {
             true => self.Type.sentinel,
@@ -925,6 +934,22 @@ pub const TypeData = struct {
 
     pub fn isSlice(comptime self: @This()) bool {
         return self.attrs.is_slice;
+    }
+
+    pub fn isOptional(comptime self: @This()) bool {
+        return self.isAllocator() or self.isPromise() or self.isAbortSignal();
+    }
+
+    pub fn isAllocator(comptime self: @This()) bool {
+        return self.Type == std.mem.Allocator;
+    }
+
+    pub fn isPromise(comptime self: @This()) bool {
+        return comptime isInternal(self.Type) and @hasDecl(self.Type, "Payload");
+    }
+
+    pub fn isAbortSignal(comptime self: @This()) bool {
+        return self.Type == AbortSignal;
     }
 
     pub fn isSupported(comptime self: @This()) bool {
@@ -1546,7 +1571,7 @@ pub fn ArgumentStruct(comptime T: type) type {
     const count = get: {
         var count = 1;
         for (f.params) |param| {
-            if (param.type != std.mem.Allocator and param.type != null) {
+            if (param.type != null) {
                 count += 1;
             }
         }
@@ -1566,7 +1591,7 @@ pub fn ArgumentStruct(comptime T: type) type {
     };
     var arg_index = 0;
     for (f.params) |param| {
-        if (param.type != std.mem.Allocator and param.type != null) {
+        if (param.type != null) {
             const name = std.fmt.comptimePrint("{d}", .{arg_index});
             fields[arg_index + 1] = .{
                 .name = name,
@@ -1616,7 +1641,7 @@ test "ArgumentStruct" {
     try expect(fieldsB[1].name[0] == '0');
     const ArgC = ArgumentStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
-    try expect(fieldsC.len == 3);
+    try expect(fieldsC.len == 4);
 }
 
 pub fn FnPointerTarget(comptime T: type) type {
@@ -1632,6 +1657,37 @@ pub fn FnPointerTarget(comptime T: type) type {
 test "FnPointerTarget" {
     const FT = FnPointerTarget(*const fn () void);
     try expect(FT == fn () void);
+}
+
+const Internal = opaque {};
+
+pub fn Promise(comptime T: type) type {
+    return struct {
+        callback: *const fn (T) void,
+
+        const Payload = T;
+        const Opaque = Internal;
+    };
+}
+
+pub const AbortSignal = struct {
+    signaled: bool,
+
+    const Opaque = Internal;
+};
+
+pub fn isInternal(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => @hasDecl(T, "Opaque") and @field(T, "Opaque") == Internal,
+        else => false,
+    };
+}
+
+test "isInternal" {
+    try expectCT(isInternal(AbortSignal) == true);
+    try expectCT(isInternal(struct {}) == false);
+    try expectCT(isInternal(Promise(f64)) == true);
+    try expectCT(isInternal(Promise(anyerror!u32)) == true);
 }
 
 fn expectCT(comptime value: bool) !void {

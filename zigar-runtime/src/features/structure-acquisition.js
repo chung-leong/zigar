@@ -82,7 +82,7 @@ export default mixin({
     const object = constructor.call(ENVIRONMENT, dv);
     if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
-      this.updatePointerTargets(object);
+      this.updatePointerTargets(null, object);
     }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
@@ -97,7 +97,7 @@ export default mixin({
         const placeholder = Object.create(constructor.prototype);
         placeholder[MEMORY] = template[MEMORY];
         placeholder[SLOTS] = template[SLOTS];
-        this.updatePointerTargets(placeholder);
+        this.updatePointerTargets(null, placeholder);
       }
     }
   },
