@@ -12,7 +12,8 @@ const Error = types.Error;
 const ActionType = thunk_js.ActionType;
 const ActionResult = thunk_js.ActionResult;
 
-const Call = *anyopaque;
+pub const Promise = types.Promise;
+pub const AbortSignal = types.AbortSignal;
 
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;

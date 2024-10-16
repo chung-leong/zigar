@@ -1640,12 +1640,17 @@ test "FnPointerTarget" {
 
 const Internal = opaque {};
 
-pub fn Promise(comptime T: type) type {
+pub fn Promise(comptime T: type, release: anytype) type {
     return struct {
         callback: *const fn (T) void,
 
         const Payload = T;
         const Opaque = Internal;
+
+        pub inline fn resolve(self: @This(), value: T) void {
+            self.callback(value);
+            release(self.callback);
+        }
     };
 }
 
@@ -1653,6 +1658,14 @@ pub const AbortSignal = struct {
     ptr: *const i32,
 
     const Opaque = Internal;
+
+    pub inline fn signaled(self: @This()) bool {
+        return self.ptr.* != 0;
+    }
+
+    pub inline fn signaledAtomic(self: @This()) bool {
+        return @atomicLoad(i32, self.ptr, .acquire) != 0;
+    }
 };
 
 pub fn isInternal(comptime T: type) bool {

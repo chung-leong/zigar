@@ -302,7 +302,7 @@ napi_value throw_last_error(napi_env env) {
 }
 
 napi_value get_buffer_address(napi_env env,
-                                  napi_callback_info info) {
+                              napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     void* bytes;

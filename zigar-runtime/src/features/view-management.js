@@ -18,7 +18,7 @@ export default mixin({
       if (tag === 'DataView') {
         // capture relationship between the view and its buffer
         dv = this.registerView(arg);
-      } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+      } else if (tag === 'ArrayBuffer') {
         dv = this.obtainView(arg, 0, arg.byteLength);
       } else if ((tag && tag === constructor[TYPED_ARRAY]?.name) || (tag === 'Uint8ClampedArray' && constructor[TYPED_ARRAY] === Uint8Array)) {
         dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);

@@ -11,6 +11,9 @@ const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 
+pub const Promise = types.Promise;
+pub const AbortSignal = types.AbortSignal;
+
 const ModuleData = opaque {};
 
 // struct for C

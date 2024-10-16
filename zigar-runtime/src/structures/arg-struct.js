@@ -127,11 +127,10 @@ export default mixin({
       } else {
         signal.addEventListener('abort', () => {
           Atomics.store(array, 0, 1);
-          Atomics.notify(array, 0, 1);
         }, { once: true });
       }
     }
-    return array;
+    return { ptr: array };
   },
 });
 
