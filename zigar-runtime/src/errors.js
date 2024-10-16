@@ -227,9 +227,15 @@ export class NoProperty extends TypeError {
 
 export class ArgumentCountMismatch extends Error {
   constructor(expected, actual) {
-    const s = (expected !== 1) ? 's' : '';
-    super(`Expecting ${expected} argument${s}, received ${actual}`);
-    adjustArgumentError.call(this);
+    super();
+    this.fnName = '';
+    this.argIndex = expected;
+    this.argCount = actual;
+  }
+
+  get message() {
+    const s = (this.argIndex !== 1) ? 's' : '';
+    return `${this.fnName}(): Expecting ${this.argIndex} argument${s}, received ${this.argCount}`;
   }
 }
 
@@ -414,17 +420,14 @@ export function adjustArgumentError(argIndex, argCount) {
         let msg = message;
         const { fnName, argIndex, argCount } = this;
         if (fnName) {
-          let argLabel = '';
-          if (argIndex !== undefined) {
-            const argName = `args[${argIndex}]`;
-            const prefix = (argIndex !== 0) ? '..., ' : '';
-            const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-            argLabel = prefix + argName + suffix;
-          }
+          const argName = `args[${argIndex}]`;
+          const prefix = (argIndex !== 0) ? '..., ' : '';
+          const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
+          const argLabel = prefix + argName + suffix;
           msg = `${fnName}(${argLabel}): ${msg}`;
         }
         return msg;
-      }
+      },
     }
   });
   return this;

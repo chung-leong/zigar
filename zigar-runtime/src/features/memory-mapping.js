@@ -16,23 +16,23 @@ export default mixin({
     if (cluster) {
       const dv = target[MEMORY];
       if (cluster.address === undefined) {
-        const shadow = this.createClusterShadow(cluster);
-        cluster.address = this.getViewAddress(context, shadow[MEMORY]);
+        const shadow = this.createClusterShadow(context, cluster);
+        cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
       return adjustAddress(cluster.address, dv.byteOffset - cluster.start);
     } else {
-      const shadow = this.createShadow(target);
+      const shadow = this.createShadow(context, target);
       return this.getViewAddress(shadow[MEMORY]);
     }
   },
-  createShadow(object) {
+  createShadow(context, object) {
     const dv = object[MEMORY]
     // use the alignment of the structure; in the case of an opaque pointer's target,
     // try to the alignment specified when the memory was allocated
     const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    return this.addShadow(shadow, object, align);
+    return this.addShadow(context, shadow, object, align);
   },
   addShadow(context, shadow, object, align) {
     const shadowMap = context.shadowMap ??= new Map();
@@ -54,7 +54,7 @@ export default mixin({
       }
     }
   },
-  createClusterShadow(cluster) {
+  createClusterShadow(context, cluster) {
     const { start, end, targets } = cluster;
     // look for largest align
     let maxAlign = 0, maxAlignOffset;
@@ -96,7 +96,7 @@ export default mixin({
       // attach fixed memory info to aligned data view so it gets freed correctly
       shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
     }
-    return this.addShadow(shadow, source, 1);
+    return this.addShadow(context, shadow, source, 1);
   },
   updateShadows(context) {
     const { shadowMap } = context;

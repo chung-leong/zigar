@@ -106,7 +106,17 @@ export default mixin({
         }
         // see if it's a method
         if (member.flags & MemberFlag.IsMethod) {
-          const method = (...args) => fn([this, ...args]);
+          const method = function(...args) {
+            try {
+              return fn(this, ...args);
+            } catch (err) {
+              if ('argCount' in err) {
+                err.argIndex--;
+                err.argCount--;
+              }
+              throw err;
+            }
+          };
           defineProperties(method, {
             name: defineValue(name),
             length: defineValue(fn.length - 1),
