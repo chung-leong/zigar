@@ -331,23 +331,27 @@ fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
 fn runThunk(
     thunk_address: usize,
     fn_address: usize,
-    args: *anyopaque,
+    arg_address: usize,
 ) callconv(.C) Result {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(fn_ptr, args)) .ok else |_| .failure;
+    const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
+    return if (thunk(fn_ptr, arg_ptr)) .ok else |_| .failure;
 }
 
 fn runVariadicThunk(
     thunk_address: usize,
     fn_address: usize,
-    args: *anyopaque,
-    attr_ptr: *const anyopaque,
-    arg_count: usize,
+    arg_address: usize,
+    attr_address: usize,
+    attr_len: usize,
 ) callconv(.C) Result {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(fn_ptr, args, attr_ptr, arg_count)) .ok else |_| .failure;
+    const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
+    const attr_ptr: *const anyopaque = @ptrFromInt(attr_address);
+    const arg_count = attr_len / 8;
+    return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) .ok else |_| .failure;
 }
 
 fn createJsThunk(
@@ -414,8 +418,8 @@ const Exports = extern struct {
     allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (usize, usize, *anyopaque) callconv(.C) Result,
-    run_variadic_thunk: *const fn (usize, usize, *anyopaque, *const anyopaque, usize) callconv(.C) Result,
+    run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
+    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
     override_write: *const fn ([*]const u8, usize) callconv(.C) Result,

@@ -1,6 +1,7 @@
+import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { Exit, ZigError } from '../errors.js';
-import { ATTRIBUTES, CONTEXT, MEMORY, VISIT } from '../symbols.js';
+import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
+import { ATTRIBUTES, CONTEXT, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
 
 export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -8,10 +9,8 @@ export default mixin({
     const self = function (...args) {
       try {
         const argStruct = new ArgStruct(args);
-        const thunkAddr = thisEnv.getViewAddress(thunk[MEMORY]);
-        const funcAddr = thisEnv.getViewAddress(self[MEMORY]);
-        thisEnv.invokeThunk(thunkAddr, funcAddr, argStruct);
-        return argStruct.retval;
+        thisEnv.invokeThunk(thunk, self, argStruct);
+        return argStruct[PROMISE] ?? argStruct.retval;
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -21,41 +20,79 @@ export default mixin({
     };
     return self;
   },
-  ...(process.env.TARGET === 'wasm' ? {
-    imports: {
-      runThunk: { argType: 'iii', returnType: 'b' },
-      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
-    },
-
-    invokeThunk(thunkAddress, fnAddress, args) {
-      // runThunk will be present only after WASM has compiled
-      if (this.runThunk) {
-        return this.invokeThunkNow(thunkAddress, fnAddress, args);
-      } else {
+  copyArguments(dest, src, members, options) {
+    let srcIndex = 0;
+    let allocatorCount = 0;
+    for (const [ destIndex, { type, structure } ] of members.entries()) {
+      let arg;
+      if (structure.type === StructureType.Struct) {
+        if (structure.flags & StructFlag.IsAllocator) {
+          // use programmer-supplied allocator if found in options object, handling rare scenarios
+          // where a function uses multiple allocators
+          allocatorCount++;
+          const allocator = (allocatorCount === 1)
+          ? options?.['allocator'] ?? options?.['allocator1']
+          : options?.[`allocator${allocatorCount}`];
+          // otherwise use default allocator which allocates relocatable memory from JS engine
+          arg = allocator ?? this.createDefaultAllocator(structure, dest[CONTEXT]);
+        } else if (structure.flags & StructFlag.IsPromise) {
+          // invoke programmer-supplied callback if there's one, otherwise a function that
+          // resolves/rejects a promise attached to the argument struct
+          arg = { callback: this.createCallback(dest, options?.['callback']) };
+        } else if (structure.flags & StructFlag.IsAbortSignal) {
+          // create an Int32Array with one element, hooking it up to the programmer-supplied
+          // AbortSignal object if found
+          arg = { ptr: this.createSignalArray(options?.['signal']) };
+        }
+      }
+      if (arg === undefined) {
+        // just a regular argument
+        arg = src[srcIndex++];
+        // only void has the value of undefined
+        if (arg === undefined && type !== MemberType.Void) {
+          throw new UndefinedArgument();
+        }
+      }
+      try {
+        dest[destIndex] = arg;
+      } catch (err) {
+        throw adjustArgumentError.call(err, destIndex, src.length);
+      }
+    }
+  },
+  invokeThunk(thunk, fn, args) {
+    if (process.env.TARGET === 'wasm') {
+      if (!this.runThunk) {
         return this.initPromise.then(() => {
-          return this.invokeThunkNow(thunkAddress, fnAddress, args);
+          return this.invokeThunk(thunk, fn, args);
         });
       }
-    },
-    invokeThunkNow(thunkAddress, fnAddress, args) {
-      try {
-        const context = args[CONTEXT];
-        const hasPointers = VISIT in args;
-        if (hasPointers) {
-          this.updatePointerAddresses(context, args);
-        }
-        // return address of shadow for argumnet struct
-        const argAddress = this.getShadowAddress(context, args);
-        const attrs = args[ATTRIBUTES];
-        // get address of attributes if function variadic
-        const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0;
-        this.updateShadows(context);
-        const success = (attrs)
-        ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-        : this.runThunk(thunkAddress, fnAddress, argAddress);
-        if (!success) {
-          throw new ZigError();
-        }
+    }
+    try {
+      const context = args[CONTEXT];
+      const attrs = args[ATTRIBUTES];
+      const thunkAddress = this.getViewAddress(thunk[MEMORY]);
+      const fnAddress = this.getViewAddress(fn[MEMORY]);
+      const hasPointers = VISIT in args;
+      if (hasPointers) {
+        this.updatePointerAddresses(context, args);
+      }
+      // return address of shadow for argumnet struct
+      const argAddress = (process.env.TARGET === 'wasm')
+      ? this.getShadowAddress(context, args[MEMORY])
+      : this.getViewAddress(args[MEMORY]);
+      // get address of attributes if function variadic
+      const attrAddress = (process.env.TARGET === 'wasm')
+      ? (attrs) ? this.getShadowAddress(context, attrs) : 0
+      : (attrs) ? this.getViewAddress(attrs) : 0;
+      this.updateShadows(context);
+      const success = (attrs)
+      ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+      : this.runThunk(thunkAddress, fnAddress, argAddress);
+      if (!success) {
+        throw new ZigError();
+      }
+      const finalize = () => {
         // create objects that pointers point to
         this.updateShadowTargets(context);
         if (hasPointers) {
@@ -63,42 +100,32 @@ export default mixin({
         }
         this.releaseShadows(context);
         this.flushConsole?.();
-        return args.retval;
-      } catch (err) {
+      };
+      if (FINALIZE in args) {
+        // async function--finalization happens when callback is invoked
+        args[FINALIZE] = finalize;
+      } else {
+        finalize();
+      }
+    } catch (err) {
+      if (process.env.TARGET === 'wasm') {
         // do nothing when exit code is 0
-        if (!(err instanceof Exit && err.code === 0)) {
-          throw err;
+        if (err instanceof Exit && err.code === 0) {
+          return;
         }
       }
+      throw err;
+    }
+  },
+  ...(process.env.TARGET === 'wasm' ? {
+    imports: {
+      runThunk: { argType: 'iii', returnType: 'b' },
+      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
       runThunk: null,
       runVariadicThunk: null,
-    },
-
-    invokeThunk(thunkAddress, fnAddress, args) {
-      const context = args[CONTEXT];
-      const attrs = args[ATTRIBUTES];
-      const hasPointers = VISIT in args;
-      if (hasPointers) {
-        // copy addresses of garbage-collectible objects into memory
-        this.updatePointerAddresses(context, args);
-        this.updateShadows(context);
-      }
-      const success = (attrs)
-      ? this.runVariadicThunk(thunkAddress, fnAddress, args[MEMORY], attrs[MEMORY])
-      : this.runThunk(thunkAddress, fnAddress, args[MEMORY]);
-      if (!success) {
-        throw new ZigError();
-      }
-      if (hasPointers) {
-        // create objects that pointers point to
-        this.updateShadowTargets(context);
-        this.updatePointerTargets(context, args);
-        this.releaseShadows(context);
-      }
-      this.flushConsole?.();
     },
     /* c8 ignore next */
   } : undefined),

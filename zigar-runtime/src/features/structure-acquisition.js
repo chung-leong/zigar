@@ -1,4 +1,4 @@
-import { CONST_TARGET, COPY, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
+import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { ExportFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, defineProperty, findObjects } from '../utils.js';
@@ -104,6 +104,7 @@ export default mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
+    const thunk = { [MEMORY]: this.obtainFixedView(thunkAddress, 0) };
     const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
@@ -120,11 +121,12 @@ export default mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
+      this[CONTEXT] = { memoryList: [], shadowMap: null };
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
     this.comptime = true;
-    this.invokeThunk(thunkAddress, thunkAddress, args);
+    this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
   },
   getRootModule() {

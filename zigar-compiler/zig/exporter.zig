@@ -83,6 +83,12 @@ pub fn getStructureFlags(comptime tdb: anytype, comptime td: TypeData) types.Str
                         }
                     } else false,
                     .is_throwing = @typeInfo(st.fields[0].type) == .ErrorUnion,
+                    .is_async = inline for (st.fields) |field| {
+                        const field_td = tdb.get(field.type);
+                        if (field_td.isPromise()) {
+                            break true;
+                        }
+                    } else false,
                 },
             } else if (comptime td.isSlice()) .{
                 .slice = .{

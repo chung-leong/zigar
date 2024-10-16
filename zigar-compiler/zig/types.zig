@@ -186,7 +186,8 @@ pub const StructureFlags = extern union {
 
         has_options: bool = false,
         is_throwing: bool = false,
-        _: u26 = 0,
+        is_async: bool = false,
+        _: u25 = 0,
     },
     variadic_struct: packed struct(u32) {
         has_value: bool = false,
@@ -196,7 +197,8 @@ pub const StructureFlags = extern union {
 
         has_options: bool = false,
         is_throwing: bool = false,
-        _: u26 = 0,
+        is_async: bool = false,
+        _: u25 = 0,
     },
     function: packed struct(u32) {
         has_value: bool = false,
@@ -1649,7 +1651,7 @@ pub fn Promise(comptime T: type, release: anytype) type {
 
         pub inline fn resolve(self: @This(), value: T) void {
             self.callback(value);
-            release(self.callback);
+            release(self.callback) catch {};
         }
     };
 }

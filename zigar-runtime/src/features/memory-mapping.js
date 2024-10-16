@@ -1,16 +1,13 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict, NullPointer } from '../errors.js';
-import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE, SIZE } from '../symbols.js';
+import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
-  adjustAddress, alignForward, defineProperty, empty, findSortedIndex, isInvalidAddress, isMisaligned,
-  usizeMax, usizeMin,
+  adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
+  usizeMin
 } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
-  nextContextId: usizeMax,
-  contextMap: new Map(),
-  defaultAllocatorVTable: null,
 
   getShadowAddress(context, target, cluster) {
     if (cluster) {
@@ -100,20 +97,18 @@ export default mixin({
   },
   updateShadows(context) {
     const { shadowMap } = context;
-    if (!shadowMap) {
-      return;
-    }
-    for (const [ shadow, object ] of shadowMap) {
-      shadow[COPY](object);
+    if (shadowMap) {
+      for (const [ shadow, object ] of shadowMap) {
+        shadow[COPY](object);
+      }
     }
   },
   updateShadowTargets(context) {
     const { shadowMap } = context;
-    if (!shadowMap) {
-      return;
-    }
-    for (const [ shadow, object ] of shadowMap) {
-      object[COPY](shadow);
+    if (shadowMap) {
+      for (const [ shadow, object ] of shadowMap) {
+        object[COPY](shadow);
+      }
     }
   },
   releaseShadows(context) {
@@ -233,65 +228,6 @@ export default mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
-  createDefaultAllocator(structure, context) {
-    const { constructor: Allocator } = structure;
-    let vtable = this.defaultAllocatorVTable;
-    if (!vtable) {
-      // create vtable in fixed memory
-      const { VTable, noResize } = Allocator;
-      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.defaultAllocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          return this.allocateHostMemory(context, len, 1 << ptrAlign);
-        } else {
-          return null;
-        }
-      };
-      vtable.resize = noResize;
-      vtable.free = (ptr, buf, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          const address = this.getViewAddress(buf['*'][MEMORY]);
-          const len = buf.length;
-          this.freeHostMemory(context, address, len, 1 << ptrAlign);
-        }
-      };
-    }
-    const contextId = this.nextContextId--;
-    // storing context id in a fake pointer
-    const ptr = this.obtainFixedView(contextId, 0);
-    this.contextMap.set(contextId, context);
-    return new Allocator({ ptr, vtable });
-  },
-  allocateHostMemory(context, len, align) {
-    const dv = this.allocateRelocMemory(len, align);
-    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
-    // for Node, we create another DataView on the same buffer and pretend that it's fixed
-    // memory
-    const shadowDV = (process.env.TARGET === 'wasm')
-    ? this.allocateShadowMemory(len, align)
-    : this.createShadowView(dv);
-    const copier = (process.env.TARGET === 'wasm')
-    ? this.defineCopier(len).value
-    : empty;
-    const constructor = { [ALIGN]: align };
-    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
-    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
-    this.addShadow(context, shadow, object, align);
-    return shadowDV;
-  },
-  freeHostMemory(context, address, len, align) {
-    const shadowDV = this.unregisterMemory(context, address);
-    if (shadowDV) {
-      this.removeShadow(context, shadowDV);
-      this.freeShadowMemory(shadowDV);
-    }
-  },
-
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       allocateExternMemory: { argType: 'iii', returnType: 'i' },

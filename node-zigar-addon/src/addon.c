@@ -493,21 +493,16 @@ napi_value run_thunk(napi_env env,
     napi_value args[3];
     uintptr_t thunk_address;
     uintptr_t fn_address;
-    void* args_ptr;
-    size_t args_len;
+    uintptr_t arg_address;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_uintptr(env, args[0], &thunk_address) != napi_ok) {
         return throw_error(env, "Thunk address must be a number");
     } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
         return throw_error(env, "Function address must be a number");
-    } else if (napi_get_dataview_info(env, args[2], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
-        return throw_error(env, "Arguments must be a DataView");
+    } else if (napi_get_value_uintptr(env, args[2], &arg_address) != napi_ok) {
+        return throw_error(env, "Argument address must be a number");
     }
-    if (args_len == 0) {
-        // pointer might not be valid when length is zero
-        args_ptr = NULL;
-    }
-    bool success = md->mod->imports->run_thunk(thunk_address, fn_address, args_ptr) == OK;
+    bool success = md->mod->imports->run_thunk(thunk_address, fn_address, arg_address) == OK;
     napi_value retval = NULL;
     napi_get_boolean(env, success, &retval);
     return retval;
@@ -516,30 +511,27 @@ napi_value run_thunk(napi_env env,
 napi_value run_variadic_thunk(napi_env env,
                               napi_callback_info info) {
     module_data* md;
-    size_t argc = 4;
-    napi_value args[4];
+    size_t argc = 5;
+    napi_value args[5];
     uintptr_t thunk_address;
     uintptr_t fn_address;
-    void* args_ptr;
-    size_t args_len;
-    void* args_attrs_ptr;
-    size_t args_attrs_len;
+    uintptr_t arg_address;
+    uintptr_t attr_address;
+    size_t attr_len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_uintptr(env, args[0], &thunk_address) != napi_ok) {
         return throw_error(env, "Thunk address must be a number");
     } else if (napi_get_value_uintptr(env, args[1], &fn_address) != napi_ok) {
         return throw_error(env, "Function address must be a number");
-    } else if (napi_get_dataview_info(env, args[2], &args_len, &args_ptr, NULL, NULL) != napi_ok) {
-        return throw_error(env, "Arguments must be a DataView");
-    } else if (napi_get_dataview_info(env, args[3], &args_attrs_len, &args_attrs_ptr, NULL, NULL) != napi_ok) {
-        return throw_error(env, "Attributes must be a DataView");
+    } else if (napi_get_value_uintptr(env, args[2], &arg_address) != napi_ok) {
+        return throw_error(env, "Argument address must be a number");
+    } else if (napi_get_value_uintptr(env, args[3], &attr_address) != napi_ok) {
+        return throw_error(env, "Attribute address must be a number");
+    } else if (napi_get_value_uintptr(env, args[4], &attr_len) != napi_ok) {
+        return throw_error(env, "Attribute length must be a number");
     }
-    size_t arg_count = args_attrs_len / 8;
     napi_value result;
-    if (args_len == 0) {
-        args_ptr = NULL;
-    }
-    bool success = md->mod->imports->run_variadic_thunk(thunk_address, fn_address, args_ptr, args_attrs_ptr, arg_count) == OK;
+    bool success = md->mod->imports->run_variadic_thunk(thunk_address, fn_address, arg_address, attr_address, attr_len) == OK;
     napi_value retval = NULL;
     napi_get_boolean(env, success, &retval);
     return retval;

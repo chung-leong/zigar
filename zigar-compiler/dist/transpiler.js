@@ -81,6 +81,7 @@ const OpaqueFlag = {
 const ArgStructFlag = {
   HasOptions:       0x0010,
   IsThrowing:       0x0020,
+  IsAsync:          0x0040,
 };
 
 const MemberType = {
@@ -147,6 +148,7 @@ const GETTERS = Symbol('getters');
 const SETTERS = Symbol('setters');
 const TYPED_ARRAY = Symbol('typedArray');
 const THROWING = Symbol('throwing');
+const PROMISE = Symbol('promise');
 const CONTEXT = Symbol('context');
 
 const UPDATE = Symbol('update');
@@ -2228,6 +2230,22 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
   }
 }
 
+var abortSignal = mixin({
+  createSignalArray(signal) {
+    const array = new Int32Array(1);
+    if (signal) {
+      if (signal.aborted) {
+        array[0] = 1;
+      } else {
+        signal.addEventListener('abort', () => {
+          Atomics.store(array, 0, 1);
+        }, { once: true });
+      }
+    }
+    return array;
+  },
+});
+
 var baseline = mixin({
   littleEndian: true,
   variables: [],
@@ -2688,9 +2706,15 @@ class NoProperty extends TypeError {
 
 class ArgumentCountMismatch extends Error {
   constructor(expected, actual) {
-    const s = (expected !== 1) ? 's' : '';
-    super(`Expecting ${expected} argument${s}, received ${actual}`);
-    adjustArgumentError.call(this);
+    super();
+    this.fnName = '';
+    this.argIndex = expected;
+    this.argCount = actual;
+  }
+
+  get message() {
+    const s = (this.argIndex !== 1) ? 's' : '';
+    return `${this.fnName}(): Expecting ${this.argIndex} argument${s}, received ${this.argCount}`;
   }
 }
 
@@ -2868,17 +2892,14 @@ function adjustArgumentError(argIndex, argCount) {
         let msg = message;
         const { fnName, argIndex, argCount } = this;
         if (fnName) {
-          let argLabel = '';
-          if (argIndex !== undefined) {
-            const argName = `args[${argIndex}]`;
-            const prefix = (argIndex !== 0) ? '..., ' : '';
-            const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-            argLabel = prefix + argName + suffix;
-          }
+          const argName = `args[${argIndex}]`;
+          const prefix = (argIndex !== 0) ? '..., ' : '';
+          const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
+          const argLabel = prefix + argName + suffix;
           msg = `${fnName}(${argLabel}): ${msg}`;
         }
         return msg;
-      }
+      },
     }
   });
   return this;
@@ -2961,10 +2982,8 @@ var callMarshalingOutbound = mixin({
     const self = function (...args) {
       try {
         const argStruct = new ArgStruct(args);
-        const thunkAddr = thisEnv.getViewAddress(thunk[MEMORY]);
-        const funcAddr = thisEnv.getViewAddress(self[MEMORY]);
-        thisEnv.invokeThunk(thunkAddr, funcAddr, argStruct);
-        return argStruct.retval;
+        thisEnv.invokeThunk(thunk, self, argStruct);
+        return argStruct[PROMISE] ?? argStruct.retval;
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -2974,41 +2993,79 @@ var callMarshalingOutbound = mixin({
     };
     return self;
   },
-  ...({
-    imports: {
-      runThunk: { argType: 'iii', returnType: 'b' },
-      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
-    },
-
-    invokeThunk(thunkAddress, fnAddress, args) {
-      // runThunk will be present only after WASM has compiled
-      if (this.runThunk) {
-        return this.invokeThunkNow(thunkAddress, fnAddress, args);
-      } else {
+  copyArguments(dest, src, members, options) {
+    let srcIndex = 0;
+    let allocatorCount = 0;
+    for (const [ destIndex, { type, structure } ] of members.entries()) {
+      let arg;
+      if (structure.type === StructureType.Struct) {
+        if (structure.flags & StructFlag.IsAllocator) {
+          // use programmer-supplied allocator if found in options object, handling rare scenarios
+          // where a function uses multiple allocators
+          allocatorCount++;
+          const allocator = (allocatorCount === 1)
+          ? options?.['allocator'] ?? options?.['allocator1']
+          : options?.[`allocator${allocatorCount}`];
+          // otherwise use default allocator which allocates relocatable memory from JS engine
+          arg = allocator ?? this.createDefaultAllocator(structure, dest[CONTEXT]);
+        } else if (structure.flags & StructFlag.IsPromise) {
+          // invoke programmer-supplied callback if there's one, otherwise a function that
+          // resolves/rejects a promise attached to the argument struct
+          arg = { callback: this.createCallback(dest, options?.['callback']) };
+        } else if (structure.flags & StructFlag.IsAbortSignal) {
+          // create an Int32Array with one element, hooking it up to the programmer-supplied
+          // AbortSignal object if found
+          arg = { ptr: this.createSignalArray(options?.['signal']) };
+        }
+      }
+      if (arg === undefined) {
+        // just a regular argument
+        arg = src[srcIndex++];
+        // only void has the value of undefined
+        if (arg === undefined && type !== MemberType.Void) {
+          throw new UndefinedArgument();
+        }
+      }
+      try {
+        dest[destIndex] = arg;
+      } catch (err) {
+        throw adjustArgumentError.call(err, destIndex, src.length);
+      }
+    }
+  },
+  invokeThunk(thunk, fn, args) {
+    {
+      if (!this.runThunk) {
         return this.initPromise.then(() => {
-          return this.invokeThunkNow(thunkAddress, fnAddress, args);
+          return this.invokeThunk(thunk, fn, args);
         });
       }
-    },
-    invokeThunkNow(thunkAddress, fnAddress, args) {
-      try {
-        const context = args[CONTEXT];
-        const hasPointers = VISIT in args;
-        if (hasPointers) {
-          this.updatePointerAddresses(context, args);
-        }
-        // return address of shadow for argumnet struct
-        const argAddress = this.getShadowAddress(context, args);
-        const attrs = args[ATTRIBUTES];
-        // get address of attributes if function variadic
-        const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0;
-        this.updateShadows(context);
-        const success = (attrs)
-        ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-        : this.runThunk(thunkAddress, fnAddress, argAddress);
-        if (!success) {
-          throw new ZigError();
-        }
+    }
+    try {
+      const context = args[CONTEXT];
+      const attrs = args[ATTRIBUTES];
+      const thunkAddress = this.getViewAddress(thunk[MEMORY]);
+      const fnAddress = this.getViewAddress(fn[MEMORY]);
+      const hasPointers = VISIT in args;
+      if (hasPointers) {
+        this.updatePointerAddresses(context, args);
+      }
+      // return address of shadow for argumnet struct
+      const argAddress = ("wasm" === 'wasm')
+      ? this.getShadowAddress(context, args[MEMORY])
+      : this.getViewAddress(args[MEMORY]);
+      // get address of attributes if function variadic
+      const attrAddress = ("wasm" === 'wasm')
+      ? (attrs) ? this.getShadowAddress(context, attrs) : 0
+      : (attrs) ? this.getViewAddress(attrs) : 0;
+      this.updateShadows(context);
+      const success = (attrs)
+      ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+      : this.runThunk(thunkAddress, fnAddress, argAddress);
+      if (!success) {
+        throw new ZigError();
+      }
+      const finalize = () => {
         // create objects that pointers point to
         this.updateShadowTargets(context);
         if (hasPointers) {
@@ -3016,13 +3073,27 @@ var callMarshalingOutbound = mixin({
         }
         this.releaseShadows(context);
         this.flushConsole?.();
-        return args.retval;
-      } catch (err) {
+      };
+      if (FINALIZE in args) {
+        // async function--finalization happens when callback is invoked
+        args[FINALIZE] = finalize;
+      } else {
+        finalize();
+      }
+    } catch (err) {
+      {
         // do nothing when exit code is 0
-        if (!(err instanceof Exit && err.code === 0)) {
-          throw err;
+        if (err instanceof Exit && err.code === 0) {
+          return;
         }
       }
+      throw err;
+    }
+  },
+  ...({
+    imports: {
+      runThunk: { argType: 'iii', returnType: 'b' },
+      runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
   } ),
 });
@@ -3228,6 +3299,69 @@ function reset32(dest, offset) {
   dest.setInt32(offset + 28, 0, true);
 }
 
+var defaultAllocator = mixin({
+  nextContextId: usizeMax,
+  contextMap: new Map(),
+  defaultAllocatorVTable: null,
+
+  createDefaultAllocator(structure, context) {
+    const { constructor: Allocator } = structure;
+    let vtable = this.defaultAllocatorVTable;
+    if (!vtable) {
+      // create vtable in fixed memory
+      const { VTable, noResize } = Allocator;
+      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
+      vtable = this.defaultAllocatorVTable = VTable(dv);
+      vtable.alloc = (ptr, len, ptrAlign) => {
+        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+        const context = this.contextMap.get(contextId);
+        if (context) {
+          return this.allocateHostMemory(context, len, 1 << ptrAlign);
+        } else {
+          return null;
+        }
+      };
+      vtable.resize = noResize;
+      vtable.free = (ptr, buf, ptrAlign) => {
+        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+        const context = this.contextMap.get(contextId);
+        if (context) {
+          const address = this.getViewAddress(buf['*'][MEMORY]);
+          const len = buf.length;
+          this.freeHostMemory(context, address, len, 1 << ptrAlign);
+        }
+      };
+    }
+    const contextId = this.nextContextId--;
+    // storing context id in a fake pointer
+    const ptr = this.obtainFixedView(contextId, 0);
+    this.contextMap.set(contextId, context);
+    return new Allocator({ ptr, vtable });
+  },
+  allocateHostMemory(context, len, align) {
+    const dv = this.allocateRelocMemory(len, align);
+    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
+    // for Node, we create another DataView on the same buffer and pretend that it's fixed
+    // memory
+    const shadowDV = this.allocateShadowMemory(len, align)
+    ;
+    const copier = this.defineCopier(len).value
+    ;
+    const constructor = { [ALIGN]: align };
+    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
+    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
+    this.addShadow(context, shadow, object, align);
+    return shadowDV;
+  },
+  freeHostMemory(context, address, len, align) {
+    const shadowDV = this.unregisterMemory(context, address);
+    if (shadowDV) {
+      this.removeShadow(context, shadowDV);
+      this.freeShadowMemory(shadowDV);
+    }
+  },
+});
+
 var intConversion = mixin({
   addIntConversion(getAccessor) {
     return function (access, member) {
@@ -3263,31 +3397,28 @@ var intConversion = mixin({
 
 var memoryMapping = mixin({
   emptyBuffer: new ArrayBuffer(0),
-  nextContextId: usizeMax,
-  contextMap: new Map(),
-  defaultAllocatorVTable: null,
 
   getShadowAddress(context, target, cluster) {
     if (cluster) {
       const dv = target[MEMORY];
       if (cluster.address === undefined) {
-        const shadow = this.createClusterShadow(cluster);
-        cluster.address = this.getViewAddress(context, shadow[MEMORY]);
+        const shadow = this.createClusterShadow(context, cluster);
+        cluster.address = this.getViewAddress(shadow[MEMORY]);
       }
       return adjustAddress(cluster.address, dv.byteOffset - cluster.start);
     } else {
-      const shadow = this.createShadow(target);
+      const shadow = this.createShadow(context, target);
       return this.getViewAddress(shadow[MEMORY]);
     }
   },
-  createShadow(object) {
+  createShadow(context, object) {
     const dv = object[MEMORY];
     // use the alignment of the structure; in the case of an opaque pointer's target,
     // try to the alignment specified when the memory was allocated
     const align = object.constructor[ALIGN] ?? dv[ALIGN];
     const shadow = Object.create(object.constructor.prototype);
     shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    return this.addShadow(shadow, object, align);
+    return this.addShadow(context, shadow, object, align);
   },
   addShadow(context, shadow, object, align) {
     const shadowMap = context.shadowMap ??= new Map();
@@ -3309,7 +3440,7 @@ var memoryMapping = mixin({
       }
     }
   },
-  createClusterShadow(cluster) {
+  createClusterShadow(context, cluster) {
     const { start, end, targets } = cluster;
     // look for largest align
     let maxAlign = 0, maxAlignOffset;
@@ -3351,24 +3482,22 @@ var memoryMapping = mixin({
       // attach fixed memory info to aligned data view so it gets freed correctly
       shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
     }
-    return this.addShadow(shadow, source, 1);
+    return this.addShadow(context, shadow, source, 1);
   },
   updateShadows(context) {
     const { shadowMap } = context;
-    if (!shadowMap) {
-      return;
-    }
-    for (const [ shadow, object ] of shadowMap) {
-      shadow[COPY](object);
+    if (shadowMap) {
+      for (const [ shadow, object ] of shadowMap) {
+        shadow[COPY](object);
+      }
     }
   },
   updateShadowTargets(context) {
     const { shadowMap } = context;
-    if (!shadowMap) {
-      return;
-    }
-    for (const [ shadow, object ] of shadowMap) {
-      object[COPY](shadow);
+    if (shadowMap) {
+      for (const [ shadow, object ] of shadowMap) {
+        object[COPY](shadow);
+      }
     }
   },
   releaseShadows(context) {
@@ -3488,63 +3617,6 @@ var memoryMapping = mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
-  createDefaultAllocator(structure, context) {
-    const { constructor: Allocator } = structure;
-    let vtable = this.defaultAllocatorVTable;
-    if (!vtable) {
-      // create vtable in fixed memory
-      const { VTable, noResize } = Allocator;
-      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.defaultAllocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          return this.allocateHostMemory(context, len, 1 << ptrAlign);
-        } else {
-          return null;
-        }
-      };
-      vtable.resize = noResize;
-      vtable.free = (ptr, buf, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          const address = this.getViewAddress(buf['*'][MEMORY]);
-          const len = buf.length;
-          this.freeHostMemory(context, address, len, 1 << ptrAlign);
-        }
-      };
-    }
-    const contextId = this.nextContextId--;
-    // storing context id in a fake pointer
-    const ptr = this.obtainFixedView(contextId, 0);
-    this.contextMap.set(contextId, context);
-    return new Allocator({ ptr, vtable });
-  },
-  allocateHostMemory(context, len, align) {
-    const dv = this.allocateRelocMemory(len, align);
-    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
-    // for Node, we create another DataView on the same buffer and pretend that it's fixed
-    // memory
-    const shadowDV = this.allocateShadowMemory(len, align)
-    ;
-    const copier = this.defineCopier(len).value
-    ;
-    const constructor = { [ALIGN]: align };
-    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
-    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
-    this.addShadow(context, shadow, object, align);
-    return shadowDV;
-  },
-  freeHostMemory(context, address, len, align) {
-    const shadowDV = this.unregisterMemory(context, address);
-    if (shadowDV) {
-      this.removeShadow(context, shadowDV);
-      this.freeShadowMemory(shadowDV);
-    }
-  },
-
   ...({
     imports: {
       allocateExternMemory: { argType: 'iii', returnType: 'i' },
@@ -4008,6 +4080,28 @@ var pointerSynchronization = mixin({
   },
 });
 
+var promiseCallback = mixin({
+  createCallback(args, callback) {
+    if (!callback) {
+      let resolve, reject;
+      args[PROMISE] = new Promise((...args) => {
+        resolve = args[0];
+        reject = args[1];
+      });
+      callback = (value) => {
+        const f = (value instanceof Error) ? reject : resolve;
+        f(value);
+      };
+    }
+    return (result) => {
+      if (!(result instanceof Error)) {
+        args[FINALIZE]();
+      }
+      return callback(result);
+    }
+  },
+});
+
 var runtimeSafety = mixin({
   addRuntimeCheck(getAccessor) {
     return function (access, member) {
@@ -4196,6 +4290,7 @@ var structureAcquisition = mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
+    const thunk = { [MEMORY]: this.obtainFixedView(thunkAddress, 0) };
     const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
@@ -4212,11 +4307,12 @@ var structureAcquisition = mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
+      this[CONTEXT] = { memoryList: [], shadowMap: null };
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
     this.comptime = true;
-    this.invokeThunk(thunkAddress, thunkAddress, args);
+    this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
   },
   getRootModule() {
@@ -4456,7 +4552,7 @@ var viewManagement = mixin({
       if (tag === 'DataView') {
         // capture relationship between the view and its buffer
         dv = this.registerView(arg);
-      } else if (tag === 'ArrayBuffer' || tag === 'SharedArrayBuffer') {
+      } else if (tag === 'ArrayBuffer') {
         dv = this.obtainView(arg, 0, arg.byteLength);
       } else if ((tag && tag === constructor[TYPED_ARRAY]?.name) || (tag === 'Uint8ClampedArray' && constructor[TYPED_ARRAY] === Uint8Array)) {
         dv = this.obtainView(arg.buffer, arg.byteOffset, arg.byteLength);
@@ -5564,7 +5660,17 @@ var all = mixin({
         }
         // see if it's a method
         if (member.flags & MemberFlag.IsMethod) {
-          const method = (...args) => fn([this, ...args]);
+          const method = function(...args) {
+            try {
+              return fn(this, ...args);
+            } catch (err) {
+              if ('argCount' in err) {
+                err.argIndex--;
+                err.argCount--;
+              }
+              throw err;
+            }
+          };
           defineProperties(method, {
             name: defineValue(name),
             length: defineValue(fn.length - 1),
@@ -5810,7 +5916,10 @@ var argStruct = mixin({
         if (args.length !== length) {
           throw new ArgumentCountMismatch(length, args.length);
         }
-        self[CONTEXT] = new CallContext();
+        self[CONTEXT] = { memoryList: [], shadowMap: null };
+        if (flags & ArgStructFlag.IsAsync) {
+          self[FINALIZE] = null;
+        }
         thisEnv.copyArguments(self, args, argMembers, options);
       } else {
         return self;
@@ -5829,86 +5938,33 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    {
+      this.detectArgumentFeatures(argMembers);
+    }
     return constructor;
   },
   finalizeArgStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
-  copyArguments(dest, src, members, options) {
-    let srcIndex = 0;
-    let allocatorCount = 0;
-    for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg;
-      if (structure.type === StructureType.Struct) {
-        if (structure.flags & StructFlag.IsAllocator) {
-          // use programmer-supplied allocator if found in options object, handling rare scenarios
-          // where a function uses multiple allocators
-          allocatorCount++;
-          const allocator = (allocatorCount === 1)
-          ? options?.['allocator'] ?? options?.['allocator1']
-          : options?.[`allocator${allocatorCount}`];
-          // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(structure, dest[CONTEXT]);
-        } else if (structure.flags & StructFlag.IsPromise) {
-          // use programmer-supplied callback if found, otherwise a function that resolves/rejects
-          // a promise attached to the argument struct
-          arg = options?.['callback'] ?? this.createPromise(dest);
-        } else if (structure.flags & StructFlag.IsAbortSignal) {
-          // create an Int32Array with one element, hooking it up to the programmer-supplied
-          // AbortSignal object if found
-          arg = this.createAbortSignal(options?.['signal']);
-        }
-      }
-      if (arg === undefined) {
-        // just a regular argument
-        arg = src[srcIndex++];
-        // only void has the value of undefined
-        if (arg === undefined && type !== MemberType.Void) {
-          throw new UndefinedArgument();
-        }
-      }
-      try {
-        dest[destIndex] = arg;
-      } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, src.length);
-      }
-    }
-  },
-  createPromise(dest) {
-    let resolve, reject;
-    dest[PROMISE] = new Promise((...args) => {
-      resolve = args[0];
-      reject = args[1];
-    });
-    return (value) => {
-      if (value instanceof Error) {
-        reject(value);
-      } else {
-        resolve(value);
-      }
-    };
-  },
-  createAbortSignal(signal) {
-    const array = new Int32Array(1);
-    if (signal) {
-      if (signal.aborted) {
-        array[0] = 1;
-      } else {
-        signal.addEventListener('abort', () => {
-          Atomics.store(array, 0, 1);
-          Atomics.notify(array, 0, 1);
-        }, { once: true });
-      }
-    }
-    return array;
-  },
-});
+  ...({
+    usingPromise: false,
+    usingAbortSignal: false,
+    usingAllocator: false,
 
-class CallContext {
-  memoryList = [];
-  shadowMap = null;
-}
+    detectArgumentFeatures(argMembers) {
+      for (const { structure: flags } of argMembers) {
+        if (flags & StructFlag.IsAllocator) {
+          this.usingAllocator = true;
+        } else if (flags & StructFlag.IsPromise) {
+          this.usingPromise = true;
+        } else if (flags & StructFlag.IsAbortSignal) {
+          this.usingAbortSignal = true;
+        }
+      }
+    }
+  } ),
+});
 
 var arrayLike = mixin({
   defineFinalizerArray({ get, set }) {
@@ -6832,7 +6888,7 @@ var pointer = mixin({
           // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
           if (TYPED_ARRAY in Target) {
             const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer' || /* c8 ignore next */ tag === 'SharedArrayBuffer') {
+            if (tag === 'ArrayBuffer') {
               warnImplicitArrayCreation(targetStructure, arg);
             }
           }
@@ -7070,7 +7126,6 @@ function isCompatibleBuffer(arg, constructor) {
         case 'DataView':
           return true;
         case 'ArrayBuffer':
-        case 'SharedArrayBuffer':
           return typedArray === Uint8Array || typedArray === Int8Array;
         case 'Uint8ClampedArray':
           return typedArray === Uint8Array;
@@ -7734,15 +7789,18 @@ var mixins = /*#__PURE__*/Object.freeze({
   AccessorUnalignedBool1: unalignedBool1,
   AccessorUnalignedInt: unalignedInt,
   AccessorUnalignedUint: unalignedUint,
+  FeatureAbortSignal: abortSignal,
   FeatureBaseline: baseline,
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
+  FeatureDefaultAllocator: defaultAllocator,
   FeatureIntConversion: intConversion,
   FeatureMemoryMapping: memoryMapping,
   FeatureModuleLoading: moduleLoading,
   FeatureObjectLinkage: objectLinkage,
   FeaturePointerSynchronization: pointerSynchronization,
+  FeaturePromiseCallback: promiseCallback,
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,

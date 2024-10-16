@@ -96,6 +96,25 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create thread that resolves a promise', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-promise', { multithreaded: true });
+      try {
+        const promise = spawn();
+        expect(promise).to.be.a('promise');
+        let result = await promise;
+        expect(result).to.equal(1234);
+        result = 0;
+        spawn({ callback: (v) => { result = v } });
+        await delay(100);
+        expect(result).to.equal(1234);
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 

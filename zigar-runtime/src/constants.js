@@ -73,6 +73,7 @@ export const OpaqueFlag = {
 export const ArgStructFlag = {
   HasOptions:       0x0010,
   IsThrowing:       0x0020,
+  IsAsync:          0x0040,
 };
 
 export const MemberType = {
