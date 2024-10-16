@@ -157,6 +157,9 @@ export const alignForward = (process.env.BITS === '64')
   /* c8 ignore next */
 : undefined;
 
+export const usizeMin = (process.env.BITS === '64') ? 0n : 0;
+export const usizeMax = (process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
+
 export const usize = (process.env.BITS === '64')
 ? function(arg) {
     return BigInt(arg);
@@ -166,8 +169,6 @@ export const usize = (process.env.BITS === '64')
     return Number(arg);
   }
 : undefined;
-
-export const nullAddress = (process.env.BITS === '64') ? 0n : 0;
 
 export const isInvalidAddress = (process.env.BITS === '64')
 ? function(address) {

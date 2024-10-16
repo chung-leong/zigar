@@ -1,14 +1,14 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict, NullPointer } from '../errors.js';
-import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE, SIZE } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, empty, findSortedIndex, isInvalidAddress, isMisaligned,
-  nullAddress, usize,
+  usizeMax, usizeMin,
 } from '../utils.js';
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
-  nextContextId: usize(1),
+  nextContextId: usizeMax,
   contextMap: new Map(),
   defaultAllocatorVTable: null,
 
@@ -217,7 +217,7 @@ export default mixin({
         this.freeFixedMemory(dv);
       }
       // set address to zero so data view won't get reused
-      fixed.address = nullAddress;
+      fixed.address = usizeMin;
       fixed.freed = true;
     }
   },
@@ -238,11 +238,10 @@ export default mixin({
     let vtable = this.defaultAllocatorVTable;
     if (!vtable) {
       // create vtable in fixed memory
-      const ptrStructure = structure.instance.members[1].structure;
-      const { byteSize, align, constructor: VTable } = ptrStructure.instance.members[0].structure;
-      const dv = this.allocateFixedMemory(byteSize, align);
+      const { VTable, noResize } = Allocator;
+      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.defaultAllocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign, retAddr) => {
+      vtable.alloc = (ptr, len, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
         const context = this.contextMap.get(contextId);
         if (context) {
@@ -251,8 +250,8 @@ export default mixin({
           return null;
         }
       };
-      vtable.resize = Allocator.noResize;
-      vtable.free = (ptr, buf, ptrAlign, retAddr) => {
+      vtable.resize = noResize;
+      vtable.free = (ptr, buf, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
         const context = this.contextMap.get(contextId);
         if (context) {
@@ -262,7 +261,7 @@ export default mixin({
         }
       };
     }
-    const contextId = this.nextContextId++;
+    const contextId = this.nextContextId--;
     // storing context id in a fake pointer
     const ptr = this.obtainFixedView(contextId, 0);
     this.contextMap.set(contextId, context);

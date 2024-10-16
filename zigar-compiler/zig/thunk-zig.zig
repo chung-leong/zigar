@@ -88,28 +88,3 @@ test "createThunk" {
         },
     }
 }
-
-pub fn uninline(comptime function: anytype) types.Uninlined(@TypeOf(function)) {
-    const FT = types.Uninlined(@TypeOf(function));
-    if (comptime FT == @TypeOf(function)) {
-        return function;
-    }
-    const f = @typeInfo(FT).Fn;
-    const ns = struct {
-        inline fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
-            return @call(.auto, function, args);
-        }
-    };
-    return fn_transform.spreadArgs(ns.call, f.calling_convention);
-}
-
-test "uninline" {
-    const ns = struct {
-        inline fn add(a: i32, b: i32) i32 {
-            return a + b;
-        }
-    };
-    const f = uninline(ns.add);
-    const c = f(1, 2);
-    try expect(c == 3);
-}

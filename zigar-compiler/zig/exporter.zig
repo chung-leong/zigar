@@ -598,11 +598,8 @@ fn addStaticMembers(ctx: anytype, structure: Value, comptime td: TypeData) !void
                                 else => decl_ptr_td.isConst(),
                             };
                             // deal with inline functions
-                            const target_ptr = switch (@typeInfo(DT)) {
-                                .Fn => &thunk_zig.uninline(decl_value),
-                                else => decl_ptr,
-                            };
-                            const value_obj = try exportPointerTarget(ctx, target_ptr, is_comptime);
+
+                            const value_obj = try exportPointerTarget(ctx, decl_ptr, is_comptime);
                             template_maybe = template_maybe orelse try ctx.host.createTemplate(null);
                             try ctx.host.writeSlot(template_maybe.?, index, value_obj);
                         }
