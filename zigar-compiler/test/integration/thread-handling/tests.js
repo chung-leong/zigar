@@ -105,11 +105,53 @@ export function addTests(importModule, options) {
       try {
         const promise = spawn();
         expect(promise).to.be.a('promise');
-        let result = await promise;
+        const result = await promise;
         expect(result).to.equal(1234);
-        result = 0;
+      } finally {
+        shutdown();
+      }
+    })
+    it('should allow the use of a callback in lieu of promise', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-promise', { multithreaded: true });
+      try {
+        let result = 0;
         spawn({ callback: (v) => { result = v } });
         await delay(100);
+        expect(result).to.equal(1234);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create thread that resolves a promise on abort', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-promise-and-abort-signal', { multithreaded: true });
+      try {
+        const controller1 = new AbortController();
+        const promise1 = spawn(true, { signal: controller1.signal });
+        setTimeout(() => controller1.abort(), 100);
+        let result, error;
+        try {
+          result = await promise1;
+        } catch (err) {
+          error = err;
+        }
+        expect(error).to.be.an('error');
+        error = null;
+        const controller2 = new AbortController();
+        const promise2 = spawn(false, { signal: controller2.signal });
+        setTimeout(() => controller2.abort(), 100);
+        try {
+          result = await promise2;
+        } catch (err) {
+          error = err;
+        }
         expect(result).to.equal(1234);
       } finally {
         shutdown();
