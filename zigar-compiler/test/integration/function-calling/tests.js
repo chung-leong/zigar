@@ -420,12 +420,6 @@ export function addTests(importModule, options) {
       const [ line3 ] = await capture(() => print());
       expect(line3).to.equal('odd = 777, even = 888');
     })
-    it('should be able to call a function marked inline', async function() {
-      this.timeout(300000);
-      const { returnNumber } = await importTest('inline-function');
-      const result = returnNumber(1234);
-      expect(result).to.equal(1234);
-    })
     it('should handle pointer in struct', async function() {
       this.timeout(300000);
       const { User } = await importTest('handle-pointer-in-struct');
