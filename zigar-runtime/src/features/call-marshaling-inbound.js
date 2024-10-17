@@ -5,7 +5,7 @@ export default mixin({
   jsFunctionThunkMap: new Map(),
   jsFunctionCallerMap: new Map(),
   jsFunctionIdMap: null,
-  jsFunctionNextId: 1,
+  jsFunctionNextId: 8888,
 
   getFunctionId(fn) {
     if (!this.jsFunctionIdMap) {
@@ -19,16 +19,16 @@ export default mixin({
     return id;
   },
   getFunctionThunk(fn, jsThunkController) {
-    const funcId = this.getFunctionId(fn);
-    let dv = this.jsFunctionThunkMap.get(funcId);
+    const id = this.getFunctionId(fn);
+    let dv = this.jsFunctionThunkMap.get(id);
     if (dv === undefined) {
       const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-      const thunkAddr = this.createJsThunk(controllerAddr, funcId);
+      const thunkAddr = this.createJsThunk(controllerAddr, id);
       if (!thunkAddr) {
         throw new Error('Unable to create function thunk');
       }
       dv = this.obtainFixedView(thunkAddr, 0);
-      this.jsFunctionThunkMap.set(funcId, dv);
+      this.jsFunctionThunkMap.set(id, dv);
     }
     return dv;
   },
@@ -105,8 +105,8 @@ export default mixin({
       }
       return result;
     };
-    const funcId = this.getFunctionId(fn);
-    this.jsFunctionCallerMap.set(funcId, handler);
+    const id = this.getFunctionId(fn);
+    this.jsFunctionCallerMap.set(id, handler);
     return function(...args) {
       return fn(...args);
     };

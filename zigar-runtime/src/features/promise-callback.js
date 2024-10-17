@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { FINALIZE, PROMISE } from '../symbols.js';
+import { FINALIZE, FIXED, MEMORY, PROMISE } from '../symbols.js';
 
 export default mixin({
   createCallback(args, callback) {
@@ -9,9 +9,14 @@ export default mixin({
         resolve = args[0];
         reject = args[1];
       });
-      callback = (value) => {
-        const f = (value instanceof Error) ? reject : resolve;
-        f(value);
+      callback = (result) => {
+        if (result?.[MEMORY]?.[FIXED]) {
+          // the memory in the result object is stack memory, which will go bad after the function
+          // returns; we need to copy the content into JavaScript memory
+          result = new result.constructor(result);
+        }
+        const f = (result instanceof Error) ? reject : resolve;
+        f(result);
       };
     }
     return (result) => {
@@ -19,6 +24,6 @@ export default mixin({
         args[FINALIZE]();
       }
       return callback(result);
-    }
+    };
   },
 });

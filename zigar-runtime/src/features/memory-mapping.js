@@ -193,27 +193,36 @@ export default mixin({
       // pointer to nothing
       let entry = this.viewMap.get(this.emptyBuffer);
       if (!entry) {
-        this.viewMap.set(this.emptyBuffer, entry = {});
+        this.viewMap.set(this.emptyBuffer, entry = new Map());
       }
       const key = `${address}:0`;
-      dv = entry[key];
-      if (!dv || dv[FIXED].address !== address) {
-        dv = entry[key] = new DataView(this.emptyBuffer);
+      dv = entry.get(key);
+      if (!dv) {
+        dv = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
+        entry.set(key, dv);
+      } else {
       }
     }
     return dv;
   },
   releaseFixedView(dv) {
     const fixed = dv[FIXED];
-    if (fixed?.address) {
+    const address = fixed?.address;
+    if (address) {
       // only allocated memory would have type attached
       if (fixed.type !== undefined) {
         this.freeFixedMemory(dv);
       }
       // set address to zero so data view won't get reused
       fixed.address = usizeMin;
-      fixed.freed = true;
+      if (fixed.len === 0) {
+        let entry = this.viewMap.get(this.emptyBuffer);
+        if (entry) {
+          const key = `${address}:0`;
+          entry.delete(key);
+        }
+      }
     }
   },
   getViewAddress(dv) {

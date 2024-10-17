@@ -2340,7 +2340,7 @@ var callMarshalingInbound = mixin({
   jsFunctionThunkMap: new Map(),
   jsFunctionCallerMap: new Map(),
   jsFunctionIdMap: null,
-  jsFunctionNextId: 1,
+  jsFunctionNextId: 8888,
 
   getFunctionId(fn) {
     if (!this.jsFunctionIdMap) {
@@ -2354,16 +2354,16 @@ var callMarshalingInbound = mixin({
     return id;
   },
   getFunctionThunk(fn, jsThunkController) {
-    const funcId = this.getFunctionId(fn);
-    let dv = this.jsFunctionThunkMap.get(funcId);
+    const id = this.getFunctionId(fn);
+    let dv = this.jsFunctionThunkMap.get(id);
     if (dv === undefined) {
       const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-      const thunkAddr = this.createJsThunk(controllerAddr, funcId);
+      const thunkAddr = this.createJsThunk(controllerAddr, id);
       if (!thunkAddr) {
         throw new Error('Unable to create function thunk');
       }
       dv = this.obtainFixedView(thunkAddr, 0);
-      this.jsFunctionThunkMap.set(funcId, dv);
+      this.jsFunctionThunkMap.set(id, dv);
     }
     return dv;
   },
@@ -2440,8 +2440,8 @@ var callMarshalingInbound = mixin({
       }
       return result;
     };
-    const funcId = this.getFunctionId(fn);
-    this.jsFunctionCallerMap.set(funcId, handler);
+    const id = this.getFunctionId(fn);
+    this.jsFunctionCallerMap.set(id, handler);
     return function(...args) {
       return fn(...args);
     };
@@ -2449,7 +2449,8 @@ var callMarshalingInbound = mixin({
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainFixedView(argAddress, argSize);
-      return this.runFunction(id, dv, futexHandle);
+      const result = this.runFunction(id, dv, futexHandle);
+      return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
     }
@@ -3012,6 +3013,7 @@ var callMarshalingOutbound = mixin({
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
           arg = { callback: this.createCallback(dest, options?.['callback']) };
+          debugger;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
@@ -3582,27 +3584,35 @@ var memoryMapping = mixin({
       // pointer to nothing
       let entry = this.viewMap.get(this.emptyBuffer);
       if (!entry) {
-        this.viewMap.set(this.emptyBuffer, entry = {});
+        this.viewMap.set(this.emptyBuffer, entry = new Map());
       }
       const key = `${address}:0`;
-      dv = entry[key];
-      if (!dv || dv[FIXED].address !== address) {
-        dv = entry[key] = new DataView(this.emptyBuffer);
+      dv = entry.get(key);
+      if (!dv) {
+        dv = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
+        entry.set(key, dv);
       }
     }
     return dv;
   },
   releaseFixedView(dv) {
     const fixed = dv[FIXED];
-    if (fixed?.address) {
+    const address = fixed?.address;
+    if (address) {
       // only allocated memory would have type attached
       if (fixed.type !== undefined) {
         this.freeFixedMemory(dv);
       }
       // set address to zero so data view won't get reused
       fixed.address = usizeMin;
-      fixed.freed = true;
+      if (fixed.len === 0) {
+        let entry = this.viewMap.get(this.emptyBuffer);
+        if (entry) {
+          const key = `${address}:0`;
+          entry.delete(key);
+        }
+      }
     }
   },
   getViewAddress(dv) {
@@ -4088,9 +4098,14 @@ var promiseCallback = mixin({
         resolve = args[0];
         reject = args[1];
       });
-      callback = (value) => {
-        const f = (value instanceof Error) ? reject : resolve;
-        f(value);
+      callback = (result) => {
+        if (result?.[MEMORY]?.[FIXED]) {
+          // the memory in the result object is stack memory, which will go bad after the function
+          // returns; we need to copy the content into JavaScript memory
+          result = new result.constructor(result);
+        }
+        const f = (result instanceof Error) ? reject : resolve;
+        f(result);
       };
     }
     return (result) => {
@@ -4098,7 +4113,7 @@ var promiseCallback = mixin({
         args[FINALIZE]();
       }
       return callback(result);
-    }
+    };
   },
 });
 
@@ -4631,11 +4646,11 @@ var viewManagement = mixin({
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
           const prevKey = `${prev.byteOffset}:${prev.byteLength}`;
-          entry = { [prevKey]: prev };
+          entry = new Map([ [ prevKey, prev ] ]);
           this.viewMap.set(buffer, entry);
         }
       } else {
-        existing = entry[`${offset}:${len}`];
+        existing = entry.get(`${offset}:${len}`);
       }
     }
     return { existing, entry };
@@ -4646,7 +4661,8 @@ var viewManagement = mixin({
     if (existing) {
       return existing;
     } else if (entry) {
-      dv = entry[`${offset}:${len}`] = new DataView(buffer, offset, len);
+      dv = new DataView(buffer, offset, len);
+      entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));

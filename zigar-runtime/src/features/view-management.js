@@ -99,11 +99,11 @@ export default mixin({
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
           const prevKey = `${prev.byteOffset}:${prev.byteLength}`;
-          entry = { [prevKey]: prev };
+          entry = new Map([ [ prevKey, prev ] ]);
           this.viewMap.set(buffer, entry);
         }
       } else {
-        existing = entry[`${offset}:${len}`];
+        existing = entry.get(`${offset}:${len}`);
       }
     }
     return { existing, entry };
@@ -114,7 +114,8 @@ export default mixin({
     if (existing) {
       return existing;
     } else if (entry) {
-      dv = entry[`${offset}:${len}`] = new DataView(buffer, offset, len);
+      dv = new DataView(buffer, offset, len);
+      entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
