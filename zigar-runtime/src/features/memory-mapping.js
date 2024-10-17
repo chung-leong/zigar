@@ -149,6 +149,11 @@ export default mixin({
     let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)
     if (context) {
+      // see if the address points to the call context; if so, we need to retain the context
+      // because a copy of the allocator is stored in a returned structure
+      if (size === undefined && context.id === address) {
+        context.retained = true;
+      }
       const { memoryList } = context;
       const index = findMemoryIndex(memoryList, address);
       const entry = memoryList[index - 1];

@@ -18,7 +18,7 @@ export default mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.setMultithread?.(false);
+      this.freeDefaultAllocator?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;

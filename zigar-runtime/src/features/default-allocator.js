@@ -5,16 +5,16 @@ import { empty, usizeMax } from '../utils.js';
 export default mixin({
   nextContextId: usizeMax,
   contextMap: new Map(),
-  defaultAllocatorVTable: null,
+  allocatorVTable: null,
 
   createDefaultAllocator(structure, context) {
     const { constructor: Allocator } = structure;
-    let vtable = this.defaultAllocatorVTable;
+    let vtable = this.allocatorVTable;
     if (!vtable) {
       // create vtable in fixed memory
       const { VTable, noResize } = Allocator;
       const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.defaultAllocatorVTable = VTable(dv);
+      vtable = this.allocatorVTable = VTable(dv);
       vtable.alloc = (ptr, len, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
         const context = this.contextMap.get(contextId);
@@ -35,7 +35,7 @@ export default mixin({
         }
       };
     }
-    const contextId = this.nextContextId--;
+    const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
     const ptr = this.obtainFixedView(contextId, 0);
     this.contextMap.set(contextId, context);
@@ -63,6 +63,18 @@ export default mixin({
     if (shadowDV) {
       this.removeShadow(context, shadowDV);
       this.freeShadowMemory(shadowDV);
+    }
+  },
+  releaseCallContext(context) {
+    if (!context.retained) {
+      this.contextMap.delete(context.id);
+    }
+  },
+  freeDefaultAllocator() {
+    if (this.allocatorVTable) {
+      const dv = this.allocatorVTable[MEMORY];
+      this.allocatorVTable = null;
+      this.freeFixedMemory(dv);
     }
   },
 });

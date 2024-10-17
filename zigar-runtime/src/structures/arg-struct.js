@@ -2,7 +2,7 @@ import { ArgStructFlag, MemberType, StructFlag, StructureFlag } from '../constan
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
 import { CONTEXT, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue, never } from '../utils.js';
+import { defineValue, never, usizeMin } from '../utils.js';
 
 export default mixin({
   defineArgStruct(structure, descriptors) {
@@ -40,7 +40,7 @@ export default mixin({
         if (args.length !== length) {
           throw new ArgumentCountMismatch(length, args.length);
         }
-        self[CONTEXT] = { memoryList: [], shadowMap: null };
+        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }

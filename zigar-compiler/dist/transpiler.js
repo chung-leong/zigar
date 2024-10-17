@@ -2449,8 +2449,7 @@ var callMarshalingInbound = mixin({
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainFixedView(argAddress, argSize);
-      const result = this.runFunction(id, dv, futexHandle);
-      return result;
+      return this.runFunction(id, dv, futexHandle);
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
     }
@@ -3013,7 +3012,6 @@ var callMarshalingOutbound = mixin({
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
           arg = { callback: this.createCallback(dest, options?.['callback']) };
-          debugger;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
@@ -3074,6 +3072,7 @@ var callMarshalingOutbound = mixin({
           this.updatePointerTargets(context, args);
         }
         this.releaseShadows(context);
+        this.releaseCallContext(context);
         this.flushConsole?.();
       };
       if (FINALIZE in args) {
@@ -3304,16 +3303,16 @@ function reset32(dest, offset) {
 var defaultAllocator = mixin({
   nextContextId: usizeMax,
   contextMap: new Map(),
-  defaultAllocatorVTable: null,
+  allocatorVTable: null,
 
   createDefaultAllocator(structure, context) {
     const { constructor: Allocator } = structure;
-    let vtable = this.defaultAllocatorVTable;
+    let vtable = this.allocatorVTable;
     if (!vtable) {
       // create vtable in fixed memory
       const { VTable, noResize } = Allocator;
       const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.defaultAllocatorVTable = VTable(dv);
+      vtable = this.allocatorVTable = VTable(dv);
       vtable.alloc = (ptr, len, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
         const context = this.contextMap.get(contextId);
@@ -3334,7 +3333,7 @@ var defaultAllocator = mixin({
         }
       };
     }
-    const contextId = this.nextContextId--;
+    const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
     const ptr = this.obtainFixedView(contextId, 0);
     this.contextMap.set(contextId, context);
@@ -3360,6 +3359,18 @@ var defaultAllocator = mixin({
     if (shadowDV) {
       this.removeShadow(context, shadowDV);
       this.freeShadowMemory(shadowDV);
+    }
+  },
+  releaseCallContext(context) {
+    if (!context.retained) {
+      this.contextMap.delete(context.id);
+    }
+  },
+  freeDefaultAllocator() {
+    if (this.allocatorVTable) {
+      const dv = this.allocatorVTable[MEMORY];
+      this.allocatorVTable = null;
+      this.freeFixedMemory(dv);
     }
   },
 });
@@ -3540,6 +3551,11 @@ var memoryMapping = mixin({
     let len = count * (size ?? 0);
     // check for null address (=== can't be used since address can be both number and bigint)
     if (context) {
+      // see if the address points to the call context; if so, we need to retain the context
+      // because a copy of the allocator is stored in a returned structure
+      if (size === undefined && context.id === address) {
+        context.retained = true;
+      }
       const { memoryList } = context;
       const index = findMemoryIndex(memoryList, address);
       const entry = memoryList[index - 1];
@@ -3716,7 +3732,7 @@ var moduleLoading = mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.setMultithread?.(false);
+      this.freeDefaultAllocator?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;
@@ -4322,7 +4338,7 @@ var structureAcquisition = mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
-      this[CONTEXT] = { memoryList: [], shadowMap: null };
+      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
@@ -5932,7 +5948,7 @@ var argStruct = mixin({
         if (args.length !== length) {
           throw new ArgumentCountMismatch(length, args.length);
         }
-        self[CONTEXT] = { memoryList: [], shadowMap: null };
+        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }

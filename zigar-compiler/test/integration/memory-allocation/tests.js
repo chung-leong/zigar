@@ -33,21 +33,19 @@ export function addTests(importModule, options) {
         expect(() => freeSlice(slice)).to.not.throw();
       }
     })
-    it('should create object in fixed memory', async function() {
+    it('should keep a usable copy of allocator', async function() {
       this.timeout(300000);
-      const { default: module, Struct, print } = await importTest('create-fixed-object');
-      const [ before ] = await capture(() => print());
-      expect(before).to.equal('empty');
-      const notFixed = new Struct({ number1: 23, number2: 55 });
-      expect(() => module.ptr_maybe = notFixed).to.throw(TypeError);
-      const fixed = new Struct({ number1: 23, number2: 55 }, { fixed: true });
-      expect(fixed.number1).to.equal(23);
-      expect(fixed.number2).to.equal(55);
-      expect(() => module.ptr_maybe = fixed).to.not.throw();
-      const [ after ] = await capture(() => print());
-      expect(after).to.equal('create-fixed-object.Struct{ .number1 = 23, .number2 = 55 }');
-      fixed.delete();
-      expect(() => fixed.number1).to.throw();
+      const { create } = await importTest('retain-allocator');
+      const copier = create();
+      const copy1 = copier.dupe('Hello world');
+      expect(copy1.string).to.equal('Hello world');
+      const copy2 = copier.dupe('This is a test');
+      expect(copy2.string).to.equal('This is a test');
+    })
+    it('should return a Zig allocator', async function() {
+      this.timeout(300000);
+      const { getAllocator } = await importTest('return-allocator');
+      const allocator = getAllocator();
     })
   })
 }

@@ -99,6 +99,7 @@ export default mixin({
           this.updatePointerTargets(context, args);
         }
         this.releaseShadows(context);
+        this.releaseCallContext(context);
         this.flushConsole?.();
       };
       if (FINALIZE in args) {
