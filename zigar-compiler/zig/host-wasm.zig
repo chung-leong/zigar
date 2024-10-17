@@ -65,25 +65,30 @@ export fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment:
     a.rawFree(bytes[0..len], ptr_align, 0);
 }
 
+const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
+
 export fn runThunk(
     thunk_address: usize,
     fn_address: usize,
-    args: *anyopaque,
+    arg_address: usize,
 ) bool {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    return if (thunk(fn_ptr, args)) true else |_| false;
+    const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
+    return if (thunk(fn_ptr, arg_ptr)) true else |_| false;
 }
 
 export fn runVariadicThunk(
     thunk_address: usize,
     fn_address: usize,
-    arg_ptr: *anyopaque,
-    attr_ptr: *const anyopaque,
+    arg_address: usize,
+    attr_address: usize,
     arg_count: usize,
 ) bool {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
+    const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
+    const attr_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(attr_address) else empty_ptr;
     return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 

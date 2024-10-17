@@ -328,6 +328,8 @@ fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     return .ok;
 }
 
+const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
+
 fn runThunk(
     thunk_address: usize,
     fn_address: usize,
@@ -335,7 +337,7 @@ fn runThunk(
 ) callconv(.C) Result {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
+    const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     return if (thunk(fn_ptr, arg_ptr)) .ok else |_| .failure;
 }
 
@@ -348,7 +350,7 @@ fn runVariadicThunk(
 ) callconv(.C) Result {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
-    const arg_ptr: *anyopaque = @ptrFromInt(arg_address);
+    const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *const anyopaque = @ptrFromInt(attr_address);
     const arg_count = attr_len / 8;
     return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) .ok else |_| .failure;

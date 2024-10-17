@@ -161,7 +161,7 @@ export default mixin({
     const thisEnv = this;
     const constructor = function(arg, options = {}) {
       const {
-        fixed = false,
+        allocator = false,
       } = options;
       const creating = this instanceof constructor;
       let self, dv;
@@ -177,10 +177,10 @@ export default mixin({
           // provided by defineStructureSlice(); the slice is different from other structures
           // as it does not have a fixed size; memory is allocated by the slice initializer
           // based on the argument given
-          self[INITIALIZE](arg, fixed);
+          self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
         } else {
-          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, fixed);
+          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, allocator);
         }
       } else {
         if (CAST in constructor) {
@@ -242,7 +242,7 @@ export default mixin({
   },
   createApplier(structure) {
     const { instance: { template } } = structure;
-    return function(arg, fixed) {
+    return function(arg, allocator) {
       const argKeys = Object.keys(arg);
       const keys = this[KEYS];
       const setters = this[SETTERS];
@@ -297,7 +297,7 @@ export default mixin({
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], fixed);
+        set.call(this, arg[key], allocator);
       }
       return argKeys.length;
     };

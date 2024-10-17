@@ -4705,9 +4705,19 @@ var viewManagement = mixin({
     }
     return dv;
   },
-  allocateMemory(len, align = 0, fixed = false) {
-    if (fixed) {
-      return this.allocateFixedMemory(len, align);
+  allocateMemory(len, align = 0, allocator = null) {
+    if (allocator) {
+      const ptrAlign = 31 - Math.clz32(align);
+      const { vtable, ptr } = allocator;
+      const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+      // alloc returns a [*]u8, which has a init length of 1
+      slicePtr.length = len;
+      const dv = slicePtr['*'][MEMORY];
+      const fixed = dv[FIXED];
+      if (fixed) {
+        fixed.allocator = allocator;
+      }
+      return dv;
     } else {
       return this.allocateRelocMemory(len, align);
     }
@@ -5747,7 +5757,7 @@ var all = mixin({
     const thisEnv = this;
     const constructor = function(arg, options = {}) {
       const {
-        fixed = false,
+        allocator = false,
       } = options;
       const creating = this instanceof constructor;
       let self, dv;
@@ -5763,10 +5773,10 @@ var all = mixin({
           // provided by defineStructureSlice(); the slice is different from other structures
           // as it does not have a fixed size; memory is allocated by the slice initializer
           // based on the argument given
-          self[INITIALIZE](arg, fixed);
+          self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
         } else {
-          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, fixed);
+          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, allocator);
         }
       } else {
         if (CAST in constructor) {
@@ -5828,7 +5838,7 @@ var all = mixin({
   },
   createApplier(structure) {
     const { instance: { template } } = structure;
-    return function(arg, fixed) {
+    return function(arg, allocator) {
       const argKeys = Object.keys(arg);
       const keys = this[KEYS];
       const setters = this[SETTERS];
@@ -5883,7 +5893,7 @@ var all = mixin({
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], fixed);
+        set.call(this, arg[key], allocator);
       }
       return argKeys.length;
     };

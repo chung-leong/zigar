@@ -149,9 +149,19 @@ export default mixin({
     }
     return dv;
   },
-  allocateMemory(len, align = 0, fixed = false) {
-    if (fixed) {
-      return this.allocateFixedMemory(len, align);
+  allocateMemory(len, align = 0, allocator = null) {
+    if (allocator) {
+      const ptrAlign = 31 - Math.clz32(align);
+      const { vtable, ptr } = allocator;
+      const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+      // alloc returns a [*]u8, which has a init length of 1
+      slicePtr.length = len;
+      const dv = slicePtr['*'][MEMORY];
+      const fixed = dv[FIXED];
+      if (fixed) {
+        fixed.allocator = allocator;
+      }
+      return dv;
     } else {
       return this.allocateRelocMemory(len, align);
     }

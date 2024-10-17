@@ -44,8 +44,17 @@ export function addTests(importModule, options) {
     })
     it('should return a Zig allocator', async function() {
       this.timeout(300000);
-      const { getAllocator } = await importTest('return-allocator');
+      const {
+        Struct,
+        getAllocator,
+        print,
+        default: module } = await importTest('return-allocator');
       const allocator = getAllocator();
+      const struct = new Struct({ number1: 123, number2: 456 }, { allocator });
+      expect(struct.valueOf()).to.eql({ number1: 123, number2: 456 });
+      module.ptr_maybe = struct;
+      const [ after ] = await capture(() => print());
+      expect(after).to.equal('return-allocator.Struct{ .number1 = 123, .number2 = 456 }');
     })
   })
 }
