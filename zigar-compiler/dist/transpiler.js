@@ -1204,7 +1204,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
     multithreaded = (isWASM) ? false : true,
-    maxMemory = (isWASM && multithreaded) ? 1024 * 65536 : undefined,
+    maxMemory = (isWASM && multithreaded) ? 10240 * 65536 : undefined,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -2339,6 +2339,7 @@ var baseline = mixin({
 var callMarshalingInbound = mixin({
   jsFunctionThunkMap: new Map(),
   jsFunctionCallerMap: new Map(),
+  jsFunctionControllerMap: new Map(),
   jsFunctionIdMap: null,
   jsFunctionNextId: 8888,
 
@@ -2357,23 +2358,26 @@ var callMarshalingInbound = mixin({
     const id = this.getFunctionId(fn);
     let dv = this.jsFunctionThunkMap.get(id);
     if (dv === undefined) {
-      const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-      const thunkAddr = this.createJsThunk(controllerAddr, id);
-      if (!thunkAddr) {
+      const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+      const thunkAddress = this.createJsThunk(controllerAddress, id);
+      if (!thunkAddress) {
         throw new Error('Unable to create function thunk');
       }
-      dv = this.obtainFixedView(thunkAddr, 0);
+      dv = this.obtainFixedView(thunkAddress, 0);
       this.jsFunctionThunkMap.set(id, dv);
+      this.jsFunctionControllerMap.set(id, jsThunkController);
     }
     return dv;
   },
   freeFunctionThunk(thunk, jsThunkController) {
-    const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-    const thunkAddr = this.getViewAddress(thunk);
-    const id = this.destroyJsThunk(controllerAddr, thunkAddr);
+    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+    const thunkAddress = this.getViewAddress(thunk);
+    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+    this.releaseFixedView(thunk);
     if (id) {
       this.jsFunctionThunkMap.delete(id);
       this.jsFunctionCallerMap.delete(id);
+      this.jsFunctionControllerMap.delete(id);
     }
   },
   createInboundCaller(fn, ArgStruct) {
@@ -2463,11 +2467,10 @@ var callMarshalingInbound = mixin({
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
-    if (thunk) {
-      this.releaseFixedView(thunk);
+    const controller = this.jsFunctionControllerMap.get(id);
+    if (thunk && controller) {
+      this.freeFunctionThunk(thunk, controller);
     }
-    this.jsFunctionThunkMap.delete(id);
-    this.jsFunctionCallerMap.delete(id);
   },
   ...({
     exports: {
@@ -2496,8 +2499,8 @@ const CallResult = {
 };
 
 const Action = {
-  Call: 2,
-  Release: 3,
+  Call: 0,
+  Release: 1,
 };
 
 class InvalidIntConversion extends SyntaxError {
@@ -2874,12 +2877,12 @@ class ZigError extends Error {
   }
 }
 
-let Exit$1 = class Exit extends ZigError {
+class Exit extends ZigError {
   constructor(code) {
     super('Program exited');
     this.code = code;
   }
-};
+}
 
 function adjustArgumentError(argIndex, argCount) {
   const { message } = this;
@@ -3075,7 +3078,7 @@ var callMarshalingOutbound = mixin({
         this.updatePointerTargets(context, args);
       }
       this.releaseShadows(context);
-      this.releaseCallContext(context);
+      this.releaseCallContext?.(context);
       this.flushConsole?.();
     };
     if (FINALIZE in args) {
@@ -3094,12 +3097,12 @@ var callMarshalingOutbound = mixin({
   ...({
     usingPromise: false,
     usingAbortSignal: false,
-    usingAllocator: false,
+    usingDefaultAllocator: false,
 
     detectArgumentFeatures(argMembers) {
-      for (const { structure: flags } of argMembers) {
+      for (const { structure: { flags } } of argMembers) {
         if (flags & StructFlag.IsAllocator) {
-          this.usingAllocator = true;
+          this.usingDefaultAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
         } else if (flags & StructFlag.IsAbortSignal) {
@@ -4802,7 +4805,7 @@ var wasiSupport = mixin({
           return () => ENOBADF;
         case 'proc_exit':
           return (code) => {
-            throw new Exit$1(code);
+            throw new Exit(code);
           };
         case 'random_get':
           return (buf, buf_len) => {
@@ -6566,6 +6569,7 @@ var _function = mixin({
       }
       let existing;
       if (existing = cache.find(dv)) {
+        console.log(`existing`);
         return existing;
       }
       const argCount = ArgStruct.prototype.length;
@@ -9283,6 +9287,9 @@ async function transpile(path, options) {
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
+  usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
+  usage.FeaturePromiseCallback = env.usingPromise;
+  usage.FeatureAbortSignal = env.usingAbortSignal;
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
   } else {

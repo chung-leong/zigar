@@ -206,7 +206,6 @@ export default mixin({
         dv = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
         entry.set(key, dv);
-      } else {
       }
     }
     return dv;

@@ -4,7 +4,7 @@ export default mixin({
     nextThreadId: 1,
     workers: [],
     exports: {
-      terminateThreads: { argType: '' },
+      _detachThreads: { argType: '' },
     },
 
     getThreadHandler() {
@@ -28,31 +28,37 @@ export default mixin({
         } else if (msg.type === 'exit') {
           const index = this.workers.indexOf(worker);
           if (index !== -1) {
+            worker.detach();
             this.workers.splice(index, 1);
           }
         }
       };
       const code = getWorkerCode();
+      const evtName = 'message';
       if (typeof(Worker) === 'function' || process.env.COMPAT !== 'node') {
         // web worker
         const url = new URL('data:,' + encodeURIComponent(code));
         const worker = new Worker(url, { type: 'module', name: 'zig' });
-        worker.onmessage = evt => handler(worker, evt.data);
+        const listener = evt => handler(worker, evt.data);
+        worker.addEventListener(evtName, listener);
+        worker.detach = () => worker.removeEventListener(evtName, listener);
         worker.postMessage(workerData);
         this.workers.push(worker);
       } else if (process.env.COMPAT === 'node') {
         // Node.js worker-thread
         import('worker_threads').then(({ Worker }) => {
           const worker = new Worker(code, { workerData, eval: true });
-          worker.on('message', msg => handler(worker, msg));
+          const listener = msg => handler(worker, msg);
+          worker.on(evtName, listener);
+          worker.detach = () => worker.off(evtName, listener);
           this.workers.push(worker);
         });
       }
       return tid;
     },
-    terminateThreads() {
+    _detachThreads() {
       for (const worker of this.workers) {
-        worker.terminate();
+        worker.detach();
       }
       this.workers.splice(0);
     },

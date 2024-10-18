@@ -4,6 +4,7 @@ import { MEMORY, THROWING, VISIT } from '../symbols.js';
 export default mixin({
   jsFunctionThunkMap: new Map(),
   jsFunctionCallerMap: new Map(),
+  jsFunctionControllerMap: new Map(),
   jsFunctionIdMap: null,
   jsFunctionNextId: 8888,
 
@@ -22,23 +23,26 @@ export default mixin({
     const id = this.getFunctionId(fn);
     let dv = this.jsFunctionThunkMap.get(id);
     if (dv === undefined) {
-      const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-      const thunkAddr = this.createJsThunk(controllerAddr, id);
-      if (!thunkAddr) {
+      const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+      const thunkAddress = this.createJsThunk(controllerAddress, id);
+      if (!thunkAddress) {
         throw new Error('Unable to create function thunk');
       }
-      dv = this.obtainFixedView(thunkAddr, 0);
+      dv = this.obtainFixedView(thunkAddress, 0);
       this.jsFunctionThunkMap.set(id, dv);
+      this.jsFunctionControllerMap.set(id, jsThunkController);
     }
     return dv;
   },
   freeFunctionThunk(thunk, jsThunkController) {
-    const controllerAddr = this.getViewAddress(jsThunkController[MEMORY]);
-    const thunkAddr = this.getViewAddress(thunk);
-    const id = this.destroyJsThunk(controllerAddr, thunkAddr);
+    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+    const thunkAddress = this.getViewAddress(thunk);
+    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+    this.releaseFixedView(thunk);
     if (id) {
       this.jsFunctionThunkMap.delete(id);
       this.jsFunctionCallerMap.delete(id);
+      this.jsFunctionControllerMap.delete(id);
     }
   },
   createInboundCaller(fn, ArgStruct) {
@@ -128,11 +132,10 @@ export default mixin({
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
-    if (thunk) {
-      this.releaseFixedView(thunk);
+    const controller = this.jsFunctionControllerMap.get(id);
+    if (thunk && controller) {
+      this.freeFunctionThunk(thunk, controller);
     }
-    this.jsFunctionThunkMap.delete(id);
-    this.jsFunctionCallerMap.delete(id);
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
@@ -170,6 +173,6 @@ const CallResult = {
 };
 
 const Action = {
-  Call: 2,
-  Release: 3,
+  Call: 0,
+  Release: 1,
 };

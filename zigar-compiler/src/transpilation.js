@@ -57,6 +57,9 @@ export async function transpile(path, options) {
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
+  usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
+  usage.FeaturePromiseCallback = env.usingPromise;
+  usage.FeatureAbortSignal = env.usingAbortSignal;
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
   } else {

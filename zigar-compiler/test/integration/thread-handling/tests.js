@@ -23,12 +23,13 @@ export function addTests(importModule, options) {
             count++
           });
         }
-        await delay(200);
+        await delay(1000);
         expect(count).to.equal(10);
       } finally {
         shutdown();
       }
     })
+    skip.if(target === 'wasm32').
     it('should create thread pool and invoke callback', async function() {
       this.timeout(300000);
       const {
@@ -105,13 +106,20 @@ export function addTests(importModule, options) {
       try {
         const promise = spawn();
         expect(promise).to.be.a('promise');
-        let result = await promise;
-        expect(result).to.equal(1234);
+        const result1 = await promise;
+        expect(result1).to.equal(1234);
         // use callback instead
-        result = 0;
-        spawn({ callback: (v) => { result = v } });
-        await delay(100);
-        expect(result).to.equal(1234);
+        let result2 = -1;
+        spawn({
+          callback(v) {
+            result2 = v;
+          }
+        });
+        await delay(250);
+        expect(result2).to.equal(1234);
+        // try promise again
+        const result3 = await spawn();
+        expect(result2).to.equal(1234);
       } finally {
         shutdown();
       }

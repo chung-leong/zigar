@@ -13,12 +13,14 @@ pub const ActionResult = enum(u32) {
     failure_disabled,
 };
 pub const ActionType = enum(u32) {
-    // performed by zig:
-    create,
-    destroy,
     // performed by js:
     call,
     release,
+    // performed by zig:
+    create,
+    destroy,
+    get_ptr,
+    get_id,
 };
 pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
@@ -59,6 +61,22 @@ const native = struct {
                             return Error.UnableToFindThunk;
                         }
                     },
+                    .get_ptr => {
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        if (Binding.fromFunction(thunk)) |b| {
+                            return @intFromPtr(b.context().@"-2");
+                        } else {
+                            return Error.UnableToFindThunk;
+                        }
+                    },
+                    .get_id => {
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        if (Binding.fromFunction(thunk)) |b| {
+                            return b.context().@"-1";
+                        } else {
+                            return Error.UnableToFindThunk;
+                        }
+                    },
                     else => unreachable,
                 }
             }
@@ -85,17 +103,6 @@ const native = struct {
         const thunk: *const BFT = @ptrFromInt(thunk_address);
         const result = thunk(777, 3.14);
         try expect(result == 1234);
-    }
-
-    pub fn getPointer(comptime BFT: type, fn_ptr: *const BFT) !?*anyopaque {
-        const CT = struct { @"-2": ?*anyopaque, @"-1": usize };
-        const CHT = CallHandler(BFT);
-        const Binding = binding.Binding(CHT, CT);
-        if (Binding.fromFunction(fn_ptr)) |b| {
-            return b.context().@"-2";
-        } else {
-            return Error.UnableToFindThunk;
-        }
     }
 };
 
@@ -152,6 +159,14 @@ const wasm = struct {
                         return for (thunks, &fn_ids) |f, *id_ptr| {
                             if (f == thunk) {
                                 defer id_ptr.* = 0;
+                                break id_ptr.*;
+                            }
+                        } else Error.UnableToFindThunk;
+                    },
+                    .get_id => {
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        return for (thunks, &fn_ids) |f, *id_ptr| {
+                            if (f == thunk) {
                                 break id_ptr.*;
                             }
                         } else Error.UnableToFindThunk;

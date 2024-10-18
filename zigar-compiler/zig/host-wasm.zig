@@ -36,7 +36,7 @@ extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
 extern fn _performJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize) ActionResult;
 extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) ActionResult;
-extern fn _terminateThreads() void;
+extern fn _detachThreads() void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
 threadlocal var main_thread: bool = false;
@@ -294,8 +294,7 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = thunk_js.createThunkController(@This(), FT);
-    const controller_address = @intFromPtr(control);
-    const fn_id = destroyJsThunk(controller_address, thunk_address);
+    const fn_id = try control(null, .get_id, thunk_address);
     if (main_thread) {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {
@@ -312,7 +311,7 @@ pub fn setMultithread(state: bool) !void {
     }
     if (multithread != state) {
         if (state == false) {
-            _terminateThreads();
+            _detachThreads();
         }
         multithread = state;
     }

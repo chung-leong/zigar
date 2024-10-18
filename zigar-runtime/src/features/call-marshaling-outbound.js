@@ -1,6 +1,6 @@
 import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { adjustArgumentError, UndefinedArgument, ZigError } from '../errors.js';
+import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import { ATTRIBUTES, CONTEXT, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
 
 export default mixin({
@@ -104,7 +104,7 @@ export default mixin({
         this.updatePointerTargets(context, args);
       }
       this.releaseShadows(context);
-      this.releaseCallContext(context);
+      this.releaseCallContext?.(context);
       this.flushConsole?.();
     };
     if (FINALIZE in args) {
@@ -129,12 +129,12 @@ export default mixin({
   ...(process.env.MIXIN === 'track' ? {
     usingPromise: false,
     usingAbortSignal: false,
-    usingAllocator: false,
+    usingDefaultAllocator: false,
 
     detectArgumentFeatures(argMembers) {
-      for (const { structure: flags } of argMembers) {
+      for (const { structure: { flags } } of argMembers) {
         if (flags & StructFlag.IsAllocator) {
-          this.usingAllocator = true;
+          this.usingDefaultAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
         } else if (flags & StructFlag.IsAbortSignal) {
