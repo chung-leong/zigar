@@ -1,6 +1,6 @@
 import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
+import { adjustArgumentError, UndefinedArgument, ZigError } from '../errors.js';
 import { ATTRIBUTES, CONTEXT, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
 
 export default mixin({
@@ -14,6 +14,12 @@ export default mixin({
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
+        }
+        if (process.env.TARGET === 'wasm') {
+          // do nothing when exit code is 0
+          if (err instanceof Exit && err.code === 0) {
+            return;
+          }
         }
         throw err;
       }
@@ -68,54 +74,44 @@ export default mixin({
         });
       }
     }
-    try {
-      const context = args[CONTEXT];
-      const attrs = args[ATTRIBUTES];
-      const thunkAddress = this.getViewAddress(thunk[MEMORY]);
-      const fnAddress = this.getViewAddress(fn[MEMORY]);
-      const hasPointers = VISIT in args;
+    const context = args[CONTEXT];
+    const attrs = args[ATTRIBUTES];
+    const thunkAddress = this.getViewAddress(thunk[MEMORY]);
+    const fnAddress = this.getViewAddress(fn[MEMORY]);
+    const hasPointers = VISIT in args;
+    if (hasPointers) {
+      this.updatePointerAddresses(context, args);
+    }
+    // return address of shadow for argumnet struct
+    const argAddress = (process.env.TARGET === 'wasm')
+    ? this.getShadowAddress(context, args)
+    : this.getViewAddress(args[MEMORY]);
+    // get address of attributes if function variadic
+    const attrAddress = (process.env.TARGET === 'wasm')
+    ? (attrs) ? this.getShadowAddress(context, attrs) : 0
+    : (attrs) ? this.getViewAddress(attrs[MEMORY]) : 0;
+    this.updateShadows(context);
+    const success = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    : this.runThunk(thunkAddress, fnAddress, argAddress);
+    if (!success) {
+      throw new ZigError();
+    }
+    const finalize = () => {
+      // create objects that pointers point to
+      this.updateShadowTargets(context);
       if (hasPointers) {
-        this.updatePointerAddresses(context, args);
+        this.updatePointerTargets(context, args);
       }
-      // return address of shadow for argumnet struct
-      const argAddress = (process.env.TARGET === 'wasm')
-      ? this.getShadowAddress(context, args[MEMORY])
-      : this.getViewAddress(args[MEMORY]);
-      // get address of attributes if function variadic
-      const attrAddress = (process.env.TARGET === 'wasm')
-      ? (attrs) ? this.getShadowAddress(context, attrs) : 0
-      : (attrs) ? this.getViewAddress(attrs) : 0;
-      this.updateShadows(context);
-      const success = (attrs)
-      ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-      : this.runThunk(thunkAddress, fnAddress, argAddress);
-      if (!success) {
-        throw new ZigError();
-      }
-      const finalize = () => {
-        // create objects that pointers point to
-        this.updateShadowTargets(context);
-        if (hasPointers) {
-          this.updatePointerTargets(context, args);
-        }
-        this.releaseShadows(context);
-        this.releaseCallContext(context);
-        this.flushConsole?.();
-      };
-      if (FINALIZE in args) {
-        // async function--finalization happens when callback is invoked
-        args[FINALIZE] = finalize;
-      } else {
-        finalize();
-      }
-    } catch (err) {
-      if (process.env.TARGET === 'wasm') {
-        // do nothing when exit code is 0
-        if (err instanceof Exit && err.code === 0) {
-          return;
-        }
-      }
-      throw err;
+      this.releaseShadows(context);
+      this.releaseCallContext(context);
+      this.flushConsole?.();
+    };
+    if (FINALIZE in args) {
+      // async function--finalization happens when callback is invoked
+      args[FINALIZE] = finalize;
+    } else {
+      finalize();
     }
   },
   ...(process.env.TARGET === 'wasm' ? {
@@ -128,6 +124,24 @@ export default mixin({
       runThunk: null,
       runVariadicThunk: null,
     },
+    /* c8 ignore next */
+  } : undefined),
+  ...(process.env.MIXIN === 'track' ? {
+    usingPromise: false,
+    usingAbortSignal: false,
+    usingAllocator: false,
+
+    detectArgumentFeatures(argMembers) {
+      for (const { structure: flags } of argMembers) {
+        if (flags & StructFlag.IsAllocator) {
+          this.usingAllocator = true;
+        } else if (flags & StructFlag.IsPromise) {
+          this.usingPromise = true;
+        } else if (flags & StructFlag.IsAbortSignal) {
+          this.usingAbortSignal = true;
+        }
+      }
+    }
     /* c8 ignore next */
   } : undefined),
 });

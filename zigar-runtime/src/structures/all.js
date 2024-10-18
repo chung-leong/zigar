@@ -46,10 +46,10 @@ export default mixin({
       ...this.defineSpecialMethods?.(),
       // add special properties like dataView (from mixin "members/special-props")
       ...this.defineSpecialProperties?.(structure),
-      ...(process.env.TARGET === 'wasm' && {
+      ...(process.env.TARGET === 'wasm' ? {
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer?.(),
-      }),
+      } : undefined),
     };
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
       let s;

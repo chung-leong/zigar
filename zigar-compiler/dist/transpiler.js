@@ -2874,12 +2874,12 @@ class ZigError extends Error {
   }
 }
 
-class Exit extends ZigError {
+let Exit$1 = class Exit extends ZigError {
   constructor(code) {
     super('Program exited');
     this.code = code;
   }
-}
+};
 
 function adjustArgumentError(argIndex, argCount) {
   const { message } = this;
@@ -2988,6 +2988,12 @@ var callMarshalingOutbound = mixin({
         if ('fnName' in err) {
           err.fnName = self.name;
         }
+        {
+          // do nothing when exit code is 0
+          if (err instanceof Exit && err.code === 0) {
+            return;
+          }
+        }
         throw err;
       }
     };
@@ -3041,54 +3047,42 @@ var callMarshalingOutbound = mixin({
         });
       }
     }
-    try {
-      const context = args[CONTEXT];
-      const attrs = args[ATTRIBUTES];
-      const thunkAddress = this.getViewAddress(thunk[MEMORY]);
-      const fnAddress = this.getViewAddress(fn[MEMORY]);
-      const hasPointers = VISIT in args;
+    const context = args[CONTEXT];
+    const attrs = args[ATTRIBUTES];
+    const thunkAddress = this.getViewAddress(thunk[MEMORY]);
+    const fnAddress = this.getViewAddress(fn[MEMORY]);
+    const hasPointers = VISIT in args;
+    if (hasPointers) {
+      this.updatePointerAddresses(context, args);
+    }
+    // return address of shadow for argumnet struct
+    const argAddress = this.getShadowAddress(context, args)
+    ;
+    // get address of attributes if function variadic
+    const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
+    ;
+    this.updateShadows(context);
+    const success = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    : this.runThunk(thunkAddress, fnAddress, argAddress);
+    if (!success) {
+      throw new ZigError();
+    }
+    const finalize = () => {
+      // create objects that pointers point to
+      this.updateShadowTargets(context);
       if (hasPointers) {
-        this.updatePointerAddresses(context, args);
+        this.updatePointerTargets(context, args);
       }
-      // return address of shadow for argumnet struct
-      const argAddress = ("wasm" === 'wasm')
-      ? this.getShadowAddress(context, args[MEMORY])
-      : this.getViewAddress(args[MEMORY]);
-      // get address of attributes if function variadic
-      const attrAddress = ("wasm" === 'wasm')
-      ? (attrs) ? this.getShadowAddress(context, attrs) : 0
-      : (attrs) ? this.getViewAddress(attrs) : 0;
-      this.updateShadows(context);
-      const success = (attrs)
-      ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-      : this.runThunk(thunkAddress, fnAddress, argAddress);
-      if (!success) {
-        throw new ZigError();
-      }
-      const finalize = () => {
-        // create objects that pointers point to
-        this.updateShadowTargets(context);
-        if (hasPointers) {
-          this.updatePointerTargets(context, args);
-        }
-        this.releaseShadows(context);
-        this.releaseCallContext(context);
-        this.flushConsole?.();
-      };
-      if (FINALIZE in args) {
-        // async function--finalization happens when callback is invoked
-        args[FINALIZE] = finalize;
-      } else {
-        finalize();
-      }
-    } catch (err) {
-      {
-        // do nothing when exit code is 0
-        if (err instanceof Exit && err.code === 0) {
-          return;
-        }
-      }
-      throw err;
+      this.releaseShadows(context);
+      this.releaseCallContext(context);
+      this.flushConsole?.();
+    };
+    if (FINALIZE in args) {
+      // async function--finalization happens when callback is invoked
+      args[FINALIZE] = finalize;
+    } else {
+      finalize();
     }
   },
   ...({
@@ -3096,6 +3090,24 @@ var callMarshalingOutbound = mixin({
       runThunk: { argType: 'iii', returnType: 'b' },
       runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
+  } ),
+  ...({
+    usingPromise: false,
+    usingAbortSignal: false,
+    usingAllocator: false,
+
+    detectArgumentFeatures(argMembers) {
+      for (const { structure: flags } of argMembers) {
+        if (flags & StructFlag.IsAllocator) {
+          this.usingAllocator = true;
+        } else if (flags & StructFlag.IsPromise) {
+          this.usingPromise = true;
+        } else if (flags & StructFlag.IsAbortSignal) {
+          this.usingAbortSignal = true;
+        }
+      }
+    }
+    /* c8 ignore next */
   } ),
 });
 
@@ -4790,7 +4802,7 @@ var wasiSupport = mixin({
           return () => ENOBADF;
         case 'proc_exit':
           return (code) => {
-            throw new Exit(code);
+            throw new Exit$1(code);
           };
         case 'random_get':
           return (buf, buf_len) => {
@@ -5645,7 +5657,7 @@ var all = mixin({
       ...({
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer?.(),
-      }),
+      } ),
     };
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
       let s;
@@ -5989,23 +6001,6 @@ var argStruct = mixin({
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
-  ...({
-    usingPromise: false,
-    usingAbortSignal: false,
-    usingAllocator: false,
-
-    detectArgumentFeatures(argMembers) {
-      for (const { structure: flags } of argMembers) {
-        if (flags & StructFlag.IsAllocator) {
-          this.usingAllocator = true;
-        } else if (flags & StructFlag.IsPromise) {
-          this.usingPromise = true;
-        } else if (flags & StructFlag.IsAbortSignal) {
-          this.usingAbortSignal = true;
-        }
-      }
-    }
-  } ),
 });
 
 var arrayLike = mixin({
@@ -7621,20 +7616,25 @@ var variadicStruct = mixin({
       byteSize,
       align,
       flags,
+      length,
       instance: { members },
     } = structure;
     const argMembers = members.slice(1);
-    const argCount = argMembers.length;
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
-    const constructor = function(args, name, offset) {
-      if (args.length < argCount) {
+    const constructor = function(args) {
+      if (args.length < length) {
         throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
+      }
+      const varArgs = args.slice(length);
+      if (flags & ArgStructFlag.HasOptions) {
+        if (varArgs.length > 0 && !varArgs[varArgs.length - 1][MEMORY]) {
+          varArgs.pop();
+        }
       }
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
-      const varArgs = args.slice(argCount);
       const offsets = {};
       for (const [ index, arg ] of varArgs.entries()) {
         const dv = arg[MEMORY];
@@ -7661,6 +7661,7 @@ var variadicStruct = mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
+
       for (let i = 0; i < argCount; i++) {
         try {
           const arg = args[i];
@@ -7672,7 +7673,7 @@ var variadicStruct = mixin({
           }
           this[i] = arg;
         } catch (err) {
-          throw adjustArgumentError(name, i - offset);
+          throw adjustArgumentError(name, i - offset, argCount - offset);
         }
       }
       // set attributes of retval and fixed args
@@ -7751,6 +7752,9 @@ var variadicStruct = mixin({
         }
       },
     };
+    {
+      this.detectArgumentFeatures(argMembers);
+    }
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

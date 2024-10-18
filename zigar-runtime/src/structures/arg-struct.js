@@ -1,4 +1,4 @@
-import { ArgStructFlag, MemberType, StructFlag, StructureFlag } from '../constants.js';
+import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
 import { CONTEXT, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
@@ -71,21 +71,4 @@ export default mixin({
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
-  ...(process.env.MIXIN === 'track' ? {
-    usingPromise: false,
-    usingAbortSignal: false,
-    usingAllocator: false,
-
-    detectArgumentFeatures(argMembers) {
-      for (const { structure: flags } of argMembers) {
-        if (flags & StructFlag.IsAllocator) {
-          this.usingAllocator = true;
-        } else if (flags & StructFlag.IsPromise) {
-          this.usingPromise = true;
-        } else if (flags & StructFlag.IsAbortSignal) {
-          this.usingAbortSignal = true;
-        }
-      }
-    }
-  } : undefined),
 });
