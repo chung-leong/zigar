@@ -2,6 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 
 pub fn spreadArgs(func: anytype, comptime conv: ?std.builtin.CallingConvention) SpreadArgsFn(func, conv) {
+    @setEvalBranchQuota(200000);
     const pyramid = getPyramid(func, conv);
     const fields = getTupleFields(func);
     const caller_name = std.fmt.comptimePrint("call{d}", .{fields.len});
