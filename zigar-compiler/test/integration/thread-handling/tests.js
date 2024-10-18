@@ -29,7 +29,6 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    skip.if(target === 'wasm32').
     it('should create thread pool and invoke callback', async function() {
       this.timeout(300000);
       const {
@@ -169,6 +168,22 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create thread pool for function returning promise', async function() {
+      this.timeout(300000);
+      const {
+        start,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-pool-return-promise', { multithreaded: true });
+      start(4);
+      try {
+        const result = await spawn();
+        expect(result).to.equal(1234);
+      } finally {
+        shutdown();
+      }
+    })
+
   })
 }
 

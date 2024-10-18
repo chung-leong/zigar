@@ -12,13 +12,13 @@ pub fn start(n_jobs: u32) !void {
     });
 }
 
-pub fn spawn(cb: *const fn () void) !void {
+pub fn spawn(promise: zigar.function.Promise(i32)) !void {
     const ns = struct {
-        fn run(f: *const fn () void) void {
-            f();
+        fn run(p: zigar.function.Promise(i32)) void {
+            p.resolve(1234);
         }
     };
-    _ = try pool.spawn(ns.run, .{cb});
+    _ = try pool.spawn(ns.run, .{promise});
 }
 
 pub fn shutdown() !void {
