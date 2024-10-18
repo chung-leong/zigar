@@ -2231,18 +2231,19 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 var abortSignal = mixin({
-  createSignalArray(signal) {
-    const array = new Int32Array(1);
+  createSignalArray(args, structure, signal) {
+    const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
+    const int32 = new Int32(signal?.aborted ? 1 : 0);
     if (signal) {
-      if (signal.aborted) {
-        array[0] = 1;
-      } else {
-        signal.addEventListener('abort', () => {
-          Atomics.store(array, 0, 1);
-        }, { once: true });
-      }
+      signal.addEventListener('abort', () => {
+        {
+          const shadow = this.findShadow(args[CONTEXT], int32);
+          const shadowInt32 = Int32(shadow[MEMORY]);
+          Atomics.store(shadowInt32.typedArray, 0, 1);
+        }
+      }, { once: true });
     }
-    return array;
+    return int32;
   },
 });
 
@@ -3016,15 +3017,15 @@ var callMarshalingOutbound = mixin({
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(structure, dest[CONTEXT]);
+          arg = allocator ?? this.createDefaultAllocator(dest, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          arg = { callback: this.createCallback(dest, options?.['callback']) };
+          arg = { callback: this.createCallback(dest, structure, options?.['callback']) };
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = { ptr: this.createSignalArray(options?.['signal']) };
+          arg = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
         }
       }
       if (arg === undefined) {
@@ -3320,7 +3321,7 @@ var defaultAllocator = mixin({
   contextMap: new Map(),
   allocatorVTable: null,
 
-  createDefaultAllocator(structure, context) {
+  createDefaultAllocator(args, structure) {
     const { constructor: Allocator } = structure;
     let vtable = this.allocatorVTable;
     if (!vtable) {
@@ -3348,6 +3349,7 @@ var defaultAllocator = mixin({
         }
       };
     }
+    const context = args[CONTEXT];
     const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
     const ptr = this.obtainFixedView(contextId, 0);
@@ -3456,6 +3458,14 @@ var memoryMapping = mixin({
     shadowMap.set(shadow, object);
     this.registerMemory(context, shadow[MEMORY], object[MEMORY], align);
     return shadow;
+  },
+  findShadow(context, object) {
+    const { shadowMap } = context;
+    for (const [ shadow, shadowObject ] of shadowMap) {
+      if (object === shadowObject) {
+        return shadow;
+      }
+    }
   },
   removeShadow(context, dv) {
     const { shadowMap } = context;
@@ -4122,7 +4132,7 @@ var pointerSynchronization = mixin({
 });
 
 var promiseCallback = mixin({
-  createCallback(args, callback) {
+  createCallback(args, structure, callback) {
     if (!callback) {
       let resolve, reject;
       args[PROMISE] = new Promise((...args) => {
@@ -6569,7 +6579,6 @@ var _function = mixin({
       }
       let existing;
       if (existing = cache.find(dv)) {
-        console.log(`existing`);
         return existing;
       }
       const argCount = ArgStruct.prototype.length;
@@ -7620,25 +7629,20 @@ var variadicStruct = mixin({
       byteSize,
       align,
       flags,
-      length,
       instance: { members },
     } = structure;
     const argMembers = members.slice(1);
+    const argCount = argMembers.length;
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
-    const constructor = function(args) {
-      if (args.length < length) {
+    const constructor = function(args, name, offset) {
+      if (args.length < argCount) {
         throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
-      }
-      const varArgs = args.slice(length);
-      if (flags & ArgStructFlag.HasOptions) {
-        if (varArgs.length > 0 && !varArgs[varArgs.length - 1][MEMORY]) {
-          varArgs.pop();
-        }
       }
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
+      const varArgs = args.slice(argCount);
       const offsets = {};
       for (const [ index, arg ] of varArgs.entries()) {
         const dv = arg[MEMORY];
@@ -7665,7 +7669,6 @@ var variadicStruct = mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
-
       for (let i = 0; i < argCount; i++) {
         try {
           const arg = args[i];
@@ -7677,7 +7680,7 @@ var variadicStruct = mixin({
           }
           this[i] = arg;
         } catch (err) {
-          throw adjustArgumentError(name, i - offset, argCount - offset);
+          throw adjustArgumentError(name, i - offset);
         }
       }
       // set attributes of retval and fixed args
@@ -7756,9 +7759,6 @@ var variadicStruct = mixin({
         }
       },
     };
-    {
-      this.detectArgumentFeatures(argMembers);
-    }
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

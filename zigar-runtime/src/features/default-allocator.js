@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ALIGN, COPY, MEMORY, SIZE } from '../symbols.js';
+import { ALIGN, CONTEXT, COPY, MEMORY, SIZE } from '../symbols.js';
 import { empty, usizeMax } from '../utils.js';
 
 export default mixin({
@@ -7,7 +7,7 @@ export default mixin({
   contextMap: new Map(),
   allocatorVTable: null,
 
-  createDefaultAllocator(structure, context) {
+  createDefaultAllocator(args, structure) {
     const { constructor: Allocator } = structure;
     let vtable = this.allocatorVTable;
     if (!vtable) {
@@ -35,6 +35,7 @@ export default mixin({
         }
       };
     }
+    const context = args[CONTEXT];
     const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
     const ptr = this.obtainFixedView(contextId, 0);

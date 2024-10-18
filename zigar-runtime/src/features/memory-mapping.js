@@ -40,6 +40,14 @@ export default mixin({
     this.registerMemory(context, shadow[MEMORY], object[MEMORY], align);
     return shadow;
   },
+  findShadow(context, object) {
+    const { shadowMap } = context;
+    for (const [ shadow, shadowObject ] of shadowMap) {
+      if (object === shadowObject) {
+        return shadow;
+      }
+    }
+  },
   removeShadow(context, dv) {
     const { shadowMap } = context;
     if (shadowMap) {

@@ -40,15 +40,15 @@ export default mixin({
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(structure, dest[CONTEXT]);
+          arg = allocator ?? this.createDefaultAllocator(dest, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          arg = { callback: this.createCallback(dest, options?.['callback']) };
+          arg = { callback: this.createCallback(dest, structure, options?.['callback']) };
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = { ptr: this.createSignalArray(options?.['signal']) };
+          arg = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
         }
       }
       if (arg === undefined) {

@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import { FINALIZE, FIXED, MEMORY, PROMISE } from '../symbols.js';
 
 export default mixin({
-  createCallback(args, callback) {
+  createCallback(args, structure, callback) {
     if (!callback) {
       let resolve, reject;
       args[PROMISE] = new Promise((...args) => {
