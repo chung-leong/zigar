@@ -2237,6 +2237,8 @@ var abortSignal = mixin({
     if (signal) {
       signal.addEventListener('abort', () => {
         {
+          // WASM doesn't directly access JavaScript memory, we need to find the
+          // shadow memory that's been assigned to the object and store the value there
           const shadow = this.findShadow(args[CONTEXT], int32);
           const shadowInt32 = Int32(shadow[MEMORY]);
           Atomics.store(shadowInt32.typedArray, 0, 1);
@@ -3427,6 +3429,7 @@ var intConversion = mixin({
 
 var memoryMapping = mixin({
   emptyBuffer: new ArrayBuffer(0),
+  emptyBufferMap: new Map,
 
   getShadowAddress(context, target, cluster) {
     if (cluster) {
@@ -3623,16 +3626,11 @@ var memoryMapping = mixin({
       dv = this.obtainExternView(address, len);
     } else {
       // pointer to nothing
-      let entry = this.viewMap.get(this.emptyBuffer);
-      if (!entry) {
-        this.viewMap.set(this.emptyBuffer, entry = new Map());
-      }
-      const key = `${address}:0`;
-      dv = entry.get(key);
+      dv = this.emptyBufferMap.get(address);
       if (!dv) {
         dv = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
-        entry.set(key, dv);
+        this.emptyBufferMap.set(address, dv);
       }
     }
     return dv;
@@ -3641,18 +3639,13 @@ var memoryMapping = mixin({
     const fixed = dv[FIXED];
     const address = fixed?.address;
     if (address) {
-      // only allocated memory would have type attached
-      if (fixed.type !== undefined) {
-        this.freeFixedMemory(dv);
-      }
-      // set address to zero so data view won't get reused
+      // try to free memory through the allocator from which it came
+      fixed?.free();
+      // set address to zero to avoid double free
       fixed.address = usizeMin;
-      if (fixed.len === 0) {
-        let entry = this.viewMap.get(this.emptyBuffer);
-        if (entry) {
-          const key = `${address}:0`;
-          entry.delete(key);
-        }
+      if (!fixed.len) {
+        // remove view from empty buffer map
+        this.emptyBufferMap.delete(address);
       }
     }
   },
@@ -4740,7 +4733,7 @@ var viewManagement = mixin({
       const dv = slicePtr['*'][MEMORY];
       const fixed = dv[FIXED];
       if (fixed) {
-        fixed.allocator = allocator;
+        fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
       }
       return dv;
     } else {
@@ -6722,7 +6715,7 @@ var pointer = mixin({
     const {
       type: targetType,
       flags: targetFlags,
-      byteSize: targetSuze = 1
+      byteSize: targetSize = 1
     } = targetStructure;
     // length for slice can be zero or undefined
     const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
@@ -6850,18 +6843,24 @@ var pointer = mixin({
         if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
-          max = (bytesAvailable / targetSuze) | 0;
+          max = (bytesAvailable / targetSize) | 0;
         }
       }
       if (len < 0 || len > max) {
         throw new InvalidSliceLength(len, max);
       }
-      const byteLength = len * targetSuze;
+      const byteLength = len * targetSize;
       const newDV = (byteLength <= bytesAvailable)
       // can use the same buffer
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
       : thisEnv.obtainFixedView(fixed.address, byteLength);
+      const free = fixed?.free;
+      if (free) {
+        // transfer free function to new view
+        newDV[FIXED].free = free;
+        fixed.free = null;
+      }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);

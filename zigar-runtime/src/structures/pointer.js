@@ -24,7 +24,7 @@ export default mixin({
     const {
       type: targetType,
       flags: targetFlags,
-      byteSize: targetSuze = 1
+      byteSize: targetSize = 1
     } = targetStructure;
     // length for slice can be zero or undefined
     const addressSize = (flags & PointerFlag.HasLength) ? byteSize / 2 : byteSize;
@@ -152,18 +152,24 @@ export default mixin({
         if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
-          max = (bytesAvailable / targetSuze) | 0;
+          max = (bytesAvailable / targetSize) | 0;
         }
       }
       if (len < 0 || len > max) {
         throw new InvalidSliceLength(len, max);
       }
-      const byteLength = len * targetSuze;
+      const byteLength = len * targetSize;
       const newDV = (byteLength <= bytesAvailable)
       // can use the same buffer
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
       : thisEnv.obtainFixedView(fixed.address, byteLength);
+      const free = fixed?.free;
+      if (free) {
+        // transfer free function to new view
+        newDV[FIXED].free = free;
+        fixed.free = null;
+      }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);

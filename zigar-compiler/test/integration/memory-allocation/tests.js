@@ -55,6 +55,8 @@ export function addTests(importModule, options) {
       module.ptr_maybe = struct;
       const [ after ] = await capture(() => print());
       expect(after).to.equal('return-allocator.Struct{ .number1 = 123, .number2 = 456 }');
+      module.ptr_maybe = null;
+      struct.delete();
     })
   })
 }

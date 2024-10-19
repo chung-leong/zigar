@@ -8,6 +8,7 @@ import {
 
 export default mixin({
   emptyBuffer: new ArrayBuffer(0),
+  emptyBufferMap: new Map,
 
   getShadowAddress(context, target, cluster) {
     if (cluster) {
@@ -204,16 +205,11 @@ export default mixin({
       dv = this.obtainExternView(address, len);
     } else {
       // pointer to nothing
-      let entry = this.viewMap.get(this.emptyBuffer);
-      if (!entry) {
-        this.viewMap.set(this.emptyBuffer, entry = new Map());
-      }
-      const key = `${address}:0`;
-      dv = entry.get(key);
+      dv = this.emptyBufferMap.get(address);
       if (!dv) {
         dv = new DataView(this.emptyBuffer);
         dv[FIXED] = { address, len: 0 };
-        entry.set(key, dv);
+        this.emptyBufferMap.set(address, dv);
       }
     }
     return dv;
@@ -222,18 +218,13 @@ export default mixin({
     const fixed = dv[FIXED];
     const address = fixed?.address;
     if (address) {
-      // only allocated memory would have type attached
-      if (fixed.type !== undefined) {
-        this.freeFixedMemory(dv);
-      }
-      // set address to zero so data view won't get reused
+      // try to free memory through the allocator from which it came
+      fixed?.free();
+      // set address to zero to avoid double free
       fixed.address = usizeMin;
-      if (fixed.len === 0) {
-        let entry = this.viewMap.get(this.emptyBuffer);
-        if (entry) {
-          const key = `${address}:0`;
-          entry.delete(key);
-        }
+      if (!fixed.len) {
+        // remove view from empty buffer map
+        this.emptyBufferMap.delete(address);
       }
     }
   },

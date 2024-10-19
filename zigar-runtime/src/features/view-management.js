@@ -159,7 +159,7 @@ export default mixin({
       const dv = slicePtr['*'][MEMORY];
       const fixed = dv[FIXED];
       if (fixed) {
-        fixed.allocator = allocator;
+        fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
       }
       return dv;
     } else {
