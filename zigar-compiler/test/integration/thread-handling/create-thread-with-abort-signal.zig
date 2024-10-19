@@ -9,7 +9,7 @@ pub fn spawn(signal: zigar.function.AbortSignal) !void {
     try zigar.thread.use(true);
     const ns = struct {
         fn run(s: zigar.function.AbortSignal) void {
-            while (!s.signaled()) {
+            while (s.off()) {
                 count += 1;
             }
         }

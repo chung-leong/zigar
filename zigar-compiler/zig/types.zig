@@ -1661,12 +1661,12 @@ pub const AbortSignal = struct {
 
     const Opaque = Internal;
 
-    pub inline fn signaled(self: @This()) bool {
+    pub inline fn on(self: @This()) bool {
         return self.ptr.* != 0;
     }
 
-    pub inline fn signaledAtomic(self: @This()) bool {
-        return @atomicLoad(i32, self.ptr, .acquire) != 0;
+    pub inline fn off(self: @This()) bool {
+        return self.ptr.* == 0;
     }
 };
 

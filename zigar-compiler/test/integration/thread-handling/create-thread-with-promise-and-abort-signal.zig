@@ -13,7 +13,7 @@ pub fn spawn(
     try zigar.thread.use(true);
     const ns = struct {
         fn run(f: bool, p: zigar.function.Promise(Error!i32), s: zigar.function.AbortSignal) void {
-            while (!s.signaled()) {}
+            while (s.off()) {}
             p.resolve(if (f) Error.Aborted else 1234);
         }
     };
