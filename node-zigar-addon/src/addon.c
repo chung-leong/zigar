@@ -517,7 +517,7 @@ napi_value run_variadic_thunk(napi_env env,
     uintptr_t fn_address;
     uintptr_t arg_address;
     uintptr_t attr_address;
-    size_t attr_len;
+    uint32_t attr_len;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
      || napi_get_value_uintptr(env, args[0], &thunk_address) != napi_ok) {
         return throw_error(env, "Thunk address must be a number");
@@ -527,7 +527,7 @@ napi_value run_variadic_thunk(napi_env env,
         return throw_error(env, "Argument address must be a number");
     } else if (napi_get_value_uintptr(env, args[3], &attr_address) != napi_ok) {
         return throw_error(env, "Attribute address must be a number");
-    } else if (napi_get_value_uintptr(env, args[4], &attr_len) != napi_ok) {
+    } else if (napi_get_value_uint32(env, args[4], &attr_len) != napi_ok) {
         return throw_error(env, "Attribute length must be a number");
     }
     napi_value result;

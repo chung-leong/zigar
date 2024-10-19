@@ -226,16 +226,21 @@ export class NoProperty extends TypeError {
 }
 
 export class ArgumentCountMismatch extends Error {
-  constructor(expected, actual) {
+  constructor(expected, actual, variadic = false) {
     super();
     this.fnName = '';
     this.argIndex = expected;
     this.argCount = actual;
+    this.variadic = variadic;
   }
 
   get message() {
     const s = (this.argIndex !== 1) ? 's' : '';
-    return `${this.fnName}(): Expecting ${this.argIndex} argument${s}, received ${this.argCount}`;
+    let count = this.argIndex;
+    if (this.variadic) {
+      count = `at least ${count}`;
+    }
+    return `${this.fnName}(): Expecting ${count} argument${s}, received ${this.argCount}`;
   }
 }
 

@@ -1,10 +1,11 @@
 import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ArgumentCountMismatch, InvalidVariadicArgument, UndefinedArgument, adjustArgumentError } from '../errors.js';
+import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING, VISIT, VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, CONTEXT, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING, VISIT,
+  VIVIFICATE
 } from '../symbols.js';
-import { always, defineProperties, defineValue } from '../utils.js';
+import { always, defineProperties, defineValue, usizeMin } from '../utils.js';
 
 export default mixin({
   defineVariadicStruct(structure, descriptors) {
@@ -12,27 +13,31 @@ export default mixin({
       byteSize,
       align,
       flags,
+      length,
       instance: { members },
     } = structure;
     const argMembers = members.slice(1);
-    const argCount = argMembers.length;
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
-    const constructor = function(args, name, offset) {
-      if (args.length < argCount) {
-        throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
+    const constructor = function(args) {
+      if (args.length < length) {
+        throw new ArgumentCountMismatch(length, args.length, true);
       }
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
-      const varArgs = args.slice(argCount);
+      let options;
+      const varArgs = args.slice(length);
       const offsets = {};
+      if (!varArgs[varArgs.length - 1][MEMORY]) {
+        options = varArgs.pop();
+      }
       for (const [ index, arg ] of varArgs.entries()) {
-        const dv = arg[MEMORY]
-        let argAlign = arg.constructor[ALIGN];
+        const dv = arg?.[MEMORY]
+        let argAlign = arg?.constructor?.[ALIGN];
         if (!dv || !argAlign) {
           const err = new InvalidVariadicArgument();
-          throw adjustArgumentError(name, argCount + index - offset, args.length - offset, err);
+          throw adjustArgumentError.call(err, length + index, args.length);
         }
         if (process.env.TARGET === 'wasm') {
           // the arg struct is passed to the function in WebAssembly and fields are
@@ -42,7 +47,7 @@ export default mixin({
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
         }
-        // can't use alignForward here, since that uses bigint when platform is 64-bit
+        // can't use alignForward() here, since that uses bigint when platform is 64-bit
         const byteOffset = offsets[index] = (totalByteSize + (argAlign - 1)) & ~(argAlign - 1);
         totalByteSize = byteOffset + dv.byteLength;
       }
@@ -52,21 +57,9 @@ export default mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
-      for (let i = 0; i < argCount; i++) {
-        try {
-          const arg = args[i];
-          if (arg === undefined) {
-            const { type } = argMembers[i];
-            if (type !== MemberType.Void) {
-              throw new UndefinedArgument();
-            }
-          }
-          this[i] = arg;
-        } catch (err) {
-          throw adjustArgumentError(name, i - offset, argCount - offset, err);
-        }
-      }
-      // set attributes of retval and fixed args
+      // copy fixed args
+      thisEnv.copyArguments(this, args, argMembers, options);
+      // set their attributes
       for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);
       }
@@ -82,9 +75,13 @@ export default mixin({
         const type = arg.constructor[PRIMITIVE];
         child.$ = arg;
         // set attributes
-        attrs.set(argCount + index, offset, bitSize, align, type);
+        attrs.set(length + index, offset, bitSize, align, type);
       }
       this[ATTRIBUTES] = attrs;
+      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
+      if (flags & ArgStructFlag.IsAsync) {
+        this[FINALIZE] = null;
+      }
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
