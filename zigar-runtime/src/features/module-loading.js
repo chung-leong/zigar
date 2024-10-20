@@ -1,4 +1,3 @@
-import { Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
@@ -23,22 +22,6 @@ export default mixin({
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;
-    }
-  },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      if (id) {
-        return this.runFunction(id, dv, futexHandle);
-      } else {
-        const result = this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
-        if (futexHandle) {
-          this.finalizeAsyncCall(futexHandle, result);
-        }
-        return result;
-      }
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
     }
   },
   ...(process.env.TARGET === 'wasm' ? {

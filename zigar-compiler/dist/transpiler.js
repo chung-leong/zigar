@@ -2547,6 +2547,16 @@ var callMarshalingInbound = mixin({
       return fn(...args);
     };
   },
+  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    if (action === Action.Call) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      {
+        return this.runFunction(id, dv, futexHandle);
+      }
+    } else if (action === Action.Release) {
+      return this.releaseFunction(id);
+    }
+  },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
     if (!caller) {
@@ -3765,15 +3775,6 @@ var moduleLoading = mixin({
       this.abandoned = true;
     }
   },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      const f = (id) ? this.runFunction : this.writeToConsole;
-      return f.call(this, id, dv, futexHandle);
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
   ...({
     imports: {
       initialize: { argType: '' },
@@ -4234,10 +4235,10 @@ var streamRedirection = mixin({
         }, 250);
       }
       /* c8 ignore next 3 */
-      return CallResult.OK;
+      return true;
     } catch (err) {
       console.error(err);
-      return CallResult.Failure;
+      return false;
     }
   },
   writeToConsoleNow(array) {

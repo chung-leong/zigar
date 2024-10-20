@@ -1,4 +1,4 @@
-import { CallResult } from '../constants.js';
+import { Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, THROWING, VISIT } from '../symbols.js';
 
@@ -115,6 +115,26 @@ export default mixin({
     return function(...args) {
       return fn(...args);
     };
+  },
+  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    if (action === Action.Call) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      if(process.env.TARGET === 'node') {
+        if (id) {
+          return this.runFunction(id, dv, futexHandle);
+        } else {
+          const result = this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
+          if (futexHandle) {
+            this.finalizeAsyncCall(futexHandle, result);
+          }
+          return result;
+        }
+      } else {
+        return this.runFunction(id, dv, futexHandle);
+      }
+    } else if (action === Action.Release) {
+      return this.releaseFunction(id);
+    }
   },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
