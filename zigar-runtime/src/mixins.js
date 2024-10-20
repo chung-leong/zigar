@@ -16,6 +16,7 @@ export { default as AccessorUnalignedInt } from './accessors/unaligned-int.js';
 export { default as AccessorUnalignedUint } from './accessors/unaligned-uint.js';
 export { default as AccessorUnaligned } from './accessors/unaligned.js';
 export { default as FeatureAbortSignal } from './features/abort-signal.js';
+export { default as FeatureAllocatorMethods } from './features/allocator-methods.js';
 export { default as FeatureBaseline } from './features/baseline.js';
 export { default as FeatureCallMarshalingInbound } from './features/call-marshaling-inbound.js';
 export { default as FeatureCallMarshalingOutbound } from './features/call-marshaling-outbound.js';

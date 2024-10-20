@@ -93,7 +93,7 @@ export default mixin({
       }
     }
     // placeholder object type
-    const prototype = defineProperty({}, COPY, this.defineCopier(len, false));
+    const prototype = defineProperty({}, COPY, this.defineCopier(len));
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);

@@ -160,7 +160,7 @@ const COPY = Symbol('copy');
 const SHAPE = Symbol('shape');
 const MODIFY = Symbol('modify');
 const INITIALIZE = Symbol('initialize');
-const FINALIZE = Symbol('finalize');
+const FINALIZE$1 = Symbol('finalize');
 const CAST = Symbol('cast');
 
 function defineProperty(object, name, descriptor) {
@@ -372,6 +372,30 @@ function findObjects(structures, SLOTS) {
     find(structure.static.template);
   }
   return list;
+}
+
+function copy(dest, src) {
+  let i = 0, len = dest.byteLength;
+  while (i + 4 <= len) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+    i += 4;
+  }
+  while (i + 1 <= len) {
+    dest.setInt8(i, src.getInt8(i));
+    i++;
+  }
+}
+
+function reset(dest, offset, size) {
+  let i = offset, limit = offset + size;
+  while (i + 4 <= limit) {
+    dest.setInt32(i, 0, true);
+    i += 4;
+  }
+  while (i + 1 <= limit) {
+    dest.setInt8(i, 0);
+    i++;
+  }
 }
 
 function getSelf() {
@@ -2249,6 +2273,64 @@ var abortSignal = mixin({
   },
 });
 
+var allocatorMethods = mixin({
+  defineAlloc() {
+    return {
+      value(len, align) {
+        const ptrAlign = 31 - Math.clz32(align);
+        const { vtable, ptr } = this;
+        const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+        // alloc returns a [*]u8, which has a initial length of 1
+        slicePtr.length = len;
+        const dv = slicePtr['*'][MEMORY];
+        const fixed = dv[FIXED];
+        if (fixed) {
+          fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
+        }
+        return dv;
+      }
+    };
+  },
+  defineFree(dv) {
+    return {
+      value(dv) {
+        const fixed = dv[FIXED];
+        const f = fixed?.free;
+        if (!f) {
+          throw new TypeMismatch('DataView object from alloc()', dv);
+        }
+        f();
+      }
+    };
+  },
+  defineDupe() {
+    return {
+      value(arg) {
+        let src;
+        if (typeof(arg) === 'string') {
+          arg = encodeText(arg);
+        }
+        if (arg instanceof DataView) {
+          src = arg;
+        } else if (arg instanceof ArrayBuffer) {
+          src = new DataView(arg);
+        } else if (arg) {
+          const { buffer, byteOffset, byteLength } = arg;
+          if (buffer && byteOffset !== undefined && byteLength !== undefined) {
+            src = new DataView(buffer, byteOffset, byteLength);
+          }
+        }
+        if (!src) {
+          throw new TypeMismatch('string, DataView, or typed array', arg);
+        }
+        const dv = this.alloc(src.byteLength, 8);
+        copy(dv, src);
+        return dv;
+      }
+    };
+  }
+});
+
 var baseline = mixin({
   littleEndian: true,
   variables: [],
@@ -2711,16 +2793,21 @@ class NoProperty extends TypeError {
 }
 
 class ArgumentCountMismatch extends Error {
-  constructor(expected, actual) {
+  constructor(expected, actual, variadic = false) {
     super();
     this.fnName = '';
     this.argIndex = expected;
     this.argCount = actual;
+    this.variadic = variadic;
   }
 
   get message() {
     const s = (this.argIndex !== 1) ? 's' : '';
-    return `${this.fnName}(): Expecting ${this.argIndex} argument${s}, received ${this.argCount}`;
+    let count = this.argIndex;
+    if (this.variadic) {
+      count = `at least ${count}`;
+    }
+    return `${this.fnName}(): Expecting ${count} argument${s}, received ${this.argCount}`;
   }
 }
 
@@ -2770,12 +2857,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-class TypeMismatch extends TypeError {
+let TypeMismatch$1 = class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-}
+};
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -3067,9 +3154,10 @@ var callMarshalingOutbound = mixin({
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
+    const attrLength = attrs?.[MEMORY]?.byteLength;
     this.updateShadows(context);
     const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrLength)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
       throw new ZigError();
@@ -3084,9 +3172,9 @@ var callMarshalingOutbound = mixin({
       this.releaseCallContext?.(context);
       this.flushConsole?.();
     };
-    if (FINALIZE in args) {
+    if (FINALIZE$1 in args) {
       // async function--finalization happens when callback is invoked
-      args[FINALIZE] = finalize;
+      args[FINALIZE$1] = finalize;
     } else {
       finalize();
     }
@@ -3155,18 +3243,9 @@ function getCopyFunction(size, multiple = false) {
         return copier;
       }
     }
-    if (!(size & 0x07)) return copy8x;
     if (!(size & 0x03)) return copy4x;
-    if (!(size & 0x01)) return copy2x;
-    return copy1x;
-  } else {
-    return copyAny;
   }
-}
-
-function copyAny(dest, src) {
-  const copy = getCopyFunction(dest.byteLength);
-  copy(dest, src);
+  return copy;
 }
 
 const copiers = {
@@ -3175,31 +3254,11 @@ const copiers = {
   4: copy4,
   8: copy8,
   16: copy16,
-  32: copy32,
 };
-
-function copy1x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
-    dest.setInt8(i, src.getInt8(i));
-  }
-}
-
-function copy2x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
-    dest.setInt16(i, src.getInt16(i, true), true);
-  }
-}
 
 function copy4x(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i += 4) {
     dest.setInt32(i, src.getInt32(i, true), true);
-  }
-}
-
-function copy8x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-    dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
   }
 }
 
@@ -3227,26 +3286,15 @@ function copy16(dest, src) {
   dest.setInt32(12, src.getInt32(12, true), true);
 }
 
-function copy32(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-  dest.setInt32(16, src.getInt32(16, true), true);
-  dest.setInt32(20, src.getInt32(20, true), true);
-  dest.setInt32(24, src.getInt32(24, true), true);
-  dest.setInt32(28, src.getInt32(28, true), true);
-}
-
 function getResetFunction(size) {
-  const resetter = resetters[size];
-  if (resetter) {
-    return resetter;
+  if (size !== undefined) {
+    const resetter = resetters[size];
+    if (resetter) {
+      return resetter;
+    }
+    if (!(size & 0x03)) return reset4x;
   }
-  if (!(size & 0x07)) return reset8x;
-  if (!(size & 0x03)) return reset4x;
-  if (!(size & 0x01)) return reset2x;
-  return reset1x;
+  return reset;
 }
 
 const resetters = {
@@ -3255,31 +3303,11 @@ const resetters = {
   4: reset4,
   8: reset8,
   16: reset16,
-  32: reset32,
 };
-
-function reset1x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i++) {
-    dest.setInt8(i, 0);
-  }
-}
-
-function reset2x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 2) {
-    dest.setInt16(i, 0, true);
-  }
-}
 
 function reset4x(dest, offset, size) {
   for (let i = offset, limit = offset + size; i < limit; i += 4) {
     dest.setInt32(i, 0, true);
-  }
-}
-
-function reset8x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 8) {
-    dest.setInt32(i, 0, true);
-    dest.setInt32(i + 4, 0, true);
   }
 }
 
@@ -3305,17 +3333,6 @@ function reset16(dest, offset) {
   dest.setInt32(offset + 4, 0, true);
   dest.setInt32(offset + 8, 0, true);
   dest.setInt32(offset + 12, 0, true);
-}
-
-function reset32(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-  dest.setInt32(offset + 8, 0, true);
-  dest.setInt32(offset + 12, 0, true);
-  dest.setInt32(offset + 16, 0, true);
-  dest.setInt32(offset + 20, 0, true);
-  dest.setInt32(offset + 24, 0, true);
-  dest.setInt32(offset + 28, 0, true);
 }
 
 var defaultAllocator = mixin({
@@ -3514,7 +3531,7 @@ var memoryMapping = mixin({
       }
     }
     // placeholder object type
-    const prototype = defineProperty({}, COPY, this.defineCopier(len, false));
+    const prototype = defineProperty({}, COPY, this.defineCopier(len));
     const source = Object.create(prototype);
     const shadow = Object.create(prototype);
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
@@ -4144,7 +4161,7 @@ var promiseCallback = mixin({
     }
     return (result) => {
       if (!(result instanceof Error)) {
-        args[FINALIZE]();
+        args[FINALIZE$1]();
       }
       return callback(result);
     };
@@ -4724,21 +4741,7 @@ var viewManagement = mixin({
     return dv;
   },
   allocateMemory(len, align = 0, allocator = null) {
-    if (allocator) {
-      const ptrAlign = 31 - Math.clz32(align);
-      const { vtable, ptr } = allocator;
-      const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
-      // alloc returns a [*]u8, which has a init length of 1
-      slicePtr.length = len;
-      const dv = slicePtr['*'][MEMORY];
-      const fixed = dv[FIXED];
-      if (fixed) {
-        fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
-      }
-      return dv;
-    } else {
-      return this.allocateRelocMemory(len, align);
-    }
+    return allocator?.alloc?.(len, align) ?? this.allocateRelocMemory(len, align);
   },
   ...({
     allocateRelocMemory(len, align) {
@@ -5312,7 +5315,7 @@ var specialProps = mixin({
       },
       set(str, fixed) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$1('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, fixed);
@@ -5328,7 +5331,7 @@ var specialProps = mixin({
         },
         set(ta, fixed) {
           if (!isTypedArray(ta, TypedArray)) {
-            throw new TypeMismatch(TypedArray.name, ta);
+            throw new TypeMismatch$1(TypedArray.name, ta);
           }
           const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
           thisEnv.assignView(this, dv, structure, true, fixed);
@@ -5352,7 +5355,7 @@ var specialProps = mixin({
           },
           set(str, fixed) {
             if (typeof(str) !== 'string') {
-              throw new TypeMismatch('a string', str);
+              throw new TypeMismatch$1('a string', str);
             }
             const sentinelValue = this.constructor[SENTINEL]?.value;
             if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -5376,7 +5379,7 @@ function isTypedArray(arg, TypedArray) {
 
 function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throw new TypeMismatch('a DataView', dv);
+    throw new TypeMismatch$1('a DataView', dv);
   }
   return dv;
 }
@@ -5833,8 +5836,8 @@ var all = mixin({
           self[INITIALIZE](arg);
         }
       }
-      if (FINALIZE in self) {
-        self = self[FINALIZE]();
+      if (FINALIZE$1 in self) {
+        self = self[FINALIZE$1]();
       }
       return cache.save(dv, self);
     };
@@ -5978,7 +5981,7 @@ var argStruct = mixin({
         }
         this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
         if (flags & ArgStructFlag.IsAsync) {
-          self[FINALIZE] = null;
+          self[FINALIZE$1] = null;
         }
         thisEnv.copyArguments(self, args, argMembers, options);
       } else {
@@ -6141,7 +6144,7 @@ var array = mixin({
     descriptors.entries = defineValue(getArrayEntries);
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
+    descriptors[FINALIZE$1] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
@@ -6558,7 +6561,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch('function', arg);
+          throw new TypeMismatch$1('function', arg);
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);
@@ -6979,7 +6982,7 @@ var pointer = mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = {
+    descriptors[FINALIZE$1] = {
       value() {
         const handlers = (targetType === StructureType.Pointer) ? {} : proxyHandlers;
         const proxy = new Proxy(this, handlers);
@@ -7329,7 +7332,7 @@ var slice = mixin({
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
+    descriptors[FINALIZE$1] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
@@ -7465,6 +7468,11 @@ var struct = mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
     descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
+    if (flags & StructFlag.IsAllocator) {
+      descriptors.alloc = this.defineAlloc();
+      descriptors.free = this.defineFree();
+      descriptors.dupe = this.defineDupe();
+    }
     return constructor;
   }
 });
@@ -7628,27 +7636,27 @@ var variadicStruct = mixin({
       byteSize,
       align,
       flags,
+      length,
       instance: { members },
     } = structure;
     const argMembers = members.slice(1);
-    const argCount = argMembers.length;
     const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
-    const constructor = function(args, name, offset) {
-      if (args.length < argCount) {
-        throw new ArgumentCountMismatch(name, `at least ${argCount - offset}`, args.length - offset);
+    const constructor = function(args) {
+      if (args.length < length) {
+        throw new ArgumentCountMismatch(length, args.length, true);
       }
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
-      const varArgs = args.slice(argCount);
+      const varArgs = args.slice(length);
       const offsets = {};
       for (const [ index, arg ] of varArgs.entries()) {
-        const dv = arg[MEMORY];
-        let argAlign = arg.constructor[ALIGN];
+        const dv = arg?.[MEMORY];
+        let argAlign = arg?.constructor?.[ALIGN];
         if (!dv || !argAlign) {
-          new InvalidVariadicArgument();
-          throw adjustArgumentError(name, argCount + index - offset, args.length - offset);
+          const err = new InvalidVariadicArgument();
+          throw adjustArgumentError.call(err, length + index, args.length);
         }
         {
           // the arg struct is passed to the function in WebAssembly and fields are
@@ -7658,7 +7666,7 @@ var variadicStruct = mixin({
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
         }
-        // can't use alignForward here, since that uses bigint when platform is 64-bit
+        // can't use alignForward() here, since that uses bigint when platform is 64-bit
         const byteOffset = offsets[index] = (totalByteSize + (argAlign - 1)) & ~(argAlign - 1);
         totalByteSize = byteOffset + dv.byteLength;
       }
@@ -7668,21 +7676,9 @@ var variadicStruct = mixin({
       dv[ALIGN] = maxAlign;
       this[MEMORY] = dv;
       this[SLOTS] = {};
-      for (let i = 0; i < argCount; i++) {
-        try {
-          const arg = args[i];
-          if (arg === undefined) {
-            const { type } = argMembers[i];
-            if (type !== MemberType.Void) {
-              throw new UndefinedArgument();
-            }
-          }
-          this[i] = arg;
-        } catch (err) {
-          throw adjustArgumentError(name, i - offset);
-        }
-      }
-      // set attributes of retval and fixed args
+      // copy fixed args
+      thisEnv.copyArguments(this, args, argMembers);
+      // set their attributes
       for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);
       }
@@ -7698,9 +7694,13 @@ var variadicStruct = mixin({
         const type = arg.constructor[PRIMITIVE];
         child.$ = arg;
         // set attributes
-        attrs.set(argCount + index, offset, bitSize, align, type);
+        attrs.set(length + index, offset, bitSize, align, type);
       }
       this[ATTRIBUTES] = attrs;
+      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
+      if (flags & ArgStructFlag.IsAsync) {
+        this[FINALIZE] = null;
+      }
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
@@ -7839,6 +7839,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   AccessorUnalignedInt: unalignedInt,
   AccessorUnalignedUint: unalignedUint,
   FeatureAbortSignal: abortSignal,
+  FeatureAllocatorMethods: allocatorMethods,
   FeatureBaseline: baseline,
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,

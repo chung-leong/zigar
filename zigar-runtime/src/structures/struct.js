@@ -78,6 +78,11 @@ export default mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
     descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
+    if (flags & StructFlag.IsAllocator) {
+      descriptors.alloc = this.defineAlloc();
+      descriptors.free = this.defineFree();
+      descriptors.dupe = this.defineDupe();
+    }
     return constructor;
   }
 });

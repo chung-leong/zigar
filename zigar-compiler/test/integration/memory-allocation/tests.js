@@ -57,6 +57,19 @@ export function addTests(importModule, options) {
       expect(after).to.equal('return-allocator.Struct{ .number1 = 123, .number2 = 456 }');
       module.ptr_maybe = null;
       struct.delete();
+      const msg = 'Hello world';
+      const dv1 = allocator.dupe(msg);
+      expect(dv1.byteLength).to.equal(msg.length);
+      for (let i = 0; i < msg.length; i++) {
+        expect(dv1.getUint8(i)).to.equal(msg.charCodeAt(i));
+      }
+      const array = new Float64Array([ 1.1, 2.2, 3.3, 4.4, 5.5 ]);
+      const dv2 = allocator.dupe(array);
+      expect(dv2.byteLength).to.equal(array.length * 8);
+      for (let i = 0; i < array.length; i++) {
+        expect(dv2.getFloat64(i * 8, true)).to.equal(array[i]);
+      }
+      allocator.free(dv2);
     })
   })
 }
