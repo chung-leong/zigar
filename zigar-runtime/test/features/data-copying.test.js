@@ -23,13 +23,13 @@ describe('Feature: data-copying', function() {
         }
         f(dest, src);
         for (let i = 0; i < size; i++) {
-          expect(dest.getInt8(i)).to.equal(i);
+          expect(dest.getUint8(i)).to.equal(i);
         }
       }
       for (let size = 1; size <= 64; size++) {
         const src = new DataView(new ArrayBuffer(size * 16));
-        for (let i = 0; i < size; i++) {
-          src.setInt8(i, i);
+        for (let i = 0; i < size * 16; i++) {
+          src.setInt8(i, i & 0xFF);
         }
         const dest = new DataView(new ArrayBuffer(size * 16));
         const f = getCopyFunction(size, true);
@@ -37,11 +37,11 @@ describe('Feature: data-copying', function() {
           functions.push(f);
         }
         f(dest, src);
-        for (let i = 0; i < size; i++) {
-          expect(dest.getInt8(i)).to.equal(i);
+        for (let i = 0; i < size * 16; i++) {
+          expect(dest.getUint8(i)).to.equal(i & 0xFF);
         }
       }
-      expect(functions).to.have.lengthOf(10);
+      expect(functions).to.have.lengthOf(7);
     })
     it('should return function for copying buffers of unknown size', function() {
       const src = new DataView(new ArrayBuffer(23));
@@ -52,7 +52,7 @@ describe('Feature: data-copying', function() {
       const f = getCopyFunction(undefined);
       f(dest, src);
       for (let i = 0; i < 23; i++) {
-        expect(dest.getInt8(i)).to.equal(i);
+        expect(dest.getUint8(i)).to.equal(i);
       }
     })
   })
@@ -70,10 +70,10 @@ describe('Feature: data-copying', function() {
         }
         f(dest, 0, size);
         for (let i = 0; i < size; i++) {
-          expect(dest.getInt8(i)).to.equal(0);
+          expect(dest.getUint8(i)).to.equal(0);
         }
       }
-      expect(functions).to.have.lengthOf(10);
+      expect(functions).to.have.lengthOf(7);
     })
   })
   if (process.env.TARGET === 'wasm') {
@@ -92,10 +92,10 @@ describe('Feature: data-copying', function() {
           [RESTORE]: env.defineRestorer(),
         });
         memory.grow(1);
-        expect(() => dv.getInt8(0)).to.throw(TypeError);
+        expect(() => dv.getUint8(0)).to.throw(TypeError);
         object[RESTORE]();
         expect(object[MEMORY]).to.not.equal(dv);
-        expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+        expect(() => object[MEMORY].getUint8(0)).to.not.throw();
         expect(constructor[CACHE].find(object[MEMORY])).to.equal(object);
       })
       it('should add align to new buffer when previous buffer has one attached', function() {
@@ -113,10 +113,10 @@ describe('Feature: data-copying', function() {
           [RESTORE]: env.defineRestorer(),
         });
         memory.grow(1);
-        expect(() => dv.getInt8(0)).to.throw(TypeError);
+        expect(() => dv.getUint8(0)).to.throw(TypeError);
         object[RESTORE]();
         expect(object[MEMORY]).to.not.equal(dv);
-        expect(() => object[MEMORY].getInt8(0)).to.not.throw();
+        expect(() => object[MEMORY].getUint8(0)).to.not.throw();
         expect(object[MEMORY][FIXED].align).to.equal(4);
       })
     })

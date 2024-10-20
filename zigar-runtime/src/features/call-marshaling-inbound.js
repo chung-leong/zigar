@@ -165,14 +165,14 @@ export default mixin({
   } : undefined),
 });
 
-const CallResult = {
+export const CallResult = {
   OK: 0,
   Failure: 1,
   Deadlock: 2,
   Disabled: 3,
 };
 
-const Action = {
+export const Action = {
   Call: 0,
   Release: 1,
 };

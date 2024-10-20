@@ -39,18 +39,21 @@ export function getCopyFunction(size, multiple = false) {
         return copier;
       }
     }
-    if (!(size & 0x07)) return copy8x;
     if (!(size & 0x03)) return copy4x;
-    if (!(size & 0x01)) return copy2x;
-    return copy1x;
-  } else {
-    return copyAny;
   }
+  return copyAny;
 }
 
 function copyAny(dest, src) {
-  const copy = getCopyFunction(dest.byteLength);
-  copy(dest, src);
+  let i = 0, len = dest.byteLength;
+  while (i + 4 <= len) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+    i += 4;
+  }
+  while (i + 1 <= len) {
+    dest.setInt8(i, src.getInt8(i));
+    i++;
+  }
 }
 
 const copiers = {
@@ -59,31 +62,11 @@ const copiers = {
   4: copy4,
   8: copy8,
   16: copy16,
-  32: copy32,
 };
-
-function copy1x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i++) {
-    dest.setInt8(i, src.getInt8(i));
-  }
-}
-
-function copy2x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 2) {
-    dest.setInt16(i, src.getInt16(i, true), true);
-  }
-}
 
 function copy4x(dest, src) {
   for (let i = 0, len = dest.byteLength; i < len; i += 4) {
     dest.setInt32(i, src.getInt32(i, true), true);
-  }
-}
-
-function copy8x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 8) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-    dest.setInt32(i + 4, src.getInt32(i + 4, true), true);
   }
 }
 
@@ -111,26 +94,15 @@ function copy16(dest, src) {
   dest.setInt32(12, src.getInt32(12, true), true);
 }
 
-function copy32(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-  dest.setInt32(16, src.getInt32(16, true), true);
-  dest.setInt32(20, src.getInt32(20, true), true);
-  dest.setInt32(24, src.getInt32(24, true), true);
-  dest.setInt32(28, src.getInt32(28, true), true);
-}
-
 export function getResetFunction(size) {
-  const resetter = resetters[size];
-  if (resetter) {
-    return resetter;
+  if (size !== undefined) {
+    const resetter = resetters[size];
+    if (resetter) {
+      return resetter;
+    }
+    if (!(size & 0x03)) return reset4x;
   }
-  if (!(size & 0x07)) return reset8x;
-  if (!(size & 0x03)) return reset4x;
-  if (!(size & 0x01)) return reset2x;
-  return reset1x;
+  return resetAny;
 }
 
 const resetters = {
@@ -139,31 +111,23 @@ const resetters = {
   4: reset4,
   8: reset8,
   16: reset16,
-  32: reset32,
 };
 
-function reset1x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i++) {
-    dest.setInt8(i, 0);
+function resetAny(dest, offset, size) {
+  let i = offset, limit = offset + size;
+  while (i + 4 <= limit) {
+    dest.setInt32(i, 0, true);
+    i += 4;
   }
-}
-
-function reset2x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 2) {
-    dest.setInt16(i, 0, true);
+  while (i + 1 <= limit) {
+    dest.setInt8(i, 0);
+    i++;
   }
 }
 
 function reset4x(dest, offset, size) {
   for (let i = offset, limit = offset + size; i < limit; i += 4) {
     dest.setInt32(i, 0, true);
-  }
-}
-
-function reset8x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 8) {
-    dest.setInt32(i, 0, true);
-    dest.setInt32(i + 4, 0, true);
   }
 }
 
@@ -191,13 +155,3 @@ function reset16(dest, offset) {
   dest.setInt32(offset + 12, 0, true);
 }
 
-function reset32(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-  dest.setInt32(offset + 8, 0, true);
-  dest.setInt32(offset + 12, 0, true);
-  dest.setInt32(offset + 16, 0, true);
-  dest.setInt32(offset + 20, 0, true);
-  dest.setInt32(offset + 24, 0, true);
-  dest.setInt32(offset + 28, 0, true);
-}

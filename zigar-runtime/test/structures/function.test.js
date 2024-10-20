@@ -3,7 +3,7 @@ import { MemberType, StructureFlag, StructureType } from '../../src/constants.js
 import { defineEnvironment } from '../../src/environment.js';
 import { CallResult } from '../../src/features/call-marshaling-inbound.js';
 import '../../src/mixins.js';
-import { FIXED, MEMORY, SIZE, VARIANTS } from '../../src/symbols.js';
+import { FIXED, MEMORY, SIZE } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -81,11 +81,8 @@ describe('Structure: function', function() {
       const f2 = constructor(dv);
       expect(f2).to.equal(f);
       expect(f.name).to.equal('');
-      const { method } = f[VARIANTS];
-      expect(method).to.be.a('function');
       defineProperty(f, 'name', { value: 'dingo' });
       expect(f.name).to.equal('dingo');
-      expect(method.name).to.equal('dingo');
       let thunkAddress, fnAddress, argStruct;
       env.runThunk = (...args) => {
         thunkAddress = args[0];

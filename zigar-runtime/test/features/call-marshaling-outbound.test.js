@@ -3,7 +3,6 @@ import ChaiAsPromised from 'chai-as-promised';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
-import { CallContext } from '../../src/features/call-marshaling-outbound.js';
 import '../../src/mixins.js';
 import { ALIGN, ATTRIBUTES, COPY, FIXED, MEMORY, SIZE, SLOTS, VISIT } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
@@ -14,61 +13,6 @@ use (ChaiAsPromised);
 const Env = defineEnvironment();
 
 describe('Feature: call-marshaling-outbound', function() {
-  describe('startContext', function() {
-    it('should start a new context', function() {
-      const env = new Env();
-      env.startContext();
-      try {
-        expect(env.context).to.be.an.instanceOf(CallContext);
-      } finally {
-        env.endContext();
-      }
-    })
-    it('should push existing context onto stack', function() {
-      const env = new Env();
-      env.startContext();
-      const ctx1 = env.context;
-      env.startContext();
-      const ctx2 = env.context;
-      try {
-        expect(ctx2).to.not.equal(ctx1);
-        expect(env.contextStack).to.be.an('array').with.lengthOf(1);
-        expect(env.contextStack[0]).to.equal(ctx1);
-      } finally {
-        env.endContext();
-        env.endContext();
-      }
-    })
-  })
-  describe('endContext', function() {
-    it('should end current context', function() {
-      const env = new Env();
-      env.startContext();
-      try {
-        expect(env.context).to.be.an.instanceOf(CallContext);
-      } finally {
-        env.endContext();
-      }
-      expect(env.context).to.be.undefined;
-    })
-    it('should restore previous context', function() {
-      const env = new Env();
-      env.startContext();
-      const ctx1 = env.context;
-      env.startContext();
-      const ctx2 = env.context;
-      try {
-        expect(ctx2).to.not.equal(ctx1);
-      } finally {
-        env.endContext();
-      }
-      try {
-        expect(env.context).to.equal(ctx1);
-      } finally {
-        env.endContext();
-      }
-    })
-  })
   describe('createOutboundCallers', function() {
     it('should create a caller for invoking a Zig function', function() {
       const env = new Env();
