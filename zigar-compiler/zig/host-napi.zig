@@ -188,23 +188,6 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn writeToConsole(dv: Value) !void {
-    const md = try getModuleData();
-    if (imports.write_to_console(md, dv) != .ok) {
-        return Error.UnableToWriteToConsole;
-    }
-}
-
-pub fn writeBytesToConsole(bytes: [*]const u8, len: usize) !void {
-    const memory: Memory = .{
-        .bytes = @constCast(bytes),
-        .len = len,
-        .attributes = .{ .is_comptime = true },
-    };
-    const dv = try captureView(memory);
-    try writeToConsole(dv);
-}
-
 pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, wait: bool) thunk_js.ActionResult {
     var action: Action = .{
         .type = .call,
@@ -267,12 +250,29 @@ pub fn setMultithread(state: bool) !void {
 
 fn initialize(md: *ModuleData) callconv(.C) Result {
     module_data = md;
+    module_data_list.append(md) catch return .failure;
     return .ok;
+}
+
+fn deinitialize(md: *ModuleData) callconv(.C) Result {
+    module_data = null;
+    for (module_data_list.items, 0..) |item, index| {
+        if (item == md) {
+            _ = module_data_list.swapRemove(index);
+            return .ok;
+        }
+    }
+    return .failure;
+}
+
+fn getMainThreadModuleData() !*ModuleData {
+    return module_data_list.getLastOrNull() orelse Error.NotInMainThread;
 }
 
 // allocator for fixed memory
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = gpa.allocator();
+const allocator = gpa.allocator();
+var module_data_list = std.ArrayList(*ModuleData).init(allocator);
 
 fn clearBytes(bytes: [*]u8, len: usize) void {
     var start: usize = 0;
@@ -324,8 +324,9 @@ fn freeExternMemory(_: MemoryType, memory: *const Memory) callconv(.C) Result {
 }
 
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
-    writeBytesToConsole(bytes, len) catch return .failure;
-    return .ok;
+    const md = getModuleData() catch getMainThreadModuleData() catch return .failure;
+    const result = handleJsCall(md, 0, @constCast(bytes), len, true);
+    return if (result == .ok) .ok else .failure;
 }
 
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
@@ -407,7 +408,6 @@ const Imports = extern struct {
     define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) Result,
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
-    write_to_console: *const fn (*ModuleData, Value) callconv(.C) Result,
     enable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
     disable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
     perform_js_action: *const fn (*ModuleData, *Action) callconv(.C) thunk_js.ActionResult,
@@ -417,6 +417,7 @@ const Imports = extern struct {
 // pointer table that's used on the C side
 const Exports = extern struct {
     initialize: *const fn (*ModuleData) callconv(.C) Result,
+    deinitialize: *const fn (*ModuleData) callconv(.C) Result,
     allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
@@ -454,6 +455,7 @@ pub fn createModule(comptime T: type) Module {
         .imports = &imports,
         .exports = &.{
             .initialize = initialize,
+            .deinitialize = deinitialize,
             .allocate_fixed_memory = allocateExternMemory,
             .free_fixed_memory = freeExternMemory,
             .get_factory_thunk = createGetFactoryThunk(T),

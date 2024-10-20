@@ -113,6 +113,18 @@ const ExportFlag = {
   OmitVariables:    0x0002,
 };
 
+const CallResult = {
+  OK: 0,
+  Failure: 1,
+  Deadlock: 2,
+  Disabled: 3,
+};
+
+const Action = {
+  Call: 0,
+  Release: 1,
+};
+
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
@@ -2535,14 +2547,6 @@ var callMarshalingInbound = mixin({
       return fn(...args);
     };
   },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      return this.runFunction(id, dv, futexHandle);
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
     if (!caller) {
@@ -2575,18 +2579,6 @@ var callMarshalingInbound = mixin({
     },
   } ),
 });
-
-const CallResult = {
-  OK: 0,
-  Failure: 1,
-  Deadlock: 2,
-  Disabled: 3,
-};
-
-const Action = {
-  Call: 0,
-  Release: 1,
-};
 
 class InvalidIntConversion extends SyntaxError {
   constructor(arg) {
@@ -3773,6 +3765,15 @@ var moduleLoading = mixin({
       this.abandoned = true;
     }
   },
+  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    if (action === Action.Call) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      const f = (id) ? this.runFunction : this.writeToConsole;
+      return f.call(this, id, dv, futexHandle);
+    } else if (action === Action.Release) {
+      return this.releaseFunction(id);
+    }
+  },
   ...({
     imports: {
       initialize: { argType: '' },
@@ -4233,8 +4234,10 @@ var streamRedirection = mixin({
         }, 250);
       }
       /* c8 ignore next 3 */
+      return CallResult.OK;
     } catch (err) {
       console.error(err);
+      return CallResult.Failure;
     }
   },
   writeToConsoleNow(array) {

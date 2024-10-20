@@ -1,3 +1,4 @@
+import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, THROWING, VISIT } from '../symbols.js';
 
@@ -115,14 +116,6 @@ export default mixin({
       return fn(...args);
     };
   },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      return this.runFunction(id, dv, futexHandle);
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
   runFunction(id, dv, futexHandle) {
     const caller = this.jsFunctionCallerMap.get(id);
     if (!caller) {
@@ -165,14 +158,3 @@ export default mixin({
   } : undefined),
 });
 
-export const CallResult = {
-  OK: 0,
-  Failure: 1,
-  Deadlock: 2,
-  Disabled: 3,
-};
-
-export const Action = {
-  Call: 0,
-  Release: 1,
-};

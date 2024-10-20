@@ -104,3 +104,15 @@ export const ExportFlag = {
   OmitMethods:      0x0001,
   OmitVariables:    0x0002,
 };
+
+export const CallResult = {
+  OK: 0,
+  Failure: 1,
+  Deadlock: 2,
+  Disabled: 3,
+};
+
+export const Action = {
+  Call: 0,
+  Release: 1,
+};

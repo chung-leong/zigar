@@ -32,6 +32,9 @@ void release_module(napi_env env,
             napi_reference_unref(env, md->js_fns[i], NULL);
         }
         if (md->so_handle) {
+            if (md->mod) {
+                md->mod->imports->deinitialize(md);
+            }
             dlclose(md->so_handle);
         }
         free(md);
@@ -57,7 +60,6 @@ enum {
     defineStructure,
     endStructure,
     createTemplate,
-    writeToConsole,
     performJsAction,
 };
 
@@ -252,16 +254,6 @@ result create_template(module_data* md,
     napi_value args[1] = { dv };
     if ((args[0] || napi_get_null(env, &args[0]) == napi_ok)
      && call_js_function(md, createTemplate, 1, args, dest)) {
-        return OK;
-    }
-    return FAILURE;
-}
-
-result write_to_console(module_data* md,
-                        napi_value dv) {
-    napi_value args[1] = { dv };
-    napi_value result;
-    if (call_js_function(md, writeToConsole, 1, args, &result)) {
         return OK;
     }
     return FAILURE;
@@ -736,7 +728,6 @@ struct {
     { "defineStructure", defineStructure },
     { "endStructure", endStructure },
     { "createTemplate", createTemplate },
-    { "writeToConsole", writeToConsole },
     { "performJsAction", performJsAction },
 };
 
@@ -840,7 +831,6 @@ napi_value load_module(napi_env env,
     exports->define_structure = define_structure;
     exports->end_structure = end_structure;
     exports->create_template = create_template;
-    exports->write_to_console = write_to_console;
     exports->enable_multithread = enable_multithread;
     exports->disable_multithread = disable_multithread;
     exports->perform_js_action = perform_js_action;

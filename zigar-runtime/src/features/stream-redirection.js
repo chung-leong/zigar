@@ -32,8 +32,10 @@ export default mixin({
         }, 250);
       }
       /* c8 ignore next 3 */
+      return true;
     } catch (err) {
       console.error(err);
+      return false;
     }
   },
   writeToConsoleNow(array) {
@@ -52,9 +54,6 @@ export default mixin({
       flushStdout: { argType: '', returnType: '' },
     },
   } : process.env.TARGET === 'node' ? {
-    exports: {
-      writeToConsole: null,
-    },
     imports: {
       flushStdout: null,
     },

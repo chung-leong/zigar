@@ -21,7 +21,7 @@
 #define MISSING(T)                      ((T) -1)
 
 #define EXPORT_COUNT    15
-#define IMPORT_COUNT    12
+#define IMPORT_COUNT    11
 
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
@@ -162,7 +162,6 @@ struct export_table {
     result (__cdecl *define_structure)(module_data*, napi_value, napi_value*);
     result (__cdecl *end_structure)(module_data*, napi_value);
     result (__cdecl *create_template)(module_data*, napi_value, napi_value*);
-    result (__cdecl *write_to_console)(module_data*, napi_value);
     result (__cdecl *enable_multithread)(module_data*);
     result (__cdecl *disable_multithread)(module_data*);
     result (__cdecl *perform_js_action)(module_data*, js_action*);
@@ -171,6 +170,7 @@ struct export_table {
 
 struct import_table {
     result (__cdecl *initialize)(module_data*);
+    result (__cdecl *deinitialize)(module_data*);
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
     result (__cdecl *get_factory_thunk)(size_t*);
