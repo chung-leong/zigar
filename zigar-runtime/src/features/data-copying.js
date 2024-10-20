@@ -1,5 +1,6 @@
 import { mixin } from '../environment.js';
 import { MEMORY, RESTORE } from '../symbols.js';
+import { copy, reset } from '../utils.js';
 
 export default mixin({
   defineCopier(size, multiple) {
@@ -41,19 +42,7 @@ export function getCopyFunction(size, multiple = false) {
     }
     if (!(size & 0x03)) return copy4x;
   }
-  return copyAny;
-}
-
-function copyAny(dest, src) {
-  let i = 0, len = dest.byteLength;
-  while (i + 4 <= len) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-    i += 4;
-  }
-  while (i + 1 <= len) {
-    dest.setInt8(i, src.getInt8(i));
-    i++;
-  }
+  return copy;
 }
 
 const copiers = {
@@ -102,7 +91,7 @@ export function getResetFunction(size) {
     }
     if (!(size & 0x03)) return reset4x;
   }
-  return resetAny;
+  return reset;
 }
 
 const resetters = {
@@ -112,18 +101,6 @@ const resetters = {
   8: reset8,
   16: reset16,
 };
-
-function resetAny(dest, offset, size) {
-  let i = offset, limit = offset + size;
-  while (i + 4 <= limit) {
-    dest.setInt32(i, 0, true);
-    i += 4;
-  }
-  while (i + 1 <= limit) {
-    dest.setInt8(i, 0);
-    i++;
-  }
-}
 
 function reset4x(dest, offset, size) {
   for (let i = offset, limit = offset + size; i < limit; i += 4) {

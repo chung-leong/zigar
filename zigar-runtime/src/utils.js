@@ -253,6 +253,30 @@ export function findObjects(structures, SLOTS) {
   return list;
 }
 
+export function copy(dest, src) {
+  let i = 0, len = dest.byteLength;
+  while (i + 4 <= len) {
+    dest.setInt32(i, src.getInt32(i, true), true);
+    i += 4;
+  }
+  while (i + 1 <= len) {
+    dest.setInt8(i, src.getInt8(i));
+    i++;
+  }
+}
+
+export function reset(dest, offset, size) {
+  let i = offset, limit = offset + size;
+  while (i + 4 <= limit) {
+    dest.setInt32(i, 0, true);
+    i += 4;
+  }
+  while (i + 1 <= limit) {
+    dest.setInt8(i, 0);
+    i++;
+  }
+}
+
 export function getSelf() {
   return this;
 }
