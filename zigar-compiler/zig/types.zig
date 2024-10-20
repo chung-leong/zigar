@@ -1680,8 +1680,8 @@ pub fn isInternal(comptime T: type) bool {
 test "isInternal" {
     try expectCT(isInternal(AbortSignal) == true);
     try expectCT(isInternal(struct {}) == false);
-    try expectCT(isInternal(Promise(f64)) == true);
-    try expectCT(isInternal(Promise(anyerror!u32)) == true);
+    try expectCT(isInternal(Promise(f64, undefined)) == true);
+    try expectCT(isInternal(Promise(anyerror!u32, undefined)) == true);
 }
 
 fn expectCT(comptime value: bool) !void {

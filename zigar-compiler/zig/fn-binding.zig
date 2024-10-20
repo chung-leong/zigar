@@ -574,7 +574,7 @@ test "Binding (i64 x 9)" {
     const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var gpa = executable();
     const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
-    defer Binding1.unbind(gpa.allocator(), bf);
+    defer _ = Binding1.unbind(gpa.allocator(), bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
 }

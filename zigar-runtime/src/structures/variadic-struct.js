@@ -26,12 +26,8 @@ export default mixin({
       // calculate the actual size of the struct based on arguments given
       let totalByteSize = byteSize;
       let maxAlign = align;
-      let options;
       const varArgs = args.slice(length);
       const offsets = {};
-      if (!varArgs[varArgs.length - 1][MEMORY]) {
-        options = varArgs.pop();
-      }
       for (const [ index, arg ] of varArgs.entries()) {
         const dv = arg?.[MEMORY]
         let argAlign = arg?.constructor?.[ALIGN];
@@ -58,7 +54,7 @@ export default mixin({
       this[MEMORY] = dv;
       this[SLOTS] = {};
       // copy fixed args
-      thisEnv.copyArguments(this, args, argMembers, options);
+      thisEnv.copyArguments(this, args, argMembers);
       // set their attributes
       for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);

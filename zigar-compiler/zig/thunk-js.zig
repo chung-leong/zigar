@@ -241,14 +241,20 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
             switch (host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct), !isNoWait(RT))) {
-                .failure_deadlock => @panic("Promise encountered in main thread"),
-                .failure_disabled => @panic("Multithreading not enabled"),
+                .failure_deadlock => {
+                    if (comptime findError(RT, .{ error.Deadlock, error.Unexpected })) |err| {
+                        return err;
+                    } else @panic("Promise encountered in main thread");
+                },
+                .failure_disabled => {
+                    if (comptime findError(RT, .{ error.Disabled, error.Unexpected })) |err| {
+                        return err;
+                    } else @panic("Multithreading not enabled");
+                },
                 .failure => {
-                    if (comptime hasError(RT, "Unexpected")) {
-                        return error.Unexpected;
-                    } else {
-                        @panic("JavaScript function failed");
-                    }
+                    if (comptime findError(RT, .{error.Unexpected})) |err| {
+                        return err;
+                    } else @panic("JavaScript function failed");
                 },
                 else => {},
             }
@@ -302,29 +308,30 @@ test "getJsCallHandler (error handling)" {
     try expect(result3 == ES2.Unexpected);
 }
 
-fn hasError(comptime T: type, comptime name: []const u8) bool {
-    return switch (@typeInfo(T)) {
-        .ErrorUnion => |eu| check: {
-            if (@typeInfo(eu.error_set).ErrorSet) |errors| {
-                inline for (errors) |err| {
-                    if (std.mem.eql(u8, err.name, name)) {
-                        break :check true;
-                    }
-                } else {
-                    break :check false;
+fn findError(comptime T: type, comptime errors: anytype) ?anyerror {
+    switch (@typeInfo(T)) {
+        .ErrorUnion => |eu| {
+            inline for (errors) |err| {
+                if (eu.error_set == anyerror) {
+                    return err;
                 }
-            } else {
-                break :check true;
+                const name = @errorName(err);
+                if (@typeInfo(eu.error_set).ErrorSet) |es| {
+                    inline for (es) |e| {
+                        if (std.mem.eql(u8, e.name, name)) return err;
+                    }
+                }
             }
         },
-        else => false,
-    };
+        else => {},
+    }
+    return null;
 }
 
 test "hasError" {
-    try expect(hasError(error{ Hello, World }!i32, "Hello"));
-    try expect(hasError(anyerror!i32, "Cow"));
-    try expect(!hasError(error{ Hello, World }!i32, "Cow"));
+    try expect(findError(error{ Hello, World }!i32, .{error.Hello}) != null);
+    try expect(findError(anyerror!i32, .{error.Cow}) != null);
+    try expect(findError(error{ Hello, World }!i32, .{error.Cow}) == null);
 }
 
 fn isNoWait(comptime T: type) bool {

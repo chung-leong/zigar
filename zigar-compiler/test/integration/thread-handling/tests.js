@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { delay } from '../test-utils.js';
+import { capture, captureError, delay } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -25,6 +25,16 @@ export function addTests(importModule, options) {
         }
         await delay(1000);
         expect(count).to.equal(10);
+        const [ line ] = await captureError(async () => {
+          const [ line ] = await capture(async () => {
+            spawn(() => {
+              throw new Error("Doh!");
+            });
+            await delay(250);
+          });
+          expect(line).to.equal('Unexpected');
+        });
+        expect(line).to.equal('Error: Doh!');
       } finally {
         shutdown();
       }
