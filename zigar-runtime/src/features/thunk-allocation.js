@@ -56,7 +56,7 @@ export default mixin({
         sourceAddress = source.createJsThunk(controllerAddress, funcId);
         break;
       }
-      if (!source) {
+      if (!sourceAddress) {
         source = this.addJsThunkSource();
         sourceAddress = source.createJsThunk(controllerAddress, funcId);
       }
@@ -85,6 +85,7 @@ export default mixin({
       let fnId = 0;
       try {
         const thunkObject = this.table.get(thunkAddress);
+        this.table.set(thunkAddress, null);
         const entry = this.thunkMap.get(thunkObject);
         if (entry) {
           const { source, sourceAddress } = entry;
@@ -97,7 +98,7 @@ export default mixin({
           }
           this.thunkMap.delete(thunkObject);
         }
-        } catch (err) {
+      } catch (err) {
       }
       return fnId;
     },

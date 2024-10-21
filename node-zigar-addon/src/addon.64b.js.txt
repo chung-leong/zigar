@@ -2445,7 +2445,7 @@
 "      const address = fixed?.address;\n"
 "      if (address) {\n"
 "        // try to free memory through the allocator from which it came\n"
-"        fixed?.free();\n"
+"        fixed?.free?.();\n"
 "        // set address to zero to avoid double free\n"
 "        fixed.address = usizeMin;\n"
 "        if (!fixed.len) {\n"

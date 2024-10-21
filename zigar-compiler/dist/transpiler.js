@@ -3659,7 +3659,7 @@ var memoryMapping = mixin({
     const address = fixed?.address;
     if (address) {
       // try to free memory through the allocator from which it came
-      fixed?.free();
+      fixed?.free?.();
       // set address to zero to avoid double free
       fixed.address = usizeMin;
       if (!fixed.len) {
@@ -3790,6 +3790,7 @@ var moduleLoading = mixin({
     executable: null,
     memory: null,
     table: null,
+    initialTableLength: 0,
     exportedFunctions: null,
 
     async initialize(wasi) {
@@ -3901,6 +3902,7 @@ var moduleLoading = mixin({
         element: 'anyfunc',
         shared: multithreaded,
       });
+      this.initialTableLength = tableInitial;
       return new w.Instance(executable, exports);
     },
     loadModule(source, options) {
@@ -4562,7 +4564,7 @@ var thunkAllocation = mixin({
         sourceAddress = source.createJsThunk(controllerAddress, funcId);
         break;
       }
-      if (!source) {
+      if (!sourceAddress) {
         source = this.addJsThunkSource();
         sourceAddress = source.createJsThunk(controllerAddress, funcId);
       }
@@ -4591,6 +4593,7 @@ var thunkAllocation = mixin({
       let fnId = 0;
       try {
         const thunkObject = this.table.get(thunkAddress);
+        this.table.set(thunkAddress, null);
         const entry = this.thunkMap.get(thunkObject);
         if (entry) {
           const { source, sourceAddress } = entry;
@@ -4603,7 +4606,7 @@ var thunkAllocation = mixin({
           }
           this.thunkMap.delete(thunkObject);
         }
-        } catch (err) {
+      } catch (err) {
       }
       return fnId;
     },

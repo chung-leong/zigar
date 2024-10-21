@@ -64,6 +64,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const code_len = encoder.encode(&instrs, null);
             const instance_size = @offsetOf(@This(), "code") + code_len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
+            // std.debug.print("allocated: {x} ({d})\n", .{ @intFromPtr(new_bytes.ptr), new_bytes.len });
             const self: *@This() = @ptrCast(new_bytes);
             var ctx: CT = undefined;
             const fields = @typeInfo(CT).Struct.fields;
@@ -96,8 +97,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const alignment = @alignOf(@This());
             const ST = []align(alignment) u8;
             const MT = [*]align(alignment) u8;
-            const ptr: ST = @as(MT, @ptrCast(self))[0..self.size];
-            allocator.free(ptr);
+            const slice: ST = @as(MT, @ptrCast(self))[0..self.size];
+            // std.debug.print("freeing {x} ({d})\n", .{ @intFromPtr(slice.ptr), slice.len });
+            allocator.free(slice);
         }
 
         pub inline fn function(self: *const @This()) *const BFT {

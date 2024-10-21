@@ -219,7 +219,7 @@ export default mixin({
     const address = fixed?.address;
     if (address) {
       // try to free memory through the allocator from which it came
-      fixed?.free();
+      fixed?.free?.();
       // set address to zero to avoid double free
       fixed.address = usizeMin;
       if (!fixed.len) {

@@ -39,6 +39,7 @@ export default mixin({
     executable: null,
     memory: null,
     table: null,
+    initialTableLength: 0,
     exportedFunctions: null,
 
     async initialize(wasi) {
@@ -160,6 +161,7 @@ export default mixin({
         element: 'anyfunc',
         shared: multithreaded,
       });
+      this.initialTableLength = tableInitial;
       return new w.Instance(executable, exports);
     },
     loadModule(source, options) {
