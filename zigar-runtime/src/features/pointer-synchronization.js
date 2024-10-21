@@ -75,11 +75,17 @@ export default mixin({
         const newTarget = (!currentTarget || isMutable(this))
         ? pointer[UPDATE](context, true, isActive(this))
         : currentTarget;
-        // update targets of pointers in original target (which could have been altered)
-        currentTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+        // update targets of pointers in original target if it's in relocatable memory
+        // pointers in fixed memory are updated on access so we don't need to do it here
+        // (and they should never point to reloctable memory)
+        if (currentTarget && !currentTarget[MEMORY][FIXED]) {
+          currentTarget[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+        }
         if (newTarget !== currentTarget) {
-          // acquire targets of pointers in new target
-          newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+          if (newTarget && !newTarget[MEMORY][FIXED]) {
+            // acquire targets of pointers in new target
+            newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+          }
         }
       }
     }

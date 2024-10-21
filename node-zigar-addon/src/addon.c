@@ -714,6 +714,8 @@ struct {
     { "finalizeAsyncCall", finalize_async_call },
 };
 
+#include <stdio.h>
+
 struct {
     const char* name;
     int index;

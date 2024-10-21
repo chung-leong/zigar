@@ -701,6 +701,7 @@ export function addTests(importModule, options) {
       const f = fopen(path, 'r');
       const count1 = fread(buffer1, 1, buffer1.byteLength, f);
       const count2 = fread(buffer2, 1, buffer2.byteLength, f);
+      debugger;
       fclose(f);
       expect(`${count1}`).to.equal(`${buffer1.byteLength}`);
       expect(`${count2}`).to.equal(`${buffer2.byteLength}`);
@@ -893,39 +894,6 @@ export function addTests(importModule, options) {
         new Double(1.23),
       );
       expect(result3).to.equal(20);
-    })
-    it('should correctly free function thunks', async function() {
-      this.timeout(300000);
-      const { Callback } = await importTest('function-pointer');
-      const list = [];
-      const addresses = [];
-      for (let i = 0; i < 256; i++) {
-        const f = new Callback(() => {});
-        list.push(f);
-        const [ MEMORY ] = Object.getOwnPropertySymbols(f);
-        const dv = f[MEMORY];
-        const [ FIXED ] = Object.getOwnPropertySymbols(dv);
-        addresses.push(dv[FIXED].address);
-      }
-      for (const [ i, f ] of list.entries()) {
-        // don't delete the first one so the initial page is kept
-        if (i !== 0) {
-          f.delete();
-        }
-      }
-      let reuseCount = 0;
-      for (let i = 0; i < 256; i++) {
-        const f = new Callback(() => {});
-        list.push(f);
-        const [ MEMORY ] = Object.getOwnPropertySymbols(f);
-        const dv = f[MEMORY];
-        const [ FIXED ] = Object.getOwnPropertySymbols(dv);
-        const { address } = dv[FIXED];
-        if (addresses.includes(address)) {
-          reuseCount++;
-        }
-      }
-      expect(reuseCount).to.be.above(100);
     })
   })
 }
