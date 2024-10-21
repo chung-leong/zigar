@@ -809,20 +809,20 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
-        const MOVZ = packed struct(u32) {
+        movz: packed struct(u32) {
             rd: u5,
             imm16: u16,
             hw: u2,
             opc: u9 = 0x1a5,
-        };
-        const SUB = packed struct {
+        },
+        sub: packed struct {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
             opc: u9 = 0x162,
-        };
-        const MVN = packed struct(u32) {
+        },
+        mvn: packed struct(u32) {
             rd: u5,
             rn: u5 = 0x1f,
             imm6: u6 = 0,
@@ -830,130 +830,105 @@ const Instruction = switch (builtin.target.cpu.arch) {
             _: u1 = 1,
             shift: u2 = 0,
             opc: u8 = 0xaa,
-        };
-        const LDR = packed struct(u32) {
+        },
+        ldr: packed struct(u32) {
             rt: u5,
             imm19: u19,
             opc: u8 = 0x58,
-        };
-        const STR = packed struct(u32) {
+        },
+        str: packed struct(u32) {
             rt: u5,
             rn: u5,
             imm12: u12 = 0,
             opc: u10 = 0x3e4,
-        };
-        const BR = packed struct(u32) {
+        },
+        br: packed struct(u32) {
             rm: u5 = 0,
             rn: u5,
             opc: u22 = 0x35_87c0,
-        };
-        const NOP = packed struct(u32) {
+        },
+        nop: packed struct(u32) {
             opc: u32 = 0xd503_201f,
-        };
-
-        movz: MOVZ,
-        sub: SUB,
-        mvn: MVN,
-        ldr: LDR,
-        str: STR,
-        br: BR,
-        nop: NOP,
+        },
         literal: usize,
     },
     .riscv64 => union(enum) {
-        const LUI = packed struct(u32) {
+        lui: packed struct(u32) {
             opc: u7 = 0x37,
             rd: u5,
             imm20: i20 = 0,
-        };
-        const ADDI = packed struct(u32) {
-            opc: u7 = 0x13,
-            rs: u5,
-            func: u3 = 0,
-            rd: u5,
-            imm12: i12 = 0,
-        };
-        const XOR = packed struct(u32) {
-            opc: u7 = 0x13,
-            rs: u5,
-            func: u3 = 4,
-            rd: u5,
-            imm12: i12,
-        };
-        const SUB = packed struct(u32) {
-            opc: u7 = 0x33,
-            rd: u5,
-            func: u3 = 0,
-            rs1: u5,
-            rs2: u5,
-            offset_11_5: u7 = 0x20,
-        };
-        const AUIPC = packed struct(u32) {
+        },
+        auipc: packed struct(u32) {
             opc: u7 = 0x17,
             rd: u5,
             imm20: i20 = 0,
-        };
-        const LD = packed struct(u32) {
+        },
+        ld: packed struct(u32) {
             opc: u7 = 0x3,
             rd: u5,
             func: u3 = 0x3,
             rs: u5,
             imm12: i12 = 0,
-        };
-        const SD = packed struct(u32) {
+        },
+        sd: packed struct(u32) {
             opc: u7 = 0x23,
             imm12_4_0: u5 = 0,
             func: u3 = 0x3,
             rs1: u5,
             rs2: u5,
             imm12_11_5: i7 = 0,
-        };
-        const JALR = packed struct(u32) {
+        },
+        xor: packed struct(u32) {
+            opc: u7 = 0x13,
+            rs: u5,
+            func: u3 = 4,
+            rd: u5,
+            imm12: i12,
+        },
+        sub: packed struct(u32) {
+            opc: u7 = 0x33,
+            rd: u5,
+            func: u3 = 0,
+            rs1: u5,
+            rs2: u5,
+            offset_11_5: u7 = 0x20,
+        },
+        jalr: packed struct(u32) {
             opc: u7 = 0x67,
             rd: u5,
             func: u3 = 0,
             rs: u5,
             imm12: i12 = 0,
-        };
-
-        lui: LUI,
-        auipc: AUIPC,
-        ld: LD,
-        sd: SD,
-        xor: XOR,
-        sub: SUB,
-        jalr: JALR,
-        addi: ADDI,
+        },
+        addi: packed struct(u32) {
+            opc: u7 = 0x13,
+            rs: u5,
+            func: u3 = 0,
+            rd: u5,
+            imm12: i12 = 0,
+        },
         literal: usize,
     },
     .powerpc64le => union(enum) {
-        const ADDI = packed struct(u32) {
+        addi: packed struct(u32) {
             imm16: i16,
             ra: u5,
             rt: u5,
             opc: u6 = 0x0e,
-        };
-        const ORI = packed struct(u32) {
+        },
+        ori: packed struct(u32) {
             imm16: u16,
             ra: u5,
             rs: u5,
             opc: u6 = 0x18,
-        };
-        const ORIS = packed struct(u32) {
+        },
+        oris: packed struct(u32) {
             imm16: u16,
             ra: u5,
             rs: u5,
             opc: u6 = 0x19,
-        };
-        const XOR = packed struct(u32) {
-            rc: u1 = 0,
-            func: u10 = 316,
-            rb: u5,
-            ra: u5,
-            rs: u5,
-            opc: u6 = 0x1f,
-        };
-        const RLDIC = packed struct(u32) {
+        },
+        rldic: packed struct(u32) {
             rc: u1 = 0,
             sh2: u1,
             _: u3 = 2,
@@ -962,29 +937,37 @@ const Instruction = switch (builtin.target.cpu.arch) {
             ra: u5,
             rs: u5,
             opc: u6 = 0x1e,
-        };
-        const LD = packed struct {
+        },
+        ld: packed struct {
             _: u2 = 0,
             ds: i14 = 0,
             ra: u5,
             rt: u5,
             opc: u6 = 0x3a,
-        };
-        const STD = packed struct {
+        },
+        xor: packed struct(u32) {
+            rc: u1 = 0,
+            func: u10 = 316,
+            rb: u5,
+            ra: u5,
+            rs: u5,
+            opc: u6 = 0x1f,
+        },
+        std: packed struct {
             _: u2 = 0,
             ds: i14 = 0,
             ra: u5,
             rs: u5,
             opc: u6 = 0x3e,
-        };
-        const MTCTR = packed struct(u32) {
+        },
+        mtctr: packed struct(u32) {
             _: u1 = 0,
             func: u10 = 467,
             spr: u10 = 0x120,
             rs: u5,
             opc: u6 = 0x1f,
-        };
-        const BCTRL = packed struct(u32) {
+        },
+        bctrl: packed struct(u32) {
             lk: u1 = 0,
             func: u10 = 528,
             bh: u2 = 0,
@@ -992,35 +975,25 @@ const Instruction = switch (builtin.target.cpu.arch) {
             bi: u5 = 0,
             bo: u5 = 0x14,
             opc: u6 = 0x13,
-        };
-
-        addi: ADDI,
-        ori: ORI,
-        oris: ORIS,
-        rldic: RLDIC,
-        ld: LD,
-        xor: XOR,
-        std: STD,
-        mtctr: MTCTR,
-        bctrl: BCTRL,
+        },
         literal: usize,
     },
     .arm => union(enum) {
-        const LDR = packed struct(u32) {
+        ldr: packed struct(u32) {
             imm12: u12,
             rt: u4,
             rn: u4,
             opc: u8 = 0x59,
             _: u4 = 0,
-        };
-        const SUB = packed struct(u32) {
+        },
+        sub: packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
             opc: u8 = 0x24,
             _: u4 = 0,
-        };
-        const MVN = packed struct(u32) {
+        },
+        mvn: packed struct(u32) {
             rm: u4,
             ___: u1 = 0,
             type: u2 = 0,
@@ -1029,36 +1002,29 @@ const Instruction = switch (builtin.target.cpu.arch) {
             __: u4 = 0,
             opc: u8 = 0x1e,
             _: u4 = 0,
-        };
-        const STR = packed struct(u32) {
+        },
+        str: packed struct(u32) {
             imm12: u12 = 0,
             rt: u4,
             rn: u4,
             opc: u8 = 0x58,
             _: u4 = 0,
-        };
-        const BX = packed struct(u32) {
+        },
+        bx: packed struct(u32) {
             rm: u4,
             flags: u4 = 0x1,
             imm12: u12 = 0xfff,
             opc: u8 = 0x12,
             _: u4 = 0,
-        };
-        const NOP = packed struct(u32) {
+        },
+        nop: packed struct(u32) {
             _____: u8 = 0,
             ____: u4 = 0,
             ___: u4 = 0xf,
             __: u4 = 0,
             opc: u8 = 0x32,
             _: u4 = 0,
-        };
-
-        ldr: LDR,
-        sub: SUB,
-        mvn: MVN,
-        str: STR,
-        bx: BX,
-        nop: NOP,
+        },
         literal: usize,
 
         fn imm12(comptime value: u32) u12 {
