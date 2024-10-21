@@ -60,15 +60,16 @@ await plugin({
       // the path to the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
       // is absent, compilation does not occur
       const { outputPath } = await compile(srcPath, modPath, options);
-      const env = createEnvironment({ addonPath });
+      process.env.ADDON_PATH = addonPath;
+      const env = createEnvironment();
       env.loadModule(outputPath);
       env.acquireStructures(options);
       const definition = env.exportStructures();
       // get the absolute path to node-zigar-addon so the transpiled code can find it
       const runtimeURL = pathToFileURL(getLibraryPath()).href;
       const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
-      const envOptions = { addonPath };
-      const { code } = generateCode(definition, { runtimeURL, binarySource, envOptions });
+      const envVariables = { ADDON_PATH: addonPath };
+      const { code } = generateCode(definition, { runtimeURL, binarySource, envVariables });
       return {
         contents: code,
         loader: 'js',
