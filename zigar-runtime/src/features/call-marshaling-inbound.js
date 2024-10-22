@@ -7,7 +7,7 @@ export default mixin({
   jsFunctionCallerMap: new Map(),
   jsFunctionControllerMap: new Map(),
   jsFunctionIdMap: null,
-  jsFunctionNextId: 8888,
+  jsFunctionNextId: 1,
 
   getFunctionId(fn) {
     if (!this.jsFunctionIdMap) {

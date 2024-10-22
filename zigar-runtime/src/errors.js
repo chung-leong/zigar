@@ -228,7 +228,7 @@ export class NoProperty extends TypeError {
 export class ArgumentCountMismatch extends Error {
   constructor(expected, actual, variadic = false) {
     super();
-    this.fnName = '';
+    this.fnName = 'fn';
     this.argIndex = expected;
     this.argCount = actual;
     this.variadic = variadic;
@@ -417,28 +417,24 @@ export class Exit extends ZigError {
 export function adjustArgumentError(argIndex, argCount) {
   const { message } = this;
   defineProperties(this, {
-    fnName: defineValue(''),
+    fnName: defineValue('fn'),
     argIndex: defineValue(argIndex),
     argCount: defineValue(argCount),
     message: {
       get() {
-        let msg = message;
         const { fnName, argIndex, argCount } = this;
-        if (fnName) {
-          const argName = `args[${argIndex}]`;
-          const prefix = (argIndex !== 0) ? '..., ' : '';
-          const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-          const argLabel = prefix + argName + suffix;
-          msg = `${fnName}(${argLabel}): ${msg}`;
-        }
-        return msg;
+        const argName = `args[${argIndex}]`;
+        const prefix = (argIndex !== 0) ? '..., ' : '';
+        const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
+        const argLabel = prefix + argName + suffix;
+        return `${fnName}(${argLabel}): ${message}`;
       },
     }
   });
   return this;
 }
 
-export function adjustRangeError(member, index, err) {
+export function replaceRangeError(member, index, err) {
   if (err instanceof RangeError && !(err instanceof OutOfBound)) {
     err = new OutOfBound(member, index);
   }

@@ -1,7 +1,8 @@
 import { expect } from 'chai';
-import { ArgStructFlag, MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  ArgStructFlag, CallResult, MemberFlag, MemberType, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { CallResult } from '../../src/features/call-marshaling-inbound.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { capture, captureError, delay, usize } from '../test-utils.js';
@@ -50,7 +51,7 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(thunk3).to.equal(thunk1);
     })
   })
-  describe('createInboundCallers', function() {
+  describe('createInboundCaller', function() {
     it('should create a caller for invoking a JavaScript function from Zig', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -72,6 +73,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -103,10 +105,10 @@ describe('Feature: call-marshaling-inbound', function() {
         console.log(`${arg1} ${arg2}`);
         return arg1 + arg2;
       };
-      const { self, binary } = env.createInboundCallers(fn, ArgStruct)
+      const self = env.createInboundCaller(fn, ArgStruct)
       expect(self).to.be.a('function');
-      expect(binary).to.be.a('function');
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const binary = env.jsFunctionCallerMap.get(1);
       const [ line ] = await capture(() => {
         expect(() => binary(argStruct[MEMORY])).to.not.throw();
       });
@@ -136,6 +138,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -167,7 +170,7 @@ describe('Feature: call-marshaling-inbound', function() {
         console.log(`${arg1} ${arg2}`);
         return arg1 + arg2;
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let result;
@@ -199,6 +202,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -229,7 +233,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const fn = (arg1, arg2) => {
         throw new Error('Boo!');
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let result;
@@ -260,6 +264,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -290,7 +295,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const fn = (arg1, arg2) => {
         throw new Error('Boo!');
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let result;
@@ -379,6 +384,7 @@ describe('Feature: call-marshaling-inbound', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
         name: 'Hello',
         byteSize: 6 + 4 * 2,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -410,7 +416,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const fn = (arg1, arg2) => {
         throw MyError.UnableToCreateObject;
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       const result = env.runFunction(funcId, argStruct[MEMORY]);
@@ -496,6 +502,7 @@ describe('Feature: call-marshaling-inbound', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
         name: 'Hello',
         byteSize: 6 + 4 * 2,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -527,7 +534,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const fn = (arg1, arg2) => {
         throw new Error('Boo!');
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let result;
@@ -558,6 +565,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -589,7 +597,7 @@ describe('Feature: call-marshaling-inbound', function() {
         await delay(50);
         return arg1 + arg2;
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let called = false, futexHandle, result;
@@ -626,6 +634,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -657,7 +666,7 @@ describe('Feature: call-marshaling-inbound', function() {
         await delay(50);
         throw new Error('Boo!');
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       let called = false, futexHandle, result;
@@ -695,6 +704,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -726,7 +736,7 @@ describe('Feature: call-marshaling-inbound', function() {
         await delay(50);
         return arg1 + arg2;
       };
-      env.createInboundCallers(fn, ArgStruct)
+      env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
       const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
       const result = env.runFunction(funcId, argStruct[MEMORY], 0);

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { adjustRangeError } from '../errors.js';
+import { replaceRangeError } from '../errors.js';
 import { MEMORY, RESTORE } from '../symbols.js';
 
 export default mixin({
@@ -51,7 +51,7 @@ export default mixin({
               if (err instanceof TypeError && this[RESTORE]?.()) {
                 return getter.call(this[MEMORY], index * byteSize, littleEndian);
               } else {
-                throw adjustRangeError(member, index, err);
+                throw replaceRangeError(member, index, err);
               }
             }
           },
@@ -62,7 +62,7 @@ export default mixin({
               if (err instanceof TypeError && this[RESTORE]?.()) {
                 return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
               } else {
-                throw adjustRangeError(member, index, err);
+                throw replaceRangeError(member, index, err);
               }
             }
           },
@@ -98,7 +98,7 @@ export default mixin({
             try {
               return getter.call(this[MEMORY], index * byteSize, littleEndian);
             } catch (err) {
-              throw adjustRangeError(member, index, err);
+              throw replaceRangeError(member, index, err);
             }
           },
           set: function setElement(index, value) {

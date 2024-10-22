@@ -41,11 +41,11 @@ import {
   UndefinedArgument,
   Unsupported,
   adjustArgumentError,
-  adjustRangeError,
   article,
   deanimalizeErrorName,
   formatList,
   getDescription,
+  replaceRangeError,
 } from '../src/errors.js';
 
 describe('Error functions', function() {
@@ -419,9 +419,9 @@ describe('Error functions', function() {
   })
   describe('ArgumentCountMismatch', function() {
     it('should throw an error', function() {
-      const err1 = new ArgumentCountMismatch('hello', 3, 1);
+      const err1 = new ArgumentCountMismatch(3, 1);
       expect(err1.message).to.contain('1').and.contain('3 arguments');
-      const err2 = new ArgumentCountMismatch('hello', 1, 0);
+      const err2 = new ArgumentCountMismatch(1, 0);
       expect(err2.message).to.contain('0').and.contain('1 argument,');
     })
   })
@@ -627,30 +627,28 @@ describe('Error functions', function() {
   })
   describe('adjustArgumentError', function() {
     it('should add argument number to an error', function() {
-      const err = new TypeError('Something');
-      const err1 = adjustArgumentError('hello', 0, 3, err);
-      expect(err1.message).to.contain('(args[0], ...)').and.contain(err.message);
-      const err2 = adjustArgumentError('hello', 1, 3, err);
+      const err1 = adjustArgumentError.call(new TypeError('Something'), 0, 3);
+      expect(err1.message).to.contain('(args[0], ...)').and.contain('Something');
+      const err2 = adjustArgumentError.call(new TypeError('Something'), 1, 3);
       expect(err2.message).to.contain('(..., args[1], ...)');
-      const err3 = adjustArgumentError('hello', 2, 3, err);
+      const err3 = adjustArgumentError.call(new TypeError('Something'), 2, 3);
       expect(err3.message).to.contain('(..., args[2])');
     })
     it('should return error of the same class', function() {
-      const err = new UndefinedArgument();
-      const err1 = adjustArgumentError('hello', 0, 3, err);
+      const err1 = adjustArgumentError.call(new UndefinedArgument(), 0, 3);
       expect(() => { throw err1 }).to.throw(UndefinedArgument);
     })
   })
-  describe('adjustRangeError', function() {
+  describe('replaceRangeError', function() {
     it('should throw range error when given a range error', function() {
       const member = {
         name: 'hello',
         type: MemberType.Int,
         bitSize: 8,
       };
-      const err1 = adjustRangeError(member, 5, new RangeError);
+      const err1 = replaceRangeError(member, 5, new RangeError);
       expect(err1.message).to.contain('hello');
-      const err2 = adjustRangeError(member, 5, new TypeError);
+      const err2 = replaceRangeError(member, 5, new TypeError);
       expect(err2).to.be.instanceOf(TypeError);
     })
   })

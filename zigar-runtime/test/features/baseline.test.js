@@ -40,6 +40,7 @@ describe('Feature: baseline', function() {
         name: 'hello',
         byteSize: 0,
         align: 0,
+        length: 0,
         instance: {
           members: [
             {
@@ -88,6 +89,7 @@ describe('Feature: baseline', function() {
         flags: 0,
         name: 'fn () void',
         byteSize: 0,
+        length: 0,
         instance: {
           members: [
             {
@@ -250,35 +252,36 @@ describe('Feature: baseline', function() {
       expect(object.dog).to.equal(1234);
       expect(object.cat).to.equal(5678);
       expect(object.ghost).to.equal(-8888);
-      let thunkAddress, fnAddress, argDV;
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1]
-          argDV = new DataView(env.memory.buffer, args[2], s2.byteSize);
-          return true;
-        };
-      } else {
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1]
-          argDV = args[2];
-          return true;
-        };
-        env.recreateAddress = function(address) {
-          return 0n + address;
-        };
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
+      let thunkAddress, fnAddress, argAddress;
+      env.runThunk = function(...args) {
+        thunkAddress = args[0];
+        fnAddress = args[1]
+        argAddress = args[2];
+        return true;
+      };
+      env.recreateAddress = function(address) {
+        return address;
+      };
+      const bufferMap = new Map(), addressMap = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = bufferMap.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          bufferMap.set(address, buffer);
+          addressMap.set(buffer, address);
+        }
+        return buffer;
+      };
+      env.getBufferAddress = function(buffer) {
+        return addressMap.get(buffer) ?? usize(0x1234);
+      };
       env.linkVariables(false);
+      constructor.hello();
       expect(() => constructor.hello()).to.not.throw();
       expect(() => constructor.world()).to.not.throw();
       expect(thunkAddress).to.equal(usize(0x8888));
       expect(fnAddress).to.equal(usize(0x2_8888));
-      expect(argDV.byteLength).to.equal(0);
+      expect(argAddress).to.equal(usize(0x1234));
       expect(env.variables).to.have.lengthOf(4);
     })
   })

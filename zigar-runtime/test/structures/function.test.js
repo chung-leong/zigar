@@ -1,7 +1,6 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { CallResult, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { CallResult } from '../../src/features/call-marshaling-inbound.js';
 import '../../src/mixins.js';
 import { FIXED, MEMORY, SIZE } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
