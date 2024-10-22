@@ -259,9 +259,6 @@ describe('Feature: baseline', function() {
         argAddress = args[2];
         return true;
       };
-      env.recreateAddress = function(address) {
-        return address;
-      };
       const bufferMap = new Map(), addressMap = new Map();
       env.obtainExternBuffer = function(address, len) {
         let buffer = bufferMap.get(address);
@@ -272,11 +269,16 @@ describe('Feature: baseline', function() {
         }
         return buffer;
       };
+      env.recreateAddress = function(address) {
+        return address;
+      };
       env.getBufferAddress = function(buffer) {
         return addressMap.get(buffer) ?? usize(0x1234);
       };
+      if (process.env.TARGET === 'wasm') {
+        env.initPromise = Promise.resolve();
+      }
       env.linkVariables(false);
-      constructor.hello();
       expect(() => constructor.hello()).to.not.throw();
       expect(() => constructor.world()).to.not.throw();
       expect(thunkAddress).to.equal(usize(0x8888));

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { CallResult, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FIXED, MEMORY, SIZE } from '../../src/symbols.js';
+import { ENVIRONMENT, FIXED, MEMORY, SIZE } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -31,6 +31,7 @@ describe('Structure: function', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(argStructure, {
         name: 'retval',
@@ -72,12 +73,12 @@ describe('Structure: function', function() {
       const constructor = env.defineStructure(structure);
       expect(constructor).to.be.a('function');
       const dv = fixed(0x2008);
-      const f = constructor(dv);
+      const f = constructor.call(ENVIRONMENT, dv);
       expect(f).to.be.a('function');
       expect(f).to.be.an.instanceOf(constructor);
       expect(f.constructor).to.equal(constructor);
       expect(f).to.be.an.instanceOf(Function);
-      const f2 = constructor(dv);
+      const f2 = constructor.call(ENVIRONMENT, dv);
       expect(f2).to.equal(f);
       expect(f.name).to.equal('');
       defineProperty(f, 'name', { value: 'dingo' });
@@ -131,6 +132,7 @@ describe('Structure: function', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(argStructure, {
         name: 'retval',
@@ -217,6 +219,7 @@ describe('Structure: function', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(argStructure, {
         name: 'retval',

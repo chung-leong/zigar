@@ -97,6 +97,7 @@ describe('Structure: arg-struct', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -176,6 +177,7 @@ describe('Structure: arg-struct', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: childStructure.byteSize + 4 + 4,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -245,6 +247,7 @@ describe('Structure: arg-struct', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Hello',
         byteSize: ptrStructure.byteSize * 2,
+        length: 1,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -299,6 +302,7 @@ describe('Structure: arg-struct', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -350,6 +354,7 @@ describe('Structure: arg-struct', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -401,6 +406,7 @@ describe('Structure: arg-struct', function() {
         type: StructureType.ArgStruct,
         name: 'Hello',
         byteSize: 4 * 3,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',

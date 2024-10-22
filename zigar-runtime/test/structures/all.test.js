@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, FIXED, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
+import { ALIGN, ENVIRONMENT, FIXED, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -302,7 +302,7 @@ describe('Structure: all', function() {
       expect(Hello.superdog).to.equal(43);
       const descriptors = Object.getOwnPropertyDescriptors(Hello);
       expect(descriptors.superdog.set).to.be.a('function');
-      expect(descriptors.supercat.set).to.be.undefined;
+      expect(descriptors.supercat.set).to.be.a('function');
       const names = [], values = [];
       for (const [ name, value ] of Hello) {
         names.push(name);
@@ -312,6 +312,7 @@ describe('Structure: all', function() {
       expect(values).to.eql([ 43, 4567 ]);
       expect(Hello.valueOf()).to.eql({ superdog: 43, supercat: 4567 });
       expect(JSON.stringify(Hello)).to.eql('{"superdog":43,"supercat":4567}');
+      expect(() => Hello.supercat = 123).to.throw();
     })
     it('should attach variables to an enum', function() {
       const env = new Env();
@@ -416,6 +417,7 @@ describe('Structure: all', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 12,
+        length: 1,
       });
       env.attachMember(argStruct, {
         name: 'retval',
@@ -455,7 +457,7 @@ describe('Structure: all', function() {
         structure: fnStructure,
         slot: 0,
       }, true);
-      const fn = Func(fixed(0x4567));
+      const fn = Func.call(ENVIRONMENT, fixed(0x4567));
       expect(fn).to.be.a('function');
       env.attachTemplate(structure, {
         [SLOTS]: {
@@ -532,6 +534,7 @@ describe('Structure: all', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 12,
+        length: 1,
       });
       env.attachMember(getterArgStruct, {
         name: 'retval',
@@ -577,6 +580,7 @@ describe('Structure: all', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 12,
+        length: 2,
       });
       env.attachMember(setterArgStruct, {
         name: 'retval',
@@ -627,15 +631,17 @@ describe('Structure: all', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Getter(fixed(0x12345)),
-          1: Setter(fixed(0x45678)),
+          0: Getter.call(ENVIRONMENT, fixed(0x12345)),
+          1: Setter.call(ENVIRONMENT, fixed(0x45678)),
         }
       }, true);
       env.endStructure(structure);
       const object = new Hello({ dog: 1, cat: 2 });
       let apple = 123;
       const thunkAddresses = [];
-      env.invokeThunk = (thunkAddress, fnAddress, args) => {
+      env.invokeThunk = (thunk, fn, args) => {
+        const thunkAddress = env.getViewAddress(thunk[MEMORY]);
+        const fnAddress = env.getViewAddress(fn[MEMORY]);
         thunkAddresses.push(thunkAddress);
         switch (fnAddress) {
           case usize(0x12345): // getter
@@ -665,6 +671,7 @@ describe('Structure: all', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 4,
+        length: 0,
       });
       env.attachMember(getterArgStruct, {
         name: 'retval',
@@ -700,6 +707,7 @@ describe('Structure: all', function() {
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 4,
+        length: 1,
       });
       env.attachMember(setterArgStruct, {
         name: 'retval',
@@ -740,14 +748,16 @@ describe('Structure: all', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Getter(fixed(0x12345)),
-          1: Setter(fixed(0x45678)),
+          0: Getter.call(ENVIRONMENT, fixed(0x12345)),
+          1: Setter.call(ENVIRONMENT, fixed(0x45678)),
         }
       }, true);
       env.endStructure(structure);
       let apple = 123;
       const thunkAddresses = [];
-      env.invokeThunk = (thunkAddress, fnAddress, args) => {
+      env.invokeThunk = (thunk, fn, args) => {
+        const thunkAddress = env.getViewAddress(thunk[MEMORY]);
+        const fnAddress = env.getViewAddress(fn[MEMORY]);
         thunkAddresses.push(thunkAddress);
         switch (fnAddress) {
           case usize(0x12345): // getter

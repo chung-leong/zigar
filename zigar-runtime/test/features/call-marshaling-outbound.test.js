@@ -82,11 +82,11 @@ describe('Feature: call-marshaling-outbound', function() {
       };
       env.freeExternMemory = function() {
       }
+      const bufferMap = new Map(), addressMap = new Map();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else if (process.env.TARGET === 'node') {
         let nextAddress = usize(0xf000_1000);
-        const bufferMap = new Map(), addressMap = new Map();
         env.getBufferAddress = function(buffer) {
           let address = addressMap.get(buffer);
           if (!address) {

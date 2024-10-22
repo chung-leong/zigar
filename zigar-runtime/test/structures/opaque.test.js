@@ -118,6 +118,7 @@ describe('Structure: opaque', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 13,
+        length: 1,
       });
       env.attachMember(argStructure, {
         name: 'retval',
@@ -165,7 +166,7 @@ describe('Structure: opaque', function() {
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
       fnDV[FIXED] = { address: usize(0x1_8888) };
-      const next = Next(fnDV);
+      const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {
           0: next,
