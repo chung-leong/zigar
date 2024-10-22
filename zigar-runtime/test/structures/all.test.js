@@ -473,30 +473,32 @@ describe('Structure: all', function() {
       const object = new Hello({});
       object.dog = 10;
       object.cat = 13;
-      let call;
-      env.allocateExternMemory = function(type, len, align) {
-        return 0x1000;
-      };
-      env.freeExternMemory = function() {};
+      let call, argBuffer;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
-        env.runThunk = function(thunkAddress, fnAddress, argAddress) {
-          const argDV = new DataView(env.memory.buffer, argAddress, ArgStruct[SIZE]);
-          call = { thunkAddress, fnAddress, argDV };
-          const dog = argDV.getInt32(4, true);
-          const cat = argDV.getInt32(8, true);
-          argDV.setInt32(0, dog + cat, true);
-          return true;
+        env.allocateExternMemory = function(type, len, align) {
+          return 0x1000;
         };
+        env.freeExternMemory = function() {};
       } else if (process.env.TARGET === 'node') {
-        env.runThunk = function(thunkAddress, fnAddress, argDV) {
-          call = { thunkAddress, fnAddress, argDV };
-          const dog = argDV.getInt32(4, true);
-          const cat = argDV.getInt32(8, true);
-          argDV.setInt32(0, dog + cat, true);
-          return true;
+        env.getBufferAddress = function(buffer) {
+          argBuffer = buffer;
+          return usize(0x0000_f000);
         };
       }
+      env.runThunk = function(thunkAddress, fnAddress, argAddress) {
+        let argDV;
+        if (process.env.TARGET === 'wasm') {
+          argDV = new DataView(env.memory.buffer, argAddress, ArgStruct[SIZE]);
+        } else {
+          argDV = new DataView(argBuffer, 0, ArgStruct[SIZE]);
+        }
+        call = { thunkAddress, fnAddress, argDV };
+        const dog = argDV.getInt32(4, true);
+        const cat = argDV.getInt32(8, true);
+        argDV.setInt32(0, dog + cat, true);
+        return true;
+      };
       const res1 = object.merge();
       expect(res1).to.equal(23);
       object.dog = 20;

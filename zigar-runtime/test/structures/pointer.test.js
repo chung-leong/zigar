@@ -4,9 +4,11 @@ import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+  ADDRESS, ENVIRONMENT,
+  FIXED,
+  INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
   UPDATE,
-  VISIT,
+  VISIT
 } from '../../src/symbols.js';
 import { defineValue } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
@@ -2558,46 +2560,44 @@ describe('Structure: pointer', function() {
       env.defineStructure(structure);
       env.endStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      let at0x30000;
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-        at0x30000 = new DataView(env.memory.buffer, 0x30000, 4 * 4);
-        env.allocateExternMemory = function(type, len, align) {
+      const allocator = {
+        alloc(len, align) {
           const address = nextAddress;
           nextAddress += usize(0x1000);
-          return address;
-        };
-      } else if (process.env.TARGET === 'node') {
-        at0x30000 = new DataView(new ArrayBuffer(4 * 4));
-        const bufferMap = new Map([ [ usize(0x30000), at0x30000.buffer ] ]);
-        const addressMap = new Map([ [ at0x30000, usize(0x30000) ] ]);
-        env.allocateExternMemory = function(type, len, align) {
-          const address = nextAddress;
-          nextAddress += usize(0x1000);
-          const buffer = new ArrayBuffer(len);
-          bufferMap.set(address, buffer);
-          addressMap.set(buffer, address);
-          return address;
-        };
-        env.extractBufferAddress = function(buffer) {
-          return addressMap.get(buffer);
-        };
-        env.obtainExternBuffer = function(address, len) {
-          return bufferMap.get(address);
+          const dv = new DataView(new ArrayBuffer(len));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
+      };
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
         }
-      }
-      const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { fixed: true });
+        return dv;
+      };
+      const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { allocator });
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
-      // put 4 '8' at address 0x30000
-      for (let i = 0; i < at0x30000.byteLength; i += 4) {
-        at0x30000.setInt32(i, 8, true);
+      const beforeDV = pointer['*'][MEMORY];
+      const beforeAddress = beforeDV[FIXED].address;
+      const afterDV = allocator.alloc(4 * 4, 4);
+      const afterAddress = afterDV[FIXED].address;
+      // put 4 '8' into afterDV
+      for (let i = 0; i < afterDV.byteLength; i += 4) {
+        afterDV.setInt32(i, 8, true);
       }
-      setUsize.call(pointer[MEMORY], 0, usize(0x30000), true);
+      setUsize.call(pointer[MEMORY], 0, afterAddress, true);
       setUsize.call(pointer[MEMORY], addressByteSize, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 8, 8, 8, 8 ]);
-      setUsize.call(pointer[MEMORY], 0, usize(0x2000), true);
+      setUsize.call(pointer[MEMORY], 0, beforeAddress, true);
       setUsize.call(pointer[MEMORY], addressByteSize, usize(4), true);
       pointer['*'];
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
@@ -2822,20 +2822,30 @@ describe('Structure: pointer', function() {
       });
       const HelloPtr = env.defineStructure(structure);
       env.endStructure(structure);
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const address = nextAddress;
-        nextAddress += usize(0x1000);
-        return address;
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len * 2));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else if (process.env.TARGET === 'node') {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
-      const pointer = new HelloPtr(5, { fixed: true });
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
+        }
+        return dv;
+      };
+      const pointer = new HelloPtr(5, { allocator });
       expect(() => pointer.length = 6).to.not.throw();
     })
     it('should allow anyopaque pointer to point at anything', function() {
@@ -3614,25 +3624,35 @@ describe('Structure: pointer', function() {
       });
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const currentAddress = nextAddress;
-        nextAddress += usize(0x1000);
-        return currentAddress;
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len * 2));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else if (process.env.TARGET === 'node') {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
+        }
+        return dv;
+      };
       expect(Int32Ptr.child).to.equal(Int32);
-      const int1 = new Int32(1234, { fixed: true });
-      const intPointer = new Int32Ptr(int1, { fixed: true });
+      const int1 = new Int32(1234, { allocator });
+      const intPointer = new Int32Ptr(int1, { allocator });
       const dv = intPointer[MEMORY];
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0x1000));
-      const int2 = new Int32(4567, { fixed: true });
+      const int2 = new Int32(4567, { allocator });
       intPointer.$ = int2;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0x3000));
     })
@@ -3684,21 +3704,31 @@ describe('Structure: pointer', function() {
       });
       const Int32SPtr = env.defineStructure(spStructure);
       env.endStructure(spStructure);
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const currentAddress = nextAddress;
-        nextAddress += usize(0x1000);
-        return currentAddress;
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len * 2));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else if (process.env.TARGET === 'node') {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
-      const intSPointer1 = new Int32SPtr([ 1, 2, 3, 4 ], { fixed: true });
-      const intSPointer2 = new Int32SPtr(undefined, { fixed: true });
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
+        }
+        return dv;
+      };
+      const intSPointer1 = new Int32SPtr([ 1, 2, 3, 4 ], { allocator });
+      const intSPointer2 = new Int32SPtr(undefined, { allocator });
       const dv = intSPointer2[MEMORY];
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
       expect(getUsize.call(dv, addressByteSize, true)).to.equal(usize(0));
@@ -3758,21 +3788,31 @@ describe('Structure: pointer', function() {
       });
       const Int32CPtr = env.defineStructure(cpStructure);
       env.endStructure(cpStructure);
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const currentAddress = nextAddress;
-        nextAddress += usize(0x1000);
-        return currentAddress;
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len * 2));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else if (process.env.TARGET === 'node') {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
-      const intCPointer1 = new Int32CPtr([ 1, 2, 3, 4 ], { fixed: true });
-      const intCPointer2 = new Int32CPtr(undefined, { fixed: true });
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
+        }
+        return dv;
+      };
+      const intCPointer1 = new Int32CPtr([ 1, 2, 3, 4 ], { allocator });
+      const intCPointer2 = new Int32CPtr(undefined, { allocator });
       const dv = intCPointer2[MEMORY];
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
       intCPointer2.$ = intCPointer1;

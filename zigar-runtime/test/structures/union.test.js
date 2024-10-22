@@ -1689,6 +1689,7 @@ describe('Structure: union', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 13,
+        length: 1,
       });
       env.attachMember(argStructure, {
         name: 'retval',
@@ -1736,50 +1737,43 @@ describe('Structure: union', function() {
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
       fnDV[FIXED] = { address: usize(0x1_8888) };
-      const next = Next(fnDV);
+      const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {
           0: next,
         }
       }, true);
       env.endStructure(structure);
-      let i = 0, thunkAddress, fnAddress;
+      let i = 0, thunkAddress, fnAddress, argBuffer;
+      env.runThunk = function(...args) {
+        thunkAddress = args[0];
+        fnAddress = args[1];
+        let argDV;
+        if (process.env.TARGET === 'wasm') {
+          argDV = new DataView(env.memory.buffer, args[2], 13);
+        } else {
+          argDV = new DataView(argBuffer, 0, 13);
+        }
+        if (i++ < 5) {
+          argDV.setInt32(0, i, true);
+          argDV.setInt8(4, 1);
+        } else {
+          argDV.setInt32(0, 0, true);
+          argDV.setInt8(4, 0);
+          debugger;
+        }
+        return true;
+      };
       if (process.env.TARGET === 'wasm') {
         env.allocateExternMemory = function(len, align) {
           return 0x1000;
         };
         env.freeExternMemory = function(address) {
         };
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1];
-          const argDV = new DataView(env.memory.buffer, args[2], 13);
-          if (i++ < 5) {
-            argDV.setInt32(0, i, true);
-            argDV.setInt8(4, 1);
-          } else {
-            argDV.setInt32(0, 0, true);
-            argDV.setInt8(4, 0);
-            debugger;
-          }
-          return true;
-        };
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else if (process.env.TARGET === 'node') {
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1];
-          const argDV = args[2];
-          if (i++ < 5) {
-            argDV.setInt32(0, i, true);
-            argDV.setInt8(4, 1);
-          } else {
-            argDV.setInt32(0, 0, true);
-            argDV.setInt8(4, 0);
-          }
-          return true;
-        };
         env.getBufferAddress = function(buffer) {
+          argBuffer = buffer;
           return 0x1000n;
         }
       }

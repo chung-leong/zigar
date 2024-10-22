@@ -83,30 +83,35 @@ describe('Structure: function', function() {
       expect(f.name).to.equal('');
       defineProperty(f, 'name', { value: 'dingo' });
       expect(f.name).to.equal('dingo');
-      let thunkAddress, fnAddress, argStruct;
+      let thunkAddress, fnAddress, argAddress, argBuffer;
       env.runThunk = (...args) => {
         thunkAddress = args[0];
         fnAddress = args[1];
-        argStruct = args[2];
+        argAddress = args[2];
         return true;
       };
-      env.allocateExternMemory = function(address, len) {
-        return usize(0x4000);
-      };
-      env.freeExternMemory = function() {
-      }
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
+        env.allocateExternMemory = function(address, len) {
+          return usize(0x4000);
+        };
+        env.freeExternMemory = function() {
+        }
+      } else {
+        env.getBufferAddress = function(buffer) {
+          argBuffer = buffer;
+          return usize(0x4000);
+        };
       }
       expect(() => f(1, 2)).to.not.throw();
       expect(thunkAddress).to.equal(usize(0x1004));
       expect(fnAddress).to.equal(usize(0x2008));
+      expect(argAddress).to.equal(usize(0x4000));
+      let argStruct;
       if (process.env.TARGET === 'wasm') {
-        expect(argStruct).to.equal(usize(0x4000));
         argStruct = ArgStruct(new DataView(env.memory.buffer, 0x4000, ArgStruct[SIZE]));
       } else if (process.env.TARGET === 'node') {
-        expect(argStruct).to.be.instanceOf(DataView);
-        argStruct = ArgStruct(argStruct);
+        argStruct = ArgStruct(new DataView(argBuffer));
       }
       expect(argStruct[0]).to.equal(1);
       expect(argStruct[1]).to.equal(2);

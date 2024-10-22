@@ -29,9 +29,9 @@ export default mixin({
     /* c8 ignore end */
     const { byteSize: elementSize, structure: elementStructure } = member;
     const thisEnv = this;
-    const shapeDefiner = function(dv, length, fixed = false) {
+    const shapeDefiner = function(dv, length, allocator) {
       if (!dv) {
-        dv = thisEnv.allocateMemory(length * elementSize, align, fixed);
+        dv = thisEnv.allocateMemory(length * elementSize, align, allocator);
       }
       this[MEMORY] = dv;
       this[LENGTH] = length;
@@ -46,10 +46,10 @@ export default mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, fixed = false) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, arg.length, fixed);
+          shapeDefiner.call(this, null, arg.length, allocator);
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
@@ -58,11 +58,11 @@ export default mixin({
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
-        initializer.call(this, { string: arg }, fixed);
+        initializer.call(this, { string: arg }, allocator);
       } else if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
         if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, arg.length, fixed);
+          shapeDefiner.call(this, null, arg.length, allocator);
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
@@ -73,12 +73,12 @@ export default mixin({
         }
       } else if (typeof(arg) === 'number') {
         if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
-          shapeDefiner.call(this, null, arg, fixed);
+          shapeDefiner.call(this, null, arg, allocator);
         } else {
           throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
         }
       } else if (arg && typeof(arg) === 'object') {
-        if (propApplier.call(this, arg, fixed) === 0) {
+        if (propApplier.call(this, arg, allocator) === 0) {
           throw new InvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {

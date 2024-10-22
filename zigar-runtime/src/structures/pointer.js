@@ -175,7 +175,7 @@ export default mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         // initialize with the other pointer'structure target
@@ -240,7 +240,7 @@ export default mixin({
           }
         }
         // autovivificate target object
-        const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
+        const autoObj = new Target(arg, { allocator });
         if (thisEnv.runtimeSafety) {
           // creation of a new slice using a typed array is probably
           // not what the user wants; it's more likely that the intention

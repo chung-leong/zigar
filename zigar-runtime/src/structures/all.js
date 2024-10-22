@@ -161,7 +161,7 @@ export default mixin({
     const thisEnv = this;
     const constructor = function(arg, options = {}) {
       const {
-        allocator = false,
+        allocator,
       } = options;
       const creating = this instanceof constructor;
       let self, dv;
@@ -216,7 +216,7 @@ export default mixin({
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {
-          self[INITIALIZE](arg);
+          self[INITIALIZE](arg, allocator);
         }
       }
       if (FINALIZE in self) {

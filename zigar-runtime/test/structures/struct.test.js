@@ -1352,19 +1352,38 @@ describe('Structure: struct', function() {
     })
     it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
       const env = new Env();
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const address = nextAddress;
-        nextAddress += usize(len * 0x0F);
-        return address;
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          let dv;
+          if (process.env.TARGET === 'wasm') {
+            if (!env.memory) {
+              env.memory = new WebAssembly.Memory({ initial: 128 });
+            }
+            dv = new DataView(env.memory.buffer, address, len);
+          } else {
+            dv = new DataView(new ArrayBuffer(len));
+          }
+          dv.buffer[FIXED] =  { address, len };
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
+      env.obtainExternView = (address, len) => {
+        let dv = viewMap.get(address);
+        if (dv.byteLength !== len) {
+          dv = new DataView(dv.buffer, dv.byteOffset, len);
+          dv[FIXED] = { address, len };
+        }
+        return dv;
+      };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'i32',
@@ -1427,7 +1446,7 @@ describe('Structure: struct', function() {
         cat: new Int32(1234),
         dog: new Int32(4567),
       });
-      const object2 = new Hello(undefined, { fixed: true });
+      const object2 = new Hello(undefined, { allocator });
       expect(() => object2.$ = object1).to.throw(TypeError)
         .with.property('message').that.contains('cannot point to garbage-collected');
     })
@@ -1492,6 +1511,7 @@ describe('Structure: struct', function() {
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Argument',
         byteSize: 13,
+        length: 1,
       });
       env.attachMember(argStructure, {
         name: 'retval',
@@ -1540,49 +1560,42 @@ describe('Structure: struct', function() {
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
       fnDV[FIXED] = { address: usize(0x1_8888) };
-      const next = Next(fnDV);
+      const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {
           0: next,
         }
       }, true);
       env.endStructure(structure);
-      let i = 0, thunkAddress, fnAddress;
+      let i = 0, thunkAddress, fnAddress, argBuffer;
+      env.runThunk = function(...args) {
+        thunkAddress = args[0];
+        fnAddress = args[1];
+        let argDV;
+        if (process.env.TARGET === 'wasm') {
+          argDV = new DataView(env.memory.buffer, args[2], 13);
+        } else {
+          argDV = new DataView(argBuffer, 0, 13);
+        }
+        if (i++ < 5) {
+          argDV.setInt32(0, i, true);
+          argDV.setInt8(4, 1);
+        } else {
+          argDV.setInt32(0, 0, true);
+          argDV.setInt8(4, 0);
+        }
+        return true;
+      };
       if (process.env.TARGET === 'wasm') {
         env.allocateExternMemory = function(len, align) {
           return 0x1000;
         };
         env.freeExternMemory = function(address) {
         };
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1];
-          const argDV = new DataView(env.memory.buffer, args[2], 13);
-          if (i++ < 5) {
-            argDV.setInt32(0, i, true);
-            argDV.setInt8(4, 1);
-          } else {
-            argDV.setInt32(0, 0, true);
-            argDV.setInt8(4, 0);
-          }
-          return true;
-        };
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else if (process.env.TARGET === 'node') {
-        env.runThunk = function(...args) {
-          thunkAddress = args[0];
-          fnAddress = args[1];
-          const argDV = args[2];
-          if (i++ < 5) {
-            argDV.setInt32(0, i, true);
-            argDV.setInt8(4, 1);
-          } else {
-            argDV.setInt32(0, 0, true);
-            argDV.setInt8(4, 0);
-          }
-          return true;
-        };
         env.getBufferAddress = function(buffer) {
+          argBuffer = buffer;
           return 0x1000n;
         }
       }

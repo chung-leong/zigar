@@ -16,6 +16,7 @@ describe('Structure: variadic-struct', function() {
         byteSize: 8,
         instance: {},
         static: { members: [] },
+        length: 1,
       };
       structure.instance.members = [
         {
@@ -47,6 +48,7 @@ describe('Structure: variadic-struct', function() {
         byteSize: 8,
         instance: {},
         static: { members: [] },
+        length: 1,
       };
       structure.instance.members = [
         {
@@ -133,6 +135,7 @@ describe('Structure: variadic-struct', function() {
         name: 'Hello',
         byteSize: 4 * 3,
         align: 4,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -219,6 +222,7 @@ describe('Structure: variadic-struct', function() {
         name: 'Hello',
         byteSize: 4 + 4 + 4,
         align: 4,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
@@ -302,6 +306,7 @@ describe('Structure: variadic-struct', function() {
         name: 'Hello',
         byteSize: 4 + 4 + 4,
         align: 4,
+        length: 2,
       });
       env.attachMember(structure, {
         name: 'retval',
