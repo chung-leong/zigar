@@ -7,6 +7,13 @@ export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
     const thisEnv = this;
     const self = function (...args) {
+      if (process.env.TARGET === 'wasm') {
+        if (!thisEnv.runThunk) {
+          return thisEnv.initPromise.then(() => {
+            return self(...args);
+          });
+        }
+      }
       try {
         const argStruct = new ArgStruct(args);
         thisEnv.invokeThunk(thunk, self, argStruct);
@@ -67,13 +74,6 @@ export default mixin({
     }
   },
   invokeThunk(thunk, fn, args) {
-    if (process.env.TARGET === 'wasm') {
-      if (!this.runThunk) {
-        return this.initPromise.then(() => {
-          return this.invokeThunk(thunk, fn, args);
-        });
-      }
-    }
     const context = args[CONTEXT];
     const attrs = args[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);

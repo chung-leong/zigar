@@ -333,7 +333,6 @@ describe('Feature: module-loading', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new Env();
         const exports = env.exportFunctions();
-        expect(exports.allocateHostMemory).to.be.a('function');
         expect(exports.getViewAddress).to.be.a('function');
       })
     })
@@ -348,12 +347,14 @@ describe('Feature: module-loading', function() {
           },
           runThunk: () => {},
           runVariadicThunk: () => {},
+          finalizeAsyncCall: () => {},
           getBufferAddress: () => {},
           copyExternBytes: () => {},
           getFactoryThunk: () => {},
           flushStdout: () => {},
           garbage: () => {},
           createJsThunk: () => {},
+          destroyJsThunk: () => {},
           recreateAddress: () => {},
           findSentinel: () => {},
           obtainExternBuffer: () => {},

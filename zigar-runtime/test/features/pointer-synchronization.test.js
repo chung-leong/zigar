@@ -112,8 +112,6 @@ describe('Feature: pointer-synchronization', function() {
       env.getBufferAddress = function(buffer) {
         return usize(0x2000);
       };
-      env.startContext();
-      debugger;
       env.updatePointerAddresses(args);
       expect(getUsize.call(args[0][MEMORY], 0, true)).to.equal(usize(0x2000));
       expect(getUsize.call(args[1][MEMORY], 0, true)).to.equal(usize(0x1000));
@@ -218,7 +216,6 @@ describe('Feature: pointer-synchronization', function() {
       env.getTargetAddress = function(target, cluster) {
         return map.get(target[MEMORY]);
       };
-      env.startContext();
       env.updatePointerAddresses(object3);
       expect(object1[MEMORY].getBigUint64(0, true)).to.equal(0x3000n);  // obj1 -> obj3
       expect(object2[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);  // obj2 -> obj1
