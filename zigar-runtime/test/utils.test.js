@@ -9,6 +9,7 @@ import {
   decodeBase64,
   decodeText,
   defineProperties,
+  empty,
   encodeBase64,
   encodeText,
   findSortedIndex,
@@ -22,6 +23,7 @@ import {
   ObjectCache,
   toString,
   transformIterable,
+  usize,
 } from '../src/utils.js';
 
 describe('Utility functions', function() {
@@ -343,4 +345,21 @@ describe('Utility functions', function() {
       expect(never()).to.be.false;
     })
   })
+  describe('empty', function() {
+    it('should do nothing', function() {
+      expect(empty()).to.be.undefined;
+    })
+  })
+  describe('usize', function() {
+    if (process.env.BITS === '32') {
+      it('should return a number', function() {
+        expect(usize(1234)).to.be.a('number');
+      })
+    } else if (process.env.BITS === '64') {
+      it('should return a big int', function() {
+        expect(usize(1234)).to.be.a('bigint');
+      })
+    }
+  })
+
 })

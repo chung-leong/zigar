@@ -76,8 +76,10 @@ export default mixin({
     }
     return constructor;
   },
+  /* c8 ignore start */
   ...(process.env.MIXIN === 'track' ? {
     usingFunction: false,
     usingFunctionPointer: false,
   } : undefined),
+  /* c8 ignore end */
 });

@@ -137,7 +137,11 @@ export default mixin({
     const setTargetLength = function(len) {
       len = len | 0;
       const target = getTargetObject.call(this);
-      if (!target) {
+      if (target) {
+        if (target.length === len) {
+          return;
+        }
+      } else {
         if (len !== 0) {
           throw new InvalidSliceLength(len, 0);
         }

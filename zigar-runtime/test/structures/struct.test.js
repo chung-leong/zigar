@@ -1608,6 +1608,29 @@ describe('Structure: struct', function() {
       expect(thunkAddress).to.equal(usize(0x8888));
       expect(fnAddress).to.equal(usize(0x1_8888));
     })
+    it('should define an allocator struct', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructFlag.IsAllocator,
+        name: 'Hello',
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object =  new Hello({});
+      expect(object.alloc).to.be.a('function');
+      expect(object.free).to.be.a('function');
+      expect(object.dupe).to.be.a('function');
+    })
   })
 })
 

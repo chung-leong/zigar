@@ -2848,6 +2848,112 @@ describe('Structure: pointer', function() {
       const pointer = new HelloPtr(5, { allocator });
       expect(() => pointer.length = 6).to.not.throw();
     })
+    it('should transfer free function from original slice to new slice when length is changed', function() {
+      const env = new Env();
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        name: 'Hello',
+        byteSize: 8,
+        hasPointer: false,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: '[_]Hello',
+        byteSize: 8,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        byteSize: 8,
+        structure: structStructure,
+      });
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        name: '[]Hello',
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: addressSize * 2,
+        bitOffset: 0,
+        byteSize: addressByteSize * 2,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const HelloPtr = env.defineStructure(structure);
+      env.endStructure(structure);
+      const viewMap = new Map(), addressMap = new Map();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          const buffer = new ArrayBuffer(len);
+          buffer[FIXED] = { address, len };
+          return buffer;
+        };
+      }
+      let nextAddress = usize(0x1000);
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          let dv;
+          if (process.env.TARGET === 'wasm') {
+            dv = new DataView(env.memory.buffer, address, len);
+          } else {
+            const buffer = new ArrayBuffer(len);
+            buffer[FIXED] = { address, len };
+            dv = new DataView(buffer);
+          }
+          dv[FIXED] = { address, len, allocator: this, free: () => {} };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
+      };
+      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ], { allocator });
+      const slice1 = pointer['*'];
+      expect(slice1.length).to.equal(3);
+      expect(slice1[MEMORY][FIXED].free).to.be.a('function');
+      expect(() => pointer.length = 2).to.not.throw();
+      const slice2 = pointer['*'];
+      expect(slice2.length).to.equal(2);
+      expect(slice2[MEMORY][FIXED].free).to.be.a('function');
+      expect(slice1[MEMORY][FIXED].free).to.be.null;
+      expect(() => pointer.length = 4).to.not.throw();
+      // make sure there's early exit such the function doesn't get moved into the same object
+      // (thereby disappearing altogether)
+      pointer.length = 4;
+      pointer.length = 4;
+      const slice3 = pointer['*'];
+      expect(slice3.length).to.equal(4);
+      expect(slice3[MEMORY][FIXED].free).to.be.a('function');
+      expect(slice2[MEMORY][FIXED].free).to.be.null;
+    })
     it('should allow anyopaque pointer to point at anything', function() {
       const env = new Env();
       const byteStructure = env.beginStructure({

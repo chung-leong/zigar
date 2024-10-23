@@ -1,9 +1,14 @@
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 import { FINALIZE, FIXED, MEMORY, PROMISE } from '../symbols.js';
 
 export default mixin({
   createCallback(args, structure, callback) {
-    if (!callback) {
+    if (callback) {
+      if (typeof(callback) !== 'function') {
+        throw new TypeMismatch('function', callback);
+      }
+    } else {
       let resolve, reject;
       args[PROMISE] = new Promise((...args) => {
         resolve = args[0];

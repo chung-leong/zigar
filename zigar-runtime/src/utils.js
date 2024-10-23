@@ -168,6 +168,7 @@ export const usize = (process.env.BITS === '64')
 ? function(arg) {
     return Number(arg);
   }
+  /* c8 ignore next */
 : undefined;
 
 export const isInvalidAddress = (process.env.BITS === '64')

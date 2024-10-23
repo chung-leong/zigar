@@ -8,12 +8,6 @@ export class MustBeOverridden extends Error {
   }
 }
 
-export class InvalidDeallocation extends ReferenceError {
-  constructor(address) {
-    super(`Invalid memory deallocation: @${address.toString(16)}`);
-  }
-}
-
 export class InvalidIntConversion extends SyntaxError {
   constructor(arg) {
     super(`Cannot convert ${arg} to an Int`);

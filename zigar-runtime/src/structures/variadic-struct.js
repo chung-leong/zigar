@@ -75,9 +75,6 @@ export default mixin({
       }
       this[ATTRIBUTES] = attrs;
       this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
-      if (flags & ArgStructFlag.IsAsync) {
-        this[FINALIZE] = null;
-      }
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
