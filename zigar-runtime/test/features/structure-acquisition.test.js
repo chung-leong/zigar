@@ -244,7 +244,7 @@ describe('Feature: structure-acquisition', function() {
       };
       let thunkAddress, optionsDV;
       env.invokeThunk = function(...args) {
-        thunkAddress = args[0];
+        thunkAddress = this.getViewAddress(args[0][MEMORY]);
         optionsDV = args[2][MEMORY];
       };
       env.acquireStructures({ omitFunctions: true });

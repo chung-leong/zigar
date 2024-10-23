@@ -655,6 +655,7 @@ describe('Structure: all', function() {
         }
         return args.retval;
       };
+      env.runThunk = () => {};
       expect(object.apple).to.equal(123);
       object.apple = 456;
       expect(apple).to.equal(456);
@@ -771,6 +772,7 @@ describe('Structure: all', function() {
         }
         return args.retval;
       };
+      env.runThunk = () => {};
       expect(Hello.apple).to.equal(123);
       Hello.apple = 456;
       expect(apple).to.equal(456);

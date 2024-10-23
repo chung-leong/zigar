@@ -142,7 +142,7 @@ export default mixin({
         // return existing view instead of this one
         return existing;
       } else if (entry) {
-        entry[`${byteOffset}:${byteLength}`] = dv;
+        entry.set(`${byteOffset}:${byteLength}`, dv);
       } else {
         this.viewMap.set(buffer, dv);
       }

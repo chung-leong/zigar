@@ -21,7 +21,7 @@ if (process.env.TARGET === 'wasm') {
       })
       it('should throw if WASM compilation has been initiated already', function() {
         const env = new Env();
-        env.hasCodeSource = true;
+        env.executable = {};
         const wasi = { wasiImport: {} };
         expect(() => env.setCustomWASI(wasi)).to.throw();
       })

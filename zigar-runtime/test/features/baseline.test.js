@@ -9,7 +9,7 @@ const Env = defineEnvironment();
 
 describe('Feature: baseline', function() {
   describe('recreateStructures', function() {
-    it('should recreate structures based on input definition', function() {
+    it('should recreate structures based on input definition', async function() {
       const env = new Env();
       const s1 = {
         type: StructureType.Primitive,
@@ -101,7 +101,7 @@ describe('Feature: baseline', function() {
           ],
           template: {
             memory: (() => {
-              const array = new Uint8Array(1);
+              const array = new Uint8Array(0);
               return { array };
             })(),
             reloc: usize(0x8888),
@@ -260,30 +260,39 @@ describe('Feature: baseline', function() {
         return true;
       };
       const bufferMap = new Map(), addressMap = new Map();
-      env.obtainExternBuffer = function(address, len) {
-        let buffer = bufferMap.get(address);
-        if (!buffer) {
-          buffer = new ArrayBuffer(len);
-          bufferMap.set(address, buffer);
-          addressMap.set(buffer, address);
-        }
-        return buffer;
-      };
-      env.recreateAddress = function(address) {
-        return address;
-      };
-      env.getBufferAddress = function(buffer) {
-        return addressMap.get(buffer) ?? usize(0x1234);
-      };
       if (process.env.TARGET === 'wasm') {
-        env.initPromise = Promise.resolve();
+        env.initPromise = Promise.resolve().then(() => {
+          env.memory = new WebAssembly.Memory({ initial: 1 });
+        });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = bufferMap.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            bufferMap.set(address, buffer);
+            addressMap.set(buffer, address);
+          }
+          return buffer;
+        };
+        env.recreateAddress = function(address) {
+          return address;
+        };
+        env.getBufferAddress = function(buffer) {
+          return addressMap.get(buffer) ?? usize(0x1234);
+        };
       }
       env.linkVariables(false);
+      await env.initPromise;
+      constructor.hello();
       expect(() => constructor.hello()).to.not.throw();
       expect(() => constructor.world()).to.not.throw();
       expect(thunkAddress).to.equal(usize(0x8888));
       expect(fnAddress).to.equal(usize(0x2_8888));
-      expect(argAddress).to.equal(usize(0x1234));
+      if (process.env.TARGET === 'wasm') {
+        expect(argAddress).to.equal(usize(0));
+      } else {
+        expect(argAddress).to.equal(usize(0x1234));
+      }
       expect(env.variables).to.have.lengthOf(4);
     })
   })

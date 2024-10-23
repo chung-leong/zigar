@@ -242,16 +242,20 @@ describe('Feature: object-linkage', function() {
   describe('unlinkObject', function() {
     it('should replace buffer in fixed memory with ones in relocatable memory', function() {
       const env = new Env();
+      const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(type, len, align) {
-        const address = nextAddress
-        nextAddress += usize(len * 0x0F);
-        return address;
-      };
-      env.obtainExternView = function(address, len) {
-        const buffer = new ArrayBuffer(len);
-        buffer[FIXED] = { address, len };
-        return this.obtainView(buffer, 0, len);
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
       };
       const Test = function(dv) {
         this[MEMORY] = dv;
@@ -262,7 +266,8 @@ describe('Feature: object-linkage', function() {
           value: function() {},
         }
       });
-      const object = new Test(env.allocateMemory(16, 8, true));
+
+      const object = new Test(env.allocateMemory(16, 8, allocator));
       const dv = object[MEMORY];
       expect(dv[FIXED]).to.be.an('object');
       dv.setUint32(12, 1234, true);

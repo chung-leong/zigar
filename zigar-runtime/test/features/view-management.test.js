@@ -2,8 +2,9 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, MEMORY, TYPED_ARRAY } from '../../src/symbols.js';
+import { COPY, FIXED, MEMORY, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -16,17 +17,6 @@ describe('Feature: view-management', function() {
         byteSize: 8
       };
       const arg = new ArrayBuffer(8);
-      const env = new Env();
-      const dv = env.extractView(structure, arg);
-      expect(dv).to.be.instanceOf(DataView);
-    })
-    it('should return a DataView when given an SharedArrayBuffer', function() {
-      const structure = {
-        type: StructureType.Array,
-        name: 'Test',
-        byteSize: 8
-      };
-      const arg = new SharedArrayBuffer(8);
       const env = new Env();
       const dv = env.extractView(structure, arg);
       expect(dv).to.be.instanceOf(DataView);
@@ -302,17 +292,27 @@ describe('Feature: view-management', function() {
       expect(dv.byteLength).to.equal(32);
       expect(dv.byteOffset).to.equal(0);
     })
-    it('should try to create a buffer in fixed memory', function() {
+    it('should allocate memory from given allocator', function() {
       const env = new Env();
-      env.allocateFixedMemory = (len, align) => {
-        const buffer = new ArrayBuffer(len);
-        buffer.align = align;
-        return new DataView(buffer);
-      }
-      const dv = env.allocateMemory(32, 4, true);
+      const viewMap = new Map(), addressMap = new Map();
+      let nextAddress = usize(0x1000);
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
+      };
+      const dv = env.allocateMemory(32, 4, allocator);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
-      expect(dv.buffer.align).to.equal(4);
+      expect(dv[FIXED]).to.be.an('object');
     })
   })
   describe('allocateRelocMemory', function() {

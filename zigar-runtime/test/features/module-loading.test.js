@@ -246,6 +246,7 @@ describe('Feature: module-loading', function() {
         const env = new Env();
         let freed;
         const exports = {
+          initialize: () => {},
           allocateExternMemory: () => {},
           freeExternMemory: (type, address, len, align) => {
             freed = { type, address, len, align };
@@ -253,9 +254,11 @@ describe('Feature: module-loading', function() {
           runThunk: () => {},
           runVariadicThunk: () => {},
           getFactoryThunk: () => {},
+          finalizeAsyncCall: () => {},
           flushStdout: () => {},
           garbage: () => {},
           createJsThunk: () => {},
+          destroyJsThunk: () => {},
           getModuleAttributes: () => {},
         };
         env.importFunctions(exports);
