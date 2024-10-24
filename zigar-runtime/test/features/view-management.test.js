@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, FIXED, MEMORY, TYPED_ARRAY } from '../../src/symbols.js';
+import { COPY, FIXED, LENGTH, MEMORY, SHAPE, TYPED_ARRAY } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -280,7 +280,51 @@ describe('Feature: view-management', function() {
         length: { value: 16 },
       });
       const dv = new DataView(new ArrayBuffer(16));
-      env.assignView(target, dv, structure, false, false, {});
+      env.assignView(target, dv, structure, false, null);
+    })
+    it('should copy data when target is in fixed memory', function() {
+      const env = new Env();
+      const structure = {
+        type: StructureType.Slice,
+        name: 'Opaque',
+        byteSize: undefined,
+      };
+      const target = {
+      };
+      defineProperties(target, {
+        [MEMORY]: { value: null },
+        [COPY]: env.defineCopier(16),
+        [SHAPE]: {
+          value(dv, length, allocator) {
+            if (!dv) {
+              dv = env.allocateMemory(length * 1, 1, allocator);
+            }
+            this[MEMORY] = dv;
+            this[LENGTH] = length;
+          }
+        },
+        length: { value: 16 },
+      });
+      const viewMap = new Map(), addressMap = new Map();
+      let nextAddress = usize(0x1000);
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len));
+          dv[FIXED] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
+      };
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setInt8(9, 123);
+      env.assignView(target, dv, structure, false, allocator);
+      expect(target[MEMORY]).to.not.equal(dv);
+      expect(target[MEMORY].getInt8(9)).to.equal(123);
     })
   })
   describe('allocateMemory', function() {

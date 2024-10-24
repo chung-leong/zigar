@@ -67,7 +67,7 @@ export default mixin({
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER] ?? this;
+      const pointer = this[POINTER] /* c8 ignore next */ ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;

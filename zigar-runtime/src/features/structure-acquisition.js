@@ -1,7 +1,7 @@
 import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
 import { ExportFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, defineProperty, findObjects, usizeMin } from '../utils.js';
+import { CallContext, decodeText, defineProperty, findObjects } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -121,7 +121,7 @@ export default mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
-      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
+      this[CONTEXT] = new CallContext();
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
-import { adjustAddress, defineProperties, defineProperty, usizeMin } from '../../src/utils.js';
+import { adjustAddress, CallContext, defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -22,7 +22,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.getShadowAddress(context, object);
       expect(address).to.equal(usize(0x1000));
     })
@@ -48,7 +48,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address1 = env.getShadowAddress(context, object1, cluster);
       const address2 = env.getShadowAddress(context, object2, cluster);
       expect(address1).to.equal(usize(0x1000));
@@ -69,7 +69,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const shadow = env.createShadow(context, object);
       expect(shadow).to.be.instanceOf(Test);
       expect(shadow[MEMORY].byteLength).to.equal(8);
@@ -99,7 +99,7 @@ describe('Feature: memory-mapping', function() {
         end: 19,
       };
       object1[MEMORY].setUint32(0, 1234, true);
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const shadow = env.createClusterShadow(context, cluster);
       expect(shadow[MEMORY].byteLength).to.equal(16);
       expect(shadow[MEMORY].buffer.byteLength).to.equal(20);
@@ -130,7 +130,7 @@ describe('Feature: memory-mapping', function() {
         end: 19,
       };
       object1[MEMORY].setUint32(0, 1234, true);
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const shadow = env.createClusterShadow(context, cluster);
       expect(shadow[MEMORY].byteLength).to.equal(16);
       expect(shadow[MEMORY].buffer.byteLength).to.equal(20);
@@ -160,7 +160,7 @@ describe('Feature: memory-mapping', function() {
         start: 4,
         end: 21,
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       expect(() => env.createClusterShadow(context, cluster)).to.throw(TypeError);
     })
   })
@@ -176,7 +176,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.addShadow(context, shadow, object);
       expect(context.shadowMap.size).to.equal(1);
     })
@@ -193,7 +193,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.addShadow(context, shadow, object);
       env.removeShadow(context, shadow[MEMORY]);
       expect(context.shadowMap.size).to.equal(0);
@@ -202,7 +202,7 @@ describe('Feature: memory-mapping', function() {
   describe('updateShadows', function() {
     it('should do nothing where there are no shadows', function() {
       const env = new Env();
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.updateShadows(context);
     })
     it('should copy data from targets to shadows', function() {
@@ -218,7 +218,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.addShadow(context, shadow, object);
       object[MEMORY].setUint32(0, 1234, true);
       env.updateShadows(context);
@@ -228,7 +228,7 @@ describe('Feature: memory-mapping', function() {
   describe('updateShadowTargets', function() {
     it('should do nothing where there are no shadows', function() {
       const env = new Env();
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.updateShadowTargets(context);
     })
     it('should copy data from shadows to targets', function() {
@@ -244,7 +244,7 @@ describe('Feature: memory-mapping', function() {
       env.getBufferAddress = function() {
         return usize(0x1000);
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.addShadow(context, shadow, object);
       shadow[MEMORY].setUint32(0, 1234, true);
       env.updateShadowTargets(context);
@@ -254,7 +254,7 @@ describe('Feature: memory-mapping', function() {
   describe('releaseShadows', function() {
     it('should do nothing where there are no shadows', function() {
       const env = new Env();
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.releaseShadows(context);
     })
     it('should free the memory of shadows', function() {
@@ -273,7 +273,7 @@ describe('Feature: memory-mapping', function() {
       env.freeShadowMemory = function(dv) {
         freed = dv;
       };
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       env.addShadow(context, shadow, object);
       env.releaseShadows(context);
       expect(freed).to.equal(shadow[MEMORY]);
@@ -420,7 +420,7 @@ describe('Feature: memory-mapping', function() {
       const env = new Env();
       env.getBufferAddress = () => usize(0x1000);
       const dv = new DataView(new ArrayBuffer(16), 8, 8);
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv);
       expect(address).to.equal(usize(0x1000 + 8));
     })
@@ -428,7 +428,7 @@ describe('Feature: memory-mapping', function() {
       const env = new Env();
       env.getBufferAddress = () => usize(0x1000);
       const dv = new DataView(new ArrayBuffer(16), 8, 8);
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv);
       expect(address).to.equal(usize(0x1000 + 8));
     })
@@ -441,7 +441,7 @@ describe('Feature: memory-mapping', function() {
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv1);
       const dv2 = env.findMemory(context, address, dv1.byteLength, 1);
       expect(dv2).to.be.instanceOf(DataView);
@@ -453,7 +453,7 @@ describe('Feature: memory-mapping', function() {
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv1);
       const dv2 = env.findMemory(context, address, 1, undefined);
       expect(dv2).to.be.instanceOf(DataView);
@@ -465,7 +465,7 @@ describe('Feature: memory-mapping', function() {
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv1);
       const dv2 = env.findMemory(context, adjustAddress(address, 8), 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
@@ -477,7 +477,7 @@ describe('Feature: memory-mapping', function() {
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv1);
       const dv2 = env.findMemory(context, usize(0xFF0000), 8, 1);
       expect(dv2).to.be.instanceOf(DataView);
@@ -488,7 +488,7 @@ describe('Feature: memory-mapping', function() {
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const address = env.registerMemory(context, dv1);
       const dv2 = env.findMemory(context, usize(0xFF0000), 4, undefined);
       expect(dv2).to.be.instanceOf(DataView);
@@ -497,7 +497,7 @@ describe('Feature: memory-mapping', function() {
     it('should return null when address is invalid and count is above 0', function() {
       const env = new Env();
       const address = (process.env.BITS === '64') ? 0xaaaa_aaaa_aaaa_aaaan : 0xaaaa_aaaa;
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const dv = env.findMemory(context, address, 14, 5);
       expect(dv).to.be.null;
     })
@@ -510,7 +510,7 @@ describe('Feature: memory-mapping', function() {
       const env = new Env();
       env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
-      const context = { memoryList: [], shadowMap: null, id: usizeMin };
+      const context = new CallContext();
       const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
       expect(dv.byteLength).to.equal(0);
     })
@@ -573,7 +573,7 @@ describe('Feature: memory-mapping', function() {
         const object = {
           [MEMORY]: env.allocateMemory(16, 8, false)
         };
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.be.undefined;
       })
@@ -582,7 +582,7 @@ describe('Feature: memory-mapping', function() {
         const object = {
           [MEMORY]: env.allocateMemory(0, 0, false)
         };
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(0);
       })
@@ -592,7 +592,7 @@ describe('Feature: memory-mapping', function() {
         const object = {
           [MEMORY]: env.obtainFixedView(256, 0),
         };
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(256);
       })
@@ -622,7 +622,7 @@ describe('Feature: memory-mapping', function() {
         Type[ALIGN] = 8;
         const object = new Type();
         object[MEMORY] = new DataView(new ArrayBuffer(64));
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(usize(0x1000));
       })
@@ -635,7 +635,7 @@ describe('Feature: memory-mapping', function() {
         Type[ALIGN] = 8;
         const object = new Type();
         object[MEMORY] = new DataView(new ArrayBuffer(64));
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.be.undefined;
       })
@@ -658,7 +658,7 @@ describe('Feature: memory-mapping', function() {
           address: undefined,
           misaligned: undefined,
         };
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address1 = env.getTargetAddress(context, object1, cluster);
         expect(address1).to.equal(usize(0x1008));
         expect(cluster.misaligned).to.be.false;
@@ -684,7 +684,7 @@ describe('Feature: memory-mapping', function() {
           address: undefined,
           misaligned: undefined,
         };
-        const context = { memoryList: [], shadowMap: null, id: usizeMin };
+        const context = new CallContext();
         const address1 = env.getTargetAddress(context, object1, cluster);
         expect(address1).to.be.undefined;
         expect(cluster.misaligned).to.be.true;

@@ -59,7 +59,7 @@ export default mixin({
     }
     return dv;
   },
-  assignView(target, dv, structure, copy, fixed) {
+  assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
     if (!target[MEMORY]) {
@@ -69,11 +69,11 @@ export default mixin({
       const len = dv.byteLength / elementSize;
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
-      if (fixed) {
+      if (allocator) {
         // need to copy when target object is in fixed memory
         copy = true;
       }
-      target[SHAPE](copy ? null : dv, len, fixed);
+      target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
         target[COPY](source);
       }

@@ -87,11 +87,12 @@ export default mixin({
     imports: {
       recreateAddress: null,
     },
-    /* c8 ignore next */
+    /* c8 ignore start */
   } : undefined),
-  ...(process.env.MIXIN === 'track' ? {
+    ...(process.env.MIXIN === 'track' ? {
     useObjectLinkage() {
       // empty function used for mixin tracking
     },
   } : undefined),
-});
+    /* c8 ignore end */
+  });

@@ -15,21 +15,21 @@ export default mixin({
         }
         return this[MEMORY];
       },
-      set(dv, fixed) {
+      set(dv, allocator) {
         checkDataView(dv);
-        thisEnv.assignView(this, dv, structure, true, fixed);
+        thisEnv.assignView(this, dv, structure, true, allocator);
       },
     });
     descriptors.base64 = markAsSpecial({
       get() {
         return encodeBase64(this.dataView);
       },
-      set(str, fixed) {
+      set(str, allocator) {
         if (typeof(str) !== 'string') {
           throw new TypeMismatch('string', str);
         }
         const dv = decodeBase64(str);
-        thisEnv.assignView(this, dv, structure, false, fixed);
+        thisEnv.assignView(this, dv, structure, false, allocator);
       }
     });
     const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
@@ -40,12 +40,12 @@ export default mixin({
           const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
           return new TypedArray(dv.buffer, dv.byteOffset, length);
         },
-        set(ta, fixed) {
+        set(ta, allocator) {
           if (!isTypedArray(ta, TypedArray)) {
             throw new TypeMismatch(TypedArray.name, ta);
           }
           const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-          thisEnv.assignView(this, dv, structure, true, fixed);
+          thisEnv.assignView(this, dv, structure, true, allocator);
         },
       });
       const { type, flags } = structure;
@@ -64,7 +64,7 @@ export default mixin({
             }
             return str;
           },
-          set(str, fixed) {
+          set(str, allocator) {
             if (typeof(str) !== 'string') {
               throw new TypeMismatch('a string', str);
             }
@@ -74,7 +74,7 @@ export default mixin({
             }
             const ta = encodeText(str, encoding);
             const dv = new DataView(ta.buffer);
-            thisEnv.assignView(this, dv, structure, false, fixed);
+            thisEnv.assignView(this, dv, structure, false, allocator);
           },
         });
       }

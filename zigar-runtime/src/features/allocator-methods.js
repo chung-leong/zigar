@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 import { FIXED, MEMORY } from '../symbols.js';
 import { copy, encodeText } from '../utils.js';
 

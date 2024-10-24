@@ -31,8 +31,8 @@ export default mixin({
           this.consolePending.splice(0);
         }, 250);
       }
-      /* c8 ignore next 3 */
       return true;
+      /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       return false;
