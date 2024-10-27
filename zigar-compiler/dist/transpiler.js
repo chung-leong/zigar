@@ -172,7 +172,7 @@ const COPY = Symbol('copy');
 const SHAPE = Symbol('shape');
 const MODIFY = Symbol('modify');
 const INITIALIZE = Symbol('initialize');
-const FINALIZE$1 = Symbol('finalize');
+const FINALIZE = Symbol('finalize');
 const CAST = Symbol('cast');
 
 function defineProperty(object, name, descriptor) {
@@ -443,6 +443,141 @@ class ObjectCache {
   }
 }
 
+class CallContext {
+  memoryList = [];
+  shadowMap = null;
+  id = usizeMin;
+  async = false;
+}
+
+function shortenNames(structures) {
+  let structId = 1;
+  let unionId = 1;
+  let errorSetId = 1;
+  let enumId = 1;
+  let opaqueId = 1;
+  const map = new Map();
+  const nsRegExp = /.+?\./g;
+  const removeNS = function(s) {
+    return s.replace(nsRegExp, '');
+  };
+  const handlers = {
+    getPrimitiveName(s) {
+      const { name, instance: { members: [ member ] } } = s;
+      switch (member.type) {
+        case MemberType.Literal: return 'enum_literal';
+        case MemberType.Null: return 'null';
+        case MemberType.Undefined: return 'undefined';
+        default: return name;
+      }
+    },
+    getArrayName(s) {
+      const { instance: { members: [ element ] }, length } = s;
+      const elementName = process(element.structure);
+      return `[${length}]${elementName}`;
+    },
+    getStructName(s) {
+      const { name } = s;
+      return /[{}()]/.test(name) ? `S${structId++}` : removeNS(name);
+    },
+    getUnionName(s) {
+      const { name } = s;
+      return /[{}()]/.test(name) ? `U${unionId++}` : removeNS(name);
+    },
+    getErrorUnionName(s) {
+      const { instance: { members: [ payload, errorSet ] } } = s;
+      const payloadName = process(payload.structure);
+      const errorSetName = process(errorSet.structure);
+      return `${errorSetName}!${payloadName}`;
+    },
+    getErrorSetName(s) {
+      const { name } = s;
+      return /[{}()]/.test(name) ? `ES${errorSetId++}` : removeNS(name);
+    },
+    getEnumName(s) {
+      const { name } = s;
+      return /[{}()]/.test(name) ? `E${enumId++}` : removeNS(name);
+    },
+    getOptionalName(s) {
+      const { instance: { members: [ payload ] } } = s;
+      const payloadName = process(payload.structure);
+      return `?${payloadName}`;
+    },
+    getPointerName(s) {
+      const { instance: { members: [ target ] }, flags } = s;
+      let prefix = '*';
+      let targetName = process(target.structure);
+      if (target.structure.type === StructureType.Slice) {
+        targetName = targetName.slice(3);
+      }
+      if (flags & PointerFlag.IsMultiple) {
+        if (flags & PointerFlag.HasLength) {
+          prefix = '[]';
+        } else if (flags & PointerFlag.IsSingle) {
+          prefix = '[*c]';
+        } else {
+          prefix = '[*]';
+        }
+      }
+      const sentinel = target.constructor[SENTINEL];
+      if (sentinel) {
+        prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+      }
+      if (flags & PointerFlag.IsConst) {
+        prefix = `${prefix}const `;
+      }
+      return prefix + targetName;
+    },
+    getSliceName(s) {
+      const { instance: { members: [ element ] } } = s;
+      const elementName = process(element.structure);
+      return `[_]${elementName}`;
+    },
+    getVector(s) {
+      return s.name;
+    },
+    getOpaqueName(s) {
+      const { name } = s;
+      return (name !== 'anyopaque') ? `O${opaqueId++}` : name;
+    },
+    getArgStructName(s) {
+      const { instance: { members } } = s;
+      const retval = members[0];
+      const args = members.slice(1);
+      const rvName = process(retval.structure);
+      const argNames = args.map(m => process(m.structure));
+      return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+    },
+    getVariadicStructName(s) {
+      const { instance: { members } } = s;
+      const retval = members[0];
+      const args = members.slice(1);
+      const rvName = process(retval.structure);
+      const argNames = args.map(m => process(m.structure));
+      return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+    },
+    getFunctionName(s) {
+      const { instance: { members: [ args ] } } = s;
+      const argName = process(args.structure);
+      return argName.slice(4, -1);
+    },
+  };
+  const process = function(s) {
+    let name = map.get(s);
+    if (name === undefined) {
+      const handlerName = `get${structureNames[s.type]}Name`;
+      const handler = handlers[handlerName];
+      name = handler?.(s) ?? 'TODO';
+      map.set(s, name);
+      s.name = name;
+    }
+    return name;
+  };
+  for (const s of structures) {
+    process(s);
+  }
+}
+
 function generateCode(definition, params) {
   const { structures } = definition;
   const {
@@ -454,6 +589,7 @@ function generateCode(definition, params) {
     moduleOptions,
     envVariables = {},
   } = params;
+  shortenNames(structures);
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
@@ -2285,311 +2421,6 @@ var abortSignal = mixin({
   },
 });
 
-var allocatorMethods = mixin({
-  defineAlloc() {
-    return {
-      value(len, align) {
-        const ptrAlign = 31 - Math.clz32(align);
-        const { vtable, ptr } = this;
-        const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
-        // alloc returns a [*]u8, which has a initial length of 1
-        slicePtr.length = len;
-        const dv = slicePtr['*'][MEMORY];
-        const fixed = dv[FIXED];
-        if (fixed) {
-          fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
-        }
-        return dv;
-      }
-    };
-  },
-  defineFree(dv) {
-    return {
-      value(dv) {
-        const fixed = dv[FIXED];
-        const f = fixed?.free;
-        if (!f) {
-          throw new TypeMismatch('DataView object from alloc()', dv);
-        }
-        f();
-      }
-    };
-  },
-  defineDupe() {
-    return {
-      value(arg) {
-        let src;
-        if (typeof(arg) === 'string') {
-          arg = encodeText(arg);
-        }
-        if (arg instanceof DataView) {
-          src = arg;
-        } else if (arg instanceof ArrayBuffer) {
-          src = new DataView(arg);
-        } else if (arg) {
-          const { buffer, byteOffset, byteLength } = arg;
-          if (buffer && byteOffset !== undefined && byteLength !== undefined) {
-            src = new DataView(buffer, byteOffset, byteLength);
-          }
-        }
-        if (!src) {
-          throw new TypeMismatch('string, DataView, or typed array', arg);
-        }
-        const dv = this.alloc(src.byteLength, 8);
-        copy(dv, src);
-        return dv;
-      }
-    };
-  }
-});
-
-var baseline = mixin({
-  littleEndian: true,
-  variables: [],
-
-  getSpecialExports() {
-    const check = (v) => {
-      if (v === undefined) throw new Error('Not a Zig type');
-      return v;
-    };
-    return {
-      init: (...args) => this.initialize?.(...args),
-      abandon: () => this.abandonModule?.(),
-      released: () => this.released,
-      connect: (console) => this.consoleObject = console,
-      sizeOf: (T) => check(T?.[SIZE]),
-      alignOf: (T) => check(T?.[ALIGN]),
-      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
-    };
-  },
-  recreateStructures(structures, options) {
-    Object.assign(this, options);
-    const insertObjects = (dest, placeholders) => {
-      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = createObject(placeholder);
-      }
-      return dest;
-    };
-    const createObject = (placeholder) => {
-      const { memory, structure, actual } = placeholder;
-      if (memory) {
-        if (actual) {
-          return actual;
-        } else {
-          const { array, offset, length } = memory;
-          const dv = this.obtainView(array.buffer, offset, length);
-          const { reloc, const: isConst } = placeholder;
-          const constructor = structure?.constructor;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
-          if (isConst) {
-            this.makeReadOnly(object);
-          }
-          if (placeholder.slots) {
-            insertObjects(object[SLOTS], placeholder.slots);
-          }
-          if (reloc !== undefined) {
-            // need to replace dataview with one pointing to fixed memory later,
-            // when the VM is up and running
-            this.variables.push({ reloc, object });
-          }
-          return object;
-        }
-      } else {
-        return structure;
-      }
-    };
-    this.resetGlobalErrorSet?.();
-    const objectPlaceholders = new Map();
-    for (const structure of structures) {
-      // recreate the actual template using the provided placeholder
-      for (const scope of [ structure.instance, structure.static ]) {
-        if (scope.template) {
-          const { slots, memory, reloc } = scope.template;
-          const object = scope.template = {};
-          if (memory) {
-            const { array, offset, length } = memory;
-            object[MEMORY] = this.obtainView(array.buffer, offset, length);
-            if (reloc) {
-              this.variables.push({ reloc, object });
-            }
-          }
-          if (slots) {
-            // defer creation of objects until shapes of structures are finalized
-            const realSlots = object[SLOTS] = {};
-            objectPlaceholders.set(realSlots, slots);
-          }
-        }
-      }
-      this.defineStructure(structure);
-    }
-    // insert objects into template slots
-    for (const [ slots, placeholders ] of objectPlaceholders) {
-      insertObjects(slots, placeholders);
-    }
-    // add static members, methods, etc.
-    for (const structure of structures) {
-      this.finalizeStructure(structure);
-    }
-  },
-});
-
-var callMarshalingInbound = mixin({
-  jsFunctionThunkMap: new Map(),
-  jsFunctionCallerMap: new Map(),
-  jsFunctionControllerMap: new Map(),
-  jsFunctionIdMap: null,
-  jsFunctionNextId: 8888,
-
-  getFunctionId(fn) {
-    if (!this.jsFunctionIdMap) {
-      this.jsFunctionIdMap = new WeakMap();
-    }
-    let id = this.jsFunctionIdMap.get(fn);
-    if (id === undefined) {
-      id = this.jsFunctionNextId++;
-      this.jsFunctionIdMap.set(fn, id);
-    }
-    return id;
-  },
-  getFunctionThunk(fn, jsThunkController) {
-    const id = this.getFunctionId(fn);
-    let dv = this.jsFunctionThunkMap.get(id);
-    if (dv === undefined) {
-      const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
-      const thunkAddress = this.createJsThunk(controllerAddress, id);
-      if (!thunkAddress) {
-        throw new Error('Unable to create function thunk');
-      }
-      dv = this.obtainFixedView(thunkAddress, 0);
-      this.jsFunctionThunkMap.set(id, dv);
-      this.jsFunctionControllerMap.set(id, jsThunkController);
-    }
-    return dv;
-  },
-  freeFunctionThunk(thunk, jsThunkController) {
-    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
-    const thunkAddress = this.getViewAddress(thunk);
-    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
-    this.releaseFixedView(thunk);
-    if (id) {
-      this.jsFunctionThunkMap.delete(id);
-      this.jsFunctionCallerMap.delete(id);
-      this.jsFunctionControllerMap.delete(id);
-    }
-  },
-  createInboundCaller(fn, ArgStruct) {
-    const handler = (dv, futexHandle) => {
-      let result = CallResult.OK;
-      let awaiting = false;
-      try {
-        const argStruct = ArgStruct(dv);
-        const hasPointers = VISIT in argStruct;
-        if (hasPointers) {
-          this.updatePointerTargets(null, argStruct);
-        }
-        const args = [];
-        for (let i = 0; i < argStruct.length; i++) {
-          // error unions will throw on access, in which case we pass the error as the argument
-          try {
-            args.push(argStruct[i]);
-          } catch (err) {
-            args.push(err);
-          }
-        }
-        const onError = (err) => {
-          if (ArgStruct[THROWING] && err instanceof Error) {
-            // see if the error is part of the error set of the error union returned by function
-            try {
-              argStruct.retval = err;
-              return;
-            } catch (_) {
-            }
-          }
-          console.error(err);
-          result = CallResult.Failure;
-        };
-        const onReturn = (value) => {
-          argStruct.retval = value;
-          if (hasPointers) {
-            this.updatePointerAddresses(null, argStruct);
-          }
-        };
-        try {
-          const retval = fn(...args);
-          if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle) {
-              retval.then(onReturn, onError).then(() => {
-                this.finalizeAsyncCall(futexHandle, result);
-              });
-              awaiting = true;
-              result = CallResult.OK;
-            } else {
-              result = CallResult.Deadlock;
-            }
-          } else {
-            onReturn(retval);
-          }
-        } catch (err) {
-          onError(err);
-        }
-      } catch(err) {
-        console.error(err);
-        result = CallResult.Failure;
-      }
-      if (futexHandle && !awaiting) {
-        this.finalizeAsyncCall(futexHandle, result);
-      }
-      return result;
-    };
-    const id = this.getFunctionId(fn);
-    this.jsFunctionCallerMap.set(id, handler);
-    return function(...args) {
-      return fn(...args);
-    };
-  },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
-      {
-        return this.runFunction(id, dv, futexHandle);
-      }
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
-  runFunction(id, dv, futexHandle) {
-    const caller = this.jsFunctionCallerMap.get(id);
-    if (!caller) {
-      return CallResult.Failure;
-    }
-    return caller(dv, futexHandle);
-  },
-  releaseFunction(id) {
-    const thunk = this.jsFunctionThunkMap.get(id);
-    const controller = this.jsFunctionControllerMap.get(id);
-    if (thunk && controller) {
-      this.freeFunctionThunk(thunk, controller);
-    }
-  },
-  ...({
-    exports: {
-      performJsAction: { argType: 'iiii', returnType: 'i' },
-      queueJsAction: { argType: 'iiiii' },
-    },
-    imports: {
-      createJsThunk: { argType: 'ii', returnType: 'i' },
-      destroyJsThunk: { argType: 'ii', returnType: 'i' },
-      finalizeAsyncCall: { argType: 'ii' },
-    },
-    queueJsAction(action, id, argAddress, argSize, futexHandle) {
-      // in the main thread, this method is never called from WASM;
-      // the implementation of queueJsAction() in worker.js, call this
-      // through postMessage() when it is called the worker's WASM instance
-      this.performJsAction(action, id, argAddress, argSize, futexHandle);
-    },
-  } ),
-});
-
 class InvalidIntConversion extends SyntaxError {
   constructor(arg) {
     super(`Cannot convert ${arg} to an Int`);
@@ -2797,7 +2628,7 @@ class NoProperty extends TypeError {
 class ArgumentCountMismatch extends Error {
   constructor(expected, actual, variadic = false) {
     super();
-    this.fnName = '';
+    this.fnName = 'fn';
     this.argIndex = expected;
     this.argCount = actual;
     this.variadic = variadic;
@@ -2859,12 +2690,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-let TypeMismatch$1 = class TypeMismatch extends TypeError {
+class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-};
+}
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -2979,28 +2810,24 @@ class Exit extends ZigError {
 function adjustArgumentError(argIndex, argCount) {
   const { message } = this;
   defineProperties(this, {
-    fnName: defineValue(''),
+    fnName: defineValue('fn'),
     argIndex: defineValue(argIndex),
     argCount: defineValue(argCount),
     message: {
       get() {
-        let msg = message;
         const { fnName, argIndex, argCount } = this;
-        if (fnName) {
-          const argName = `args[${argIndex}]`;
-          const prefix = (argIndex !== 0) ? '..., ' : '';
-          const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-          const argLabel = prefix + argName + suffix;
-          msg = `${fnName}(${argLabel}): ${msg}`;
-        }
-        return msg;
+        const argName = `args[${argIndex}]`;
+        const prefix = (argIndex !== 0) ? '..., ' : '';
+        const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
+        const argLabel = prefix + argName + suffix;
+        return `${fnName}(${argLabel}): ${message}`;
       },
     }
   });
   return this;
 }
 
-function adjustRangeError(member, index, err) {
+function replaceRangeError(member, index, err) {
   if (err instanceof RangeError && !(err instanceof OutOfBound)) {
     err = new OutOfBound(member, index);
   }
@@ -3071,10 +2898,322 @@ function formatList(list, conj = 'or') {
   }
 }
 
+var allocatorMethods = mixin({
+  defineAlloc() {
+    return {
+      value(len, align) {
+        const ptrAlign = 31 - Math.clz32(align);
+        const { vtable, ptr } = this;
+        const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+        // alloc returns a [*]u8, which has a initial length of 1
+        slicePtr.length = len;
+        const dv = slicePtr['*'][MEMORY];
+        const fixed = dv[FIXED];
+        if (fixed) {
+          fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
+        }
+        return dv;
+      }
+    };
+  },
+  defineFree(dv) {
+    return {
+      value(dv) {
+        const fixed = dv[FIXED];
+        const f = fixed?.free;
+        if (!f) {
+          throw new TypeMismatch('DataView object from alloc()', dv);
+        }
+        f();
+      }
+    };
+  },
+  defineDupe() {
+    return {
+      value(arg) {
+        let src;
+        if (typeof(arg) === 'string') {
+          arg = encodeText(arg);
+        }
+        if (arg instanceof DataView) {
+          src = arg;
+        } else if (arg instanceof ArrayBuffer) {
+          src = new DataView(arg);
+        } else if (arg) {
+          const { buffer, byteOffset, byteLength } = arg;
+          if (buffer && byteOffset !== undefined && byteLength !== undefined) {
+            src = new DataView(buffer, byteOffset, byteLength);
+          }
+        }
+        if (!src) {
+          throw new TypeMismatch('string, DataView, or typed array', arg);
+        }
+        const dv = this.alloc(src.byteLength, 8);
+        copy(dv, src);
+        return dv;
+      }
+    };
+  }
+});
+
+var baseline = mixin({
+  littleEndian: true,
+  variables: [],
+
+  getSpecialExports() {
+    const check = (v) => {
+      if (v === undefined) throw new Error('Not a Zig type');
+      return v;
+    };
+    return {
+      init: (...args) => this.initialize?.(...args),
+      abandon: () => this.abandonModule?.(),
+      released: () => this.released,
+      connect: (console) => this.consoleObject = console,
+      sizeOf: (T) => check(T?.[SIZE]),
+      alignOf: (T) => check(T?.[ALIGN]),
+      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
+    };
+  },
+  recreateStructures(structures, options) {
+    Object.assign(this, options);
+    const insertObjects = (dest, placeholders) => {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = createObject(placeholder);
+      }
+      return dest;
+    };
+    const createObject = (placeholder) => {
+      const { memory, structure, actual } = placeholder;
+      if (memory) {
+        if (actual) {
+          return actual;
+        } else {
+          const { array, offset, length } = memory;
+          const dv = this.obtainView(array.buffer, offset, length);
+          const { reloc, const: isConst } = placeholder;
+          const constructor = structure?.constructor;
+          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
+          if (isConst) {
+            this.makeReadOnly(object);
+          }
+          if (placeholder.slots) {
+            insertObjects(object[SLOTS], placeholder.slots);
+          }
+          if (reloc !== undefined) {
+            // need to replace dataview with one pointing to fixed memory later,
+            // when the VM is up and running
+            this.variables.push({ reloc, object });
+          }
+          return object;
+        }
+      } else {
+        return structure;
+      }
+    };
+    this.resetGlobalErrorSet?.();
+    const objectPlaceholders = new Map();
+    for (const structure of structures) {
+      // recreate the actual template using the provided placeholder
+      for (const scope of [ structure.instance, structure.static ]) {
+        if (scope.template) {
+          const { slots, memory, reloc } = scope.template;
+          const object = scope.template = {};
+          if (memory) {
+            const { array, offset, length } = memory;
+            object[MEMORY] = this.obtainView(array.buffer, offset, length);
+            if (reloc) {
+              this.variables.push({ reloc, object });
+            }
+          }
+          if (slots) {
+            // defer creation of objects until shapes of structures are finalized
+            const realSlots = object[SLOTS] = {};
+            objectPlaceholders.set(realSlots, slots);
+          }
+        }
+      }
+      this.defineStructure(structure);
+    }
+    // insert objects into template slots
+    for (const [ slots, placeholders ] of objectPlaceholders) {
+      insertObjects(slots, placeholders);
+    }
+    // add static members, methods, etc.
+    for (const structure of structures) {
+      this.finalizeStructure(structure);
+    }
+  },
+});
+
+var callMarshalingInbound = mixin({
+  jsFunctionThunkMap: new Map(),
+  jsFunctionCallerMap: new Map(),
+  jsFunctionControllerMap: new Map(),
+  jsFunctionIdMap: null,
+  jsFunctionNextId: 1,
+
+  getFunctionId(fn) {
+    if (!this.jsFunctionIdMap) {
+      this.jsFunctionIdMap = new WeakMap();
+    }
+    let id = this.jsFunctionIdMap.get(fn);
+    if (id === undefined) {
+      id = this.jsFunctionNextId++;
+      this.jsFunctionIdMap.set(fn, id);
+    }
+    return id;
+  },
+  getFunctionThunk(fn, jsThunkController) {
+    const id = this.getFunctionId(fn);
+    let dv = this.jsFunctionThunkMap.get(id);
+    if (dv === undefined) {
+      const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+      const thunkAddress = this.createJsThunk(controllerAddress, id);
+      if (!thunkAddress) {
+        throw new Error('Unable to create function thunk');
+      }
+      dv = this.obtainFixedView(thunkAddress, 0);
+      this.jsFunctionThunkMap.set(id, dv);
+      this.jsFunctionControllerMap.set(id, jsThunkController);
+    }
+    return dv;
+  },
+  freeFunctionThunk(thunk, jsThunkController) {
+    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+    const thunkAddress = this.getViewAddress(thunk);
+    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+    this.releaseFixedView(thunk);
+    if (id) {
+      this.jsFunctionThunkMap.delete(id);
+      this.jsFunctionCallerMap.delete(id);
+      this.jsFunctionControllerMap.delete(id);
+    }
+  },
+  createInboundCaller(fn, ArgStruct) {
+    const handler = (dv, futexHandle) => {
+      let result = CallResult.OK;
+      let awaiting = false;
+      try {
+        const argStruct = ArgStruct(dv);
+        const hasPointers = VISIT in argStruct;
+        if (hasPointers) {
+          this.updatePointerTargets(null, argStruct);
+        }
+        const args = [];
+        for (let i = 0; i < argStruct.length; i++) {
+          // error unions will throw on access, in which case we pass the error as the argument
+          try {
+            args.push(argStruct[i]);
+          } catch (err) {
+            args.push(err);
+          }
+        }
+        const onError = (err) => {
+          if (ArgStruct[THROWING] && err instanceof Error) {
+            // see if the error is part of the error set of the error union returned by function
+            try {
+              argStruct.retval = err;
+              return;
+            } catch (_) {
+            }
+          }
+          console.error(err);
+          result = CallResult.Failure;
+        };
+        const onReturn = (value) => {
+          argStruct.retval = value;
+          if (hasPointers) {
+            this.updatePointerAddresses(null, argStruct);
+          }
+        };
+        try {
+          const retval = fn(...args);
+          if (retval?.[Symbol.toStringTag] === 'Promise') {
+            if (futexHandle) {
+              retval.then(onReturn, onError).then(() => {
+                this.finalizeAsyncCall(futexHandle, result);
+              });
+              awaiting = true;
+              result = CallResult.OK;
+            } else {
+              result = CallResult.Deadlock;
+            }
+          } else {
+            onReturn(retval);
+          }
+        } catch (err) {
+          onError(err);
+        }
+      } catch(err) {
+        console.error(err);
+        result = CallResult.Failure;
+      }
+      if (futexHandle && !awaiting) {
+        this.finalizeAsyncCall(futexHandle, result);
+      }
+      return result;
+    };
+    const id = this.getFunctionId(fn);
+    this.jsFunctionCallerMap.set(id, handler);
+    return function(...args) {
+      return fn(...args);
+    };
+  },
+  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    if (action === Action.Call) {
+      const dv = this.obtainFixedView(argAddress, argSize);
+      {
+        return this.runFunction(id, dv, futexHandle);
+      }
+    } else if (action === Action.Release) {
+      return this.releaseFunction(id);
+    }
+  },
+  runFunction(id, dv, futexHandle) {
+    const caller = this.jsFunctionCallerMap.get(id);
+    if (!caller) {
+      return CallResult.Failure;
+    }
+    return caller(dv, futexHandle);
+  },
+  releaseFunction(id) {
+    const thunk = this.jsFunctionThunkMap.get(id);
+    const controller = this.jsFunctionControllerMap.get(id);
+    if (thunk && controller) {
+      this.freeFunctionThunk(thunk, controller);
+    }
+  },
+  ...({
+    exports: {
+      performJsAction: { argType: 'iiii', returnType: 'i' },
+      queueJsAction: { argType: 'iiiii' },
+    },
+    imports: {
+      createJsThunk: { argType: 'ii', returnType: 'i' },
+      destroyJsThunk: { argType: 'ii', returnType: 'i' },
+      finalizeAsyncCall: { argType: 'ii' },
+    },
+    queueJsAction(action, id, argAddress, argSize, futexHandle) {
+      // in the main thread, this method is never called from WASM;
+      // the implementation of queueJsAction() in worker.js, call this
+      // through postMessage() when it is called the worker's WASM instance
+      this.performJsAction(action, id, argAddress, argSize, futexHandle);
+    },
+  } ),
+});
+
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
     const thisEnv = this;
     const self = function (...args) {
+      {
+        if (!thisEnv.runThunk) {
+          return thisEnv.initPromise.then(() => {
+            return self(...args);
+          });
+        }
+      }
       try {
         const argStruct = new ArgStruct(args);
         thisEnv.invokeThunk(thunk, self, argStruct);
@@ -3135,13 +3274,6 @@ var callMarshalingOutbound = mixin({
     }
   },
   invokeThunk(thunk, fn, args) {
-    {
-      if (!this.runThunk) {
-        return this.initPromise.then(() => {
-          return this.invokeThunk(thunk, fn, args);
-        });
-      }
-    }
     const context = args[CONTEXT];
     const attrs = args[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
@@ -3174,9 +3306,9 @@ var callMarshalingOutbound = mixin({
       this.releaseCallContext?.(context);
       this.flushConsole?.();
     };
-    if (FINALIZE$1 in args) {
+    if (FINALIZE in args) {
       // async function--finalization happens when callback is invoked
-      args[FINALIZE$1] = finalize;
+      args[FINALIZE] = finalize;
     } else {
       finalize();
     }
@@ -4010,12 +4142,13 @@ var objectLinkage = mixin({
       return reloc;
     },
   } ),
-  ...({
+    ...({
     useObjectLinkage() {
       // empty function used for mixin tracking
     },
   } ),
-});
+    /* c8 ignore end */
+  });
 
 var pointerSynchronization = mixin({
   updatePointerAddresses(context, args) {
@@ -4081,7 +4214,7 @@ var pointerSynchronization = mixin({
     const pointerMap = new Map();
     const callback = function({ isActive, isMutable }) {
       // bypass proxy
-      const pointer = this[POINTER] ?? this;
+      const pointer = this[POINTER] /* c8 ignore next */ ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
         const writable = !pointer.constructor.const;
@@ -4153,7 +4286,11 @@ var pointerSynchronization = mixin({
 
 var promiseCallback = mixin({
   createCallback(args, structure, callback) {
-    if (!callback) {
+    if (callback) {
+      if (typeof(callback) !== 'function') {
+        throw new TypeMismatch('function', callback);
+      }
+    } else {
       let resolve, reject;
       args[PROMISE] = new Promise((...args) => {
         resolve = args[0];
@@ -4171,7 +4308,7 @@ var promiseCallback = mixin({
     }
     return (result) => {
       if (!(result instanceof Error)) {
-        args[FINALIZE$1]();
+        args[FINALIZE]();
       }
       return callback(result);
     };
@@ -4242,8 +4379,8 @@ var streamRedirection = mixin({
           this.consolePending.splice(0);
         }, 250);
       }
-      /* c8 ignore next 3 */
       return true;
+      /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       return false;
@@ -4385,7 +4522,7 @@ var structureAcquisition = mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
-      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
+      this[CONTEXT] = new CallContext();
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
@@ -4670,7 +4807,7 @@ var viewManagement = mixin({
     }
     return dv;
   },
-  assignView(target, dv, structure, copy, fixed) {
+  assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
     if (!target[MEMORY]) {
@@ -4680,11 +4817,11 @@ var viewManagement = mixin({
       const len = dv.byteLength / elementSize;
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
-      if (fixed) {
+      if (allocator) {
         // need to copy when target object is in fixed memory
         copy = true;
       }
-      target[SHAPE](copy ? null : dv, len, fixed);
+      target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
         target[COPY](source);
       }
@@ -4746,7 +4883,7 @@ var viewManagement = mixin({
         // return existing view instead of this one
         return existing;
       } else if (entry) {
-        entry[`${byteOffset}:${byteLength}`] = dv;
+        entry.set(`${byteOffset}:${byteLength}`, dv);
       } else {
         this.viewMap.set(buffer, dv);
       }
@@ -5120,7 +5257,7 @@ var primitive$1 = mixin({
               if (err instanceof TypeError && this[RESTORE]?.()) {
                 return getter.call(this[MEMORY], index * byteSize, littleEndian);
               } else {
-                throw adjustRangeError(member, index, err);
+                throw replaceRangeError(member, index, err);
               }
             }
           },
@@ -5131,7 +5268,7 @@ var primitive$1 = mixin({
               if (err instanceof TypeError && this[RESTORE]?.()) {
                 return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
               } else {
-                throw adjustRangeError(member, index, err);
+                throw replaceRangeError(member, index, err);
               }
             }
           },
@@ -5317,21 +5454,21 @@ var specialProps = mixin({
         }
         return this[MEMORY];
       },
-      set(dv, fixed) {
+      set(dv, allocator) {
         checkDataView(dv);
-        thisEnv.assignView(this, dv, structure, true, fixed);
+        thisEnv.assignView(this, dv, structure, true, allocator);
       },
     });
     descriptors.base64 = markAsSpecial({
       get() {
         return encodeBase64(this.dataView);
       },
-      set(str, fixed) {
+      set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch$1('string', str);
+          throw new TypeMismatch('string', str);
         }
         const dv = decodeBase64(str);
-        thisEnv.assignView(this, dv, structure, false, fixed);
+        thisEnv.assignView(this, dv, structure, false, allocator);
       }
     });
     const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
@@ -5342,12 +5479,12 @@ var specialProps = mixin({
           const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
           return new TypedArray(dv.buffer, dv.byteOffset, length);
         },
-        set(ta, fixed) {
+        set(ta, allocator) {
           if (!isTypedArray(ta, TypedArray)) {
-            throw new TypeMismatch$1(TypedArray.name, ta);
+            throw new TypeMismatch(TypedArray.name, ta);
           }
           const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-          thisEnv.assignView(this, dv, structure, true, fixed);
+          thisEnv.assignView(this, dv, structure, true, allocator);
         },
       });
       const { type, flags } = structure;
@@ -5366,9 +5503,9 @@ var specialProps = mixin({
             }
             return str;
           },
-          set(str, fixed) {
+          set(str, allocator) {
             if (typeof(str) !== 'string') {
-              throw new TypeMismatch$1('a string', str);
+              throw new TypeMismatch('a string', str);
             }
             const sentinelValue = this.constructor[SENTINEL]?.value;
             if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -5376,7 +5513,7 @@ var specialProps = mixin({
             }
             const ta = encodeText(str, encoding);
             const dv = new DataView(ta.buffer);
-            thisEnv.assignView(this, dv, structure, false, fixed);
+            thisEnv.assignView(this, dv, structure, false, allocator);
           },
         });
       }
@@ -5392,7 +5529,7 @@ function isTypedArray(arg, TypedArray) {
 
 function checkDataView(dv) {
   if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throw new TypeMismatch$1('a DataView', dv);
+    throw new TypeMismatch('a DataView', dv);
   }
   return dv;
 }
@@ -5791,7 +5928,7 @@ var all = mixin({
     const thisEnv = this;
     const constructor = function(arg, options = {}) {
       const {
-        allocator = false,
+        allocator,
       } = options;
       const creating = this instanceof constructor;
       let self, dv;
@@ -5846,11 +5983,11 @@ var all = mixin({
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {
-          self[INITIALIZE](arg);
+          self[INITIALIZE](arg, allocator);
         }
       }
-      if (FINALIZE$1 in self) {
-        self = self[FINALIZE$1]();
+      if (FINALIZE in self) {
+        self = self[FINALIZE]();
       }
       return cache.save(dv, self);
     };
@@ -5992,9 +6129,9 @@ var argStruct = mixin({
         if (args.length !== length) {
           throw new ArgumentCountMismatch(length, args.length);
         }
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
+        this[CONTEXT] = new CallContext();
         if (flags & ArgStructFlag.IsAsync) {
-          self[FINALIZE$1] = null;
+          self[FINALIZE] = null;
         }
         thisEnv.copyArguments(self, args, argMembers, options);
       } else {
@@ -6157,7 +6294,7 @@ var array = mixin({
     descriptors.entries = defineValue(getArrayEntries);
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE$1] = this.defineFinalizerArray(descriptor);
+    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
@@ -6574,7 +6711,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch$1('function', arg);
+          throw new TypeMismatch('function', arg);
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);
@@ -6629,10 +6766,12 @@ var _function = mixin({
     }
     return constructor;
   },
+  /* c8 ignore start */
   ...({
     usingFunction: false,
     usingFunctionPointer: false,
   } ),
+  /* c8 ignore end */
 });
 
 var opaque = mixin({
@@ -6844,7 +6983,11 @@ var pointer = mixin({
     const setTargetLength = function(len) {
       len = len | 0;
       const target = getTargetObject.call(this);
-      if (!target) {
+      if (target) {
+        if (target.length === len) {
+          return;
+        }
+      } else {
         if (len !== 0) {
           throw new InvalidSliceLength(len, 0);
         }
@@ -6882,7 +7025,7 @@ var pointer = mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         // initialize with the other pointer'structure target
@@ -6946,7 +7089,7 @@ var pointer = mixin({
           }
         }
         // autovivificate target object
-        const autoObj = new Target(arg, { fixed: !!this[MEMORY][FIXED] });
+        const autoObj = new Target(arg, { allocator });
         if (thisEnv.runtimeSafety) {
           // creation of a new slice using a typed array is probably
           // not what the user wants; it's more likely that the intention
@@ -6995,7 +7138,7 @@ var pointer = mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE$1] = {
+    descriptors[FINALIZE] = {
       value() {
         const handlers = (targetType === StructureType.Pointer) ? {} : proxyHandlers;
         const proxy = new Proxy(this, handlers);
@@ -7254,9 +7397,9 @@ var slice = mixin({
     /* c8 ignore end */
     const { byteSize: elementSize, structure: elementStructure } = member;
     const thisEnv = this;
-    const shapeDefiner = function(dv, length, fixed = false) {
+    const shapeDefiner = function(dv, length, allocator) {
       if (!dv) {
-        dv = thisEnv.allocateMemory(length * elementSize, align, fixed);
+        dv = thisEnv.allocateMemory(length * elementSize, align, allocator);
       }
       this[MEMORY] = dv;
       this[LENGTH] = length;
@@ -7271,10 +7414,10 @@ var slice = mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, fixed = false) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, arg.length, fixed);
+          shapeDefiner.call(this, null, arg.length, allocator);
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
@@ -7283,11 +7426,11 @@ var slice = mixin({
           this[VISIT]('copy', { vivificate: true, source: arg });
         }
       } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
-        initializer.call(this, { string: arg }, fixed);
+        initializer.call(this, { string: arg }, allocator);
       } else if (arg?.[Symbol.iterator]) {
         arg = transformIterable(arg);
         if (!this[MEMORY]) {
-          shapeDefiner.call(this, null, arg.length, fixed);
+          shapeDefiner.call(this, null, arg.length, allocator);
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
@@ -7298,12 +7441,12 @@ var slice = mixin({
         }
       } else if (typeof(arg) === 'number') {
         if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
-          shapeDefiner.call(this, null, arg, fixed);
+          shapeDefiner.call(this, null, arg, allocator);
         } else {
           throw new InvalidArrayInitializer(structure, arg, !this[MEMORY]);
         }
       } else if (arg && typeof(arg) === 'object') {
-        if (propApplier.call(this, arg, fixed) === 0) {
+        if (propApplier.call(this, arg, allocator) === 0) {
           throw new InvalidArrayInitializer(structure, arg);
         }
       } else if (arg !== undefined) {
@@ -7345,7 +7488,7 @@ var slice = mixin({
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE$1] = this.defineFinalizerArray(descriptor);
+    descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
@@ -7710,10 +7853,7 @@ var variadicStruct = mixin({
         attrs.set(length + index, offset, bitSize, align, type);
       }
       this[ATTRIBUTES] = attrs;
-      this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
-      if (flags & ArgStructFlag.IsAsync) {
-        this[FINALIZE] = null;
-      }
+      this[CONTEXT] = new CallContext();
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);

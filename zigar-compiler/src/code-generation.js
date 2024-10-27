@@ -1,5 +1,6 @@
 import { MemberFlag, MemberType, StructureType } from '../../zigar-runtime/src/constants.js';
 import { findObjects } from '../../zigar-runtime/src/utils.js';
+import { shortenNames } from './name-shortening.js';
 
 export function generateCode(definition, params) {
   const { structures } = definition;
@@ -12,6 +13,7 @@ export function generateCode(definition, params) {
     moduleOptions,
     envVariables = {},
   } = params;
+  shortenNames(structures);
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);

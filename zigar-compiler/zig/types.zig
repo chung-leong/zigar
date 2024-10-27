@@ -513,17 +513,7 @@ pub const TypeAttributes = packed struct {
 pub const TypeData = struct {
     Type: type,
     slot: ?usize = null,
-    name: ?[:0]const u8 = null,
     attrs: TypeAttributes = .{},
-
-    pub fn getName(comptime self: @This()) [:0]const u8 {
-        return self.name orelse @typeName(self.Type);
-    }
-
-    test "getName" {
-        try expectCT(std.mem.eql(u8, getName(.{ .Type = u32, .name = @typeName(u32) }), "u32"));
-        try expectCT(std.mem.eql(u8, getName(.{ .Type = void, .name = "nothing" }), "nothing"));
-    }
 
     pub fn getSlot(comptime self: @This()) usize {
         return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
@@ -988,8 +978,6 @@ pub const TypeDataCollector = struct {
             if (td.isSupported()) {
                 // assign slots to supported types
                 self.setSlot(td);
-                // set alternate names of types now that we have the slot
-                self.setName(td);
             }
         }
     }
@@ -1303,55 +1291,6 @@ pub const TypeDataCollector = struct {
         }
     }
 
-    fn getName(comptime self: *@This(), comptime T: type) [:0]const u8 {
-        const td = self.get(T);
-        self.setName(td);
-        return td.name.?;
-    }
-
-    fn setName(comptime self: *@This(), comptime td: *TypeData) void {
-        if (td.name != null) {
-            return;
-        }
-        const type_name = @typeName(td.Type);
-        td.name = switch (@typeInfo(td.Type)) {
-            .Pointer => |pt| format: {
-                const size_end_index = find: {
-                    comptime var index = 0;
-                    comptime var in_brackets = false;
-                    inline while (index < @min(25, type_name.len)) : (index += 1) {
-                        switch (type_name[index]) {
-                            '*' => if (!in_brackets) break :find index + 1,
-                            '[' => in_brackets = true,
-                            ']' => break :find index + 1,
-                            else => {},
-                        }
-                    } else {
-                        break :find 0;
-                    }
-                };
-                const size = type_name[0..size_end_index];
-                const modifier = if (pt.is_const) "const " else if (pt.is_volatile) "volatile " else "";
-                break :format std.fmt.comptimePrint("{s}{s}{s}", .{ size, modifier, self.getName(pt.child) });
-            },
-            .Optional => |op| std.fmt.comptimePrint("?{s}", .{self.getName(op.child)}),
-            .Array => |ar| std.fmt.comptimePrint("[{d}]{s}", .{ ar.len, self.getName(ar.child) }),
-            .ErrorUnion => |eu| std.fmt.comptimePrint("{s}!{s}", .{ self.getName(eu.error_set), self.getName(eu.payload) }),
-            .ErrorSet => switch (td.Type) {
-                anyerror => type_name,
-                else => std.fmt.comptimePrint("ErrorSet{d:0>4}", .{self.getSlot(td)}),
-            },
-            .Struct => get: {
-                if (std.mem.endsWith(u8, type_name, "}")) {
-                    break :get std.fmt.comptimePrint("Struct{d:0>4}", .{self.getSlot(td)});
-                } else {
-                    break :get type_name;
-                }
-            },
-            else => type_name,
-        };
-    }
-
     test "scan" {
         @setEvalBranchQuota(10000);
         const ns = struct {
@@ -1476,25 +1415,6 @@ pub const TypeDataCollector = struct {
         try expectCT(tdc.get(ns.D).attrs.has_pointer == true);
         // comptime fields should be ignored
         try expectCT(tdc.get(ns.E).attrs.has_pointer == false);
-    }
-
-    test "setNames" {
-        @setEvalBranchQuota(10000);
-        const ns = struct {
-            pub const tuple = .{.tuple};
-            pub const Error = error{ A, B, C };
-            pub const AnyError = anyerror;
-        };
-        comptime var tdc = init(0);
-        comptime tdc.scan(ns);
-        const s_td = tdc.get(@TypeOf(ns.tuple));
-        const s_name = std.fmt.comptimePrint("Struct{d:0>4}", .{s_td.slot.?});
-        try expectCT(std.mem.eql(u8, s_td.getName(), s_name));
-        const e_td = tdc.get(ns.Error);
-        const e_name = std.fmt.comptimePrint("ErrorSet{d:0>4}", .{e_td.slot.?});
-        try expectCT(std.mem.eql(u8, e_td.getName(), e_name));
-        const ae_td = tdc.get(ns.AnyError);
-        try expectCT(std.mem.eql(u8, ae_td.getName(), "anyerror"));
     }
 };
 

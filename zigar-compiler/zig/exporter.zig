@@ -257,7 +257,7 @@ fn getStructure(ctx: anytype, comptime T: type) types.Error!Value {
     const slot = td.getSlot();
     return ctx.host.readSlot(null, slot) catch create: {
         const def: types.Structure = .{
-            .name = td.getName(),
+            .name = @typeName(T),
             .type = getStructureType(ctx.tdb, td),
             .flags = getStructureFlags(ctx.tdb, td),
             .length = getStructureLength(ctx.tdb, td),

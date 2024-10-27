@@ -247,10 +247,10 @@ describe('Feature: structure-acquisition', function() {
         thunkAddress = this.getViewAddress(args[0][MEMORY]);
         optionsDV = args[2][MEMORY];
       };
-      env.acquireStructures({ omitFunctions: true });
+      env.acquireStructures({ omitFunctions: true, omitVariables: true });
       expect(thunkAddress).to.equal(0x1234);
       expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitMethods)).to.be.true;
-      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.false;
+      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.true;
     })
   })
   describe('getRootModule', function() {

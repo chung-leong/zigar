@@ -79,6 +79,7 @@ export async function load(url, context, nextLoad) {
   const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
   const envVariables = { ADDON_PATH: addonPath };
   const { code } = generateCode(definition, { runtimeURL, binarySource, envVariables });
+  // console.log(code);
   return {
     format: 'module',
     shortCircuit: true,
