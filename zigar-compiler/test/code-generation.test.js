@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
+import { MemberType, StructureType } from '../../zigar-runtime/src/constants.js';
 import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
-import { MemberType, StructureType, hasStandardFloatSize } from '../../zigar-runtime/src/types.js';
 import { generateCode } from '../src/code-generation.js';
 
 describe('Code generation', function() {
@@ -564,7 +564,6 @@ describe('Code generation', function() {
         type: StructureType.Struct,
         name: 'struct {}',
         byteSize: 4,
-        hasPointer: hasStandardFloatSize,
         instance: {
           members: [
             {

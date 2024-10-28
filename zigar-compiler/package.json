@@ -12,9 +12,9 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha -- test/*.test.js",
-    "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
-    "coverage": "c8 mocha -- test/*.test.js",
+    "test": "DEV=1 TARGET=wasm BITS=32 MIXIN=track mocha -- test/*.test.js",
+    "debug": "DEV=1 TARGET=wasm BITS=32 MIXIN=track mocha --reporter spec --inspect-brk -- test/*.test.js",
+    "coverage": "DEV=1 TARGET=wasm BITS=32 MIXIN=track c8 mocha -- test/*.test.js",
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [

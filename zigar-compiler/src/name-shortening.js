@@ -1,5 +1,5 @@
-import { MemberType, PointerFlag, structureNames, StructureType } from "../../zigar-runtime/src/constants";
-import { SENTINEL } from "../../zigar-runtime/src/symbols";
+import { MemberType, PointerFlag, structureNames, StructureType } from '../../zigar-runtime/src/constants.js';
+import { SENTINEL } from '../../zigar-runtime/src/symbols.js';
 
 export function shortenNames(structures) {
   let structId = 1;

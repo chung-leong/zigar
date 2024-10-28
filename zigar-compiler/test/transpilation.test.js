@@ -103,5 +103,16 @@ describe('Transpilation', function() {
       expect(code).to.be.a('string');
       expect(code).to.contain('integers');
     })
+    it('should transpile zig source code involving function pointer', async function() {
+      this.timeout(600000);
+      const path = getSamplePath('fn-pointer');
+      const options = {
+        optimize: 'ReleaseSmall',
+        embedWASM: false,
+        wasmLoader: saveWASM,
+      };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"call"');
+    })
   })
 })
