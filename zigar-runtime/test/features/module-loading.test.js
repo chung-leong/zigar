@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { WASI } from 'wasi';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -86,6 +87,22 @@ describe('Feature: module-loading', function() {
           error = err;
         }
         expect(error).to.be.an('error');
+      })
+    })
+    describe('displayPanic', function() {
+      it('should output panic message to console', async function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        const address = 0x1000;
+        const dv = new DataView(env.memory.buffer, address, 4);
+        dv.setUint8(0, 'D'.charCodeAt(0));
+        dv.setUint8(1, 'o'.charCodeAt(0));
+        dv.setUint8(2, 'h'.charCodeAt(0));
+        dv.setUint8(3, '!'.charCodeAt(0));
+        const [ line ] = await captureError(() => {
+          env.displayPanic(address, 4);
+        });
+        expect(line).to.equal('Zig panic: Doh!');
       })
     })
     describe('clearExchangeTable', function() {

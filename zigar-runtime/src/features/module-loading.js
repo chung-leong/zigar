@@ -13,9 +13,6 @@ export default mixin({
       }
     }
   },
-  isReleased() {
-    return this.released;
-  },
   abandonModule() {
     if (!this.abandoned) {
       this.freeDefaultAllocator?.();
@@ -104,6 +101,7 @@ export default mixin({
       const imports = {};
       for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
+        /* c8 ignore next 5 */
         if (process.env.DEV) {
           if (!fn) {
             throw new Error(`Unable to export function: ${name}`);
@@ -116,6 +114,7 @@ export default mixin({
     importFunctions(exports) {
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
+        /* c8 ignore next 5 */
         if (process.env.DEV) {
           if (!fn) {
             throw new Error(`Unable to import function: ${name}`);
@@ -172,7 +171,6 @@ export default mixin({
         this.trackInstance(instance);
         this.customWASI?.initialize?.(instance);
         this.initialize();
-        // this.runtimeSafety = ;
       })();
     },
     displayPanic(address, len) {
@@ -196,6 +194,7 @@ export default mixin({
       const imports = {};
       for (const [ name, alias ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
+        /* c8 ignore next 5 */
         if (process.env.DEV) {
           if (!fn) {
             throw new Error(`Unable to export function: ${name}`);
@@ -208,6 +207,7 @@ export default mixin({
     importFunctions(exports) {
       for (const [ name, alias ] of Object.entries(this.imports)) {
         const fn = exports[alias ?? name];
+        /* c8 ignore next 5 */
         if (process.env.DEV) {
           if (!fn) {
             throw new Error(`Unable to import function: ${name}`);
