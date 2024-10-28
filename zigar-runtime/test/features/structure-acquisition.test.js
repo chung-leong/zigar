@@ -373,6 +373,113 @@ describe('Feature: structure-acquisition', function() {
       expect(env.structures).to.eql([]);
       expect(env.slots).to.eql({});
     })
+    it('should add objects in fixed memory to variable list', function() {
+      const env = new Env();
+      const addressMap = new Map();
+      env.getViewAddress = (dv) => addressMap.get(dv);
+      env.getMemoryOffset = (address) => Number(address);
+      env.copyExternBytes = (dv, address, len) => {};
+      const templ1 = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(8))
+      };
+      const templ2 = {
+        [MEMORY]: new DataView(new ArrayBuffer(32)),
+        [SLOTS]: {
+          0: object,
+        },
+      };
+      const constructor = function() {};
+      env.structures = [
+        {
+          instance: { template: templ1 },
+          static: {}
+        },
+        {
+          instance: {},
+          static: { template: templ2 },
+          constructor,
+        },
+      ];
+      addressMap.set(templ1[MEMORY], 1002n);
+      addressMap.set(templ2[MEMORY], 1000n);
+      addressMap.set(object[MEMORY], 1016n);
+      object[MEMORY][FIXED] = { address: 1016n, len: 8 };
+      const module = env.useStructures();
+      expect(env.variables.length).to.equal(1);
+    })
+  })
+  describe('hasMethods', function() {
+    it('should return false when there are no exported functions', function() {
+      const env = new Env();
+      expect(env.hasMethods()).to.be.false;
+    })
+    it('should return true when there ar exported functions', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Hello',
+        byteSize: 4 * 3,
+        length: 2,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Function,
+        name: 'fn(i32, i32) i32',
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        structure: argStructure,
+      });
+      const thunk = { [MEMORY]: fixed(0x1004) };
+      env.attachTemplate(structure, thunk, false);
+      env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(env.hasMethods()).to.be.true;
+    })
   })
   describe('acquireDefaultPointers', function() {
     it('should acquire targets of pointers in structure template slots', function() {
@@ -522,3 +629,9 @@ describe('Feature: structure-acquisition', function() {
     })
   }
 })
+
+function fixed(address, len = 0) {
+  const dv = new DataView(new ArrayBuffer(len));
+  dv[FIXED] = { address: usize(address), len };
+  return dv;
+}

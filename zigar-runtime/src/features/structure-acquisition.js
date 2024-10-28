@@ -109,7 +109,7 @@ export default mixin({
     const FactoryArg = function(options) {
       const {
         omitFunctions = false,
-        omitVariables = isElectron(),
+        omitVariables = false,
       } = options;
       const dv = new DataView(new ArrayBuffer(4));
       let flags = 0;
@@ -258,11 +258,6 @@ export default mixin({
       getFactoryThunk: null,
       getMemoryOffset: null,
     },
-  } : {}),
+  /* c8 ignore next */
+  } : undefined),
 });
-
-function isElectron() {
-  return typeof(process) === 'object'
-      && typeof(process?.versions) === 'object'
-      && !!process.versions?.electron;
-}

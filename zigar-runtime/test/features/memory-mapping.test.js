@@ -181,6 +181,40 @@ describe('Feature: memory-mapping', function() {
       expect(context.shadowMap.size).to.equal(1);
     })
   })
+  describe('findShadow', function() {
+    it('should find object shadowing another', function() {
+      const env = new Env();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      env.getBufferAddress = function() {
+        return usize(0x1000);
+      };
+      const context = new CallContext();
+      env.addShadow(context, shadow, object);
+      const result = env.findShadow(context, object);
+      expect(result).to.equal(shadow);
+    })
+    it('should return undefined when no shadow is found', function() {
+      const env = new Env();
+      const object = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      const shadow = {
+        [MEMORY]: new DataView(new ArrayBuffer(4))
+      };
+      env.getBufferAddress = function() {
+        return usize(0x1000);
+      };
+      const context = new CallContext();
+      env.addShadow(context, shadow, object);
+      const result = env.findShadow(context, {});
+      expect(result).to.be.undefined;
+    })
+  })
   describe('removeShadow', function() {
     it('should remove a previously added shadow', function() {
       const env = new Env();
@@ -514,6 +548,16 @@ describe('Feature: memory-mapping', function() {
       const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
       expect(dv.byteLength).to.equal(0);
     })
+    it('should mark context as retained when the context itself is referenced', function() {
+      const env = new Env();
+      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.getBufferAddress = () => usize(0x1000);
+      const context = new CallContext();
+      context.id = usize(0x1234);
+      const dv = env.findMemory(context, context.id, 0, undefined);
+      expect(context.retained).to.be.true;
+    })
+
   })
   describe('getViewAddress', function() {
     it('should return address of data view', function() {

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { AlignmentConflict, NullPointer } from '../errors.js';
+import { AlignmentConflict } from '../errors.js';
 import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
@@ -231,9 +231,6 @@ export default mixin({
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
-      if (fixed.freed) {
-        throw new NullPointer();
-      }
       return fixed.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
