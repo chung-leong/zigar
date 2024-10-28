@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { empty } from '../utils.js';
 
 export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
@@ -18,15 +19,12 @@ export default mixin({
       const w = WebAssembly;
       const env = {}, wasi = {}, wasiPreview = {};
       const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(this.executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = empty;
-          } else if (module === 'wasi') {
-            wasi[name] = empty;
           }
         }
       }
@@ -83,22 +81,19 @@ export default mixin({
     },
     freeJsThunk(controllerAddress, thunkAddress) {
       let fnId = 0;
-      try {
-        const thunkObject = this.table.get(thunkAddress);
-        this.table.set(thunkAddress, null);
-        const entry = this.thunkMap.get(thunkObject);
-        if (entry) {
-          const { source, sourceAddress } = entry;
-          fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
-          if (--source.thunkCount === 0) {
-            const index = this.thunkSources.indexOf(source);
-            if (index !== -1) {
-              this.thunkSources.splice(index, 1);
-            }
+      const thunkObject = this.table.get(thunkAddress);
+      this.table.set(thunkAddress, null);
+      const entry = this.thunkMap.get(thunkObject);
+      if (entry) {
+        const { source, sourceAddress } = entry;
+        fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
+        if (--source.thunkCount === 0) {
+          const index = this.thunkSources.indexOf(source);
+          if (index !== -1) {
+            this.thunkSources.splice(index, 1);
           }
-          this.thunkMap.delete(thunkObject);
         }
-      } catch (err) {
+        this.thunkMap.delete(thunkObject);
       }
       return fnId;
     },

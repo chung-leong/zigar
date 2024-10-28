@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Fn = fn () void;
 
 pub fn call(ptr: *const Fn) void {

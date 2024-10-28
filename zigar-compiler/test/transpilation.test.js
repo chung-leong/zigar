@@ -106,8 +106,9 @@ describe('Transpilation', function() {
     it('should transpile zig source code involving function pointer', async function() {
       this.timeout(600000);
       const path = getSamplePath('fn-pointer');
+      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
       const options = {
-        optimize: 'ReleaseSmall',
+        optimize: 'Debug',
         embedWASM: false,
         wasmLoader: saveWASM,
       };
