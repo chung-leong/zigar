@@ -37,13 +37,12 @@ export default mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg;
+      let arg, callback, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
           // where a function uses multiple allocators
-          allocatorCount++;
-          const allocator = (allocatorCount === 1)
+          const allocator = (++allocatorCount === 1)
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
@@ -51,11 +50,17 @@ export default mixin({
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          arg = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          if (!callback) {
+            callback = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          }
+          arg = callback;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
+          if (!signal) {
+            signal = { ptr: this.createSignalArray(dest, structure, options?.['signal']) }
+          }
+          arg = signal;
         }
       }
       if (arg === undefined) {
@@ -125,7 +130,7 @@ export default mixin({
       runThunk: null,
       runVariadicThunk: null,
     },
-    /* c8 ignore next */
+  /* c8 ignore next */
   } : undefined),
   ...(process.env.MIXIN === 'track' ? {
     usingPromise: false,
@@ -143,6 +148,6 @@ export default mixin({
         }
       }
     }
-    /* c8 ignore next */
+  /* c8 ignore next */
   } : undefined),
 });

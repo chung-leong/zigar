@@ -49,7 +49,7 @@ describe('Feature: abort-signal', function() {
         type: StructureType.Struct,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -106,7 +106,7 @@ describe('Feature: abort-signal', function() {
         type: StructureType.Struct,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -176,7 +176,7 @@ describe('Feature: abort-signal', function() {
         type: StructureType.Struct,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
