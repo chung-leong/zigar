@@ -1,6 +1,7 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, RESTORE } from '../symbols.js';
+import { empty } from '../utils.js';
 
 export default mixin({
   copiers: null,
@@ -42,7 +43,6 @@ export default mixin({
   getResetFunction(size) {
     if (!this.resetters) {
       this.resetters = this.defineResetters();
-
     }
     return this.resetters[size] ?? this.resetters.any;
   },
@@ -58,6 +58,7 @@ export default mixin({
     const setInt32 = this.getAccessor('set', int32);
 
     return {
+      0: empty,
       1: function(dest, src) {
         setInt8.call(dest, 0, getInt8.call(src, 0));
       },
@@ -99,6 +100,7 @@ export default mixin({
     const setInt16 = this.getAccessor('set', int16);
     const setInt32 = this.getAccessor('set', int32);
     return {
+      0: empty,
       1: function(dest, offset) {
         setInt8.call(dest, offset, 0);
       },
@@ -119,8 +121,8 @@ export default mixin({
         setInt32.call(dest, offset + 8, 0, true);
         setInt32.call(dest, offset + 12, 0, true);
       },
-      any: function(dest, offset) {
-        let i = offset, len = dest.byteLength;
+      any: function(dest, offset, len) {
+        let i = offset;
         while (i + 4 <= len) {
           setInt32.call(dest, i, 0, true);
           i += 4;
