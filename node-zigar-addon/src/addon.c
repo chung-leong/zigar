@@ -361,6 +361,20 @@ napi_value free_external_memory(napi_env env,
     return NULL;
 }
 
+bool can_create_external_buffer(napi_env env) {
+    static bool checked = false;
+    static bool can_create = false;
+    if (!checked) {
+        char src[4];
+        napi_value buffer;
+        if (napi_create_external_arraybuffer(env, src, 4, NULL, NULL, &buffer) == napi_ok) {
+            can_create = true;
+        }
+        checked = true;
+    }
+    return can_create;
+}
+
 napi_value obtain_external_buffer(napi_env env,
                                   napi_callback_info info) {
     module_data* md;
@@ -379,25 +393,25 @@ napi_value obtain_external_buffer(napi_env env,
     void* dest;
     // need to include at least one byte
     size_t len = len_float, min_len = !len ? 1 : len;
-    switch (napi_create_external_arraybuffer(env, src, min_len, finalize_external_buffer, md, &buffer)) {
-        case napi_ok: break;
-        case napi_no_external_buffers_allowed: {
-            // make copy of external memory instead
-            void* copy;
-            if (napi_create_arraybuffer(env, len, &copy, &buffer) == napi_ok
-             && napi_add_finalizer(env, buffer, NULL, finalize_external_buffer, md, NULL) == napi_ok) {
-                memcpy(copy, src, len);
-                napi_value key = args[2];
-                napi_value value;
-                if (napi_create_uintptr(env, address, &value) == napi_ok
-                 && napi_set_property(env, buffer, key, value) == napi_ok) {
-                    break;
-                }
-            } else {
-                // fall through
-            }
+    if (can_create_external_buffer(env)) {
+        if (napi_create_external_arraybuffer(env, src, min_len, finalize_external_buffer, md, &buffer) != napi_ok) {
+            return throw_last_error(env);
         }
-        default: throw_last_error(env);
+    } else {
+        // make copy of external memory instead
+        void* copy;
+        if (napi_create_arraybuffer(env, len, &copy, &buffer) != napi_ok
+         || napi_add_finalizer(env, buffer, NULL, finalize_external_buffer, md, NULL) != napi_ok) {
+            return throw_last_error(env);
+        }
+        memcpy(copy, src, len);
+        // attach address as fallback property
+        napi_value key = args[2];
+        napi_value value;
+        if (napi_create_uintptr(env, address, &value) != napi_ok
+         || napi_set_property(env, buffer, key, value) != napi_ok) {
+            return throw_last_error(env);
+        }
     }
     // create a reference to the module so that the shared library doesn't get unloaded
     // while the external buffer is still around pointing to it
@@ -746,7 +760,7 @@ napi_value set_numeric_value(napi_env env,
                 }
             }
             break;
-        case MEMBER_TYPE_FLOAT:
+        case MEMBER_TYPE_FLOAT: {
             double value;
             status = napi_get_value_double(env, args[3], &value);
             if (status == napi_ok) {
@@ -755,9 +769,46 @@ napi_value set_numeric_value(napi_env env,
                     case 64: *((double *) ptr) = value; break;
                 }
             }
-            break;
+        }   break;
     }
     return (status == napi_ok) ? NULL : throw_last_error(env);
+}
+
+napi_value require_buffer_fallback(napi_env env,
+                                   napi_callback_info info) {
+    napi_value result;
+    bool can_create = can_create_external_buffer(env);
+    if (napi_get_boolean(env, !can_create, &result) == napi_ok) {
+        return result;
+    }
+    return NULL;
+}
+
+napi_value sync_external_buffer(napi_env env,
+                                napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3];
+    napi_value value;
+    void* bytes;
+    // check arguments
+    size_t len;
+    uintptr_t address;
+    bool to_ext;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
+     || napi_get_arraybuffer_info(env, args[0], &bytes, &len) != napi_ok) {
+        return throw_error(env, "Argument must be ArrayBuffer");
+    } else if (napi_get_property(env, args[0], args[1], &value) != napi_ok
+     || napi_get_value_uintptr(env, value, &address) != napi_ok) {
+        return throw_error(env, "Cannot retrieve address");
+    } else if (napi_get_value_bool(env, args[2], &to_ext) != napi_ok) {
+        return throw_error(env, "ToExt should be a boolean");
+    }
+    if (to_ext) {
+        memcpy((void*) address, bytes, len);
+    } else {
+        memcpy(bytes, (void*) address, len);
+    }
+    return NULL;
 }
 
 result perform_js_action(module_data* md,
@@ -842,6 +893,8 @@ struct {
     { "finalizeAsyncCall", finalize_async_call },
     { "getNumericValue", get_numeric_value },
     { "setNumericValue", set_numeric_value },
+    { "requireBufferFallback", require_buffer_fallback },
+    { "syncExternalBuffer", sync_external_buffer }
 };
 
 #include <stdio.h>

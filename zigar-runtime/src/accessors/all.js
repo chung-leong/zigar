@@ -30,8 +30,8 @@ export default mixin({
     const accessorName = access + names.join('');
     // see if it's a built-in method of DataView
     let accessor = DataView.prototype[accessorName];
-    if (process.env.TARGET === 'node' && process.versions.electron) {
-      if (accessor) {
+    if (process.env.TARGET === 'node') {
+      if (accessor && this.usingBufferFallback()) {
         const thisEnv = this;
         const normal = accessor;
         const getAddress = function(offset) {
@@ -89,8 +89,17 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     imports: {
+      requireBufferFallback: null,
       getNumericValue: null,
       setNumericValue: null,
     },
+    needFallback: undefined,
+
+    usingBufferFallback() {
+      if (this.needFallback === undefined) {
+        this.needFallback = this.requireBufferFallback();
+      }
+      return this.needFallback;
+    }
   } : undefined),
 });

@@ -1,23 +1,35 @@
 import { ArrayFlag, SliceFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { MEMORY, RESTORE, SENTINEL } from '../symbols.js';
+import { FALLBACK, MEMORY, RESTORE, SENTINEL } from '../symbols.js';
 import { decodeBase64, decodeText, encodeBase64, encodeText } from '../utils.js';
 
 export default mixin({
   defineSpecialProperties(structure) {
     const descriptors = {};
     const thisEnv = this;
+    const syncBuffer = (process.env.TARGET === 'node' && this.usingBufferFallback())
+    ? function(toExt) {
+        thisEnv.syncExternalBuffer(this.buffer, FALLBACK, toExt);
+      }
+    : undefined;
     descriptors.dataView = markAsSpecial({
       get() {
         if (process.env.TARGET === 'wasm') {
           this[RESTORE]?.();
         }
-        return this[MEMORY];
+        const dv = this[MEMORY];
+        if (process.env.TARGET === 'node') {
+          syncBuffer?.call(dv, false);
+        }
+        return dv;
       },
       set(dv, allocator) {
         checkDataView(dv);
         thisEnv.assignView(this, dv, structure, true, allocator);
+        if (process.env.TARGET === 'node') {
+          syncBuffer?.call(dv, true);
+        }
       },
     });
     descriptors.base64 = markAsSpecial({
@@ -81,6 +93,11 @@ export default mixin({
     }
     return descriptors;
   },
+  ...(process.env.TARGET === 'node' ? {
+    imports: {
+      syncExternalBuffer: null,
+    },
+  } : undefined)
 });
 
 function isTypedArray(arg, TypedArray) {
