@@ -44,6 +44,9 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(float64_array4x4)).to.equal('[[1.1,1.2,1.3,1.4],[2.1,2.2,2.3,2.4],[3.1,3.2,3.3,3.4],[4.1,4.2,4.3,4.4]]');
       expect([ ...module.int32_array4.typedArray ]).to.eql([ 1, 123, 3, 4 ]);
       expect(module.int32_array4.dataView.getInt32(4, true)).to.equal(123);
+      module.int32_array4.typedArray = new Int32Array([ 1, 2, 3, 4 ]);
+      const [ afterTA ] = await capture(() => print());
+      expect(afterTA).to.equal('{ 1, 2, 3, 4 }');
     })
     it('should print array arguments', async function() {
       this.timeout(300000);

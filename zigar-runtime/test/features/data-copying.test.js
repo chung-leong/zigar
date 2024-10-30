@@ -1,6 +1,5 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
-import { getCopyFunction, getResetFunction } from '../../src/features/data-copying.js';
 import '../../src/mixins.js';
 import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
@@ -10,6 +9,7 @@ const Env = defineEnvironment();
 describe('Feature: data-copying', function() {
   describe('getCopyFunction', function() {
     it('should return optimal function for copying buffers of various sizes', function() {
+      const env = new Env();
       const functions = [];
       for (let size = 1; size <= 64; size++) {
         const src = new DataView(new ArrayBuffer(size));
@@ -17,7 +17,7 @@ describe('Feature: data-copying', function() {
           src.setInt8(i, i);
         }
         const dest = new DataView(new ArrayBuffer(size));
-        const f = getCopyFunction(size);
+        const f = env.getCopyFunction(size);
         if (!functions.includes(f)) {
           functions.push(f);
         }
@@ -32,7 +32,7 @@ describe('Feature: data-copying', function() {
           src.setInt8(i, i & 0xFF);
         }
         const dest = new DataView(new ArrayBuffer(size * 16));
-        const f = getCopyFunction(size, true);
+        const f = env.getCopyFunction(size, true);
         if (!functions.includes(f)) {
           functions.push(f);
         }
@@ -41,15 +41,16 @@ describe('Feature: data-copying', function() {
           expect(dest.getUint8(i)).to.equal(i & 0xFF);
         }
       }
-      expect(functions).to.have.lengthOf(7);
+      expect(functions).to.have.lengthOf(6);
     })
     it('should return function for copying buffers of unknown size', function() {
+      const env = new Env();
       const src = new DataView(new ArrayBuffer(23));
       for (let i = 0; i < 23; i++) {
         src.setInt8(i, i);
       }
       const dest = new DataView(new ArrayBuffer(23));
-      const f = getCopyFunction(undefined);
+      const f = env.getCopyFunction(undefined);
       f(dest, src);
       for (let i = 0; i < 23; i++) {
         expect(dest.getUint8(i)).to.equal(i);
@@ -58,13 +59,14 @@ describe('Feature: data-copying', function() {
   })
   describe('getResetFunction', function() {
     it('should return optimal function for clearing buffers of various sizes', function() {
+      const env = new Env();
       const functions = [];
       for (let size = 1; size <= 64; size++) {
         const dest = new DataView(new ArrayBuffer(size));
         for (let i = 0; i < size; i++) {
           dest.setInt8(i, i);
         }
-        const f = getResetFunction(size);
+        const f = env.getResetFunction(size);
         if (!functions.includes(f)) {
           functions.push(f);
         }
@@ -73,7 +75,7 @@ describe('Feature: data-copying', function() {
           expect(dest.getUint8(i)).to.equal(0);
         }
       }
-      expect(functions).to.have.lengthOf(7);
+      expect(functions).to.have.lengthOf(6);
     })
   })
   if (process.env.TARGET === 'wasm') {

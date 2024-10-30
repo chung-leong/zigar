@@ -89,17 +89,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     imports: {
-      requireBufferFallback: null,
       getNumericValue: null,
       setNumericValue: null,
     },
-    needFallback: undefined,
-
-    usingBufferFallback() {
-      if (this.needFallback === undefined) {
-        this.needFallback = this.requireBufferFallback();
-      }
-      return this.needFallback;
-    }
   } : undefined),
 });

@@ -8,28 +8,23 @@ export default mixin({
   defineSpecialProperties(structure) {
     const descriptors = {};
     const thisEnv = this;
-    const syncBuffer = (process.env.TARGET === 'node' && this.usingBufferFallback())
-    ? function(toExt) {
-        thisEnv.syncExternalBuffer(this.buffer, FALLBACK, toExt);
-      }
-    : undefined;
     descriptors.dataView = markAsSpecial({
       get() {
         if (process.env.TARGET === 'wasm') {
           this[RESTORE]?.();
         }
         const dv = this[MEMORY];
-        if (process.env.TARGET === 'node') {
-          syncBuffer?.call(dv, false);
+        if (process.env.TARGET === 'node' && thisEnv.usingBufferFallback()) {
+          const address = dv.buffer[FALLBACK];
+          if (address !== undefined) {
+            thisEnv.syncExternalBuffer(dv.buffer, address);
+          }
         }
         return dv;
       },
       set(dv, allocator) {
         checkDataView(dv);
         thisEnv.assignView(this, dv, structure, true, allocator);
-        if (process.env.TARGET === 'node') {
-          syncBuffer?.call(dv, true);
-        }
       },
     });
     descriptors.base64 = markAsSpecial({

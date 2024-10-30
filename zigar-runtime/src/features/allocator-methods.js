@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { FIXED, MEMORY } from '../symbols.js';
-import { copy, encodeText } from '../utils.js';
+import { encodeText } from '../utils.js';
 
 export default mixin({
   defineAlloc() {
@@ -34,6 +34,7 @@ export default mixin({
     };
   },
   defineDupe() {
+    const copy = this.getCopyFunction();
     return {
       value(arg) {
         let src;

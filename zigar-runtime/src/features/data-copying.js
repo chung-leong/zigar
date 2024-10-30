@@ -1,10 +1,13 @@
+import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, RESTORE } from '../symbols.js';
-import { copy, reset } from '../utils.js';
 
 export default mixin({
+  copiers: null,
+  resetters: null,
+
   defineCopier(size, multiple) {
-    const copy = getCopyFunction(size, multiple);
+    const copy = this.getCopyFunction(size, multiple);
     return {
       value(target) {
         if (process.env.TARGET === 'wasm') {
@@ -18,7 +21,7 @@ export default mixin({
     };
   },
   defineResetter(offset, size) {
-    const reset = getResetFunction(size);
+    const reset = this.getResetFunction(size);
     return {
       value() {
         if (process.env.TARGET === 'wasm') {
@@ -29,106 +32,104 @@ export default mixin({
       }
     };
   },
-  getCopyFunction,
+  getCopyFunction(size, multiple = false) {
+    if (!this.copiers) {
+      this.copiers = this.defineCopiers();
+    }
+    const f = !multiple ? this.copiers[size] : undefined;
+    return f ?? this.copiers.any;
+  },
+  getResetFunction(size) {
+    if (!this.resetters) {
+      this.resetters = this.defineResetters();
+
+    }
+    return this.resetters[size] ?? this.resetters.any;
+  },
+  defineCopiers() {
+    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
+    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
+    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
+    const getInt8 = this.getAccessor('get', int8);
+    const setInt8 = this.getAccessor('set', int8);
+    const getInt16 = this.getAccessor('get', int16);
+    const setInt16 = this.getAccessor('set', int16);
+    const getInt32 = this.getAccessor('get', int32);
+    const setInt32 = this.getAccessor('set', int32);
+
+    return {
+      1: function(dest, src) {
+        setInt8.call(dest, 0, getInt8.call(src, 0));
+      },
+      2: function(dest, src) {
+        setInt16.call(dest, 0, getInt16.call(src, 0, true), true);
+
+      },
+      4: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+      },
+      8: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
+      },
+      16: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
+        setInt32.call(dest, 8, getInt32.call(src, 8, true), true);
+        setInt32.call(dest, 12, getInt32.call(src, 12, true), true);
+      },
+      'any': function(dest, src) {
+        let i = 0, len = dest.byteLength;
+        while (i + 4 <= len) {
+          setInt32.call(dest, i, getInt32.call(src, i, true), true);
+          i += 4;
+        }
+        while (i + 1 <= len) {
+          setInt8.call(dest, i, getInt8.call(src, i));
+          i++;
+        }
+      },
+    }
+  },
+  defineResetters() {
+    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
+    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
+    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
+    const setInt8 = this.getAccessor('set', int8);
+    const setInt16 = this.getAccessor('set', int16);
+    const setInt32 = this.getAccessor('set', int32);
+    return {
+      1: function(dest, offset) {
+        setInt8.call(dest, offset, 0);
+      },
+      2: function(dest, offset) {
+        setInt16.call(dest, offset, 0, true);
+
+      },
+      4: function(dest, offset) {
+        setInt32.call(dest, offset, 0, true);
+      },
+      8: function(dest, offset) {
+        setInt32.call(dest, offset + 0, 0, true);
+        setInt32.call(dest, offset + 4, 0, true);
+      },
+      16: function(dest, offset) {
+        setInt32.call(dest, offset + 0, 0, true);
+        setInt32.call(dest, offset + 4, 0, true);
+        setInt32.call(dest, offset + 8, 0, true);
+        setInt32.call(dest, offset + 12, 0, true);
+      },
+      any: function(dest, offset) {
+        let i = offset, len = dest.byteLength;
+        while (i + 4 <= len) {
+          setInt32.call(dest, i, 0, true);
+          i += 4;
+        }
+        while (i + 1 <= len) {
+          setInt8.call(dest, i, 0);
+          i++;
+        }
+      },
+    };
+  }
 });
-
-export function getCopyFunction(size, multiple = false) {
-  if (size !== undefined) {
-    if (!multiple) {
-      const copier = copiers[size];
-      if (copier) {
-        return copier;
-      }
-    }
-    if (!(size & 0x03)) return copy4x;
-  }
-  return copy;
-}
-
-const copiers = {
-  1: copy1,
-  2: copy2,
-  4: copy4,
-  8: copy8,
-  16: copy16,
-};
-
-function copy4x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-  }
-}
-
-function copy1(dest, src) {
-  dest.setInt8(0, src.getInt8(0));
-}
-
-function copy2(dest, src) {
-  dest.setInt16(0, src.getInt16(0, true), true);
-}
-
-function copy4(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-}
-
-function copy8(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-}
-
-function copy16(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-}
-
-export function getResetFunction(size) {
-  if (size !== undefined) {
-    const resetter = resetters[size];
-    if (resetter) {
-      return resetter;
-    }
-    if (!(size & 0x03)) return reset4x;
-  }
-  return reset;
-}
-
-const resetters = {
-  1: reset1,
-  2: reset2,
-  4: reset4,
-  8: reset8,
-  16: reset16,
-};
-
-function reset4x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 4) {
-    dest.setInt32(i, 0, true);
-  }
-}
-
-function reset1(dest, offset) {
-  dest.setInt8(offset, 0);
-}
-
-function reset2(dest, offset) {
-  dest.setInt16(offset, 0, true);
-}
-
-function reset4(dest, offset) {
-  dest.setInt32(offset, 0, true);
-}
-
-function reset8(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-}
-
-function reset16(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-  dest.setInt32(offset + 8, 0, true);
-  dest.setInt32(offset + 12, 0, true);
-}
-

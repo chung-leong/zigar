@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CONTEXT, FINALIZE, FIXED, MEMORY, PROMISE } from '../../src/symbols.js';
-import { CallContext, copy } from '../../src/utils.js';
+import { CallContext } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -29,6 +29,7 @@ describe('Feature: promise-callback', function() {
       const callback = env.createCallback(args, null, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
+      const copy = env.getCopyFunction();
       const Result = function(other) {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         if (other) {

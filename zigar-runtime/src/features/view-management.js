@@ -158,6 +158,18 @@ export default mixin({
       return this.obtainView(new ArrayBuffer(len), 0, len);
     },
   } : process.env.TARGET === 'node' ? {
+    imports: {
+      requireBufferFallback: null,
+      syncExternalBuffer: null,
+    },
+    needFallback: undefined,
+
+    usingBufferFallback() {
+      if (this.needFallback === undefined) {
+        this.needFallback = this.requireBufferFallback();
+      }
+      return this.needFallback;
+    },
     allocateRelocMemory(len, align) {
       // allocate extra memory for alignment purpose when align is larger than the default
       const extra = (align > defaultAlign && this.getBufferAddress) ? align : 0;
