@@ -364,8 +364,8 @@ napi_value free_external_memory(napi_env env,
 napi_value obtain_external_buffer(napi_env env,
                                   napi_callback_info info) {
     module_data* md;
-    size_t argc = 2;
-    napi_value args[2];
+    size_t argc = 3;
+    napi_value args[3];
     uintptr_t address;
     double len_float;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
@@ -387,7 +387,12 @@ napi_value obtain_external_buffer(napi_env env,
             if (napi_create_arraybuffer(env, len, &copy, &buffer) == napi_ok
              && napi_add_finalizer(env, buffer, NULL, finalize_external_buffer, md, NULL) == napi_ok) {
                 memcpy(copy, src, len);
-                break;
+                napi_value key = args[2];
+                napi_value value;
+                if (napi_create_uintptr(env, address, &value) == napi_ok
+                 && napi_set_property(env, buffer, key, value) == napi_ok) {
+                    break;
+                }
             } else {
                 // fall through
             }
@@ -632,6 +637,129 @@ napi_value finalize_async_call(napi_env env,
     return NULL;
 }
 
+#define MEMBER_TYPE_INT     2
+#define MEMBER_TYPE_UINT    3
+#define MEMBER_TYPE_FLOAT   4
+
+napi_value get_numeric_value(napi_env env,
+                             napi_callback_info info) {
+    module_data* md;
+    size_t argc = 3;
+    napi_value args[3];
+    uint32_t type;
+    uint32_t bits;
+    uintptr_t address;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
+     || napi_get_value_uint32(env, args[0], &type) != napi_ok) {
+        return throw_error(env, "Type must be a number");
+    } else if (napi_get_value_uint32(env, args[1], &bits) != napi_ok) {
+        return throw_error(env, "Bits must be a number");
+    } else if (napi_get_value_uintptr(env, args[2], &address) != napi_ok) {
+        return throw_error(env, "Address must be a number");
+    }
+    void* ptr = (void *) address;
+    napi_status status = napi_invalid_arg;
+    napi_value value;
+    switch (type) {
+        case MEMBER_TYPE_INT:
+            switch (bits) {
+                case 8: status = napi_create_int32(env, *((int8_t *) ptr), &value); break;
+                case 16: status = napi_create_int32(env, *((int16_t *) ptr), &value); break;
+                case 32: status = napi_create_int32(env, *((int32_t *) ptr), &value); break;
+                case 64: status = napi_create_bigint_int64(env, *((int64_t *) ptr), &value); break;
+            }
+            break;
+        case MEMBER_TYPE_UINT:
+            switch (bits) {
+                case 8: status = napi_create_uint32(env, *((uint8_t *) ptr), &value); break;
+                case 16: status = napi_create_uint32(env, *((uint16_t *) ptr), &value); break;
+                case 32: status = napi_create_uint32(env, *((uint32_t *) ptr), &value); break;
+                case 64: status = napi_create_bigint_uint64(env, *((uint64_t *) ptr), &value); break;
+            }
+            break;
+        case MEMBER_TYPE_FLOAT:
+            switch (bits) {
+                case 32: status = napi_create_double(env, *((float *) ptr), &value); break;
+                case 64: status = napi_create_double(env, *((double *) ptr), &value); break;
+            }
+            break;
+    }
+    return (status == napi_ok) ? value : throw_last_error(env);
+}
+
+napi_value set_numeric_value(napi_env env,
+                             napi_callback_info info) {
+    module_data* md;
+    size_t argc = 4;
+    napi_value args[4];
+    uint32_t type;
+    uint32_t bits;
+    uintptr_t address;
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
+     || napi_get_value_uint32(env, args[0], &type) != napi_ok) {
+        return throw_error(env, "Type must be a number");
+    } else if (napi_get_value_uint32(env, args[1], &bits) != napi_ok) {
+        return throw_error(env, "Bits must be a number");
+    } else if (napi_get_value_uintptr(env, args[2], &address) != napi_ok) {
+        return throw_error(env, "Address must be a number");
+    }
+    void* ptr = (void *) address;
+    napi_status status = napi_invalid_arg;
+    switch (type) {
+        case MEMBER_TYPE_INT:
+            if (bits == 64) {
+                int64_t value;
+                bool lossless;
+                status = napi_get_value_bigint_int64(env, args[3], &value, &lossless);
+                if (status == napi_ok) {
+                    *((int64_t *) ptr) = value;
+                }
+            } else {
+                int32_t value;
+                status = napi_get_value_int32(env, args[3], &value);
+                if (status == napi_ok) {
+                    switch (bits) {
+                        case 8: *((int8_t *) ptr) = value; break;
+                        case 16: *((int16_t *) ptr) = value; break;
+                        case 32: *((int32_t *) ptr) = value; break;
+                    }
+                }
+            }
+            break;
+        case MEMBER_TYPE_UINT:
+            if (bits == 64) {
+                uint64_t value;
+                bool lossless;
+                status = napi_get_value_bigint_uint64(env, args[3], &value, &lossless);
+                if (status == napi_ok) {
+                    *((uint64_t *) ptr) = value;
+                }
+            } else {
+                uint32_t value;
+                status = napi_get_value_uint32(env, args[3], &value);
+                if (status == napi_ok) {
+                    switch (bits) {
+                        case 8: *((uint8_t *) ptr) = value; break;
+                        case 16: *((uint16_t *) ptr) = value; break;
+                        case 32: *((uint32_t *) ptr) = value; break;
+                    }
+                }
+            }
+            break;
+        case MEMBER_TYPE_FLOAT:
+            double value;
+            status = napi_get_value_double(env, args[3], &value);
+            if (status == napi_ok) {
+                switch (bits) {
+                    case 32: *((float *) ptr) = value; break;
+                    case 64: *((double *) ptr) = value; break;
+                }
+            }
+            break;
+    }
+    return (status == napi_ok) ? NULL : throw_last_error(env);
+}
+
 result perform_js_action(module_data* md,
                          js_action* action) {
     napi_env env = md->env;
@@ -712,6 +840,8 @@ struct {
     { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
     { "finalizeAsyncCall", finalize_async_call },
+    { "getNumericValue", get_numeric_value },
+    { "setNumericValue", set_numeric_value },
 };
 
 #include <stdio.h>

@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
-import { ALIGN, CACHE, COPY, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { ALIGN, CACHE, COPY, FALLBACK, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
   usizeMin
@@ -330,7 +330,7 @@ export default mixin({
       return shadowDV;
     },
     obtainExternView(address, len) {
-      const buffer = this.obtainExternBuffer(address, len);
+      const buffer = this.obtainExternBuffer(address, len, FALLBACK);
       buffer[FIXED] = { address, len };
       return this.obtainView(buffer, 0, len);
     },

@@ -1,6 +1,7 @@
 import { memberNames, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { defineProperty, defineValue } from '../utils.js';
+import { FALLBACK } from '../symbols.js';
+import { defineProperty, defineValue, usize } from '../utils.js';
 
 // handle retrieval of accessors
 
@@ -29,6 +30,39 @@ export default mixin({
     const accessorName = access + names.join('');
     // see if it's a built-in method of DataView
     let accessor = DataView.prototype[accessorName];
+    if (process.env.TARGET === 'node' && process.versions.electron) {
+      if (accessor) {
+        const thisEnv = this;
+        const normal = accessor;
+        const getAddress = function(offset) {
+          const { buffer, byteOffset, byteLength } = this;
+          const base = buffer[FALLBACK];
+          if (base) {
+            if (offset < 0 || (offset + bitSize / 8) > byteLength) {
+              throw new RangeError('Offset is outside the bounds of the DataView');
+            }
+            return base + usize(byteOffset + offset);
+          }
+        };
+        accessor = (access === 'get')
+        ? function(offset, littleEndian) {
+            const address = getAddress.call(this, offset);
+            if (address !== undefined) {
+              return thisEnv.getNumericValue(type, bitSize, address);
+            } else {
+              return normal.call(this, offset, littleEndian);
+            }
+          }
+        : function(offset, value, littleEndian) {
+            const address = getAddress.call(this, offset);
+            if (address !== undefined) {
+              return thisEnv.setNumericValue(type, bitSize, address, value);
+            } else {
+              return normal.call(this, offset, value, littleEndian);
+            }
+          };
+      }
+    }
     if (accessor) {
       return accessor;
     }
@@ -53,4 +87,10 @@ export default mixin({
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
+  ...(process.env.TARGET === 'node' ? {
+    imports: {
+      getNumericValue: null,
+      setNumericValue: null,
+    },
+  } : undefined),
 });
