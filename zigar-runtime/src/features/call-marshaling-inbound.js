@@ -79,9 +79,6 @@ export default mixin({
         };
         const onReturn = (value) => {
           argStruct.retval = value
-          if (hasPointers) {
-            this.updatePointerAddresses(null, argStruct);
-          }
         };
         try {
           const retval = fn(...args);

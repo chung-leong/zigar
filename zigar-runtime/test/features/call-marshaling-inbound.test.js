@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, CallResult, MemberFlag, MemberType, StructureFlag, StructureType,
+  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -50,6 +50,15 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(thunk2).to.not.equal(thunk1);
       expect(thunk3).to.equal(thunk1);
     })
+    it('should throw when it is unable to create thunk', function() {
+      const jsThunkConstructor = {
+        [MEMORY]: new DataView(new ArrayBuffer(0))
+      };
+      jsThunkConstructor[MEMORY][FIXED] = { address: usize(0x8888) };
+      const env = new Env();
+      env.createJsThunk = () => 0;
+      expect(() => env.getFunctionThunk(() => {}, jsThunkConstructor)).to.throw(Error);
+    });
   })
   describe('createInboundCaller', function() {
     it('should create a caller for invoking a JavaScript function from Zig', async function() {
@@ -107,13 +116,199 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       const self = env.createInboundCaller(fn, ArgStruct)
       expect(self).to.be.a('function');
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const argStruct = new ArgStruct([ 123, 456 ]);
       const binary = env.jsFunctionCallerMap.get(1);
       const [ line ] = await capture(() => {
         expect(() => binary(argStruct[MEMORY])).to.not.throw();
       });
       expect(line).to.equal('123 456');
       expect(argStruct.retval).to.equal(123 + 456);
+    })
+    it('should create a caller that updates pointers in arguments', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'i32',
+        byteSize: 4,
+      })
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32 = env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        name: '*i32',
+        byteSize: 8,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Hello',
+        byteSize: ptrStructure.byteSize * 2,
+        length: 1,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: ptrStructure.byteSize * 8,
+        bitOffset: 0,
+        byteSize: ptrStructure.byteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: ptrStructure.byteSize * 8,
+        bitOffset: ptrStructure.byteSize * 8,
+        byteSize: ptrStructure.byteSize,
+        slot: 1,
+        structure: ptrStructure,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      const fn = arg => arg;
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const int32 = new Int32(123);
+      const argStruct = new ArgStruct([ int32 ]);
+      const binary = env.jsFunctionCallerMap.get(1);
+      expect(() => binary(argStruct[MEMORY])).to.not.throw();
+    })
+    it('should create a caller that accept error union as argument', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        name: 'i64',
+        byteSize: 8,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: {},
+      });
+      const Int64 = env.defineStructure(intStructure);
+      const errorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        name: 'MyError',
+        byteSize: 2,
+      });
+      env.attachMember(errorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+        structure: errorStructure,
+      });
+      const MyError = env.defineStructure(errorStructure);
+      env.attachMember(errorStructure, {
+        name: 'UnableToRetrieveMemoryLocation',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
+        slot: 0,
+        structure: errorStructure,
+      }, true);
+      env.attachMember(errorStructure, {
+        name: 'UnableToCreateObject',
+        type: MemberType.Object,
+        flags: MemberFlag.IsReadOnly,
+        slot: 1,
+        structure: errorStructure,
+      }, true);
+      env.attachTemplate(errorStructure, {
+        [SLOTS]: {
+          0: MyError.call(ENVIRONMENT, errorData(5)),
+          1: MyError.call(ENVIRONMENT, errorData(8)),
+        }
+      }, true);
+      env.endStructure(errorStructure);
+      // console.log(MyError[CLASS]);
+      const euStructure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        flags: StructureFlag.HasValue,
+        name: '!i64',
+        byteSize: 10,
+      });
+      env.attachMember(euStructure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        structure: intStructure,
+      });
+      env.attachMember(euStructure, {
+        name: 'error',
+        type: MemberType.Uint,
+        bitOffset: 64,
+        bitSize: 16,
+        byteSize: 2,
+        structure: errorStructure,
+      });
+      const ErrorUnion = env.defineStructure(euStructure);
+      env.endStructure(euStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'Hello',
+        byteSize: 18,
+        length: 1,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: intStructure,
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 80,
+        bitOffset: 64,
+        byteSize: 10,
+        structure: euStructure,
+        slot: 0,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      let error;
+      const fn = (arg) => {
+        if (arg instanceof Error) {
+          error = arg;
+          return 0n;
+        } else {
+          return 1234n;
+        }
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      const argStruct1 = new ArgStruct([ 46n ]);
+      expect(() => binary(argStruct1[MEMORY])).to.not.throw();
+      expect(argStruct1.retval).to.equal(1234n);
+      const argStruct2 = new ArgStruct([ MyError.UnableToCreateObject ]);
+      expect(() => binary(argStruct2[MEMORY])).to.not.throw();
+      expect(argStruct2.retval).to.equal(0n);
+      expect(error).to.equal(MyError.UnableToCreateObject);
     })
   })
   describe('runFunction', function() {
