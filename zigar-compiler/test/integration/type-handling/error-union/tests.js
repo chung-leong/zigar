@@ -169,9 +169,9 @@ export function addTests(importModule, options) {
       expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('error.GoldfishDied');
-      module.error_union = FileError.corrupted;
+      module.error_union = FileError.Corrupted;
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('error.corrupted');
+      expect(after2).to.equal('error.Corrupted');
     })
     it('should handle error union in vector', async function() {
       this.timeout(300000);
