@@ -166,7 +166,7 @@ export default mixin({
 
     usingBufferFallback() {
       if (this.needFallback === undefined) {
-        this.needFallback = this.requireBufferFallback();
+        this.needFallback = this.requireBufferFallback?.();
       }
       return this.needFallback;
     },

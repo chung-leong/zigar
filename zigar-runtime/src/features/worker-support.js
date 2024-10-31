@@ -35,6 +35,7 @@ export default mixin({
       };
       const code = getWorkerCode();
       const evtName = 'message';
+      /* c8 ignore start */
       if (typeof(Worker) === 'function' || process.env.COMPAT !== 'node') {
         // web worker
         const url = new URL('data:,' + encodeURIComponent(code));
@@ -44,7 +45,9 @@ export default mixin({
         worker.detach = () => worker.removeEventListener(evtName, listener);
         worker.postMessage(workerData);
         this.workers.push(worker);
-      } else if (process.env.COMPAT === 'node') {
+      }
+      /* c8 ignore end */
+      else if (process.env.COMPAT === 'node') {
         // Node.js worker-thread
         import('worker_threads').then(({ Worker }) => {
           const worker = new Worker(code, { workerData, eval: true });
@@ -71,6 +74,7 @@ function getWorkerCode() {
   return s.slice(si, ei);
 }
 
+/* c8 ignore start */
 function workerMain() {
   let postMessage;
 
@@ -131,3 +135,4 @@ function workerMain() {
     }
   }
 }
+/* c8 ignore end */

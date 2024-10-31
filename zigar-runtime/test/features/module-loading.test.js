@@ -40,16 +40,15 @@ describe('Feature: module-loading', function() {
     })
   })
   if (process.env.TARGET === 'wasm') {
-    skip.
     describe('initialize', function() {
       it('should accept a WASI object', async function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         env.loadModule(buffer, {
-          memoryInitial: 128,
+          memoryInitial: 257,
           memoryMax: undefined,
-          tableInitial: 18,
+          tableInitial: 320,
           multithreaded: false,
         });
         const wasi = new WASI({
@@ -67,9 +66,9 @@ describe('Feature: module-loading', function() {
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         await env.instantiateWebAssembly(buffer, {
-          memoryInitial: 128,
+          memoryInitial: 257,
           memoryMax: undefined,
-          tableInitial: 18,
+          tableInitial: 320,
           multithreaded: false,
         });
         const wasi = new WASI({
@@ -380,6 +379,10 @@ describe('Feature: module-loading', function() {
           obtainExternBuffer: () => {},
           loadModule: () => {},
           getMemoryOffset: () => {},
+          getNumericValue: () => {},
+          setNumericValue: () => {},
+          requireBufferFallback: () => {},
+          syncExternalBuffer: () => {},
         };
         env.importFunctions(exports);
         expect(env.allocateExternMemory).to.be.a('function');

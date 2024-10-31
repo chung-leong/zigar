@@ -1,4 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-DEV=1 TARGET=wasm BITS=32 MIXIN=track npx mocha --no-warnings '**/*.test.js' -- "$@" || true
+DEV=1 TARGET=wasm BITS=32 MIXIN=track COMPAT=node npx mocha --no-warnings '**/*.test.js' -- "$@" || true
 DEV=1 TARGET=node BITS=64 MIXIN=track npx mocha --no-warnings '**/*.test.js' -- "$@"

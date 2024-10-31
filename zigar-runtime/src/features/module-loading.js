@@ -131,7 +131,7 @@ export default mixin({
         multithreaded,
       } = this.options = options;
       const res = await source;
-      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
       const executable = this.executable = await f(res);
@@ -142,11 +142,11 @@ export default mixin({
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
-            env[name] = functions[name] ?? empty;
+            env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi' && name === 'thread-spawn') {
-            wasi[name] = this.getThreadHandler?.() ?? empty;
+            wasi[name] = this.getThreadHandler?.() ?? /* c8 ignore next */ empty;
           }
         }
       }
@@ -169,7 +169,16 @@ export default mixin({
         const { exports } = instance;
         this.importFunctions(exports);
         this.trackInstance(instance);
-        this.customWASI?.initialize?.(instance);
+        if (this.customWASI) {
+          // use a proxy to attach the memory object to the list of exports
+          const exportsPlusMemory = { ...exports, memory: this.memory };
+          const instanceProxy = new Proxy(instance, {
+            get(inst, name) {
+              return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
+            }
+          })
+          this.customWASI.initialize?.(instanceProxy);
+        }
         this.initialize();
       })();
     },
@@ -206,7 +215,7 @@ export default mixin({
     },
     importFunctions(exports) {
       for (const [ name, alias ] of Object.entries(this.imports)) {
-        const fn = exports[alias ?? name];
+        const fn = exports[alias ?? /* c8 ignore next */ name];
         /* c8 ignore next 5 */
         if (process.env.DEV) {
           if (!fn) {
@@ -216,5 +225,6 @@ export default mixin({
         this[name] = fn;
       }
     },
+  /* c8 ignore next */
   } : undefined)
 });

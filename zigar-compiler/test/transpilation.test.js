@@ -45,8 +45,9 @@ describe('Transpilation', function() {
     it('should transpile zig source code accessing the file system', async function() {
       this.timeout(600000);
       const path = getSamplePath('read-file');
+      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
       const options = {
-        optimize: 'ReleaseSmall',
+        optimize: 'Debug',
         embedWASM: false,
         wasmLoader: saveWASM,
       };
@@ -114,6 +115,19 @@ describe('Transpilation', function() {
       };
       const { code } = await transpile(path, options);
       expect(code).to.contain('"call"');
+    })
+    it('should transpile zig source code spawning thread', async function() {
+      this.timeout(600000);
+      const path = getSamplePath('thread');
+      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
+      const options = {
+        optimize: 'Debug',
+        embedWASM: false,
+        wasmLoader: saveWASM,
+        multithreaded: true,
+      };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"spawn"');
     })
   })
 })
