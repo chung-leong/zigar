@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { decodeText } from '../utils.js';
+import { decodeText, empty } from '../utils.js';
 
 export default mixin({
   released: false,
@@ -138,7 +138,6 @@ export default mixin({
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
       const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {

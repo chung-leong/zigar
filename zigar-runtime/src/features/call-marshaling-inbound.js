@@ -172,6 +172,7 @@ export default mixin({
       destroyJsThunk: null,
       finalizeAsyncCall: null,
     },
+  /* c8 ignore next */
   } : undefined),
 });
 

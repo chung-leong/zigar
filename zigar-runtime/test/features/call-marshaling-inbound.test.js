@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import {
+  Action,
   ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
@@ -310,6 +311,99 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(argStruct2.retval).to.equal(0n);
       expect(error).to.equal(MyError.UnableToCreateObject);
     })
+    it('should return error code when arg struct constructor throws', async function() {
+      const env = new Env();
+      const fn = () => {};
+      const ArgStruct = () => { throw new Error('Doh!') };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      let result;
+      const [ line ] = await captureError(() => {
+        result = binary({});
+      });
+      expect(line).to.equal('Error: Doh!');
+      expect(result).to.equal(CallResult.Failure);
+    })
+    it('should return function that calls the given function', function() {
+      const env = new Env();
+      const fn = (...args) => args;
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const result = self(1, 2, 3, 4);
+      expect(result).to.eql([ 1, 2, 3, 4 ]);
+    })
+    it('should set futex at the end of call', function() {
+      const env = new Env();
+      const fn = () => {};
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      env.finalizeAsyncCall = function(futexHandle, result) {
+        expect(futexHandle).to.equal(usize(0x1234));
+        expect(result).to.equal(CallResult.OK);
+      };
+      const result = binary(null, usize(0x1234));
+      expect(result).to.equal(CallResult.OK);
+    })
+  })
+  describe('performJsAction', function() {
+    it('should call runFunction', function() {
+      const env = new Env();
+      let called;
+      env.runFunction = function(id, dv, futexHandle) {
+        called = true;
+        return CallResult.OK;
+      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
+      const result = env.performJsAction(Action.Call, 100, usize(0x1234), 4);
+      expect(called).to.be.true;
+      expect(result).to.equal(CallResult.OK);
+    })
+    it('should call releaseFunction', function() {
+      const env = new Env();
+      let called;
+      env.releaseFunction = function(id) {
+        called = true;
+      };
+      env.performJsAction(Action.Release, 100);
+      expect(called).to.be.true;
+    })
+    if (process.env.TARGET === 'node') {
+      it('should call writeToConsole when function id is 0', function() {
+        const env = new Env();
+        let called;
+        let success = true;
+        env.writeToConsole = function(dv) {
+          called = true;
+          return success;
+        };
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+        env.finalizeAsyncCall = function(futexHandle, value) {
+          expect(futexHandle).to.equal(usize(0x4000));
+          expect(value).to.equal(success ? CallResult.OK : CallResult.Failure);
+        };
+        env.performJsAction(Action.Call, 0, usize(0x1234), 4, usize(0x4000));
+        expect(called).to.be.true;
+        success = false;
+        env.performJsAction(Action.Call, 0, usize(0x1234), 4, usize(0x4000));
+      })
+    }
   })
   describe('runFunction', function() {
     it('should run JavaScript function registered to function id', async function() {
@@ -438,67 +532,10 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(result).to.equal(CallResult.Failure);
       expect(line).to.contain('Boo!');
     })
-    it('should return failure code when JavaScript function throws', async function() {
+    it('should return failure code when function is not found', async function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Int32',
-        byteSize: 4,
-        flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const structure = env.beginStructure({
-        type: StructureType.ArgStruct,
-        name: 'Hello',
-        byteSize: 4 * 3,
-        length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
-      const fn = (arg1, arg2) => {
-        throw new Error('Boo!');
-      };
-      env.createInboundCaller(fn, ArgStruct)
-      const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
-      let result;
-      const [ line ] = await captureError(() => {
-        result = env.runFunction(funcId, argStruct[MEMORY]);
-      });
+      const result = env.runFunction(1234, null);
       expect(result).to.equal(CallResult.Failure);
-      expect(line).to.contain('Boo!');
     })
     it('should place error into error union when JavaScript function throws one from error set', async function() {
       const env = new Env();
@@ -938,6 +975,51 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(result).to.equal(CallResult.Deadlock);
     })
   })
+  describe('releaseFunction', function() {
+    it('should free resources associated with function id', function() {
+      const env = new Env();
+      const fn = () => {};
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const dv = new DataView(new ArrayBuffer(0));
+      dv[FIXED] = { address: usize(0x1234), len: 0 };
+      const controller = { [MEMORY]: dv };
+      env.createJsThunk = function() {
+        return usize(0x1000);
+      };
+      let called = true;
+      env.destroyJsThunk = function() {
+        called = true;
+        return 1;
+      };
+      const thunk = env.getFunctionThunk(fn, controller);
+      expect(env.jsFunctionThunkMap.size).to.equal(1);
+      expect(env.jsFunctionCallerMap.size).to.equal(1);
+      expect(env.jsFunctionControllerMap.size).to.equal(1);
+      env.releaseFunction(1);
+      expect(env.jsFunctionThunkMap.size).to.equal(0);
+      expect(env.jsFunctionCallerMap.size).to.equal(0);
+      expect(env.jsFunctionControllerMap.size).to.equal(0);
+      expect(called).to.be.true;
+    })
+  })
+  if (process.env.TARGET === 'wasm') {
+    describe('queueJsAction', function() {
+      it('should call performJsAction', function() {
+        const env = new Env();
+        let called = true;
+        env.performJsAction = function() {
+          called = true;
+        };
+        env.queueJsAction(Action.Call, 1, usize(0x1000), 4, usize(0x4000));
+        expect()
+      })
+    })
+  }
 })
 
 function errorData(index) {
