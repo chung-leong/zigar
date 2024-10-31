@@ -161,7 +161,7 @@ export function addTests(importModule, options) {
         allocateOptional,
       } = await importTest('allocate-slice-of-structs');
       const structs1 = allocate(10);
-      expect(structs1).to.be.a('[]allocate-slice-of-structs.StructA');
+      expect(structs1).to.be.a('[]StructA');
       expect(structs1).to.have.lengthOf(10);
       for (const [ index, struct ] of structs1.entries()) {
         const { vector1, vector2 } = struct;
@@ -175,7 +175,7 @@ export function addTests(importModule, options) {
         expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
       }
       const structs2 = allocateNoError(10);
-      expect(structs2).to.be.a('[]allocate-slice-of-structs.StructA');
+      expect(structs2).to.be.a('[]StructA');
       expect(structs2).to.have.lengthOf(10);
       for (const [ index, struct ] of structs2.entries()) {
         const { vector1, vector2 } = struct;
@@ -189,7 +189,7 @@ export function addTests(importModule, options) {
         expect(vector2[3]).to.equal(Math.PI * 1.00 / (index + 1));
       }
       const structs3 = allocateOptional(10);
-      expect(structs3).to.be.a('[]allocate-slice-of-structs.StructA');
+      expect(structs3).to.be.a('[]StructA');
       expect(structs3).to.have.lengthOf(10);
       for (const [ index, struct ] of structs3.entries()) {
         const { vector1, vector2 } = struct;
