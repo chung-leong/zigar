@@ -438,6 +438,7 @@ describe('Feature: memory-mapping', function() {
       dv[FIXED] = { address: 0x1000, len: 8, free: () => called = true };
       env.releaseFixedView(dv);
       expect(called).to.be.true;
+      expect(dv[FIXED].address).to.equal(usize(-1));
     })
     it('should remove view from empty buffer map', function() {
       const env = new Env();

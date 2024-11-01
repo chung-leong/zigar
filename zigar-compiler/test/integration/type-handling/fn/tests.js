@@ -61,7 +61,7 @@ export function addTests(importModule, options) {
       expect(dingo).to.be.true;
       // f1 is freed by call1()
       expect(() => call1(f1)).to.throw(TypeError)
-        .with.property('message').that.contains('Null pointer');
+        .with.property('message').that.contains('freed');
       await captureError(() => {
         expect(() => call2(() => { throw new Error('Doh!')})).to.throw(Error)
           .with.property('message').that.equal('Unexpected');

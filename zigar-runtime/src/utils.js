@@ -159,6 +159,7 @@ export const alignForward = (process.env.BITS === '64')
 
 export const usizeMin = (process.env.BITS === '64') ? 0n : 0;
 export const usizeMax = (process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
+export const usizeInvalid = (process.env.BITS === '64') ? -1n : -1;
 
 export const usize = (process.env.BITS === '64')
 ? function(arg) {

@@ -2,7 +2,7 @@ import { MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, Struc
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
-  InvalidSliceLength, NoCastingToPointer, NullPointer, ReadOnlyTarget, throwReadOnly,
+  InvalidSliceLength, NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
   warnImplicitArrayCreation
 } from '../errors.js';
 import {
@@ -10,7 +10,7 @@ import {
   LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
   TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT
 } from '../symbols.js';
-import { always, defineProperties, defineValue, findElements, getProxy } from '../utils.js';
+import { always, defineProperties, defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 
 export default mixin({
   definePointer(structure, descriptors) {
@@ -216,7 +216,7 @@ export default mixin({
           } else {
             throw new ReadOnlyTarget(structure);
           }
-        }0
+        }
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
@@ -261,6 +261,10 @@ export default mixin({
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
         }
+      }
+      const fixed = arg?.[MEMORY]?.[FIXED];
+      if (fixed?.address === usizeInvalid) {
+        throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
     };

@@ -312,6 +312,7 @@ const alignForward = function(address, align) {
 
 const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
+const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
     return address === 0xaaaaaaaa;
@@ -386,30 +387,6 @@ function findObjects(structures, SLOTS) {
   return list;
 }
 
-function copy(dest, src) {
-  let i = 0, len = dest.byteLength;
-  while (i + 4 <= len) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-    i += 4;
-  }
-  while (i + 1 <= len) {
-    dest.setInt8(i, src.getInt8(i));
-    i++;
-  }
-}
-
-function reset(dest, offset, size) {
-  let i = offset, limit = offset + size;
-  while (i + 4 <= limit) {
-    dest.setInt32(i, 0, true);
-    i += 4;
-  }
-  while (i + 1 <= limit) {
-    dest.setInt8(i, 0);
-    i++;
-  }
-}
-
 function getSelf() {
   return this;
 }
@@ -429,6 +406,8 @@ function always() {
 function never() {
   return false;
 }
+
+function empty() {}
 
 class ObjectCache {
   map = new WeakMap();
@@ -1843,6 +1822,7 @@ var all$2 = mixin({
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
+  ...(undefined),
 });
 
 var bigInt = mixin({
@@ -2709,6 +2689,12 @@ class NullPointer extends TypeError {
   }
 }
 
+class PreviouslyFreed extends TypeError {
+  constructor(arg) {
+    super(`Object has been freed: ${arg.constructor.name}`);
+  }
+}
+
 class InvalidPointerTarget extends TypeError {
   constructor(structure, arg) {
     const { name } = structure;
@@ -2929,6 +2915,7 @@ var allocatorMethods = mixin({
     };
   },
   defineDupe() {
+    const copy = this.getCopyFunction();
     return {
       value(arg) {
         let src;
@@ -3123,9 +3110,6 @@ var callMarshalingInbound = mixin({
         };
         const onReturn = (value) => {
           argStruct.retval = value;
-          if (hasPointers) {
-            this.updatePointerAddresses(null, argStruct);
-          }
         };
         try {
           const retval = fn(...args);
@@ -3237,13 +3221,12 @@ var callMarshalingOutbound = mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg;
+      let arg, callback, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
           // where a function uses multiple allocators
-          allocatorCount++;
-          const allocator = (allocatorCount === 1)
+          const allocator = (++allocatorCount === 1)
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
@@ -3251,11 +3234,17 @@ var callMarshalingOutbound = mixin({
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          arg = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          if (!callback) {
+            callback = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          }
+          arg = callback;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
+          if (!signal) {
+            signal = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
+          }
+          arg = signal;
         }
       }
       if (arg === undefined) {
@@ -3335,13 +3324,16 @@ var callMarshalingOutbound = mixin({
         }
       }
     }
-    /* c8 ignore next */
+  /* c8 ignore next */
   } ),
 });
 
 var dataCopying = mixin({
+  copiers: null,
+  resetters: null,
+
   defineCopier(size, multiple) {
-    const copy = getCopyFunction(size, multiple);
+    const copy = this.getCopyFunction(size, multiple);
     return {
       value(target) {
         {
@@ -3355,7 +3347,7 @@ var dataCopying = mixin({
     };
   },
   defineResetter(offset, size) {
-    const reset = getResetFunction(size);
+    const reset = this.getResetFunction(size);
     return {
       value() {
         {
@@ -3366,108 +3358,108 @@ var dataCopying = mixin({
       }
     };
   },
-  getCopyFunction,
+  getCopyFunction(size, multiple = false) {
+    if (!this.copiers) {
+      this.copiers = this.defineCopiers();
+    }
+    const f = !multiple ? this.copiers[size] : undefined;
+    return f ?? this.copiers.any;
+  },
+  getResetFunction(size) {
+    if (!this.resetters) {
+      this.resetters = this.defineResetters();
+    }
+    return this.resetters[size] ?? this.resetters.any;
+  },
+  defineCopiers() {
+    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
+    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
+    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
+    const getInt8 = this.getAccessor('get', int8);
+    const setInt8 = this.getAccessor('set', int8);
+    const getInt16 = this.getAccessor('get', int16);
+    const setInt16 = this.getAccessor('set', int16);
+    const getInt32 = this.getAccessor('get', int32);
+    const setInt32 = this.getAccessor('set', int32);
+
+    return {
+      0: empty,
+      1: function(dest, src) {
+        setInt8.call(dest, 0, getInt8.call(src, 0));
+      },
+      2: function(dest, src) {
+        setInt16.call(dest, 0, getInt16.call(src, 0, true), true);
+
+      },
+      4: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+      },
+      8: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
+      },
+      16: function(dest, src) {
+        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
+        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
+        setInt32.call(dest, 8, getInt32.call(src, 8, true), true);
+        setInt32.call(dest, 12, getInt32.call(src, 12, true), true);
+      },
+      'any': function(dest, src) {
+        let i = 0, len = dest.byteLength;
+        while (i + 4 <= len) {
+          setInt32.call(dest, i, getInt32.call(src, i, true), true);
+          i += 4;
+        }
+        while (i + 1 <= len) {
+          setInt8.call(dest, i, getInt8.call(src, i));
+          i++;
+        }
+      },
+    }
+  },
+  defineResetters() {
+    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
+    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
+    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
+    const setInt8 = this.getAccessor('set', int8);
+    const setInt16 = this.getAccessor('set', int16);
+    const setInt32 = this.getAccessor('set', int32);
+    return {
+      0: empty,
+      1: function(dest, offset) {
+        setInt8.call(dest, offset, 0);
+      },
+      2: function(dest, offset) {
+        setInt16.call(dest, offset, 0, true);
+
+      },
+      4: function(dest, offset) {
+        setInt32.call(dest, offset, 0, true);
+      },
+      8: function(dest, offset) {
+        setInt32.call(dest, offset + 0, 0, true);
+        setInt32.call(dest, offset + 4, 0, true);
+      },
+      16: function(dest, offset) {
+        setInt32.call(dest, offset + 0, 0, true);
+        setInt32.call(dest, offset + 4, 0, true);
+        setInt32.call(dest, offset + 8, 0, true);
+        setInt32.call(dest, offset + 12, 0, true);
+      },
+      any: function(dest, offset, len) {
+        let i = offset;
+        while (i + 4 <= len) {
+          setInt32.call(dest, i, 0, true);
+          i += 4;
+        }
+        while (i + 1 <= len) {
+          setInt8.call(dest, i, 0);
+          i++;
+        }
+      },
+    };
+  }
 });
-
-function getCopyFunction(size, multiple = false) {
-  if (size !== undefined) {
-    if (!multiple) {
-      const copier = copiers[size];
-      if (copier) {
-        return copier;
-      }
-    }
-    if (!(size & 0x03)) return copy4x;
-  }
-  return copy;
-}
-
-const copiers = {
-  1: copy1,
-  2: copy2,
-  4: copy4,
-  8: copy8,
-  16: copy16,
-};
-
-function copy4x(dest, src) {
-  for (let i = 0, len = dest.byteLength; i < len; i += 4) {
-    dest.setInt32(i, src.getInt32(i, true), true);
-  }
-}
-
-function copy1(dest, src) {
-  dest.setInt8(0, src.getInt8(0));
-}
-
-function copy2(dest, src) {
-  dest.setInt16(0, src.getInt16(0, true), true);
-}
-
-function copy4(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-}
-
-function copy8(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-}
-
-function copy16(dest, src) {
-  dest.setInt32(0, src.getInt32(0, true), true);
-  dest.setInt32(4, src.getInt32(4, true), true);
-  dest.setInt32(8, src.getInt32(8, true), true);
-  dest.setInt32(12, src.getInt32(12, true), true);
-}
-
-function getResetFunction(size) {
-  if (size !== undefined) {
-    const resetter = resetters[size];
-    if (resetter) {
-      return resetter;
-    }
-    if (!(size & 0x03)) return reset4x;
-  }
-  return reset;
-}
-
-const resetters = {
-  1: reset1,
-  2: reset2,
-  4: reset4,
-  8: reset8,
-  16: reset16,
-};
-
-function reset4x(dest, offset, size) {
-  for (let i = offset, limit = offset + size; i < limit; i += 4) {
-    dest.setInt32(i, 0, true);
-  }
-}
-
-function reset1(dest, offset) {
-  dest.setInt8(offset, 0);
-}
-
-function reset2(dest, offset) {
-  dest.setInt16(offset, 0, true);
-}
-
-function reset4(dest, offset) {
-  dest.setInt32(offset, 0, true);
-}
-
-function reset8(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-}
-
-function reset16(dest, offset) {
-  dest.setInt32(offset + 0, 0, true);
-  dest.setInt32(offset + 4, 0, true);
-  dest.setInt32(offset + 8, 0, true);
-  dest.setInt32(offset + 12, 0, true);
-}
 
 var defaultAllocator = mixin({
   nextContextId: usizeMax,
@@ -3789,11 +3781,11 @@ var memoryMapping = mixin({
   releaseFixedView(dv) {
     const fixed = dv[FIXED];
     const address = fixed?.address;
-    if (address) {
+    if (address && address !== usizeInvalid) {
       // try to free memory through the allocator from which it came
       fixed?.free?.();
-      // set address to zero to avoid double free
-      fixed.address = usizeMin;
+      // set address to invalid to avoid double free
+      fixed.address = usizeInvalid;
       if (!fixed.len) {
         // remove view from empty buffer map
         this.emptyBufferMap.delete(address);
@@ -3803,9 +3795,6 @@ var memoryMapping = mixin({
   getViewAddress(dv) {
     const fixed = dv[FIXED];
     if (fixed) {
-      if (fixed.freed) {
-        throw new NullPointer();
-      }
       return fixed.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
@@ -3895,9 +3884,6 @@ var moduleLoading = mixin({
         this[name] = throwError;
       }
     }
-  },
-  isReleased() {
-    return this.released;
   },
   abandonModule() {
     if (!this.abandoned) {
@@ -4005,22 +3991,21 @@ var moduleLoading = mixin({
         multithreaded,
       } = this.options = options;
       const res = await source;
-      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
       const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
-            env[name] = functions[name] ?? empty;
+            env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi' && name === 'thread-spawn') {
-            wasi[name] = this.getThreadHandler?.() ?? empty;
+            wasi[name] = this.getThreadHandler?.() ?? /* c8 ignore next */ empty;
           }
         }
       }
@@ -4043,9 +4028,17 @@ var moduleLoading = mixin({
         const { exports } = instance;
         this.importFunctions(exports);
         this.trackInstance(instance);
-        this.customWASI?.initialize?.(instance);
+        if (this.customWASI) {
+          // use a proxy to attach the memory object to the list of exports
+          const exportsPlusMemory = { ...exports, memory: this.memory };
+          const instanceProxy = new Proxy(instance, {
+            get(inst, name) {
+              return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
+            }
+          });
+          this.customWASI.initialize?.(instanceProxy);
+        }
         this.initialize();
-        // this.runtimeSafety = ;
       })();
     },
     displayPanic(address, len) {
@@ -4510,7 +4503,7 @@ var structureAcquisition = mixin({
     const FactoryArg = function(options) {
       const {
         omitFunctions = false,
-        omitVariables = isElectron(),
+        omitVariables = false,
       } = options;
       const dv = new DataView(new ArrayBuffer(4));
       let flags = 0;
@@ -4645,12 +4638,6 @@ var structureAcquisition = mixin({
   } ),
 });
 
-function isElectron() {
-  return typeof(process) === 'object'
-      && typeof(process?.versions) === 'object'
-      && !!process.versions?.electron;
-}
-
 var thunkAllocation = mixin({
   ...({
     exports: {
@@ -4669,15 +4656,12 @@ var thunkAllocation = mixin({
       const w = WebAssembly;
       const env = {}, wasi = {}, wasiPreview = {};
       const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      const empty = function() {};
       for (const { module, name, kind } of w.Module.imports(this.executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = empty;
-          } else if (module === 'wasi') {
-            wasi[name] = empty;
           }
         }
       }
@@ -4734,22 +4718,19 @@ var thunkAllocation = mixin({
     },
     freeJsThunk(controllerAddress, thunkAddress) {
       let fnId = 0;
-      try {
-        const thunkObject = this.table.get(thunkAddress);
-        this.table.set(thunkAddress, null);
-        const entry = this.thunkMap.get(thunkObject);
-        if (entry) {
-          const { source, sourceAddress } = entry;
-          fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
-          if (--source.thunkCount === 0) {
-            const index = this.thunkSources.indexOf(source);
-            if (index !== -1) {
-              this.thunkSources.splice(index, 1);
-            }
+      const thunkObject = this.table.get(thunkAddress);
+      this.table.set(thunkAddress, null);
+      const entry = this.thunkMap.get(thunkObject);
+      if (entry) {
+        const { source, sourceAddress } = entry;
+        fnId = source.destroyJsThunk(controllerAddress, sourceAddress);
+        if (--source.thunkCount === 0) {
+          const index = this.thunkSources.indexOf(source);
+          if (index !== -1) {
+            this.thunkSources.splice(index, 1);
           }
-          this.thunkMap.delete(thunkObject);
         }
-      } catch (err) {
+        this.thunkMap.delete(thunkObject);
       }
       return fnId;
     },
@@ -5452,7 +5433,8 @@ var specialProps = mixin({
         {
           this[RESTORE]?.();
         }
-        return this[MEMORY];
+        const dv = this[MEMORY];
+        return dv;
       },
       set(dv, allocator) {
         checkDataView(dv);
@@ -5520,6 +5502,7 @@ var specialProps = mixin({
     }
     return descriptors;
   },
+  ...(undefined)
 });
 
 function isTypedArray(arg, TypedArray) {
@@ -7062,7 +7045,8 @@ var pointer = mixin({
           } else {
             throw new ReadOnlyTarget(structure);
           }
-        }      } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
+        }
+      } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
@@ -7106,6 +7090,10 @@ var pointer = mixin({
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
         }
+      }
+      const fixed = arg?.[MEMORY]?.[FIXED];
+      if (fixed?.address === usizeInvalid) {
+        throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
     };

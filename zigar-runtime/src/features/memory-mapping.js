@@ -3,7 +3,7 @@ import { AlignmentConflict } from '../errors.js';
 import { ALIGN, CACHE, COPY, FALLBACK, FIXED, MEMORY, RESTORE } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
-  usizeMin
+  usizeInvalid
 } from '../utils.js';
 
 export default mixin({
@@ -217,11 +217,11 @@ export default mixin({
   releaseFixedView(dv) {
     const fixed = dv[FIXED];
     const address = fixed?.address;
-    if (address) {
+    if (address && address !== usizeInvalid) {
       // try to free memory through the allocator from which it came
       fixed?.free?.();
-      // set address to zero to avoid double free
-      fixed.address = usizeMin;
+      // set address to invalid to avoid double free
+      fixed.address = usizeInvalid;
       if (!fixed.len) {
         // remove view from empty buffer map
         this.emptyBufferMap.delete(address);

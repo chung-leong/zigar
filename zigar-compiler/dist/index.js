@@ -83,6 +83,7 @@ const SENTINEL = Symbol('sentinel');
 
 (process.env.BITS === '64') ? 0n : 0;
 (process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
+(process.env.BITS === '64') ? -1n : -1;
 
 (process.env.BITS === '64')
 ? function(arg) {

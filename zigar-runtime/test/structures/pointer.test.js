@@ -3926,6 +3926,46 @@ describe('Structure: pointer', function() {
       intCPointer2.$ = null;
       expect(getUsize.call(dv, 0, true)).to.equal(usize(0));
     })
+    it('should throw when given a previously freed object', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        name: 'i32',
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32 = env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        name: '*i32',
+        byteSize: 8,
+        hasPointer: true,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      const Int32Ptr = env.defineStructure(structure);
+      env.endStructure(structure);
+      const dv = new DataView(new ArrayBuffer(4));
+      dv[FIXED] = { address: usize(-1), len: 4 };
+      const int32 = Int32(dv);
+      expect(() => new Int32Ptr(int32)).to.throw(TypeError)
+        .with.property('message').that.contains('freed').and.contains('i32');
+    })
   })
   it('should should when visitor specified is unrecognized or invalid', function() {
     const env = new Env();

@@ -310,6 +310,12 @@ export class NullPointer extends TypeError {
   }
 }
 
+export class PreviouslyFreed extends TypeError {
+  constructor(arg) {
+    super(`Object has been freed: ${arg.constructor.name}`);
+  }
+}
+
 export class InvalidPointerTarget extends TypeError {
   constructor(structure, arg) {
     const { name } = structure;

@@ -37,6 +37,7 @@ import {
   NullPointer,
   OutOfBound,
   Overflow,
+  PreviouslyFreed,
   TypeMismatch,
   UndefinedArgument,
   Unsupported,
@@ -567,6 +568,15 @@ describe('Error functions', function() {
       };
       const err = new Overflow(member, 1024);
       expect(err.message).to.contain('Int8');
+    })
+  })
+  describe('PreviouslyFreed', function() {
+    it('should have expected message', function() {
+      const Test = function() {};
+      const arg = new Test();
+      const err = new PreviouslyFreed(arg);
+      expect(err.message).to.contain('freed');
+      expect(err.message).to.contain('Test');
     })
   })
   describe('OutOfBound', function() {
