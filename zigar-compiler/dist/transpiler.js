@@ -8196,6 +8196,7 @@ function stripUnused(binary, options = {}) {
         for (const { opcode, operand } of fn.instructions) {
           switch (opcode) {
             case 0x10:    // function call
+            case 0x12:    // return call
             case 0xD2: {  // function reference
               useFunction(operand);
             } break;
@@ -8248,6 +8249,7 @@ function stripUnused(binary, options = {}) {
       for (const op of fn.instructions) {
         switch (op.opcode) {
           case 0x10:    // function call
+          case 0x12:    // return call
           case 0xD2: {  // function reference
             const target = functions[op.operand];
             op.operand = target.newIndex;
@@ -9059,8 +9061,11 @@ function createDecoder(reader) {
     0x0D: readOne,
     0x0E: () => [ readArray(readOne), readU32Leb128() ],
 
-    0x10: readU32Leb128,
+    0x10: readOne,
     0x11: readTwo,
+    0x12: readOne,
+    0x13: readTwo,
+
     0x1C: () => readArray(readU8),
 
     0x20: readOne,
@@ -9235,10 +9240,12 @@ function createEncoder(writer) {
     0x05: writeI32Leb128,
     0x0C: writeOne,
     0x0D: writeOne,
-    0x0E: (op) => [ writeArray(op[0], writeOne), writeU32Leb128(op[1]) ],
+    0x0E: (op) => [ writeArray(op[0], writeOne), writeOne(op[1]) ],
 
-    0x10: writeU32Leb128,
+    0x10: writeOne,
     0x11: writeTwo,
+    0x12: writeOne,
+    0x13: writeTwo,
     0x1C: (op) => writeArray(op, writeU8),
 
     0x20: writeOne,

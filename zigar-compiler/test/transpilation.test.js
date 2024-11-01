@@ -119,6 +119,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('thread');
       const options = {
         optimize: 'ReleaseSmall',
+        stripWASM: false, // getFactoryThunk() is needed by worker-support test cases
         embedWASM: false,
         wasmLoader: saveWASM,
         multithreaded: true,
