@@ -101,26 +101,18 @@ export default mixin({
       const imports = {};
       for (const [ name, { argType, returnType, alias } ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
-        /* c8 ignore next 5 */
-        if (process.env.DEV) {
-          if (!fn) {
-            throw new Error(`Unable to export function: ${name}`);
-          }
+        if (fn) {
+          imports[`_${name}`] = this.exportFunction(fn, argType, returnType, name);
         }
-        imports[`_${name}`] = this.exportFunction(fn, argType, returnType, name);
       }
       return imports;
     },
     importFunctions(exports) {
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
-        /* c8 ignore next 5 */
-        if (process.env.DEV) {
-          if (!fn) {
-            throw new Error(`Unable to import function: ${name}`);
-          }
+        if (fn) {
+          this[name] = this.importFunction(fn, argType, returnType);
         }
-        this[name] = this.importFunction(fn, argType, returnType);
       }
     },
     async instantiateWebAssembly(source, options) {

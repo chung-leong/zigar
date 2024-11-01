@@ -29,13 +29,12 @@ describe('Transpilation', function() {
       expect(code).to.be.a('string');
       expect(code).to.contain('integers');
     })
-    it('should transpile zig source code contain a method', async function() {
+    it('should transpile zig source code containing a method', async function() {
       this.timeout(600000);
       const path = getSamplePath('simple');
       const options = {
         optimize: 'ReleaseSmall',
         embedWASM: false,
-        stripWASM: false,
         wasmLoader: saveWASM,
       };
       const { code } = await transpile(path, options);
@@ -45,9 +44,8 @@ describe('Transpilation', function() {
     it('should transpile zig source code accessing the file system', async function() {
       this.timeout(600000);
       const path = getSamplePath('read-file');
-      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
       const options = {
-        optimize: 'Debug',
+        optimize: 'ReleaseSmall',
         embedWASM: false,
         wasmLoader: saveWASM,
       };
@@ -107,9 +105,9 @@ describe('Transpilation', function() {
     it('should transpile zig source code involving function pointer', async function() {
       this.timeout(600000);
       const path = getSamplePath('fn-pointer');
-      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
       const options = {
-        optimize: 'Debug',
+        optimize: 'ReleaseSmall',
+        stripWASM: false, // getFactoryThunk() is needed by thunk-allocation test cases
         embedWASM: false,
         wasmLoader: saveWASM,
       };
@@ -119,9 +117,8 @@ describe('Transpilation', function() {
     it('should transpile zig source code spawning thread', async function() {
       this.timeout(600000);
       const path = getSamplePath('thread');
-      /* TODO: set optimize back to ReleaseSmall once #436 is fixed */
       const options = {
-        optimize: 'Debug',
+        optimize: 'ReleaseSmall',
         embedWASM: false,
         wasmLoader: saveWASM,
         multithreaded: true,

@@ -285,12 +285,7 @@ describe('Feature: module-loading', function() {
         expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
         expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
       })
-      it('should throw when a function is missing', function() {
-        const env = new Env();
-        expect(() => env.importFunctions({})).to.throw(Error);
-      })
     })
-    skip.
     describe('instantiateWebAssembly', function() {
       it('should attempt to stream in a WASM instance', async function() {
         const env = new Env();
@@ -299,9 +294,9 @@ describe('Feature: module-loading', function() {
         };
         try {
           const wasm = await env.instantiateWebAssembly(response, {
-            memoryInitial: 128,
+            memoryInitial: 257,
             memoryMax: undefined,
-            tableInitial: 18,
+            tableInitial: 210,
             multithreaded: false,
           });
         } catch (err) {
@@ -312,24 +307,23 @@ describe('Feature: module-loading', function() {
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         const wasm = await env.instantiateWebAssembly(buffer, {
-          memoryInitial: 128,
+          memoryInitial: 257,
           memoryMax: undefined,
-          tableInitial: 18,
+          tableInitial: 210,
           multithreaded: false,
         });
       })
     })
-    skip.
     describe('loadModule', function() {
       it('should load a module', async function() {
         const env = new Env();
-        const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
+        const url = new URL('./wasm-samples/simple.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         expect(env.getFactoryThunk).to.be.undefined;
         await env.loadModule(buffer, {
-          memoryInitial: 128,
+          memoryInitial: 257,
           memoryMax: undefined,
-          tableInitial: 18,
+          tableInitial: 210,
           multithreaded: false,
         });
         expect(env.allocateExternMemory).to.be.a('function');

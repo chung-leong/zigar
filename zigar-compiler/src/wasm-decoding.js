@@ -184,6 +184,12 @@ export function stripUnused(binary, options = {}) {
     }
   }
 
+  // mark start function as being in-use
+  const startSection = getSection(SectionType.Start);
+  if (startSection) {
+    useFunction(startSection.funcidx);
+  }
+
   // assign new indices to functions
   const newFunctions = [];
   for (const fn of functions) {
@@ -220,8 +226,9 @@ export function stripUnused(binary, options = {}) {
   }
 
   // create new element section
-  const newElementSection = { type: SectionType.Element, segments: [] };
+  let newElementSection = null;
   if (elemSection) {
+    newElementSection = { type: SectionType.Element, segments: [] };
     for (const segment of elemSection.segments) {
       if (segment.indices) {
         const indices = segment.indices.map((index) => {
@@ -236,8 +243,9 @@ export function stripUnused(binary, options = {}) {
     }
   }
   // create new export section
-  const newExportSection = { type: SectionType.Export, exports: [] };
+  let newExportSection = null;
   if (exportSection) {
+    newExportSection = { type: SectionType.Export, exports: [] };
     for (const object of exportSection.exports) {
       if (object.type === ObjectType.Function) {
         const fn = functions[object.index];
@@ -252,11 +260,13 @@ export function stripUnused(binary, options = {}) {
     }
   }
   // create new import section
-  const newImportSection = { type: SectionType.Import, imports: [] };
+  let newImportSection = null;
   if (importSection) {
-    for (const [ index, object ] of importSection.imports.entries()) {
+    newImportSection = { type: SectionType.Import, imports: [] };
+    let fnIndex = 0;
+    for (const object of importSection.imports) {
       if (object.type === ObjectType.Function) {
-        const fn = functions[index];
+        const fn = functions[fnIndex++];
         if (fn.using) {
           newImportSection.imports.push(object);
         }
@@ -265,6 +275,12 @@ export function stripUnused(binary, options = {}) {
         newImportSection.imports.push(object);
       }
     }
+  }
+  // create new start section
+  let newStartSection = null;
+  if (startSection) {
+    const fn = functions[startSection.funcidx];
+    newStartSection = { type: SectionType.Start, funcidx: fn.newIndex };
   }
   // create new name section
   let newNameSection = null;
@@ -305,6 +321,9 @@ export function stripUnused(binary, options = {}) {
         break;
       case SectionType.Import:
         newSections.push(newImportSection);
+        break;
+      case SectionType.Start:
+        newSections.push(newStartSection);
         break;
       case SectionType.Custom:
         if (section.name === 'name' && newNameSection) {
@@ -457,6 +476,10 @@ export function parseBinary(binary) {
           }
         });
         return { type, segments };
+      }
+      case SectionType.Start: {
+        const funcidx = readU32Leb128()
+        return { type, funcidx };
       }
       default: {
         const data = readBytes(len);
@@ -642,6 +665,9 @@ export function repackBinary(module) {
               } break;
             }
           });
+        } break;
+        case SectionType.Start: {
+          writeU32Leb128(section.funcidx);
         } break;
         default: {
           writeBytes(section.data);
