@@ -1135,6 +1135,15 @@ function createDecoder(reader) {
           return op1;
       }
     },
+    0xFE: () => {
+      const op1 = readOne();
+      switch (op1) {
+        case 3:
+          return [ op1, readU8() ];
+        default:
+          return [ op1, readOne(), readOne() ];
+      }
+    },
   }
 
   function decodeNext() {
@@ -1263,8 +1272,11 @@ function createEncoder(writer) {
           writeMultiple(op);
         }
       } else {
-        return writeOne(op);
+        writeOne(op);
       }
+    },
+    0xFE: (op) => {
+      writeMultiple(op);
     },
   }
 
