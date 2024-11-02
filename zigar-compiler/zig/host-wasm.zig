@@ -4,6 +4,7 @@ const exporter = @import("exporter.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const types = @import("types.zig");
+const patch_wasm = @import("patch-wasm.zig");
 
 const Value = types.Value;
 const MemoryType = types.MemoryType;
@@ -135,12 +136,18 @@ const Futex = struct {
     handle: usize = undefined,
 };
 
-export fn finalizeAsyncCall(futex_handle: usize, value: u32) void {
+fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
     // make sure futex address is valid
     const ptr: *Futex = @ptrFromInt(futex_handle);
     if (ptr.handle == futex_handle) {
         ptr.value.store(value, .release);
-        wake(&ptr.value, 1);
+        patch_wasm.Futex.wake(&ptr.value, 1);
+    }
+}
+
+comptime {
+    if (!builtin.single_threaded) {
+        @export(finalizeAsyncCall, .{ .name = "finalizeAsyncCall", .linkage = .weak });
     }
 }
 
@@ -270,6 +277,7 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
+        if (comptime builtin.single_threaded) unreachable;
         if (!multithread) {
             return .failure_disabled;
         }
@@ -283,7 +291,7 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         }
         var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex_handle);
         if (result == .ok and is_waiting) {
-            wait(&futex.value, initial_value);
+            patch_wasm.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }
         return result;
@@ -298,6 +306,7 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     if (main_thread) {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {
+        if (comptime builtin.single_threaded) unreachable;
         if (!multithread) {
             return Error.MultithreadingNotEnabled;
         }
@@ -306,6 +315,9 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
 }
 
 pub fn setMultithread(state: bool) !void {
+    if (comptime builtin.single_threaded) {
+        return Error.MultithreadingNotEnabled;
+    }
     if (!main_thread) {
         return Error.NotInMainThread;
     }
@@ -410,67 +422,3 @@ fn clearBytes(bytes: [*]u8, len: usize) void {
 fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }
-
-// workaround for issue with std.Thread.Futex
-const atomic = std.atomic;
-
-pub fn wait(ptr: *const atomic.Value(u32), expect: u32) void {
-    @setCold(true);
-
-    Impl.wait(ptr, expect, null) catch |err| switch (err) {
-        error.Timeout => unreachable, // null timeout meant to wait forever
-    };
-}
-
-pub fn wake(ptr: *const atomic.Value(u32), max_waiters: u32) void {
-    @setCold(true);
-
-    // Avoid calling into the OS if there's nothing to wake up.
-    if (max_waiters == 0) {
-        return;
-    }
-
-    Impl.wake(ptr, max_waiters);
-}
-
-const Impl = struct {
-    fn wait(ptr: *const atomic.Value(u32), expect: u32, timeout: ?u64) error{Timeout}!void {
-        if (!comptime std.Target.wasm.featureSetHas(builtin.target.cpu.features, .atomics)) {
-            @compileError("WASI target missing cpu feature 'atomics'");
-        }
-        const to: i64 = if (timeout) |to| @intCast(to) else -1;
-        const result = asm volatile (
-            \\local.get %[ptr]
-            \\local.get %[expected]
-            \\local.get %[timeout]
-            \\memory.atomic.wait32 0
-            \\local.set %[ret]
-            : [ret] "=r" (-> u32),
-            : [ptr] "r" (&ptr.raw),
-              [expected] "r" (@as(i32, @bitCast(expect))),
-              [timeout] "r" (to),
-        );
-        switch (result) {
-            0 => {}, // ok
-            1 => {}, // expected =! loaded
-            2 => return error.Timeout,
-            else => unreachable,
-        }
-    }
-
-    fn wake(ptr: *const atomic.Value(u32), max_waiters: u32) void {
-        if (!comptime std.Target.wasm.featureSetHas(builtin.target.cpu.features, .atomics)) {
-            @compileError("WASI target missing cpu feature 'atomics'");
-        }
-        const woken_count = asm volatile (
-            \\local.get %[ptr]
-            \\local.get %[waiters]
-            \\memory.atomic.notify 0
-            \\local.set %[ret]
-            : [ret] "=r" (-> u32),
-            : [ptr] "r" (&ptr.raw),
-              [waiters] "r" (max_waiters),
-        );
-        _ = woken_count; // can be 0 when linker flag 'shared-memory' is not enabled
-    }
-};
