@@ -71,7 +71,6 @@ async function importModule(url, options) {
   } finally {
     await bundle.close();
   }
-  // console.log(jsPath);
   currentModule = await import(jsPath);
   return currentModule;
 }

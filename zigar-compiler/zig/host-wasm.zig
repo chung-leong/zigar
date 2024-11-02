@@ -140,7 +140,7 @@ export fn finalizeAsyncCall(futex_handle: usize, value: u32) void {
     const ptr: *Futex = @ptrFromInt(futex_handle);
     if (ptr.handle == futex_handle) {
         ptr.value.store(value, .release);
-        std.Thread.Futex.wake(&ptr.value, 1);
+        wake(&ptr.value, 1);
     }
 }
 
@@ -266,7 +266,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, wait: bool) ActionResult {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, is_waiting: bool) ActionResult {
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
@@ -276,14 +276,14 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
         var futex_handle: usize = 0;
-        if (wait) {
+        if (is_waiting) {
             futex.value = std.atomic.Value(u32).init(initial_value);
             futex.handle = @intFromPtr(&futex);
             futex_handle = futex.handle;
         }
         var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex_handle);
-        if (result == .ok and wait) {
-            std.Thread.Futex.wait(&futex.value, initial_value);
+        if (result == .ok and is_waiting) {
+            wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }
         return result;
@@ -410,3 +410,67 @@ fn clearBytes(bytes: [*]u8, len: usize) void {
 fn getPtrAlign(alignment: u16) u8 {
     return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }
+
+// workaround for issue with std.Thread.Futex
+const atomic = std.atomic;
+
+pub fn wait(ptr: *const atomic.Value(u32), expect: u32) void {
+    @setCold(true);
+
+    Impl.wait(ptr, expect, null) catch |err| switch (err) {
+        error.Timeout => unreachable, // null timeout meant to wait forever
+    };
+}
+
+pub fn wake(ptr: *const atomic.Value(u32), max_waiters: u32) void {
+    @setCold(true);
+
+    // Avoid calling into the OS if there's nothing to wake up.
+    if (max_waiters == 0) {
+        return;
+    }
+
+    Impl.wake(ptr, max_waiters);
+}
+
+const Impl = struct {
+    fn wait(ptr: *const atomic.Value(u32), expect: u32, timeout: ?u64) error{Timeout}!void {
+        if (!comptime std.Target.wasm.featureSetHas(builtin.target.cpu.features, .atomics)) {
+            @compileError("WASI target missing cpu feature 'atomics'");
+        }
+        const to: i64 = if (timeout) |to| @intCast(to) else -1;
+        const result = asm volatile (
+            \\local.get %[ptr]
+            \\local.get %[expected]
+            \\local.get %[timeout]
+            \\memory.atomic.wait32 0
+            \\local.set %[ret]
+            : [ret] "=r" (-> u32),
+            : [ptr] "r" (&ptr.raw),
+              [expected] "r" (@as(i32, @bitCast(expect))),
+              [timeout] "r" (to),
+        );
+        switch (result) {
+            0 => {}, // ok
+            1 => {}, // expected =! loaded
+            2 => return error.Timeout,
+            else => unreachable,
+        }
+    }
+
+    fn wake(ptr: *const atomic.Value(u32), max_waiters: u32) void {
+        if (!comptime std.Target.wasm.featureSetHas(builtin.target.cpu.features, .atomics)) {
+            @compileError("WASI target missing cpu feature 'atomics'");
+        }
+        const woken_count = asm volatile (
+            \\local.get %[ptr]
+            \\local.get %[waiters]
+            \\memory.atomic.notify 0
+            \\local.set %[ret]
+            : [ret] "=r" (-> u32),
+            : [ptr] "r" (&ptr.raw),
+              [waiters] "r" (max_waiters),
+        );
+        _ = woken_count; // can be 0 when linker flag 'shared-memory' is not enabled
+    }
+};

@@ -78,7 +78,7 @@ export default mixin({
           result = CallResult.Failure;
         };
         const onReturn = (value) => {
-          argStruct.retval = value
+          argStruct.retval = value;
         };
         try {
           const retval = fn(...args);
