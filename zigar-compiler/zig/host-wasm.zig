@@ -4,7 +4,7 @@ const exporter = @import("exporter.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const types = @import("types.zig");
-const patch_wasm = @import("patch-wasm.zig");
+const Thread = @import("patch-wasm/thread.zig");
 
 const Value = types.Value;
 const MemoryType = types.MemoryType;
@@ -141,7 +141,7 @@ fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
     const ptr: *Futex = @ptrFromInt(futex_handle);
     if (ptr.handle == futex_handle) {
         ptr.value.store(value, .release);
-        patch_wasm.Futex.wake(&ptr.value, 1);
+        Thread.Futex.wake(&ptr.value, 1);
     }
 }
 
@@ -291,7 +291,7 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         }
         var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex_handle);
         if (result == .ok and is_waiting) {
-            patch_wasm.Futex.wait(&futex.value, initial_value);
+            Thread.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }
         return result;
