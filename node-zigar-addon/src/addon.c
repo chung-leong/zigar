@@ -889,8 +889,6 @@ struct {
     { "syncExternalBuffer", sync_external_buffer }
 };
 
-#include <stdio.h>
-
 struct {
     const char* name;
     int index;
@@ -1027,7 +1025,7 @@ napi_value load_module(napi_env env,
      || napi_set_named_property(env, js_env, "littleEndian", little_endian) != napi_ok
      || napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) != napi_ok
      || napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) != napi_ok
-     || napi_get_boolean(env, attributes.multithreaded, &runtime_safety) != napi_ok
+     || napi_get_boolean(env, attributes.multithreaded, &multithreaded) != napi_ok
      || napi_set_named_property(env, js_env, "multithreaded", multithreaded) != napi_ok) {
         return throw_error(env, "Unable to modify runtime environment");
     }

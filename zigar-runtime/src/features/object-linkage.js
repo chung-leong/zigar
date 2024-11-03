@@ -35,8 +35,9 @@ export default mixin({
     }
     const dv = object[MEMORY];
     const address = this.recreateAddress(reloc);
-    const fixedDV = this.obtainFixedView(address, dv.byteLength);
-    if (writeBack) {
+    const length = dv.byteLength;
+    const fixedDV = this.obtainFixedView(address, length);
+    if (writeBack && length > 0) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = fixedDV;
       dest[COPY](object);
