@@ -556,8 +556,9 @@ fn addFunctionMember(ctx: anytype, structure: Value, comptime td: TypeData) !voi
     const thunk_dv = try ctx.host.captureView(thunk_memory);
     const instance_template = try ctx.host.createTemplate(thunk_dv);
     try ctx.host.attachTemplate(structure, instance_template, false);
-    const ptr_tdb = ctx.tdb.get(*const FT);
-    if (comptime ptr_tdb.isInUse()) {
+    const PT = *const FT;
+    const tdb = comptime ctx.tdb;
+    if (comptime tdb.has(PT) and tdb.get(PT).isInUse()) {
         // store JS thunk controller as static template
         const js_thunk_constructor = thunk_js.createThunkController(ctx.host, FT);
         const js_thunk_constructor_memory = Memory.from(js_thunk_constructor, false);

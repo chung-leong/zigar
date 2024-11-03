@@ -1423,13 +1423,19 @@ fn TypeDatabase(comptime len: comptime_int) type {
         entries: [len]TypeData,
 
         pub fn get(comptime self: @This(), comptime T: type) TypeData {
-            inline for (self.entries) |entry| {
+            return inline for (self.entries) |entry| {
                 if (entry.Type == T) {
-                    return entry;
+                    break entry;
                 }
-            } else {
-                @compileError("No type data for " ++ @typeName(T));
-            }
+            } else @compileError("No type data for " ++ @typeName(T));
+        }
+
+        pub fn has(comptime self: @This(), comptime T: type) bool {
+            return inline for (self.entries) |entry| {
+                if (entry.Type == T) {
+                    break true;
+                }
+            } else false;
         }
     };
 }
