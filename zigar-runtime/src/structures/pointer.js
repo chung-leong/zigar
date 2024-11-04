@@ -1,14 +1,16 @@
-import { MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
+import {
+  MemberType, OpaqueFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType,
+} from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
   InvalidSliceLength, NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
-  warnImplicitArrayCreation
+  warnImplicitArrayCreation,
 } from '../errors.js';
 import {
   ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, INITIALIZE, LAST_ADDRESS,
-  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
-  TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT
+  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
+  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT,
 } from '../symbols.js';
 import { always, defineProperties, defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 
@@ -191,7 +193,7 @@ export default mixin({
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
-      } else if (name === '*anyopaque' && arg) {
+      } else if (targetType === StructureType.Opaque && (targetFlags & OpaqueFlag.IsAny) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
           arg = arg['*']?.[MEMORY];
         } else if (arg[MEMORY]) {

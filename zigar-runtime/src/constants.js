@@ -67,8 +67,12 @@ export const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
 };
+export const ErrorSetFlag = {
+  IsAny:            0x0010,
+};
 export const OpaqueFlag = {
-  IsIterator:       0x0010,
+  IsAny:            0x0010,
+  IsIterator:       0x0020,
 };
 export const ArgStructFlag = {
   HasOptions:       0x0010,

@@ -1,5 +1,5 @@
 import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SENTINEL, SLOTS } from '../../src/symbols.js';
-import { ExportFlag, MemberType, PointerFlag, PrimitiveFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
+import { ErrorSetFlag, ExportFlag, MemberType, OpaqueFlag, PointerFlag, PrimitiveFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { CallContext, decodeText, defineProperty, findObjects } from '../utils.js';
 
@@ -259,7 +259,7 @@ export default mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsAny) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `E${this.structureCounters.enum++}`;
@@ -302,7 +302,7 @@ export default mixin({
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
-    return `O${this.structureCounters.opaque++}`;
+    return (s.flags & OpaqueFlag.IsAny) ? 'anyopaque' : `O${this.structureCounters.opaque++}`;
   },
   getArgStructName(s) {
     const { instance: { members } } = s;

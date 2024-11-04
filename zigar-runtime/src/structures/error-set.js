@@ -1,4 +1,4 @@
-import { MemberType, StructureType } from '../constants.js';
+import { ErrorSetFlag, MemberType, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   deanimalizeErrorName, ErrorExpected, InvalidInitializer, isErrorJSON, NotInErrorSet
@@ -12,8 +12,8 @@ export default mixin({
 
   defineErrorSet(structure, descriptors) {
     const {
-      name,
       instance: { members: [ member ] },
+      flags,
     } = structure;
     if (!this.currentErrorClass) {
       // create anyerror set
@@ -24,11 +24,10 @@ export default mixin({
         instance: { members: [ member ] },
         static: { members: [], template: { SLOTS: {} } },
       };
-      this.defineStructure(ae);
+      this.currentGlobalSet = this.defineStructure(ae);
       this.finalizeStructure(ae);
-      this.currentGlobalSet = ae.constructor;
     }
-    if (this.currentGlobalSet && name === 'anyerror') {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);
@@ -58,11 +57,11 @@ export default mixin({
   finalizeErrorSet(structure, staticDescriptors) {
     const {
       constructor,
-      name,
+      flags,
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && name === 'anyerror') {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
       // already finalized
       return false;
     }

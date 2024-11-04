@@ -116,7 +116,8 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
-        _: u28 = 0,
+        is_any: bool = false,
+        _: u27 = 0,
     },
     @"enum": packed struct(u32) {
         has_value: bool = true,
@@ -175,8 +176,9 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
+        is_any: bool = false,
         is_iterator: bool = false,
-        _: u27 = 0,
+        _: u26 = 0,
     },
     arg_struct: packed struct(u32) {
         has_value: bool = false,

@@ -173,7 +173,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_iterator = td.isIterator(),
                     },
                 },
-                .ErrorSet => .{ .error_set = .{} },
+                .ErrorSet => .{
+                    .error_set = .{
+                        .is_any = td.Type == anyerror,
+                    },
+                },
                 .Array => |ar| get: {
                     const child_td = tdb.get(ar.child);
                     break :get .{
@@ -197,6 +201,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .Opaque => .{
                     .@"opaque" = .{
+                        .is_any = td.Type == anyopaque,
                         .is_iterator = td.isIterator(),
                     },
                 },
@@ -238,7 +243,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .ComptimeFloat,
                 .Void,
                 .Type,
-                .ErrorSet,
                 .ErrorUnion,
                 .Optional,
                 .Array,
@@ -264,6 +268,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                             break :result null;
                         }
                     } else name;
+                },
+                .ErrorSet => switch (td.Type) {
+                    anyerror => "anyerror",
+                    else => null,
                 },
                 .Opaque => switch (td.Type) {
                     anyopaque => "anyopaque",
