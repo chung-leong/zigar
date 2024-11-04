@@ -436,19 +436,14 @@ const Module = extern struct {
     exports: *const Exports,
 };
 
-fn createGetFactoryThunk(comptime T: type) fn (*usize) callconv(.C) Result {
+pub fn createModule(comptime module: type) Module {
     const host = @This();
     const ns = struct {
         fn getFactoryThunk(dest: *usize) callconv(.C) Result {
-            const factory = exporter.createRootFactory(host, T);
-            dest.* = @intFromPtr(factory);
+            dest.* = @intFromPtr(exporter.getFactoryThunk(host, module));
             return .ok;
         }
     };
-    return ns.getFactoryThunk;
-}
-
-pub fn createModule(comptime T: type) Module {
     return .{
         .version = 5,
         .attributes = exporter.getModuleAttributes(),
@@ -458,7 +453,7 @@ pub fn createModule(comptime T: type) Module {
             .deinitialize = deinitialize,
             .allocate_fixed_memory = allocateExternMemory,
             .free_fixed_memory = freeExternMemory,
-            .get_factory_thunk = createGetFactoryThunk(T),
+            .get_factory_thunk = ns.getFactoryThunk,
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,
             .create_js_thunk = createJsThunk,

@@ -154,10 +154,8 @@ export fn getModuleAttributes() i32 {
     return @bitCast(exporter.getModuleAttributes());
 }
 
-pub fn getFactoryThunk(comptime T: type) usize {
-    const host = @This();
-    const factory = exporter.createRootFactory(host, T);
-    return @intFromPtr(factory);
+pub fn getFactoryThunk(comptime module: type) usize {
+    return @intFromPtr(exporter.getFactoryThunk(@This(), module));
 }
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
