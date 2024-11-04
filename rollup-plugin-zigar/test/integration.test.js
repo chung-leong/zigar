@@ -29,6 +29,8 @@ async function importModule(url, options) {
     useLibc = false,
     topLevelAwait = true,
     multithreaded = false,
+    omitFunctions = false,
+    omitVariables = false,
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -42,7 +44,7 @@ async function importModule(url, options) {
     currentModule = null;
   }
   const path = fileURLToPath(url);
-  const hash = md5(path);
+  const hash = md5(path + JSON.stringify(options));
   const jsPath = join(tmpdir(), 'rollup-integration-test', optimize, `${hash}.mjs`);
   const inputOptions = {
     input: path,
@@ -55,6 +57,8 @@ async function importModule(url, options) {
         multithreaded,
         useLibc,
         embedWASM,
+        omitFunctions,
+        omitVariables,
       }),
       NodeResolve({
         modulePaths: [ resolve(`../node_modules`) ],

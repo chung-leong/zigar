@@ -75,8 +75,12 @@ const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
 };
+const ErrorSetFlag = {
+  IsAny:            0x0010,
+};
 const OpaqueFlag = {
-  IsIterator:       0x0010,
+  IsAny:            0x0010,
+  IsIterator:       0x0020,
 };
 const ArgStructFlag = {
   HasOptions:       0x0010,
@@ -4529,7 +4533,7 @@ var structureAcquisition = mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsAny) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `E${this.structureCounters.enum++}`;
@@ -4572,7 +4576,7 @@ var structureAcquisition = mixin({
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
-    return `O${this.structureCounters.opaque++}`;
+    return (s.flags & OpaqueFlag.IsAny) ? 'anyopaque' : `O${this.structureCounters.opaque++}`;
   },
   getArgStructName(s) {
     const { instance: { members } } = s;
@@ -6426,8 +6430,8 @@ var errorSet = mixin({
 
   defineErrorSet(structure, descriptors) {
     const {
-      name,
       instance: { members: [ member ] },
+      flags,
     } = structure;
     if (!this.currentErrorClass) {
       // create anyerror set
@@ -6438,11 +6442,10 @@ var errorSet = mixin({
         instance: { members: [ member ] },
         static: { members: [], template: { SLOTS: {} } },
       };
-      this.defineStructure(ae);
+      this.currentGlobalSet = this.defineStructure(ae);
       this.finalizeStructure(ae);
-      this.currentGlobalSet = ae.constructor;
     }
-    if (this.currentGlobalSet && name === 'anyerror') {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);
@@ -6472,11 +6475,11 @@ var errorSet = mixin({
   finalizeErrorSet(structure, staticDescriptors) {
     const {
       constructor,
-      name,
+      flags,
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && name === 'anyerror') {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
       // already finalized
       return false;
     }
@@ -7018,7 +7021,7 @@ var pointer = mixin({
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
-      } else if (name === '*anyopaque' && arg) {
+      } else if (targetType === StructureType.Opaque && (targetFlags & OpaqueFlag.IsAny) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
           arg = arg['*']?.[MEMORY];
         } else if (arg[MEMORY]) {

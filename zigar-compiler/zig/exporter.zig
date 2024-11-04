@@ -644,34 +644,34 @@ fn Factory(comptime host: type, comptime module: type) type {
                             const decl_value = decl_ptr.*;
                             const DT = @TypeOf(decl_value);
                             // export type only if it's supported
-                            const is_value_supported = if (DT == type)
-                                tdb.get(decl_value).isSupported()
-                            else
-                                true;
-                            if (is_value_supported) {
+                            const is_value_supported = switch (DT) {
+                                type => tdb.get(decl_value).isSupported(),
+                                else => true,
+                            };
+                            const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
+                                .Fn => !self.options.omit_methods,
+                                else => !self.options.omit_variables or decl_ptr_td.isConst(),
+                            } else false;
+                            if (should_export) {
                                 // always export constants while variables can be optionally switched off
-                                if (decl_ptr_td.isConst() or !self.options.omit_variables) {
-                                    const decl_td = tdb.get(DT);
-                                    try host.attachMember(structure, .{
-                                        .name = decl.name,
-                                        .type = .object,
-                                        .flags = .{
-                                            .is_read_only = decl_ptr_td.isConst(),
-                                            .is_method = decl_td.isMethodOf(td.Type),
-                                        },
-                                        .slot = index,
-                                        .structure = try self.getStructure(DT),
-                                    }, true);
-                                    const is_comptime = comptime switch (@typeInfo(DT)) {
-                                        .Fn => false,
-                                        else => decl_ptr_td.isConst(),
-                                    };
-                                    // deal with inline functions
-
-                                    const value_obj = try self.exportPointerTarget(decl_ptr, is_comptime);
-                                    template_maybe = template_maybe orelse try host.createTemplate(null);
-                                    try host.writeSlot(template_maybe.?, index, value_obj);
-                                }
+                                const decl_td = tdb.get(DT);
+                                try host.attachMember(structure, .{
+                                    .name = decl.name,
+                                    .type = .object,
+                                    .flags = .{
+                                        .is_read_only = decl_ptr_td.isConst(),
+                                        .is_method = decl_td.isMethodOf(td.Type),
+                                    },
+                                    .slot = index,
+                                    .structure = try self.getStructure(DT),
+                                }, true);
+                                const is_comptime = comptime switch (@typeInfo(DT)) {
+                                    .Fn => false,
+                                    else => decl_ptr_td.isConst(),
+                                };
+                                const value_obj = try self.exportPointerTarget(decl_ptr, is_comptime);
+                                template_maybe = template_maybe orelse try host.createTemplate(null);
+                                try host.writeSlot(template_maybe.?, index, value_obj);
                             }
                         }
                         offset += 1;

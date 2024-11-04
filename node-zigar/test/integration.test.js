@@ -20,8 +20,14 @@ async function importModule(path, options) {
   const {
     optimize,
     multithreaded,
+    omitFunctions,
+    omitVariables,
   } = options;
   currentModule?.__zigar?.abandon();
-  currentModule = await import(`${path}?optimize=${optimize}&multithreaded=${multithreaded ? 1 : 0}`);
+  const query = `optimize=${optimize}&`
+              + `multithreaded=${multithreaded ? 1 : 0}&`
+              + `omit-functions=${omitFunctions ? 1 : 0}&`
+              + `omit-variables=${omitVariables ? 1 : 0}&`;
+  currentModule = await import(path + '?' + query);
   return currentModule;
 }

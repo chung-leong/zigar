@@ -26,6 +26,9 @@ async function importModule(url, options) {
     embedWASM = true,
     topLevelAwait = true,
     useLibc = false,
+    multithreaded = false,
+    omitFunctions = false,
+    omitVariables = false,
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -40,7 +43,7 @@ async function importModule(url, options) {
   }
   const loader = resolve('../dist/index.js');
   const path = fileURLToPath(url);
-  const hash = await md5(path);
+  const hash = md5(path + JSON.stringify(options));
   const jsPath = join(tmpdir(), 'webpack-integration-test', optimize, `${hash}.mjs`);
   const jsFile = parse(jsPath);
   const config = {
@@ -70,7 +73,10 @@ async function importModule(url, options) {
             embedWASM,
             useLibc,
             keepNames: optimize === 'ReleaseSafe',
-          }
+            multithreaded,
+            omitFunctions,
+            omitVariables,
+          },
         },
       ]
     },
