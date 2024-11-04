@@ -429,134 +429,6 @@ class CallContext {
   async = false;
 }
 
-function shortenNames(structures) {
-  let structId = 1;
-  let unionId = 1;
-  let errorSetId = 1;
-  let enumId = 1;
-  let opaqueId = 1;
-  const map = new Map();
-  const nsRegExp = /.+?\./g;
-  const removeNS = function(s) {
-    return s.replace(nsRegExp, '');
-  };
-  const handlers = {
-    getPrimitiveName(s) {
-      const { name, instance: { members: [ member ] } } = s;
-      switch (member.type) {
-        case MemberType.Literal: return 'enum_literal';
-        case MemberType.Null: return 'null';
-        case MemberType.Undefined: return 'undefined';
-        default: return name;
-      }
-    },
-    getArrayName(s) {
-      const { instance: { members: [ element ] }, length } = s;
-      const elementName = process(element.structure);
-      return `[${length}]${elementName}`;
-    },
-    getStructName(s) {
-      const { name } = s;
-      return /[{}()]/.test(name) ? `S${structId++}` : removeNS(name);
-    },
-    getUnionName(s) {
-      const { name } = s;
-      return /[{}()]/.test(name) ? `U${unionId++}` : removeNS(name);
-    },
-    getErrorUnionName(s) {
-      const { instance: { members: [ payload, errorSet ] } } = s;
-      const payloadName = process(payload.structure);
-      const errorSetName = process(errorSet.structure);
-      return `${errorSetName}!${payloadName}`;
-    },
-    getErrorSetName(s) {
-      const { name } = s;
-      return /[{}()]/.test(name) ? `ES${errorSetId++}` : removeNS(name);
-    },
-    getEnumName(s) {
-      const { name } = s;
-      return /[{}()]/.test(name) ? `E${enumId++}` : removeNS(name);
-    },
-    getOptionalName(s) {
-      const { instance: { members: [ payload ] } } = s;
-      const payloadName = process(payload.structure);
-      return `?${payloadName}`;
-    },
-    getPointerName(s) {
-      const { instance: { members: [ target ] }, flags } = s;
-      let prefix = '*';
-      let targetName = process(target.structure);
-      if (target.structure.type === StructureType.Slice) {
-        targetName = targetName.slice(3);
-      }
-      if (flags & PointerFlag.IsMultiple) {
-        if (flags & PointerFlag.HasLength) {
-          prefix = '[]';
-        } else if (flags & PointerFlag.IsSingle) {
-          prefix = '[*c]';
-        } else {
-          prefix = '[*]';
-        }
-      }
-      const sentinel = target.constructor[SENTINEL];
-      if (sentinel) {
-        prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
-      }
-      if (flags & PointerFlag.IsConst) {
-        prefix = `${prefix}const `;
-      }
-      return prefix + targetName;
-    },
-    getSliceName(s) {
-      const { instance: { members: [ element ] } } = s;
-      const elementName = process(element.structure);
-      return `[_]${elementName}`;
-    },
-    getVector(s) {
-      return s.name;
-    },
-    getOpaqueName(s) {
-      const { name } = s;
-      return (name !== 'anyopaque') ? `O${opaqueId++}` : name;
-    },
-    getArgStructName(s) {
-      const { instance: { members } } = s;
-      const retval = members[0];
-      const args = members.slice(1);
-      const rvName = process(retval.structure);
-      const argNames = args.map(m => process(m.structure));
-      return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
-    },
-    getVariadicStructName(s) {
-      const { instance: { members } } = s;
-      const retval = members[0];
-      const args = members.slice(1);
-      const rvName = process(retval.structure);
-      const argNames = args.map(m => process(m.structure));
-      return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
-    },
-    getFunctionName(s) {
-      const { instance: { members: [ args ] } } = s;
-      const argName = process(args.structure);
-      return argName.slice(4, -1);
-    },
-  };
-  const process = function(s) {
-    let name = map.get(s);
-    if (name === undefined) {
-      const handlerName = `get${structureNames[s.type]}Name`;
-      const handler = handlers[handlerName];
-      name = handler?.(s) ?? 'TODO';
-      map.set(s, name);
-      s.name = name;
-    }
-    return name;
-  };
-  for (const s of structures) {
-    process(s);
-  }
-}
-
 function generateCode(definition, params) {
   const { structures } = definition;
   const {
@@ -568,7 +440,6 @@ function generateCode(definition, params) {
     moduleOptions,
     envVariables = {},
   } = params;
-  shortenNames(structures);
   const exports = getExports(structures);
   const lines = [];
   const add = manageIndentation(lines);
@@ -4090,8 +3961,9 @@ var objectLinkage = mixin({
     }
     const dv = object[MEMORY];
     const address = this.recreateAddress(reloc);
-    const fixedDV = this.obtainFixedView(address, dv.byteLength);
-    if (writeBack) {
+    const length = dv.byteLength;
+    const fixedDV = this.obtainFixedView(address, length);
+    if (writeBack && length > 0) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = fixedDV;
       dest[COPY](object);
@@ -4405,7 +4277,13 @@ var structureAcquisition = mixin({
   comptime: false,
   slots: {},
   structures: [],
-
+  structureCounters: {
+    struct: 0,
+    union: 0,
+    errorSet: 0,
+    enum: 0,
+    opaque: 0,
+  },
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -4458,6 +4336,9 @@ var structureAcquisition = mixin({
     target.template = template;
   },
   endStructure(structure) {
+    if (!structure.name) {
+      this.inferTypeName(structure);
+    }
     this.structures.push(structure);
     this.finalizeStructure(structure);
   },
@@ -4600,6 +4481,119 @@ var structureAcquisition = mixin({
     this.structures = [];
     module.__zigar = this.getSpecialExports();
     return module;
+  },
+  inferTypeName(s) {
+    const handlerName = `get${structureNames[s.type]}Name`;
+    const handler = this[handlerName];
+    s.name = handler.call(this, s);
+  },
+  getPrimitiveName(s) {
+    const { instance: { members: [ member ] }, static: { template }, flags } = s;
+    switch (member.type) {
+      case MemberType.Bool:
+        return `bool`;
+      case MemberType.Int:
+        return (flags & PrimitiveFlag.IsSize) ? `isize` : `i${member.bitSize}`;
+      case MemberType.Uint:
+        return (flags & PrimitiveFlag.IsSize) ? `usize` : `u${member.bitSize}`;
+      case MemberType.Float:
+        return `f${member.bitSize}`;
+      case MemberType.Void:
+        return 'void';
+      case MemberType.Literal:
+        return 'enum_literal';
+      case MemberType.Null:
+        return 'null';
+      case MemberType.Undefined:
+        return 'undefined';
+      case MemberType.Type:
+        return 'type';
+      case MemberType.Object:
+        return 'comptime';
+      default:
+        return 'unknown';
+    }
+  },
+  getArrayName(s) {
+    const { instance: { members: [ element ] }, length } = s;
+    return `[${length}]${element.structure.name}`;
+  },
+  getStructName(s) {
+    return `S${this.structureCounters.struct++}`;
+  },
+  getUnionName(s) {
+    return `U${this.structureCounters.union++}`;
+  },
+  getErrorUnionName(s) {
+    const { instance: { members: [ payload, errorSet ] } } = s;
+    return `${errorSet.structure.name}!${payload.structure.name}`;
+  },
+  getErrorSetName(s) {
+    return `ES${this.structureCounters.errorSet++}`;
+  },
+  getEnumName(s) {
+    return `E${this.structureCounters.enum++}`;
+  },
+  getOptionalName(s) {
+    const { instance: { members: [ payload ] } } = s;
+    return `?${payload.structure.name}`;
+  },
+  getPointerName(s) {
+    const { instance: { members: [ target ] }, flags } = s;
+    let prefix = '*';
+    let targetName = target.structure.name;
+    if (target.structure.type === StructureType.Slice) {
+      targetName = targetName.slice(3);
+    }
+    if (flags & PointerFlag.IsMultiple) {
+      if (flags & PointerFlag.HasLength) {
+        prefix = '[]';
+      } else if (flags & PointerFlag.IsSingle) {
+        prefix = '[*c]';
+      } else {
+        prefix = '[*]';
+      }
+    }
+    const sentinel = target.constructor[SENTINEL];
+    if (sentinel) {
+      prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+    }
+    if (flags & PointerFlag.IsConst) {
+      prefix = `${prefix}const `;
+    }
+    return prefix + targetName;
+  },
+  getSliceName(s) {
+    const { instance: { members: [ element ] } } = s;
+    return `[_]${element.structure.name}`;
+  },
+  getVectorName(s) {
+    const { instance: { members: [ element ] }, length } = s;
+    return `@Vector(${length}, ${element.structure.name})`;
+  },
+  getOpaqueName(s) {
+    return `O${this.structureCounters.opaque++}`;
+  },
+  getArgStructName(s) {
+    const { instance: { members } } = s;
+    const retval = members[0];
+    const args = members.slice(1);
+    const rvName = retval.structure.name;
+    const argNames = args.map(a => a.structure.name);
+    return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+  },
+  getVariadicStructName(s) {
+    const { instance: { members } } = s;
+    const retval = members[0];
+    const args = members.slice(1);
+    const rvName = retval.structure.name;
+    const argNames = args.map(a => a.structure.name);
+    return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+  },
+  getFunctionName(s) {
+    const { instance: { members: [ args ] } } = s;
+    const argName = args.structure.name;
+    return argName.slice(4, -1);
   },
   ...({
     exports: {
@@ -9178,6 +9172,15 @@ function createDecoder(reader) {
           return op1;
       }
     },
+    0xFE: () => {
+      const op1 = readOne();
+      switch (op1) {
+        case 3:
+          return [ op1, readU8() ];
+        default:
+          return [ op1, readOne(), readOne() ];
+      }
+    },
   };
 
   function decodeNext() {
@@ -9306,8 +9309,11 @@ function createEncoder(writer) {
           writeMultiple(op);
         }
       } else {
-        return writeOne(op);
+        writeOne(op);
       }
+    },
+    0xFE: (op) => {
+      writeMultiple(op);
     },
   };
 

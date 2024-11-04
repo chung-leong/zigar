@@ -1,5 +1,5 @@
-import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
-import { ExportFlag, StructureFlag, StructureType } from '../constants.js';
+import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SENTINEL, SLOTS } from '../../src/symbols.js';
+import { ExportFlag, MemberType, PointerFlag, PrimitiveFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { CallContext, decodeText, defineProperty, findObjects } from '../utils.js';
 
@@ -7,7 +7,13 @@ export default mixin({
   comptime: false,
   slots: {},
   structures: [],
-
+  structureCounters: {
+    struct: 0,
+    union: 0,
+    errorSet: 0,
+    enum: 0,
+    opaque: 0,
+  },
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -60,6 +66,9 @@ export default mixin({
     target.template = template;
   },
   endStructure(structure) {
+    if (!structure.name) {
+      this.inferTypeName(structure);
+    }
     this.structures.push(structure);
     this.finalizeStructure(structure);
   },
@@ -202,6 +211,119 @@ export default mixin({
     this.structures = [];
     module.__zigar = this.getSpecialExports();
     return module;
+  },
+  inferTypeName(s) {
+    const handlerName = `get${structureNames[s.type]}Name`;
+    const handler = this[handlerName];
+    s.name = handler.call(this, s);
+  },
+  getPrimitiveName(s) {
+    const { instance: { members: [ member ] }, static: { template }, flags } = s;
+    switch (member.type) {
+      case MemberType.Bool:
+        return `bool`;
+      case MemberType.Int:
+        return (flags & PrimitiveFlag.IsSize) ? `isize` : `i${member.bitSize}`;
+      case MemberType.Uint:
+        return (flags & PrimitiveFlag.IsSize) ? `usize` : `u${member.bitSize}`;
+      case MemberType.Float:
+        return `f${member.bitSize}`;
+      case MemberType.Void:
+        return 'void';
+      case MemberType.Literal:
+        return 'enum_literal';
+      case MemberType.Null:
+        return 'null';
+      case MemberType.Undefined:
+        return 'undefined';
+      case MemberType.Type:
+        return 'type';
+      case MemberType.Object:
+        return 'comptime';
+      default:
+        return 'unknown';
+    }
+  },
+  getArrayName(s) {
+    const { instance: { members: [ element ] }, length } = s;
+    return `[${length}]${element.structure.name}`;
+  },
+  getStructName(s) {
+    return `S${this.structureCounters.struct++}`;
+  },
+  getUnionName(s) {
+    return `U${this.structureCounters.union++}`;
+  },
+  getErrorUnionName(s) {
+    const { instance: { members: [ payload, errorSet ] } } = s;
+    return `${errorSet.structure.name}!${payload.structure.name}`;
+  },
+  getErrorSetName(s) {
+    return `ES${this.structureCounters.errorSet++}`;
+  },
+  getEnumName(s) {
+    return `E${this.structureCounters.enum++}`;
+  },
+  getOptionalName(s) {
+    const { instance: { members: [ payload ] } } = s;
+    return `?${payload.structure.name}`;
+  },
+  getPointerName(s) {
+    const { instance: { members: [ target ] }, flags } = s;
+    let prefix = '*'
+    let targetName = target.structure.name;
+    if (target.structure.type === StructureType.Slice) {
+      targetName = targetName.slice(3);
+    }
+    if (flags & PointerFlag.IsMultiple) {
+      if (flags & PointerFlag.HasLength) {
+        prefix = '[]';
+      } else if (flags & PointerFlag.IsSingle) {
+        prefix = '[*c]';
+      } else {
+        prefix = '[*]';
+      }
+    }
+    const sentinel = target.constructor[SENTINEL];
+    if (sentinel) {
+      prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+    }
+    if (flags & PointerFlag.IsConst) {
+      prefix = `${prefix}const `;
+    }
+    return prefix + targetName;
+  },
+  getSliceName(s) {
+    const { instance: { members: [ element ] } } = s;
+    return `[_]${element.structure.name}`;
+  },
+  getVectorName(s) {
+    const { instance: { members: [ element ] }, length } = s;
+    return `@Vector(${length}, ${element.structure.name})`;
+  },
+  getOpaqueName(s) {
+    return `O${this.structureCounters.opaque++}`;
+  },
+  getArgStructName(s) {
+    const { instance: { members } } = s;
+    const retval = members[0];
+    const args = members.slice(1);
+    const rvName = retval.structure.name;
+    const argNames = args.map(a => a.structure.name);
+    return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+  },
+  getVariadicStructName(s) {
+    const { instance: { members } } = s;
+    const retval = members[0];
+    const args = members.slice(1);
+    const rvName = retval.structure.name;
+    const argNames = args.map(a => a.structure.name);
+    return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+  },
+  getFunctionName(s) {
+    const { instance: { members: [ args ] } } = s;
+    const argName = args.structure.name;
+    return argName.slice(4, -1);
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {

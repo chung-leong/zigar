@@ -171,8 +171,8 @@ result begin_structure(module_data* md,
      && (s->byte_size == MISSING(size_t) || napi_set_named_property(env, args[0], "byteSize", byte_size) == napi_ok)
      && (s->align == MISSING(uint16_t) || napi_create_uint32(env, s->align, &align) == napi_ok)
      && (s->align == MISSING(uint16_t) || napi_set_named_property(env, args[0], "align", align) == napi_ok)
-     && (napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
-     && (napi_set_named_property(env, args[0], "name", name) == napi_ok)
+     && (!s->name || napi_create_string_utf8(env, s->name, NAPI_AUTO_LENGTH, &name) == napi_ok)
+     && (!s->name || napi_set_named_property(env, args[0], "name", name) == napi_ok)
      && call_js_function(md, beginStructure, 1, args, dest)) {
         return OK;
      }

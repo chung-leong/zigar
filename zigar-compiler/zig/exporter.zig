@@ -228,6 +228,51 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
+        pub fn getStructureName(comptime td: TypeData) ?[]const u8 {
+            return switch (@typeInfo(td.Type)) {
+                // names of these can be inferred on the JS side
+                .Bool,
+                .Int,
+                .ComptimeInt,
+                .Float,
+                .ComptimeFloat,
+                .Void,
+                .Type,
+                .ErrorSet,
+                .ErrorUnion,
+                .Optional,
+                .Array,
+                .Pointer,
+                .Vector,
+                .Fn,
+                .Null,
+                .Undefined,
+                .EnumLiteral,
+                .NoReturn,
+                => null,
+                // return the name without ns qualifier if it's alphanumeric
+                .Struct, .Union, .Enum => comptime result: {
+                    var name: []const u8 = @typeName(td.Type);
+                    if (std.mem.lastIndexOfScalar(u8, name, '.')) |index| {
+                        name = name[index + 1 .. name.len];
+                    }
+                    if (td.Type == module) {
+                        break :result name;
+                    }
+                    return for (name) |c| {
+                        if (!std.ascii.isAlphanumeric(c)) {
+                            break :result null;
+                        }
+                    } else name;
+                },
+                .Opaque => switch (td.Type) {
+                    anyopaque => "anyopaque",
+                    else => null,
+                },
+                else => null,
+            };
+        }
+
         pub fn getMemberType(comptime td: TypeData, comptime is_comptime: bool) types.MemberType {
             return switch (td.isSupported()) {
                 false => .unsupported,
@@ -267,7 +312,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             const slot = td.getSlot();
             return host.readSlot(null, slot) catch create: {
                 const def: types.Structure = .{
-                    .name = @typeName(T),
+                    .name = comptime getStructureName(td),
                     .type = getStructureType(td),
                     .flags = getStructureFlags(td),
                     .length = getStructureLength(td),
@@ -760,7 +805,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .ErrorUnion => {
                     if (value) |v| {
-                        const obj = try exportComptimeValue(v);
+                        const obj = try self.exportComptimeValue(v);
                         try host.writeSlot(target, 0, obj);
                     } else |_| {}
                 },
