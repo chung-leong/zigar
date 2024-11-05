@@ -53,9 +53,11 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('{ 1, 2, 777, 4 }');
       // modifying const pointer
-      expect(() => module.u8_slice = "This is a test").to.throw(TypeError);
-      // this works thanks to auto-allocation of Zig memory
-      expect(() => module.text = "This is a test").to.not.throw(TypeError);
+      expect(() => module.u8_slice = "This is a test").to.throw(TypeError)
+        .with.property('message').that.contains('read-only');
+      // we no longer autovivicate for pointers in Zig memory
+      expect(() => module.text = "This is a test").to.throw(TypeError)
+        .with.property('message').that.contains('garbage-collected');
       const lines = await capture(() => {
         printText();
         // allocate Zig memory
@@ -67,7 +69,7 @@ export function addTests(importModule, options) {
         freeText(text);
       });
       expect(lines).to.eql([
-        'This is a test',
+        'Hello world',
         'This is another test',
         'Goodbye cruel world',
       ]);
