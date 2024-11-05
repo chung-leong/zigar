@@ -259,23 +259,73 @@ result create_template(module_data* md,
     return FAILURE;
 }
 
-void js_queue_callback(napi_env, napi_value, void*, void*);
+void js_queue_callback(napi_env env,
+                       napi_value js_callback,
+                       void* context,
+                       void* data) {
+    js_action* action = (js_action*) data;
+    napi_value args[5];
+    size_t argc = 5;
+    napi_value null;
+    napi_value result;
+    uint32_t status = FAILURE;
+    if (napi_create_uint32(env, action->type, &args[0]) == napi_ok
+     && napi_create_uint32(env, action->fn_id, &args[1]) == napi_ok
+     && napi_create_uintptr(env, action->arg_address, &args[2]) == napi_ok
+     && napi_create_uint32(env, action->arg_size, &args[3]) == napi_ok
+     && napi_create_uintptr(env, action->futex_handle, &args[4]) == napi_ok
+     && napi_get_null(env, &null) == napi_ok) {
+        if (napi_call_function(env, null, js_callback, argc, args, &result) == napi_ok) {
+            napi_get_value_uint32(env, result, &status);
+        }
+    }
+    if (action->futex_handle) {
+        if (status != OK) {
+            module_data* md = (module_data*) context;
+            // need to wake caller since JS code won't do it
+            md->mod->imports->wake_caller(action->futex_handle, status);
+        }
+    } else {
+        // if the caller isn't waiting, then action is on the heap and not
+        // in the caller's stack frame
+        free(action);
+    }
+}
+
+void js_queue_release_callback(napi_env env,
+                               napi_value js_callback,
+                               void* context,
+                               void* data) {
+    size_t fn_id = (size_t) data;
+    napi_value args[2];
+    size_t argc = 2;
+    napi_value null;
+    napi_value result;
+    if (napi_create_uint32(env, RELEASE, &args[0]) == napi_ok
+     && napi_create_uint32(env, fn_id, &args[1]) == napi_ok
+     && napi_get_null(env, &null) == napi_ok) {
+        napi_call_function(env, null, js_callback, argc, args, &result);
+    }
+}
 
 result enable_multithread(module_data* md) {
     napi_env env = md->env;
     napi_value resource_name;
     napi_value perform_fn;
-    if (napi_get_reference_value(env, md->js_fns[performJsAction], &perform_fn) != napi_ok
-     || napi_create_string_utf8(env, "perform", 7, &resource_name) != napi_ok
-     || napi_create_threadsafe_function(env, perform_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) != napi_ok) {
-        return FAILURE;
+    if (napi_get_reference_value(env, md->js_fns[performJsAction], &perform_fn) == napi_ok
+     && napi_create_string_utf8(env, "zigar", 5, &resource_name) == napi_ok
+     && napi_create_threadsafe_function(env, perform_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_callback, &md->ts_fn) == napi_ok
+     && napi_create_threadsafe_function(env, perform_fn, NULL, resource_name, 0, 1, NULL, NULL, md, js_queue_release_callback, &md->ts_release_fn) == napi_ok) {
+        return OK;
     }
-    return OK;
+    return FAILURE;
 }
 
 result disable_multithread(module_data* md) {
     napi_release_threadsafe_function(md->ts_fn, napi_tsfn_release);
+    napi_release_threadsafe_function(md->ts_release_fn, napi_tsfn_release);
     md->ts_fn = NULL;
+    md->ts_release_fn = NULL;
     return OK;
 }
 
@@ -806,16 +856,14 @@ napi_value sync_external_buffer(napi_env env,
 result perform_js_action(module_data* md,
                          js_action* action) {
     napi_env env = md->env;
-    napi_value buffer;
-    napi_value args[5];
+    napi_value args[4];
     napi_value result;
     uint32_t status;
     if (napi_create_uint32(env, action->type, &args[0]) == napi_ok
      && napi_create_uint32(env, action->fn_id, &args[1]) == napi_ok
      && napi_create_uintptr(env, action->arg_address, &args[2]) == napi_ok
-     && napi_create_uint32(env, action->arg_size, &args[3]) == napi_ok
-     && napi_create_uintptr(env, action->futex_handle, &args[4]) == napi_ok) {
-        if (call_js_function(md, performJsAction, 5, args, &result)
+     && napi_create_uint32(env, action->arg_size, &args[3]) == napi_ok) {
+        if (call_js_function(md, performJsAction, 4, args, &result)
          && napi_get_value_uint32(env, result, &status) == napi_ok) {
             return status;
         }
@@ -825,38 +873,24 @@ result perform_js_action(module_data* md,
 
 result queue_js_action(module_data* md,
                        js_action* action) {
-    if (md->ts_fn) {
-        if (!action->futex_handle) {
+    if (!md->ts_fn) {
+        return FAILURE_DISABLED;
+    }
+    napi_status status;
+    if (action->type == RELEASE && !action->futex_handle) {
+        // use compact form that doesn't required memory allocation
+        status = napi_call_threadsafe_function(md->ts_release_fn, action, napi_tsfn_nonblocking);
+    } else {
+        // if caller doesn't wait, then action will get overwritten when the caller returns
+        // we need to therefore create a copy of it on the heap
+        if (action->futex_handle) {
             js_action* copy = malloc(sizeof(js_action));
             memcpy(copy, action, sizeof(js_action));
             action = copy;
         }
-        if (napi_call_threadsafe_function(md->ts_fn, action, napi_tsfn_nonblocking) == napi_ok) {
-            return OK;
-        } else {
-            return FAILURE;
-        }
-    } else {
-        return FAILURE_DISABLED;
+        status = napi_call_threadsafe_function(md->ts_fn, action, napi_tsfn_nonblocking);
     }
-}
-
-void js_queue_callback(napi_env env,
-                       napi_value js_callback,
-                       void* context,
-                       void* data) {
-    module_data* md = (module_data*) context;
-    js_action* action = (js_action*) data;
-    uint32_t status = perform_js_action(md, action);
-    if (status != OK) {
-        if (action->futex_handle) {
-            // need to wake caller since JS code won't do it
-            md->mod->imports->wake_caller(action->futex_handle, status);
-        } else {
-            // if the caller isn't waiting, then action is on the heap and not the caller's stack
-            free(action);
-        }
-    }
+    return (status == napi_ok) ? OK : FAILURE;
 }
 
 void finalize_function(napi_env env,

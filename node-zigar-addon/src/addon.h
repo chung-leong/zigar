@@ -62,8 +62,6 @@ enum {
 
 typedef uint32_t action;
 enum {
-    CREATE,
-    DESTROY,
     CALL,
     RELEASE,
 };
@@ -136,6 +134,7 @@ typedef struct {
     napi_ref js_env;
     napi_ref js_fns[IMPORT_COUNT];
     napi_threadsafe_function ts_fn;
+    napi_threadsafe_function ts_release_fn;
 } module_data;
 
 typedef struct {

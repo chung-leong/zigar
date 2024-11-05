@@ -133,7 +133,6 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    skip.
     it('should create thread that resolves a promise on abort', async function() {
       this.timeout(300000);
       const {
