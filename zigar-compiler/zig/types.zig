@@ -1585,7 +1585,7 @@ pub fn Promise(comptime T: type, release: anytype) type {
 }
 
 pub const AbortSignal = struct {
-    ptr: *const i32,
+    ptr: *const volatile i32,
 
     const Opaque = Internal;
 
