@@ -13,7 +13,6 @@ import {
   CreatingOpaque,
   EnumExpected,
   ErrorExpected,
-  FixedMemoryTargetRequired,
   InaccessiblePointer,
   InactiveUnionProperty,
   InvalidArrayInitializer,
@@ -41,6 +40,7 @@ import {
   TypeMismatch,
   UndefinedArgument,
   Unsupported,
+  ZigMemoryTargetRequired,
   adjustArgumentError,
   article,
   deanimalizeErrorName,
@@ -544,7 +544,7 @@ describe('Error functions', function() {
       expect(err5.message).to.contain('undefined');
     })
   })
-  describe('FixedMemoryTargetRequired', function() {
+  describe('ZigMemoryTargetRequired', function() {
     it('should have expected message', function() {
       const structure = {
         name: '*Hello',
@@ -555,8 +555,8 @@ describe('Error functions', function() {
           members: [],
         },
       };
-      const err = new FixedMemoryTargetRequired(structure, null);
-      expect(err.message).to.contain('fixed memory');
+      const err = new ZigMemoryTargetRequired(structure, null);
+      expect(err.message).to.contain('Zig memory');
     })
   })
   describe('Overflow', function() {

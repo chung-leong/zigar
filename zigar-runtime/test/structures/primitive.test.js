@@ -12,7 +12,6 @@ describe('Structure: primitive', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -34,7 +33,6 @@ describe('Structure: primitive', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -61,7 +59,6 @@ describe('Structure: primitive', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -84,7 +81,6 @@ describe('Structure: primitive', function() {
     it('should not add descriptor when one is not available', function() {
       const structure = {
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -111,7 +107,6 @@ describe('Structure: primitive', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 0,
       });
       env.attachMember(structure, {
@@ -135,7 +130,6 @@ describe('Structure: primitive', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -157,7 +151,6 @@ describe('Structure: primitive', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -176,7 +169,6 @@ describe('Structure: primitive', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {

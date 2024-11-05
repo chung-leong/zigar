@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, CONTEXT, FIXED, MEMORY, SIZE } from '../../src/symbols.js';
+import { ALIGN, CONTEXT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
 import { CallContext, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -42,11 +42,11 @@ describe('Feature: default-allocator', function() {
       } else {
         env.obtainExternBuffer = function(address, len) {
           const buffer = new ArrayBuffer(len);
-          buffer[FIXED] = { address, len };
+          buffer[ZIG] = { address, len };
           return buffer;
         };
         env.getBufferAddress = function(buffer) {
-          return buffer[FIXED]?.address ?? usize(0xf_0000);
+          return buffer[ZIG]?.address ?? usize(0xf_0000);
         };
       }
       const allocator = env.createDefaultAllocator(args, structure);
@@ -100,7 +100,7 @@ describe('Feature: default-allocator', function() {
       } else {
         env.obtainExternBuffer = function(address, len) {
           const buffer = new ArrayBuffer(len);
-          buffer[FIXED] = { address, len };
+          buffer[ZIG] = { address, len };
           return buffer;
         };
       }

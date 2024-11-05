@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
-import { ALIGN, CACHE, COPY, FALLBACK, FIXED, MEMORY, RESTORE } from '../symbols.js';
+import { ALIGN, CACHE, COPY, FALLBACK, MEMORY, RESTORE, ZIG } from '../symbols.js';
 import {
   adjustAddress, alignForward, defineProperty, findSortedIndex, isInvalidAddress, isMisaligned,
   usizeInvalid
@@ -99,8 +99,8 @@ export default mixin({
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = shadowDV;
     if (process.env.TARGET === 'wasm') {
-      // attach fixed memory info to aligned data view so it gets freed correctly
-      shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
+      // attach Zig memory info to aligned data view so it gets freed correctly
+      shadowDV[ZIG] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
     }
     return this.addShadow(context, shadow, source, 1);
   },
@@ -183,23 +183,23 @@ export default mixin({
         return dv;
       }
     }
-    // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len);
+    // not found in any of the buffers we've seen--assume it's Zig memory
+    return this.obtainZigView(address, len);
   },
-  allocateFixedMemory(len, align, type = MemoryType.Normal) {
+  allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
-    const dv = this.obtainFixedView(address, len);
-    dv[FIXED].align = align;
-    dv[FIXED].type = type;
+    const dv = this.obtainZigView(address, len);
+    dv[ZIG].align = align;
+    dv[ZIG].type = type;
     return dv;
   },
-  freeFixedMemory(dv) {
-    const { address, unalignedAddress, len, align, type } = dv[FIXED];
+  freeZigMemory(dv) {
+    const { address, unalignedAddress, len, align, type } = dv[ZIG];
     if (len) {
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   },
-  obtainFixedView(address, len) {
+  obtainZigView(address, len) {
     let dv;
     if (address && len) {
       dv = this.obtainExternView(address, len);
@@ -208,30 +208,30 @@ export default mixin({
       dv = this.emptyBufferMap.get(address);
       if (!dv) {
         dv = new DataView(this.emptyBuffer);
-        dv[FIXED] = { address, len: 0 };
+        dv[ZIG] = { address, len: 0 };
         this.emptyBufferMap.set(address, dv);
       }
     }
     return dv;
   },
-  releaseFixedView(dv) {
-    const fixed = dv[FIXED];
-    const address = fixed?.address;
+  releaseZigView(dv) {
+    const zig = dv[ZIG];
+    const address = zig?.address;
     if (address && address !== usizeInvalid) {
       // try to free memory through the allocator from which it came
-      fixed?.free?.();
+      zig?.free?.();
       // set address to invalid to avoid double free
-      fixed.address = usizeInvalid;
-      if (!fixed.len) {
+      zig.address = usizeInvalid;
+      if (!zig.len) {
         // remove view from empty buffer map
         this.emptyBufferMap.delete(address);
       }
     }
   },
   getViewAddress(dv) {
-    const fixed = dv[FIXED];
-    if (fixed) {
-      return fixed.address;
+    const zig = dv[ZIG];
+    if (zig) {
+      return zig.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
       return adjustAddress(address, dv.byteOffset);
@@ -247,10 +247,10 @@ export default mixin({
     },
 
     allocateShadowMemory(len, align) {
-      return this.allocateFixedMemory(len, align, MemoryType.Scratch);
+      return this.allocateZigMemory(len, align, MemoryType.Scratch);
     },
     freeShadowMemory(dv) {
-      return this.freeFixedMemory(dv);
+      return this.freeZigMemory(dv);
     },
     obtainExternView(address, len) {
       const { buffer } = this.memory;
@@ -258,7 +258,7 @@ export default mixin({
     },
     getTargetAddress(context, target, cluster) {
       const dv = target[MEMORY];
-      if (dv[FIXED]) {
+      if (dv[ZIG]) {
         return this.getViewAddress(dv);
       } else if (dv.byteLength === 0) {
         // it's a null pointer/empty slice
@@ -279,11 +279,11 @@ export default mixin({
       return {
         value() {
           const dv = this[MEMORY];
-          const fixed = dv?.[FIXED];
-          if (fixed && fixed.len > 0 && dv.buffer.byteLength === 0) {
-            const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
-            if (fixed.align) {
-              newDV[FIXED].align = fixed.align;
+          const zig = dv?.[ZIG];
+          if (zig && zig.len > 0 && dv.buffer.byteLength === 0) {
+            const newDV = thisEnv.obtainZigView(zig.address, zig.len);
+            if (zig.align) {
+              newDV[ZIG].align = zig.align;
             }
             this[MEMORY] = newDV;
             if (updateCache) {
@@ -316,22 +316,22 @@ export default mixin({
 
     allocateShadowMemory(len, align) {
       // Node can read into JavaScript memory space so we can keep shadows there
-      return this.allocateRelocMemory(len, align);
+      return this.allocateJSMemory(len, align);
     },
     freeShadowMemory(dv) {
       // nothing needs to happen
     },
     createShadowView(dv) {
-      // create a fake fixed view for bypassing pointer check
+      // create a fake zig view for bypassing pointer check
       const address = this.getViewAddress(dv);
       const len = dv.byteLength;
       const shadowDV = new DataView(dv.buffer, dv.byteOffset, len);
-      shadowDV[FIXED] = { address, len };
+      shadowDV[ZIG] = { address, len };
       return shadowDV;
     },
     obtainExternView(address, len) {
       const buffer = this.obtainExternBuffer(address, len, FALLBACK);
-      buffer[FIXED] = { address, len };
+      buffer[ZIG] = { address, len };
       return this.obtainView(buffer, 0, len);
     },
     getTargetAddress(context, target, cluster) {

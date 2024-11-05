@@ -14,7 +14,6 @@ describe('Feature: baseline', function() {
       const s1 = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
         align: 4,
         instance: {

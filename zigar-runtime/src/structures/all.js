@@ -5,13 +5,8 @@ import {
 } from '../errors.js';
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
-  ALIGN, CACHE, CAST,
-  CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, MODIFY,
-  PROPS,
-  RESTORE,
-  SETTERS, SHAPE, SIZE, SLOTS, TYPE,
-  TYPED_ARRAY,
-  VISIT
+  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
+  MODIFY, PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY, VISIT,
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -175,7 +170,7 @@ export default mixin({
         }
         if (SHAPE in self) {
           // provided by defineStructureSlice(); the slice is different from other structures
-          // as it does not have a fixed size; memory is allocated by the slice initializer
+          // as it does not have a zig size; memory is allocated by the slice initializer
           // based on the argument given
           self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
@@ -236,7 +231,7 @@ export default mixin({
         if (this[SLOTS]) {
           this[SLOTS] = {};
         }
-        thisEnv.releaseFixedView(dv);
+        thisEnv.releaseZigView(dv);
       }
     };
   },

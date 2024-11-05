@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import {
-  ADDRESS, COPY, FIXED, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
+  ADDRESS, COPY, LENGTH, MEMORY, RESTORE, SLOTS, TARGET, ZIG,
 } from '../symbols.js';
 
 export default mixin({
@@ -30,19 +30,19 @@ export default mixin({
     }
   },
   linkObject(object, reloc, writeBack) {
-    if (object[MEMORY][FIXED]) {
+    if (object[MEMORY][ZIG]) {
       return;
     }
     const dv = object[MEMORY];
     const address = this.recreateAddress(reloc);
     const length = dv.byteLength;
-    const fixedDV = this.obtainFixedView(address, length);
+    const zigDV = this.obtainZigView(address, length);
     if (writeBack && length > 0) {
       const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = fixedDV;
+      dest[MEMORY] = zigDV;
       dest[COPY](object);
     }
-    object[MEMORY] = fixedDV;
+    object[MEMORY] = zigDV;
     const linkChildren = (object) => {
       if (object[SLOTS]) {
         for (const child of Object.values(object[SLOTS])) {
@@ -50,7 +50,7 @@ export default mixin({
             const childDV = child[MEMORY];
             if (childDV.buffer === dv.buffer) {
               const offset = childDV.byteOffset - dv.byteOffset;
-              child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+              child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
             }
           }
@@ -65,7 +65,7 @@ export default mixin({
     }
   },
   unlinkObject(object) {
-    if (!object[MEMORY][FIXED]) {
+    if (!object[MEMORY][ZIG]) {
       return;
     }
     if (process.env.TARGET === 'wasm') {

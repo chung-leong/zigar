@@ -1,8 +1,12 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, OptionalFlag, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  MemberFlag, MemberType, OptionalFlag, PointerFlag, StructFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENTRIES, ENVIRONMENT, FIXED, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS } from '../../src/symbols.js';
+import {
+  ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, ZIG,
+} from '../../src/symbols.js';
 import { defineValue, encodeBase64 } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -13,7 +17,6 @@ describe('Structure: struct', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -99,7 +102,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -142,7 +144,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -184,7 +185,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -213,7 +213,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -246,7 +245,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -273,7 +271,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -301,7 +298,6 @@ describe('Structure: struct', function() {
       env.littleEndian = false;
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -339,7 +335,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -381,7 +376,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -419,7 +413,6 @@ describe('Structure: struct', function() {
       env.runtimeSafety = true;
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -457,7 +450,6 @@ describe('Structure: struct', function() {
       env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structure, {
@@ -494,7 +486,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 1,
       });
       env.attachMember(structure, {
@@ -535,7 +526,6 @@ describe('Structure: struct', function() {
       env.runtimeSafety = true;
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 1,
       });
       env.attachMember(structure, {
@@ -577,7 +567,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 5,
       });
       env.attachMember(structure, {
@@ -612,7 +601,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -645,7 +633,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -673,7 +660,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -707,7 +693,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -740,7 +725,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -773,7 +757,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -804,7 +787,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -835,7 +817,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1198,7 +1179,6 @@ describe('Structure: struct', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1228,7 +1208,6 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8 * 2,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
       });
@@ -1280,7 +1259,6 @@ describe('Structure: struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -1311,7 +1289,6 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8 * 2,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
       });
@@ -1350,7 +1327,7 @@ describe('Structure: struct', function() {
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
     })
-    it('should throw when copying a struct with pointer in reloc memory to one in fixed memory', function() {
+    it('should throw when copying a struct with pointer in reloc memory to one in Zig memory', function() {
       const env = new Env();
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
@@ -1367,8 +1344,8 @@ describe('Structure: struct', function() {
           } else {
             dv = new DataView(new ArrayBuffer(len));
           }
-          dv.buffer[FIXED] =  { address, len };
-          dv[FIXED] = { address, len, allocator: this };
+          dv.buffer[ZIG] =  { address, len };
+          dv[ZIG] = { address, len, allocator: this };
           viewMap.set(address, dv);
           addressMap.set(dv, address);
           return dv;
@@ -1380,13 +1357,12 @@ describe('Structure: struct', function() {
         let dv = viewMap.get(address);
         if (dv.byteLength !== len) {
           dv = new DataView(dv.buffer, dv.byteOffset, len);
-          dv[FIXED] = { address, len };
+          dv[ZIG] = { address, len };
         }
         return dv;
       };
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -1417,7 +1393,6 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 8 * 2,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
       });
@@ -1455,7 +1430,6 @@ describe('Structure: struct', function() {
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsIterator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -1547,7 +1521,7 @@ describe('Structure: struct', function() {
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      thunk[MEMORY][FIXED] = { address: usize(0x8888) };
+      thunk[MEMORY][ZIG] = { address: usize(0x8888) };
       env.attachTemplate(fnStructure, thunk, false);
       const Next = env.defineStructure(fnStructure);
       env.endStructure(fnStructure);
@@ -1559,7 +1533,7 @@ describe('Structure: struct', function() {
         structure: fnStructure,
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
-      fnDV[FIXED] = { address: usize(0x1_8888) };
+      fnDV[ZIG] = { address: usize(0x1_8888) };
       const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {
@@ -1613,7 +1587,6 @@ describe('Structure: struct', function() {
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsAllocator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {

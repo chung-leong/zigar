@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { CallResult, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, FIXED, MEMORY, SIZE } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -14,7 +14,6 @@ describe('Structure: function', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -29,7 +28,6 @@ describe('Structure: function', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -68,11 +66,11 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
       const constructor = env.defineStructure(structure);
       expect(constructor).to.be.a('function');
-      const dv = fixed(0x2008);
+      const dv = zig(0x2008);
       const f = constructor.call(ENVIRONMENT, dv);
       expect(f).to.be.a('function');
       expect(f).to.be.an.instanceOf(constructor);
@@ -120,7 +118,6 @@ describe('Structure: function', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -135,7 +132,6 @@ describe('Structure: function', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -174,9 +170,9 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
-      const jsThunkConstructor = { [MEMORY]: fixed(0x8888) };
+      const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
       expect(constructor).to.be.a('function');
@@ -207,7 +203,6 @@ describe('Structure: function', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -222,7 +217,6 @@ describe('Structure: function', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -261,9 +255,9 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
-      const jsThunkConstructor = { [MEMORY]: fixed(0x8888) };
+      const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
       expect(() => new constructor()).to.throw(TypeError);
@@ -273,7 +267,6 @@ describe('Structure: function', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -288,7 +281,6 @@ describe('Structure: function', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -327,10 +319,10 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
       const constructor = env.defineStructure(structure);
-      const dv = fixed(0x4000);
+      const dv = zig(0x4000);
       expect(() => constructor(dv)).to.throw(TypeError);
       expect(() => constructor(null)).to.throw(TypeError);
     })
@@ -338,7 +330,6 @@ describe('Structure: function', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -353,7 +344,6 @@ describe('Structure: function', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -392,9 +382,9 @@ describe('Structure: function', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
-      const jsThunkController = { [MEMORY]: fixed(0x2004) };
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(structure, jsThunkController, true);
       const constructor = env.defineStructure(structure);
       let controllerAddress, thunkAddress;
@@ -416,8 +406,8 @@ describe('Structure: function', function() {
   })
 })
 
-function fixed(address, len = 0) {
+function zig(address, len = 0) {
   const dv = new DataView(new ArrayBuffer(len));
-  dv[FIXED] = { address: usize(address), len };
+  dv[ZIG] = { address: usize(address), len };
   return dv;
 }

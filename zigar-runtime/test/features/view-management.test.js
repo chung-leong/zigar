@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, FIXED, LENGTH, MEMORY, SHAPE, TYPED_ARRAY } from '../../src/symbols.js';
+import { COPY, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -135,7 +135,6 @@ describe('Feature: view-management', function() {
       array[MEMORY] = new DataView(new ArrayBuffer(6));
       array.length = 3;
       const env = new Env();
-      debugger;
       const dv = env.extractView(structure, array);
       expect(dv).to.be.an.instanceOf(DataView);
     })
@@ -282,7 +281,7 @@ describe('Feature: view-management', function() {
       const dv = new DataView(new ArrayBuffer(16));
       env.assignView(target, dv, structure, false, null);
     })
-    it('should copy data when target is in fixed memory', function() {
+    it('should copy data when target is in Zig memory', function() {
       const env = new Env();
       const structure = {
         type: StructureType.Slice,
@@ -312,7 +311,7 @@ describe('Feature: view-management', function() {
           const address = nextAddress;
           nextAddress += usize(0x1000);
           const dv = new DataView(new ArrayBuffer(len));
-          dv[FIXED] = { address, len, allocator: this };
+          dv[ZIG] = { address, len, allocator: this };
           viewMap.set(address, dv);
           addressMap.set(dv, address);
           return dv;
@@ -345,7 +344,7 @@ describe('Feature: view-management', function() {
           const address = nextAddress;
           nextAddress += usize(0x1000);
           const dv = new DataView(new ArrayBuffer(len));
-          dv[FIXED] = { address, len, allocator: this };
+          dv[ZIG] = { address, len, allocator: this };
           viewMap.set(address, dv);
           addressMap.set(dv, address);
           return dv;
@@ -356,14 +355,14 @@ describe('Feature: view-management', function() {
       const dv = env.allocateMemory(32, 4, allocator);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(32);
-      expect(dv[FIXED]).to.be.an('object');
+      expect(dv[ZIG]).to.be.an('object');
     })
   })
-  describe('allocateRelocMemory', function() {
+  describe('allocateJSMemory', function() {
     if (process.env.TARGET === 'wasm') {
       it('should allocate relocable memory', function() {
         const env = new Env();
-        const dv = env.allocateRelocMemory(64, 32);
+        const dv = env.allocateJSMemory(64, 32);
         expect(dv.byteLength).to.equal(64);
         expect(dv.buffer.byteLength).to.equal(64);
       })
@@ -373,7 +372,7 @@ describe('Feature: view-management', function() {
         env.getBufferAddress = function(buffer) {
           return 0x1000n;
         };
-        const dv = env.allocateRelocMemory(64, 32);
+        const dv = env.allocateJSMemory(64, 32);
         expect(dv.byteLength).to.equal(64);
         expect(dv.buffer.byteLength).to.equal(96);
       })

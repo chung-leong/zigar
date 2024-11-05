@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import {
-  ADDRESS, COPY, FIXED, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET
+  ADDRESS, COPY, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, RESTORE, SLOTS, TARGET, ZIG,
 } from '../../src/symbols.js';
 import { adjustAddress, defineProperties, ObjectCache } from '../../src/utils.js';
 import { delay, usize } from '../test-utils.js';
@@ -16,7 +16,7 @@ describe('Feature: object-linkage', function() {
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
-      env.obtainFixedView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv.address = address;
         return dv;
@@ -43,7 +43,7 @@ describe('Feature: object-linkage', function() {
       env.recreateAddress = function(address) {
         return adjustAddress(usize(address), 0x1000);
       };
-      env.obtainFixedView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv.address = address;
         return dv;
@@ -114,12 +114,12 @@ describe('Feature: object-linkage', function() {
     }
   })
   describe('linkObject', function() {
-    it('should replace relocatable memory with fixed memory', function() {
+    it('should replace relocatable memory with Zig memory', function() {
       const env = new Env();
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
-      env.obtainFixedView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv.address = address;
         return dv;
@@ -142,7 +142,7 @@ describe('Feature: object-linkage', function() {
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
-      env.obtainFixedView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv.address = address;
         return dv;
@@ -160,20 +160,20 @@ describe('Feature: object-linkage', function() {
       expect(object[MEMORY]).to.not.equal(dv);
       expect(object[MEMORY].getUint32(0, true)).to.not.equal(1234);
     })
-    it('should ignore object already with fixed memory', function() {
+    it('should ignore object already with Zig memory', function() {
       const env = new Env();
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      const fixed = function(address, len) {
+      const zig = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len }
+        dv[ZIG] = { address, len }
         return dv;
       }
       defineProperties(Test.prototype, {
         [COPY]: env.defineCopier(4),
       });
-      const object = new Test(fixed(0x1000, 4));
+      const object = new Test(zig(0x1000, 4));
       const dv = object[MEMORY];
       env.linkObject(object, 0x1000, true);
       expect(object[MEMORY]).to.equal(dv);
@@ -183,7 +183,7 @@ describe('Feature: object-linkage', function() {
       env.recreateAddress = function(address) {
         return address + 0x1000;
       };
-      env.obtainFixedView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv.address = address;
         return dv;
@@ -217,7 +217,7 @@ describe('Feature: object-linkage', function() {
       };
       env.obtainExternView = function(address, len) {
         const buffer = new ArrayBuffer(len);
-        buffer[FIXED] = { address, len };
+        buffer[ZIG] = { address, len };
         return this.obtainView(buffer, 0, len);
       };
       const Test = function(dv) {
@@ -235,12 +235,12 @@ describe('Feature: object-linkage', function() {
       env.variables.push({ name: 'a', object: object1 });
       env.variables.push({ name: 'b', object: object2 });
       env.unlinkVariables();
-      expect(object1[MEMORY][FIXED]).to.be.undefined;
-      expect(object2[MEMORY][FIXED]).to.be.undefined;
+      expect(object1[MEMORY][ZIG]).to.be.undefined;
+      expect(object2[MEMORY][ZIG]).to.be.undefined;
     })
   })
   describe('unlinkObject', function() {
-    it('should replace buffer in fixed memory with ones in relocatable memory', function() {
+    it('should replace buffer in Zig memory with ones in relocatable memory', function() {
       const env = new Env();
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
@@ -249,7 +249,7 @@ describe('Feature: object-linkage', function() {
           const address = nextAddress;
           nextAddress += usize(0x1000);
           const dv = new DataView(new ArrayBuffer(len));
-          dv[FIXED] = { address, len, allocator: this };
+          dv[ZIG] = { address, len, allocator: this };
           viewMap.set(address, dv);
           addressMap.set(dv, address);
           return dv;
@@ -269,12 +269,12 @@ describe('Feature: object-linkage', function() {
 
       const object = new Test(env.allocateMemory(16, 8, allocator));
       const dv = object[MEMORY];
-      expect(dv[FIXED]).to.be.an('object');
+      expect(dv[ZIG]).to.be.an('object');
       dv.setUint32(12, 1234, true);
       env.unlinkObject(object);
       expect(object[MEMORY]).to.not.equal(dv);
       expect(dv.getUint32(12, true)).to.equal(1234);
-      expect(object[MEMORY][FIXED]).to.be.undefined;
+      expect(object[MEMORY][ZIG]).to.be.undefined;
       // should do nothing
       env.unlinkObject(object);
     })

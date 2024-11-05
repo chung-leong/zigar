@@ -153,7 +153,6 @@ export function addTests(importModule, options) {
         expect(error).to.be.an('error');
         error = null;
         const controller2 = new AbortController();
-        debugger;
         const promise2 = spawn(false, { signal: controller2.signal });
         setTimeout(() => controller2.abort(), 100);
         try {

@@ -2,8 +2,8 @@ import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, ArgumentCountMismatch, InvalidVariadicArgument } from '../errors.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, CONTEXT, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING, VISIT,
-  VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, CONTEXT, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING,
+  VISIT, VIVIFICATE,
 } from '../symbols.js';
 import { always, CallContext, defineProperties, defineValue } from '../utils.js';
 

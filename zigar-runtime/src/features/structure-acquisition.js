@@ -1,5 +1,11 @@
-import { CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, FIXED, MEMORY, SENTINEL, SLOTS } from '../../src/symbols.js';
-import { ErrorSetFlag, ExportFlag, MemberType, OpaqueFlag, PointerFlag, PrimitiveFlag, StructureFlag, structureNames, StructureType } from '../constants.js';
+import {
+  CONST_TARGET, CONTEXT, COPY, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG,
+} from '../../src/symbols.js';
+import {
+  ErrorSetFlag, ExportFlag, MemberType,
+  PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag,
+  structureNames, StructureType
+} from '../constants.js';
 import { mixin } from '../environment.js';
 import { CallContext, decodeText, defineProperty, findObjects } from '../utils.js';
 
@@ -74,15 +80,15 @@ export default mixin({
   },
   captureView(address, len, copy) {
     if (copy) {
-      // copy content into reloctable memory
-      const dv = this.allocateRelocMemory(len, 0);
+      // copy content into JavaScript memory
+      const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
         this.copyExternBytes(dv, address, len);
       }
       return dv;
     } else {
-      // link into fixed memory
-      return this.obtainFixedView(address, len);
+      // link into Zig memory
+      return this.obtainZigView(address, len);
     }
   },
   castView(address, len, copy, structure) {
@@ -113,7 +119,7 @@ export default mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
-    const thunk = { [MEMORY]: this.obtainFixedView(thunkAddress, 0) };
+    const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
     const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
@@ -159,8 +165,8 @@ export default mixin({
     const objects = findObjects(this.structures, SLOTS);
     const list = [];
     for (const object of objects) {
-      if (object[MEMORY]?.[FIXED]) {
-        // replace fixed memory
+      if (object[MEMORY]?.[ZIG]) {
+        // replace Zig memory
         const dv = object[MEMORY];
         const address = this.getViewAddress(dv);
         const offset = this.getMemoryOffset(address);
@@ -192,17 +198,17 @@ export default mixin({
     }
     if (process.env.MIXIN === 'track') {
       if (list.length > 0) {
-        // mixin "features/object-linkage" is used when there are objects linked to fixed memory
+        // mixin "features/object-linkage" is used when there are objects linked to Zig memory
         this.useObjectLinkage();
       }
     }
   },
   useStructures() {
     const module = this.getRootModule();
-    // add fixed memory object to list so they can be unlinked
+    // add Zig memory object to list so they can be unlinked
     const objects = findObjects(this.structures, SLOTS);
     for (const object of objects) {
-      if (object[MEMORY]?.[FIXED]) {
+      if (object[MEMORY]?.[ZIG]) {
         this.variables.push({ object });
       }
     }
@@ -259,7 +265,7 @@ export default mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsAny) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `E${this.structureCounters.enum++}`;
@@ -294,15 +300,15 @@ export default mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [ element ] } } = s;
-    return `[_]${element.structure.name}`;
+    const { instance: { members: [ element ] }, flags } = s;
+    return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
     const { instance: { members: [ element ] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
-    return (s.flags & OpaqueFlag.IsAny) ? 'anyopaque' : `O${this.structureCounters.opaque++}`;
+    return `O${this.structureCounters.opaque++}`;
   },
   getArgStructName(s) {
     const { instance: { members } } = s;

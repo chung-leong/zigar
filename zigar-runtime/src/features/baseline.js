@@ -47,7 +47,7 @@ export default mixin({
             insertObjects(object[SLOTS], placeholder.slots);
           }
           if (reloc !== undefined) {
-            // need to replace dataview with one pointing to fixed memory later,
+            // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ reloc, object });
           }

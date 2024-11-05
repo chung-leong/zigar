@@ -1,9 +1,11 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { ExportFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  ExportFlag, MemberType, PointerFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
 import { addressByteSize, addressSize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -174,8 +176,10 @@ describe('Feature: structure-acquisition', function() {
     it('should add structure to list', function() {
       const env = new Env();
       const s = {
+        type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
+        constructor: function() {},
       };
       env.endStructure(s);
       expect(env.structures[0]).to.equal(s);
@@ -194,10 +198,10 @@ describe('Feature: structure-acquisition', function() {
       expect(dv.getInt32(0, true)).to.equal(1234);
       expect(dv.getInt32(4, true)).to.equal(32);
     })
-    it('should get view of memory using obtainFixedView', function() {
+    it('should get view of memory using obtainZigView', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.obtainFixedView = (address, len) => {
+      env.obtainZigView = (address, len) => {
         return { address, len };
       };
       const result = env.captureView(1234, 32, false);
@@ -257,12 +261,14 @@ describe('Feature: structure-acquisition', function() {
     it('should return constructor of the last structure added', function() {
       const env = new Env();
       const s1 = {
+        type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
       };
       env.endStructure(s1);
       const s2 = {
+        type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
@@ -276,12 +282,14 @@ describe('Feature: structure-acquisition', function() {
     it('should return list of structures and keys for accessing them', function() {
       const env = new Env();
       const s1 = {
+        type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
       };
       env.endStructure(s1);
       const s2 = {
+        type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
@@ -297,22 +305,22 @@ describe('Feature: structure-acquisition', function() {
   describe('prepareObjectsForExport', function() {
     it('should combine data views that overlaps the same memory region', function() {
       const env = new Env();
-      env.getViewAddress = (dv) => dv[FIXED].address;
+      env.getViewAddress = (dv) => dv[ZIG].address;
       env.getMemoryOffset = (address) => Number(address);
       env.copyExternBytes = (dv, address, len) => {};
-      const fixed = function(address, len) {
+      const zig = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len }
+        dv[ZIG] = { address, len }
         return dv;
       };
       const templ1 = {
-        [MEMORY]: fixed(1002n, 8),
+        [MEMORY]: zig(1002n, 8),
       };
       const object = {
-        [MEMORY]: fixed(1016n, 8),
+        [MEMORY]: zig(1016n, 8),
       };
       const templ2 = {
-        [MEMORY]: fixed(1000n, 32),
+        [MEMORY]: zig(1000n, 32),
         [SLOTS]: {
           0: object,
         },
@@ -373,7 +381,7 @@ describe('Feature: structure-acquisition', function() {
       expect(env.structures).to.eql([]);
       expect(env.slots).to.eql({});
     })
-    it('should add objects in fixed memory to variable list', function() {
+    it('should add objects in Zig memory to variable list', function() {
       const env = new Env();
       const addressMap = new Map();
       env.getViewAddress = (dv) => addressMap.get(dv);
@@ -406,7 +414,7 @@ describe('Feature: structure-acquisition', function() {
       addressMap.set(templ1[MEMORY], 1002n);
       addressMap.set(templ2[MEMORY], 1000n);
       addressMap.set(object[MEMORY], 1016n);
-      object[MEMORY][FIXED] = { address: 1016n, len: 8 };
+      object[MEMORY][ZIG] = { address: 1016n, len: 8 };
       const module = env.useStructures();
       expect(env.variables.length).to.equal(1);
     })
@@ -435,7 +443,6 @@ describe('Feature: structure-acquisition', function() {
       env.endStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -474,7 +481,7 @@ describe('Feature: structure-acquisition', function() {
         type: MemberType.Object,
         structure: argStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
       env.defineStructure(structure);
       env.endStructure(structure);
@@ -518,7 +525,6 @@ describe('Feature: structure-acquisition', function() {
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: addressByteSize * 2,
       });
       env.attachMember(structure, {
@@ -551,7 +557,7 @@ describe('Feature: structure-acquisition', function() {
       env.obtainExternView = function(address, len) {
         requests.push({ address, len });
         const buffer = new ArrayBuffer(len);
-        buffer[FIXED] = { address, len };
+        buffer[ZIG] = { address, len };
         const dv = this.obtainView(buffer, 0, len);
         dv.setUint32(0, Number(address), true);
         return dv;
@@ -630,8 +636,8 @@ describe('Feature: structure-acquisition', function() {
   }
 })
 
-function fixed(address, len = 0) {
+function zig(address, len = 0) {
   const dv = new DataView(new ArrayBuffer(len));
-  dv[FIXED] = { address: usize(address), len };
+  dv[ZIG] = { address: usize(address), len };
   return dv;
 }

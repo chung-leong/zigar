@@ -107,10 +107,10 @@ export default mixin({
     descriptors.slice = {
       value(begin, end, options = {}) {
         const {
-          fixed = false
+          zig = false
         } = options;
         const dv1 = getSubArrayView.call(this, begin, end);
-        const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
+        const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, zig);
         const slice = constructor(dv2);
         slice[COPY]({ [MEMORY]: dv1 });
         return slice;

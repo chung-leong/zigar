@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import { ErrorSetFlag, MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -12,7 +12,6 @@ describe('Structure: error-union', function() {
       const structure = {
         type: StructureType.ErrorUnion,
         flags: 0,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -43,7 +42,6 @@ describe('Structure: error-union', function() {
       const structure = {
         type: StructureType.ErrorUnion,
         flags: 0,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -113,7 +111,6 @@ describe('Structure: error-union', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: 0,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -209,7 +206,7 @@ describe('Structure: error-union', function() {
       const env = new Env();
       const anyErrorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'anyerror',
+        flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
       });
       env.attachMember(anyErrorStructure, {
@@ -222,7 +219,6 @@ describe('Structure: error-union', function() {
       env.defineStructure(anyErrorStructure);
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'MyError',
         byteSize: 2,
       });
       env.attachMember(errorStructure, {
@@ -256,7 +252,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -289,7 +284,6 @@ describe('Structure: error-union', function() {
       const env = new Env();
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'MyError',
         byteSize: 2,
       });
       env.attachMember(errorStructure, {
@@ -323,7 +317,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -353,7 +346,6 @@ describe('Structure: error-union', function() {
       const env = new Env();
       const errorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'MyError',
         byteSize: 2,
       });
       env.attachMember(errorStructure, {
@@ -387,7 +379,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -573,7 +564,6 @@ describe('Structure: error-union', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 16,
       });
       env.attachMember(structure, {
@@ -641,7 +631,6 @@ describe('Structure: error-union', function() {
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -685,7 +674,6 @@ describe('Structure: error-union', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -785,7 +773,6 @@ describe('Structure: error-union', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
-        name: 'Hello',
         byteSize: 16,
       });
       env.attachMember(structure, {
@@ -881,7 +868,6 @@ describe('Structure: error-union', function() {
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 16,
       });
       env.attachMember(structure, {
@@ -946,7 +932,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1011,7 +996,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1075,7 +1059,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1138,7 +1121,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1204,7 +1186,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1268,7 +1249,6 @@ describe('Structure: error-union', function() {
       env.endStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {

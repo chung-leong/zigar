@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FIXED, MEMORY } from '../symbols.js';
+import { MEMORY, ZIG } from '../symbols.js';
 import { encodeText } from '../utils.js';
 
 export default mixin({
@@ -13,9 +13,9 @@ export default mixin({
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];
-        const fixed = dv[FIXED];
-        if (fixed) {
-          fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
+        const zig = dv[ZIG];
+        if (zig) {
+          zig.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
         }
         return dv;
       }
@@ -24,8 +24,8 @@ export default mixin({
   defineFree(dv) {
     return {
       value(dv) {
-        const fixed = dv[FIXED];
-        const f = fixed?.free;
+        const zig = dv[ZIG];
+        const f = zig?.free;
         if (!f) {
           throw new TypeMismatch('DataView object from alloc()', dv);
         }

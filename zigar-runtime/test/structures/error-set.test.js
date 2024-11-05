@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, StructureType } from '../../src/constants.js';
+import { ErrorSetFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -11,7 +11,6 @@ describe('Structure: error-set', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
         instance: {},
         static: {
@@ -38,7 +37,6 @@ describe('Structure: error-set', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
         instance: {},
         static: {
@@ -154,7 +152,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -219,7 +216,6 @@ describe('Structure: error-set', function() {
       // define error first
       const errorStructure1 = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet1',
         byteSize: 2,
       });
       env.attachMember(errorStructure1, {
@@ -254,7 +250,7 @@ describe('Structure: error-set', function() {
       // define anyerror
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'anyerror',
+        flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -262,13 +258,13 @@ describe('Structure: error-set', function() {
         bitSize: 16,
         bitOffset: 0,
         byteSize: 2,
+        structure,
       });
       const AnyError = env.defineStructure(structure);
       env.endStructure(structure);
       // define another error afterward
       const errorStructure2 = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet2',
         byteSize: 2,
       });
       env.attachMember(errorStructure2, {
@@ -320,7 +316,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -362,7 +357,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -429,7 +423,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -470,7 +463,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -510,7 +502,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -555,7 +546,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -724,7 +714,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -762,7 +751,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -800,7 +788,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -839,7 +826,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {
@@ -877,7 +863,6 @@ describe('Structure: error-set', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        name: 'ErrorSet',
         byteSize: 2,
       });
       env.attachMember(structure, {

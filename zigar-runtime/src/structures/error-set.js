@@ -27,7 +27,7 @@ export default mixin({
       this.currentGlobalSet = this.defineStructure(ae);
       this.finalizeStructure(ae);
     }
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);
@@ -61,7 +61,7 @@ export default mixin({
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
       // already finalized
       return false;
     }

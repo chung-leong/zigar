@@ -16,7 +16,6 @@ describe('Feature: abort-signal', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -73,7 +72,6 @@ describe('Feature: abort-signal', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -143,7 +141,6 @@ describe('Feature: abort-signal', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });

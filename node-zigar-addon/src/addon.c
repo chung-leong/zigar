@@ -328,7 +328,7 @@ napi_value allocate_external_memory(napi_env env,
     }
     memory mem;
     if (md->mod->imports->allocate_extern_memory(bin, len, align, &mem) != OK) {
-        return throw_error(env, "Unable to allocate fixed memory");
+        return throw_error(env, "Unable to allocate extern memory");
     }
     napi_value address;
     if (napi_create_uintptr(env, (uintptr_t) mem.bytes, &address) != napi_ok) {

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, COPY, FIXED, MEMORY } from '../../src/symbols.js';
+import { ALIGN, COPY, MEMORY, ZIG } from '../../src/symbols.js';
 import { adjustAddress, CallContext, defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -313,21 +313,21 @@ describe('Feature: memory-mapping', function() {
       expect(freed).to.equal(shadow[MEMORY]);
     })
   })
-  describe('allocateFixedMemory', function() {
-    it('should try to allocate fixed memory from zig', function() {
+  describe('allocateZigMemory', function() {
+    it('should try to allocate Zig memory from zig', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
         return usize(0x1000);
       };
       env.obtainExternView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len };
+        dv[ZIG] = { address, len };
         return dv;
       };
-      const dv = env.allocateFixedMemory(400, 4);
+      const dv = env.allocateZigMemory(400, 4);
       expect(dv).to.be.instanceOf(DataView);
       expect(dv.byteLength).to.equal(400);
-      expect(dv[FIXED]).to.be.an('object');
+      expect(dv[ZIG]).to.be.an('object');
     })
     it('should return empty data view when len is 0', function() {
       const env = new Env();
@@ -336,48 +336,48 @@ describe('Feature: memory-mapping', function() {
       };
       env.obtainExternView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len };
+        dv[ZIG] = { address, len };
         return dv;
       };
-      const dv1 = env.allocateFixedMemory(0, 4);
-      const dv2 = env.allocateFixedMemory(0, 1);
+      const dv1 = env.allocateZigMemory(0, 4);
+      const dv2 = env.allocateZigMemory(0, 1);
       expect(dv1.byteLength).to.equal(0);
       expect(dv2.byteLength).to.equal(0);
-      expect(dv1[FIXED]).to.be.an('object')
+      expect(dv1[ZIG]).to.be.an('object')
     })
   })
-  describe('freeFixedMemory', function() {
-    it('should try to free fixed memory through Zig', function() {
+  describe('freeZigMemory', function() {
+    it('should try to free Zig memory through Zig', function() {
       const env = new Env();
       let args;
       env.freeExternMemory = function(type, address, len, align) {
         args = { type, address, len, align };
       };
       const dv = new DataView(new ArrayBuffer(16));
-      dv[FIXED] = {
+      dv[ZIG] = {
         type: 0,
         address: usize(0x1000),
         len: 16,
         align: 4,
       };
-      env.freeFixedMemory(dv);
+      env.freeZigMemory(dv);
       expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
     })
-    it('should try to free fixed memory with unaligned address through Zig', function() {
+    it('should try to free Zig memory with unaligned address through Zig', function() {
       const env = new Env();
       let args;
       env.freeExternMemory = function(type, address, len, align) {
         args = { type, address, len, align };
       };
       const dv = new DataView(new ArrayBuffer(16));
-      dv[FIXED] = {
+      dv[ZIG] = {
         type: 0,
         unalignedAddress: usize(0x1000),
         address: usize(0x1004),
         len: 16,
         align: 4,
       };
-      env.freeFixedMemory(dv);
+      env.freeZigMemory(dv);
       expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
     })
     it('should do nothing when len is 0', function() {
@@ -387,66 +387,66 @@ describe('Feature: memory-mapping', function() {
         called = true;
       };
       const dv = new DataView(new ArrayBuffer(0));
-      dv[FIXED] = {
+      dv[ZIG] = {
         type: 0,
         address: usize(0x1000),
         len: 0,
         align: 0,
       };
-      env.freeFixedMemory(dv);
+      env.freeZigMemory(dv);
       expect(called).to.equal(false);
     })
   })
-  describe('obtainFixedView', function() {
-    it('should return a data view covering fixed memory at given address', function() {
+  describe('obtainZigView', function() {
+    it('should return a data view covering Zig memory at given address', function() {
       const env = new Env();
       env.obtainExternView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len };
+        dv[ZIG] = { address, len };
         return dv;
       };
-      const dv = env.obtainFixedView(usize(0x1000), 16);
+      const dv = env.obtainZigView(usize(0x1000), 16);
       expect(dv.byteLength).to.equal(16);
-      expect(dv[FIXED]).to.be.an('object')
+      expect(dv[ZIG]).to.be.an('object')
     })
     it('should return empty data view when len is 0', function() {
       const env = new Env();
       env.obtainExternView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
-        dv[FIXED] = { address, len };
+        dv[ZIG] = { address, len };
         return dv;
       };
-      const dv1 = env.obtainFixedView(usize(0x1000), 0);
-      const dv2 = env.obtainFixedView(usize(0x2000), 0);
+      const dv1 = env.obtainZigView(usize(0x1000), 0);
+      const dv2 = env.obtainZigView(usize(0x2000), 0);
       expect(dv1.byteLength).to.equal(0);
       expect(dv2.byteLength).to.equal(0);
       expect(dv1).to.not.equal(dv2);
-      expect(dv1[FIXED]).to.be.an('object')
-      expect(dv2[FIXED]).to.be.an('object')
+      expect(dv1[ZIG]).to.be.an('object')
+      expect(dv2[ZIG]).to.be.an('object')
     })
     it('should return a view to the empty buffer when len is zero and address is 0', function() {
       const env = new Env();
-      const dv = env.obtainFixedView(usize(0), 0);
+      const dv = env.obtainZigView(usize(0), 0);
       expect(dv.buffer).to.equal(env.emptyBuffer);
     })
   })
-  describe('releaseFixedView', function() {
-    it('should invoke free method attached to fixed view', function() {
+  describe('releaseZigView', function() {
+    it('should invoke free method attached to zig view', function() {
       const env = new Env();
       let called = false;
       const dv = new DataView(new ArrayBuffer(8));
-      dv[FIXED] = { address: 0x1000, len: 8, free: () => called = true };
-      env.releaseFixedView(dv);
+      dv[ZIG] = { address: 0x1000, len: 8, free: () => called = true };
+      env.releaseZigView(dv);
       expect(called).to.be.true;
-      expect(dv[FIXED].address).to.equal(usize(-1));
+      expect(dv[ZIG].address).to.equal(usize(-1));
     })
     it('should remove view from empty buffer map', function() {
       const env = new Env();
-      const dv1 = env.obtainFixedView(0x1000, 0);
-      const dv2 = env.obtainFixedView(0x1000, 0);
+      const dv1 = env.obtainZigView(0x1000, 0);
+      const dv2 = env.obtainZigView(0x1000, 0);
       expect(dv2).to.equal(dv1);
-      env.releaseFixedView(dv1);
-      const dv3 = env.obtainFixedView(0x1000, 0);
+      env.releaseZigView(dv1);
+      const dv3 = env.obtainZigView(0x1000, 0);
       expect(dv3).to.not.equal(dv1);
     })
   })
@@ -473,7 +473,7 @@ describe('Feature: memory-mapping', function() {
   describe('findMemory', function() {
     it('should find previously imported buffer', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       const context = new CallContext();
@@ -485,7 +485,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should find previously imported buffer when size is undefined', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       const context = new CallContext();
@@ -497,7 +497,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should find a subslice of previously imported buffer', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       const context = new CallContext();
@@ -509,7 +509,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return data view of shared memory if address is not known', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       const context = new CallContext();
@@ -520,7 +520,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return data view of shared memory if address is not known and size, is undefined', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const dv1 = new DataView(new ArrayBuffer(32));
       const context = new CallContext();
@@ -543,7 +543,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return empty view when address is invalid and count is 0', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const context = new CallContext();
       const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
@@ -551,7 +551,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should mark context as retained when the context itself is referenced', function() {
       const env = new Env();
-      env.obtainFixedView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const context = new CallContext();
       context.id = usize(0x1234);
@@ -631,11 +631,11 @@ describe('Feature: memory-mapping', function() {
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(0);
       })
-      it('should return the address when object is in fixed memory', function() {
+      it('should return the address when object is in Zig memory', function() {
         const env = new Env();
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
         const object = {
-          [MEMORY]: env.obtainFixedView(256, 0),
+          [MEMORY]: env.obtainZigView(256, 0),
         };
         const context = new CallContext();
         const address = env.getTargetAddress(context, object);

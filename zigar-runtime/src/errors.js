@@ -332,9 +332,9 @@ export class InvalidPointerTarget extends TypeError {
   }
 }
 
-export class FixedMemoryTargetRequired extends TypeError {
+export class ZigMemoryTargetRequired extends TypeError {
   constructor(structure, arg) {
-    super(`Pointers in fixed memory cannot point to garbage-collected object`);
+    super(`Pointers in Zig memory cannot point to garbage-collected object`);
   }
 }
 

@@ -1,11 +1,11 @@
 import { expect } from 'chai';
 import {
-  Action,
-  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType,
+  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructureFlag,
+  StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, FIXED, MEMORY, SLOTS } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
 import { capture, captureError, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -31,7 +31,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const jsThunkConstructor = {
         [MEMORY]: new DataView(new ArrayBuffer(0))
       };
-      jsThunkConstructor[MEMORY][FIXED] = { address: usize(0x8888) };
+      jsThunkConstructor[MEMORY][ZIG] = { address: usize(0x8888) };
       const env = new Env();
       let constructorAddr, fnIds = [];
       let nextThunkAddr = usize(0x10000);
@@ -55,7 +55,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const jsThunkConstructor = {
         [MEMORY]: new DataView(new ArrayBuffer(0))
       };
-      jsThunkConstructor[MEMORY][FIXED] = { address: usize(0x8888) };
+      jsThunkConstructor[MEMORY][ZIG] = { address: usize(0x8888) };
       const env = new Env();
       env.createJsThunk = () => 0;
       expect(() => env.getFunctionThunk(() => {}, jsThunkConstructor)).to.throw(Error);
@@ -81,7 +81,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -129,7 +128,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -160,7 +158,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: ptrStructure.byteSize * 2,
         length: 1,
       });
@@ -269,7 +266,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 18,
         length: 1,
       });
@@ -425,7 +421,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -489,7 +484,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -614,7 +608,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
-        name: 'Hello',
         byteSize: 6 + 4 * 2,
         length: 2,
       });
@@ -732,7 +725,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
-        name: 'Hello',
         byteSize: 6 + 4 * 2,
         length: 2,
       });
@@ -795,7 +787,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -864,7 +855,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -934,7 +924,6 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -986,7 +975,7 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       const self = env.createInboundCaller(fn, ArgStruct)
       const dv = new DataView(new ArrayBuffer(0));
-      dv[FIXED] = { address: usize(0x1234), len: 0 };
+      dv[ZIG] = { address: usize(0x1234), len: 0 };
       const controller = { [MEMORY]: dv };
       env.createJsThunk = function() {
         return usize(0x1000);

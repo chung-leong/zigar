@@ -1,5 +1,7 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
@@ -242,7 +244,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -320,7 +321,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(uintStructure, {
@@ -355,7 +355,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(uintStructure, {
@@ -387,7 +386,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(uintStructure, {
@@ -420,7 +418,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -563,7 +560,7 @@ describe('Structure: slice', function() {
       const slice2 = new Slice(str + '!');
       expect(() => slice.$ = slice2).to.throw(TypeError);
     })
-    it('should initialize correctly from a string when fixed is specified', function() {
+    it('should initialize correctly from a string when zig is specified', function() {
       const env = new Env();
       env.allocateExternMemory = function(type, len, align) {
         return usize(0x1000);
@@ -577,7 +574,6 @@ describe('Structure: slice', function() {
       }
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -604,7 +600,7 @@ describe('Structure: slice', function() {
       const Slice = env.defineStructure(structure);
       env.endStructure(structure);
       const str = 'Slice world';
-      const slice = new Slice(str, { fixed: true });
+      const slice = new Slice(str, { zig: true });
       expect(slice).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
         expect(slice[i]).to.equal(str.charCodeAt(i));
@@ -747,7 +743,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -784,7 +779,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -821,7 +815,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -859,7 +852,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -895,7 +887,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -928,7 +919,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -967,7 +957,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1005,7 +994,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1041,7 +1029,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1083,7 +1070,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1134,7 +1120,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1202,7 +1187,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1273,7 +1257,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1313,7 +1296,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1347,7 +1329,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1536,7 +1517,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1648,7 +1628,6 @@ describe('Structure: slice', function() {
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(uintStructure, {
@@ -1701,7 +1680,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1748,7 +1726,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1793,7 +1770,6 @@ describe('Structure: slice', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1838,7 +1814,6 @@ describe('Structure: slice', function() {
       env.runtimeSafety = true;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1887,7 +1862,6 @@ describe('Structure: slice', function() {
       env.runtimeSafety = true;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1937,7 +1911,6 @@ describe('Structure: slice', function() {
       env.runtimeSafety = false;
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(uintStructure, {
@@ -1988,8 +1961,7 @@ describe('Structure: slice', function() {
         const env = new Env();
         const uintStructure = env.beginStructure({
           type: StructureType.Primitive,
-          name: 'u32',
-          byteSize: 4,
+            byteSize: 4,
         });
         env.attachMember(uintStructure, {
           type: MemberType.Uint,

@@ -11,7 +11,6 @@ describe('Structure: optional', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Optional,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -42,7 +41,6 @@ describe('Structure: optional', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Optional,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -78,7 +76,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -115,7 +112,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -148,7 +144,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -178,7 +173,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -211,7 +205,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -268,7 +261,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | StructureFlag.HasSlot | StructureFlag.HasObject | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -319,7 +311,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 18,
       });
       env.attachMember(structure, {
@@ -363,7 +354,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 1,
       });
       env.attachMember(structure, {
@@ -428,7 +418,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -460,7 +449,6 @@ describe('Structure: optional', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -505,7 +493,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 16,
       });
       env.attachMember(structure, {
@@ -542,7 +529,6 @@ describe('Structure: optional', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -587,7 +573,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: 16,
       });
       env.attachMember(structure, {
@@ -651,7 +636,6 @@ describe('Structure: optional', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 8 * 2,
       });
       env.attachMember(structStructure, {
@@ -693,7 +677,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: structStructure.byteSize + 32,
       });
       env.attachMember(structure, {
@@ -761,7 +744,6 @@ describe('Structure: optional', function() {
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 8 * 2,
       });
       env.attachMember(structStructure, {
@@ -803,7 +785,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: structStructure.byteSize + 4,
       });
       env.attachMember(structure, {
@@ -867,7 +848,6 @@ describe('Structure: optional', function() {
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         length: 4,
         byteSize: 8 * 4,
       });
@@ -882,7 +862,6 @@ describe('Structure: optional', function() {
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
-        name: 'Hello',
         byteSize: arrayStructure.byteSize + 32,
       });
       env.attachMember(structure, {

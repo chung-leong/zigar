@@ -701,7 +701,6 @@ export function addTests(importModule, options) {
       const f = fopen(path, 'r');
       const count1 = fread(buffer1, 1, buffer1.byteLength, f);
       const count2 = fread(buffer2, 1, buffer2.byteLength, f);
-      debugger;
       fclose(f);
       expect(`${count1}`).to.equal(`${buffer1.byteLength}`);
       expect(`${count2}`).to.equal(`${buffer2.byteLength}`);

@@ -269,7 +269,7 @@ fn getMainThreadModuleData() !*ModuleData {
     return module_data_list.getLastOrNull() orelse Error.NotInMainThread;
 }
 
-// allocator for fixed memory
+// allocator for extern memory
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 var module_data_list = std.ArrayList(*ModuleData).init(allocator);
@@ -418,8 +418,8 @@ const Imports = extern struct {
 const Exports = extern struct {
     initialize: *const fn (*ModuleData) callconv(.C) Result,
     deinitialize: *const fn (*ModuleData) callconv(.C) Result,
-    allocate_fixed_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
-    free_fixed_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
+    allocate_extern_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
+    free_extern_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
@@ -451,8 +451,8 @@ pub fn createModule(comptime module: type) Module {
         .exports = &.{
             .initialize = initialize,
             .deinitialize = deinitialize,
-            .allocate_fixed_memory = allocateExternMemory,
-            .free_fixed_memory = freeExternMemory,
+            .allocate_extern_memory = allocateExternMemory,
+            .free_extern_memory = freeExternMemory,
             .get_factory_thunk = ns.getFactoryThunk,
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,

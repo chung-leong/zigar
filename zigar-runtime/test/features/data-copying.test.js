@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CACHE, FIXED, MEMORY, RESTORE } from '../../src/symbols.js';
+import { CACHE, MEMORY, RESTORE, ZIG } from '../../src/symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -84,7 +84,7 @@ describe('Feature: data-copying', function() {
         const env = new Env();
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
         const dv = new DataView(memory.buffer, 1000, 8);
-        dv[FIXED] = { address: 1000, len: 8 };
+        dv[ZIG] = { address: 1000, len: 8 };
         const constructor = function() {};
         defineProperties(constructor, {
           [CACHE]: defineValue(new ObjectCache()),
@@ -105,7 +105,7 @@ describe('Feature: data-copying', function() {
 
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
         const dv = new DataView(memory.buffer, 1000, 8);
-        dv[FIXED] = { address: 1000, len: 8, align: 4 };
+        dv[ZIG] = { address: 1000, len: 8, align: 4 };
         const constructor = function() {};
         defineProperties(constructor, {
           [CACHE]: defineValue(new ObjectCache()),
@@ -119,7 +119,7 @@ describe('Feature: data-copying', function() {
         object[RESTORE]();
         expect(object[MEMORY]).to.not.equal(dv);
         expect(() => object[MEMORY].getUint8(0)).to.not.throw();
-        expect(object[MEMORY][FIXED].align).to.equal(4);
+        expect(object[MEMORY][ZIG].align).to.equal(4);
       })
     })
   }

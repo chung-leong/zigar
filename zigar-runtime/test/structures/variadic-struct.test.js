@@ -12,7 +12,6 @@ describe('Structure: variadic-struct', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.VariadicStruct,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -44,7 +43,6 @@ describe('Structure: variadic-struct', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.VariadicStruct,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -84,7 +82,6 @@ describe('Structure: variadic-struct', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
         align: 4,
       });
@@ -132,7 +129,6 @@ describe('Structure: variadic-struct', function() {
       env.endStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         align: 4,
         length: 2,
@@ -187,7 +183,6 @@ describe('Structure: variadic-struct', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
         align: 4,
       });
@@ -219,7 +214,6 @@ describe('Structure: variadic-struct', function() {
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 4 + 4 + 4,
         align: 4,
         length: 2,
@@ -271,7 +265,6 @@ describe('Structure: variadic-struct', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
         align: 4,
       });
@@ -303,7 +296,6 @@ describe('Structure: variadic-struct', function() {
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: 4 + 4 + 4,
         align: 4,
         length: 2,

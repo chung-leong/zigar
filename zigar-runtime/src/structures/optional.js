@@ -1,6 +1,6 @@
 import { MemberType, OptionalFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { COPY, FIXED, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE, ZIG } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -42,7 +42,7 @@ export default mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][FIXED])) {
+        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][ZIG])) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated

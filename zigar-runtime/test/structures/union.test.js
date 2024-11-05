@@ -1,9 +1,11 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag } from '../../src/constants.js';
+import {
+  MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import {
-  ENTRIES, ENVIRONMENT, FIXED, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT
+  ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, encodeBase64 } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
@@ -15,7 +17,6 @@ describe('Structure: union', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Union,
-        name: 'Hello',
         byteSize: 4,
         instance: {},
         static: { members: [] },
@@ -51,7 +52,6 @@ describe('Structure: union', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Union,
-        name: 'Hello',
         byteSize: 4,
         instance: {},
         static: { members: [] },
@@ -101,7 +101,6 @@ describe('Structure: union', function() {
       const structure = {
         type: StructureType.Union,
         flags: UnionFlag.HasTag,
-        name: 'Hello',
         byteSize: 4,
         instance: {},
         static: { members: [] },
@@ -147,7 +146,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.IsExtern,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -185,7 +183,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.IsExtern,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -216,7 +213,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.IsExtern,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -244,7 +240,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -294,7 +289,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -337,7 +331,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -375,7 +368,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -416,7 +408,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 6,
       });
       env.attachMember(structure, {
@@ -457,7 +448,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 6,
       });
       env.attachMember(structure, {
@@ -522,7 +512,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: structStructure.byteSize * 8 + 32,
       });
       env.attachMember(structure, {
@@ -563,7 +552,6 @@ describe('Structure: union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -626,7 +614,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasSelector | UnionFlag.HasInaccessible,
-        name: 'Hello',
         byteSize: 8 * 4,
       });
       env.attachMember(structure, {
@@ -731,7 +718,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 6,
       });
       env.attachMember(structure, {
@@ -822,7 +808,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -860,7 +845,6 @@ describe('Structure: union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -925,7 +909,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -966,7 +949,6 @@ describe('Structure: union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1031,7 +1013,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1072,7 +1053,6 @@ describe('Structure: union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1137,7 +1117,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1180,7 +1159,6 @@ describe('Structure: union', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1245,7 +1223,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasTag | UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 10,
       });
       env.attachMember(structure, {
@@ -1291,7 +1268,6 @@ describe('Structure: union', function() {
     //   const intStructure = env.beginStructure({
     //     type: StructureType.Primitive,
     //     flags: StructureFlag.HasValue,
-    //     name: 'i32',
     //     byteSize: 4,
     //   });
     //   env.attachMember(intStructure, {
@@ -1397,7 +1373,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1438,7 +1413,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1476,7 +1450,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1515,7 +1488,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1553,7 +1525,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1593,7 +1564,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.HasSelector,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -1633,7 +1603,6 @@ describe('Structure: union', function() {
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: UnionFlag.IsExtern | UnionFlag.IsIterator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -1724,7 +1693,7 @@ describe('Structure: union', function() {
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      thunk[MEMORY][FIXED] = { address: usize(0x8888) };
+      thunk[MEMORY][ZIG] = { address: usize(0x8888) };
       env.attachTemplate(fnStructure, thunk, false);
       const Next = env.defineStructure(fnStructure);
       env.endStructure(fnStructure);
@@ -1736,7 +1705,7 @@ describe('Structure: union', function() {
         structure: fnStructure,
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
-      fnDV[FIXED] = { address: usize(0x1_8888) };
+      fnDV[ZIG] = { address: usize(0x1_8888) };
       const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {
@@ -1760,7 +1729,6 @@ describe('Structure: union', function() {
         } else {
           argDV.setInt32(0, 0, true);
           argDV.setInt8(4, 0);
-          debugger;
         }
         return true;
       };

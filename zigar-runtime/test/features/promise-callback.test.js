@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CONTEXT, FINALIZE, FIXED, MEMORY, PROMISE } from '../../src/symbols.js';
+import { CONTEXT, FINALIZE, MEMORY, PROMISE, ZIG } from '../../src/symbols.js';
 import { CallContext } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -21,7 +21,7 @@ describe('Feature: promise-callback', function() {
       const result = await args[PROMISE];
       expect(result).to.equal(123);
     })
-    it('should create copy of the result when it uses fixed memory', async function() {
+    it('should create copy of the result when it uses Zig memory', async function() {
       const env = new Env();
       const args = {
         [CONTEXT]: new CallContext(),
@@ -38,11 +38,11 @@ describe('Feature: promise-callback', function() {
       };
       const resultFixed = new Result();
       resultFixed[MEMORY].setInt32(0, 1234);
-      resultFixed[MEMORY][FIXED] = { address: usize(0x1000), len: 4 };
+      resultFixed[MEMORY][ZIG] = { address: usize(0x1000), len: 4 };
       callback(resultFixed);
       const result = await args[PROMISE];
       expect(result[MEMORY]).to.not.equal(resultFixed[MEMORY]);
-      expect(result[MEMORY][FIXED]).to.be.undefined;
+      expect(result[MEMORY][ZIG]).to.be.undefined;
     })
     it('should reject a promise when the callback function is given an error', async function() {
       const env = new Env();

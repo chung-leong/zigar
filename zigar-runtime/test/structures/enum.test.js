@@ -11,7 +11,6 @@ describe('Structure: enum', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 1,
         instance: {},
         static: { members: [] },
@@ -33,7 +32,6 @@ describe('Structure: enum', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 1,
         instance: {},
         static: { members: [] },
@@ -59,7 +57,6 @@ describe('Structure: enum', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 1,
         instance: {},
         static: {
@@ -86,7 +83,6 @@ describe('Structure: enum', function() {
     it('should add descriptors for items in enum set', function() {
       const structure = {
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 1,
         instance: {},
         static: {},
@@ -140,7 +136,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -191,7 +186,6 @@ describe('Structure: enum', function() {
       const structure = env.beginStructure({
         type: StructureType.Enum,
         flags: EnumFlag.IsOpenEnded,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -241,7 +235,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -282,7 +275,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -338,7 +330,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -377,7 +368,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -416,7 +406,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -456,7 +445,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -497,7 +485,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -537,7 +524,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -581,7 +567,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -620,7 +605,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -699,7 +683,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -720,7 +703,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -741,7 +723,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -780,7 +761,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -818,7 +798,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Enum,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(structure, {

@@ -12,7 +12,6 @@ describe('Structure: array', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Array,
-        name: '[4]i32',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -33,7 +32,6 @@ describe('Structure: array', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Array,
-        name: '[4]i32',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -91,7 +89,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -105,7 +102,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -132,7 +128,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -146,7 +141,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -167,7 +161,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -181,7 +174,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -218,7 +210,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -232,7 +223,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -252,7 +242,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -266,7 +255,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -291,7 +279,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -305,7 +292,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -331,7 +317,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -345,7 +330,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -374,7 +358,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -388,7 +371,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -406,7 +388,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -420,7 +401,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -441,7 +421,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -455,7 +434,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -475,7 +453,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -489,7 +466,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u32',
         length: 4,
         byteSize: 8 * 4,
       });
@@ -510,7 +486,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -525,7 +500,6 @@ describe('Structure: array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: ArrayFlag.IsString,
-        name: '[11]u8',
         length: 11,
         byteSize: 11,
       });
@@ -548,7 +522,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -563,7 +536,6 @@ describe('Structure: array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: ArrayFlag.IsString,
-        name: '[11]u8',
         length: 11,
         byteSize: 22,
       });
@@ -763,7 +735,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -778,7 +749,6 @@ describe('Structure: array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: ArrayFlag.IsString,
-        name: '[11]u8',
         length: 11,
         byteSize: 11,
       });
@@ -802,7 +772,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -817,7 +786,6 @@ describe('Structure: array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: ArrayFlag.IsString,
-        name: '[11]u8',
         length: 11,
         byteSize: 11,
       });
@@ -840,7 +808,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -854,7 +821,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -880,7 +846,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -894,7 +859,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -917,7 +881,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -931,7 +894,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -951,7 +913,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -965,7 +926,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -991,7 +951,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -1005,7 +964,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -1030,7 +988,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -1044,7 +1001,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -1067,7 +1023,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -1081,7 +1036,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: '[8]u8',
         length: 8,
         byteSize: 8,
       });
@@ -1110,7 +1064,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -1124,7 +1077,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: 'Hello',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -1142,7 +1094,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1156,7 +1107,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: 'Hello',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -1174,7 +1124,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1188,7 +1137,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -1214,7 +1162,6 @@ describe('Structure: array', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*Hello',
         byteSize: 8,
       });
       env.attachMember(ptrStructure, {
@@ -1256,7 +1203,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1270,7 +1216,6 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(structStructure, {
@@ -1358,7 +1303,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1373,7 +1317,6 @@ describe('Structure: array', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*i32',
         byteSize: 8,
       });
       env.attachMember(ptrStructure, {
@@ -1429,7 +1372,6 @@ describe('Structure: array', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1444,7 +1386,6 @@ describe('Structure: array', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*i32',
         byteSize: 8,
       });
       env.attachMember(ptrStructure, {
@@ -1460,7 +1401,6 @@ describe('Structure: array', function() {
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
       });
@@ -1485,7 +1425,6 @@ describe('Structure: array', function() {
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1500,7 +1439,6 @@ describe('Structure: array', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*i32',
         byteSize: 8,
       });
       env.attachMember(ptrStructure, {
@@ -1587,7 +1525,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1601,7 +1538,6 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: 'Hello',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -1630,7 +1566,6 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -1644,7 +1579,6 @@ describe('Structure: array', function() {
       env.endStructure(intStructure)
       const structure = env.beginStructure({
         type: StructureType.Array,
-        name: 'Hello',
         length: 8,
         byteSize: 4 * 8,
       });

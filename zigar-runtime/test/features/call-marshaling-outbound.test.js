@@ -1,10 +1,14 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
-import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  MemberType, PointerFlag, StructFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { ALIGN, ATTRIBUTES, CONTEXT, COPY, FINALIZE, FIXED, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import {
+  ALIGN, ATTRIBUTES, CONTEXT, COPY, FINALIZE, MEMORY, SLOTS, VISIT, ZIG,
+} from '../../src/symbols.js';
 import { defineProperties, defineProperty, usizeMin } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -33,7 +37,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -66,7 +69,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      thunk[MEMORY][ZIG] = { address: usize(0x1004) };
       const self = env.createOutboundCaller(thunk, ArgStruct)
       let thunkAddress, fnAddress, argAddress;
       env.runThunk = (...args) => {
@@ -76,7 +79,7 @@ describe('Feature: call-marshaling-outbound', function() {
         return true;
       };
       self[MEMORY] = new DataView(new ArrayBuffer(0));
-      self[MEMORY][FIXED] = { address: usize(0x2008) };
+      self[MEMORY][ZIG] = { address: usize(0x2008) };
       env.allocateExternMemory = function(address, len) {
         return usize(0x4000);
       };
@@ -132,7 +135,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -165,7 +167,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      thunk[MEMORY][FIXED] = { address: usize(0x1004) };
+      thunk[MEMORY][ZIG] = { address: usize(0x1004) };
       const self = env.createOutboundCaller(thunk, ArgStruct)
       defineProperty(self, 'name', { value: 'dingo' });
       env.runThunk = () => {};
@@ -187,9 +189,9 @@ describe('Feature: call-marshaling-outbound', function() {
           [COPY]: env.defineCopier(4),
         });
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
+        const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
-        self[MEMORY] = env.obtainFixedView(usize(200), 0);
+        self[MEMORY] = env.obtainZigView(usize(200), 0);
         const promise = self();
         expect(promise).to.be.a('promise');
         let thunkAddress, fnAddress, argAddress;
@@ -225,9 +227,9 @@ describe('Feature: call-marshaling-outbound', function() {
           [COPY]: env.defineCopier(4),
         });
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
+        const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
-        self[MEMORY] = env.obtainFixedView(usize(200), 0);
+        self[MEMORY] = env.obtainZigView(usize(200), 0);
         const promise = self();
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
@@ -255,9 +257,9 @@ describe('Feature: call-marshaling-outbound', function() {
           [COPY]: env.defineCopier(4),
         });
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
+        const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
-        self[MEMORY] = env.obtainFixedView(usize(200), 0);
+        self[MEMORY] = env.obtainZigView(usize(200), 0);
         const promise = self();
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
@@ -285,9 +287,9 @@ describe('Feature: call-marshaling-outbound', function() {
           [COPY]: env.defineCopier(4),
         });
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
+        const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
-        self[MEMORY] = env.obtainFixedView(usize(200), 0);
+        self[MEMORY] = env.obtainZigView(usize(200), 0);
         const promise = self();
         expect(promise).to.be.a('promise');
         env.runThunk = function(...args) {
@@ -461,7 +463,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsAllocator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -519,7 +520,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsAllocator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -578,7 +578,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsAllocator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -684,9 +683,9 @@ describe('Feature: call-marshaling-outbound', function() {
         type: MemberType.Object,
         structure: resolveArgStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(resolveStructure, thunk, false);
-      const jsThunkController = { [MEMORY]: fixed(0x2004) };
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(resolveStructure, jsThunkController, true);
       env.defineStructure(resolveStructure);
       env.endStructure(resolveStructure);
@@ -857,8 +856,8 @@ describe('Feature: call-marshaling-outbound', function() {
         [COPY]: env.defineCopier(4),
       });
       const args = new Arg();
-      const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainFixedView(usize(200), 0) };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       env.invokeThunk(thunk, fn, args);
       expect(thunkAddress).to.equal(usize(100));
       expect(fnAddress).to.equal(usize(200));
@@ -891,8 +890,8 @@ describe('Feature: call-marshaling-outbound', function() {
         [COPY]: env.defineCopier(4),
       });
       const args = new Arg();
-      const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainFixedView(usize(200), 0) };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       env.invokeThunk(thunk, fn, args);
       expect(args[FINALIZE]).to.be.a('function');
     })
@@ -932,8 +931,8 @@ describe('Feature: call-marshaling-outbound', function() {
         }
       });
       const args = new Arg();
-      const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainFixedView(usize(200), 0) };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       env.invokeThunk(thunk, fn, args);
       expect(called).to.equal(true);
     })
@@ -963,8 +962,8 @@ describe('Feature: call-marshaling-outbound', function() {
         [COPY]: env.defineCopier(4),
       });
       const args = new Arg();
-      const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainFixedView(usize(200), 0) };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       expect(() => env.invokeThunk(thunk, fn, args)).to.throw(Error)
         .with.property('message').that.contains('Zig');
     })
@@ -1015,8 +1014,8 @@ describe('Feature: call-marshaling-outbound', function() {
         [COPY]: env.defineCopier(16),
       });
       const args = new Arg();
-      const thunk = { [MEMORY]: env.obtainFixedView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainFixedView(usize(200), 0) };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       env.invokeThunk(thunk, fn, args);
       expect(recv).to.equal(env);
       expect(thunkAddress).to.equal(usize(100));
@@ -1046,7 +1045,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsAllocator,
-        name: 'Hello',
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -1145,9 +1143,9 @@ describe('Feature: call-marshaling-outbound', function() {
         type: MemberType.Object,
         structure: resolveArgStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(resolveStructure, thunk, false);
-      const jsThunkController = { [MEMORY]: fixed(0x2004) };
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(resolveStructure, jsThunkController, true);
       env.defineStructure(resolveStructure);
       env.endStructure(resolveStructure);
@@ -1279,8 +1277,8 @@ describe('Feature: call-marshaling-outbound', function() {
   })
 })
 
-function fixed(address, len = 0) {
+function zig(address, len = 0) {
   const dv = new DataView(new ArrayBuffer(len));
-  dv[FIXED] = { address: usize(address), len };
+  dv[ZIG] = { address: usize(address), len };
   return dv;
 }

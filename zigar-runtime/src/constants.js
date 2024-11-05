@@ -66,13 +66,13 @@ export const PointerFlag = {
 export const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
+  IsOpaque:         0x0040,
 };
 export const ErrorSetFlag = {
-  IsAny:            0x0010,
+  IsGlobal:         0x0010,
 };
 export const OpaqueFlag = {
-  IsAny:            0x0010,
-  IsIterator:       0x0020,
+  IsIterator:       0x0010,
 };
 export const ArgStructFlag = {
   HasOptions:       0x0010,

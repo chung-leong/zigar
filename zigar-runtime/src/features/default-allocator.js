@@ -11,9 +11,9 @@ export default mixin({
     const { constructor: Allocator } = structure;
     let vtable = this.allocatorVTable;
     if (!vtable) {
-      // create vtable in fixed memory
+      // create vtable in Zig memory
       const { VTable, noResize } = Allocator;
-      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
+      const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.allocatorVTable = VTable(dv);
       vtable.alloc = (ptr, len, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
@@ -38,14 +38,14 @@ export default mixin({
     const context = args[CONTEXT];
     const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
-    const ptr = this.obtainFixedView(contextId, 0);
+    const ptr = this.obtainZigView(contextId, 0);
     this.contextMap.set(contextId, context);
     return new Allocator({ ptr, vtable });
   },
   allocateHostMemory(context, len, align) {
-    const dv = this.allocateRelocMemory(len, align);
-    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
-    // for Node, we create another DataView on the same buffer and pretend that it's fixed
+    const dv = this.allocateJSMemory(len, align);
+    // for WebAssembly, we need to allocate Zig memory that backs the JS memory
+    // for Node, we create another DataView on the same buffer and pretend that it's zig
     // memory
     const shadowDV = (process.env.TARGET === 'wasm')
     ? this.allocateShadowMemory(len, align)
@@ -75,7 +75,7 @@ export default mixin({
     if (this.allocatorVTable) {
       const dv = this.allocatorVTable[MEMORY];
       this.allocatorVTable = null;
-      this.freeFixedMemory(dv);
+      this.freeZigMemory(dv);
     }
   },
 });

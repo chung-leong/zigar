@@ -39,7 +39,7 @@ export function generateCode(definition, params) {
     }
     add(`const source = ${binarySource};`);
     add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
-    // if top level await is used, we don't need to write changes into fixed memory buffers
+    // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
   }
   add(`\n// export root namespace and its methods and constants`);

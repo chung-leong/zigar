@@ -1,16 +1,16 @@
 import {
-  MemberType, OpaqueFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType,
+  MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
-  ConstantConstraint, FixedMemoryTargetRequired, InaccessiblePointer, InvalidPointerTarget,
-  InvalidSliceLength, NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
-  warnImplicitArrayCreation,
+  ConstantConstraint, InaccessiblePointer, InvalidPointerTarget, InvalidSliceLength,
+  NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
+  warnImplicitArrayCreation, ZigMemoryTargetRequired,
 } from '../errors.js';
 import {
-  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, FIXED, INITIALIZE, LAST_ADDRESS,
+  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS,
   LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
-  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT,
+  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG,
 } from '../symbols.js';
 import { always, defineProperties, defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 
@@ -48,7 +48,7 @@ export default mixin({
       },
     }) : {};
     const updateTarget = function(context, all = true, active = true) {
-      if (all || this[MEMORY][FIXED]) {
+      if (all || this[MEMORY][ZIG]) {
         if (active) {
           const Target = constructor.child;
           const address = readAddress.call(this);
@@ -100,18 +100,18 @@ export default mixin({
         return;
       }
       const pointer = this[POINTER] ?? this;
-      // the target sits in fixed memory--apply the change immediately
+      // the target sits in Zig memory--apply the change immediately
       if (arg) {
-        if (arg[MEMORY][FIXED]) {
+        if (arg[MEMORY][ZIG]) {
           const address = thisEnv.getViewAddress(arg[MEMORY]);
           setAddress.call(this, address);
           setLength?.call?.(this, arg.length);
         } else {
-          if (pointer[MEMORY][FIXED]) {
-            throw new FixedMemoryTargetRequired(structure, arg);
+          if (pointer[MEMORY][ZIG]) {
+            throw new ZigMemoryTargetRequired(structure, arg);
           }
         }
-      } else if (pointer[MEMORY][FIXED]) {
+      } else if (pointer[MEMORY][ZIG]) {
         setAddress.call(this, 0);
         setLength?.call?.(this, 0);
       }
@@ -150,11 +150,11 @@ export default mixin({
         return;
       }
       const dv = target[MEMORY];
-      const fixed = dv[FIXED];
+      const zig = dv[ZIG];
       const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
       // determine the maximum length
       let max;
-      if (!fixed) {
+      if (!zig) {
         if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
@@ -169,12 +169,12 @@ export default mixin({
       // can use the same buffer
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
-      : thisEnv.obtainFixedView(fixed.address, byteLength);
-      const free = fixed?.free;
+      : thisEnv.obtainZigView(zig.address, byteLength);
+      const free = zig?.free;
       if (free) {
         // transfer free function to new view
-        newDV[FIXED].free = free;
-        fixed.free = null;
+        newDV[ZIG].free = free;
+        zig.free = null;
       }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
@@ -193,7 +193,7 @@ export default mixin({
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
-      } else if (targetType === StructureType.Opaque && (targetFlags & OpaqueFlag.IsAny) && arg) {
+      } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
           arg = arg['*']?.[MEMORY];
         } else if (arg[MEMORY]) {
@@ -264,8 +264,8 @@ export default mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
       }
-      const fixed = arg?.[MEMORY]?.[FIXED];
-      if (fixed?.address === usizeInvalid) {
+      const zig = arg?.[MEMORY]?.[ZIG];
+      if (zig?.address === usizeInvalid) {
         throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;

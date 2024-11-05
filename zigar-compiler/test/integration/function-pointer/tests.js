@@ -20,8 +20,8 @@ export function addTests(importModule, options) {
         list.push(f);
         const [ MEMORY ] = Object.getOwnPropertySymbols(f);
         const dv = f[MEMORY];
-        const [ FIXED ] = Object.getOwnPropertySymbols(dv);
-        addresses.push(dv[FIXED].address);
+        const [ ZIG ] = Object.getOwnPropertySymbols(dv);
+        addresses.push(dv[ZIG].address);
       }
       for (const [ i, f ] of list.entries()) {
         // don't delete the first one so the initial page is kept
@@ -35,8 +35,8 @@ export function addTests(importModule, options) {
         list.push(f);
         const [ MEMORY ] = Object.getOwnPropertySymbols(f);
         const dv = f[MEMORY];
-        const [ FIXED ] = Object.getOwnPropertySymbols(dv);
-        const { address } = dv[FIXED];
+        const [ ZIG ] = Object.getOwnPropertySymbols(dv);
+        const { address } = dv[ZIG];
         if (addresses.includes(address)) {
           reuseCount++;
         }

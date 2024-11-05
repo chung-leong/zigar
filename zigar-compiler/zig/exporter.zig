@@ -107,6 +107,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_pointer = td.hasPointer(),
                             .has_sentinel = td.Type.sentinel != null,
                             .is_string = td.Type.ElementType == u8 or td.Type.ElementType == u16,
+                            .is_opaque = td.Type.is_opaque,
                         },
                     } else .{
                         .@"struct" = .{
@@ -175,7 +176,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .ErrorSet => .{
                     .error_set = .{
-                        .is_any = td.Type == anyerror,
+                        .is_global = td.Type == anyerror,
                     },
                 },
                 .Array => |ar| get: {
@@ -201,7 +202,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .Opaque => .{
                     .@"opaque" = .{
-                        .is_any = td.Type == anyopaque,
                         .is_iterator = td.isIterator(),
                     },
                 },
@@ -653,7 +653,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => !self.options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {
-                                // always export constants while variables can be optionally switched off
                                 const decl_td = tdb.get(DT);
                                 try host.attachMember(structure, .{
                                     .name = decl.name,

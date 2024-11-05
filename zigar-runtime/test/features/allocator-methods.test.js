@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FIXED, MEMORY } from '../../src/symbols.js';
+import { MEMORY, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -16,7 +16,7 @@ describe('Feature: allocator-methods', function() {
         vtable: {
           alloc(ptr, len, ptrAlign) {
             const dv = new DataView(new ArrayBuffer(len));
-            dv[FIXED] = { address: 0x1000, len, align: 1 << ptrAlign };
+            dv[ZIG] = { address: 0x1000, len, align: 1 << ptrAlign };
             return {
               ['*']: {
                 [MEMORY]: dv,
@@ -31,8 +31,8 @@ describe('Feature: allocator-methods', function() {
       });
       const dv = struct.alloc(16, 4);
       expect(dv.byteLength).to.equal(16);
-      expect(dv[FIXED].align).to.equal(4);
-      expect(dv[FIXED].free).to.be.a('function');
+      expect(dv[ZIG].align).to.equal(4);
+      expect(dv[ZIG].free).to.be.a('function');
     })
   })
   describe('defineFree', function() {
@@ -44,7 +44,7 @@ describe('Feature: allocator-methods', function() {
         vtable: {
           alloc(ptr, len, ptrAlign) {
             const dv = new DataView(new ArrayBuffer(len));
-            dv[FIXED] = { address: 0x1000, len, align: 1 << ptrAlign };
+            dv[ZIG] = { address: 0x1000, len, align: 1 << ptrAlign };
             return {
               ['*']: {
                 [MEMORY]: dv,
@@ -76,7 +76,7 @@ describe('Feature: allocator-methods', function() {
         vtable: {
           alloc(ptr, len, ptrAlign) {
             const dv = new DataView(new ArrayBuffer(len));
-            dv[FIXED] = { address: 0x1000, len, align: 1 << ptrAlign };
+            dv[ZIG] = { address: 0x1000, len, align: 1 << ptrAlign };
             return {
               ['*']: {
                 [MEMORY]: dv,

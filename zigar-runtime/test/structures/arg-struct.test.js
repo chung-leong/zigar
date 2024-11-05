@@ -1,9 +1,11 @@
 import { expect } from 'chai';
-import { ArgStructFlag, MemberType, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  ArgStructFlag, MemberType, PointerFlag, StructFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { FIXED, MEMORY, VISIT } from '../../src/symbols.js';
+import { MEMORY, VISIT, ZIG } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -13,7 +15,6 @@ describe('Structure: arg-struct', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -44,7 +45,6 @@ describe('Structure: arg-struct', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 8,
         instance: {},
         static: { members: [] },
@@ -96,7 +96,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -152,7 +151,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const childStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Hello',
         byteSize: 4 * 2,
       });
       env.attachMember(childStructure, {
@@ -176,7 +174,6 @@ describe('Structure: arg-struct', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: childStructure.byteSize + 4 + 4,
         length: 2,
       });
@@ -215,7 +212,6 @@ describe('Structure: arg-struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -246,7 +242,6 @@ describe('Structure: arg-struct', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: 'Hello',
         byteSize: ptrStructure.byteSize * 2,
         length: 1,
       });
@@ -287,7 +282,6 @@ describe('Structure: arg-struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -301,7 +295,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -339,7 +332,6 @@ describe('Structure: arg-struct', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -353,7 +345,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -391,7 +382,6 @@ describe('Structure: arg-struct', function() {
       env.runtimeSafety = true;
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'i32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -405,7 +395,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Hello',
         byteSize: 4 * 3,
         length: 2,
       });
@@ -503,9 +492,9 @@ describe('Structure: arg-struct', function() {
         type: MemberType.Object,
         structure: resolveArgStructure,
       });
-      const thunk = { [MEMORY]: fixed(0x1004) };
+      const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(resolveStructure, thunk, false);
-      const jsThunkController = { [MEMORY]: fixed(0x2004) };
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(resolveStructure, jsThunkController, true);
       env.defineStructure(resolveStructure);
       env.endStructure(resolveStructure);
@@ -545,7 +534,6 @@ describe('Structure: arg-struct', function() {
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions | ArgStructFlag.IsAsync,
-        name: 'Hello',
         byteSize: 8 + 4,
         length: 1,
       });
@@ -588,8 +576,8 @@ describe('Structure: arg-struct', function() {
   })
 })
 
-function fixed(address, len = 0) {
+function zig(address, len = 0) {
   const dv = new DataView(new ArrayBuffer(len));
-  dv[FIXED] = { address: usize(address), len };
+  dv[ZIG] = { address: usize(address), len };
   return dv;
 }

@@ -45,6 +45,7 @@ describe('Feature: write-protection', function() {
       const object = new Hello({ dog: 123, cat: 456 });
       env.makeReadOnly(object);
       expect(object.dog).to.equal(123);
+      object.valueOf();
       expect(object.valueOf()).to.eql({ dog: 123, cat: 456 });
       expect(() => object.dog = 1).to.throw(TypeError);
       expect(() => object.cat = 1).to.throw(TypeError);
@@ -53,7 +54,6 @@ describe('Feature: write-protection', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {

@@ -11,7 +11,6 @@ describe('Structure: vector', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Vector,
-        name: 'Vector',
         byteSize: 2,
         instance: {},
         static: {
@@ -37,7 +36,6 @@ describe('Structure: vector', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Vector,
-        name: 'Vector',
         byteSize: 2,
         instance: {},
         static: {
@@ -67,7 +65,6 @@ describe('Structure: vector', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Vector,
-        name: 'Vector',
         byteSize: 2,
         instance: {},
         static: {
@@ -96,7 +93,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -110,7 +106,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -139,7 +134,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -153,7 +147,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -177,7 +170,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -191,7 +183,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -209,7 +200,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -223,7 +213,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -249,7 +238,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -263,7 +251,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 8,
         byteSize: 4 * 8,
       });
@@ -292,7 +279,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -305,7 +291,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -380,7 +365,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 3,
         byteSize: 8 * 3,
       });
@@ -413,7 +397,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 3,
         byteSize: 16 * 3,
       });
@@ -433,7 +416,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -446,7 +428,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -470,7 +451,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -483,7 +463,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -503,7 +482,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -516,7 +494,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -540,7 +517,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -554,7 +530,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const vectorStructure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -588,7 +563,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -602,7 +576,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -624,7 +597,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -638,7 +610,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -658,7 +629,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       });
       env.attachMember(intStructure, {
@@ -672,7 +642,6 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });
@@ -692,7 +661,6 @@ describe('Structure: vector', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u32',
         byteSize: 4,
       })
       env.attachMember(intStructure, {
@@ -705,7 +673,6 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
-        name: 'Vector',
         length: 4,
         byteSize: 4 * 4,
       });

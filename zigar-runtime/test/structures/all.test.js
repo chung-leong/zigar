@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, ENVIRONMENT, FIXED, MEMORY, SIZE, SLOTS, TYPED_ARRAY } from '../../src/symbols.js';
+import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -163,7 +163,7 @@ describe('Structure: all', function() {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       }, 'delete', descriptor);
       let target;
-      env.releaseFixedView = (dv) => {
+      env.releaseZigView = (dv) => {
         target = dv;
       };
       expect(() => object.delete()).to.not.throw();
@@ -446,7 +446,7 @@ describe('Structure: all', function() {
         type: MemberType.Object,
         structure: argStruct,
       });
-      const thunk = { [MEMORY]: fixed(0x1234) };
+      const thunk = { [MEMORY]: zig(0x1234) };
       env.attachTemplate(fnStructure, thunk, false);
       const Func = env.defineStructure(fnStructure);
       env.finalizeStructure(fnStructure);
@@ -457,7 +457,7 @@ describe('Structure: all', function() {
         structure: fnStructure,
         slot: 0,
       }, true);
-      const fn = Func.call(ENVIRONMENT, fixed(0x4567));
+      const fn = Func.call(ENVIRONMENT, zig(0x4567));
       expect(fn).to.be.a('function');
       env.attachTemplate(structure, {
         [SLOTS]: {
@@ -566,7 +566,7 @@ describe('Structure: all', function() {
         type: MemberType.Object,
         structure: getterArgStruct,
       });
-      const getterThunk = { [MEMORY]: fixed(0x1234) };
+      const getterThunk = { [MEMORY]: zig(0x1234) };
       env.attachTemplate(getterStructure, getterThunk, false);
       const Getter = env.defineStructure(getterStructure);
       env.endStructure(getterStructure);
@@ -620,7 +620,7 @@ describe('Structure: all', function() {
         type: MemberType.Object,
         structure: setterArgStruct,
       });
-      const setterThunk = { [MEMORY]: fixed(0x4567) };
+      const setterThunk = { [MEMORY]: zig(0x4567) };
       env.attachTemplate(setterStructure, setterThunk, false);
       const Setter = env.defineStructure(setterStructure);
       env.endStructure(setterStructure);
@@ -633,8 +633,8 @@ describe('Structure: all', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Getter.call(ENVIRONMENT, fixed(0x12345)),
-          1: Setter.call(ENVIRONMENT, fixed(0x45678)),
+          0: Getter.call(ENVIRONMENT, zig(0x12345)),
+          1: Setter.call(ENVIRONMENT, zig(0x45678)),
         }
       }, true);
       env.endStructure(structure);
@@ -695,7 +695,7 @@ describe('Structure: all', function() {
         type: MemberType.Object,
         structure: getterArgStruct,
       });
-      const getterThunk = { [MEMORY]: fixed(0x1234) };
+      const getterThunk = { [MEMORY]: zig(0x1234) };
       env.attachTemplate(getterStructure, getterThunk, false);
       const Getter = env.defineStructure(getterStructure);
       env.endStructure(getterStructure);
@@ -739,7 +739,7 @@ describe('Structure: all', function() {
         type: MemberType.Object,
         structure: setterArgStruct,
       });
-      const setterThunk = { [MEMORY]: fixed(0x4567) };
+      const setterThunk = { [MEMORY]: zig(0x4567) };
       env.attachTemplate(setterStructure, setterThunk, false);
       const Setter = env.defineStructure(setterStructure);
       env.endStructure(setterStructure);
@@ -751,8 +751,8 @@ describe('Structure: all', function() {
       }, true);
       env.attachTemplate(structure, {
         [SLOTS]: {
-          0: Getter.call(ENVIRONMENT, fixed(0x12345)),
-          1: Setter.call(ENVIRONMENT, fixed(0x45678)),
+          0: Getter.call(ENVIRONMENT, zig(0x12345)),
+          1: Setter.call(ENVIRONMENT, zig(0x45678)),
         }
       }, true);
       env.endStructure(structure);
@@ -888,8 +888,8 @@ describe('Structure: all', function() {
   })
 })
 
-function fixed(address, len = 0) {
+function zig(address, len = 0) {
   const dv = new DataView(new ArrayBuffer(len));
-  dv[FIXED] = { address: usize(address), len };
+  dv[ZIG] = { address: usize(address), len };
   return dv;
 }

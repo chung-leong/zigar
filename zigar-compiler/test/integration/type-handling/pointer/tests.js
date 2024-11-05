@@ -54,11 +54,11 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ 1, 2, 777, 4 }');
       // modifying const pointer
       expect(() => module.u8_slice = "This is a test").to.throw(TypeError);
-      // this works thanks to auto-allocation of fixed memory
+      // this works thanks to auto-allocation of Zig memory
       expect(() => module.text = "This is a test").to.not.throw(TypeError);
       const lines = await capture(() => {
         printText();
-        // allocate fixed memory
+        // allocate Zig memory
         const text = allocText("This is another test");
         module.text = text;
         printText();

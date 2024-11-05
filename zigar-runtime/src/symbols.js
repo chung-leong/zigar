@@ -1,7 +1,7 @@
 export const MEMORY = Symbol('memory');
 export const SLOTS = Symbol('slots');
 export const PARENT = Symbol('parent');
-export const FIXED = Symbol('fixed');
+export const ZIG = Symbol('zig');
 export const NAME = Symbol('name');
 export const TYPE = Symbol('type');
 export const FLAGS = Symbol('flags');

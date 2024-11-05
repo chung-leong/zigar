@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FINALIZE, FIXED, MEMORY, PROMISE } from '../symbols.js';
+import { FINALIZE, MEMORY, PROMISE, ZIG } from '../symbols.js';
 
 export default mixin({
   createCallback(args, structure, callback) {
@@ -15,7 +15,7 @@ export default mixin({
         reject = args[1];
       });
       callback = (result) => {
-        if (result?.[MEMORY]?.[FIXED]) {
+        if (result?.[MEMORY]?.[ZIG]) {
           // the memory in the result object is stack memory, which will go bad after the function
           // returns; we need to copy the content into JavaScript memory
           result = new result.constructor(result);

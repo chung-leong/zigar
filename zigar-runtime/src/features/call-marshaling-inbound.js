@@ -29,7 +29,7 @@ export default mixin({
       if (!thunkAddress) {
         throw new Error('Unable to create function thunk');
       }
-      dv = this.obtainFixedView(thunkAddress, 0);
+      dv = this.obtainZigView(thunkAddress, 0);
       this.jsFunctionThunkMap.set(id, dv);
       this.jsFunctionControllerMap.set(id, jsThunkController);
     }
@@ -39,7 +39,7 @@ export default mixin({
     const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
     const thunkAddress = this.getViewAddress(thunk);
     const id = this.destroyJsThunk(controllerAddress, thunkAddress);
-    this.releaseFixedView(thunk);
+    this.releaseZigView(thunk);
     if (id) {
       this.jsFunctionThunkMap.delete(id);
       this.jsFunctionCallerMap.delete(id);
@@ -115,7 +115,7 @@ export default mixin({
   },
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
+      const dv = this.obtainZigView(argAddress, argSize);
       if(process.env.TARGET === 'node') {
         if (id) {
           return this.runFunction(id, dv, futexHandle);

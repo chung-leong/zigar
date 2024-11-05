@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ADDRESS, FIXED, LENGTH, MEMORY, POINTER, SLOTS, UPDATE, VISIT } from '../symbols.js';
+import { ADDRESS, LENGTH, MEMORY, POINTER, SLOTS, UPDATE, VISIT, ZIG } from '../symbols.js';
 import { findSortedIndex } from '../utils.js';
 
 export default mixin({
@@ -19,7 +19,7 @@ export default mixin({
             pointerMap.set(pointer, target);
             // only relocatable targets need updating
             const dv = target[MEMORY];
-            if (!dv[FIXED]) {
+            if (!dv[ZIG]) {
               // see if the buffer is shared with other objects
               const other = bufferMap.get(dv.buffer);
               if (other) {
@@ -51,7 +51,7 @@ export default mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      if (!pointer[MEMORY][FIXED]) {
+      if (!pointer[MEMORY][ZIG]) {
         const cluster = clusterMap.get(target);
         const address = this.getTargetAddress(context, target, cluster)
                      ?? this.getShadowAddress(context, target, cluster);
@@ -76,13 +76,13 @@ export default mixin({
         ? pointer[UPDATE](context, true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target if it's in relocatable memory
-        // pointers in fixed memory are updated on access so we don't need to do it here
+        // pointers in Zig memory are updated on access so we don't need to do it here
         // (and they should never point to reloctable memory)
-        if (currentTarget && !currentTarget[MEMORY][FIXED]) {
+        if (currentTarget && !currentTarget[MEMORY][ZIG]) {
           currentTarget[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
         }
         if (newTarget !== currentTarget) {
-          if (newTarget && !newTarget[MEMORY][FIXED]) {
+          if (newTarget && !newTarget[MEMORY][ZIG]) {
             // acquire targets of pointers in new target
             newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
           }

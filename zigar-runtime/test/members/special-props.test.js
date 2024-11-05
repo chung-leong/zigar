@@ -13,7 +13,6 @@ describe('Member: special-props', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -54,7 +53,6 @@ describe('Member: special-props', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -102,7 +100,6 @@ describe('Member: special-props', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'u8',
         byteSize: 1,
       });
       env.attachMember(intStructure, {
@@ -144,8 +141,7 @@ describe('Member: special-props', function() {
         const env = new Env();
         const intStructure = env.beginStructure({
           type: StructureType.Primitive,
-          name: 'u8',
-          byteSize: 1,
+            byteSize: 1,
         });
         env.attachMember(intStructure, {
           type: MemberType.Uint,

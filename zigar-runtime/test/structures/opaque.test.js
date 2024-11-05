@@ -1,8 +1,10 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, OpaqueFlag, OptionalFlag, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import {
+  MemberFlag, MemberType, OpaqueFlag, OptionalFlag, PointerFlag, StructureFlag, StructureType,
+} from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, FIXED, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -12,7 +14,6 @@ describe('Structure: opaque', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Opaque,
-        name: 'Hello',
         instance: { members: [] },
         static: { members: [] },
       };
@@ -24,7 +25,6 @@ describe('Structure: opaque', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Opaque,
-        name: 'Hello',
         instance: { members: [] },
         static: { members: [] },
       };
@@ -41,8 +41,8 @@ describe('Structure: opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Opaque,
-        name: 'Hello',
         byteSize: 0,
+        name: 'Hello',
       });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
@@ -71,7 +71,6 @@ describe('Structure: opaque', function() {
       const structure = env.beginStructure({
         type: StructureType.Opaque,
         flags: OpaqueFlag.IsIterator,
-        name: 'Hello',
         byteSize: 4,
       });
       const Hello = env.defineStructure(structure);
@@ -153,7 +152,7 @@ describe('Structure: opaque', function() {
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
-      thunk[MEMORY][FIXED] = { address: usize(0x8888) };
+      thunk[MEMORY][ZIG] = { address: usize(0x8888) };
       env.attachTemplate(fnStructure, thunk, false);
       const Next = env.defineStructure(fnStructure);
       env.endStructure(fnStructure);
@@ -165,7 +164,7 @@ describe('Structure: opaque', function() {
         structure: fnStructure,
       }, true);
       const fnDV = new DataView(new ArrayBuffer(0));
-      fnDV[FIXED] = { address: usize(0x1_8888) };
+      fnDV[ZIG] = { address: usize(0x1_8888) };
       const next = Next.call(ENVIRONMENT, fnDV);
       env.attachTemplate(structure, {
         [SLOTS]: {

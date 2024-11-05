@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
-import { COPY, FIXED, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
+import { COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, findElements } from '../utils.js';
 
 export default mixin({
@@ -70,7 +70,7 @@ export default mixin({
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
-        // need to copy when target object is in fixed memory
+        // need to copy when target object is in Zig memory
         copy = true;
       }
       target[SHAPE](copy ? null : dv, len, allocator);
@@ -122,20 +122,20 @@ export default mixin({
     }
     if (process.env.TARGET === 'wasm') {
       if (buffer === this.memory?.buffer) {
-        dv[FIXED] = { address: offset, len };
+        dv[ZIG] = { address: offset, len };
       }
       return dv;
     } else if (process.env.TARGET === 'node') {
-      const fixed = buffer[FIXED];
-      if (fixed) {
-        // attach address to view of fixed buffer
-        dv[FIXED] = { address: adjustAddress(fixed.address, offset), len };
+      const zig = buffer[ZIG];
+      if (zig) {
+        // attach address to view of zig buffer
+        dv[ZIG] = { address: adjustAddress(zig.address, offset), len };
       }
     }
     return dv;
   },
   registerView(dv) {
-    if (!dv[FIXED]) {
+    if (!dv[ZIG]) {
       const { buffer, byteOffset, byteLength } = dv;
       const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
       if (existing) {
@@ -150,10 +150,10 @@ export default mixin({
     return dv;
   },
   allocateMemory(len, align = 0, allocator = null) {
-    return allocator?.alloc?.(len, align) ?? this.allocateRelocMemory(len, align);
+    return allocator?.alloc?.(len, align) ?? this.allocateJSMemory(len, align);
   },
   ...(process.env.TARGET === 'wasm' ? {
-    allocateRelocMemory(len, align) {
+    allocateJSMemory(len, align) {
       // alignment doesn't matter since memory always needs to be shadowed
       return this.obtainView(new ArrayBuffer(len), 0, len);
     },
@@ -170,7 +170,7 @@ export default mixin({
       }
       return this.needFallback;
     },
-    allocateRelocMemory(len, align) {
+    allocateJSMemory(len, align) {
       // allocate extra memory for alignment purpose when align is larger than the default
       const extra = (align > defaultAlign && this.getBufferAddress) ? align : 0;
       const buffer = new ArrayBuffer(len + extra);
