@@ -74,13 +74,13 @@ const PointerFlag = {
 const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
+  IsOpaque:         0x0040,
 };
 const ErrorSetFlag = {
-  IsAny:            0x0010,
+  IsGlobal:         0x0010,
 };
 const OpaqueFlag = {
-  IsAny:            0x0010,
-  IsIterator:       0x0020,
+  IsIterator:       0x0010,
 };
 const ArgStructFlag = {
   HasOptions:       0x0010,
@@ -132,7 +132,7 @@ const Action = {
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
-const FIXED = Symbol('fixed');
+const ZIG = Symbol('zig');
 const NAME = Symbol('name');
 const TYPE = Symbol('type');
 const FLAGS = Symbol('flags');
@@ -471,7 +471,7 @@ function generateCode(definition, params) {
     }
     add(`const source = ${binarySource};`);
     add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
-    // if top level await is used, we don't need to write changes into fixed memory buffers
+    // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
   }
   add(`\n// export root namespace and its methods and constants`);
@@ -2586,9 +2586,9 @@ class InvalidPointerTarget extends TypeError {
   }
 }
 
-class FixedMemoryTargetRequired extends TypeError {
+class ZigMemoryTargetRequired extends TypeError {
   constructor(structure, arg) {
-    super(`Pointers in fixed memory cannot point to garbage-collected object`);
+    super(`Pointers in Zig memory cannot point to garbage-collected object`);
   }
 }
 
@@ -2769,9 +2769,9 @@ var allocatorMethods = mixin({
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];
-        const fixed = dv[FIXED];
-        if (fixed) {
-          fixed.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
+        const zig = dv[ZIG];
+        if (zig) {
+          zig.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
         }
         return dv;
       }
@@ -2780,8 +2780,8 @@ var allocatorMethods = mixin({
   defineFree(dv) {
     return {
       value(dv) {
-        const fixed = dv[FIXED];
-        const f = fixed?.free;
+        const zig = dv[ZIG];
+        const f = zig?.free;
         if (!f) {
           throw new TypeMismatch('DataView object from alloc()', dv);
         }
@@ -2863,7 +2863,7 @@ var baseline = mixin({
             insertObjects(object[SLOTS], placeholder.slots);
           }
           if (reloc !== undefined) {
-            // need to replace dataview with one pointing to fixed memory later,
+            // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ reloc, object });
           }
@@ -2935,7 +2935,7 @@ var callMarshalingInbound = mixin({
       if (!thunkAddress) {
         throw new Error('Unable to create function thunk');
       }
-      dv = this.obtainFixedView(thunkAddress, 0);
+      dv = this.obtainZigView(thunkAddress, 0);
       this.jsFunctionThunkMap.set(id, dv);
       this.jsFunctionControllerMap.set(id, jsThunkController);
     }
@@ -2945,7 +2945,7 @@ var callMarshalingInbound = mixin({
     const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
     const thunkAddress = this.getViewAddress(thunk);
     const id = this.destroyJsThunk(controllerAddress, thunkAddress);
-    this.releaseFixedView(thunk);
+    this.releaseZigView(thunk);
     if (id) {
       this.jsFunctionThunkMap.delete(id);
       this.jsFunctionCallerMap.delete(id);
@@ -3021,7 +3021,7 @@ var callMarshalingInbound = mixin({
   },
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
-      const dv = this.obtainFixedView(argAddress, argSize);
+      const dv = this.obtainZigView(argAddress, argSize);
       {
         return this.runFunction(id, dv, futexHandle);
       }
@@ -3345,9 +3345,9 @@ var defaultAllocator = mixin({
     const { constructor: Allocator } = structure;
     let vtable = this.allocatorVTable;
     if (!vtable) {
-      // create vtable in fixed memory
+      // create vtable in Zig memory
       const { VTable, noResize } = Allocator;
-      const dv = this.allocateFixedMemory(VTable[SIZE], VTable[ALIGN]);
+      const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.allocatorVTable = VTable(dv);
       vtable.alloc = (ptr, len, ptrAlign) => {
         const contextId = this.getViewAddress(ptr['*'][MEMORY]);
@@ -3372,14 +3372,14 @@ var defaultAllocator = mixin({
     const context = args[CONTEXT];
     const contextId = context.id = this.nextContextId--;
     // storing context id in a fake pointer
-    const ptr = this.obtainFixedView(contextId, 0);
+    const ptr = this.obtainZigView(contextId, 0);
     this.contextMap.set(contextId, context);
     return new Allocator({ ptr, vtable });
   },
   allocateHostMemory(context, len, align) {
-    const dv = this.allocateRelocMemory(len, align);
-    // for WebAssembly, we need to allocate fixed memory that backs the relocatable memory
-    // for Node, we create another DataView on the same buffer and pretend that it's fixed
+    const dv = this.allocateJSMemory(len, align);
+    // for WebAssembly, we need to allocate Zig memory that backs the JS memory
+    // for Node, we create another DataView on the same buffer and pretend that it's zig
     // memory
     const shadowDV = this.allocateShadowMemory(len, align)
     ;
@@ -3407,7 +3407,7 @@ var defaultAllocator = mixin({
     if (this.allocatorVTable) {
       const dv = this.allocatorVTable[MEMORY];
       this.allocatorVTable = null;
-      this.freeFixedMemory(dv);
+      this.freeZigMemory(dv);
     }
   },
 });
@@ -3538,8 +3538,8 @@ var memoryMapping = mixin({
     source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
     shadow[MEMORY] = shadowDV;
     {
-      // attach fixed memory info to aligned data view so it gets freed correctly
-      shadowDV[FIXED] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
+      // attach Zig memory info to aligned data view so it gets freed correctly
+      shadowDV[ZIG] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
     }
     return this.addShadow(context, shadow, source, 1);
   },
@@ -3622,23 +3622,23 @@ var memoryMapping = mixin({
         return dv;
       }
     }
-    // not found in any of the buffers we've seen--assume it's fixed memory
-    return this.obtainFixedView(address, len);
+    // not found in any of the buffers we've seen--assume it's Zig memory
+    return this.obtainZigView(address, len);
   },
-  allocateFixedMemory(len, align, type = MemoryType.Normal) {
+  allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
-    const dv = this.obtainFixedView(address, len);
-    dv[FIXED].align = align;
-    dv[FIXED].type = type;
+    const dv = this.obtainZigView(address, len);
+    dv[ZIG].align = align;
+    dv[ZIG].type = type;
     return dv;
   },
-  freeFixedMemory(dv) {
-    const { address, unalignedAddress, len, align, type } = dv[FIXED];
+  freeZigMemory(dv) {
+    const { address, unalignedAddress, len, align, type } = dv[ZIG];
     if (len) {
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   },
-  obtainFixedView(address, len) {
+  obtainZigView(address, len) {
     let dv;
     if (address && len) {
       dv = this.obtainExternView(address, len);
@@ -3647,30 +3647,30 @@ var memoryMapping = mixin({
       dv = this.emptyBufferMap.get(address);
       if (!dv) {
         dv = new DataView(this.emptyBuffer);
-        dv[FIXED] = { address, len: 0 };
+        dv[ZIG] = { address, len: 0 };
         this.emptyBufferMap.set(address, dv);
       }
     }
     return dv;
   },
-  releaseFixedView(dv) {
-    const fixed = dv[FIXED];
-    const address = fixed?.address;
+  releaseZigView(dv) {
+    const zig = dv[ZIG];
+    const address = zig?.address;
     if (address && address !== usizeInvalid) {
       // try to free memory through the allocator from which it came
-      fixed?.free?.();
+      zig?.free?.();
       // set address to invalid to avoid double free
-      fixed.address = usizeInvalid;
-      if (!fixed.len) {
+      zig.address = usizeInvalid;
+      if (!zig.len) {
         // remove view from empty buffer map
         this.emptyBufferMap.delete(address);
       }
     }
   },
   getViewAddress(dv) {
-    const fixed = dv[FIXED];
-    if (fixed) {
-      return fixed.address;
+    const zig = dv[ZIG];
+    if (zig) {
+      return zig.address;
     } else {
       const address = this.getBufferAddress(dv.buffer);
       return adjustAddress(address, dv.byteOffset);
@@ -3686,10 +3686,10 @@ var memoryMapping = mixin({
     },
 
     allocateShadowMemory(len, align) {
-      return this.allocateFixedMemory(len, align, MemoryType.Scratch);
+      return this.allocateZigMemory(len, align, MemoryType.Scratch);
     },
     freeShadowMemory(dv) {
-      return this.freeFixedMemory(dv);
+      return this.freeZigMemory(dv);
     },
     obtainExternView(address, len) {
       const { buffer } = this.memory;
@@ -3697,7 +3697,7 @@ var memoryMapping = mixin({
     },
     getTargetAddress(context, target, cluster) {
       const dv = target[MEMORY];
-      if (dv[FIXED]) {
+      if (dv[ZIG]) {
         return this.getViewAddress(dv);
       } else if (dv.byteLength === 0) {
         // it's a null pointer/empty slice
@@ -3713,11 +3713,11 @@ var memoryMapping = mixin({
       return {
         value() {
           const dv = this[MEMORY];
-          const fixed = dv?.[FIXED];
-          if (fixed && fixed.len > 0 && dv.buffer.byteLength === 0) {
-            const newDV = thisEnv.obtainFixedView(fixed.address, fixed.len);
-            if (fixed.align) {
-              newDV[FIXED].align = fixed.align;
+          const zig = dv?.[ZIG];
+          if (zig && zig.len > 0 && dv.buffer.byteLength === 0) {
+            const newDV = thisEnv.obtainZigView(zig.address, zig.len);
+            if (zig.align) {
+              newDV[ZIG].align = zig.align;
             }
             this[MEMORY] = newDV;
             if (updateCache) {
@@ -3960,19 +3960,19 @@ var objectLinkage = mixin({
     }
   },
   linkObject(object, reloc, writeBack) {
-    if (object[MEMORY][FIXED]) {
+    if (object[MEMORY][ZIG]) {
       return;
     }
     const dv = object[MEMORY];
     const address = this.recreateAddress(reloc);
     const length = dv.byteLength;
-    const fixedDV = this.obtainFixedView(address, length);
+    const zigDV = this.obtainZigView(address, length);
     if (writeBack && length > 0) {
       const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = fixedDV;
+      dest[MEMORY] = zigDV;
       dest[COPY](object);
     }
-    object[MEMORY] = fixedDV;
+    object[MEMORY] = zigDV;
     const linkChildren = (object) => {
       if (object[SLOTS]) {
         for (const child of Object.values(object[SLOTS])) {
@@ -3980,7 +3980,7 @@ var objectLinkage = mixin({
             const childDV = child[MEMORY];
             if (childDV.buffer === dv.buffer) {
               const offset = childDV.byteOffset - dv.byteOffset;
-              child[MEMORY] = this.obtainView(fixedDV.buffer, offset, childDV.byteLength);
+              child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
             }
           }
@@ -3995,7 +3995,7 @@ var objectLinkage = mixin({
     }
   },
   unlinkObject(object) {
-    if (!object[MEMORY][FIXED]) {
+    if (!object[MEMORY][ZIG]) {
       return;
     }
     {
@@ -4039,7 +4039,7 @@ var pointerSynchronization = mixin({
             pointerMap.set(pointer, target);
             // only relocatable targets need updating
             const dv = target[MEMORY];
-            if (!dv[FIXED]) {
+            if (!dv[ZIG]) {
               // see if the buffer is shared with other objects
               const other = bufferMap.get(dv.buffer);
               if (other) {
@@ -4071,7 +4071,7 @@ var pointerSynchronization = mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      if (!pointer[MEMORY][FIXED]) {
+      if (!pointer[MEMORY][ZIG]) {
         const cluster = clusterMap.get(target);
         const address = this.getTargetAddress(context, target, cluster)
                      ?? this.getShadowAddress(context, target, cluster);
@@ -4096,13 +4096,13 @@ var pointerSynchronization = mixin({
         ? pointer[UPDATE](context, true, isActive(this))
         : currentTarget;
         // update targets of pointers in original target if it's in relocatable memory
-        // pointers in fixed memory are updated on access so we don't need to do it here
+        // pointers in Zig memory are updated on access so we don't need to do it here
         // (and they should never point to reloctable memory)
-        if (currentTarget && !currentTarget[MEMORY][FIXED]) {
+        if (currentTarget && !currentTarget[MEMORY][ZIG]) {
           currentTarget[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
         }
         if (newTarget !== currentTarget) {
-          if (newTarget && !newTarget[MEMORY][FIXED]) {
+          if (newTarget && !newTarget[MEMORY][ZIG]) {
             // acquire targets of pointers in new target
             newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
           }
@@ -4170,7 +4170,7 @@ var promiseCallback = mixin({
         reject = args[1];
       });
       callback = (result) => {
-        if (result?.[MEMORY]?.[FIXED]) {
+        if (result?.[MEMORY]?.[ZIG]) {
           // the memory in the result object is stack memory, which will go bad after the function
           // returns; we need to copy the content into JavaScript memory
           result = new result.constructor(result);
@@ -4348,15 +4348,15 @@ var structureAcquisition = mixin({
   },
   captureView(address, len, copy) {
     if (copy) {
-      // copy content into reloctable memory
-      const dv = this.allocateRelocMemory(len, 0);
+      // copy content into JavaScript memory
+      const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
         this.copyExternBytes(dv, address, len);
       }
       return dv;
     } else {
-      // link into fixed memory
-      return this.obtainFixedView(address, len);
+      // link into Zig memory
+      return this.obtainZigView(address, len);
     }
   },
   castView(address, len, copy, structure) {
@@ -4387,7 +4387,7 @@ var structureAcquisition = mixin({
   acquireStructures(options) {
     this.resetGlobalErrorSet?.();
     const thunkAddress = this.getFactoryThunk();
-    const thunk = { [MEMORY]: this.obtainFixedView(thunkAddress, 0) };
+    const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
     const { littleEndian } = this;
     const FactoryArg = function(options) {
       const {
@@ -4433,8 +4433,8 @@ var structureAcquisition = mixin({
     const objects = findObjects(this.structures, SLOTS);
     const list = [];
     for (const object of objects) {
-      if (object[MEMORY]?.[FIXED]) {
-        // replace fixed memory
+      if (object[MEMORY]?.[ZIG]) {
+        // replace Zig memory
         const dv = object[MEMORY];
         const address = this.getViewAddress(dv);
         const offset = this.getMemoryOffset(address);
@@ -4466,17 +4466,17 @@ var structureAcquisition = mixin({
     }
     {
       if (list.length > 0) {
-        // mixin "features/object-linkage" is used when there are objects linked to fixed memory
+        // mixin "features/object-linkage" is used when there are objects linked to Zig memory
         this.useObjectLinkage();
       }
     }
   },
   useStructures() {
     const module = this.getRootModule();
-    // add fixed memory object to list so they can be unlinked
+    // add Zig memory object to list so they can be unlinked
     const objects = findObjects(this.structures, SLOTS);
     for (const object of objects) {
-      if (object[MEMORY]?.[FIXED]) {
+      if (object[MEMORY]?.[ZIG]) {
         this.variables.push({ object });
       }
     }
@@ -4533,7 +4533,7 @@ var structureAcquisition = mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsAny) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `E${this.structureCounters.enum++}`;
@@ -4568,15 +4568,15 @@ var structureAcquisition = mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [ element ] } } = s;
-    return `[_]${element.structure.name}`;
+    const { instance: { members: [ element ] }, flags } = s;
+    return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
     const { instance: { members: [ element ] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
-    return (s.flags & OpaqueFlag.IsAny) ? 'anyopaque' : `O${this.structureCounters.opaque++}`;
+    return `O${this.structureCounters.opaque++}`;
   },
   getArgStructName(s) {
     const { instance: { members } } = s;
@@ -4801,7 +4801,7 @@ var viewManagement = mixin({
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
-        // need to copy when target object is in fixed memory
+        // need to copy when target object is in Zig memory
         copy = true;
       }
       target[SHAPE](copy ? null : dv, len, allocator);
@@ -4853,13 +4853,13 @@ var viewManagement = mixin({
     }
     {
       if (buffer === this.memory?.buffer) {
-        dv[FIXED] = { address: offset, len };
+        dv[ZIG] = { address: offset, len };
       }
       return dv;
     }
   },
   registerView(dv) {
-    if (!dv[FIXED]) {
+    if (!dv[ZIG]) {
       const { buffer, byteOffset, byteLength } = dv;
       const { existing, entry } = this.findViewAt(buffer, byteOffset, byteLength);
       if (existing) {
@@ -4874,10 +4874,10 @@ var viewManagement = mixin({
     return dv;
   },
   allocateMemory(len, align = 0, allocator = null) {
-    return allocator?.alloc?.(len, align) ?? this.allocateRelocMemory(len, align);
+    return allocator?.alloc?.(len, align) ?? this.allocateJSMemory(len, align);
   },
   ...({
-    allocateRelocMemory(len, align) {
+    allocateJSMemory(len, align) {
       // alignment doesn't matter since memory always needs to be shadowed
       return this.obtainView(new ArrayBuffer(len), 0, len);
     },
@@ -5927,7 +5927,7 @@ var all = mixin({
         }
         if (SHAPE in self) {
           // provided by defineStructureSlice(); the slice is different from other structures
-          // as it does not have a fixed size; memory is allocated by the slice initializer
+          // as it does not have a zig size; memory is allocated by the slice initializer
           // based on the argument given
           self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
@@ -5988,7 +5988,7 @@ var all = mixin({
         if (this[SLOTS]) {
           this[SLOTS] = {};
         }
-        thisEnv.releaseFixedView(dv);
+        thisEnv.releaseZigView(dv);
       }
     };
   },
@@ -6445,7 +6445,7 @@ var errorSet = mixin({
       this.currentGlobalSet = this.defineStructure(ae);
       this.finalizeStructure(ae);
     }
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
       return this.currentGlobalSet;
     }
     const descriptor = this.defineMember(member);
@@ -6479,7 +6479,7 @@ var errorSet = mixin({
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsAny)) {
+    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
       // already finalized
       return false;
     }
@@ -6820,7 +6820,7 @@ var optional = mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][FIXED])) {
+        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][ZIG])) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
@@ -6876,7 +6876,7 @@ var pointer = mixin({
       },
     }) : {};
     const updateTarget = function(context, all = true, active = true) {
-      if (all || this[MEMORY][FIXED]) {
+      if (all || this[MEMORY][ZIG]) {
         if (active) {
           const Target = constructor.child;
           const address = readAddress.call(this);
@@ -6928,18 +6928,18 @@ var pointer = mixin({
         return;
       }
       const pointer = this[POINTER] ?? this;
-      // the target sits in fixed memory--apply the change immediately
+      // the target sits in Zig memory--apply the change immediately
       if (arg) {
-        if (arg[MEMORY][FIXED]) {
+        if (arg[MEMORY][ZIG]) {
           const address = thisEnv.getViewAddress(arg[MEMORY]);
           setAddress.call(this, address);
           setLength?.call?.(this, arg.length);
         } else {
-          if (pointer[MEMORY][FIXED]) {
-            throw new FixedMemoryTargetRequired(structure, arg);
+          if (pointer[MEMORY][ZIG]) {
+            throw new ZigMemoryTargetRequired(structure, arg);
           }
         }
-      } else if (pointer[MEMORY][FIXED]) {
+      } else if (pointer[MEMORY][ZIG]) {
         setAddress.call(this, 0);
         setLength?.call?.(this, 0);
       }
@@ -6978,11 +6978,11 @@ var pointer = mixin({
         return;
       }
       const dv = target[MEMORY];
-      const fixed = dv[FIXED];
+      const zig = dv[ZIG];
       const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
       // determine the maximum length
       let max;
-      if (!fixed) {
+      if (!zig) {
         if (flags & PointerFlag.HasLength) {
           max = this[MAX_LENGTH] ??= target.length;
         } else {
@@ -6997,12 +6997,12 @@ var pointer = mixin({
       // can use the same buffer
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
-      : thisEnv.obtainFixedView(fixed.address, byteLength);
-      const free = fixed?.free;
+      : thisEnv.obtainZigView(zig.address, byteLength);
+      const free = zig?.free;
       if (free) {
         // transfer free function to new view
-        newDV[FIXED].free = free;
-        fixed.free = null;
+        newDV[ZIG].free = free;
+        zig.free = null;
       }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
@@ -7021,7 +7021,7 @@ var pointer = mixin({
         if (isCompatiblePointer(arg, Target, flags)) {
           arg = Target(arg[SLOTS][0][MEMORY]);
         }
-      } else if (targetType === StructureType.Opaque && (targetFlags & OpaqueFlag.IsAny) && arg) {
+      } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
           arg = arg['*']?.[MEMORY];
         } else if (arg[MEMORY]) {
@@ -7092,8 +7092,8 @@ var pointer = mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
       }
-      const fixed = arg?.[MEMORY]?.[FIXED];
-      if (fixed?.address === usizeInvalid) {
+      const zig = arg?.[MEMORY]?.[ZIG];
+      if (zig?.address === usizeInvalid) {
         throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
@@ -7464,10 +7464,10 @@ var slice = mixin({
     descriptors.slice = {
       value(begin, end, options = {}) {
         const {
-          fixed = false
+          zig = false
         } = options;
         const dv1 = getSubArrayView.call(this, begin, end);
-        const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, fixed);
+        const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, zig);
         const slice = constructor(dv2);
         slice[COPY]({ [MEMORY]: dv1 });
         return slice;

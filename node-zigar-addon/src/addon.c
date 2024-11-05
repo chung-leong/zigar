@@ -826,6 +826,11 @@ result perform_js_action(module_data* md,
 result queue_js_action(module_data* md,
                        js_action* action) {
     if (md->ts_fn) {
+        if (!action->futex_handle) {
+            js_action* copy = malloc(sizeof(js_action));
+            memcpy(copy, action, sizeof(js_action));
+            action = copy;
+        }
         if (napi_call_threadsafe_function(md->ts_fn, action, napi_tsfn_nonblocking) == napi_ok) {
             return OK;
         } else {
@@ -847,6 +852,9 @@ void js_queue_callback(napi_env env,
         if (action->futex_handle) {
             // need to wake caller since JS code won't do it
             md->mod->imports->wake_caller(action->futex_handle, status);
+        } else {
+            // if the caller isn't waiting, then action is on the heap and not the caller's stack
+            free(action);
         }
     }
 }
