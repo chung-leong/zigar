@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { capture } from '../test-utils.js';
+import { captureError } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
     it('should produce an error return trace', async function() {
       this.timeout(300000);
       const { fail } = await importTest('wasm-error-trace');
-      const [ line ] = await capture(() => {
+      const [ line ] = await captureError(() => {
         if (runtimeSafety) {
           expect(fail).to.throw(WebAssembly.RuntimeError)
             .with.property('stack')
@@ -27,7 +27,7 @@ export function addTests(importModule, options) {
           expect(fail).to.not.throw();
         }
       });
-      expect(line).to.equal('reached unreachable code');
+      expect(line).to.equal('Zig panic: reached unreachable code');
     })
   })
 }
