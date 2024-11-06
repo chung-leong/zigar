@@ -95,10 +95,9 @@ export default mixin({
     const attrAddress = (process.env.TARGET === 'wasm')
     ? (attrs) ? this.getShadowAddress(context, attrs) : 0
     : (attrs) ? this.getViewAddress(attrs[MEMORY]) : 0;
-    const attrLength = attrs?.[MEMORY]?.byteLength;
     this.updateShadows(context);
     const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrLength)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
       throw new ZigError();

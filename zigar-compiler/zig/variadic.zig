@@ -51,8 +51,6 @@ pub fn call(
             },
         });
         var args: std.meta.ArgsTuple(F) = undefined;
-        // use a variable here, so that Zig doesn't try to call it as a vararg function
-        // despite the cast to a non-vararg one
         const vararg_offset = switch (arg_count > f.params.len) {
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
@@ -68,9 +66,11 @@ pub fn call(
                 args[index] = vararg_ptr;
             }
         }
-        var function_ptr: *const F = @ptrCast(&function);
-        std.mem.doNotOptimizeAway(&function_ptr);
-        arg_struct.retval = @call(.auto, function_ptr, args);
+        // use a variable here, so that Zig doesn't try to call it as a vararg function
+        // despite the cast to a non-vararg one
+        var not_vararg_func: *const F = @ptrCast(function);
+        std.mem.doNotOptimizeAway(&not_vararg_func);
+        arg_struct.retval = @call(.auto, not_vararg_func, args);
     } else {
         const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
         const Alloc = ArgAllocation(abi, FT);
