@@ -1116,7 +1116,7 @@ pub const TypeDataCollector = struct {
             },
             .ErrorSet => self.add(ErrorIntType),
             .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
-            .Fn => |f| if (!f.is_generic and f.calling_convention != .Inline) {
+            .Fn => |f| if (!f.is_generic) {
                 const ArgT = ArgumentStruct(T);
                 self.append(.{
                     .Type = ArgT,
@@ -1125,6 +1125,9 @@ pub const TypeDataCollector = struct {
                         .is_variadic = f.is_var_args,
                     },
                 });
+                if (f.calling_convention == .Inline) {
+                    self.add(Uninlined(T));
+                }
             },
             inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
                 self.add(ST);
@@ -1276,12 +1279,14 @@ pub const TypeDataCollector = struct {
                 }
             },
             .Fn => |f| {
-                if (!f.is_generic and f.calling_convention != .Inline) {
+                if (!f.is_generic) {
                     td.attrs.is_supported = comptime for (f.params) |param| {
                         if (param.is_generic) break false;
                         const PT = param.type orelse break false;
                         const param_attrs = self.getAttributes(PT);
-                        if (param_attrs.is_comptime_only) break false;
+                        if (param_attrs.is_comptime_only) {
+                            @compileLog(param);
+                        }
                     } else for (.{1}) |_| {
                         const RT = f.return_type orelse break false;
                         const retval_attrs = self.getAttributes(RT);

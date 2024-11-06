@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types.zig");
+const fn_transform = @import("fn-transform.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const expect = std.testing.expect;
@@ -668,7 +669,15 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     .Fn => false,
                                     else => decl_ptr_td.isConst(),
                                 };
-                                const value_obj = try self.exportPointerTarget(decl_ptr, is_comptime);
+                                // deal with inline functions
+                                const target_ptr = switch (@typeInfo(DT)) {
+                                    .Fn => |f| switch (f.calling_convention) {
+                                        .Inline => &uninline(decl_value),
+                                        else => decl_ptr,
+                                    },
+                                    else => decl_ptr,
+                                };
+                                const value_obj = try self.exportPointerTarget(target_ptr, is_comptime);
                                 template_maybe = template_maybe orelse try host.createTemplate(null);
                                 try host.writeSlot(template_maybe.?, index, value_obj);
                             }
@@ -942,4 +951,15 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
         else => result = value,
     }
     return result;
+}
+
+fn uninline(comptime func: anytype) types.Uninlined(@TypeOf(func)) {
+    const FT = @TypeOf(func);
+    const f = @typeInfo(FT).Fn;
+    const ns = struct {
+        fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
+            return @call(.auto, func, args);
+        }
+    };
+    return fn_transform.spreadArgs(ns.call, .Unspecified);
 }
