@@ -3,7 +3,6 @@ import { mixin } from '../environment.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
 export default mixin({
-  littleEndian: true,
   variables: [],
 
   getSpecialExports() {
@@ -21,8 +20,8 @@ export default mixin({
       typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
     };
   },
-  recreateStructures(structures, options) {
-    Object.assign(this, options);
+  recreateStructures(structures, settings) {
+    Object.assign(this, settings);
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
         dest[slot] = createObject(placeholder);

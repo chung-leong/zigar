@@ -842,7 +842,7 @@ pub fn getModuleAttributes() types.ModuleAttributes {
             .Debug, .ReleaseSafe => true,
             else => false,
         },
-        .multithreaded = !builtin.single_threaded,
+        .libc = !builtin.link_libc,
     };
 }
 

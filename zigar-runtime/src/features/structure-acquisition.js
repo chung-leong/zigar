@@ -3,6 +3,7 @@ import {
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType,
+  ModuleAttribute,
   PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag,
   structureNames, StructureType
 } from '../constants.js';
@@ -20,6 +21,10 @@ export default mixin({
     enum: 0,
     opaque: 0,
   },
+  littleEndian: true,
+  runtimeSafety: false,
+  libc: false,
+
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -117,7 +122,10 @@ export default mixin({
     }
   },
   acquireStructures(options) {
-    this.resetGlobalErrorSet?.();
+    const attrs = this.getModuleAttributes();
+    this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
+    this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
+    this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
     const { littleEndian } = this;
@@ -154,10 +162,10 @@ export default mixin({
   exportStructures() {
     this.acquireDefaultPointers();
     this.prepareObjectsForExport();
-    const { structures, runtimeSafety, littleEndian } = this;
+    const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
-      options: { runtimeSafety, littleEndian },
+      settings: { runtimeSafety, littleEndian, libc },
       keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
@@ -352,6 +360,7 @@ export default mixin({
     },
     imports: {
       getFactoryThunk: { argType: '', returnType: 'i' },
+      getModuleAttributes: { argType: '', returnType: 'i' },
     },
 
     beginDefinition() {
@@ -384,6 +393,7 @@ export default mixin({
     },
     imports: {
       getFactoryThunk: null,
+      getModuleAttributes: null,
       getMemoryOffset: null,
     },
   /* c8 ignore next */

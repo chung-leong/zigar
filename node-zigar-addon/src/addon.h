@@ -20,7 +20,7 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#define EXPORT_COUNT    19
+#define EXPORT_COUNT    20
 #define IMPORT_COUNT    11
 
 #if UINTPTR_MAX == UINT64_MAX
@@ -114,7 +114,7 @@ typedef struct {
             bool runtime_safety: 1;
             bool multithreaded: 1;
         };
-        uint32_t _;
+        uint32_t numeric;
     };
 } module_attributes;
 

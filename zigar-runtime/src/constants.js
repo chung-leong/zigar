@@ -124,5 +124,5 @@ export const Action = {
 export const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
-  Multithreaded:    0x0004,
+  LibC:             0x0004,
 };

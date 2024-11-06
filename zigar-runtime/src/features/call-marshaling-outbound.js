@@ -110,6 +110,9 @@ export default mixin({
       }
       this.releaseShadows(context);
       this.releaseCallContext?.(context);
+      if (this.libc) {
+        this.flushStdout?.();
+      }
       this.flushConsole?.();
     };
     if (FINALIZE in args) {

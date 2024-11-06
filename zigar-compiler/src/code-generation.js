@@ -30,7 +30,7 @@ export function generateCode(definition, params) {
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment();`);
   add(`\n// recreate structures`);
-  add(`env.recreateStructures(structures, options);`);
+  add(`env.recreateStructures(structures, settings);`);
   if (binarySource) {
     if (moduleOptions) {
       add(`\n// initiate loading and compilation of WASM bytecodes`);
@@ -73,7 +73,7 @@ export function generateCode(definition, params) {
 }
 
 function addStructureDefinitions(lines, definition) {
-  const { structures, options, keys } = definition;
+  const { structures, settings, keys } = definition;
   const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -285,8 +285,8 @@ function addStructureDefinitions(lines, definition) {
   add(`];`)
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
-  add(`const options = {`);
-  for (const [ name, value ] of Object.entries(options)) {
+  add(`const settings = {`);
+  for (const [ name, value ] of Object.entries(settings)) {
     add(`${name}: ${value},`);
   }
   add(`};`);

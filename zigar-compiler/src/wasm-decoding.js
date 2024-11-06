@@ -29,7 +29,8 @@ export function stripUnused(binary, options = {}) {
   const { sections, size } = parseBinary(binary);
   const blacklist = [
     /^getFactoryThunk$/,
-    /^exporter.createRootFactory/,
+    /^getModuleAttributes$/,
+    /^exporter\.getFactoryThunk/,
   ];
 
   function getSection(type) {
@@ -116,7 +117,6 @@ export function stripUnused(binary, options = {}) {
   // mark blacklisted functions as unused
   for (const fn of functions) {
     if (fn.name && blacklist.some(re => re.test(fn.name))) {
-      fn.using = false;
       if (fn.name === 'getFactoryThunk' && functionNames.length === 0) {
         // when compiled for ReleaseSmall, we don't get the name section
         // therefore unable to remove the factory function by name

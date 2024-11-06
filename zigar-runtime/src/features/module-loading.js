@@ -1,4 +1,3 @@
-import { ModuleAttribute } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, empty } from '../utils.js';
 
@@ -25,7 +24,6 @@ export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       initialize: { argType: '' },
-      getModuleAttributes: { argType: '', returnType: 'i' },
     },
     exports: {
       displayPanic: { argType: 'ii' },
@@ -161,9 +159,6 @@ export default mixin({
         const { exports } = instance;
         this.importFunctions(exports);
         this.trackInstance(instance);
-        const attrs = this.getModuleAttributes();
-        this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
-        this.multithreaded = !!(attrs & ModuleAttribute.Multithreaded);
         if (this.customWASI) {
           // use a proxy to attach the memory object to the list of exports
           const exportsPlusMemory = { ...exports, memory: this.memory };
@@ -196,26 +191,18 @@ export default mixin({
       const imports = {};
       for (const [ name, alias ] of Object.entries(this.exports)) {
         const fn = this[alias ?? name];
-        /* c8 ignore next 5 */
-        if (process.env.DEV) {
-          if (!fn) {
-            throw new Error(`Unable to export function: ${name}`);
-          }
+        if (fn) {
+          imports[name] = fn.bind(this);
         }
-        imports[name] = fn.bind(this);
       }
       return imports;
     },
     importFunctions(exports) {
       for (const [ name, alias ] of Object.entries(this.imports)) {
         const fn = exports[alias ?? /* c8 ignore next */ name];
-        /* c8 ignore next 5 */
-        if (process.env.DEV) {
-          if (!fn) {
-            throw new Error(`Unable to import function: ${name}`);
-          }
+        if (fn) {
+          this[name] = fn;
         }
-        this[name] = fn;
       }
     },
   /* c8 ignore next */

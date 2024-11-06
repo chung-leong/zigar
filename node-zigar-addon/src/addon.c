@@ -343,6 +343,19 @@ napi_value throw_last_error(napi_env env) {
     return throw_error(env, error_info->error_message);
 }
 
+napi_value get_module_attributes(napi_env env,
+                                 napi_callback_info info) {
+    module_data* md;
+    size_t argc = 0;
+    napi_value args[0];
+    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok) {
+        return throw_last_error(env);
+    }
+    napi_value value;
+    napi_create_uint32(env, md->mod->attributes.numeric, &value);
+    return value;
+}
+
 napi_value get_buffer_address(napi_env env,
                               napi_callback_info info) {
     size_t argc = 1;
@@ -911,6 +924,7 @@ struct {
     napi_callback cb;
 } exports[EXPORT_COUNT] = {
     { "loadModule", load_module },
+    { "getModuleAttributes", get_module_attributes, },
     { "getBufferAddress", get_buffer_address },
     { "allocateExternMemory", allocate_external_memory },
     { "freeExternMemory", free_external_memory },
@@ -974,6 +988,8 @@ bool export_functions(module_data* md,
     return true;
 }
 
+#include <stdio.h>
+
 bool import_functions(module_data* md,
                       napi_value js_env) {
     napi_env env = md->env;
@@ -983,6 +999,7 @@ bool import_functions(module_data* md,
     napi_value args[0];
     if (napi_get_named_property(env, js_env, "exportFunctions", &export_fn) != napi_ok
      || napi_call_function(env, js_env, export_fn, 0, args, &exports) != napi_ok) {
+        printf("???\n");
         return false;
     }
     for (int i = 0; i < IMPORT_COUNT; i++) {
@@ -1056,20 +1073,6 @@ napi_value load_module(napi_env env,
     // run initializer
     if (mod->imports->initialize(md) != OK) {
         return throw_error(env, "Initialization failed");
-    }
-
-    // add module attributess to environment
-    module_attributes attributes = md->mod->attributes;
-    napi_value little_endian, runtime_safety, multithreaded;
-    napi_value js_env;
-    if (napi_get_reference_value(env, md->js_env, &js_env) != napi_ok
-     || napi_get_boolean(env, attributes.little_endian, &little_endian) != napi_ok
-     || napi_set_named_property(env, js_env, "littleEndian", little_endian) != napi_ok
-     || napi_get_boolean(env, attributes.runtime_safety, &runtime_safety) != napi_ok
-     || napi_set_named_property(env, js_env, "runtimeSafety", runtime_safety) != napi_ok
-     || napi_get_boolean(env, attributes.multithreaded, &multithreaded) != napi_ok
-     || napi_set_named_property(env, js_env, "multithreaded", multithreaded) != napi_ok) {
-        return throw_error(env, "Unable to modify runtime environment");
     }
     return NULL;
 }

@@ -129,6 +129,12 @@ const Action = {
   Release: 1,
 };
 
+const ModuleAttribute = {
+  LittleEndian:     0x0001,
+  RuntimeSafety:    0x0002,
+  LibC:             0x0004,
+};
+
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
@@ -462,7 +468,7 @@ function generateCode(definition, params) {
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment();`);
   add(`\n// recreate structures`);
-  add(`env.recreateStructures(structures, options);`);
+  add(`env.recreateStructures(structures, settings);`);
   if (binarySource) {
     if (moduleOptions) {
       add(`\n// initiate loading and compilation of WASM bytecodes`);
@@ -505,7 +511,7 @@ function generateCode(definition, params) {
 }
 
 function addStructureDefinitions(lines, definition) {
-  const { structures, options, keys } = definition;
+  const { structures, settings, keys } = definition;
   const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
@@ -717,8 +723,8 @@ function addStructureDefinitions(lines, definition) {
   add(`];`);
   const root = structures[structures.length - 1];
   add(`const root = ${structureNames.get(root)};`);
-  add(`const options = {`);
-  for (const [ name, value ] of Object.entries(options)) {
+  add(`const settings = {`);
+  for (const [ name, value ] of Object.entries(settings)) {
     add(`${name}: ${value},`);
   }
   add(`};`);
@@ -2819,7 +2825,6 @@ var allocatorMethods = mixin({
 });
 
 var baseline = mixin({
-  littleEndian: true,
   variables: [],
 
   getSpecialExports() {
@@ -2837,8 +2842,8 @@ var baseline = mixin({
       typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
     };
   },
-  recreateStructures(structures, options) {
-    Object.assign(this, options);
+  recreateStructures(structures, settings) {
+    Object.assign(this, settings);
     const insertObjects = (dest, placeholders) => {
       for (const [ slot, placeholder ] of Object.entries(placeholders)) {
         dest[slot] = createObject(placeholder);
@@ -3152,10 +3157,9 @@ var callMarshalingOutbound = mixin({
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
-    const attrLength = attrs?.[MEMORY]?.byteLength;
     this.updateShadows(context);
     const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrLength)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
       throw new ZigError();
@@ -3168,6 +3172,9 @@ var callMarshalingOutbound = mixin({
       }
       this.releaseShadows(context);
       this.releaseCallContext?.(context);
+      if (this.libc) {
+        this.flushStdout?.();
+      }
       this.flushConsole?.();
     };
     if (FINALIZE in args) {
@@ -3771,7 +3778,6 @@ var moduleLoading = mixin({
   ...({
     imports: {
       initialize: { argType: '' },
-      getModuleAttributes: { argType: '', returnType: 'i' },
     },
     exports: {
       displayPanic: { argType: 'ii' },
@@ -4288,6 +4294,10 @@ var structureAcquisition = mixin({
     enum: 0,
     opaque: 0,
   },
+  littleEndian: true,
+  runtimeSafety: false,
+  libc: false,
+
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -4385,7 +4395,10 @@ var structureAcquisition = mixin({
     }
   },
   acquireStructures(options) {
-    this.resetGlobalErrorSet?.();
+    const attrs = this.getModuleAttributes();
+    this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
+    this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
+    this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
     const { littleEndian } = this;
@@ -4422,10 +4435,10 @@ var structureAcquisition = mixin({
   exportStructures() {
     this.acquireDefaultPointers();
     this.prepareObjectsForExport();
-    const { structures, runtimeSafety, littleEndian } = this;
+    const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
-      options: { runtimeSafety, littleEndian },
+      settings: { runtimeSafety, littleEndian, libc },
       keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
@@ -4620,6 +4633,7 @@ var structureAcquisition = mixin({
     },
     imports: {
       getFactoryThunk: { argType: '', returnType: 'i' },
+      getModuleAttributes: { argType: '', returnType: 'i' },
     },
 
     beginDefinition() {
@@ -8069,7 +8083,8 @@ function stripUnused(binary, options = {}) {
   const { sections, size } = parseBinary(binary);
   const blacklist = [
     /^getFactoryThunk$/,
-    /^exporter.createRootFactory/,
+    /^getModuleAttributes$/,
+    /^exporter\.getFactoryThunk/,
   ];
 
   function getSection(type) {
@@ -8156,7 +8171,6 @@ function stripUnused(binary, options = {}) {
   // mark blacklisted functions as unused
   for (const fn of functions) {
     if (fn.name && blacklist.some(re => re.test(fn.name))) {
-      fn.using = false;
       if (fn.name === 'getFactoryThunk' && functionNames.length === 0) {
         // when compiled for ReleaseSmall, we don't get the name section
         // therefore unable to remove the factory function by name

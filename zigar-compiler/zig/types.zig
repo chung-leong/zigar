@@ -253,7 +253,7 @@ pub const Structure = struct {
 pub const ModuleAttributes = packed struct(u32) {
     little_endian: bool,
     runtime_safety: bool,
-    multithreaded: bool,
+    libc: bool,
     _: u29 = 0,
 };
 
