@@ -988,8 +988,6 @@ bool export_functions(module_data* md,
     return true;
 }
 
-#include <stdio.h>
-
 bool import_functions(module_data* md,
                       napi_value js_env) {
     napi_env env = md->env;
@@ -999,7 +997,6 @@ bool import_functions(module_data* md,
     napi_value args[0];
     if (napi_get_named_property(env, js_env, "exportFunctions", &export_fn) != napi_ok
      || napi_call_function(env, js_env, export_fn, 0, args, &exports) != napi_ok) {
-        printf("???\n");
         return false;
     }
     for (int i = 0; i < IMPORT_COUNT; i++) {
