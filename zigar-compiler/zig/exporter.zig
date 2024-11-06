@@ -842,7 +842,7 @@ pub fn getModuleAttributes() types.ModuleAttributes {
             .Debug, .ReleaseSafe => true,
             else => false,
         },
-        .libc = !builtin.link_libc,
+        .libc = builtin.link_libc,
     };
 }
 
