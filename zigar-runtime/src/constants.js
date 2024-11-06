@@ -120,3 +120,9 @@ export const Action = {
   Call: 0,
   Release: 1,
 };
+
+export const ModuleAttribute = {
+  LittleEndian:     0x0001,
+  RuntimeSafety:    0x0002,
+  Multithreaded:    0x0004,
+};

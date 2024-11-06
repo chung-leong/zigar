@@ -1,3 +1,4 @@
+import { ModuleAttribute } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, empty } from '../utils.js';
 
@@ -160,6 +161,9 @@ export default mixin({
         const { exports } = instance;
         this.importFunctions(exports);
         this.trackInstance(instance);
+        const attrs = this.getModuleAttributes();
+        this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
+        this.multithreaded = !!(attrs & ModuleAttribute.Multithreaded);
         if (this.customWASI) {
           // use a proxy to attach the memory object to the list of exports
           const exportsPlusMemory = { ...exports, memory: this.memory };
@@ -184,8 +188,6 @@ export default mixin({
       Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
   } : process.env.TARGET === 'node' ? {
-    exports: {
-    },
     imports: {
       loadModule: null,
     },
