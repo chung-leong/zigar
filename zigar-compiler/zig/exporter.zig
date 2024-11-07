@@ -108,6 +108,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_pointer = td.hasPointer(),
                             .has_sentinel = td.Type.sentinel != null,
                             .is_string = td.Type.ElementType == u8 or td.Type.ElementType == u16,
+                            .is_typed_array = isTypedArray(td),
+                            .is_clamped_array = td.Type.ElementType == u8 and isTypedArray(td),
                             .is_opaque = td.Type.is_opaque,
                         },
                     } else .{
@@ -188,10 +190,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
                             .has_pointer = td.attrs.has_pointer,
                             .is_string = ar.child == u8 or ar.child == u16,
+                            .is_typed_array = isTypedArray(td),
+                            .is_clamped_array = ar.child == u8 and isTypedArray(td),
                         },
                     };
                 },
-                .Vector => .{ .vector = .{} },
+                .Vector => .{
+                    .vector = .{
+                        .is_typed_array = isTypedArray(td),
+                    },
+                },
                 .Pointer => |pt| .{
                     .pointer = .{
                         .has_length = pt.size == .Slice,
@@ -311,6 +319,24 @@ fn Factory(comptime host: type, comptime module: type) type {
                         else => .undefined,
                     },
                 },
+            };
+        }
+
+        fn isTypedArray(comptime td: TypeData) bool {
+            return switch (@typeInfo(td.Type)) {
+                .Int => |int| inline for (.{ 8, 16, 32, 64 }) |bits| {
+                    if (int.bits == bits) break true;
+                } else false,
+                .Float => |float| inline for (.{ 32, 64 }) |bits| {
+                    if (float.bits == bits) break true;
+                } else false,
+                .Array => |ar| isTypedArray(tdb.get(ar.child)),
+                .Vector => |ve| isTypedArray(tdb.get(ve.child)),
+                .Struct => switch (td.isSlice()) {
+                    true => isTypedArray(tdb.get(td.Type.ElementType)),
+                    false => false,
+                },
+                else => false,
             };
         }
 

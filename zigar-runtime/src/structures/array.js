@@ -57,6 +57,15 @@ export default mixin({
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = defineValue(getArrayEntries);
+    if (flags & ArrayFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & ArrayFlag.IsString) {
+        descriptors.string = this.defineString(structure);
+      }
+      if (flags & ArrayFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);

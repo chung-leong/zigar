@@ -66,7 +66,6 @@ describe('Feature: abort-signal', function() {
       };
       const int32 = env.createSignalArray(args, signalStructure, null);
       expect(int32.$).to.equal(0);
-      expect(int32.typedArray).to.be.an('Int32Array');
     })
     it('should create an Int32 object hooked to an abort signal', async function() {
       const env = new Env();

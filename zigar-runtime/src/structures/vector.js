@@ -1,3 +1,4 @@
+import { VectorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getVectorEntries, getVectorIterator } from '../iterators.js';
@@ -7,6 +8,7 @@ import { defineValue, getSelf } from '../utils.js';
 export default mixin({
   defineVector(structure, descriptors) {
     const {
+      flags,
       length,
       instance: { members: [ member ] },
     } = structure;
@@ -52,6 +54,12 @@ export default mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     descriptors.length = defineValue(length);
+    if (flags & VectorFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & VectorFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors.entries = defineValue(getVectorEntries);
     descriptors[Symbol.iterator] = defineValue(getVectorIterator);
     descriptors[INITIALIZE] = defineValue(initializer);

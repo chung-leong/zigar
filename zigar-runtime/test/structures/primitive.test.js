@@ -205,7 +205,7 @@ describe('Structure: primitive', function() {
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
-      expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
+      expect(object.base64).to.be.a('string');
     })
     it('should accept base64 data as initializer', function() {
       const env = new Env();
@@ -271,51 +271,6 @@ describe('Structure: primitive', function() {
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.undefined;
-    })
-    it('should accept typed array as initializer', function() {
-      const env = new Env();
-      const structure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'i64',
-        byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
-      env.endStructure(structure);
-      const { constructor: I64 } = structure;
-      const typedArray = new BigInt64Array([ 1234n ]);
-      const int = new I64({ typedArray });
-      expect(int.$).to.equal(typedArray[0]);
-      int.$ = 123n;
-      expect(int.$).to.not.equal(typedArray[0]);
-    })
-    it('should allow assignment of typed array', function() {
-      const env = new Env();
-      const structure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'i64',
-        byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
-      env.endStructure(structure);
-      const { constructor: I64 } = structure;
-      const int = new I64(77n);
-      const typedArray = new BigInt64Array([ 1234n ]);
-      int.typedArray = typedArray;
-      expect(int.$).to.equal(typedArray[0]);
     })
     it('should allow casting of typed array into primitive', function() {
       const env = new Env();

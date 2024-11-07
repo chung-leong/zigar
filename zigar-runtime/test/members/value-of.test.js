@@ -5,17 +5,16 @@ import '../../src/mixins.js';
 
 const Env = defineEnvironment();
 
-describe('Member: special-methods', function() {
-  describe('defineSpecialMethods', function() {
-    it('should return descriptors for toJSON and valueOf', function() {
+describe('Member: valueOf', function() {
+  describe('defineValueOf', function() {
+    it('should return descriptor for valueOf', function() {
       const env = new Env();
-      const descriptors = env.defineSpecialMethods();
-      expect(descriptors.toJSON.value).to.be.a('function');
-      expect(descriptors.valueOf.value).to.be.a('function');
+      const valueOf = env.defineValueOf();
+      expect(valueOf.value).to.be.a('function');
     })
   })
   describe('defineStructure', function() {
-    it('should attach toJSON and valueOf methods to defined structures', function() {
+    it('should attach valueOf method to structure', function() {
       const env = new Env();
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -103,7 +102,6 @@ describe('Member: special-methods', function() {
         turkey: 1e7,
       };
       const object = new Complex(data);
-      expect(JSON.stringify(object)).to.equal(JSON.stringify(data));
       expect(object.valueOf()).to.eql(data);
     })
     it('should replace inaccessible pointer with symbol', function() {
@@ -173,8 +171,6 @@ describe('Member: special-methods', function() {
       env.endStructure(structure);
       const object = new Complex({ donut: 3.5 });
       expect(object.valueOf().goat).to.be.a('symbol');
-      JSON.stringify(object);
-      expect(JSON.stringify(object)).to.equal(JSON.stringify({ donut: 3.5, turkey: 3.5 }));
     })
   })
 })

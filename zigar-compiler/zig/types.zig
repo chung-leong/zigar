@@ -69,7 +69,9 @@ pub const StructureFlags = extern union {
         has_slot: bool = false,
 
         is_string: bool = false,
-        _: u27 = 0,
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+        _: u25 = 0,
     },
     @"struct": packed struct(u32) {
         has_value: bool = false,
@@ -160,8 +162,11 @@ pub const StructureFlags = extern union {
 
         has_sentinel: bool = false,
         is_string: bool = false,
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+
         is_opaque: bool = false,
-        _: u25 = 0,
+        _: u23 = 0,
     },
     vector: packed struct(u32) {
         has_value: bool = false,
@@ -169,7 +174,9 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
-        _: u28 = 0,
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+        _: u26 = 0,
     },
     @"opaque": packed struct(u32) {
         has_value: bool = false,

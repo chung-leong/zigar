@@ -822,7 +822,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const options = { signal };
       env.copyArguments(dest, src, members, options);
       expect(dest[0]).to.equal(1);
-      expect(dest[1]).to.have.property('ptr').that.has.property('typedArray');
+      expect(dest[1]).to.have.property('ptr');
     })
   })
   describe('invokeThunk', function() {

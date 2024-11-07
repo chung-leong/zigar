@@ -719,44 +719,6 @@ describe('Structure: enum', function() {
       env.endStructure(structure);
       expect(() => new Hello(false)).to.throw(TypeError);
     })
-    it('should accept special initializers', function() {
-      const env = new Env();
-      const structure = env.beginStructure({
-        type: StructureType.Enum,
-        byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure,
-      });
-      const Hello = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'Dog',
-        type: MemberType.Object,
-        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'Cat',
-        type: MemberType.Object,
-        flags: MemberFlag.IsPartOfSet | MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: createInstance(env, structure, new Uint32Array([ 456 ])),
-          1: createInstance(env, structure, new Uint32Array([ 123 ])),
-        },
-      }, true);
-      env.endStructure(structure);
-      const object = new Hello({ typedArray: new Uint32Array([ 123 ])});
-      expect(object.$).to.equal(Hello.Cat);
-    })
     it('should throw when initializer is empty', function() {
       const env = new Env();
       const structure = env.beginStructure({

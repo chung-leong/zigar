@@ -1,29 +1,21 @@
 import { StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ENTRIES, FLAGS, TYPE } from '../symbols.js';
-import { defineValue } from '../utils.js';
 
 export default mixin({
-  defineSpecialMethods() {
+  defineValueOf() {
     return {
-      toJSON: defineValue(convertToJSON),
-      valueOf: defineValue(convertToJS),
+      value() {
+        return normalizeObject(this, false);
+      },
     };
   },
 });
 
-function convertToJS() {
-  return normalizeObject(this, false);
-}
-
-function convertToJSON() {
-  return normalizeObject(this, true);
-}
-
 const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
-function normalizeObject(object, forJSON) {
+export function normalizeObject(object, forJSON) {
   const handleError = (forJSON)
   ? (cb) => {
       try {

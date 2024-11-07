@@ -462,7 +462,7 @@ describe('Structure: optional', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]Uint8',
         byteSize: 1,
       })
@@ -542,7 +542,7 @@ describe('Structure: optional', function() {
       env.endStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       })

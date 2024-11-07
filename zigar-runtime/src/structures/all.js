@@ -30,6 +30,10 @@ export default mixin({
     const keys = [];
     const setters = {};
     const descriptors = {
+      dataView: this.defineDataView(structure),
+      base64: this.defineBase64(structure),
+      toJSON: this.defineToJSON(),
+      valueOf: this.defineValueOf(),
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
@@ -37,25 +41,20 @@ export default mixin({
       [KEYS]: defineValue(keys),
       // add memory copier (from mixin "memory/copying")
       [COPY]: this.defineCopier(byteSize),
-      // add special methods like toJSON() (from mixin "members/special-method")
-      ...this.defineSpecialMethods?.(),
-      // add special properties like dataView (from mixin "members/special-props")
-      ...this.defineSpecialProperties?.(structure),
       ...(process.env.TARGET === 'wasm' ? {
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer?.(),
       } : undefined),
     };
+    const constructor = structure.constructor = f.call(this, structure, descriptors);
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
-      let s;
-      if (s = descriptor?.set) {
+      const s = descriptor?.set;
+      if (s && !setters[name]) {
         setters[name] = s;
         keys.push(name);
       }
     }
-    const constructor = f.call(this, structure, descriptors);
     defineProperties(constructor.prototype, descriptors);
-    structure.constructor = constructor;
     return constructor;
   },
   finalizeStructure(structure) {
@@ -71,6 +70,8 @@ export default mixin({
     const props = [];
     const staticDescriptors = {
       name: defineValue(name),
+      toJSON: this.defineToJSON(),
+      valueOf: this.defineValueOf(),
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
@@ -80,7 +81,6 @@ export default mixin({
       [Symbol.iterator]: defineValue(getStructIterator),
       [ENTRIES]: { get: getStructEntries },
       [PROPS]: defineValue(props),
-      ...this.defineSpecialMethods?.(),
     };
     const descriptors = {};
     for (const member of members) {

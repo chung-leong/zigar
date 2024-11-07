@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ExportFlag, MemberType, PointerFlag, StructureFlag, StructureType,
+  ExportFlag, MemberType, ModuleAttribute, PointerFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -250,6 +250,9 @@ describe('Feature: structure-acquisition', function() {
       env.invokeThunk = function(...args) {
         thunkAddress = this.getViewAddress(args[0][MEMORY]);
         optionsDV = args[2][MEMORY];
+      };
+      env.getModuleAttributes = function() {
+        return ModuleAttribute.LittleEndian;
       };
       env.acquireStructures({ omitFunctions: true, omitVariables: true });
       expect(thunkAddress).to.equal(0x1234);

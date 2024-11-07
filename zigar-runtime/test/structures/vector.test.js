@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureType } from '../../src/constants.js';
+import { MemberType, StructureType, VectorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
@@ -11,6 +11,7 @@ describe('Structure: vector', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         byteSize: 2,
         instance: {},
         static: {
@@ -25,7 +26,7 @@ describe('Structure: vector', function() {
           type: MemberType.Uint,
           bitSize: 16,
           byteSize: 1,
-          structure,
+          structure: {},
         },
       ];
       const env = new Env();
@@ -36,6 +37,7 @@ describe('Structure: vector', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         byteSize: 2,
         instance: {},
         static: {
@@ -50,7 +52,7 @@ describe('Structure: vector', function() {
           type: MemberType.Uint,
           bitSize: 16,
           byteSize: 2,
-          structure,
+          structure: {},
         },
       ];
       const env = new Env();
@@ -65,6 +67,7 @@ describe('Structure: vector', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         byteSize: 2,
         instance: {},
         static: {
@@ -106,6 +109,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -147,6 +151,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -183,6 +188,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -213,6 +219,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 8,
         byteSize: 4 * 8,
       });
@@ -251,6 +258,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 8,
         byteSize: 4 * 8,
       });
@@ -291,6 +299,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -326,6 +335,7 @@ describe('Structure: vector', function() {
       env.endStructure(floatStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         name: '@Vector(4, f32)',
         length: 4,
         byteSize: 4 * 4,
@@ -365,6 +375,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 3,
         byteSize: 8 * 3,
       });
@@ -397,6 +408,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: 0,
         length: 3,
         byteSize: 16 * 3,
       });
@@ -428,6 +440,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -463,6 +476,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -494,6 +508,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -530,6 +545,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const vectorStructure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -576,6 +592,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -610,6 +627,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -642,6 +660,7 @@ describe('Structure: vector', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });
@@ -673,6 +692,7 @@ describe('Structure: vector', function() {
       env.endStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
+        flags: VectorFlag.IsTypedArray,
         length: 4,
         byteSize: 4 * 4,
       });

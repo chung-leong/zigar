@@ -102,6 +102,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 4 * 8,
       });
@@ -499,7 +500,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
       });
@@ -535,7 +536,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 22,
       });
@@ -572,7 +573,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -611,7 +612,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -649,7 +650,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -716,7 +717,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -748,7 +749,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
       });
@@ -785,7 +786,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
       });
@@ -821,6 +822,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
       });
@@ -859,6 +861,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
       });
@@ -894,6 +897,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
+        flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
       });

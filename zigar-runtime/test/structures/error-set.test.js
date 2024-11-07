@@ -784,44 +784,6 @@ describe('Structure: error-set', function() {
       env.endStructure(structure);
       expect(() => ErrorSet(false)).to.throw(TypeError);
     })
-    it('should accept special properties', function() {
-      const env = new Env();
-      const structure = env.beginStructure({
-        type: StructureType.ErrorSet,
-        byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
-      env.endStructure(structure);
-      const object = new ErrorSet({ typedArray: new Uint16Array([ 8 ])});
-      expect(object.$).to.equal(ErrorSet.UnableToCreateObject);
-    })
     it('should throw when no special properties are found', function() {
       const env = new Env();
       const structure = env.beginStructure({

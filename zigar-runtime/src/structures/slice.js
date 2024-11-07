@@ -97,6 +97,15 @@ export default mixin({
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = { get: getLength };
+    if (flags & SliceFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & SliceFlag.IsString) {
+        descriptors.string = this.defineString(structure);
+      }
+      if (flags & SliceFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors.entries = defineValue(getArrayEntries);
     descriptors.subarray = {
       value(begin, end) {

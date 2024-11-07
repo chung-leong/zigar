@@ -257,7 +257,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 1,
       });
@@ -296,7 +296,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 2,
       });
@@ -431,7 +431,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -468,7 +468,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -505,7 +505,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -543,7 +543,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -587,7 +587,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -624,7 +624,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -661,7 +661,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
       });
@@ -792,7 +792,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -828,6 +828,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -865,6 +866,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -900,6 +902,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
+        flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
       });
@@ -1693,7 +1696,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1739,7 +1742,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1783,7 +1786,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1827,7 +1830,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1875,7 +1878,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });
@@ -1925,7 +1928,7 @@ describe('Structure: slice', function() {
       env.runtimeSafety = false;
       const structure = env.beginStructure({
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.HasSentinel,
+        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
       });

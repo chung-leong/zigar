@@ -28,6 +28,8 @@ export const PrimitiveFlag = {
 };
 export const ArrayFlag = {
   IsString:         0x0010,
+  IsTypedArray:     0x0020,
+  IsClampedArray:   0x0040,
 };
 export const StructFlag = {
   IsExtern:         0x0010,
@@ -66,13 +68,20 @@ export const PointerFlag = {
 export const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
-  IsOpaque:         0x0040,
+  IsTypedArray:     0x0040,
+  IsClampedArray:   0x0080,
+
+  IsOpaque:         0x0100,
 };
 export const ErrorSetFlag = {
   IsGlobal:         0x0010,
 };
 export const OpaqueFlag = {
   IsIterator:       0x0010,
+};
+export const VectorFlag = {
+  IsTypedArray:     0x0010,
+  IsClampedArray:   0x0020,
 };
 export const ArgStructFlag = {
   HasOptions:       0x0010,

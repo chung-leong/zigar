@@ -2768,7 +2768,7 @@ function formatList(list, conj = 'or') {
 var allocatorMethods = mixin({
   defineAlloc() {
     return {
-      value(len, align) {
+      value(len, align = 1) {
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable, ptr } = this;
         const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
@@ -2799,7 +2799,7 @@ var allocatorMethods = mixin({
     const copy = this.getCopyFunction();
     return {
       value(arg) {
-        let src;
+        let src, align;
         if (typeof(arg) === 'string') {
           arg = encodeText(arg);
         }
@@ -2808,15 +2808,16 @@ var allocatorMethods = mixin({
         } else if (arg instanceof ArrayBuffer) {
           src = new DataView(arg);
         } else if (arg) {
-          const { buffer, byteOffset, byteLength } = arg;
+          const { buffer, byteOffset, byteLength, BYTES_PER_ELEMENT } = arg;
           if (buffer && byteOffset !== undefined && byteLength !== undefined) {
             src = new DataView(buffer, byteOffset, byteLength);
+            align = BYTES_PER_ELEMENT;
           }
         }
         if (!src) {
           throw new TypeMismatch('string, DataView, or typed array', arg);
         }
-        const dv = this.alloc(src.byteLength, 8);
+        const dv = this.alloc(src.byteLength, align);
         copy(dv, src);
         return dv;
       }

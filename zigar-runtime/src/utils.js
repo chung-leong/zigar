@@ -255,6 +255,11 @@ export function findObjects(structures, SLOTS) {
   return list;
 }
 
+export function markAsSpecial({ get, set }) {
+  get.special = set.special = true;
+  return { get, set };
+}
+
 export function getSelf() {
   return this;
 }
