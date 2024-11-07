@@ -332,7 +332,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 } else false,
                 .Array => |ar| isTypedArray(tdb.get(ar.child)),
                 .Vector => |ve| isTypedArray(tdb.get(ve.child)),
-                .Struct => switch (td.isSlice()) {
+                .Struct => switch (comptime td.isSlice()) {
                     true => isTypedArray(tdb.get(td.Type.ElementType)),
                     false => false,
                 },

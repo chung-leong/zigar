@@ -347,13 +347,12 @@ fn runVariadicThunk(
     fn_address: usize,
     arg_address: usize,
     attr_address: usize,
-    attr_len: usize,
+    arg_count: usize,
 ) callconv(.C) Result {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *const anyopaque = @ptrFromInt(attr_address);
-    const arg_count = attr_len / 8;
     return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) .ok else |_| .failure;
 }
 
