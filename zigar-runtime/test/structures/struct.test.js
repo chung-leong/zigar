@@ -1132,6 +1132,7 @@ describe('Structure: struct', function() {
         type: StructureType.Struct,
         flags: StructureFlag.HasSlot | StructFlag.IsTuple,
         name: 'zig.super.Hello',
+        length: 2,
         byteSize: 0,
       });
       env.attachMember(structure, {

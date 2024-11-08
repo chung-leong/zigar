@@ -235,7 +235,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                         }
                         break :req_arg_count len;
                     },
-                    false => null,
+                    false => switch (st.is_tuple) {
+                        true => st.fields.len,
+                        false => null,
+                    },
                 },
                 .Fn => getStructureLength(tdb.get(types.ArgumentStruct(td.Type))),
                 else => null,

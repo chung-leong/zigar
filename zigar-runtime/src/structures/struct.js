@@ -10,8 +10,9 @@ import { defineValue, getSelf } from '../utils.js';
 export default mixin({
   defineStruct(structure, descriptors) {
     const {
-      instance: { members },
       flags,
+      length,
+      instance: { members },
     } = structure;
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
@@ -49,9 +50,7 @@ export default mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
-    descriptors.length = (flags & StructFlag.IsTuple) && {
-      value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
-    };
+    descriptors.length = defineValue(length);
     descriptors.entries = (flags & StructFlag.IsTuple) && {
       value: getVectorEntries,
     };
