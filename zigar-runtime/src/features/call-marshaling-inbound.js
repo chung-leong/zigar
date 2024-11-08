@@ -1,6 +1,6 @@
 import { Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, THROWING, VISIT } from '../symbols.js';
+import { MEMORY, THROWING } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -52,10 +52,6 @@ export default mixin({
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
-        const hasPointers = VISIT in argStruct;
-        if (hasPointers) {
-          this.updatePointerTargets(null, argStruct);
-        }
         const args = [];
         for (let i = 0; i < argStruct.length; i++) {
           // error unions will throw on access, in which case we pass the error as the argument
