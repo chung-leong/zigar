@@ -5048,14 +5048,16 @@ var all$1 = mixin({
     /* c8 ignore end */
     const descriptor = f.call(this, member);
     if (applyTransform) {
-      // we use int/uint getters to access underlying values of enums and error sets;
-      // the transform functions put wrapper functions around the accessors that
-      // perform item lookup
-      const { type } = structure;
-      const handleName = `transformDescriptor${structureNames[type]}`;
-      const f = this[handleName];
-      if (f) {
-        return f.call(this, descriptor, member);
+      if (structure) {
+        // we use int/uint getters to access underlying values of enums and error sets;
+        // the transform functions put wrapper functions around the accessors that
+        // perform item lookup
+        const { type } = structure;
+        const handleName = `transformDescriptor${structureNames[type]}`;
+        const f = this[handleName];
+        if (f) {
+          return f.call(this, descriptor, member);
+        }
       }
     }
     return descriptor;
