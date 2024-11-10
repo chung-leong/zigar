@@ -522,29 +522,29 @@ pub const TypeAttributes = packed struct {
 };
 
 pub const TypeData = struct {
-    Type: type,
+    type: type,
     slot: ?usize = null,
     attrs: TypeAttributes = .{},
 
     pub fn getSlot(comptime self: @This()) usize {
-        return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.Type));
+        return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.type));
     }
 
     pub fn getElementType(comptime self: @This()) type {
         return if (self.attrs.is_slice)
-            self.Type.ElementType
-        else switch (@typeInfo(self.Type)) {
+            self.type.ElementType
+        else switch (@typeInfo(self.type)) {
             inline .Array, .Vector => |ar| ar.child,
             else => @compileError("Not an array, vector, or slice"),
         };
     }
 
     test "getElementType" {
-        try expectCT(getElementType(.{ .Type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+        try expectCT(getElementType(.{ .type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
     }
 
     pub fn getTargetType(comptime self: @This()) type {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Pointer => |pt| switch (pt.size) {
                 .One => if (pt.child == anyopaque) Slice(anyopaque, null) else pt.child,
                 else => define: {
@@ -563,68 +563,68 @@ pub const TypeData = struct {
     }
 
     test "getTargetType" {
-        try expectCT(getTargetType(.{ .Type = []i32 }) == Slice(i32, null));
-        try expectCT(getTargetType(.{ .Type = *const anyopaque }) == Slice(anyopaque, null));
-        try expectCT(getTargetType(.{ .Type = *i32 }) == i32);
+        try expectCT(getTargetType(.{ .type = []i32 }) == Slice(i32, null));
+        try expectCT(getTargetType(.{ .type = *const anyopaque }) == Slice(anyopaque, null));
+        try expectCT(getTargetType(.{ .type = *i32 }) == i32);
     }
 
     pub fn getByteSize(comptime self: @This()) ?usize {
-        if (self.attrs.is_slice and self.Type.is_opaque) {
+        if (self.attrs.is_slice and self.type.is_opaque) {
             // opaque types have unknown size
             return null;
         }
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Null, .Undefined, .Fn => 0,
             .Opaque => null,
             .ErrorSet => @sizeOf(anyerror),
-            else => return @sizeOf(self.Type),
+            else => return @sizeOf(self.type),
         };
     }
 
     test "getByteSize" {
-        try expectCT(getByteSize(.{ .Type = void }) == 0);
-        try expectCT(getByteSize(.{ .Type = @TypeOf(null) }) == 0);
-        try expectCT(getByteSize(.{ .Type = u8 }) == 1);
+        try expectCT(getByteSize(.{ .type = void }) == 0);
+        try expectCT(getByteSize(.{ .type = @TypeOf(null) }) == 0);
+        try expectCT(getByteSize(.{ .type = u8 }) == 1);
     }
 
     pub fn getBitSize(comptime self: @This()) ?usize {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Null, .Undefined, .Fn => 0,
             .Opaque => null,
             .ErrorSet => @bitSizeOf(anyerror),
-            else => return @bitSizeOf(self.Type),
+            else => return @bitSizeOf(self.type),
         };
     }
 
     test "getBitSize" {
-        try expectCT(getBitSize(.{ .Type = void }) == 0);
-        try expectCT(getBitSize(.{ .Type = @TypeOf(null) }) == 0);
-        try expectCT(getBitSize(.{ .Type = u8 }) == 8);
+        try expectCT(getBitSize(.{ .type = void }) == 0);
+        try expectCT(getBitSize(.{ .type = @TypeOf(null) }) == 0);
+        try expectCT(getBitSize(.{ .type = u8 }) == 8);
     }
 
     pub fn getAlignment(comptime self: @This()) ?u16 {
-        if (self.attrs.is_slice and self.Type.is_opaque) {
+        if (self.attrs.is_slice and self.type.is_opaque) {
             // opaque types have unknown alignment
             return null;
         }
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Null, .Undefined, .Fn => 0,
             .Opaque => null,
             .ErrorSet => @alignOf(anyerror),
-            else => return @alignOf(self.Type),
+            else => return @alignOf(self.type),
         };
     }
 
     test "getAlignment" {
-        try expectCT(getAlignment(.{ .Type = void }) == 1);
-        try expectCT(getAlignment(.{ .Type = u8 }) == 1);
-        try expectCT(getAlignment(.{ .Type = u32 }) == 4);
+        try expectCT(getAlignment(.{ .type = void }) == 1);
+        try expectCT(getAlignment(.{ .type = u8 }) == 1);
+        try expectCT(getAlignment(.{ .type = u32 }) == 4);
     }
 
     pub fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
         return if (self.attrs.is_slice)
-            self.Type.sentinel
-        else switch (@typeInfo(self.Type)) {
+            self.type.sentinel
+        else switch (@typeInfo(self.type)) {
             inline .Array => |ar| if (ar.sentinel) |opaque_ptr| sentinel: {
                 const ptr: *const self.getElementType() = @ptrCast(opaque_ptr);
                 break :sentinel .{ .value = ptr.*, .is_required = true };
@@ -634,14 +634,14 @@ pub const TypeData = struct {
     }
 
     test "getSentinel" {
-        try expectCT(getSentinel(.{ .Type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
-        try expectCT(getSentinel(.{ .Type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
-        try expectCT(getSentinel(.{ .Type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
-        try expectCT(getSentinel(.{ .Type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
+        try expectCT(getSentinel(.{ .type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
+        try expectCT(getSentinel(.{ .type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
+        try expectCT(getSentinel(.{ .type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
+        try expectCT(getSentinel(.{ .type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
     }
 
     pub fn hasSelector(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Union => self.getSelectorType() != null,
             .Optional => |op| switch (@typeInfo(op.child)) {
                 .Pointer, .ErrorSet => false,
@@ -652,7 +652,7 @@ pub const TypeData = struct {
     }
 
     pub fn getSelectorType(comptime self: @This()) ?type {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Union => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
                 true => IntType(un.fields.len),
                 false => null,
@@ -672,21 +672,21 @@ pub const TypeData = struct {
             cat: u32,
             dog: u32,
         };
-        try expectCT(getSelectorType(.{ .Type = Union }) == Tag);
+        try expectCT(getSelectorType(.{ .type = Union }) == Tag);
         if (runtime_safety) {
             const BareUnion = union {
                 cat: u32,
                 dog: u32,
             };
-            try expectCT(getSelectorType(.{ .Type = BareUnion }) == u8);
+            try expectCT(getSelectorType(.{ .type = BareUnion }) == u8);
         }
     }
 
     pub fn getSelectorBitOffset(comptime self: @This()) comptime_int {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Union => get: {
                 const TT = self.getSelectorType().?;
-                const fields = @typeInfo(self.Type).Union.fields;
+                const fields = @typeInfo(self.type).Union.fields;
                 // selector comes first unless content needs larger align
                 comptime var offset = 0;
                 inline for (fields) |field| {
@@ -712,11 +712,11 @@ pub const TypeData = struct {
             cat: i32,
             dog: i32,
         };
-        try expectCT(getSelectorBitOffset(.{ .Type = Union }) == 32);
+        try expectCT(getSelectorBitOffset(.{ .type = Union }) == 32);
     }
 
     pub fn getErrorBitOffset(comptime self: @This()) comptime_int {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             // value is placed after the error number if its alignment is smaller than that of anyerror
             .ErrorUnion => |eu| if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8,
             else => @compileError("Not an error union"),
@@ -724,7 +724,7 @@ pub const TypeData = struct {
     }
 
     pub fn getContentBitOffset(comptime self: @This()) comptime_int {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Union => if (self.getSelectorType()) |TT| switch (self.getSelectorBitOffset()) {
                 0 => @sizeOf(TT) * 8,
                 else => 0,
@@ -743,24 +743,24 @@ pub const TypeData = struct {
             cat: i32,
             dog: i32,
         };
-        try expectCT(getContentBitOffset(.{ .Type = Union }) == 0);
+        try expectCT(getContentBitOffset(.{ .type = Union }) == 0);
     }
 
     pub fn isConst(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Pointer => |pt| pt.is_const,
             else => false,
         };
     }
 
     test "isConst" {
-        try expectCT(isConst(.{ .Type = i32 }) == false);
-        try expectCT(isConst(.{ .Type = *i32 }) == false);
-        try expectCT(isConst(.{ .Type = *const i32 }) == true);
+        try expectCT(isConst(.{ .type = i32 }) == false);
+        try expectCT(isConst(.{ .type = *i32 }) == false);
+        try expectCT(isConst(.{ .type = *const i32 }) == true);
     }
 
     pub fn isPacked(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Struct => |st| st.layout == .@"packed",
             .Union => |un| un.layout == .@"packed",
             else => false,
@@ -776,13 +776,13 @@ pub const TypeData = struct {
             flag1: bool,
             flag2: bool,
         };
-        try expectCT(isPacked(.{ .Type = A }) == false);
-        try expectCT(isPacked(.{ .Type = B }) == true);
+        try expectCT(isPacked(.{ .type = A }) == false);
+        try expectCT(isPacked(.{ .type = B }) == true);
     }
 
     pub fn isBitVector(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
-            .Vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.Type),
+        return switch (@typeInfo(self.type)) {
+            .Vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.type),
             else => false,
         };
     }
@@ -790,8 +790,8 @@ pub const TypeData = struct {
     test "isBitVector" {
         const A = @Vector(8, bool);
         const B = @Vector(4, f32);
-        try expectCT(isBitVector(.{ .Type = A }) == true);
-        try expectCT(isBitVector(.{ .Type = B }) == false);
+        try expectCT(isBitVector(.{ .type = A }) == true);
+        try expectCT(isBitVector(.{ .type = B }) == false);
     }
 
     fn PayloadType(comptime T: type) ?type {
@@ -863,10 +863,10 @@ pub const TypeData = struct {
     }
 
     pub fn isIterator(comptime self: @This()) bool {
-        switch (@typeInfo(self.Type)) {
-            .Struct, .Union, .Opaque => if (@hasDecl(self.Type, "next")) {
-                const next = @field(self.Type, "next");
-                if (NextMethodReturnType(@TypeOf(next), self.Type)) |_| {
+        switch (@typeInfo(self.type)) {
+            .Struct, .Union, .Opaque => if (@hasDecl(self.type, "next")) {
+                const next = @field(self.type, "next");
+                if (NextMethodReturnType(@TypeOf(next), self.type)) |_| {
                     return true;
                 }
             },
@@ -876,13 +876,13 @@ pub const TypeData = struct {
     }
 
     test "isIterator" {
-        try expect(isIterator(.{ .Type = std.mem.SplitIterator(u8, .sequence) }));
-        try expect(isIterator(.{ .Type = std.fs.path.ComponentIterator(.posix, u8) }));
-        try expect(isIterator(.{ .Type = std.fs.path }) == false);
+        try expect(isIterator(.{ .type = std.mem.SplitIterator(u8, .sequence) }));
+        try expect(isIterator(.{ .type = std.fs.path.ComponentIterator(.posix, u8) }));
+        try expect(isIterator(.{ .type = std.fs.path }) == false);
     }
 
     pub fn isMethodOf(comptime self: @This(), comptime T: type) bool {
-        switch (@typeInfo(self.Type)) {
+        switch (@typeInfo(self.type)) {
             .Fn => |f| {
                 if (f.params.len > 0) {
                     if (f.params[0].type) |PT| {
@@ -909,13 +909,13 @@ pub const TypeData = struct {
             fn e(_: *const @This()) void {}
         };
         const B = struct {};
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.a) }, A) == false);
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.b) }, A) == false);
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.c) }, A) == true);
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.d) }, A) == true);
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.e) }, A) == true);
-        try expect(isMethodOf(.{ .Type = @TypeOf(A.e) }, B) == false);
-        try expect(isMethodOf(.{ .Type = u32 }, B) == false);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.a) }, A) == false);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.b) }, A) == false);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.c) }, A) == true);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.d) }, A) == true);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.e) }, A) == true);
+        try expect(isMethodOf(.{ .type = @TypeOf(A.e) }, B) == false);
+        try expect(isMethodOf(.{ .type = u32 }, B) == false);
     }
 
     pub fn hasPointer(comptime self: @This()) bool {
@@ -923,14 +923,14 @@ pub const TypeData = struct {
     }
 
     pub fn isPointer(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Pointer => true,
             else => false,
         };
     }
 
     pub fn isObject(comptime self: @This()) bool {
-        return switch (@typeInfo(self.Type)) {
+        return switch (@typeInfo(self.type)) {
             .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector, .Fn => true,
             else => false,
         };
@@ -949,15 +949,15 @@ pub const TypeData = struct {
     }
 
     pub fn isAllocator(comptime self: @This()) bool {
-        return self.Type == std.mem.Allocator;
+        return self.type == std.mem.Allocator;
     }
 
     pub fn isPromise(comptime self: @This()) bool {
-        return comptime isInternal(self.Type) and @hasDecl(self.Type, "Payload");
+        return comptime isInternal(self.type) and @hasDecl(self.type, "Payload");
     }
 
     pub fn isAbortSignal(comptime self: @This()) bool {
-        return self.Type == AbortSignal;
+        return self.type == AbortSignal;
     }
 
     pub fn isSupported(comptime self: @This()) bool {
@@ -1056,7 +1056,7 @@ pub const TypeDataCollector = struct {
     }
 
     fn append(comptime self: *@This(), comptime td: TypeData) void {
-        const T = td.Type;
+        const T = td.type;
         if (self.indexOf(T)) |index| {
             if (td.attrs.is_in_use) {
                 const existing_td = self.at(index);
@@ -1107,7 +1107,7 @@ pub const TypeDataCollector = struct {
                 inline for (st.decls) |decl| {
                     // decls are accessed through pointers
                     const PT = @TypeOf(&@field(T, decl.name));
-                    _ = self.append(.{ .Type = PT, .attrs = .{ .is_in_use = false } });
+                    _ = self.append(.{ .type = PT, .attrs = .{ .is_in_use = false } });
                     if (@typeInfo(PT).Pointer.is_const) {
                         self.addTypeOf(@field(T, decl.name));
                     }
@@ -1119,10 +1119,10 @@ pub const TypeDataCollector = struct {
         switch (@typeInfo(T)) {
             .NoReturn => self.add(void),
             .Pointer => |pt| {
-                const TT = TypeData.getTargetType(.{ .Type = T });
+                const TT = TypeData.getTargetType(.{ .type = T });
                 if (TT != pt.child) {
                     self.append(.{
-                        .Type = TT,
+                        .type = TT,
                         .attrs = .{ .is_slice = true },
                     });
                 }
@@ -1133,7 +1133,7 @@ pub const TypeDataCollector = struct {
             .Fn => |f| if (!f.is_generic) {
                 const ArgT = ArgumentStruct(T);
                 self.append(.{
-                    .Type = ArgT,
+                    .type = ArgT,
                     .attrs = .{
                         .is_arguments = true,
                         .is_variadic = f.is_var_args,
@@ -1151,7 +1151,7 @@ pub const TypeDataCollector = struct {
     }
 
     fn add(comptime self: *@This(), comptime T: type) void {
-        self.append(.{ .Type = T });
+        self.append(.{ .type = T });
     }
 
     fn addTypeOf(comptime self: *@This(), comptime value: anytype) void {
@@ -1193,7 +1193,7 @@ pub const TypeDataCollector = struct {
 
     fn indexOf(comptime self: *@This(), comptime T: type) ?usize {
         return inline for (self.types.slice(), 0..) |td, index| {
-            if (td.Type == T) {
+            if (td.type == T) {
                 break index;
             }
         } else null;
@@ -1224,7 +1224,7 @@ pub const TypeDataCollector = struct {
         }
         // prevent endless recursion
         td.attrs.known = true;
-        switch (@typeInfo(td.Type)) {
+        switch (@typeInfo(td.type)) {
             .Bool,
             .Int,
             .Float,
@@ -1445,7 +1445,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
 
         pub fn get(comptime self: @This(), comptime T: type) TypeData {
             return inline for (self.entries) |entry| {
-                if (entry.Type == T) {
+                if (entry.type == T) {
                     break entry;
                 }
             } else @compileError("No type data for " ++ @typeName(T));
@@ -1453,7 +1453,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
 
         pub fn has(comptime self: @This(), comptime T: type) bool {
             return inline for (self.entries) |entry| {
-                if (entry.Type == T) {
+                if (entry.type == T) {
                     break true;
                 }
             } else false;
