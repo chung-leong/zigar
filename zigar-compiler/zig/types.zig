@@ -1160,7 +1160,7 @@ pub const TypeDataCollector = struct {
             .Type => self.add(value),
             .ComptimeFloat => self.add(*const f64),
             .ComptimeInt => self.add(*const IntType(value)),
-            .EnumLiteral => self.add(@TypeOf(@tagName(value))),
+            .EnumLiteral => self.add(@TypeOf(removeSentinel(@tagName(value)))),
             .Optional => if (value) |v| self.addTypeOf(v),
             .ErrorUnion => if (value) |v| self.addTypeOf(v) else |_| {},
             .Union => |un| {
@@ -1585,6 +1585,17 @@ pub fn FnPointerTarget(comptime T: type) type {
 test "FnPointerTarget" {
     const FT = FnPointerTarget(*const fn () void);
     try expect(FT == fn () void);
+}
+
+pub fn removeSentinel(comptime ptr: anytype) retval_type: {
+    const PT = @TypeOf(ptr);
+    var pt = @typeInfo(PT).Pointer;
+    var ar = @typeInfo(pt.child).Array;
+    ar.sentinel = null;
+    pt.child = @Type(.{ .Array = ar });
+    break :retval_type @Type(.{ .Pointer = pt });
+} {
+    return @ptrCast(ptr);
 }
 
 const Internal = opaque {};

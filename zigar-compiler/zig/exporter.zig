@@ -798,7 +798,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             return switch (@typeInfo(@TypeOf(value))) {
                 .ComptimeInt => self.exportPointerTarget(&@as(types.IntType(value), value), true),
                 .ComptimeFloat => self.exportPointerTarget(&@as(f64, value), true),
-                .EnumLiteral => self.exportPointerTarget(@tagName(value), true),
+                .EnumLiteral => self.exportPointerTarget(types.removeSentinel(@tagName(value)), true),
                 .Type => self.getStructure(value),
                 else => return self.exportPointerTarget(&value, true),
             };
