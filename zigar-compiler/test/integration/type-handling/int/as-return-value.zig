@@ -34,8 +34,8 @@ pub fn getIsize() isize {
 }
 
 pub fn getUsize() usize {
-    return switch (@typeInfo(usize)) {
-        .Int => |int| if (int.bits == 64) 0x7FFF_FFFF_FFFF_FFFF else 0x7FFF_FFFF,
-        else => unreachable,
+    return switch (@bitSizeOf(usize)) {
+        64 => 0x7FFF_FFFF_FFFF_FFFF,
+        else => 0x7FFF_FFFF,
     };
 }
