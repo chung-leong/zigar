@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 
 const path = './main.wasm';
-const auxPath = './aux.wasm';
+const auxPath = './auxiliary.wasm';
 const ENOSYS = 38;
 const ENOBADF = 8;
 const noImpl = () => ENOSYS;

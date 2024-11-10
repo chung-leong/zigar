@@ -24,8 +24,8 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&wf.step);
 
     const liba = b.addSharedLibrary(.{
-        .name = "aux",
-        .root_source_file = .{ .cwd_relative = "aux.zig" },
+        .name = "auxiliary",
+        .root_source_file = .{ .cwd_relative = "auxiliary.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -39,7 +39,7 @@ pub fn build(b: *std.Build) void {
         true => b.addUpdateSourceFiles(),
         false => b.addWriteFiles(),
     };
-    wfa.addCopyFileToSource(liba.getEmittedBin(), "aux.wasm");
+    wfa.addCopyFileToSource(liba.getEmittedBin(), "auxiliary.wasm");
     wfa.step.dependOn(&liba.step);
     b.getInstallStep().dependOn(&wfa.step);
 }
