@@ -27,9 +27,10 @@ export const PrimitiveFlag = {
   IsSize:           0x0010,
 };
 export const ArrayFlag = {
-  IsString:         0x0010,
-  IsTypedArray:     0x0020,
-  IsClampedArray:   0x0040,
+  HasSentinel:      0x0010,
+  IsString:         0x0020,
+  IsTypedArray:     0x0040,
+  IsClampedArray:   0x0080,
 };
 export const StructFlag = {
   IsExtern:         0x0010,

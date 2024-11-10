@@ -2,7 +2,7 @@ import { ArrayFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
-import { COPY, ENTRIES, FINALIZE, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, ENTRIES, FINALIZE, INITIALIZE, SENTINEL, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue, getProxy, transformIterable } from '../utils.js';
 
 export default mixin({
@@ -76,8 +76,10 @@ export default mixin({
   },
   finalizeArray(structure, staticDescriptors) {
     const {
+      flags,
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
+    staticDescriptors[SENTINEL] = (flags & ArrayFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });

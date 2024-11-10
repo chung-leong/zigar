@@ -107,9 +107,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_slot = has_slot,
                             .has_pointer = td.hasPointer(),
                             .has_sentinel = td.Type.sentinel != null,
-                            .is_string = td.Type.ElementType == u8 or td.Type.ElementType == u16,
+                            .is_string = td.getElementType() == u8 or td.getElementType() == u16,
                             .is_typed_array = isTypedArray(td),
-                            .is_clamped_array = td.Type.ElementType == u8 and isTypedArray(td),
+                            .is_clamped_array = td.getElementType() == u8 and isTypedArray(td),
                             .is_opaque = td.Type.is_opaque,
                         },
                     } else .{
@@ -189,9 +189,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_object = child_td.isObject(),
                             .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
                             .has_pointer = td.attrs.has_pointer,
-                            .is_string = ar.child == u8 or ar.child == u16,
+                            .has_sentinel = td.getSentinel() != null,
+                            .is_string = td.getElementType() == u8 or td.getElementType() == u16,
                             .is_typed_array = isTypedArray(td),
-                            .is_clamped_array = ar.child == u8 and isTypedArray(td),
+                            .is_clamped_array = td.getElementType() == u8 and isTypedArray(td),
                         },
                     };
                 },
@@ -416,6 +417,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .byte_size = child_td.getByteSize(),
                 .structure = try self.getStructure(child_td.Type),
             }, false);
+            try self.addSentinelMember(structure, td, child_td);
         }
 
         fn addSliceMember(self: @This(), structure: Value, comptime td: TypeData) !void {
@@ -427,6 +429,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .byte_size = child_td.getByteSize(),
                 .structure = try self.getStructure(child_td.Type),
             }, false);
+            try self.addSentinelMember(structure, td, child_td);
+        }
+
+        fn addSentinelMember(self: @This(), structure: Value, comptime td: TypeData, comptime child_td: TypeData) !void {
             if (td.getSentinel()) |sentinel| {
                 try host.attachMember(structure, .{
                     .type = getMemberType(child_td, false),

@@ -68,10 +68,12 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
+        has_sentinel: bool = false,
         is_string: bool = false,
         is_typed_array: bool = false,
         is_clamped_array: bool = false,
-        _: u25 = 0,
+
+        _: u24 = 0,
     },
     @"struct": packed struct(u32) {
         has_value: bool = false,
@@ -620,9 +622,14 @@ pub const TypeData = struct {
     }
 
     pub fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
-        return switch (self.attrs.is_slice) {
-            true => self.Type.sentinel,
-            else => @compileError("Not a slice"),
+        return if (self.attrs.is_slice)
+            self.Type.sentinel
+        else switch (@typeInfo(self.Type)) {
+            inline .Array => |ar| if (ar.sentinel) |opaque_ptr| sentinel: {
+                const ptr: *const self.getElementType() = @ptrCast(opaque_ptr);
+                break :sentinel .{ .value = ptr.*, .is_required = true };
+            } else null,
+            else => @compileError("Not an array or slice"),
         };
     }
 

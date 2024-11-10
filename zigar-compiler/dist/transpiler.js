@@ -35,7 +35,10 @@ const PrimitiveFlag = {
   IsSize:           0x0010,
 };
 const ArrayFlag = {
-  IsString:         0x0010,
+  HasSentinel:      0x0010,
+  IsString:         0x0020,
+  IsTypedArray:     0x0040,
+  IsClampedArray:   0x0080,
 };
 const StructFlag = {
   IsExtern:         0x0010,
@@ -74,13 +77,20 @@ const PointerFlag = {
 const SliceFlag = {
   HasSentinel:      0x0010,
   IsString:         0x0020,
-  IsOpaque:         0x0040,
+  IsTypedArray:     0x0040,
+  IsClampedArray:   0x0080,
+
+  IsOpaque:         0x0100,
 };
 const ErrorSetFlag = {
   IsGlobal:         0x0010,
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,
+};
+const VectorFlag = {
+  IsTypedArray:     0x0010,
+  IsClampedArray:   0x0020,
 };
 const ArgStructFlag = {
   HasOptions:       0x0010,
@@ -395,6 +405,11 @@ function findObjects(structures, SLOTS) {
     find(structure.static.template);
   }
   return list;
+}
+
+function markAsSpecial({ get, set }) {
+  get.special = set.special = true;
+  return { get, set };
 }
 
 function getSelf() {
@@ -2266,15 +2281,17 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 var abortSignal = mixin({
   createSignalArray(args, structure, signal) {
     const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
-    const int32 = new Int32(signal?.aborted ? 1 : 0);
+    const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
+    const int32 = Int32(ta);
     if (signal) {
       signal.addEventListener('abort', () => {
         {
           // WASM doesn't directly access JavaScript memory, we need to find the
           // shadow memory that's been assigned to the object and store the value there
           const shadow = this.findShadow(args[CONTEXT], int32);
-          const shadowInt32 = Int32(shadow[MEMORY]);
-          Atomics.store(shadowInt32.typedArray, 0, 1);
+          const shadowDV = shadow[MEMORY];
+          const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
+          Atomics.store(shadowTA, 0, 1);
         }
       }, { once: true });
     }
@@ -2964,10 +2981,6 @@ var callMarshalingInbound = mixin({
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
-        const hasPointers = VISIT in argStruct;
-        if (hasPointers) {
-          this.updatePointerTargets(null, argStruct);
-        }
         const args = [];
         for (let i = 0; i < argStruct.length; i++) {
           // error unions will throw on access, in which case we pass the error as the argument
@@ -5067,10 +5080,70 @@ function bindSlot(slot, { get, set }) {
   }
 }
 
+var base64 = mixin({
+  defineBase64(structure) {
+    const thisEnv = this;
+    return markAsSpecial({
+      get() {
+        return encodeBase64(this.dataView);
+      },
+      set(str, allocator) {
+        if (typeof(str) !== 'string') {
+          throw new TypeMismatch('string', str);
+        }
+        const dv = decodeBase64(str);
+        thisEnv.assignView(this, dv, structure, false, allocator);
+      }
+    });
+  },
+});
+
 var bool = mixin({
   defineMemberBool(member) {
     return this.defineMemberUsing(member, this.getAccessor);
   },
+});
+
+var clampedArray = mixin({
+  defineClampedArray(structure) {
+    const thisEnv = this;
+    const ClampedArray = Uint8ClampedArray;
+    return markAsSpecial({
+      get() {
+        const ta = this.typedArray;
+        return new ClampedArray(ta.buffer, ta.byteOffset, ta.length);
+      },
+      set(ta, allocator) {
+        if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
+          throw new TypeMismatch(ClampedArray.name, ta);
+        }
+        const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
+        thisEnv.assignView(this, dv, structure, true, allocator);
+      },
+    });
+  },
+});
+
+var dataView = mixin({
+  defineDataView(structure) {
+    const thisEnv = this;
+    return markAsSpecial({
+      get() {
+        {
+          this[RESTORE]?.();
+        }
+        const dv = this[MEMORY];
+        return dv;
+      },
+      set(dv, allocator) {
+        if (dv?.[Symbol.toStringTag] !== 'DataView') {
+          throw new TypeMismatch('DataView', dv);
+        }
+        thisEnv.assignView(this, dv, structure, true, allocator);
+      },
+    });
+  },
+  ...(undefined)
 });
 
 var float = mixin({
@@ -5350,22 +5423,45 @@ var sentinel = mixin({
   } ),
 });
 
-var specialMethods = mixin({
-  defineSpecialMethods() {
-    return {
-      toJSON: defineValue(convertToJSON),
-      valueOf: defineValue(convertToJS),
-    };
+var string = mixin({
+  defineString(structure) {
+    const thisEnv = this;
+    const { byteSize } = structure.instance.members[0];
+    const encoding = `utf-${byteSize * 8}`;
+    return markAsSpecial({
+      get() {
+        let str = decodeText(this.typedArray, encoding);
+        const sentinelValue = this.constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) === sentinelValue) {
+          str = str.slice(0, -1);
+        }
+        return str;
+      },
+      set(str, allocator) {
+        if (typeof(str) !== 'string') {
+          throw new TypeMismatch('string', str);
+        }
+        const sentinelValue = this.constructor[SENTINEL]?.value;
+        if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
+          str += String.fromCharCode(sentinelValue);
+        }
+        const ta = encodeText(str, encoding);
+        const dv = new DataView(ta.buffer);
+        thisEnv.assignView(this, dv, structure, false, allocator);
+      },
+    });
   },
 });
 
-function convertToJS() {
-  return normalizeObject(this, false);
-}
-
-function convertToJSON() {
-  return normalizeObject(this, true);
-}
+var valueOf = mixin({
+  defineValueOf() {
+    return {
+      value() {
+        return normalizeObject(this, false);
+      },
+    };
+  },
+});
 
 const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
@@ -5441,103 +5537,15 @@ function normalizeObject(object, forJSON) {
   return process(object);
 }
 
-var specialProps = mixin({
-  defineSpecialProperties(structure) {
-    const descriptors = {};
-    const thisEnv = this;
-    descriptors.dataView = markAsSpecial({
-      get() {
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
-        return dv;
+var toJson = mixin({
+  defineToJSON() {
+    return {
+      value() {
+        return normalizeObject(this, true);
       },
-      set(dv, allocator) {
-        checkDataView(dv);
-        thisEnv.assignView(this, dv, structure, true, allocator);
-      },
-    });
-    descriptors.base64 = markAsSpecial({
-      get() {
-        return encodeBase64(this.dataView);
-      },
-      set(str, allocator) {
-        if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
-        }
-        const dv = decodeBase64(str);
-        thisEnv.assignView(this, dv, structure, false, allocator);
-      }
-    });
-    const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
-    if (TypedArray) {
-      descriptors.typedArray = markAsSpecial({
-        get() {
-          const dv = this.dataView;
-          const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
-          return new TypedArray(dv.buffer, dv.byteOffset, length);
-        },
-        set(ta, allocator) {
-          if (!isTypedArray(ta, TypedArray)) {
-            throw new TypeMismatch(TypedArray.name, ta);
-          }
-          const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
-          thisEnv.assignView(this, dv, structure, true, allocator);
-        },
-      });
-      const { type, flags } = structure;
-      if ((type === StructureType.Array || flags & ArrayFlag.IsString)
-       || (type === StructureType.Slice || flags & SliceFlag.IsString)) {
-        const { byteSize } = structure.instance.members[0];
-        const encoding = `utf-${byteSize * 8}`;
-        descriptors.string = markAsSpecial({
-          get() {
-            const dv = this.dataView;
-            const ta = new TypedArray(dv.buffer, dv.byteOffset, this.length);
-            let str = decodeText(ta, encoding);
-            const sentinelValue = this.constructor[SENTINEL]?.value;
-            if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) === sentinelValue) {
-              str = str.slice(0, -1);
-            }
-            return str;
-          },
-          set(str, allocator) {
-            if (typeof(str) !== 'string') {
-              throw new TypeMismatch('a string', str);
-            }
-            const sentinelValue = this.constructor[SENTINEL]?.value;
-            if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
-              str += String.fromCharCode(sentinelValue);
-            }
-            const ta = encodeText(str, encoding);
-            const dv = new DataView(ta.buffer);
-            thisEnv.assignView(this, dv, structure, false, allocator);
-          },
-        });
-      }
-    }
-    return descriptors;
+    };
   },
-  ...(undefined)
 });
-
-function isTypedArray(arg, TypedArray) {
-  const tag = arg?.[Symbol.toStringTag];
-  return (!!TypedArray && tag === TypedArray.name);
-}
-
-function checkDataView(dv) {
-  if (dv?.[Symbol.toStringTag] !== 'DataView') {
-    throw new TypeMismatch('a DataView', dv);
-  }
-  return dv;
-}
-
-function markAsSpecial({ get, set }) {
-  get.special = set.special = true;
-  return { get, set };
-}
 
 var type = mixin({
   defineMemberType(member, env) {
@@ -5551,6 +5559,27 @@ var type = mixin({
       set: throwReadOnly,
     });
   }
+});
+
+var typedArray = mixin({
+  defineTypedArray(structure) {
+    const thisEnv = this;
+    const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
+    return markAsSpecial({
+      get() {
+        const dv = this.dataView;
+        const length = dv.byteLength / TypedArray.BYTES_PER_ELEMENT;
+        return new TypedArray(dv.buffer, dv.byteOffset, length);
+      },
+      set(ta, allocator) {
+        if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
+          throw new TypeMismatch(TypedArray.name, ta);
+        }
+        const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
+        thisEnv.assignView(this, dv, structure, true, allocator);
+      },
+    });
+  },
 });
 
 var uint = mixin({
@@ -5802,6 +5831,10 @@ var all = mixin({
     const keys = [];
     const setters = {};
     const descriptors = {
+      dataView: this.defineDataView(structure),
+      base64: this.defineBase64(structure),
+      toJSON: this.defineToJSON(),
+      valueOf: this.defineValueOf(),
       delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
@@ -5809,25 +5842,20 @@ var all = mixin({
       [KEYS]: defineValue(keys),
       // add memory copier (from mixin "memory/copying")
       [COPY]: this.defineCopier(byteSize),
-      // add special methods like toJSON() (from mixin "members/special-method")
-      ...this.defineSpecialMethods?.(),
-      // add special properties like dataView (from mixin "members/special-props")
-      ...this.defineSpecialProperties?.(structure),
       ...({
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer?.(),
       } ),
     };
+    const constructor = structure.constructor = f.call(this, structure, descriptors);
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
-      let s;
-      if (s = descriptor?.set) {
+      const s = descriptor?.set;
+      if (s && !setters[name]) {
         setters[name] = s;
         keys.push(name);
       }
     }
-    const constructor = f.call(this, structure, descriptors);
     defineProperties(constructor.prototype, descriptors);
-    structure.constructor = constructor;
     return constructor;
   },
   finalizeStructure(structure) {
@@ -5843,6 +5871,8 @@ var all = mixin({
     const props = [];
     const staticDescriptors = {
       name: defineValue(name),
+      toJSON: this.defineToJSON(),
+      valueOf: this.defineValueOf(),
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
@@ -5852,7 +5882,6 @@ var all = mixin({
       [Symbol.iterator]: defineValue(getStructIterator),
       [ENTRIES]: { get: getStructEntries },
       [PROPS]: defineValue(props),
-      ...this.defineSpecialMethods?.(),
     };
     const descriptors = {};
     for (const member of members) {
@@ -6292,6 +6321,15 @@ var array = mixin({
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = defineValue(getArrayEntries);
+    if (flags & ArrayFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & ArrayFlag.IsString) {
+        descriptors.string = this.defineString(structure);
+      }
+      if (flags & ArrayFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors[Symbol.iterator] = defineValue(getArrayIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
@@ -6302,9 +6340,11 @@ var array = mixin({
   },
   finalizeArray(structure, staticDescriptors) {
     const {
+      flags,
       instance: { members: [ member ] },
     } = structure;
     staticDescriptors.child = defineValue(member.structure.constructor);
+    staticDescriptors[SENTINEL] = (flags & ArrayFlag.HasSentinel) && this.defineSentinel(structure);
   },
 });
 
@@ -7469,6 +7509,15 @@ var slice = mixin({
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = { get: getLength };
+    if (flags & SliceFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & SliceFlag.IsString) {
+        descriptors.string = this.defineString(structure);
+      }
+      if (flags & SliceFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors.entries = defineValue(getArrayEntries);
     descriptors.subarray = {
       value(begin, end) {
@@ -7560,8 +7609,9 @@ var structLike = mixin({
 var struct = mixin({
   defineStruct(structure, descriptors) {
     const {
-      instance: { members },
       flags,
+      length,
+      instance: { members },
     } = structure;
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
@@ -7599,9 +7649,7 @@ var struct = mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
-    descriptors.length = (flags & StructFlag.IsTuple) && {
-      value: (members.length > 0) ? parseInt(members[members.length - 1].name) + 1 : 0,
-    };
+    descriptors.length = defineValue(length);
     descriptors.entries = (flags & StructFlag.IsTuple) && {
       value: getVectorEntries,
     };
@@ -7926,6 +7974,7 @@ var variadicStruct = mixin({
 var vector = mixin({
   defineVector(structure, descriptors) {
     const {
+      flags,
       length,
       instance: { members: [ member ] },
     } = structure;
@@ -7961,6 +8010,12 @@ var vector = mixin({
     }
     descriptors.$ = { get: getSelf, set: initializer };
     descriptors.length = defineValue(length);
+    if (flags & VectorFlag.IsTypedArray) {
+      descriptors.typedArray = this.defineTypedArray(structure);
+      if (flags & VectorFlag.IsClampedArray) {
+        descriptors.clampedArray = this.defineClampedArray(structure);
+      }
+    }
     descriptors.entries = defineValue(getVectorEntries);
     descriptors[Symbol.iterator] = defineValue(getVectorIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -8016,7 +8071,10 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,
   MemberAll: all$1,
+  MemberBase64: base64,
   MemberBool: bool,
+  MemberClampedArray: clampedArray,
+  MemberDataView: dataView,
   MemberFloat: float,
   MemberInt: int,
   MemberLiteral: literal,
@@ -8026,12 +8084,14 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberPointerInStruct: pointerInStruct,
   MemberPrimitive: primitive$1,
   MemberSentinel: sentinel,
-  MemberSpecialMethods: specialMethods,
-  MemberSpecialProps: specialProps,
+  MemberString: string,
+  MemberToJson: toJson,
   MemberType: type,
+  MemberTypedArray: typedArray,
   MemberUint: uint,
   MemberUndefined: _undefined,
   MemberUnsupported: unsupported,
+  MemberValueOf: valueOf,
   MemberVoid: _void,
   StructureAll: all,
   StructureArgStruct: argStruct,
