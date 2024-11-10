@@ -443,7 +443,7 @@ pub fn Uninlined(comptime FT: type) type {
         .@"fn" => |f| @Type(.{
             .@"fn" = .{
                 .calling_convention = switch (f.calling_convention) {
-                    .Inline => .Unspecified,
+                    .@"inline" => .Unspecified,
                     else => |cc| cc,
                 },
                 .is_generic = f.is_generic,
@@ -457,7 +457,7 @@ pub fn Uninlined(comptime FT: type) type {
 }
 
 test "Uninlined" {
-    try expect(Uninlined(fn () callconv(.Inline) void) == fn () void);
+    try expect(Uninlined(fn () callconv(.@"inline") void) == fn () void);
     try expect(Uninlined(fn () void) == fn () void);
 }
 
@@ -1139,7 +1139,7 @@ pub const TypeDataCollector = struct {
                         .is_variadic = f.is_var_args,
                     },
                 });
-                if (f.calling_convention == .Inline) {
+                if (f.calling_convention == .@"inline") {
                     self.add(Uninlined(T));
                 }
             },

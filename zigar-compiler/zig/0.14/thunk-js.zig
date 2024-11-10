@@ -205,7 +205,7 @@ test {
 
 fn CallHandler(comptime BFT: type) type {
     const f = @typeInfo(BFT).@"fn";
-    var new_params: [f.params.len + 2]std.builtin.Type.@"fn".Param = undefined;
+    var new_params: [f.params.len + 2]std.builtin.Type.Fn.Param = undefined;
     for (f.params, 0..) |param, index| {
         new_params[index] = param;
     }

@@ -586,7 +586,7 @@ pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
     const params = @typeInfo(FT).@"fn".params;
     const fields = @typeInfo(CT).@"struct".fields;
     const context_mapping = getContextMapping(FT, CT);
-    var new_params: [params.len - fields.len]std.builtin.Type.@"fn".Param = undefined;
+    var new_params: [params.len - fields.len]std.builtin.Type.Fn.Param = undefined;
     var index = 0;
     for (params, 0..) |param, number| {
         const name = std.fmt.comptimePrint("{d}", .{number});

@@ -28,8 +28,8 @@ pub fn call(
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime is_wasm) {
         const param_count = f.params.len + 1;
-        const params: [param_count]std.builtin.Type.@"fn".Param = define: {
-            comptime var list: [param_count]std.builtin.Type.@"fn".Param = undefined;
+        const params: [param_count]std.builtin.Type.Fn.Param = define: {
+            comptime var list: [param_count]std.builtin.Type.Fn.Param = undefined;
             inline for (&list, 0..) |*p, index| {
                 if (index < f.params.len) {
                     p.* = f.params[index];
@@ -1446,7 +1446,7 @@ fn callWithArgs(
     const Int = @typeInfo(@TypeOf(fixed_ints)).array.child;
     const fixed_arg_count = fixed_floats.len + fixed_ints.len;
     const params = define: {
-        comptime var params: [fixed_arg_count]std.builtin.Type.@"fn".Param = undefined;
+        comptime var params: [fixed_arg_count]std.builtin.Type.Fn.Param = undefined;
         inline for (&params, 0..) |*p, index| {
             p.* = .{
                 .is_generic = false,

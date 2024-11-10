@@ -707,7 +707,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 // deal with inline functions
                                 const target_ptr = switch (@typeInfo(DT)) {
                                     .@"fn" => |f| switch (f.calling_convention) {
-                                        .Inline => &uninline(decl_value),
+                                        .@"inline" => &uninline(decl_value),
                                         else => decl_ptr,
                                     },
                                     else => decl_ptr,
@@ -796,7 +796,7 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
             return switch (@typeInfo(@TypeOf(value))) {
-                .comptime_int => self.exportPointerTarget(&@as(types.intType(value), value), true),
+                .comptime_int => self.exportPointerTarget(&@as(types.IntType(value), value), true),
                 .comptime_float => self.exportPointerTarget(&@as(f64, value), true),
                 .enum_literal => self.exportPointerTarget(types.removeSentinel(@tagName(value)), true),
                 .type => self.getStructure(value),
