@@ -89,14 +89,14 @@ export function addTests(importModule, options) {
     it('should correctly pass allocator as argument and return a new slice', async function() {
       this.timeout(300000);
       const { printString, printArray } = await importTest('returning-slice');
-      const f1 = (allocator) => {
+      const f1 = ({ allocator }) => {
         return allocator.dupe('Hello world!');
       };
       const [ line1 ] = await capture(() => {
         printString(f1);
       });
       expect(line1).to.equal('Hello world!');
-      const f2 = (allocator) => {
+      const f2 = ({ allocator }) => {
         return allocator.dupe(new Float64Array([ 1, 2, 3, 4 ]));
       };
       const [ line2 ] = await capture(() => {

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructureFlag,
-  StructureType,
+  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructFlag,
+  StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -338,6 +338,10 @@ describe('Feature: call-marshaling-inbound', function() {
       const ArgStruct = function() {
         const self = {};
         self.length = 0;
+        self[Symbol.iterator] = function() {
+          const array = [];
+          return array[Symbol.iterator]();
+        };
         return self;
       };
       const self = env.createInboundCaller(fn, ArgStruct)
@@ -348,6 +352,317 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       const result = binary(null, usize(0x1234));
       expect(result).to.equal(CallResult.OK);
+    })
+  })
+  describe('defineArgIterator', function() {
+    it('should return descriptor for iterator that places allocator into options object', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const allocatorStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructFlag.IsAllocator,
+        byteSize: 4,
+      });
+      env.attachMember(allocatorStructure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(allocatorStructure);
+      env.endStructure(allocatorStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 12,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: allocatorStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const dv = new DataView(new ArrayBuffer(12));
+      dv.setInt32(4, 1234);
+      dv.setInt32(8, 5678);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[1]).to.be.an('object').with.property('allocator');
+    })
+    it('should return descriptor for iterator that places multiple allocators into options object', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const allocatorStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructFlag.IsAllocator,
+        byteSize: 4,
+      });
+      env.attachMember(allocatorStructure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(allocatorStructure);
+      env.endStructure(allocatorStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 16,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: allocatorStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '2',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 96,
+        byteSize: 4,
+        structure: allocatorStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setInt32(4, 1234);
+      dv.setInt32(8, 5678);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[1]).to.be.an('object').with.property('allocator1');
+      expect(args[1]).to.be.an('object').with.property('allocator2');
+    })
+    it('should return descriptor for iterator that places promise into options object', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const signalStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructFlag.IsPromise,
+        byteSize: 4,
+      });
+      env.attachMember(signalStructure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(signalStructure);
+      env.endStructure(signalStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 16,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: signalStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '2',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 96,
+        byteSize: 4,
+        structure: signalStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setInt32(4, 1234);
+      dv.setInt32(8, 5678);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[1]).to.be.an('object').with.property('signal');
+    })
+    it('should return descriptor for iterator that places abort signal into options object', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const signalStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructFlag.IsAbortSignal,
+        byteSize: 4,
+      });
+      env.attachMember(signalStructure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(signalStructure);
+      env.endStructure(signalStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 16,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: signalStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '2',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 96,
+        byteSize: 4,
+        structure: signalStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const dv = new DataView(new ArrayBuffer(16));
+      dv.setInt32(4, 1234);
+      dv.setInt32(8, 5678);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[1]).to.be.an('object').with.property('signal');
     })
   })
   describe('performJsAction', function() {

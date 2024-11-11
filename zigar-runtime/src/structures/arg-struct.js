@@ -62,6 +62,7 @@ export default mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.MIXIN === 'track') {
       this.detectArgumentFeatures(argMembers);
     }
