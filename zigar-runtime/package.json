@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.13.3-alpha.0",
+  "version": "0.13.3-alpha.1",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "exports": {

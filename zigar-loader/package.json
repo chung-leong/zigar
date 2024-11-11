@@ -1,6 +1,6 @@
 {
   "name": "zigar-loader",
-  "version": "0.13.3-alpha.0",
+  "version": "0.13.3-alpha.1",
   "description": "Webpack plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "type": "commonjs",
@@ -9,7 +9,6 @@
   },
   "scripts": {
     "test": "mocha -- --no-warnings test/*.test.mjs",
-    "test:extended": "mocha -- test/*.test.mjs",
     "debug": "mocha --reporter spec --inspect-brk -- test/*.test.mjs",
     "coverage": "c8 mocha -- test/*.test.mjs"
   },
@@ -31,8 +30,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
-    "zigar-compiler": "^0.13.3-alpha.0",
-    "zigar-runtime": "^0.13.3-alpha.0"
+    "zigar-compiler": "^0.13.3-alpha.1",
+    "zigar-runtime": "^0.13.3-alpha.1"
   },
   "devDependencies": {
     "c8": "^10.1.2",
