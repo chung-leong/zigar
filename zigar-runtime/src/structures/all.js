@@ -34,7 +34,6 @@ export default mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
@@ -138,6 +137,7 @@ export default mixin({
   },
   createConstructor(structure, handlers = {}) {
     const {
+      type,
       byteSize,
       align,
       flags,
@@ -175,7 +175,9 @@ export default mixin({
           self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
         } else {
-          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, allocator);
+          // don't use allocator to create storage for pointer
+          const a = (type !== StructureType.Pointer) ? allocator : null;
+          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, a);
         }
       } else {
         if (CAST in constructor) {
@@ -221,19 +223,6 @@ export default mixin({
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     return constructor;
-  },
-  defineDestructor() {
-    const thisEnv = this;
-    return {
-      value() {
-        const dv = this[MEMORY];
-        this[MEMORY] = null;
-        if (this[SLOTS]) {
-          this[SLOTS] = {};
-        }
-        thisEnv.releaseZigView(dv);
-      }
-    };
   },
   createApplier(structure) {
     const { instance: { template } } = structure;

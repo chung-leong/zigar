@@ -128,7 +128,6 @@ describe('Structure: pointer', function() {
       expect(Number(intPointer)).to.equal(1234);
       expect(String(intPointer)).to.equal('1234');
       expect(`${intPointer}`).to.equal('1234');
-      expect(() => intPointer.delete()).to.not.throw();
       expect(() => new Int32Ptr(null)).to.throw(TypeError);
     })
     it('should cast the same buffer to the same object', function() {

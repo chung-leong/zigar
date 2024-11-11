@@ -16,3 +16,9 @@ pub const thread = struct {
         try host.setMultithread(state);
     }
 };
+
+pub const mem = struct {
+    pub fn getDefaultAllocator() std.mem.Allocator {
+        return host.getDefaultAllocator();
+    }
+};

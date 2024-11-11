@@ -12,7 +12,7 @@ export function addTests(importModule, options) {
   describe('Function pointer', function() {
     it('should correctly free function thunks', async function() {
       this.timeout(300000);
-      const { Callback } = await importTest('function-pointer');
+      const { Callback, release } = await importTest('function-pointer');
       const list = [];
       const addresses = [];
       for (let i = 0; i < 256; i++) {
@@ -26,7 +26,7 @@ export function addTests(importModule, options) {
       for (const [ i, f ] of list.entries()) {
         // don't delete the first one so the initial page is kept
         if (i !== 0) {
-          f.delete();
+          release(f);
         }
       }
       let reuseCount = 0;

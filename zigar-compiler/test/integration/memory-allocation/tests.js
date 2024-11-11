@@ -56,7 +56,7 @@ export function addTests(importModule, options) {
       const [ after ] = await capture(() => print());
       expect(after).to.equal('return-allocator.Struct{ .number1 = 123, .number2 = 456 }');
       module.ptr_maybe = null;
-      struct.delete();
+      allocator.free(struct);
       const msg = 'Hello world';
       const dv1 = allocator.dupe(msg);
       expect(dv1.byteLength).to.equal(msg.length);
@@ -70,6 +70,20 @@ export function addTests(importModule, options) {
         expect(dv2.getFloat64(i * 8, true)).to.equal(array[i]);
       }
       allocator.free(dv2);
+    })
+    it('should use returned allocator in call', async function() {
+      this.timeout(300000);
+      const {
+        Struct,
+        defaultAllocator,
+        alloc,
+      } = await importTest('allocate-from-zig-allocator');
+      const struct = new Struct({ number1: 123, number2: 456 }, { allocator: defaultAllocator });
+      expect(struct.valueOf()).to.eql({ number1: 123, number2: 456 });
+      defaultAllocator.free(struct);
+      const ptr = alloc({ allocator: defaultAllocator });
+      expect(ptr.valueOf()).to.eql({ number1: 123, number2: 456 });
+      defaultAllocator.free(ptr);
     })
   })
 }

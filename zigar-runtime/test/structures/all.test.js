@@ -3,7 +3,6 @@ import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
-import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -151,23 +150,6 @@ describe('Structure: all', function() {
       const f = env.createApplier(structure);
       expect(() => f.call(object, { cow: 1234 })).to.throw(TypeError)
         .with.property('message').that.contains('cow');
-    })
-  })
-  describe('defineDestructor', function() {
-    const env = new Env;
-    it('should return descriptor for destructor', function() {
-      const env = new Env;
-      const descriptor = env.defineDestructor();
-      expect(descriptor.value).to.be.a('function');
-      const object = defineProperty({
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      }, 'delete', descriptor);
-      let target;
-      env.releaseZigView = (dv) => {
-        target = dv;
-      };
-      expect(() => object.delete()).to.not.throw();
-      expect(target).to.be.a('DataView');
     })
   })
   describe('finalizeStructure', function() {

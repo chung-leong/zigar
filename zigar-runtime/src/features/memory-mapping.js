@@ -218,8 +218,6 @@ export default mixin({
     const zig = dv[ZIG];
     const address = zig?.address;
     if (address && address !== usizeInvalid) {
-      // try to free memory through the allocator from which it came
-      zig?.free?.();
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
       if (!zig.len) {

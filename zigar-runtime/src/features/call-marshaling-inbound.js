@@ -35,17 +35,6 @@ export default mixin({
     }
     return dv;
   },
-  freeFunctionThunk(thunk, jsThunkController) {
-    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
-    const thunkAddress = this.getViewAddress(thunk);
-    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
-    this.releaseZigView(thunk);
-    if (id) {
-      this.jsFunctionThunkMap.delete(id);
-      this.jsFunctionCallerMap.delete(id);
-      this.jsFunctionControllerMap.delete(id);
-    }
-  },
   createInboundCaller(fn, ArgStruct) {
     const handler = (dv, futexHandle) => {
       let result = CallResult.OK;
@@ -140,7 +129,15 @@ export default mixin({
     const thunk = this.jsFunctionThunkMap.get(id);
     const controller = this.jsFunctionControllerMap.get(id);
     if (thunk && controller) {
-      this.freeFunctionThunk(thunk, controller);
+      const controllerAddress = this.getViewAddress(controller[MEMORY]);
+      const thunkAddress = this.getViewAddress(thunk);
+      const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.releaseZigView(thunk);
+      if (id) {
+        this.jsFunctionThunkMap.delete(id);
+        this.jsFunctionCallerMap.delete(id);
+        this.jsFunctionControllerMap.delete(id);
+      }
     }
   },
   ...(process.env.TARGET === 'wasm' ? {

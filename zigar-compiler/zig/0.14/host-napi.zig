@@ -274,6 +274,10 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 var module_data_list = std.ArrayList(*ModuleData).init(allocator);
 
+pub fn getDefaultAllocator() std.mem.Allocator {
+    return allocator;
+}
+
 fn clearBytes(bytes: [*]u8, len: usize) void {
     var start: usize = 0;
     inline for (.{ usize, u8 }) |T| {

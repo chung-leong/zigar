@@ -1,35 +1,41 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
-import { MEMORY, ZIG } from '../symbols.js';
-import { encodeText } from '../utils.js';
+import { PreviouslyFreed, TypeMismatch } from '../errors.js';
+import { ALIGN, MEMORY, TYPE, ZIG } from '../symbols.js';
+import { encodeText, usizeInvalid } from '../utils.js';
 
 export default mixin({
   defineAlloc() {
     return {
       value(len, align = 1) {
         const ptrAlign = 31 - Math.clz32(align);
-        const { vtable, ptr } = this;
-        const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+        const { vtable: { alloc }, ptr } = this;
+        const slicePtr = alloc(ptr, len, ptrAlign, 0);
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];
-        const zig = dv[ZIG];
-        if (zig) {
-          zig.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
-        }
+        // attach alignment so we can find it again
+        dv[ZIG].align = align;
         return dv;
       }
     };
   },
-  defineFree(dv) {
+  defineFree() {
     return {
-      value(dv) {
-        const zig = dv[ZIG];
-        const f = zig?.free;
-        if (!f) {
-          throw new TypeMismatch('DataView object from alloc()', dv);
+      value(arg) {
+        const { dv, align } = getMemory(arg)
+        const zig = dv?.[ZIG];
+        if (!zig) {
+          throw new TypeMismatch('object containing allocated Zig memory', arg);
         }
-        f();
+        const { address } = zig;
+        if (!address || address === usizeInvalid) {
+          throw new PreviouslyFreed(arg);
+        }
+        const ptrAlign = 31 - Math.clz32(align);
+        const { vtable: { free }, ptr } = this;
+        free(ptr, dv, ptrAlign, 0);
+        zig.address = usizeInvalid;
       }
     };
   },
@@ -37,29 +43,46 @@ export default mixin({
     const copy = this.getCopyFunction();
     return {
       value(arg) {
-        let src, align;
-        if (typeof(arg) === 'string') {
-          arg = encodeText(arg);
-        }
-        if (arg instanceof DataView) {
-          src = arg;
-        } else if (arg instanceof ArrayBuffer) {
-          src = new DataView(arg);
-        } else if (arg) {
-          const { buffer, byteOffset, byteLength, BYTES_PER_ELEMENT } = arg;
-          if (buffer && byteOffset !== undefined && byteLength !== undefined) {
-            src = new DataView(buffer, byteOffset, byteLength);
-            align = BYTES_PER_ELEMENT;
-          }
-        }
+        const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch('string, DataView, or typed array', arg);
+          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
-        const dv = this.alloc(src.byteLength, align);
-        copy(dv, src);
-        return dv;
+        const dest = this.alloc(src.byteLength, align);
+        copy(dest, src);
+        return (constructor) ? constructor(dest) : dest;
       }
     };
   }
 });
 
+function getMemory(arg) {
+  let dv, align = 1, constructor = null;
+  if (arg instanceof DataView) {
+    dv = arg;
+    const fixedMemoryAlign = dv?.[ZIG]?.align;
+    if (fixedMemoryAlign) {
+      align = fixedMemoryAlign;
+    }
+  } else if (arg instanceof ArrayBuffer) {
+    dv = new DataView(arg);
+  } else if (arg) {
+    if (arg[MEMORY]) {
+      if (arg.constructor[TYPE] === StructureType.Pointer) {
+        arg = arg['*'];
+      }
+      dv = arg[MEMORY];
+      constructor = arg.constructor;
+      align = constructor[ALIGN];
+    } else {
+      if (typeof(arg) === 'string') {
+        arg = encodeText(arg);
+      }
+      const { buffer, byteOffset, byteLength, BYTES_PER_ELEMENT } = arg;
+      if (buffer && byteOffset !== undefined && byteLength !== undefined) {
+        dv = new DataView(buffer, byteOffset, byteLength);
+        align = BYTES_PER_ELEMENT;
+      }
+    }
+  }
+  return { dv, align, constructor };
+}

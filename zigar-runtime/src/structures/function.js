@@ -61,14 +61,6 @@ export default mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
-    // destructor needs to free the JS thunk on Zig side as well
-    const { delete: { value: defaultDelete } } = descriptors;
-    descriptors.delete = defineValue(function() {
-      if (jsThunkController) {
-        thisEnv.freeFunctionThunk(this[MEMORY], jsThunkController);
-      }
-      defaultDelete.call(this);
-    });
     if (process.env.MIXIN === 'track') {
       if (jsThunkController) {
         this.usingFunctionPointer = true;

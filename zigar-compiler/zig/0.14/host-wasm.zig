@@ -330,6 +330,11 @@ const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &std.heap.WasmAllocator.vtable,
 };
+
+pub fn getDefaultAllocator() std.mem.Allocator {
+    return allocator;
+}
+
 const ScratchAllocator = struct {
     const Self = @This();
 

@@ -431,13 +431,11 @@ describe('Feature: memory-mapping', function() {
     })
   })
   describe('releaseZigView', function() {
-    it('should invoke free method attached to zig view', function() {
+    it('should invoke set address to invalid value', function() {
       const env = new Env();
-      let called = false;
       const dv = new DataView(new ArrayBuffer(8));
-      dv[ZIG] = { address: 0x1000, len: 8, free: () => called = true };
+      dv[ZIG] = { address: 0x1000, len: 8 };
       env.releaseZigView(dv);
-      expect(called).to.be.true;
       expect(dv[ZIG].address).to.equal(usize(-1));
     })
     it('should remove view from empty buffer map', function() {
