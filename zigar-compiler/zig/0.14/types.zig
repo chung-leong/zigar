@@ -953,7 +953,7 @@ pub const TypeData = struct {
     }
 
     pub fn isPromise(comptime self: @This()) bool {
-        return comptime isInternal(self.type) and @hasDecl(self.type, "Payload");
+        return comptime self.isInternal() and @hasDecl(self.type, "Payload");
     }
 
     pub fn isAbortSignal(comptime self: @This()) bool {
@@ -970,6 +970,20 @@ pub const TypeData = struct {
 
     pub fn isInUse(comptime self: @This()) bool {
         return self.attrs.is_in_use;
+    }
+
+    pub fn isInternal(comptime self: @This()) bool {
+        return switch (@typeInfo(self.type)) {
+            .@"struct" => @hasDecl(self.type, "Opaque") and @field(self.type, "Opaque") == Internal,
+            else => false,
+        };
+    }
+
+    test "isInternal" {
+        try expectCT(isInternal(.{ .type = AbortSignal }) == true);
+        try expectCT(isInternal(.{ .type = struct {} }) == false);
+        try expectCT(isInternal(.{ .type = Promise(f64, undefined) }) == true);
+        try expectCT(isInternal(.{ .type = Promise(anyerror!u32, undefined) }) == true);
     }
 };
 
@@ -1627,20 +1641,6 @@ pub const AbortSignal = struct {
         return self.ptr.* == 0;
     }
 };
-
-pub fn isInternal(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .@"struct" => @hasDecl(T, "Opaque") and @field(T, "Opaque") == Internal,
-        else => false,
-    };
-}
-
-test "isInternal" {
-    try expectCT(isInternal(AbortSignal) == true);
-    try expectCT(isInternal(struct {}) == false);
-    try expectCT(isInternal(Promise(f64, undefined)) == true);
-    try expectCT(isInternal(Promise(anyerror!u32, undefined)) == true);
-}
 
 fn expectCT(comptime value: bool) !void {
     try expect(value);
