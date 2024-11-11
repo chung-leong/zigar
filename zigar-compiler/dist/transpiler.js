@@ -2589,7 +2589,7 @@ class NullPointer extends TypeError {
 
 class PreviouslyFreed extends TypeError {
   constructor(arg) {
-    super(`Object has been freed: ${arg.constructor.name}`);
+    super(`Object has been freed already: ${arg.constructor.name}`);
   }
 }
 
@@ -2787,28 +2787,33 @@ var allocatorMethods = mixin({
     return {
       value(len, align = 1) {
         const ptrAlign = 31 - Math.clz32(align);
-        const { vtable, ptr } = this;
-        const slicePtr = vtable.alloc(ptr, len, ptrAlign, 0);
+        const { vtable: { alloc }, ptr } = this;
+        const slicePtr = alloc(ptr, len, ptrAlign, 0);
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];
-        const zig = dv[ZIG];
-        if (zig) {
-          zig.free = () => vtable.free(ptr, slicePtr, ptrAlign, 0);
-        }
+        // attach alignment so we can find it again
+        dv[ZIG].align = align;
         return dv;
       }
     };
   },
-  defineFree(dv) {
+  defineFree() {
     return {
-      value(dv) {
-        const zig = dv[ZIG];
-        const f = zig?.free;
-        if (!f) {
-          throw new TypeMismatch('DataView object from alloc()', dv);
+      value(arg) {
+        const { dv, align } = getMemory(arg);
+        const zig = dv?.[ZIG];
+        if (!zig) {
+          throw new TypeMismatch('object containing allocated Zig memory', arg);
         }
-        f();
+        const { address } = zig;
+        if (!address || address === usizeInvalid) {
+          throw new PreviouslyFreed(arg);
+        }
+        const ptrAlign = 31 - Math.clz32(align);
+        const { vtable: { free }, ptr } = this;
+        free(ptr, dv, ptrAlign, 0);
+        zig.address = usizeInvalid;
       }
     };
   },
@@ -2816,31 +2821,49 @@ var allocatorMethods = mixin({
     const copy = this.getCopyFunction();
     return {
       value(arg) {
-        let src, align;
-        if (typeof(arg) === 'string') {
-          arg = encodeText(arg);
-        }
-        if (arg instanceof DataView) {
-          src = arg;
-        } else if (arg instanceof ArrayBuffer) {
-          src = new DataView(arg);
-        } else if (arg) {
-          const { buffer, byteOffset, byteLength, BYTES_PER_ELEMENT } = arg;
-          if (buffer && byteOffset !== undefined && byteLength !== undefined) {
-            src = new DataView(buffer, byteOffset, byteLength);
-            align = BYTES_PER_ELEMENT;
-          }
-        }
+        const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch('string, DataView, or typed array', arg);
+          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
-        const dv = this.alloc(src.byteLength, align);
-        copy(dv, src);
-        return dv;
+        const dest = this.alloc(src.byteLength, align);
+        copy(dest, src);
+        return (constructor) ? constructor(dest) : dest;
       }
     };
   }
 });
+
+function getMemory(arg) {
+  let dv, align = 1, constructor = null;
+  if (arg instanceof DataView) {
+    dv = arg;
+    const fixedMemoryAlign = dv?.[ZIG]?.align;
+    if (fixedMemoryAlign) {
+      align = fixedMemoryAlign;
+    }
+  } else if (arg instanceof ArrayBuffer) {
+    dv = new DataView(arg);
+  } else if (arg) {
+    if (arg[MEMORY]) {
+      if (arg.constructor[TYPE] === StructureType.Pointer) {
+        arg = arg['*'];
+      }
+      dv = arg[MEMORY];
+      constructor = arg.constructor;
+      align = constructor[ALIGN];
+    } else {
+      if (typeof(arg) === 'string') {
+        arg = encodeText(arg);
+      }
+      const { buffer, byteOffset, byteLength, BYTES_PER_ELEMENT } = arg;
+      if (buffer && byteOffset !== undefined && byteLength !== undefined) {
+        dv = new DataView(buffer, byteOffset, byteLength);
+        align = BYTES_PER_ELEMENT;
+      }
+    }
+  }
+  return { dv, align, constructor };
+}
 
 var baseline = mixin({
   variables: [],
@@ -2964,32 +2987,12 @@ var callMarshalingInbound = mixin({
     }
     return dv;
   },
-  freeFunctionThunk(thunk, jsThunkController) {
-    const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
-    const thunkAddress = this.getViewAddress(thunk);
-    const id = this.destroyJsThunk(controllerAddress, thunkAddress);
-    this.releaseZigView(thunk);
-    if (id) {
-      this.jsFunctionThunkMap.delete(id);
-      this.jsFunctionCallerMap.delete(id);
-      this.jsFunctionControllerMap.delete(id);
-    }
-  },
   createInboundCaller(fn, ArgStruct) {
     const handler = (dv, futexHandle) => {
       let result = CallResult.OK;
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
-        const args = [];
-        for (let i = 0; i < argStruct.length; i++) {
-          // error unions will throw on access, in which case we pass the error as the argument
-          try {
-            args.push(argStruct[i]);
-          } catch (err) {
-            args.push(err);
-          }
-        }
         const onError = (err) => {
           if (ArgStruct[THROWING] && err instanceof Error) {
             // see if the error is part of the error set of the error union returned by function
@@ -3006,7 +3009,7 @@ var callMarshalingInbound = mixin({
           argStruct.retval = value;
         };
         try {
-          const retval = fn(...args);
+          const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
             if (futexHandle) {
               retval.then(onReturn, onError).then(() => {
@@ -3038,6 +3041,54 @@ var callMarshalingInbound = mixin({
       return fn(...args);
     };
   },
+  defineArgIterator(members) {
+    const allocatorTotal = members.filter(({ structure: s }) => {
+      return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
+    }).length;
+    return {
+      value() {
+        let options;
+        let allocatorCount = 0, callbackCount = 0, signalCount = 0;
+        const args = [];
+        for (const [ srcIndex, { structure } ] of members.entries()) {
+          // error unions will throw on access, in which case we pass the error as the argument
+          try {
+            const arg = this[srcIndex];
+            let optName, opt;
+            if (structure.type === StructureType.Struct) {
+              if (structure.flags & StructFlag.IsAllocator) {
+                optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
+                opt = arg;
+              } else if (structure.flags & StructFlag.IsPromise) {
+                optName = (++callbackCount === 1) ? 'callback' : '';
+                opt = arg.callback['*'];
+              } else if (structure.flags & StructFlag.IsAbortSignal) {
+                optName = (++signalCount === 1) ? 'signal' : '';
+                const target = arg.ptr[SLOTS][0];
+                const dv = target[MEMORY];
+                opt = Int32Array(dv.buffer, 0, 1);
+              }
+            }
+            if (optName !== undefined) {
+              if (optName) {
+                options ??= {};
+                options[optName] = opt;
+              }
+            } else {
+              // just a regular argument
+              args.push(arg);
+            }
+          } catch (err) {
+            args.push(err);
+          }
+        }
+        if (options) {
+          args.push(options);
+        }
+        return args[Symbol.iterator]();
+      }
+    };
+  },
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
@@ -3059,7 +3110,15 @@ var callMarshalingInbound = mixin({
     const thunk = this.jsFunctionThunkMap.get(id);
     const controller = this.jsFunctionControllerMap.get(id);
     if (thunk && controller) {
-      this.freeFunctionThunk(thunk, controller);
+      const controllerAddress = this.getViewAddress(controller[MEMORY]);
+      const thunkAddress = this.getViewAddress(thunk);
+      const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.releaseZigView(thunk);
+      if (id) {
+        this.jsFunctionThunkMap.delete(id);
+        this.jsFunctionCallerMap.delete(id);
+        this.jsFunctionControllerMap.delete(id);
+      }
     }
   },
   ...({
@@ -3678,8 +3737,6 @@ var memoryMapping = mixin({
     const zig = dv[ZIG];
     const address = zig?.address;
     if (address && address !== usizeInvalid) {
-      // try to free memory through the allocator from which it came
-      zig?.free?.();
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
       if (!zig.len) {
@@ -5837,7 +5894,6 @@ var all = mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      delete: this.defineDestructor(),
       [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
@@ -5941,6 +5997,7 @@ var all = mixin({
   },
   createConstructor(structure, handlers = {}) {
     const {
+      type,
       byteSize,
       align,
       flags,
@@ -5978,7 +6035,9 @@ var all = mixin({
           self[INITIALIZE](arg, allocator);
           dv = self[MEMORY];
         } else {
-          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, allocator);
+          // don't use allocator to create storage for pointer
+          const a = (type !== StructureType.Pointer) ? allocator : null;
+          self[MEMORY] = dv = thisEnv.allocateMemory(byteSize, align, a);
         }
       } else {
         if (CAST in constructor) {
@@ -6024,19 +6083,6 @@ var all = mixin({
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     return constructor;
-  },
-  defineDestructor() {
-    const thisEnv = this;
-    return {
-      value() {
-        const dv = this[MEMORY];
-        this[MEMORY] = null;
-        if (this[SLOTS]) {
-          this[SLOTS] = {};
-        }
-        thisEnv.releaseZigView(dv);
-      }
-    };
   },
   createApplier(structure) {
     const { instance: { template } } = structure;
@@ -6182,6 +6228,7 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       this.detectArgumentFeatures(argMembers);
     }
@@ -6792,14 +6839,6 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
-    // destructor needs to free the JS thunk on Zig side as well
-    const { delete: { value: defaultDelete } } = descriptors;
-    descriptors.delete = defineValue(function() {
-      if (jsThunkController) {
-        thisEnv.freeFunctionThunk(this[MEMORY], jsThunkController);
-      }
-      defaultDelete.call(this);
-    });
     {
       if (jsThunkController) {
         this.usingFunctionPointer = true;
@@ -7155,7 +7194,6 @@ var pointer = mixin({
       }
       this[TARGET] = arg;
     };
-    const destructor = descriptors.delete.value;
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
     descriptors.$ = { get: getProxy, set: initializer };
@@ -7172,12 +7210,6 @@ var pointer = mixin({
         return new constructor(newTarget);
       }
     };
-    descriptors.delete = {
-      value() {
-        this[TARGET]?.delete();
-        destructor.call(this);
-      }
-    },
     descriptors[Symbol.toPrimitive] = (targetType === StructureType.Primitive) && {
       value(hint) {
         return this[TARGET][Symbol.toPrimitive](hint);

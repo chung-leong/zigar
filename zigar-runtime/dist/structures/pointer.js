@@ -260,7 +260,6 @@ var pointer = mixin({
       }
       this[TARGET] = arg;
     };
-    const destructor = descriptors.delete.value;
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
     descriptors.$ = { get: getProxy, set: initializer };
@@ -277,12 +276,6 @@ var pointer = mixin({
         return new constructor(newTarget);
       }
     };
-    descriptors.delete = {
-      value() {
-        this[TARGET]?.delete();
-        destructor.call(this);
-      }
-    },
     descriptors[Symbol.toPrimitive] = (targetType === StructureType.Primitive) && {
       value(hint) {
         return this[TARGET][Symbol.toPrimitive](hint);

@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch, NoCastingToFunction } from '../errors.js';
-import { MEMORY, ENVIRONMENT } from '../symbols.js';
+import { ENVIRONMENT, MEMORY } from '../symbols.js';
 import { ObjectCache, defineValue, getSelf, defineProperties } from '../utils.js';
 
 var _function = mixin({
@@ -56,14 +56,6 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
-    // destructor needs to free the JS thunk on Zig side as well
-    const { delete: { value: defaultDelete } } = descriptors;
-    descriptors.delete = defineValue(function() {
-      if (jsThunkController) {
-        thisEnv.freeFunctionThunk(this[MEMORY], jsThunkController);
-      }
-      defaultDelete.call(this);
-    });
     return constructor;
   },
   /* c8 ignore start */

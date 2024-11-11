@@ -312,7 +312,7 @@ class NullPointer extends TypeError {
 
 class PreviouslyFreed extends TypeError {
   constructor(arg) {
-    super(`Object has been freed: ${arg.constructor.name}`);
+    super(`Object has been freed already: ${arg.constructor.name}`);
   }
 }
 
