@@ -1,6 +1,6 @@
 {
   "name": "zigar-compiler",
-  "version": "0.13.2",
+  "version": "0.13.3-alpha.0",
   "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
   "exports": {
@@ -19,8 +19,7 @@
   },
   "files": [
     "dist/*",
-    "zig/*.zig",
-    "zig/os/*.zig"
+    "zig/*/*.zig"
   ],
   "repository": {
     "type": "git",
@@ -36,13 +35,13 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-replace": "^5.0.7",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-replace": "^6.0.1",
     "c8": "^10.1.2",
-    "chai": "^5.1.1",
+    "chai": "^5.1.2",
     "chai-as-promised": "^8.0.0",
-    "mocha": "^10.7.3",
+    "mocha": "^10.8.2",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.20.0"
+    "rollup": "^4.25.0"
   }
 }

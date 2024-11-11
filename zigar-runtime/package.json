@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.13.2",
+  "version": "0.13.3-alpha.0",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "exports": {
@@ -38,13 +38,13 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "devDependencies": {
-    "@rollup/plugin-replace": "^5.0.7",
+    "@rollup/plugin-replace": "^6.0.1",
     "c8": "^10.1.2",
-    "chai": "^5.1.1",
+    "chai": "^5.1.2",
     "chai-as-promised": "^8.0.0",
     "mersenne-twister": "^1.1.0",
-    "mocha": "^10.7.3",
+    "mocha": "^10.8.2",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.20.0"
+    "rollup": "^4.25.0"
   }
 }
