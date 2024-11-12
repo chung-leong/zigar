@@ -366,8 +366,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try self.addMembers(structure, td);
                 // finalize the shape so that static members can be instances of the structure
                 _ = try host.defineStructure(structure);
-                // don't export functions of special structs like allocator
-                if (!td.isOptional()) {
+                // don't export decls of internal structs like promise and abort signal
+                if (!td.isInternal()) {
                     try self.addStaticMembers(structure, td);
                 }
                 try host.endStructure(structure);

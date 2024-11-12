@@ -18,7 +18,7 @@ pub fn spawn(cb: *const fn () void) !void {
             f();
         }
     };
-    _ = try pool.spawn(ns.run, .{cb});
+    try pool.spawn(ns.run, .{cb});
 }
 
 pub fn shutdown() !void {
