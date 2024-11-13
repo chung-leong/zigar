@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberFlag, MemberType, OptionalFlag, PointerFlag, SliceFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, OptionalFlag, PointerFlag, SliceFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -702,8 +702,8 @@ describe('Structure: optional', function() {
       expect(ptr[SLOTS][0]).to.not.be.undefined;
       object.$ = null;
       expect(ptr[SLOTS][0]).to.be.undefined;
-      object[VISIT](function({ isActive }) {
-        expect(isActive(this)).to.be.false;
+      object[VISIT](function(flags) {
+        expect(flags & VisitorFlag.IsInactive).to.equal(VisitorFlag.IsInactive);
       });
     })
     it('should release pointers in struct when it is set to null externally', function() {

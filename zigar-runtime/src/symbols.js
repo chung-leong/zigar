@@ -37,6 +37,7 @@ export const THROWING = Symbol('throwing');
 export const PROMISE = Symbol('promise');
 export const CONTEXT = Symbol('context');
 export const FALLBACK = Symbol('fallback');
+export const INBOUND = Symbol('inbound');
 
 export const UPDATE = Symbol('update');
 export const RESTORE = Symbol('restore');

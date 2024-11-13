@@ -1,4 +1,4 @@
-import { MemberType, StructureFlag, VisitorFlag } from '../constants.js';
+import { MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { isErrorJSON, NotInErrorSet } from '../errors.js';
 import { CLASS, COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
@@ -33,7 +33,7 @@ export default mixin({
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           if (!getErrorNumber.call(this)) {
-            this[VISIT]('copy', VisitorFlag.Vivificate, arg);
+            this[VISIT]('copy', 0, arg);
           }
         }
       } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {

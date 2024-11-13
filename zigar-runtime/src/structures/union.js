@@ -7,7 +7,7 @@ import { getUnionEntries, getUnionIterator, getZigIterator } from '../iterators.
 import {
   COPY, ENTRIES, GETTERS, INITIALIZE, KEYS, MODIFY, NAME, PROPS, SETTERS, TAG, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { defineValue, empty } from '../utils.js';
 
 export default mixin({
   defineUnion(structure, descriptors) {
@@ -83,7 +83,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('reset', 0);
+          this[VISIT]?.('reset');
           return getValue.call(this);
         }
       : getValue;
@@ -100,7 +100,7 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISIT]?.('reset', 0);
+          this[VISIT]?.('reset');
         }
       : setValue;
       descriptors[name] = { get, set };
@@ -127,13 +127,15 @@ export default mixin({
     descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT]('disable', VisitorFlag.VisitInactive);
+        this[VISIT]('disable');
+        // no need to visit them again
+        this[VISIT] = empty;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, getSelectorNumber);
+    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, (flags & UnionFlag.HasTag) ? getSelectorNumber : null);
     descriptors[ENTRIES] = { get: getUnionEntries };
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {

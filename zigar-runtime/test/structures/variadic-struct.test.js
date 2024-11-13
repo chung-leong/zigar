@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, UndefinedArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
@@ -250,10 +250,10 @@ describe('Structure: variadic-struct', function() {
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
       const pointers = [], active = [], mutable = [];
-      args1[VISIT](function({ isActive, isMutable }) {
+      args1[VISIT](function(flags) {
         pointers.push(this);
-        active.push(isActive());
-        mutable.push(isMutable());
+        active.push(!(flags & VisitorFlag.IsInactive));
+        mutable.push(!(flags & VisitorFlag.IsImmutable));
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(1);
       expect(pointers[0]['*']).to.equal(88);
@@ -332,10 +332,10 @@ describe('Structure: variadic-struct', function() {
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
       const pointers = [], active = [], mutable = [];
-      args1[VISIT](function({ isActive, isMutable }) {
+      args1[VISIT](function(flags) {
         pointers.push(this);
-        active.push(isActive());
-        mutable.push(isMutable());
+        active.push(!(flags & VisitorFlag.IsInactive));
+        mutable.push(!(flags & VisitorFlag.IsImmutable));
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(2);
       expect(pointers[1]['*']).to.equal(88);

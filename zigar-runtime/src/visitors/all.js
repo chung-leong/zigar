@@ -1,6 +1,8 @@
-import { VisitorFlag } from "../constants";
+import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS, VISIT, VIVIFICATE } from "../symbols";
+import { InaccessiblePointer } from '../errors.js';
+import { POINTER, SLOTS, TARGET, VISIT, VIVIFICATE } from '../symbols.js';
+import { defineProperties } from '../utils.js';
 
 export default mixin({
   defineVisitor() {
@@ -31,7 +33,7 @@ export default mixin({
 export function visitChild(slot, cb, flags, src) {
   let child = this[SLOTS][slot];
   if (!child) {
-    if (flags & VisitorFlag.Vivificate) {
+    if (!(flags & VisitorFlag.IgnoreUncreated)) {
       child = this[VIVIFICATE](slot);
     } else {
       return;
@@ -52,14 +54,14 @@ function throwInaccessible() {
 };
 
 const builtinVisitors = {
-  copy({ source }) {
-    const target = source[SLOTS][0];
+  copy(flags, src) {
+    const target = src[SLOTS][0];
     if (target) {
       this[TARGET] = target;
     }
   },
-  reset({ isActive }) {
-    if (this[SLOTS][0] && !isActive(this)) {
+  reset(flags) {
+    if (flags & VisitorFlag.IsInactive) {
       this[SLOTS][0] = undefined;
     }
   },

@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import {
   ArgStructFlag, MemberType, PointerFlag, StructFlag, StructureFlag, StructureType,
+  VisitorFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
@@ -268,9 +269,9 @@ describe('Structure: arg-struct', function() {
       const int = new Int32(1234);
       const object = new ArgStruct([ int ]);
       const pointers = [], mutabilities = [];
-      object[VISIT](function({ isMutable }) {
+      object[VISIT](function(flags) {
         pointers.push(this);
-        mutabilities.push(isMutable(this));
+        mutabilities.push(!(flags & VisitorFlag.IsImmutable));
       }, { vivificate: true });
       expect(pointers).to.have.lengthOf(2);
       expect(pointers[0]).to.equal(object['retval']);

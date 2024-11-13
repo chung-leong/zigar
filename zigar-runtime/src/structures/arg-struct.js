@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { CONTEXT, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
+import { CONTEXT, FINALIZE, INBOUND, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { CallContext, defineValue } from '../utils.js';
 
 export default mixin({
@@ -45,6 +45,7 @@ export default mixin({
         }
         thisEnv.copyArguments(self, args, argMembers, options);
       } else {
+        self[INBOUND] = true;
         return self;
       }
     };

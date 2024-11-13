@@ -18,7 +18,7 @@ export default mixin({
           if (index !== selected) {
             fieldFlags |= VisitorFlag.IsInactive;
           }
-          if (!(fieldFlags & VisitorFlag.IsInactive) || fieldFlags & VisitorFlag.VisitInactive) {
+          if (!(fieldFlags & VisitorFlag.IsInactive) || !(fieldFlags & VisitorFlag.IgnoreInactive)) {
             visitChild.call(this, slot, cb, fieldFlags, src);
           }
         }

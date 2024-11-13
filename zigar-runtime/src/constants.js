@@ -140,9 +140,9 @@ export const ModuleAttribute = {
 export const VisitorFlag = {
   IsInactive:       0x0001,
   IsImmutable:      0x0002,
-  Vivificate:       0x0004,
 
-  VisitInactive:    0x0010,
-  VisitArguments:   0x0020 | 0x0004 | 0x0002,
-  VisitRetval:      0x0040 | 0x0004,
+  IgnoreUncreated:  0x0004,
+  IgnoreInactive:   0x0008,
+  IgnoreArguments:  0x0010,
+  IgnoreRetval:     0x0020,
 };

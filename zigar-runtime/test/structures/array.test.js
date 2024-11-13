@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { ArrayFlag, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import { ArrayFlag, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
@@ -1357,17 +1357,17 @@ describe('Structure: array', function() {
       }, {});
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
-      array[VISIT](function({ isMutable, isActive }) {
+      array[VISIT](function(flags) {
         try {
           expect(this['*']).to.be.null;
         } catch (err) {
           // null pointer error
           errors.push(err);
         }
-        expect(isMutable()).to.be.true;
-        expect(isActive()).to.be.true;
+        expect(flags & VisitorFlag.IsImmutable).to.equal(0);
+        expect(flags & VisitorFlag.IsInactive).to.equal(0);
         pointers.push(this);
-      }, { vivificate: true });
+      }, 0);
       expect(pointers).to.have.lengthOf(4);
       expect(errors).to.have.lengthOf(4);
     })

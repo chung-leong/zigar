@@ -3902,7 +3902,7 @@ describe('Structure: pointer', function() {
     expect(Int32Ptr.child).to.equal(Int32);
     const int32 = new Int32(1234);
     const intPointer = new Int32Ptr(int32);
-    expect(() => intPointer[VISIT]('reset', { isActive: () => true })).to.not.throw();
+    expect(() => intPointer[VISIT]('reset')).to.not.throw();
     expect(() => intPointer[VISIT]('evil')).to.throw();
     expect(() => intPointer[VISIT](1234)).to.throw();
   })

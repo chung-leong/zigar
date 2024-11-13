@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { visitChild } from './all.js';
 
 export default mixin({
   defineVisitorArray() {

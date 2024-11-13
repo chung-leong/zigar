@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import {
   MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag,
+  VisitorFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -1150,8 +1151,8 @@ describe('Structure: union', function() {
       const pointer = object.pointer;
       object.$ = { number: 4567 };
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[VISIT](function({ isActive }) {
-        expect(isActive(this)).to.be.false;
+      object[VISIT](function(flags) {
+        expect(flags & VisitorFlag.IsInactive).to.equal(VisitorFlag.IsInactive);
       })
     })
     it('should release pointer when a different property is activated externally', function() {
@@ -1258,8 +1259,8 @@ describe('Structure: union', function() {
       object[MEMORY].setInt16(8, 1, true);
       expect(object.number).to.equal(1234);
       expect(pointer[SLOTS][0]).to.be.undefined;
-      object[VISIT](function({ isActive }) {
-        expect(isActive(this)).to.be.false;
+      object[VISIT](function(flags) {
+        expect(flags & VisitorFlag.IsInactive).to.equal(VisitorFlag.IsInactive);
       })
     })
     // TODO: make sure that it's possible to create union with default values

@@ -10,7 +10,7 @@ export default mixin({
         if (getErrorNumber.call(this)) {
           flags |= VisitorFlag.IsInactive;
         }
-        if (!(flags & VisitorFlag.IsInactive) || flags & VisitorFlag.VisitInactive) {
+        if (!(flags & VisitorFlag.IsInactive) || !(flags & VisitorFlag.IgnoreInactive)) {
           visitChild.call(this, slot, cb, flags, src);
         }
       }

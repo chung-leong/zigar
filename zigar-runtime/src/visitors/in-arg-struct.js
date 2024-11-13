@@ -3,17 +3,17 @@ import { mixin } from '../environment.js';
 import { visitChild } from './all.js';
 
 export default mixin({
-  defineVisitorStruct(argMembers, retvalMember) {
+  defineVisitorArgStruct(argMembers, retvalMember) {
     const argSlots = argMembers.filter(m => m.structure?.flags & StructureFlag.HasPointer).map(m => m.slot);
     const retvalSlot = retvalMember.slot;
     return {
       value(cb, flags, src) {
-        if (flags & VisitorFlag.VisitArguments && argSlots.length > 0) {
+        if (!(flags & VisitorFlag.IgnoreArguments) && argSlots.length > 0) {
           for (const slot of argSlots) {
-            visitChild.call(this, slot, cb, flags, src);
+            visitChild.call(this, slot, cb, flags | VisitorFlag.IsImmutable, src);
           }
         }
-        if (flags & VisitorFlag.VisitRetval && retvalSlot !== undefined) {
+        if (!(flags & VisitorFlag.IgnoreRetval) && retvalSlot !== undefined) {
           visitChild.call(this, retvalSlot, cb, flags, src);
         }
       }

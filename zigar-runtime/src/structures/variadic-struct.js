@@ -5,7 +5,7 @@ import {
   ALIGN, ATTRIBUTES, BIT_SIZE, CONTEXT, COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING,
   VISIT, VIVIFICATE,
 } from '../symbols.js';
-import { always, CallContext, defineProperties, defineValue } from '../utils.js';
+import { CallContext, defineProperties, defineValue } from '../utils.js';
 
 export default mixin({
   defineVariadicStruct(structure, descriptors) {
@@ -14,10 +14,8 @@ export default mixin({
       align,
       flags,
       length,
-      instance: { members },
+      instance: { members: [ rvMember, ...argMembers ] },
     } = structure;
-    const argMembers = members.slice(1);
-    const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
     const constructor = function(args) {
       if (args.length < length) {
@@ -56,8 +54,12 @@ export default mixin({
       // copy fixed args
       thisEnv.copyArguments(this, args, argMembers);
       // set their attributes
-      for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
+      let maxSlot = -1;
+      for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);
+        if (slot > maxSlot) {
+          maxSlot = slot;
+        }
       }
       // create additional child objects and copy arguments into them
       for (const [ index, arg ] of varArgs.entries()) {
@@ -76,16 +78,9 @@ export default mixin({
       this[ATTRIBUTES] = attrs;
       this[CONTEXT] = new CallContext();
     };
-    for (const member of members) {
+    for (const member of [ rvMember, ...argMembers ]) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: retvalSlot, type: retvalType } = members[0];
-    const isChildMutable = (retvalType === MemberType.Object)
-    ? function(object) {
-        const child = this[VIVIFICATE](retvalSlot);
-        return object === child;
-      }
-    : function() { return false };
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -112,26 +107,7 @@ export default mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = {
-      value(cb, options = {}) {
-        const {
-          vivificate = false,
-          isActive = always,
-          isMutable = always,
-        } = options;
-        const childOptions = {
-          ...options,
-          isActive,
-          isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
-        };
-        if (vivificate && retvalType === MemberType.Object) {
-          this[VIVIFICATE](retvalSlot);
-        }
-        for (const child of Object.values(this[SLOTS])) {
-          child?.[VISIT]?.(cb, childOptions);
-        }
-      },
-    };
+    descriptors[VISIT] = this.defineVisitorVariadicStruct(rvMember);
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {
