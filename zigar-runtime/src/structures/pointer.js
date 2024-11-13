@@ -3,16 +3,17 @@ import {
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
-  ConstantConstraint, InaccessiblePointer, InvalidPointerTarget, InvalidSliceLength,
+  ConstantConstraint,
+  InvalidPointerTarget, InvalidSliceLength,
   NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
-  warnImplicitArrayCreation, ZigMemoryTargetRequired,
+  warnImplicitArrayCreation, ZigMemoryTargetRequired
 } from '../errors.js';
 import {
   ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS,
   LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
   SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG,
 } from '../symbols.js';
-import { always, defineProperties, defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
+import { defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 
 export default mixin({
   definePointer(structure, descriptors) {
@@ -305,7 +306,7 @@ export default mixin({
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };
     descriptors[LENGTH] = { set: setLength };
-    descriptors[VISIT] = defineValue(visitPointer);
+    descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
     // disable these so the target's properties are returned instead through auto-dereferencing
@@ -347,58 +348,6 @@ export default mixin({
     };
   }
 });
-
-function throwInaccessible() {
-  throw new InaccessiblePointer();
-};
-
-const builtinVisitors = {
-  copy({ source }) {
-    const target = source[SLOTS][0];
-    if (target) {
-      this[TARGET] = target;
-    }
-  },
-  reset({ isActive }) {
-    if (this[SLOTS][0] && !isActive(this)) {
-      this[SLOTS][0] = undefined;
-    }
-  },
-  disable() {
-    const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-    defineProperties(this[POINTER], {
-      '*': disabledProp,
-      '$': disabledProp,
-      [POINTER]: disabledProp,
-      [TARGET]: disabledProp,
-    });
-  },
-};
-
-function visitPointer(visitor, options = {}) {
-  const {
-    source,
-    isActive = always,
-    isMutable = always,
-  } = options;
-  let fn;
-  if (typeof(visitor) === 'string') {
-    fn = builtinVisitors[visitor];
-    if (process.env.DEV) {
-      if (!fn) {
-        throw new Error(`Unrecognized visitor: ${visitor}`);
-      }
-    }
-  } else {
-    fn = visitor;
-    if (process.env.DEV) {
-      if (typeof(fn) !== 'function') {
-        throw new Error(`Invalid visitor: ${visitor}`);
-      }
-    }
-  }
-  fn.call(this, { source, isActive, isMutable });
-}
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);

@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
@@ -276,7 +276,7 @@ export default mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.('copy', { vivificate: true, source: template });
+          this[VISIT]?.('copy', template, VisitorFlag.Vivificate);
         }
       }
       for (const key of argKeys) {

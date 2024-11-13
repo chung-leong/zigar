@@ -136,3 +136,13 @@ export const ModuleAttribute = {
   RuntimeSafety:    0x0002,
   LibC:             0x0004,
 };
+
+export const VisitorFlag = {
+  IsInactive:       0x0001,
+  IsImmutable:      0x0002,
+  Vivificate:       0x0004,
+
+  VisitInactive:    0x0010,
+  VisitArguments:   0x0020 | 0x0004 | 0x0002,
+  VisitRetval:      0x0040 | 0x0004,
+};

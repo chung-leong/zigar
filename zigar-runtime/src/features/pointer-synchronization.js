@@ -1,3 +1,4 @@
+import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ADDRESS, LENGTH, MEMORY, POINTER, SLOTS, UPDATE, VISIT, ZIG } from '../symbols.js';
 import { findSortedIndex } from '../utils.js';
@@ -8,8 +9,7 @@ export default mixin({
     const pointerMap = new Map();
     const bufferMap = new Map();
     const potentialClusters = [];
-    const env = this;
-    const callback = function({ isActive }) {
+    const callback = function(flags) {
       if (isActive(this)) {
         // bypass proxy
         const pointer = this[POINTER];
@@ -17,7 +17,7 @@ export default mixin({
           const target = pointer[SLOTS][0];
           if (target) {
             pointerMap.set(pointer, target);
-            // only relocatable targets need updating
+            // only targets in JS memory need updating
             const dv = target[MEMORY];
             if (!dv[ZIG]) {
               // see if the buffer is shared with other objects
@@ -34,13 +34,13 @@ export default mixin({
                 bufferMap.set(dv.buffer, target);
               }
               // scan pointers in target
-              target[VISIT]?.(callback);
+              target[VISIT]?.(callback, 0);
             }
           }
         }
       }
     };
-    args[VISIT](callback);
+    args[VISIT](callback, VisitorFlag.VisitArguments);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -63,33 +63,42 @@ export default mixin({
       }
     }
   },
-  updatePointerTargets(context, args) {
+  updatePointerTargets(context, args, outbound) {
     const pointerMap = new Map();
-    const callback = function({ isActive, isMutable }) {
+    const callback = function(flags) {
       // bypass proxy
       const pointer = this[POINTER] /* c8 ignore next */ ?? this;
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
-        const writable = !pointer.constructor.const;
         const currentTarget = pointer[SLOTS][0];
-        const newTarget = (!currentTarget || isMutable(this))
-        ? pointer[UPDATE](context, true, isActive(this))
+        const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
+        ? pointer[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
         : currentTarget;
-        // update targets of pointers in original target if it's in relocatable memory
-        // pointers in Zig memory are updated on access so we don't need to do it here
-        // (and they should never point to reloctable memory)
-        if (currentTarget && !currentTarget[MEMORY][ZIG]) {
-          currentTarget[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+        let targetFlags = VisitorFlag.Vivificate;
+        if (pointer.constructor.const) {
+          targetFlags |= VisitorFlag.IsImmutable;
+        }
+        if (!(targetFlags & VisitorFlag.IsImmutable)) {
+          // update targets of pointers in original target if it's in JS memory
+          // pointers in Zig memory are updated on access so we don't need to do it here
+          // (and they should never point to reloctable memory)
+          if (currentTarget && !currentTarget[MEMORY][ZIG]) {
+            currentTarget[VISIT]?.(callback, targetFlags);
+          }
         }
         if (newTarget !== currentTarget) {
+          // acquire targets of pointers in new target if it;s in JS memory
           if (newTarget && !newTarget[MEMORY][ZIG]) {
-            // acquire targets of pointers in new target
-            newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+            newTarget?.[VISIT]?.(callback, targetFlags);
           }
         }
       }
     }
-    args[VISIT](callback, { vivificate: true });
+    let argFlags = VisitorFlag.VisitArguments;
+    if (outbound) {
+      argFlags |= VisitorFlag.VisitRetval;
+    }
+    args[VISIT](callback, argFlags);
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];

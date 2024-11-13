@@ -1,4 +1,4 @@
-import { StructureFlag, UnionFlag } from '../constants.js';
+import { StructureFlag, UnionFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   InactiveUnionProperty, InvalidInitializer, MissingUnionInitializer, MultipleUnionInitializers
@@ -43,7 +43,7 @@ export default mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
@@ -83,7 +83,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('reset');
+          this[VISIT]?.('reset', 0);
           return getValue.call(this);
         }
       : getValue;
@@ -100,7 +100,7 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISIT]?.('reset');
+          this[VISIT]?.('reset', 0);
         }
       : setValue;
       descriptors[name] = { get, set };
@@ -127,21 +127,13 @@ export default mixin({
     descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT]('disable', { vivificate: true });
+        this[VISIT]('disable', VisitorFlag.VisitInactive);
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
-      isChildActive: (flags & UnionFlag.HasTag)
-      ? function(child) {
-          const name = getActiveField.call(this);
-          const active = getters[name].call(this);
-          return child === active;
-        }
-      : () => false,
-    });
+    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, getSelectorNumber);
     descriptors[ENTRIES] = { get: getUnionEntries };
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
