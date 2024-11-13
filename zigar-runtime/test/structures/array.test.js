@@ -1351,10 +1351,10 @@ describe('Structure: array', function() {
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
-      // make sure that children don't get vivificated unless the vivificate option is set
+      // make sure that children don't get vivificated when IgnoreUncreated flag is set
       array[VISIT](function() {
         pointers.push(this);
-      }, {});
+      }, VisitorFlag.IgnoreUncreated);
       expect(pointers).to.have.lengthOf(0);
       // look for the pointers for real
       array[VISIT](function(flags) {

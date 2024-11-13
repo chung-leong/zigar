@@ -254,7 +254,7 @@ describe('Structure: variadic-struct', function() {
         pointers.push(this);
         active.push(!(flags & VisitorFlag.IsInactive));
         mutable.push(!(flags & VisitorFlag.IsImmutable));
-      }, { vivificate: true });
+      });
       expect(pointers).to.have.lengthOf(1);
       expect(pointers[0]['*']).to.equal(88);
       expect(active).to.eql([ true ]);
@@ -336,11 +336,11 @@ describe('Structure: variadic-struct', function() {
         pointers.push(this);
         active.push(!(flags & VisitorFlag.IsInactive));
         mutable.push(!(flags & VisitorFlag.IsImmutable));
-      }, { vivificate: true });
+      });
       expect(pointers).to.have.lengthOf(2);
-      expect(pointers[1]['*']).to.equal(88);
+      expect(pointers[0]['*']).to.equal(88);
       expect(active).to.eql([ true, true ]);
-      expect(mutable).to.eql([ false, false ]);
+      expect(mutable).to.eql([ false, true ]);
     })
   })
 })

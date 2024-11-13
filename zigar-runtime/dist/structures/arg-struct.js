@@ -1,8 +1,8 @@
-import { MemberType, StructureFlag, ArgStructFlag } from '../constants.js';
+import { StructureFlag, ArgStructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
 import { VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, CONTEXT, FINALIZE } from '../symbols.js';
-import { never, defineValue, CallContext } from '../utils.js';
+import { defineValue, CallContext } from '../utils.js';
 
 var argStruct = mixin({
   defineArgStruct(structure, descriptors) {
@@ -52,16 +52,9 @@ var argStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: rvSlot, type: rvType } = members[0];
-    const isChildMutable = (rvType === MemberType.Object)
-    ? function(object) {
-        const child = this[VIVIFICATE](rvSlot);
-        return object === child;
-      }
-    : never;
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     return constructor;
   },

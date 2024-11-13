@@ -1,4 +1,4 @@
-import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } from '../constants.js';
+import { structureNames, StructureType, MemberFlag, VisitorFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
 import { getStructIterator, getStructEntries } from '../iterators.js';
@@ -264,7 +264,7 @@ var all = mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.('copy', { vivificate: true, source: template });
+          this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
         }
       }
       for (const key of argKeys) {

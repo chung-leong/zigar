@@ -7,12 +7,12 @@ import { defineValue } from '../utils.js';
 var errorUnion = mixin({
   defineErrorUnion(structure, descriptors) {
     const {
-      instance: { members },
+      instance: { members: [ valueMember, errorMember ] },
       flags,
     } = structure;
-    const { get: getValue, set: setValue } = this.defineMember(members[0]);
-    const { get: getError, set: setError } = this.defineMember(members[1]);
-    const { get: getErrorNumber, set: setErrorNumber } = this.defineMember(members[1], false);
+    const { get: getValue, set: setValue } = this.defineMember(valueMember);
+    const { get: getError, set: setError } = this.defineMember(errorMember);
+    const { get: getErrorNumber, set: setErrorNumber } = this.defineMember(errorMember, false);
     const get = function() {
       const errNum = getErrorNumber.call(this);
       if (errNum) {
@@ -21,22 +21,19 @@ var errorUnion = mixin({
         return getValue.call(this);
       }
     };
-    const isValueVoid = members[0].type === MemberType.Void;
-    const errorSet = members[1].structure.constructor;
-    const isChildActive = function() {
-      return !getErrorNumber.call(this);
-    };
+    const isValueVoid = valueMember.type === MemberType.Void;
+    const errorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.('reset');
+      this[VISIT]?.('reset', 0);
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          if (isChildActive.call(this)) {
-            this[VISIT]('copy', { vivificate: true, source: arg });
+          if (!getErrorNumber.call(this)) {
+            this[VISIT]('copy', 0, arg);
           }
         }
       } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
@@ -68,7 +65,7 @@ var errorUnion = mixin({
         }
       }
     };
-    const { bitOffset, byteSize } = members[0];
+    const { bitOffset, byteSize } = valueMember;
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -76,7 +73,7 @@ var errorUnion = mixin({
     // for clear value after error union is set to an an error (from mixin "features/data-copying")
     descriptors[RESET] = this.defineResetter(bitOffset / 8, byteSize);
     // for operating on pointers contained in the error union
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorErrorUnion(valueMember, getErrorNumber);
     return constructor;
   },
 });

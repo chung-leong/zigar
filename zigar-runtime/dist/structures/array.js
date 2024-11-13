@@ -1,4 +1,4 @@
-import { ArrayFlag, StructureFlag } from '../constants.js';
+import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -20,7 +20,7 @@ var array = mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else {
         if (typeof(arg) === 'string' && flags & ArrayFlag.IsString) {
@@ -61,7 +61,7 @@ var array = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeArray(structure, staticDescriptors) {

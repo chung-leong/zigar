@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { SLOTS, VISIT } from '../symbols.js';
 import { visitChild } from './all.js';
 
-export default mixin({
+var inVariadicStruct = mixin({
   defineVisitorVariadicStruct(members) {
     const rvMember = members[0];
     const rvSlot = (rvMember.structure.flags & StructureFlag.HasPointer) ? rvMember.slot : undefined;
@@ -23,3 +23,5 @@ export default mixin({
     };
   }
 });
+
+export { inVariadicStruct as default };

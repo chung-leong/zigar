@@ -1,26 +1,16 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS, TARGET, VISIT, VIVIFICATE } from '../symbols.js';
+import { SLOTS, TARGET, VIVIFICATE, VISIT } from '../symbols.js';
 
-export default mixin({
+var all = mixin({
   defineVisitor() {
     return {
       value(cb, flags, src) {
         let fn;
         if (typeof(cb) === 'string') {
           fn = builtinVisitors[cb];
-          if (process.env.DEV) {
-            if (!fn) {
-              throw new Error(`Unrecognized visitor: ${cb}`);
-            }
-          }
         } else {
           fn = cb;
-          if (process.env.DEV) {
-            if (typeof(fn) !== 'function') {
-              throw new Error(`Invalid visitor: ${cb}`);
-            }
-          }
         }
         fn.call(this, flags, src);
       }
@@ -28,7 +18,7 @@ export default mixin({
   },
 });
 
-export function visitChild(slot, cb, flags, src) {
+function visitChild(slot, cb, flags, src) {
   let child = this[SLOTS][slot];
   if (!child) {
     if (!(flags & VisitorFlag.IgnoreUncreated)) {
@@ -60,3 +50,5 @@ const builtinVisitors = {
     }
   },
 };
+
+export { all as default, visitChild };

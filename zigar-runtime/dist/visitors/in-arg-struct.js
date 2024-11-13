@@ -2,7 +2,7 @@ import { StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { visitChild } from './all.js';
 
-export default mixin({
+var inArgStruct = mixin({
   defineVisitorArgStruct(members) {
     const argSlots = [];
     let rvSlot = undefined;
@@ -29,3 +29,5 @@ export default mixin({
     };
   }
 });
+
+export { inArgStruct as default };

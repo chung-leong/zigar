@@ -1,4 +1,4 @@
-import { SliceFlag, StructureFlag } from '../constants.js';
+import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
@@ -44,7 +44,7 @@ var slice = mixin({
         }
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
         initializer.call(this, { string: arg }, allocator);
@@ -121,7 +121,7 @@ var slice = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {

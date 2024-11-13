@@ -1,8 +1,8 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed, InaccessiblePointer } from '../errors.js';
+import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
 import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, CAST, ENVIRONMENT, PARENT, POINTER, MEMORY, ZIG, SENTINEL, SIZE, SLOTS, MAX_LENGTH, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
-import { getProxy, defineValue, usizeInvalid, always, findElements, defineProperties } from '../utils.js';
+import { getProxy, defineValue, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
   definePointer(structure, descriptors) {
@@ -295,7 +295,7 @@ var pointer = mixin({
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };
     descriptors[LENGTH] = { set: setLength };
-    descriptors[VISIT] = defineValue(visitPointer);
+    descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
     // disable these so the target's properties are returned instead through auto-dereferencing
@@ -337,47 +337,6 @@ var pointer = mixin({
     };
   }
 });
-
-function throwInaccessible() {
-  throw new InaccessiblePointer();
-}
-const builtinVisitors = {
-  copy({ source }) {
-    const target = source[SLOTS][0];
-    if (target) {
-      this[TARGET] = target;
-    }
-  },
-  reset({ isActive }) {
-    if (this[SLOTS][0] && !isActive(this)) {
-      this[SLOTS][0] = undefined;
-    }
-  },
-  disable() {
-    const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-    defineProperties(this[POINTER], {
-      '*': disabledProp,
-      '$': disabledProp,
-      [POINTER]: disabledProp,
-      [TARGET]: disabledProp,
-    });
-  },
-};
-
-function visitPointer(visitor, options = {}) {
-  const {
-    source,
-    isActive = always,
-    isMutable = always,
-  } = options;
-  let fn;
-  if (typeof(visitor) === 'string') {
-    fn = builtinVisitors[visitor];
-  } else {
-    fn = visitor;
-  }
-  fn.call(this, { source, isActive, isMutable });
-}
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);

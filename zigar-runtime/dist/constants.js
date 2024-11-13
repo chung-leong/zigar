@@ -136,4 +136,14 @@ const ModuleAttribute = {
   LibC:             0x0004,
 };
 
-export { Action, ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, ExportFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructureType, UnionFlag, VectorFlag, memberNames, structureNames };
+const VisitorFlag = {
+  IsInactive:       0x0001,
+  IsImmutable:      0x0002,
+
+  IgnoreUncreated:  0x0004,
+  IgnoreInactive:   0x0008,
+  IgnoreArguments:  0x0010,
+  IgnoreRetval:     0x0020,
+};
+
+export { Action, ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, ExportFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

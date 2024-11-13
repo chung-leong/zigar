@@ -1,16 +1,16 @@
-import { MemberType, StructureType, OptionalFlag, StructureFlag } from '../constants.js';
+import { MemberType, OptionalFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { INITIALIZE, RESET, VIVIFICATE, VISIT, COPY, MEMORY, ZIG } from '../symbols.js';
+import { INITIALIZE, RESET, VIVIFICATE, VISIT, COPY } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var optional = mixin({
   defineOptional(structure, descriptors) {
     const {
-      instance: { members },
+      instance: { members: [ valueMember, presentMember ] },
       flags,
     } = structure;
-    const { get: getValue, set: setValue } = this.defineMember(members[0]);
-    const { get: getPresent, set: setPresent } = this.defineMember(members[1]);
+    const { get: getValue, set: setValue } = this.defineMember(valueMember);
+    const { get: getPresent, set: setPresent } = this.defineMember(presentMember);
     const get = function() {
       const present = getPresent.call(this);
       if (present) {
@@ -20,18 +20,14 @@ var optional = mixin({
         return null;
       }
     };
-    const isValueVoid = members[0].type === MemberType.Void;
-    const isChildPointer = members[0].structure.type === StructureType.Pointer;
-    const isChildActive = function () {
-      return !!getPresent.call(this);
-    };
+    const isValueVoid = valueMember.type === MemberType.Void;
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
-          if (isChildActive.call(arg)) {
-            this[VISIT]('copy', { vivificate: true, source: arg });
+          if (getPresent.call(this)) {
+            this[VISIT]('copy', VisitorFlag.Vivificate, arg);
           }
         }
       } else if (arg === null) {
@@ -42,7 +38,7 @@ var optional = mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg);
-        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][ZIG])) {
+        if (flags & OptionalFlag.HasSelector || flags & StructureFlag.HasPointer) {
           // since setValue() wouldn't write address into memory when the pointer is in
           // relocatable memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
@@ -51,7 +47,7 @@ var optional = mixin({
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure);
-    const { bitOffset, byteSize } = members[0];
+    const { bitOffset, byteSize } = valueMember;
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
@@ -59,7 +55,7 @@ var optional = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorOptional(valueMember, getPresent);
     return constructor;
   },
 });

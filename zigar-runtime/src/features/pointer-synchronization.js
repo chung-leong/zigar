@@ -1,8 +1,10 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
-  ADDRESS, INBOUND, LENGTH, MEMORY,
-  POINTER, SLOTS, UPDATE, VISIT, ZIG
+  ADDRESS,
+  LENGTH, MEMORY,
+  POINTER, SLOTS,
+  UPDATE, VISIT, ZIG
 } from '../symbols.js';
 import { findSortedIndex } from '../utils.js';
 
@@ -41,7 +43,8 @@ export default mixin({
         }
       }
     };
-    object[VISIT](callback, VisitorFlag.IgnoreRetval | VisitorFlag.IgnoreInactive);
+    const flags = VisitorFlag.IgnoreRetval | VisitorFlag.IgnoreInactive;
+    object[VISIT](callback, flags);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -64,7 +67,7 @@ export default mixin({
       }
     }
   },
-  updatePointerTargets(context, object) {
+  updatePointerTargets(context, object, inbound = false) {
     const pointerMap = new Map();
     const callback = function(flags) {
       // bypass proxy
@@ -92,7 +95,8 @@ export default mixin({
         }
       }
     }
-    object[VISIT](callback, (object[INBOUND]) ? VisitorFlag.IgnoreRetval : 0);
+    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
+    object[VISIT](callback, flags);
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];

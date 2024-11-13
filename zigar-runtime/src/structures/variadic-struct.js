@@ -14,9 +14,10 @@ export default mixin({
       align,
       flags,
       length,
-      instance: { members: [ rvMember, ...argMembers ] },
+      instance: { members },
     } = structure;
     const thisEnv = this;
+    const argMembers = members.slice(1);
     const constructor = function(args) {
       if (args.length < length) {
         throw new ArgumentCountMismatch(length, args.length, true);
@@ -78,7 +79,7 @@ export default mixin({
       this[ATTRIBUTES] = attrs;
       this[CONTEXT] = new CallContext();
     };
-    for (const member of [ rvMember, ...argMembers ]) {
+    for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
     const ArgAttributes = function(length) {
@@ -107,7 +108,7 @@ export default mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = this.defineVisitorVariadicStruct(rvMember);
+    descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

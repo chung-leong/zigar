@@ -272,12 +272,12 @@ describe('Structure: arg-struct', function() {
       object[VISIT](function(flags) {
         pointers.push(this);
         mutabilities.push(!(flags & VisitorFlag.IsImmutable));
-      }, { vivificate: true });
+      });
       expect(pointers).to.have.lengthOf(2);
-      expect(pointers[0]).to.equal(object['retval']);
-      expect(pointers[1]).to.equal(object['0']);
-      expect(mutabilities[0]).to.be.true;
-      expect(mutabilities[1]).to.be.false;
+      expect(pointers[0]).to.equal(object['0']);
+      expect(pointers[1]).to.equal(object['retval']);
+      expect(mutabilities[0]).to.be.false;
+      expect(mutabilities[1]).to.be.true;
     })
     it('should throw when initialized with the wrong number of arguments', function() {
       const env = new Env();

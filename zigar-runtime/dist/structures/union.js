@@ -1,9 +1,9 @@
-import { UnionFlag, StructureFlag } from '../constants.js';
+import { UnionFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty } from '../errors.js';
+import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
 import { getZigIterator, getUnionIterator, getUnionEntries } from '../iterators.js';
-import { NAME, SETTERS, KEYS, MODIFY, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, COPY } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { NAME, SETTERS, KEYS, MODIFY, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
+import { empty, defineValue, defineProperties } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {
@@ -39,7 +39,7 @@ var union = mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
@@ -123,21 +123,15 @@ var union = mixin({
     descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT]('disable', { vivificate: true });
+        this[VISIT](disablePointer);
+        // no need to visit them again
+        this[VISIT] = empty;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
-      isChildActive: (flags & UnionFlag.HasTag)
-      ? function(child) {
-          const name = getActiveField.call(this);
-          const active = getters[name].call(this);
-          return child === active;
-        }
-      : () => false,
-    });
+    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, (flags & UnionFlag.HasTag) ? getSelectorNumber : null);
     descriptors[ENTRIES] = { get: getUnionEntries };
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
@@ -157,5 +151,18 @@ var union = mixin({
     }
   }
 });
+
+function throwInaccessible() {
+  throw new InaccessiblePointer();
+}
+function disablePointer() {
+  const disabledProp = { get: throwInaccessible, set: throwInaccessible };
+  defineProperties(this[POINTER], {
+    '*': disabledProp,
+    '$': disabledProp,
+    [POINTER]: disabledProp,
+    [TARGET]: disabledProp,
+  });
+}
 
 export { union as default };

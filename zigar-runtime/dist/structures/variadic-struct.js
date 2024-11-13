@@ -1,8 +1,8 @@
-import { MemberType, StructureFlag, ArgStructFlag } from '../constants.js';
+import { StructureFlag, ArgStructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { VIVIFICATE, ALIGN, COPY, RESTORE, VISIT, SLOTS, THROWING, MEMORY, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES, CONTEXT } from '../symbols.js';
-import { defineProperties, defineValue, CallContext, always } from '../utils.js';
+import { ALIGN, COPY, RESTORE, VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES, CONTEXT } from '../symbols.js';
+import { defineProperties, defineValue, CallContext } from '../utils.js';
 
 var variadicStruct = mixin({
   defineVariadicStruct(structure, descriptors) {
@@ -13,9 +13,8 @@ var variadicStruct = mixin({
       length,
       instance: { members },
     } = structure;
-    const argMembers = members.slice(1);
-    const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
+    const argMembers = members.slice(1);
     const constructor = function(args) {
       if (args.length < length) {
         throw new ArgumentCountMismatch(length, args.length, true);
@@ -53,8 +52,12 @@ var variadicStruct = mixin({
       // copy fixed args
       thisEnv.copyArguments(this, args, argMembers);
       // set their attributes
-      for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
+      let maxSlot = -1;
+      for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);
+        if (slot > maxSlot) {
+          maxSlot = slot;
+        }
       }
       // create additional child objects and copy arguments into them
       for (const [ index, arg ] of varArgs.entries()) {
@@ -76,13 +79,6 @@ var variadicStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: retvalSlot, type: retvalType } = members[0];
-    const isChildMutable = (retvalType === MemberType.Object)
-    ? function(object) {
-        const child = this[VIVIFICATE](retvalSlot);
-        return object === child;
-      }
-    : function() { return false };
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -109,26 +105,7 @@ var variadicStruct = mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = {
-      value(cb, options = {}) {
-        const {
-          vivificate = false,
-          isActive = always,
-          isMutable = always,
-        } = options;
-        const childOptions = {
-          ...options,
-          isActive,
-          isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
-        };
-        if (vivificate && retvalType === MemberType.Object) {
-          this[VIVIFICATE](retvalSlot);
-        }
-        for (const child of Object.values(this[SLOTS])) {
-          child?.[VISIT]?.(cb, childOptions);
-        }
-      },
-    };
+    descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

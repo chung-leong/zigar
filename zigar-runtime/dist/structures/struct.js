@@ -19,7 +19,7 @@ var struct = mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', 0, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
         propApplier.call(this, arg);
@@ -72,7 +72,7 @@ var struct = mixin({
     // for creating complex fields on access
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
     descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
     if (flags & StructFlag.IsAllocator) {

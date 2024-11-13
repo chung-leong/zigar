@@ -21,7 +21,7 @@ export default mixin({
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', 0, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
         propApplier.call(this, arg);

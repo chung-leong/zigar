@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { CONTEXT, FINALIZE, INBOUND, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
+import { CONTEXT, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { CallContext, defineValue } from '../utils.js';
 
 export default mixin({
@@ -11,9 +11,10 @@ export default mixin({
       byteSize,
       align,
       length,
-      instance: { members: [ rvMember, ...argMembers ] },
+      instance: { members },
     } = structure;
     const thisEnv = this;
+    const argMembers = members.slice(1);
     const constructor = function(args) {
       const creating = this instanceof constructor;
       let self, dv;
@@ -45,16 +46,15 @@ export default mixin({
         }
         thisEnv.copyArguments(self, args, argMembers, options);
       } else {
-        self[INBOUND] = true;
         return self;
       }
     };
-    for (const member of [ ...argMembers, rvMember ]) {
+    for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(argMembers, rvMember);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.MIXIN === 'track') {
       this.detectArgumentFeatures(argMembers);
