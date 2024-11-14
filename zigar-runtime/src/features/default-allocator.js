@@ -1,10 +1,8 @@
 import { mixin } from '../environment.js';
-import { ALIGN, CONTEXT, COPY, MEMORY, SIZE } from '../symbols.js';
-import { empty, usizeMax } from '../utils.js';
+import { ALIGN, MEMORY, SIZE, ZIG } from '../symbols.js';
+import { usizeMax } from '../utils.js';
 
 export default mixin({
-  nextContextId: usizeMax,
-  contextMap: new Map(),
   allocatorVTable: null,
 
   createDefaultAllocator(args, structure) {
@@ -16,60 +14,17 @@ export default mixin({
       const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.allocatorVTable = VTable(dv);
       vtable.alloc = (ptr, len, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          return this.allocateHostMemory(context, len, 1 << ptrAlign);
-        } else {
-          return null;
-        }
+        return this.allocateHostMemory(len, 1 << ptrAlign);
       };
       vtable.resize = noResize;
       vtable.free = (ptr, buf, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          const address = this.getViewAddress(buf['*'][MEMORY]);
-          const len = buf.length;
-          this.freeHostMemory(context, address, len, 1 << ptrAlign);
-        }
+        const address = this.getViewAddress(buf['*'][MEMORY]);
+        const len = buf.length;
+        this.freeHostMemory(address, len, 1 << ptrAlign);
       };
     }
-    const context = args[CONTEXT];
-    const contextId = context.id = this.nextContextId--;
-    // storing context id in a fake pointer
-    const ptr = this.obtainZigView(contextId, 0);
-    this.contextMap.set(contextId, context);
+    const ptr = this.obtainZigView(usizeMax, 0);
     return new Allocator({ ptr, vtable });
-  },
-  allocateHostMemory(context, len, align) {
-    const dv = this.allocateJSMemory(len, align);
-    // for WebAssembly, we need to allocate Zig memory that backs the JS memory
-    // for Node, we create another DataView on the same buffer and pretend that it's zig
-    // memory
-    const shadowDV = (process.env.TARGET === 'wasm')
-    ? this.allocateShadowMemory(len, align)
-    : this.createShadowView(dv);
-    const copier = (process.env.TARGET === 'wasm')
-    ? this.defineCopier(len).value
-    : empty;
-    const constructor = { [ALIGN]: align };
-    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
-    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
-    this.addShadow(context, shadow, object, align);
-    return shadowDV;
-  },
-  freeHostMemory(context, address, len, align) {
-    const shadowDV = this.unregisterMemory(context, address);
-    if (shadowDV) {
-      this.removeShadow(context, shadowDV);
-      this.freeShadowMemory(shadowDV);
-    }
-  },
-  releaseCallContext(context) {
-    if (!context.retained) {
-      this.contextMap.delete(context.id);
-    }
   },
   freeDefaultAllocator() {
     if (this.allocatorVTable) {
@@ -78,4 +33,32 @@ export default mixin({
       this.freeZigMemory(dv);
     }
   },
+  ...(process.env.TARGET === 'wasm' ? {
+    allocateHostMemory(len, align) {
+      const targetDV = this.allocateJSMemory(len, align);
+      const shadowDV = this.allocateShadowMemory(len, align);
+      const address = this.getViewAddress(shadowDV);
+      this.registerMemory(address, len, align, true, targetDV, shadowDV);
+      return shadowDV;
+    },
+    freeHostMemory(address, len, align) {
+      const entry = this.unregisterMemory(context, address, len);
+      if (entry) {
+        this.freeShadowMemory(entry.shadowDV);
+      }
+    },
+  } : process.env.TARGET === 'node' ? {
+    allocateHostMemory(len, align) {
+      const targetDV = this.allocateJSMemory(len, align);
+      const address = this.getViewAddress(targetDV);
+      this.registerMemory(address, len, align, true, targetDV, shadowDV);
+      // pretend that the view holds Zig memory to get around code that prevents pointers
+      // in Zig memory to point at JS memory
+      targetDV[ZIG] = { address, len };
+      return targetDV;
+    },
+    freeHostMemory(len, align) {
+      // do nothing
+    },
+  } : undefined),
 });

@@ -1,8 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CONTEXT, FINALIZE, MEMORY, PROMISE, ZIG } from '../../src/symbols.js';
-import { CallContext } from '../../src/utils.js';
+import { FINALIZE, MEMORY, PROMISE, ZIG } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -11,9 +10,7 @@ describe('Feature: promise-callback', function() {
   describe('createCallback', function() {
     it('should return a function that fulfills a promise attached to the argument struct', async function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const callback = env.createCallback(args, null, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
@@ -23,9 +20,7 @@ describe('Feature: promise-callback', function() {
     })
     it('should create copy of the result when it uses Zig memory', async function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const callback = env.createCallback(args, null, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
@@ -46,9 +41,7 @@ describe('Feature: promise-callback', function() {
     })
     it('should reject a promise when the callback function is given an error', async function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const callback = env.createCallback(args, null, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       let error;
@@ -63,9 +56,7 @@ describe('Feature: promise-callback', function() {
     })
     it('should return a function that calls the given callback', function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       let result;
       const callback = env.createCallback(args, null, arg => result = arg);
       expect(args[PROMISE]).to.be.undefined;

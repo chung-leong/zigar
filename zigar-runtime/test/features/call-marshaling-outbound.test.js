@@ -7,9 +7,9 @@ import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, CONTEXT, COPY, FINALIZE, MEMORY, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineProperties, defineProperty, usizeMin } from '../../src/utils.js';
+import { defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
 use (ChaiAsPromised);
@@ -182,7 +182,6 @@ describe('Feature: call-marshaling-outbound', function() {
         const Arg = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
-          this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
           this.retval = 123;
         };
         defineProperties(Arg.prototype, {
@@ -220,7 +219,6 @@ describe('Feature: call-marshaling-outbound', function() {
         const Arg = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
-          this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
           this.retval = 123;
         };
         defineProperties(Arg.prototype, {
@@ -250,7 +248,6 @@ describe('Feature: call-marshaling-outbound', function() {
         const Arg = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
-          this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
           this.retval = 123;
         };
         defineProperties(Arg.prototype, {
@@ -280,7 +277,6 @@ describe('Feature: call-marshaling-outbound', function() {
         const Arg = function() {
           this[MEMORY] = new DataView(new ArrayBuffer(4));
           this[MEMORY][ALIGN] = 4;
-          this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
           this.retval = 123;
         };
         defineProperties(Arg.prototype, {
@@ -850,7 +846,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
       };
       defineProperties(Arg.prototype, {
         [COPY]: env.defineCopier(4),
@@ -883,7 +878,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
         this[FINALIZE] = null;
       };
       defineProperties(Arg.prototype, {
@@ -919,7 +913,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
       };
       let called = false;
       defineProperties(Arg.prototype, {
@@ -956,7 +949,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
       };
       defineProperties(Arg.prototype, {
         [COPY]: env.defineCopier(4),
@@ -1007,7 +999,6 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY][ALIGN] = 4;
         this[SLOTS] = { 0: {} };
         this[ATTRIBUTES] = new Attributes();
-        this[CONTEXT] = { memoryList: [], shadowMap: null, id: usizeMin };
         this.retval = 123;
       };
       defineProperties(Arg.prototype, {

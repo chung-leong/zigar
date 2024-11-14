@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { CONTEXT, MEMORY } from '../symbols.js';
+import { MEMORY } from '../symbols.js';
 
 export default mixin({
   createSignalArray(args, structure, signal) {
@@ -11,8 +11,7 @@ export default mixin({
         if (process.env.TARGET === 'wasm') {
           // WASM doesn't directly access JavaScript memory, we need to find the
           // shadow memory that's been assigned to the object and store the value there
-          const shadow = this.findShadow(args[CONTEXT], int32);
-          const shadowDV = shadow[MEMORY];
+          const shadowDV = this.findShadowView(int32[MEMORY]);
           const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
           Atomics.store(shadowTA, 0, 1);
         } else if (process.env.TARGET === 'node') {

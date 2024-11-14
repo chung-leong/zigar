@@ -298,10 +298,3 @@ export class ObjectCache {
     return object;
   }
 }
-
-export class CallContext {
-  memoryList = [];
-  shadowMap = null;
-  id = usizeMin;
-  async = false;
-}

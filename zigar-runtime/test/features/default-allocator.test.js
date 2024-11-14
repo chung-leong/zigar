@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, CONTEXT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
-import { CallContext, usize } from '../../src/utils.js';
+import { ALIGN, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -11,9 +11,7 @@ describe('Feature: default-allocator', function() {
   describe('createDefaultAllocator', function() {
     it('should an allocator that allocates memory from JavaScript', async function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const constructor = function({ vtable, ptr }) {
         this.vtable = vtable;
         this.ptr = {
@@ -58,7 +56,6 @@ describe('Feature: default-allocator', function() {
         },
       };
       allocator.vtable.free(allocator.ptr, buf, 3);
-      env.releaseCallContext(args[CONTEXT]);
       const dv2 = allocator.vtable.alloc(allocator.ptr, 16, 0, 3);
       expect(dv2).to.be.null;
     })
@@ -66,9 +63,7 @@ describe('Feature: default-allocator', function() {
   describe('freeDefaultAllocator', function() {
     it('should free default allocator vtable', function() {
       const env = new Env();
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const constructor = function({ vtable, ptr }) {
         this.vtable = vtable;
         this.ptr = {

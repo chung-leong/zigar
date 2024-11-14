@@ -1,7 +1,7 @@
 import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
-import { ATTRIBUTES, CONTEXT, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
+import { ATTRIBUTES, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
 
 export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -79,7 +79,7 @@ export default mixin({
     }
   },
   invokeThunk(thunk, fn, args) {
-    const context = args[CONTEXT];
+    const context = this.startContext();
     const attrs = args[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
@@ -100,6 +100,7 @@ export default mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
+      this.endContext();
       throw new ZigError();
     }
     const finalize = () => {
@@ -108,12 +109,11 @@ export default mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
-      this.releaseShadows(context);
-      this.releaseCallContext?.(context);
       if (this.libc) {
         this.flushStdout?.();
       }
       this.flushConsole?.();
+      this.endContext();
     };
     if (FINALIZE in args) {
       // async function--finalization happens when callback is invoked

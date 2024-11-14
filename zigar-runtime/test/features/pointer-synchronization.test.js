@@ -5,7 +5,6 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { MEMORY, SLOTS } from '../../src/symbols.js';
-import { CallContext } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -115,7 +114,7 @@ describe('Feature: pointer-synchronization', function() {
       env.getBufferAddress = function(buffer) {
         return usize(0x2000);
       };
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerAddresses(context, args);
       expect(getUsize.call(args[0][MEMORY], 0, true)).to.equal(usize(0x2000));
       expect(getUsize.call(args[1][MEMORY], 0, true)).to.equal(usize(0x1000));
@@ -220,7 +219,7 @@ describe('Feature: pointer-synchronization', function() {
         nextFixedAddress += usize(0x1000);
         return address;
       };
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerAddresses(context, args);
       expect(getUsize.call(args[0][MEMORY], 0, true)).to.equal(usize(0xf_1000));
       expect(getUsize.call(args[1][MEMORY], 0, true)).to.equal(usize(0xf_2000));
@@ -323,7 +322,7 @@ describe('Feature: pointer-synchronization', function() {
       env.getTargetAddress = function(context, target, cluster) {
         return map.get(target[MEMORY]);
       };
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerAddresses(context, object3);
       expect(object1[MEMORY].getBigUint64(0, true)).to.equal(0x3000n);  // obj1 -> obj3
       expect(object2[MEMORY].getBigUint64(0, true)).to.equal(0x1000n);  // obj2 -> obj1
@@ -388,7 +387,7 @@ describe('Feature: pointer-synchronization', function() {
       env.getTargetAddress = function(context, target, cluster) {
         return usize(0x1000);
       };
-      const context = new CallContext();
+      const context = env.startContext();
       // start now with an active pointer so it gets vivificated in order to ensure code coverage
       const object = new Hello(new Int32(1234));
       env.updatePointerAddresses(context, object);
@@ -511,7 +510,7 @@ describe('Feature: pointer-synchronization', function() {
         called = true;
         return 0x1000n;
       };
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerAddresses(context, object);
       expect(called).to.be.false;
     })
@@ -599,7 +598,7 @@ describe('Feature: pointer-synchronization', function() {
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, object, true);
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
@@ -663,7 +662,7 @@ describe('Feature: pointer-synchronization', function() {
       env.endStructure(structure);
       const object = new Hello([ new Int32(123) ]);
       expect(object[0]['*']).to.equal(123);
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, object, true);
       expect(object[0]['*']).to.equal(123);
     })
@@ -703,7 +702,7 @@ describe('Feature: pointer-synchronization', function() {
       expect(ptr['*']).to.equal(123);
       const invalidAddress = (addressSize == 32) ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
       setUsize.call(ptr[MEMORY], 0, invalidAddress, true);
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, ptr, true);
       expect(() => ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('Null')
@@ -812,7 +811,7 @@ describe('Feature: pointer-synchronization', function() {
       object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
       object3[MEMORY].setBigUint64(0, 0x0000n, true); // obj3 -> null
       object5[MEMORY].setBigUint64(0, 0x4000n, true); // obj5 -> obj4
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, object3, true);
       expect(object3.sibling).to.be.null;
       expect(object2.sibling['*']).to.equal(object1);
@@ -914,7 +913,7 @@ describe('Feature: pointer-synchronization', function() {
       object1[MEMORY].setBigUint64(0, 0x3000n, true); // obj1 -> obj3
       object2[MEMORY].setBigUint64(0, 0x1000n, true); // obj2 -> obj1
       object3[MEMORY].setBigUint64(0, 0x2000n, true); // obj3 -> obj2
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, object3, true);
       expect(object3.sibling['*']).to.equal(object2);
       expect(object2.sibling['*']).to.equal(object1);
@@ -953,7 +952,7 @@ describe('Feature: pointer-synchronization', function() {
         return map.get(address);
       };
       setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
-      const context = new CallContext();
+      const context = env.startContext();
       env.updatePointerTargets(context, pointer, true);
       expect(pointer.dataView).to.equal(dv);
     })

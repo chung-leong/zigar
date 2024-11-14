@@ -5,8 +5,7 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CONTEXT } from '../../src/symbols.js';
-import { CallContext } from '../../src/utils.js';
+import { MEMORY } from '../../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -61,9 +60,7 @@ describe('Feature: abort-signal', function() {
       });
       env.defineStructure(signalStructure);
       env.endStructure(signalStructure);
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const int32 = env.createSignalArray(args, signalStructure, null);
       expect(int32.$).to.equal(0);
     })
@@ -116,24 +113,23 @@ describe('Feature: abort-signal', function() {
       });
       env.defineStructure(signalStructure);
       env.endStructure(signalStructure);
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const controller = new AbortController();
       const { signal } = controller;
       const int32 = env.createSignalArray(args, signalStructure, signal);
       expect(int32.$).to.equal(0);
+      const context = env.startContext();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
         env.allocateExternMemory = function(len, align) {
           return 0x1000;
         };
-        env.createShadow(args[CONTEXT], int32);
       }
+      env.getTargetAddress(context, int32, null, true);
       controller.abort();
-      if (process.env.TARGET === 'wasm') {
-        env.updateShadowTargets(args[CONTEXT]);
-      }
+      const shadowDV = env.findShadowView(int32[MEMORY]);
+      expect(shadowDV.getInt32(0, true)).to.equal(1);
+      env.updateShadowTargets(context);
       expect(int32.$).to.equal(1);
     })
     it('should create an Int32 object with value 1 when abort signal has already fired', async function() {
@@ -185,9 +181,7 @@ describe('Feature: abort-signal', function() {
       });
       env.defineStructure(signalStructure);
       env.endStructure(signalStructure);
-      const args = {
-        [CONTEXT]: new CallContext(),
-      };
+      const args = {};
       const controller = new AbortController();
       const { signal } = controller;
       controller.abort();
