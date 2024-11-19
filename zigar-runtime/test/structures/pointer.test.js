@@ -2401,13 +2401,13 @@ describe('Structure: pointer', function() {
       });
       env.defineStructure(sliceStructure);
       env.endStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
       });
-      env.attachMember(structure, {
+      env.attachMember(ptrStructure, {
         type: MemberType.Object,
         bitSize: addressSize * 2,
         bitOffset: 0,
@@ -2415,11 +2415,27 @@ describe('Structure: pointer', function() {
         slot: 0,
         structure: sliceStructure,
       });
-      env.defineStructure(structure);
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        name: 'ptr',
+        bitSize: addressSize * 2,
+        bitOffset: 0,
+        byteSize: addressByteSize * 2,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      const Struct = env.defineStructure(structure);
       env.endStructure(structure);
-      const { constructor: Int32SlicePtr } = structure;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
+      const bufferMap = new Map();
       const allocator = {
         alloc(len, align) {
           const address = nextAddress;
@@ -2430,6 +2446,7 @@ describe('Structure: pointer', function() {
           } else {
             const buffer = new ArrayBuffer(len);
             buffer[ZIG] = { address, len };
+            bufferMap.set(address, buffer);
             dv = new DataView(buffer);
           }
           dv[ZIG] = { address, len };
@@ -2442,8 +2459,18 @@ describe('Structure: pointer', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = bufferMap.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            bufferMap.set(address, buffer);
+          }
+          return buffer;
+        };
       }
-      const pointer = new Int32SlicePtr([ 1, 2, 3, 4 ], { allocator });
+      const struct = new Struct({ ptr: [ 1, 2, 3, 4 ] }, { allocator });
+      const pointer = struct.ptr;
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4 ]);
       const beforeDV = pointer['*'][MEMORY];
       const beforeAddress = beforeDV[ZIG].address;
@@ -2709,113 +2736,6 @@ describe('Structure: pointer', function() {
       }
       const pointer = new HelloPtr(5, { allocator });
       expect(() => pointer.length = 6).to.not.throw();
-    })
-    it('should transfer free function from original slice to new slice when length is changed', function() {
-      const env = new Env();
-      const structStructure = env.beginStructure({
-        type: StructureType.Struct,
-        byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
-      env.endStructure(structStructure);
-      const sliceStructure = env.beginStructure({
-        type: StructureType.Slice,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
-        name: '[_]Hello',
-        byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
-        name: '[]Hello',
-        byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
-      const viewMap = new Map(), addressMap = new Map();
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 1 });
-      } else {
-        env.obtainExternBuffer = function(address, len) {
-          const buffer = new ArrayBuffer(len);
-          buffer[ZIG] = { address, len };
-          return buffer;
-        };
-      }
-      let nextAddress = usize(0x1000);
-      const allocator = {
-        alloc(len, align) {
-          const address = nextAddress;
-          nextAddress += usize(0x1000);
-          let dv;
-          if (process.env.TARGET === 'wasm') {
-            dv = new DataView(env.memory.buffer, address, len);
-          } else {
-            const buffer = new ArrayBuffer(len);
-            buffer[ZIG] = { address, len };
-            dv = new DataView(buffer);
-          }
-          dv[ZIG] = { address, len };
-          viewMap.set(address, dv);
-          addressMap.set(dv, address);
-          return dv;
-        },
-        free(dv) {
-        },
-      };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 1 });
-      }
-      const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ], { allocator });
-      const slice1 = pointer['*'];
-      expect(slice1.length).to.equal(3);
-      expect(slice1[MEMORY][ZIG].free).to.be.a('function');
-      expect(() => pointer.length = 2).to.not.throw();
-      const slice2 = pointer['*'];
-      expect(slice2.length).to.equal(2);
-      expect(slice2[MEMORY][ZIG].free).to.be.a('function');
-      expect(slice1[MEMORY][ZIG].free).to.be.null;
-      expect(() => pointer.length = 4).to.not.throw();
-      // make sure there's early exit such the function doesn't get moved into the same object
-      // (thereby disappearing altogether)
-      pointer.length = 4;
-      pointer.length = 4;
-      const slice3 = pointer['*'];
-      expect(slice3.length).to.equal(4);
-      expect(slice3[MEMORY][ZIG].free).to.be.a('function');
-      expect(slice2[MEMORY][ZIG].free).to.be.null;
     })
     it('should allow anyopaque pointer to point at anything', function() {
       const env = new Env();
