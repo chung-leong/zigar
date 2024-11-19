@@ -1,6 +1,6 @@
 import { Action, CallResult, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, SLOTS, THROWING } from '../symbols.js';
+import { MEMORY, SLOTS, THROWING, VISIT } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -41,6 +41,12 @@ export default mixin({
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
+        if (VISIT in argStruct) {
+          const context = this.startContext();
+          this.updatePointerTargets(context, argStruct, true);
+          this.updateShadowTargets(context);
+          this.endContext();
+        }
         const onError = (err) => {
           if (ArgStruct[THROWING] && err instanceof Error) {
             // see if the error is part of the error set of the error union returned by function

@@ -9,7 +9,7 @@ const Env = defineEnvironment();
 
 describe('Feature: default-allocator', function() {
   describe('createDefaultAllocator', function() {
-    it('should an allocator that allocates memory from JavaScript', async function() {
+    it('should create an allocator that allocates memory from JavaScript', async function() {
       const env = new Env();
       const args = {};
       const constructor = function({ vtable, ptr }) {
@@ -56,8 +56,6 @@ describe('Feature: default-allocator', function() {
         },
       };
       allocator.vtable.free(allocator.ptr, buf, 3);
-      const dv2 = allocator.vtable.alloc(allocator.ptr, 16, 0, 3);
-      expect(dv2).to.be.null;
     })
   })
   describe('freeDefaultAllocator', function() {

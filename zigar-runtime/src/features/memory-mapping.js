@@ -324,7 +324,7 @@ export default mixin({
           }
         }
         if (!cluster.misaligned) {
-          return adjustAddress(cluster.address, dv.byteOffset);
+          return adjustAddress(cluster.address, targetDV.byteOffset);
         }
       } else {
         const align = target.constructor[ALIGN];

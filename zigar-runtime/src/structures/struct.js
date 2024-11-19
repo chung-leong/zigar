@@ -17,14 +17,14 @@ export default mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
-        propApplier.call(this, arg);
+        propApplier.call(this, arg, allocator);
       } else if ((typeof(arg) === 'number' || typeof(arg) === 'bigint') && backingInt) {
         backingInt.set.call(this, arg);
       } else if (arg !== undefined) {

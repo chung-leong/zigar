@@ -51,7 +51,7 @@ export default mixin({
     allocateHostMemory(len, align) {
       const targetDV = this.allocateJSMemory(len, align);
       const address = this.getViewAddress(targetDV);
-      this.registerMemory(address, len, align, true, targetDV, shadowDV);
+      this.registerMemory(address, len, align, true, targetDV);
       // pretend that the view holds Zig memory to get around code that prevents pointers
       // in Zig memory to point at JS memory
       targetDV[ZIG] = { address, len };

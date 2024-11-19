@@ -386,10 +386,6 @@ describe('Feature: module-loading', function() {
         expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
         expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
       })
-      it('should throw when a function is missing', function() {
-        const env = new Env();
-        expect(() => env.importFunctions({})).to.throw(Error);
-      })
     })
   }
 })

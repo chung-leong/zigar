@@ -28,7 +28,7 @@ export default mixin({
       this[VISIT]?.('reset', 0);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -42,7 +42,7 @@ export default mixin({
       } else if (arg !== undefined || isValueVoid) {
         try {
           // call setValue() first, in case it throws
-          setValue.call(this, arg);
+          setValue.call(this, arg, allocator);
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {

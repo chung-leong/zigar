@@ -1,7 +1,7 @@
 import { MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly } from '../errors.js';
-import { SLOTS, VIVIFICATE } from '../symbols.js';
+import { INITIALIZE, SLOTS, VIVIFICATE } from '../symbols.js';
 import { bindSlot } from './all.js';
 
 export default mixin({
@@ -23,8 +23,8 @@ function getObject(slot) {
   return object;
 }
 
-function setValue(slot, value) {
+function setValue(slot, value, allocator) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  object.$ = value;
+  object[INITIALIZE](value, allocator);
 }
 

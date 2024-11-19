@@ -21,7 +21,7 @@ export default mixin({
       }
     };
     const isValueVoid = valueMember.type === MemberType.Void;
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -37,10 +37,10 @@ export default mixin({
         this[VISIT]?.('reset');
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
-        setValue.call(this, arg);
+        setValue.call(this, arg, allocator);
         if (flags & OptionalFlag.HasSelector || flags & StructureFlag.HasPointer) {
           // since setValue() wouldn't write address into memory when the pointer is in
-          // relocatable memory, we need to use setPresent() in order to write something
+          // JS memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
           setPresent.call(this, 1);
         }

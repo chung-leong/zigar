@@ -40,7 +40,7 @@ export default mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -56,7 +56,7 @@ export default mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
-        if (propApplier.call(this, arg) === 0) {
+        if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }
       } else if (arg !== undefined) {

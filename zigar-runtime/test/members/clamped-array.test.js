@@ -76,6 +76,8 @@ describe('Member: clampedArray', function() {
       expect(array.clampedArray[3]).to.equal(4);
       array.clampedArray[3] = 1024;
       expect(array.clampedArray[3]).to.equal(255);
+      array.clampedArray = new Uint8ClampedArray([ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 ]);
+      expect(array.clampedArray[3]).to.equal(0);
     })
     it('should throw when clampedArray prop is given incorrect data', function() {
       const env = new Env();
@@ -94,7 +96,7 @@ describe('Member: clampedArray', function() {
       env.finalizeStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray | ArrayFlag.IsClampedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -108,7 +110,7 @@ describe('Member: clampedArray', function() {
       const Array = env.defineStructure(structure);
       env.finalizeStructure(structure);
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
-      expect(() => array.typedArray = new Uint8Array(12)).to.throw(TypeError);
+      expect(() => array.clampedArray = new Uint8Array(12)).to.throw(TypeError);
     })
   })
 })

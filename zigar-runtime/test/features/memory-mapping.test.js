@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
+import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
 import { ALIGN, COPY, MEMORY, ZIG } from '../../src/symbols.js';
 import { adjustAddress, defineProperty } from '../../src/utils.js';
@@ -8,6 +9,48 @@ import { usize } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: memory-mapping', function() {
+  describe('startContext', function() {
+    it('should create a new context', function() {
+      const env = new Env();
+      const context = env.startContext();
+      expect(context).to.be.an('object');
+      expect(context.shadowList).to.be.an('array');
+    })
+  })
+  describe('endContext', function() {
+    it('should decrement context count', function() {
+      const env = new Env();
+      const context = env.startContext();
+      expect(env.contextCount).to.equal(1);
+      env.endContext();
+      expect(env.contextCount).to.equal(0);
+    })
+    it('should free shadow memory when context count reaches zero', function() {
+      const env = new Env();
+      const freed = [];
+      env.freeExternMemory = function(type, address, len, align) {
+        freed.push(address);
+      };
+      const context1 = env.startContext();
+      const address1 = usize(0x1000);
+      const len = 32;
+      const dv1 = new DataView(new ArrayBuffer(len));
+      const shadowDV = new DataView(new ArrayBuffer(len));
+      shadowDV[ZIG] = { address: address1, len, align: 4, type: MemoryType.Scratch };
+      env.registerMemory(address1, len, 4, true, dv1, shadowDV);
+      const context2 = env.startContext();
+      const address2 = usize(0x2000);
+      const dv2 = new DataView(new ArrayBuffer(len));
+      env.registerMemory(address2, len, 4, false, dv2);
+      env.endContext();
+      expect(env.memoryList).to.have.lengthOf(2);
+      env.endContext();
+      expect(env.memoryList).to.have.lengthOf(0);
+      if (process.env.TARGET === 'wasm') {
+        expect(freed).to.contain(address1);
+      }
+    })
+  })
   describe('getShadowAddress', function() {
     it('should create a shadow of an object and return the its address', function() {
       const env = new Env();
@@ -330,24 +373,56 @@ describe('Feature: memory-mapping', function() {
     })
   })
   describe('registerMemory', function() {
-    it('should return address of data view', function() {
+    it('should return memory entry', function() {
       const env = new Env();
-      const dv = new DataView(new ArrayBuffer(16), 8, 8);
       const address = usize(0x1000);
-      const context = env.startContext();
-      const entry = env.registerMemory(context, dv);
-      expect(address).to.equal(usize(0x1000 + 8));
+      const len = 8;
+      const align = 4;
+      const dv = new DataView(new ArrayBuffer(len + 8), 8, len);
+      const entry = env.registerMemory(address, len, align, false, dv);
+      expect(entry).to.be.an('object');
+      expect(entry.address).to.equal(address);
+      expect(entry.len).to.equal(len);
+      expect(entry.align).to.equal(align);
+      expect(entry.writable).to.be.false;
+      expect(entry.targetDV).to.equal(dv);
+      expect(entry.shadowDV).to.be.undefined;
     })
     it('should return address as number when address is number', function() {
+    })
+    it('should set access flag of existing entry', function() {
       const env = new Env();
-      env.getBufferAddress = () => usize(0x1000);
-      const dv = new DataView(new ArrayBuffer(16), 8, 8);
-      const context = env.startContext();
-      const address = env.registerMemory(context, dv);
-      expect(address).to.equal(usize(0x1000 + 8));
+      const address = usize(0x1000);
+      const len = 8;
+      const align = 4;
+      const dv = new DataView(new ArrayBuffer(len + 8), 8, len);
+      const entry = env.registerMemory(address, len, align, false, dv);
+      expect(entry).to.be.an('object');
+      expect(entry.address).to.equal(address);
+      expect(entry.len).to.equal(len);
+      expect(entry.align).to.equal(align);
+      expect(entry.writable).to.be.false;
+      expect(entry.targetDV).to.equal(dv);
+      expect(entry.shadowDV).to.be.undefined;
+      const after = env.registerMemory(address, len, align, true, dv);
+      expect(after).to.equal(entry);
+      expect(entry.writable).to.be.true;
     })
   })
   describe('unregisterMemory', function() {
+    it('should remove memory entry', function() {
+      const env = new Env();
+      const address = usize(0x1000);
+      const len = 8;
+      const align = 4;
+      const dv = new DataView(new ArrayBuffer(len + 8), 8, len);
+      const entry = env.registerMemory(address, len, align, false, dv);
+      expect(entry).to.be.an('object');
+      expect(entry.address).to.equal(address);
+      const after = env.unregisterMemory(address, len);
+      expect(after).to.equal(entry);
+      expect(env.memoryList).to.have.lengthOf(0);
+    })
   })
   describe('findMemory', function() {
     it('should find previously imported buffer', function() {
@@ -380,8 +455,7 @@ describe('Feature: memory-mapping', function() {
       const dv1 = new DataView(new ArrayBuffer(len));
       const context = env.startContext();
       env.registerMemory(address, len, 4, true, dv1);
-      debugger;
-      const dv2 = env.findMemory(context, address + 4, len / 2, undefined);
+      const dv2 = env.findMemory(context, adjustAddress(address, 4), len / 2, undefined);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(dv1.byteOffset + 4);
       expect(dv2.byteLength).to.equal(dv1.byteLength - 4);
@@ -435,11 +509,23 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return empty view when address is invalid and count is 0', function() {
       const env = new Env();
-      env.obtainZigView = (address, len) => new DataView(new SharedArrayBuffer(len));
+      env.obtainZigView = (address, len) => new DataView(new ArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const context = env.startContext();
       const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
       expect(dv.byteLength).to.equal(0);
+    })
+    it('should add entry to list of shadows', function() {
+      const env = new Env();
+      const address = usize(0x1000);
+      const len = 32;
+      const dv1 = new DataView(new ArrayBuffer(len));
+      const shadowDV = new DataView(new ArrayBuffer(len));
+      const context = env.startContext();
+      const entry = env.registerMemory(address, len, 4, true, dv1, shadowDV);
+      const dv2 = env.findMemory(context, adjustAddress(address, 1), 1, 16);
+      expect(dv2.buffer).to.equal(dv1.buffer);
+      expect(context.shadowList).to.contain(entry);
     })
   })
   describe('getViewAddress', function() {
@@ -495,15 +581,6 @@ describe('Feature: memory-mapping', function() {
       })
     })
     describe('getTargetAddress', function() {
-      it('should return false when object is located in relocatable memory', function() {
-        const env = new Env();
-        const object = {
-          [MEMORY]: env.allocateMemory(16, 8, false)
-        };
-        const context = env.startContext();
-        const address = env.getTargetAddress(context, object);
-        expect(address).to.be.undefined;
-      })
       it('should return zero when object has no bytes', function() {
         const env = new Env();
         const object = {
@@ -522,6 +599,19 @@ describe('Feature: memory-mapping', function() {
         const context = env.startContext();
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(256);
+      })
+      it('should create when object is located misaligned position in JS memory', function() {
+        const env = new Env();
+        const object = {
+          [MEMORY]: env.allocateMemory(16, 8, false)
+        };
+        env.allocateExternMemory = function(type, address, len, align) {
+          return usize(0x1234);
+        };
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        const context = env.startContext();
+        const address = env.getTargetAddress(context, object);
+        expect(address).to.equal(usize(0x1234));
       })
     })
   } else if (process.env.TARGET === 'node') {
@@ -553,18 +643,23 @@ describe('Feature: memory-mapping', function() {
         const address = env.getTargetAddress(context, object);
         expect(address).to.equal(usize(0x1000));
       })
-      it('should return undefined when address is misaligned', function() {
+      it('should return address of a shadow buffer when address is misaligned', function() {
         const env = new Env();
-        env.getBufferAddress = function(buffer) {
-          return usize(0x1004);
+        env.getBufferAddress = function(arg) {
+          if (arg === buffer) {
+            return usize(0x1004);
+          } else {
+            return usize(0x1000);
+          }
         };
         const Type = function() {};
         Type[ALIGN] = 8;
         const object = new Type();
-        object[MEMORY] = new DataView(new ArrayBuffer(64));
+        const buffer = new ArrayBuffer(64);
+        object[MEMORY] = new DataView(buffer);
         const context = env.startContext();
         const address = env.getTargetAddress(context, object);
-        expect(address).to.be.undefined;
+        expect(address).to.equal(usize(0x1000));
       })
       it('should return address when cluster is correctly aligned', function() {
         const env = new Env();
@@ -591,32 +686,6 @@ describe('Feature: memory-mapping', function() {
         expect(cluster.misaligned).to.be.false;
         const address2 = env.getTargetAddress(context, object2, cluster);
         expect(address2).to.equal(usize(0x1010));
-      })
-      it('should return false when cluster is misaligned', function() {
-        const env = new Env();
-        env.getBufferAddress = function(buffer) {
-          return usize(0x1000);
-        };
-        const Type = function() {};
-        Type[ALIGN] = 8;
-        const object1 = new Type();
-        const object2 = new Type();
-        const buffer = new ArrayBuffer(64);
-        object1[MEMORY] = new DataView(buffer, 2, 32);
-        object2[MEMORY] = new DataView(buffer, 10, 8);
-        const cluster = {
-          targets: [ object1, object2 ],
-          start: 2,
-          end: 32,
-          address: undefined,
-          misaligned: undefined,
-        };
-        const context = env.startContext();
-        const address1 = env.getTargetAddress(context, object1, cluster);
-        expect(address1).to.be.undefined;
-        expect(cluster.misaligned).to.be.true;
-        const address2 = env.getTargetAddress(context, object2, cluster);
-        expect(address2).to.be.undefined;
       })
     })
   }

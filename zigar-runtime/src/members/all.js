@@ -41,8 +41,8 @@ export function bindSlot(slot, { get, set }) {
         return get.call(this, slot);
       },
       set: (set)
-      ? function(arg) {
-          return set.call(this, slot, arg);
+      ? function(arg, allocator) {
+          return set.call(this, slot, arg, allocator);
         }
       : undefined,
     };

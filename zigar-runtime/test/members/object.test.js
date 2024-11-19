@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { SLOTS } from '../../src/symbols.js';
+import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -22,11 +22,11 @@ describe('Member: object', function() {
       const struct = defineProperties({
         value: 1,
       }, {
-        $: {
-          set(arg) {
+        [INITIALIZE]: {
+          value(arg) {
             Object.assign(this, arg);
           }
-        }
+        },
       });
       const object = {
         [SLOTS]: {

@@ -26,7 +26,7 @@ export default mixin({
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -43,7 +43,7 @@ export default mixin({
           }
           let i = 0;
           for (const value of arg) {
-            set.call(this, i++, value);
+            set.call(this, i++, value, allocator);
           }
         } else if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {

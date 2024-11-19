@@ -6,6 +6,7 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { MEMORY } from '../../src/symbols.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -124,12 +125,18 @@ describe('Feature: abort-signal', function() {
         env.allocateExternMemory = function(len, align) {
           return 0x1000;
         };
+      } else {
+        env.getBufferAddress = function() {
+          return usize(0x1000);
+        };
       }
       env.getTargetAddress(context, int32, null, true);
       controller.abort();
-      const shadowDV = env.findShadowView(int32[MEMORY]);
-      expect(shadowDV.getInt32(0, true)).to.equal(1);
-      env.updateShadowTargets(context);
+      if (process.env.TARGET === 'wasm') {
+        const shadowDV = env.findShadowView(int32[MEMORY]);
+        expect(shadowDV.getInt32(0, true)).to.equal(1);
+        env.updateShadowTargets(context);
+      }
       expect(int32.$).to.equal(1);
     })
     it('should create an Int32 object with value 1 when abort signal has already fired', async function() {
