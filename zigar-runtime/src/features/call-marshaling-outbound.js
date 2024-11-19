@@ -89,7 +89,7 @@ export default mixin({
     }
     // return address of shadow for argumnet struct
     const argAddress = (process.env.TARGET === 'wasm')
-    ? this.getShadowAddress(context, args)
+    ? this.getShadowAddress(context, args, null, true)
     : this.getViewAddress(args[MEMORY]);
     // get address of attributes if function variadic
     const attrAddress = (process.env.TARGET === 'wasm')
