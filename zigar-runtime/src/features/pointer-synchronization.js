@@ -25,7 +25,7 @@ export default mixin({
             const other = bufferMap.get(dv.buffer);
             if (other) {
               const array = Array.isArray(other) ? other : [ other ];
-              const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
+              const index = findSortedIndex(array, dv.byteOffset, e => e.target[MEMORY].byteOffset);
               array.splice(index, 0, entry);
               if (!Array.isArray(other)) {
                 bufferMap.set(dv.buffer, array);

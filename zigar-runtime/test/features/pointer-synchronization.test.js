@@ -100,10 +100,10 @@ describe('Feature: pointer-synchronization', function() {
       const object1 = new Int32(123);
       const object2 = new Int32(123);
       const args = new ArgStruct([ object1, object2, object1, object1 ]);
-      env.getTargetAddress = function(context, target, cluster) {
-        // flag object1 as misaligned
+      env.getTargetAddress = function(context, target, cluster, writable) {
+        // treat object1 as misaligned
         if (cluster) {
-          return;
+          return env.getShadowAddress(context, target, cluster, writable);
         } else {
           return usize(0x1000);
         }
@@ -529,8 +529,16 @@ describe('Feature: pointer-synchronization', function() {
       const object4 = new Test(new DataView(buffer2, 8, 8));
       const object5 = new Test(new DataView(buffer1, 0, 12));
       const clusters = env.findTargetClusters([
-        [ object1, object2, object5 ],
-        [ object3, object4 ],
+        [
+          { target: object1, writable: false },
+          { target: object2, writable: false },
+          { target: object5, writable: false },
+
+        ],
+        [
+          { target: object3, writable: false },
+          { target: object4, writable: false },
+        ],
       ]);
       expect(clusters).to.have.lengthOf(1);
       expect(clusters[0].targets).to.contain(object1).and.contain(object2);
