@@ -3,7 +3,7 @@ import 'mocha-skip-if';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { MEMORY, ZIG } from '../../src/symbols.js';
+import { MEMORY, TYPE, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -101,6 +101,16 @@ describe('Feature: allocator-methods', function() {
       expect(dv3.getFloat64(8 * 7, true)).to.equal(8);
       const dv4 = struct.dupe(new ArrayBuffer(17));
       expect(dv4.byteLength).to.equal(17);
+      const Pointer = function() {
+        this['*'] = {
+          [MEMORY]: new DataView(new ArrayBuffer(20), 2),
+        };
+        this[MEMORY] = new DataView(new ArrayBuffer(8));
+      };
+      Pointer[TYPE] = StructureType.Pointer;
+      const ptr = new Pointer();
+      const dv5 = struct.dupe(ptr);
+      expect(dv5.byteLength).to.equal(18);
       expect(() => struct.dupe(1)).to.throw(TypeError);
       expect(() => struct.dupe({})).to.throw(TypeError);
       const structure = env.beginStructure({

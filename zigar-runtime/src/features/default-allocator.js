@@ -33,32 +33,28 @@ export default mixin({
       this.freeZigMemory(dv);
     }
   },
-  ...(process.env.TARGET === 'wasm' ? {
-    allocateHostMemory(len, align) {
-      const targetDV = this.allocateJSMemory(len, align);
+  allocateHostMemory(len, align) {
+    const targetDV = this.allocateJSMemory(len, align);
+    if (process.env.TARGET === 'wasm') {
       const shadowDV = this.allocateShadowMemory(len, align);
       const address = this.getViewAddress(shadowDV);
       this.registerMemory(address, len, align, true, targetDV, shadowDV);
       return shadowDV;
-    },
-    freeHostMemory(address, len, align) {
-      const entry = this.unregisterMemory(context, address, len);
-      if (entry) {
-        this.freeShadowMemory(entry.shadowDV);
-      }
-    },
-  } : process.env.TARGET === 'node' ? {
-    allocateHostMemory(len, align) {
-      const targetDV = this.allocateJSMemory(len, align);
+    } else {
       const address = this.getViewAddress(targetDV);
       this.registerMemory(address, len, align, true, targetDV);
       // pretend that the view holds Zig memory to get around code that prevents pointers
       // in Zig memory to point at JS memory
       targetDV[ZIG] = { address, len };
       return targetDV;
-    },
-    freeHostMemory(len, align) {
-      // do nothing
-    },
-  } : undefined),
+    }
+  },
+  freeHostMemory(address, len, align) {
+    const entry = this.unregisterMemory(address, len);
+    if (process.env.TARGET === 'wasm') {
+      if (entry) {
+        this.freeShadowMemory(entry.shadowDV);
+      }
+    }
+  },
 });

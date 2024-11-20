@@ -645,13 +645,15 @@ describe('Feature: memory-mapping', function() {
       })
       it('should return address of a shadow buffer when address is misaligned', function() {
         const env = new Env();
-        env.getBufferAddress = function(arg) {
-          if (arg === buffer) {
-            return usize(0x1004);
-          } else {
-            return usize(0x1000);
-          }
-        };
+        if (process.env.TARGET === 'node') {
+          env.getBufferAddress = function(arg) {
+            if (arg === buffer) {
+              return usize(0x1004);
+            } else {
+              return usize(0x1000);
+            }
+          };
+        }
         const Type = function() {};
         Type[ALIGN] = 8;
         const object = new Type();
@@ -687,6 +689,39 @@ describe('Feature: memory-mapping', function() {
         const address2 = env.getTargetAddress(context, object2, cluster);
         expect(address2).to.equal(usize(0x1010));
       })
+      it('should return address of shadow buffer when cluster is misaligned', function() {
+        const env = new Env();
+        if (process.env.TARGET === 'node') {
+          env.getBufferAddress = function(arg) {
+            if (arg === buffer) {
+              return usize(0x1005);
+            } else {
+              return usize(0x2000);
+            }
+          };
+        }
+        const Type = function() {};
+        Type[ALIGN] = 8;
+        const object1 = new Type();
+        const object2 = new Type();
+        const buffer = new ArrayBuffer(64);
+        object1[MEMORY] = new DataView(buffer, 2, 32);
+        object2[MEMORY] = new DataView(buffer, 10, 8);
+        const cluster = {
+          targets: [ object1, object2 ],
+          start: 2,
+          end: 32,
+          address: undefined,
+          misaligned: undefined,
+        };
+        const context = env.startContext();
+        const address1 = env.getTargetAddress(context, object1, cluster);
+        expect(address1).to.equal(usize(0x2000));
+        expect(cluster.misaligned).to.be.true;
+        const address2 = env.getTargetAddress(context, object2, cluster);
+        expect(address2).to.equal(usize(0x2008));
+      })
+
     })
   }
 })

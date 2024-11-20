@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
+import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
 import { ALIGN, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
@@ -100,6 +101,47 @@ describe('Feature: default-allocator', function() {
       env.createDefaultAllocator(args, structure);
       env.freeDefaultAllocator();
       expect(freed).to.eql({ type: 0, address: usize(0x1000), len: 24, align: 8 });
+    })
+  })
+  describe('allocateHostMemory', function() {
+    it('should allocate JS memory', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.allocateExternMemory = function(type, len, align) {
+          return usize(0x1000);
+        };
+      } else {
+        env.getBufferAddress = function(buffer) {
+          return usize(0x1000);
+        };
+      }
+      const dv = env.allocateHostMemory(40, 4);
+      expect(dv).to.be.a('DataView');
+    })
+  })
+  describe('freeHostMemory', function() {
+    it('should release JS memory', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.allocateExternMemory = function(type, len, align) {
+          return usize(0x1000);
+        };
+        env.freeExternMemory = function(type, address, len, align) {
+          expect(type).to.equal(MemoryType.Scratch);
+          expect(address).to.equal(usize(0x1000));
+        };
+      } else {
+        env.getBufferAddress = function(buffer) {
+          return usize(0x1000);
+        };
+      }
+      const dv = env.allocateHostMemory(40, 4);
+      expect(env.memoryList).to.have.lengthOf(1);
+      const address = env.getViewAddress(dv);
+      env.freeHostMemory(address, 40, 4);
+      expect(env.memoryList).to.have.lengthOf(0);
     })
   })
 })

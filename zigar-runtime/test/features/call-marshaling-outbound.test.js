@@ -80,7 +80,7 @@ describe('Feature: call-marshaling-outbound', function() {
       };
       self[MEMORY] = new DataView(new ArrayBuffer(0));
       self[MEMORY][ZIG] = { address: usize(0x2008) };
-      env.allocateExternMemory = function(address, len) {
+      env.allocateExternMemory = function(type, len, align) {
         return usize(0x4000);
       };
       env.freeExternMemory = function() {

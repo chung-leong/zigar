@@ -611,7 +611,7 @@ describe('Feature: pointer-synchronization', function() {
       expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
     })
-    it('should ignore const pointers', function() {
+    it('should ignore argument pointers', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -630,7 +630,6 @@ describe('Feature: pointer-synchronization', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*i32',
         byteSize: 8,
       });
       env.attachMember(ptrStructure, {
@@ -673,6 +672,66 @@ describe('Feature: pointer-synchronization', function() {
       const context = env.startContext();
       env.updatePointerTargets(context, object, true);
       expect(object[0]['*']).to.equal(123);
+    })
+    it('should flag target of const pointer as immutable', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32 = env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
+        byteSize: 8,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        byteSize: 8,
+        length: 1,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Bool,
+        bitOffset: 0,
+        bitSize: 1,
+        byteSize: 8,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      const Hello = env.defineStructure(structure);
+      env.endStructure(structure);
+      const object = new Hello([ new Int32(123) ]);
+      const context = env.startContext();
+      env.updatePointerTargets(context, object, true);
     })
     it('should clear slot when pointer has invalid address', function() {
       const env = new Env();

@@ -171,12 +171,6 @@ export default mixin({
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
       : thisEnv.obtainZigView(zig.address, byteLength);
-      const free = zig?.free;
-      if (free) {
-        // transfer free function to new view
-        newDV[ZIG].free = free;
-        zig.free = null;
-      }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);
