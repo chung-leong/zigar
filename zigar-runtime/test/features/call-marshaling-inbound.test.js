@@ -355,6 +355,87 @@ describe('Feature: call-marshaling-inbound', function() {
     })
   })
   describe('defineArgIterator', function() {
+    it('should return descriptor for iterator that makes copies of objects in Zig memory', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: 4,
+      });
+      env.attachMember(structStructure, {
+        name: 'index',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject,
+        byteSize: 12,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: structStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      let buffer;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
+      const dv = env.obtainExternView(usize(0x1000), 12);
+      dv.setInt32(4, 1234, true);
+      dv.setInt32(8, 5678, true);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[0]).to.be.an('object');
+      expect(args[1]).to.be.a('number');
+      expect(args[0].index).to.equal(1234);
+      expect(args[0][MEMORY]).to.not.have.property(ZIG);
+    })
     it('should return descriptor for iterator that places allocator into options object', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -420,8 +501,8 @@ describe('Feature: call-marshaling-inbound', function() {
       const ArgStruct = env.defineStructure(argStructure);
       env.endStructure(argStructure);
       const dv = new DataView(new ArrayBuffer(12));
-      dv.setInt32(4, 1234);
-      dv.setInt32(8, 5678);
+      dv.setInt32(4, 1234, true);
+      dv.setInt32(8, 5678, true);
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
       expect(args[1]).to.be.an('object').with.property('allocator');

@@ -1,6 +1,6 @@
-import { Action, CallResult, StructFlag, StructureType } from '../constants.js';
+import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, SLOTS, THROWING, VISIT } from '../symbols.js';
+import { MEMORY, SLOTS, THROWING, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -104,10 +104,10 @@ export default mixin({
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
         const args = [];
-        for (const [ srcIndex, { structure } ] of members.entries()) {
+        for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
           try {
-            const arg = this[srcIndex];
+            let arg = this[srcIndex];
             let optName, opt;
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
@@ -130,6 +130,10 @@ export default mixin({
               }
             } else {
               // just a regular argument
+              if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+                // create copy in JS memory
+                arg = new arg.constructor(arg);
+              }
               args.push(arg);
             }
           } catch (err) {
