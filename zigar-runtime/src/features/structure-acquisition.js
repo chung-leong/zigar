@@ -1,12 +1,9 @@
 import {
-  CONST_TARGET,
-  COPY, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
+  CONST_TARGET, COPY, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG,
 } from '../../src/symbols.js';
 import {
-  ErrorSetFlag, ExportFlag, MemberType,
-  ModuleAttribute,
-  PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag,
-  structureNames, StructureType
+  ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
+  StructureFlag, structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, defineProperty, findObjects } from '../utils.js';
@@ -276,7 +273,7 @@ export default mixin({
     return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
-    return `E${this.structureCounters.enum++}`;
+    return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
     const { instance: { members: [ payload ] } } = s;
@@ -298,7 +295,7 @@ export default mixin({
         prefix = '[*]';
       }
     }
-    const sentinel = target.constructor[SENTINEL];
+    const sentinel = target.structure.constructor[SENTINEL];
     if (sentinel) {
       prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
     }
@@ -324,7 +321,7 @@ export default mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}) ${rvName})`;
   },
   getVariadicStructName(s) {
     const { instance: { members } } = s;
@@ -332,7 +329,7 @@ export default mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
     const { instance: { members: [ args ] } } = s;

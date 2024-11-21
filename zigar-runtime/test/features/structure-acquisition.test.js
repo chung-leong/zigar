@@ -1,11 +1,12 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ExportFlag, MemberType, ModuleAttribute, PointerFlag, StructureFlag, StructureType,
+  ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
+  StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, MEMORY, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
 import { addressByteSize, addressSize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -489,6 +490,603 @@ describe('Feature: structure-acquisition', function() {
       env.defineStructure(structure);
       env.endStructure(structure);
       expect(env.hasMethods()).to.be.true;
+    })
+  })
+  describe('getPrimitiveName', function() {
+    it('should return correct name for bool', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Bool,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('bool');
+    })
+    it('should return correct name for int', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('i32');
+    })
+    it('should return correct name for uint', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('u32');
+    })
+    it('should return correct name for isize', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        flags: PrimitiveFlag.IsSize,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('isize');
+    })
+    it('should return correct name for usize', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        flags: PrimitiveFlag.IsSize,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('usize');
+    })
+    it('should return correct name for float', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitSize: 64,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('f64');
+    })
+    it('should return correct name for void', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Void,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('void');
+    })
+    it('should return correct name for enum literal', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Literal,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('enum_literal');
+    })
+    it('should return correct name for null', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Null,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('null');
+    })
+    it('should return correct name for undefined', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Undefined,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('undefined');
+    })
+    it('should return correct name for type', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Type,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('type');
+    })
+    it('should return correct name for comptime', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('comptime');
+    })
+    it('should return correct name for unsupported', function() {
+      const env = new Env();
+      const name = env.getPrimitiveName({
+        type: StructureType.Primitive,
+        instance: {
+          members: [
+            {
+              type: MemberType.Unsupported,
+            }
+          ],
+        },
+        static: {},
+      });
+      expect(name).to.equal('unknown');
+    })
+  })
+  describe('getArrayName', function() {
+    it('should return correct name for array', function() {
+      const env = new Env();
+      const name = env.getArrayName({
+        type: StructureType.Array,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32'}
+            }
+          ],
+        },
+        length: 4
+      });
+      expect(name).to.equal('[4]i32');
+    })
+  })
+  describe('getStructName', function() {
+    it('should return correct name for array', function() {
+      const env = new Env();
+      const name = env.getStructName({
+        type: StructureType.Struct,
+      });
+      expect(name).to.equal('S0');
+    })
+  })
+  describe('getUnionName', function() {
+    it('should return correct name for union', function() {
+      const env = new Env();
+      const name = env.getUnionName({
+        type: StructureType.Union,
+      });
+      expect(name).to.equal('U0');
+    })
+  })
+  describe('getErrorUnionName', function() {
+    it('should return correct name for error union', function() {
+      const env = new Env();
+      const name = env.getErrorUnionName({
+        type: StructureType.ErrorUnion,
+        instance: {
+          members: [
+            {
+              type: MemberType.Bool,
+              structure: { name: 'bool' },
+            },
+            {
+              type: MemberType.Object,
+              structure: { name: 'ES0'},
+            },
+          ]
+        }
+      });
+      expect(name).to.equal('ES0!bool');
+    })
+  })
+  describe('getErrorSetName', function() {
+    it('should return correct name for error set', function() {
+      const env = new Env();
+      const name = env.getErrorSetName({
+        type: StructureType.ErrorSet,
+        flags: 0,
+      });
+      expect(name).to.equal('ES0');
+    })
+    it('should return correct name for anyerror', function() {
+      const env = new Env();
+      const name = env.getErrorSetName({
+        type: StructureType.ErrorSet,
+        flags: ErrorSetFlag.IsGlobal,
+      });
+      expect(name).to.equal('anyerror');
+    })
+  })
+  describe('getEnumName', function() {
+    it('should return correct name for enum', function() {
+      const env = new Env();
+      const name = env.getEnumName({
+        type: StructureType.Enum,
+        flags: 0,
+      });
+      expect(name).to.equal('EN0');
+    })
+  })
+  describe('getOptionalName', function() {
+    it('should return correct name for optional', function() {
+      const env = new Env();
+      const name = env.getOptionalName({
+        type: StructureType.ErrorUnion,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+            {
+              type: MemberType.Bool,
+              structure: { name: 'bool'},
+            },
+          ]
+        }
+      });
+      expect(name).to.equal('?i32');
+    })
+  })
+  describe('getPointerName', function() {
+    it('should return correct name for single pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsSingle,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('*i32');
+    })
+    it('should return correct name for const single pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsSingle | PointerFlag.IsConst,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('*const i32');
+    })
+    it('should return correct name for slice pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple | PointerFlag.HasLength,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[]i32');
+    })
+    it('should return correct name for const slice pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[]const i32');
+    })
+    it('should return correct name for multiple pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[*]i32');
+    })
+    it('should return correct name for const multiple pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple | PointerFlag.IsConst,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[*]const i32');
+    })
+    it('should return correct name for C pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple | PointerFlag.IsSingle,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[*c]i32');
+    })
+    it('should return correct name for const C pointer', function() {
+      const env = new Env();
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple | PointerFlag.IsSingle | PointerFlag.IsConst,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: { name: 'i32' },
+            },
+          ],
+        }
+      });
+      expect(name).to.equal('[*c]const i32');
+    })
+    it('should return correct name for multiple pointer with sentinel', function() {
+      const env = new Env();
+      const constructor = function() {};
+      constructor[SENTINEL] = { value: 0 };
+      const name = env.getPointerName({
+        type: StructureType.Pointer,
+        flags: PointerFlag.IsMultiple,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: {
+                name: 'i32',
+                constructor,
+              },
+            },
+          ],
+        },
+      });
+      expect(name).to.equal('[*:0]i32');
+    })
+  })
+  describe('getSliceName', function() {
+    it('should return correct name for slice', function() {
+      const env = new Env();
+      const name = env.getSliceName({
+        type: StructureType.Slice,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: {
+                name: 'i32',
+              },
+            },
+          ],
+        },
+      });
+      expect(name).to.equal('[_]i32');
+    })
+  })
+  describe('getVectorName', function() {
+    it('should return correct name for vector', function() {
+      const env = new Env();
+      const name = env.getVectorName({
+        type: StructureType.Vector,
+        length: 3,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              structure: {
+                name: 'i32',
+              },
+            },
+          ],
+        },
+      });
+      expect(name).to.equal('@Vector(3, i32)');
+    })
+  })
+  describe('getOpaqueName', function() {
+    it('should return correct name for opaque', function() {
+      const env = new Env();
+      const name = env.getOpaqueName({
+        type: StructureType.Opaque,
+        instance: {},
+      });
+      expect(name).to.equal('O0');
+    })
+  })
+  describe('getArgStructName', function() {
+    it('should return correct name for arg struct', function() {
+      const env = new Env();
+      const name = env.getArgStructName({
+        type: StructureType.Opaque,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              name: 'retval',
+              structure: {
+                name: 'i32',
+              },
+            },
+            {
+              type: MemberType.Int,
+              name: '0',
+              structure: {
+                name: 'u32',
+              },
+            },
+            {
+              type: MemberType.Int,
+              name: '1',
+              structure: {
+                name: 'u32',
+              },
+            },
+          ]
+        },
+      });
+      expect(name).to.equal('Arg(fn (u32, u32) i32)');
+    })
+  })
+  describe('getVariadicStructName', function() {
+    it('should return correct name for variadic struct', function() {
+      const env = new Env();
+      const name = env.getVariadicStructName({
+        type: StructureType.Opaque,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              name: 'retval',
+              structure: {
+                name: 'i32',
+              },
+            },
+            {
+              type: MemberType.Int,
+              name: '0',
+              structure: {
+                name: 'u32',
+              },
+            },
+            {
+              type: MemberType.Int,
+              name: '1',
+              structure: {
+                name: 'u32',
+              },
+            },
+          ]
+        },
+      });
+      expect(name).to.equal('Arg(fn (u32, u32, ...) i32)');
+    })
+  })
+  describe('getFunctionName', function() {
+    it('should return correct name for function', function() {
+      const env = new Env();
+      const name = env.getFunctionName({
+        type: StructureType.Function,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: {
+                name: 'Arg(fn (u32, u32) i32)',
+              },
+            },
+          ]
+        },
+      });
+      expect(name).to.equal('fn (u32, u32) i32');
     })
   })
   describe('acquireDefaultPointers', function() {
