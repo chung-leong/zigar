@@ -591,7 +591,6 @@ describe('Feature: call-marshaling-inbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -604,25 +603,97 @@ describe('Feature: call-marshaling-inbound', function() {
       });
       env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const signalStructure = env.beginStructure({
-        type: StructureType.Struct,
-        flags: StructFlag.IsPromise,
-        byteSize: 4,
+      const voidStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 0,
+        flags: StructureFlag.HasValue,
       });
-      env.attachMember(signalStructure, {
-        name: 'index',
+      env.attachMember(voidStructure, {
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.defineStructure(voidStructure);
+      env.endStructure(voidStructure);
+      const cbArgStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        byteSize: 4,
+        length: 1,
+      })
+      env.attachMember(cbArgStructure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.attachMember(cbArgStructure, {
+        name: '0',
         type: MemberType.Int,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: {},
+        structure: intStructure,
       });
-      env.defineStructure(signalStructure);
-      env.endStructure(signalStructure);
+      env.defineStructure(cbArgStructure);
+      env.endStructure(cbArgStructure);
+      const cbStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+        length: 1,
+      })
+      env.attachMember(cbStructure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: cbArgStructure,
+        slot: 0,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(cbStructure, thunk, false);
+      const jsControllerThunk = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(cbStructure, jsControllerThunk, true);
+      env.defineStructure(cbStructure);
+      env.endStructure(cbStructure);
+      const cbPtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(cbPtrStructure, {
+        type: MemberType.Object,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: cbStructure,
+        slot: 0,
+      });
+      env.defineStructure(cbPtrStructure);
+      env.endStructure(cbPtrStructure);
+      const promiseStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsPromise,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(promiseStructure, {
+        name: 'callback',
+        type: MemberType.Object,
+        bitSize: addressByteSize * 8,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: cbPtrStructure,
+        slot: 0,
+      });
+      env.defineStructure(promiseStructure);
+      env.endStructure(promiseStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
-        byteSize: 16,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 4 + addressByteSize + 4,
         length: 1,
       });
       env.attachMember(argStructure, {
@@ -636,35 +707,46 @@ describe('Feature: call-marshaling-inbound', function() {
       env.attachMember(argStructure, {
         name: '0',
         type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: signalStructure,
+        bitSize: addressByteSize * 8,
+        bitOffset: (4) * 8,
+        byteSize: addressByteSize,
+        structure: promiseStructure,
       });
       env.attachMember(argStructure, {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: (4 + addressByteSize) * 8,
         byteSize: 4,
         structure: intStructure,
       });
-      env.attachMember(argStructure, {
-        name: '2',
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 96,
-        byteSize: 4,
-        structure: signalStructure,
-      });
       const ArgStruct = env.defineStructure(argStructure);
       env.endStructure(argStructure);
-      const dv = new DataView(new ArrayBuffer(16));
-      dv.setInt32(4, 1234);
-      dv.setInt32(8, 5678);
+
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 4 });
+      } else {
+        const bufferMap = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = bufferMap.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            bufferMap.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      if (addressByteSize === 4) {
+        dv.setInt32(4, 0x2000, true);
+        dv.setInt32(8, 1234, true);
+      } else {
+        dv.setBigInt64(4, 0x2000n, true);
+        dv.setInt32(12, 1234, true);
+      }
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
-      expect(args[1]).to.be.an('object').with.property('signal');
+      expect(args[1]).to.be.an('object').with.property('callback');
     })
     it('should return descriptor for iterator that places abort signal into options object', async function() {
       const env = new Env();
@@ -1577,4 +1659,10 @@ describe('Feature: call-marshaling-inbound', function() {
 function errorData(index) {
   const ta = new Uint16Array([ index ]);
   return new DataView(ta.buffer, 0, 2);
+}
+
+function zig(address, len = 0) {
+  const dv = new DataView(new ArrayBuffer(len));
+  dv[ZIG] = { address: usize(address), len };
+  return dv;
 }
