@@ -6,7 +6,7 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
-import { capture, captureError, delay, usize } from '../test-utils.js';
+import { addressByteSize, capture, captureError, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -666,7 +666,7 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(args).to.have.lengthOf(2);
       expect(args[1]).to.be.an('object').with.property('signal');
     })
-    it('should return descriptor for iterator that places abort signal into options object', function() {
+    it('should return descriptor for iterator that places abort signal into options object', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -683,25 +683,41 @@ describe('Feature: call-marshaling-inbound', function() {
       });
       env.defineStructure(intStructure);
       env.endStructure(intStructure);
-      const signalStructure = env.beginStructure({
-        type: StructureType.Struct,
-        flags: StructFlag.IsAbortSignal,
-        byteSize: 4,
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
       });
-      env.attachMember(signalStructure, {
-        name: 'index',
-        type: MemberType.Int,
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
         bitSize: 32,
         bitOffset: 0,
         byteSize: 4,
-        structure: {},
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const signalStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
+        byteSize: 4,
+      });
+      env.attachMember(signalStructure, {
+        name: 'ptr',
+        type: MemberType.Object,
+        bitSize: addressByteSize * 8,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: ptrStructure,
+        slot: 0,
       });
       env.defineStructure(signalStructure);
       env.endStructure(signalStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
-        byteSize: 16,
+        byteSize: 4 + addressByteSize + 4 + addressByteSize,
         length: 1,
       });
       env.attachMember(argStructure, {
@@ -715,35 +731,186 @@ describe('Feature: call-marshaling-inbound', function() {
       env.attachMember(argStructure, {
         name: '0',
         type: MemberType.Object,
-        bitSize: 32,
+        bitSize: addressByteSize * 8,
         bitOffset: 32,
         byteSize: 4,
         structure: signalStructure,
+        slot: 0,
       });
       env.attachMember(argStructure, {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: (4 + addressByteSize) * 8,
         byteSize: 4,
         structure: intStructure,
       });
       env.attachMember(argStructure, {
         name: '2',
         type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 96,
+        bitSize: addressByteSize * 8,
+        bitOffset: (4 + addressByteSize + 4) * 8,
         byteSize: 4,
         structure: signalStructure,
+        slot: 1,
       });
       const ArgStruct = env.defineStructure(argStructure);
       env.endStructure(argStructure);
-      const dv = new DataView(new ArrayBuffer(16));
-      dv.setInt32(4, 1234);
-      dv.setInt32(8, 5678);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 4 });
+      } else {
+        const bufferMap = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = bufferMap.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            bufferMap.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      if (addressByteSize === 4) {
+        dv.setInt32(4, 0x2000, true);
+        dv.setInt32(8, 1234, true);
+        dv.setInt32(12, 0x3000, true);
+      } else {
+        dv.setBigInt64(4, 0x2000n, true);
+        dv.setBigInt64(12, 1234n, true);
+        dv.setBigInt64(16, 0x3000n, true);
+      }
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
       expect(args[1]).to.be.an('object').with.property('signal');
+      const { signal } = args[1];
+      expect(signal.aborted).to.be.false;
+      setTimeout(() => {
+        const int = env.obtainExternView(usize(0x2000), 4);
+        int.setInt32(0, 1, true);
+      }, 10);
+      await delay(100);
+      expect(signal.aborted).to.be.true;
+    })
+    it('should set abort signal to signaled initially if integer is already non-zero', async function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'Int32',
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const signalStructure = env.beginStructure({
+        type: StructureType.Struct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
+        byteSize: 4,
+      });
+      env.attachMember(signalStructure, {
+        name: 'ptr',
+        type: MemberType.Object,
+        bitSize: addressByteSize * 8,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: ptrStructure,
+        slot: 0,
+      });
+      env.defineStructure(signalStructure);
+      env.endStructure(signalStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
+        byteSize: 4 + addressByteSize + 4 + addressByteSize,
+        length: 1,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: addressByteSize * 8,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: signalStructure,
+        slot: 0,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: (4 + addressByteSize) * 8,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '2',
+        type: MemberType.Object,
+        bitSize: addressByteSize * 8,
+        bitOffset: (4 + addressByteSize + 4) * 8,
+        byteSize: 4,
+        structure: signalStructure,
+        slot: 1,
+      });
+      const ArgStruct = env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 4 });
+      } else {
+        const bufferMap = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = bufferMap.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            bufferMap.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      if (addressByteSize === 4) {
+        dv.setInt32(4, 0x2000, true);
+        dv.setInt32(8, 1234, true);
+        dv.setInt32(12, 0x3000, true);
+      } else {
+        dv.setBigInt64(4, 0x2000n, true);
+        dv.setBigInt64(12, 1234n, true);
+        dv.setBigInt64(16, 0x3000n, true);
+      }
+      const int = env.obtainExternView(usize(0x2000), 4);
+      int.setInt32(0, 1, true);
+      const args = [ ...ArgStruct(dv) ];
+      expect(args).to.have.lengthOf(2);
+      expect(args[1]).to.be.an('object').with.property('signal');
+      const { signal } = args[1];
+      expect(signal.aborted).to.be.true;
     })
   })
   describe('performJsAction', function() {

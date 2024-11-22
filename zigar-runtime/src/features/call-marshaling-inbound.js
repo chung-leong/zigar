@@ -1,6 +1,6 @@
 import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, SLOTS, THROWING, VISIT, ZIG } from '../symbols.js';
+import { MEMORY, THROWING, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -114,17 +114,30 @@ export default mixin({
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
                 opt = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
-                optName = (++callbackCount === 1) ? 'callback' : '';
-                opt = arg.callback['*'];
+                optName = 'callback';
+                if (++callbackCount === 1) {
+                  opt = arg.callback['*'];
+                }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
-                optName = (++signalCount === 1) ? 'signal' : '';
-                const target = arg.ptr[SLOTS][0];
-                const dv = target[MEMORY];
-                opt = Int32Array(dv.buffer, 0, 1);
+                optName = 'signal';
+                if (++signalCount === 1) {
+                  const controller = new AbortController();
+                  if (arg.ptr['*']) {
+                    controller.abort();
+                  } else {
+                    const interval = setInterval(() => {
+                      if (arg.ptr['*']) {
+                        controller.abort();
+                        clearInterval(interval);
+                      }
+                    }, 50);
+                  }
+                  opt = controller.signal;
+                }
               }
             }
             if (optName !== undefined) {
-              if (optName) {
+              if (opt !== undefined) {
                 options ??= {};
                 options[optName] = opt;
               }

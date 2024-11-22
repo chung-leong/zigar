@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { capture } from '../test-utils.js';
+import { capture, delay } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -103,6 +103,15 @@ export function addTests(importModule, options) {
         printArray(f2);
       });
       expect(line2).to.equal('{ 1e0, 2e0, 3e0, 4e0 }');
+    })
+    it('should correctly pass abort signal as argument', async function() {
+      this.timeout(300000);
+      const { call } = await importTest('abort-signal', { multithreaded: true });
+      let aborted = false;
+      const f = ({ signal }) => signal.addEventListener('abort', () => aborted = true);
+      call(f);
+      await delay(100);
+      expect(aborted).to.be.true;
     })
   })
 }
