@@ -1,6 +1,6 @@
 import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, THROWING, VISIT, ZIG } from '../symbols.js';
+import { CALLBACK, MEMORY, THROWING, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -47,34 +47,44 @@ export default mixin({
           this.updateShadowTargets(context);
           this.endContext();
         }
-        const onError = (err) => {
-          if (ArgStruct[THROWING] && err instanceof Error) {
-            // see if the error is part of the error set of the error union returned by function
-            try {
+        const onError = function(err) {
+          try {
+            const cb = argStruct[CALLBACK];
+            // if the error is not part of the error set returned by the function,
+            // the following will throw
+            if (cb) {
+              debugger;
+              cb(err);
+            } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct.retval = err;
-              return;
-            } catch (_) {
             }
+          } catch (_) {
+            result = CallResult.Failure;
+            console.error(err);
           }
-          console.error(err);
-          result = CallResult.Failure;
         };
-        const onReturn = (value) => {
-          argStruct.retval = value;
+        const onReturn = function(value) {
+          const cb = argStruct[CALLBACK];
+          if (cb) {
+            cb(value);
+          } else {
+            argStruct.retval = value;
+          }
         };
         try {
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle) {
-              retval.then(onReturn, onError).then(() => {
-                this.finalizeAsyncCall(futexHandle, result);
-              });
+            if (futexHandle || argStruct[CALLBACK]) {
+              const promise = retval.then(onReturn, onError);
+              if (futexHandle) {
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
+              }
               awaiting = true;
               result = CallResult.OK;
             } else {
               result = CallResult.Deadlock;
             }
-          } else {
+          } else if (retval !== undefined) {
             onReturn(retval);
           }
         } catch (err) {
@@ -116,7 +126,12 @@ export default mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  opt = arg.callback['*'];
+                  const callback = arg.callback['*'];
+                  opt = (...args) => {
+                    const arg = (args.length === 2) ? args[0] ?? args[1] : args[0];
+                    callback(arg);
+                  };
+                  this[CALLBACK] = callback;
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';

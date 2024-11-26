@@ -35,6 +35,7 @@ export const SETTERS = Symbol('setters');
 export const TYPED_ARRAY = Symbol('typedArray');
 export const THROWING = Symbol('throwing');
 export const PROMISE = Symbol('promise');
+export const CALLBACK = Symbol('callback');
 export const FALLBACK = Symbol('fallback');
 
 export const UPDATE = Symbol('update');
