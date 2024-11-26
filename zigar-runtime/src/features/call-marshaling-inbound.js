@@ -65,10 +65,15 @@ export default mixin({
         };
         const onReturn = function(value) {
           const cb = argStruct[CALLBACK];
-          if (cb) {
-            cb(value);
-          } else {
-            argStruct.retval = value;
+          try {
+            if (cb) {
+              cb(value);
+            } else {
+              argStruct.retval = value;
+            }
+          } catch (err) {
+            result = CallResult.Failure;
+            console.error(err);
           }
         };
         try {

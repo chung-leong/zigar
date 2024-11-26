@@ -138,5 +138,17 @@ export function addTests(importModule, options) {
       const [ line7 ] = await capture(() => call(f7));
       expect(line7).to.equal('error = Unexpected');
     })
+    it('should correctly pass allocator and promise as argument', async function() {
+      this.timeout(300000);
+      const { call } = await importTest('promise-with-allocator');
+      const f1 = ({ allocator, callback }) => {
+        callback(allocator.dupe('Hello world'));
+      };
+      const [ line1 ] = await capture(() => call(f1));
+      expect(line1).to.equal('value = Hello world');
+      const f2 = async ({ allocator }) => allocator.dupe('Hello world');
+      const [ line2 ] = await capture(() => call(f2));
+      expect(line2).to.equal('value = Hello world');
+    })
   })
 }
