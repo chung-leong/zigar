@@ -124,6 +124,10 @@ export default mixin({
           // error unions will throw on access, in which case we pass the error as the argument
           try {
             let arg = this[srcIndex];
+            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+              // create copy in JS memory
+              arg = new arg.constructor(arg);
+            }
             let optName, opt;
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
@@ -160,10 +164,6 @@ export default mixin({
               }
             } else {
               // just a regular argument
-              if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
-                // create copy in JS memory
-                arg = new arg.constructor(arg);
-              }
               args.push(arg);
             }
           } catch (err) {

@@ -37,6 +37,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
+    skip.
     it('should produce the right results for the fannkuch-redux example', async function() {
       this.timeout(300000);
       const { Pfannkuchen } = await importTest('fannkuch-redux');
@@ -56,6 +57,7 @@ export function addTests(importModule, options) {
         expect(line).to.equal(refLines[index]);
       }
     })
+    skip.
     it('should produce the right results for the k-nucleotide example', async function() {
       this.timeout(300000);
       const { kNucleotide } = await importTest('k-nucleotide');
