@@ -56,6 +56,8 @@ export default mixin({
               cb(err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct.retval = err;
+            } else {
+              throw err;
             }
           } catch (_) {
             result = CallResult.Failure;
