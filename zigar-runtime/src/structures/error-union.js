@@ -46,7 +46,7 @@ export default mixin({
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            const match = ErrorSet[arg.message] ?? ErrorSet.Unexpected;
+            const match = ErrorSet[arg] ?? ErrorSet.Unexpected;
             if (match) {
               setError.call(this, match);
               clearValue.call(this);

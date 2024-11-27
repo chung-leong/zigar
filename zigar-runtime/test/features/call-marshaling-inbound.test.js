@@ -5,7 +5,7 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
+import { CALLBACK, ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
 import { addressByteSize, capture, captureError, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -352,6 +352,74 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       const result = binary(null, usize(0x1234));
       expect(result).to.equal(CallResult.OK);
+    })
+    it('should pass async result to promise callback function', async function() {
+      const env = new Env();
+      const fn = async () => 777;
+      let result;
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        self[Symbol.iterator] = function() {
+          const array = [];
+          return array[Symbol.iterator]();
+        };
+        self[CALLBACK] = function(arg) {
+          result = arg;
+        };
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      binary(null, usize(0x1234));
+      await delay(0);
+      expect(result).to.equal(777);
+    })
+    it('should pass async error to promise callback function', async function() {
+      const env = new Env();
+      const fn = async () => { throw new Error('Doh!') };
+      let result;
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        self[Symbol.iterator] = function() {
+          const array = [];
+          return array[Symbol.iterator]();
+        };
+        self[CALLBACK] = function(arg) {
+          result = arg;
+        };
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      binary(null, usize(0x1234));
+      await delay(0);
+      expect(result).to.be.an('error').with.property('message', 'Doh!');
+    })
+    it('should output error to console when callback throws', async function() {
+      const env = new Env();
+      const fn = async () => 777;
+      let result;
+      const ArgStruct = function() {
+        const self = {};
+        self.length = 0;
+        self[Symbol.iterator] = function() {
+          const array = [];
+          return array[Symbol.iterator]();
+        };
+        self[CALLBACK] = function(arg) {
+          throw new Error('Doh!');
+        };
+        return self;
+      };
+      const self = env.createInboundCaller(fn, ArgStruct)
+      const binary = env.jsFunctionCallerMap.get(1);
+      const [ line ] = await captureError(async () => {
+        binary(null, usize(0x1234));
+        await delay(10);
+      });
+      expect(line).to.equal('Error: Doh!');
     })
   })
   describe('defineArgIterator', function() {
@@ -747,6 +815,16 @@ describe('Feature: call-marshaling-inbound', function() {
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
       expect(args[1]).to.be.an('object').with.property('callback');
+      const { callback } = args[1];
+      let arg;
+      env.invokeThunk = function(thunk, fn, argStruct) {
+        arg = argStruct['0'];
+      };
+      env.runThunk = function() {};
+      expect(() => callback(44)).to.not.throw();
+      expect(arg).to.equal(44);
+      expect(() => callback(null, 33)).to.not.throw();
+      expect(arg).to.equal(33);
     })
     it('should return descriptor for iterator that places abort signal into options object', async function() {
       const env = new Env();

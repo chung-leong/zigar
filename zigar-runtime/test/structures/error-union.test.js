@@ -279,6 +279,8 @@ describe('Structure: error-union', function() {
       expect(object.valueOf()).to.equal(1234n);
       object.$ = MyError.UnableToCreateObject;
       expect(() => object.valueOf()).to.throw(Hello.UnableToCreateObject);
+      object.$ = new Error('Unable to create object');
+      expect(() => object.valueOf()).to.throw(Hello.UnableToCreateObject);
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();

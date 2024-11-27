@@ -53,7 +53,6 @@ export default mixin({
             // if the error is not part of the error set returned by the function,
             // the following will throw
             if (cb) {
-              debugger;
               cb(err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct.retval = err;
@@ -131,12 +130,8 @@ export default mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  const callback = arg.callback['*'];
-                  opt = (...args) => {
-                    const arg = (args.length === 2) ? args[0] ?? args[1] : args[0];
-                    callback(arg);
-                  };
-                  this[CALLBACK] = callback;
+                  const callback = this[CALLBACK] = arg.callback['*'];
+                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
