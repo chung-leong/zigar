@@ -7,7 +7,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, CALLBACK, COPY, FINALIZE, MEMORY, PROMISE, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
@@ -115,6 +115,49 @@ describe('Feature: call-marshaling-outbound', function() {
       const argStruct = ArgStruct(argDV);
       expect(argStruct[0]).to.equal(1);
       expect(argStruct[1]).to.equal(2);
+    })
+    it('should create a caller that returns a promise', function() {
+      const env = new Env();
+      const ArgStruct = function() {
+        this[PROMISE] = new Promise((resolve) => {
+          this[CALLBACK] = resolve;
+        });
+        this.retval = 1234;
+      };
+      const thunk = {};
+      const self = env.createOutboundCaller(thunk, ArgStruct)
+      env.invokeThunk = env.runThunk = () => {};
+      expect(self()).to.eventually.equal(1234);
+    })
+    it('should reject a promise when retrieval of retval throws', function() {
+      const env = new Env();
+      const ArgStruct = function() {
+        this[PROMISE] = new Promise((resolve) => {
+          this[CALLBACK] = resolve;
+        });
+        defineProperty(this, 'retval', {
+          get() {
+            throw new Error('Doh!');
+          }
+        });
+      };
+      const thunk = {};
+      const self = env.createOutboundCaller(thunk, ArgStruct)
+      env.invokeThunk = env.runThunk = () => {};
+      expect(self()).to.eventually.be.rejected;
+    })
+    it('should invoke callback function', function() {
+      const env = new Env();
+      let retval;
+      const ArgStruct = function() {
+        this[CALLBACK] = (arg) => retval = arg;
+        this.retval = 1234;
+      };
+      const thunk = {};
+      const self = env.createOutboundCaller(thunk, ArgStruct)
+      env.invokeThunk = env.runThunk = () => {};
+      self();
+      expect(retval).to.equal(1234);
     })
     it('should add function name to argument error', function() {
       const env = new Env();

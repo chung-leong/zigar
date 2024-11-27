@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FINALIZE, MEMORY, PROMISE, ZIG } from '../symbols.js';
+import { CALLBACK, FINALIZE, MEMORY, PROMISE, ZIG } from '../symbols.js';
 
 export default mixin({
   createCallback(args, structure, func) {
@@ -24,7 +24,7 @@ export default mixin({
         };
         });
     }
-    const cb = (result) => {
+    const cb = args[CALLBACK] = (result) => {
       const isError = result instanceof Error;
       if (!isError) {
         args[FINALIZE]();

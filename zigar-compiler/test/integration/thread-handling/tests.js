@@ -1,6 +1,9 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
 import { capture, captureError, delay } from '../test-utils.js';
+
+use(chaiAsPromised);
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -133,6 +136,35 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create thread or immediately provide a value', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-optionally', { multithreaded: true });
+      try {
+        await expect(spawn(true)).to.eventually.equal(1234);
+        await expect(spawn(false)).to.eventually.equal(777);
+        // make sure callback would get called
+        let result = -1;
+        spawn(false, {
+          callback(v) {
+            result = v;
+          }
+        });
+        expect(result).to.equal(777);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should reject a promise synchronously', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+      } = await importTest('create-thread-promise-failure', { multithreaded: true });
+      const promise = spawn();
+      await expect(promise).to.eventually.be.rejectedWith(Error).with.property('message', 'Thread creation failure');
+    })
     it('should create thread that resolves a promise on abort', async function() {
       this.timeout(300000);
       const {
@@ -150,16 +182,16 @@ export function addTests(importModule, options) {
           error = err;
         }
         expect(error).to.be.an('error');
-        // error = null;
-        // const controller2 = new AbortController();
-        // const promise2 = spawn(false, { signal: controller2.signal });
-        // setTimeout(() => controller2.abort(), 100);
-        // try {
-        //   result = await promise2;
-        // } catch (err) {
-        //   error = err;
-        // }
-        // expect(result).to.equal(1234);
+        error = null;
+        const controller2 = new AbortController();
+        const promise2 = spawn(false, { signal: controller2.signal });
+        setTimeout(() => controller2.abort(), 100);
+        try {
+          result = await promise2;
+        } catch (err) {
+          error = err;
+        }
+        expect(result).to.equal(1234);
       } finally {
         shutdown();
       }

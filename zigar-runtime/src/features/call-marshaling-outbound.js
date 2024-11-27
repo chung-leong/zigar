@@ -1,7 +1,7 @@
 import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
-import { ATTRIBUTES, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
+import { ATTRIBUTES, CALLBACK, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
 
 export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -17,7 +17,24 @@ export default mixin({
       try {
         const argStruct = new ArgStruct(args);
         thisEnv.invokeThunk(thunk, self, argStruct);
-        return argStruct[PROMISE] ?? argStruct.retval;
+        const promise = argStruct[PROMISE];
+        const callback = argStruct[CALLBACK];
+        if (callback) {
+          try {
+            // ensure the function hasn't return an error
+            const { retval } = argStruct;
+            if (retval != null) {
+              // if a function returns a value, then the promise is fulfilled immediately
+              callback(retval);
+            }
+          } catch (err) {
+            callback(err);
+          }
+          // this would be undefined if a callback function is used instead
+          return promise;
+        } else {
+          return argStruct.retval;
+        }
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
