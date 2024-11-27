@@ -295,7 +295,8 @@ export default mixin({
         prefix = '[*]';
       }
     }
-    const sentinel = target.structure.constructor[SENTINEL];
+    // constructor can be null when a structure is recursive
+    const sentinel = target.structure.constructor?.[SENTINEL];
     if (sentinel) {
       prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
     }
