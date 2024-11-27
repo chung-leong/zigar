@@ -101,12 +101,17 @@ export default mixin({
         return;
       }
       const pointer = this[POINTER] ?? this;
-      // the target sits in Zig memory--apply the change immediately
       if (arg) {
-        if (arg[MEMORY][ZIG]) {
-          const address = thisEnv.getViewAddress(arg[MEMORY]);
+        const zig = arg[MEMORY][ZIG];
+        if (zig) {
+          // the target sits in Zig memory--apply the change immediately
+          const { address, js } = zig;
           setAddress.call(this, address);
           setLength?.call?.(this, arg.length);
+          if (js) {
+            // remove the fake Zig memory attributes now that we've bypassed the check
+            arg[MEMORY][ZIG] = undefined;
+          }
         } else {
           if (pointer[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired(structure, arg);

@@ -442,7 +442,6 @@ describe('Feature: memory-mapping', function() {
       const dv1 = new DataView(new ArrayBuffer(len));
       const context = env.startContext();
       env.registerMemory(address, len, 4, true, dv1);
-      debugger;
       const dv2 = env.findMemory(context, adjustAddress(address, 4), len / 2, 1);
       expect(dv2.buffer).to.equal(dv1.buffer);
       expect(dv2.byteOffset).to.equal(dv1.byteOffset + 4);

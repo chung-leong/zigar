@@ -153,7 +153,6 @@ export function addTests(importModule, options) {
         '{ 5, 6, 7, 8 }'
       ]);
     })
-    skip.
     it('should allocate a slice of structs', async function() {
       this.timeout(300000);
       const {
@@ -440,7 +439,6 @@ export function addTests(importModule, options) {
       });
       expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
     })
-    skip.
     it('should correctly return const pointer', async function() {
       this.timeout(300000);
       const { getUser } = await importTest('return-const-pointer');
@@ -450,7 +448,6 @@ export function addTests(importModule, options) {
       expect(() => user.address.street = "Nowhere").to.throw(TypeError);
       expect(() => user.address.zip = 33333).to.throw(TypeError);
     })
-    skip.
     it('should correctly handle recursive structure', async function() {
       this.timeout(300000);
       const { getRoot } = await importTest('handle-recursive-structure');
@@ -503,7 +500,6 @@ export function addTests(importModule, options) {
         'accept-c-pointer.Object{ .a = 9, .b = 10 }',
       ]);
     })
-    skip.
     it('should return multi-pointers', async function() {
       this.timeout(300000);
       const { getPointer } = await importTest('return-multi-pointer');
@@ -516,7 +512,6 @@ export function addTests(importModule, options) {
       expect(() => pointer.length = 3).to.not.throw();
       expect(pointer.valueOf()).to.eql([ { a: 0, b: 1 }, { a: 2, b: 3 }, { a: 4, b: 5 } ]);
     });
-    skip.
     it('should return C pointers', async function() {
       this.timeout(300000);
       const { getPointer, getString } = await importTest('return-c-pointer');

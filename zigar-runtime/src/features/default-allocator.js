@@ -13,15 +13,13 @@ export default mixin({
       const { VTable, noResize } = Allocator;
       const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.allocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => {
-        return this.allocateHostMemory(len, 1 << ptrAlign);
-      };
-      vtable.resize = noResize;
+      vtable.alloc = (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign);
       vtable.free = (ptr, buf, ptrAlign) => {
         const address = this.getViewAddress(buf['*'][MEMORY]);
         const len = buf.length;
         this.freeHostMemory(address, len, 1 << ptrAlign);
       };
+      vtable.resize = noResize;
     }
     const ptr = this.obtainZigView(usizeMax, 0);
     return new Allocator({ ptr, vtable });
@@ -45,7 +43,7 @@ export default mixin({
       this.registerMemory(address, len, align, true, targetDV);
       // pretend that the view holds Zig memory to get around code that prevents pointers
       // in Zig memory to point at JS memory
-      targetDV[ZIG] = { address, len };
+      targetDV[ZIG] = { address, len, js: true };
       return targetDV;
     }
   },
