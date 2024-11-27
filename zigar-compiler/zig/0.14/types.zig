@@ -1614,7 +1614,7 @@ pub fn removeSentinel(comptime ptr: anytype) retval_type: {
 
 const Internal = opaque {};
 
-pub fn Promise(comptime T: type, release: anytype) type {
+pub fn Promise(comptime T: type) type {
     return struct {
         callback: *const fn (T) void,
 
@@ -1623,7 +1623,6 @@ pub fn Promise(comptime T: type, release: anytype) type {
 
         pub inline fn resolve(self: @This(), value: T) void {
             self.callback(value);
-            release(self.callback) catch {};
         }
     };
 }

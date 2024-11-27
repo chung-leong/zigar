@@ -208,7 +208,7 @@ export default mixin({
     if (thunk && controller) {
       const controllerAddress = this.getViewAddress(controller[MEMORY]);
       const thunkAddress = this.getViewAddress(thunk);
-      const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.destroyJsThunk(controllerAddress, thunkAddress);
       this.releaseZigView(thunk);
       if (id) {
         this.jsFunctionThunkMap.delete(id);

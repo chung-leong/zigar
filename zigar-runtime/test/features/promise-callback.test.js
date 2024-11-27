@@ -64,5 +64,22 @@ describe('Feature: promise-callback', function() {
       callback(123);
       expect(result).to.equal(123);
     })
+    it('should correctly handle callback with two arguments', function() {
+      const env = new Env();
+      const args = {};
+      let error, result;
+      const callback = env.createCallback(args, null, (err, value) => {
+        error = err;
+        result = value;
+      });
+      expect(args[PROMISE]).to.be.undefined;
+      args[FINALIZE] = () => {};
+      callback(123);
+      expect(result).to.equal(123);
+      expect(error).to.be.null;
+      callback(new Error('Doh!'));
+      expect(result).to.be.null;
+      expect(error).to.be.an('error');
+    })
   })
 })

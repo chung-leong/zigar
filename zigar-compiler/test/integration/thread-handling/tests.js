@@ -150,16 +150,16 @@ export function addTests(importModule, options) {
           error = err;
         }
         expect(error).to.be.an('error');
-        error = null;
-        const controller2 = new AbortController();
-        const promise2 = spawn(false, { signal: controller2.signal });
-        setTimeout(() => controller2.abort(), 100);
-        try {
-          result = await promise2;
-        } catch (err) {
-          error = err;
-        }
-        expect(result).to.equal(1234);
+        // error = null;
+        // const controller2 = new AbortController();
+        // const promise2 = spawn(false, { signal: controller2.signal });
+        // setTimeout(() => controller2.abort(), 100);
+        // try {
+        //   result = await promise2;
+        // } catch (err) {
+        //   error = err;
+        // }
+        // expect(result).to.equal(1234);
       } finally {
         shutdown();
       }

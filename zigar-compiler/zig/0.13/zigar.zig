@@ -6,7 +6,7 @@ pub const function = struct {
         host.releaseFunction(fn_ptr) catch {};
     }
     pub fn Promise(comptime T: type) type {
-        return host.Promise(T, host.releaseFunction);
+        return host.Promise(T);
     }
     pub const AbortSignal = host.AbortSignal;
 };
