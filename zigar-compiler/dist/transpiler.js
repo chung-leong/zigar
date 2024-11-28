@@ -145,6 +145,16 @@ const ModuleAttribute = {
   LibC:             0x0004,
 };
 
+const VisitorFlag = {
+  IsInactive:       0x0001,
+  IsImmutable:      0x0002,
+
+  IgnoreUncreated:  0x0004,
+  IgnoreInactive:   0x0008,
+  IgnoreArguments:  0x0010,
+  IgnoreRetval:     0x0020,
+};
+
 const MEMORY = Symbol('memory');
 const SLOTS = Symbol('slots');
 const PARENT = Symbol('parent');
@@ -181,7 +191,7 @@ const SETTERS = Symbol('setters');
 const TYPED_ARRAY = Symbol('typedArray');
 const THROWING = Symbol('throwing');
 const PROMISE = Symbol('promise');
-const CONTEXT = Symbol('context');
+const CALLBACK = Symbol('callback');
 
 const UPDATE = Symbol('update');
 const RESTORE = Symbol('restore');
@@ -329,8 +339,6 @@ const alignForward = function(address, align) {
   }
   /* c8 ignore next */
 ;
-
-const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
@@ -424,14 +432,6 @@ function toString() {
   return String(this);
 }
 
-function always() {
-  return true;
-}
-
-function never() {
-  return false;
-}
-
 function empty() {}
 
 class ObjectCache {
@@ -445,13 +445,6 @@ class ObjectCache {
     this.map.set(dv, object);
     return object;
   }
-}
-
-class CallContext {
-  memoryList = [];
-  shadowMap = null;
-  id = usizeMin;
-  async = false;
 }
 
 function generateCode(definition, params) {
@@ -1669,7 +1662,7 @@ function defineClass(name, mixins) {
 
 // handle retrieval of accessors
 
-var all$2 = mixin({
+var all$3 = mixin({
   accessorCache: new Map(),
 
   getAccessor(access, member) {
@@ -2288,8 +2281,7 @@ var abortSignal = mixin({
         {
           // WASM doesn't directly access JavaScript memory, we need to find the
           // shadow memory that's been assigned to the object and store the value there
-          const shadow = this.findShadow(args[CONTEXT], int32);
-          const shadowDV = shadow[MEMORY];
+          const shadowDV = this.findShadowView(int32[MEMORY]);
           const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
           Atomics.store(shadowTA, 0, 1);
         }
@@ -2993,34 +2985,56 @@ var callMarshalingInbound = mixin({
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
-        const onError = (err) => {
-          if (ArgStruct[THROWING] && err instanceof Error) {
-            // see if the error is part of the error set of the error union returned by function
-            try {
+        if (VISIT in argStruct) {
+          const context = this.startContext();
+          this.updatePointerTargets(context, argStruct, true);
+          this.updateShadowTargets(context);
+          this.endContext();
+        }
+        const onError = function(err) {
+          try {
+            const cb = argStruct[CALLBACK];
+            // if the error is not part of the error set returned by the function,
+            // the following will throw
+            if (cb) {
+              cb(err);
+            } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct.retval = err;
-              return;
-            } catch (_) {
+            } else {
+              throw err;
             }
+          } catch (_) {
+            result = CallResult.Failure;
+            console.error(err);
           }
-          console.error(err);
-          result = CallResult.Failure;
         };
-        const onReturn = (value) => {
-          argStruct.retval = value;
+        const onReturn = function(value) {
+          const cb = argStruct[CALLBACK];
+          try {
+            if (cb) {
+              cb(value);
+            } else {
+              argStruct.retval = value;
+            }
+          } catch (err) {
+            result = CallResult.Failure;
+            console.error(err);
+          }
         };
         try {
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle) {
-              retval.then(onReturn, onError).then(() => {
-                this.finalizeAsyncCall(futexHandle, result);
-              });
+            if (futexHandle || argStruct[CALLBACK]) {
+              const promise = retval.then(onReturn, onError);
+              if (futexHandle) {
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
+              }
               awaiting = true;
               result = CallResult.OK;
             } else {
               result = CallResult.Deadlock;
             }
-          } else {
+          } else if (retval !== undefined) {
             onReturn(retval);
           }
         } catch (err) {
@@ -3050,27 +3064,45 @@ var callMarshalingInbound = mixin({
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
         const args = [];
-        for (const [ srcIndex, { structure } ] of members.entries()) {
+        for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
           try {
-            const arg = this[srcIndex];
+            let arg = this[srcIndex];
+            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+              // create copy in JS memory
+              arg = new arg.constructor(arg);
+            }
             let optName, opt;
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
                 opt = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
-                optName = (++callbackCount === 1) ? 'callback' : '';
-                opt = arg.callback['*'];
+                optName = 'callback';
+                if (++callbackCount === 1) {
+                  const callback = this[CALLBACK] = arg.callback['*'];
+                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
+                }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
-                optName = (++signalCount === 1) ? 'signal' : '';
-                const target = arg.ptr[SLOTS][0];
-                const dv = target[MEMORY];
-                opt = Int32Array(dv.buffer, 0, 1);
+                optName = 'signal';
+                if (++signalCount === 1) {
+                  const controller = new AbortController();
+                  if (arg.ptr['*']) {
+                    controller.abort();
+                  } else {
+                    const interval = setInterval(() => {
+                      if (arg.ptr['*']) {
+                        controller.abort();
+                        clearInterval(interval);
+                      }
+                    }, 50);
+                  }
+                  opt = controller.signal;
+                }
               }
             }
             if (optName !== undefined) {
-              if (optName) {
+              if (opt !== undefined) {
                 options ??= {};
                 options[optName] = opt;
               }
@@ -3112,7 +3144,7 @@ var callMarshalingInbound = mixin({
     if (thunk && controller) {
       const controllerAddress = this.getViewAddress(controller[MEMORY]);
       const thunkAddress = this.getViewAddress(thunk);
-      const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.destroyJsThunk(controllerAddress, thunkAddress);
       this.releaseZigView(thunk);
       if (id) {
         this.jsFunctionThunkMap.delete(id);
@@ -3154,7 +3186,24 @@ var callMarshalingOutbound = mixin({
       try {
         const argStruct = new ArgStruct(args);
         thisEnv.invokeThunk(thunk, self, argStruct);
-        return argStruct[PROMISE] ?? argStruct.retval;
+        const promise = argStruct[PROMISE];
+        const callback = argStruct[CALLBACK];
+        if (callback) {
+          try {
+            // ensure the function hasn't return an error
+            const { retval } = argStruct;
+            if (retval != null) {
+              // if a function returns a value, then the promise is fulfilled immediately
+              callback(retval);
+            }
+          } catch (err) {
+            callback(err);
+          }
+          // this would be undefined if a callback function is used instead
+          return promise;
+        } else {
+          return argStruct.retval;
+        }
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -3216,7 +3265,7 @@ var callMarshalingOutbound = mixin({
     }
   },
   invokeThunk(thunk, fn, args) {
-    const context = args[CONTEXT];
+    const context = this.startContext();
     const attrs = args[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
@@ -3225,7 +3274,7 @@ var callMarshalingOutbound = mixin({
       this.updatePointerAddresses(context, args);
     }
     // return address of shadow for argumnet struct
-    const argAddress = this.getShadowAddress(context, args)
+    const argAddress = this.getShadowAddress(context, args, null, true)
     ;
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
@@ -3235,6 +3284,7 @@ var callMarshalingOutbound = mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
+      this.endContext();
       throw new ZigError();
     }
     const finalize = () => {
@@ -3243,12 +3293,11 @@ var callMarshalingOutbound = mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
-      this.releaseShadows(context);
-      this.releaseCallContext?.(context);
       if (this.libc) {
         this.flushStdout?.();
       }
       this.flushConsole?.();
+      this.endContext();
     };
     if (FINALIZE in args) {
       // async function--finalization happens when callback is invoked
@@ -3417,8 +3466,6 @@ var dataCopying = mixin({
 });
 
 var defaultAllocator = mixin({
-  nextContextId: usizeMax,
-  contextMap: new Map(),
   allocatorVTable: null,
 
   createDefaultAllocator(args, structure) {
@@ -3429,65 +3476,39 @@ var defaultAllocator = mixin({
       const { VTable, noResize } = Allocator;
       const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
       vtable = this.allocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          return this.allocateHostMemory(context, len, 1 << ptrAlign);
-        } else {
-          return null;
-        }
+      vtable.alloc = (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign);
+      vtable.free = (ptr, buf, ptrAlign) => {
+        const address = this.getViewAddress(buf['*'][MEMORY]);
+        const len = buf.length;
+        this.freeHostMemory(address, len, 1 << ptrAlign);
       };
       vtable.resize = noResize;
-      vtable.free = (ptr, buf, ptrAlign) => {
-        const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-        const context = this.contextMap.get(contextId);
-        if (context) {
-          const address = this.getViewAddress(buf['*'][MEMORY]);
-          const len = buf.length;
-          this.freeHostMemory(context, address, len, 1 << ptrAlign);
-        }
-      };
     }
-    const context = args[CONTEXT];
-    const contextId = context.id = this.nextContextId--;
-    // storing context id in a fake pointer
-    const ptr = this.obtainZigView(contextId, 0);
-    this.contextMap.set(contextId, context);
+    const ptr = this.obtainZigView(usizeMax, 0);
     return new Allocator({ ptr, vtable });
-  },
-  allocateHostMemory(context, len, align) {
-    const dv = this.allocateJSMemory(len, align);
-    // for WebAssembly, we need to allocate Zig memory that backs the JS memory
-    // for Node, we create another DataView on the same buffer and pretend that it's zig
-    // memory
-    const shadowDV = this.allocateShadowMemory(len, align)
-    ;
-    const copier = this.defineCopier(len).value
-    ;
-    const constructor = { [ALIGN]: align };
-    const object = { constructor, [MEMORY]: dv, [COPY]: copier };
-    const shadow = { constructor, [MEMORY]: shadowDV, [COPY]: copier };
-    this.addShadow(context, shadow, object, align);
-    return shadowDV;
-  },
-  freeHostMemory(context, address, len, align) {
-    const shadowDV = this.unregisterMemory(context, address);
-    if (shadowDV) {
-      this.removeShadow(context, shadowDV);
-      this.freeShadowMemory(shadowDV);
-    }
-  },
-  releaseCallContext(context) {
-    if (!context.retained) {
-      this.contextMap.delete(context.id);
-    }
   },
   freeDefaultAllocator() {
     if (this.allocatorVTable) {
       const dv = this.allocatorVTable[MEMORY];
       this.allocatorVTable = null;
       this.freeZigMemory(dv);
+    }
+  },
+  allocateHostMemory(len, align) {
+    const targetDV = this.allocateJSMemory(len, align);
+    {
+      const shadowDV = this.allocateShadowMemory(len, align);
+      const address = this.getViewAddress(shadowDV);
+      this.registerMemory(address, len, align, true, targetDV, shadowDV);
+      return shadowDV;
+    }
+  },
+  freeHostMemory(address, len, align) {
+    const entry = this.unregisterMemory(address, len);
+    {
+      if (entry) {
+        this.freeShadowMemory(entry.shadowDV);
+      }
     }
   },
 });
@@ -3528,140 +3549,109 @@ var intConversion = mixin({
 var memoryMapping = mixin({
   emptyBuffer: new ArrayBuffer(0),
   emptyBufferMap: new Map,
+  memoryList: [],
+  contextCount: 0,
 
-  getShadowAddress(context, target, cluster) {
+  startContext() {
+    ++this.contextCount;
+    return { shadowList: [] };
+  },
+  endContext() {
+    if (--this.contextCount === 0) {
+      for (const { shadowDV } of this.memoryList) {
+        if (shadowDV) {
+          this.freeShadowMemory(shadowDV);
+        }
+      }
+      this.memoryList.splice(0);
+    }
+  },
+  getShadowAddress(context, target, cluster, writable) {
+    const targetDV = target[MEMORY];
     if (cluster) {
-      const dv = target[MEMORY];
       if (cluster.address === undefined) {
-        const shadow = this.createClusterShadow(context, cluster);
-        cluster.address = this.getViewAddress(shadow[MEMORY]);
+        const { start, end, targets } = cluster;
+        // look for largest align
+        let maxAlign = 0, maxAlignOffset;
+        for (const target of targets) {
+          const dv = target[MEMORY];
+          const offset = dv.byteOffset;
+          const align = target.constructor[ALIGN] ?? dv[ALIGN];
+          if (maxAlign === undefined || align > maxAlign) {
+            maxAlign = align;
+            maxAlignOffset = offset;
+          }
+        }
+        // ensure the shadow buffer is large enough to accommodate necessary adjustments
+        const len = end - start;
+        const unalignedDV = this.allocateShadowMemory(len + maxAlign, 1);
+        const unalignedAddress = this.getViewAddress(unalignedDV);
+        const maxAlignAddress = alignForward(adjustAddress(unalignedAddress, maxAlignOffset - start), maxAlign);
+        const address = adjustAddress(maxAlignAddress, start - maxAlignOffset);
+        // make sure that other pointers are correctly aligned also
+        for (const target of targets) {
+          const dv = target[MEMORY];
+          const offset = dv.byteOffset;
+          if (offset !== maxAlignOffset) {
+            const align = target.constructor[ALIGN] ?? dv[ALIGN];
+            if (isMisaligned(adjustAddress(address, offset - start), align)) {
+              throw new AlignmentConflict(align, maxAlign);
+            }
+          }
+        }
+        const shadowOffset = unalignedDV.byteOffset + Number(address - unalignedAddress);
+        const shadowDV = new DataView(unalignedDV.buffer, shadowOffset, len);
+        {
+          // attach Zig memory info to aligned data view so it gets freed correctly
+          shadowDV[ZIG] = { address, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
+        }
+        const clusterDV = new DataView(targetDV.buffer, Number(start), len);
+        const entry = this.registerMemory(address, len, 1, writable, clusterDV, shadowDV);
+        context.shadowList.push(entry);
+        cluster.address = address;
       }
-      return adjustAddress(cluster.address, dv.byteOffset - cluster.start);
+      return adjustAddress(cluster.address, targetDV.byteOffset - cluster.start);
     } else {
-      const shadow = this.createShadow(context, target);
-      return this.getViewAddress(shadow[MEMORY]);
+      const align = target.constructor[ALIGN] ?? targetDV[ALIGN];
+      const len = targetDV.byteLength;
+      const shadowDV = this.allocateShadowMemory(len, align);
+      const address = this.getViewAddress(shadowDV);
+      const entry = this.registerMemory(address, len, 1, writable, targetDV, shadowDV);
+      context.shadowList.push(entry);
+      return address;
     }
-  },
-  createShadow(context, object) {
-    const dv = object[MEMORY];
-    // use the alignment of the structure; in the case of an opaque pointer's target,
-    // try to the alignment specified when the memory was allocated
-    const align = object.constructor[ALIGN] ?? dv[ALIGN];
-    const shadow = Object.create(object.constructor.prototype);
-    shadow[MEMORY] = this.allocateShadowMemory(dv.byteLength, align);
-    return this.addShadow(context, shadow, object, align);
-  },
-  addShadow(context, shadow, object, align) {
-    const shadowMap = context.shadowMap ??= new Map();
-    {
-      defineProperty(shadow, RESTORE, this.defineRestorer(false));
-    }
-    shadowMap.set(shadow, object);
-    this.registerMemory(context, shadow[MEMORY], object[MEMORY], align);
-    return shadow;
-  },
-  findShadow(context, object) {
-    const { shadowMap } = context;
-    for (const [ shadow, shadowObject ] of shadowMap) {
-      if (object === shadowObject) {
-        return shadow;
-      }
-    }
-  },
-  removeShadow(context, dv) {
-    const { shadowMap } = context;
-    if (shadowMap) {
-      for (const [ shadow ] of shadowMap) {
-        if (shadow[MEMORY] === dv) {
-          shadowMap.delete(shadow);
-          break;
-        }
-      }
-    }
-  },
-  createClusterShadow(context, cluster) {
-    const { start, end, targets } = cluster;
-    // look for largest align
-    let maxAlign = 0, maxAlignOffset;
-    for (const target of targets) {
-      const dv = target[MEMORY];
-      const offset = dv.byteOffset;
-      const align = target.constructor[ALIGN] ?? dv[ALIGN];
-      if (maxAlign === undefined || align > maxAlign) {
-        maxAlign = align;
-        maxAlignOffset = offset;
-      }
-    }
-    // ensure the shadow buffer is large enough to accommodate necessary adjustments
-    const len = end - start;
-    const unalignedShadowDV = this.allocateShadowMemory(len + maxAlign, 1);
-    const unalignedAddress = this.getViewAddress(unalignedShadowDV);
-    const maxAlignAddress = alignForward(adjustAddress(unalignedAddress, maxAlignOffset - start), maxAlign);
-    const shadowAddress = adjustAddress(maxAlignAddress, start - maxAlignOffset);
-    const shadowOffset = unalignedShadowDV.byteOffset + Number(shadowAddress - unalignedAddress);
-    const shadowDV = new DataView(unalignedShadowDV.buffer, shadowOffset, len);
-    // make sure that other pointers are correctly aligned also
-    for (const target of targets) {
-      const dv = target[MEMORY];
-      const offset = dv.byteOffset;
-      if (offset !== maxAlignOffset) {
-        const align = target.constructor[ALIGN] ?? dv[ALIGN];
-        if (isMisaligned(adjustAddress(shadowAddress, offset - start), align)) {
-          throw new AlignmentConflict(align, maxAlign);
-        }
-      }
-    }
-    // placeholder object type
-    const prototype = defineProperty({}, COPY, this.defineCopier(len));
-    const source = Object.create(prototype);
-    const shadow = Object.create(prototype);
-    source[MEMORY] = new DataView(targets[0][MEMORY].buffer, Number(start), len);
-    shadow[MEMORY] = shadowDV;
-    {
-      // attach Zig memory info to aligned data view so it gets freed correctly
-      shadowDV[ZIG] = { address: shadowAddress, len, align: 1, unalignedAddress, type: MemoryType.Scratch };
-    }
-    return this.addShadow(context, shadow, source, 1);
   },
   updateShadows(context) {
-    const { shadowMap } = context;
-    if (shadowMap) {
-      for (const [ shadow, object ] of shadowMap) {
-        shadow[COPY](object);
-      }
+    const copy = this.getCopyFunction();
+    for (const { targetDV, shadowDV } of context.shadowList) {
+      copy(shadowDV, targetDV);
     }
   },
   updateShadowTargets(context) {
-    const { shadowMap } = context;
-    if (shadowMap) {
-      for (const [ shadow, object ] of shadowMap) {
-        object[COPY](shadow);
+    const copy = this.getCopyFunction();
+    for (const { targetDV, shadowDV, writable } of context.shadowList) {
+      if (writable) {
+        copy(targetDV, shadowDV);
       }
     }
   },
-  releaseShadows(context) {
-    const { shadowMap } = context;
-    if (!shadowMap) {
-      return;
+  registerMemory(address, len, align, writable, targetDV, shadowDV) {
+    const index = findMemoryIndex(this.memoryList, address);
+    let entry = this.memoryList[index - 1];
+    if (entry?.address === address && entry.len === len) {
+      entry.writable ||= writable;
+    } else {
+      entry = { address, len, align, writable, targetDV, shadowDV };
+      this.memoryList.splice(index, 0, entry);
     }
-    for (const [ shadow ] of shadowMap) {
-      this.freeShadowMemory(shadow[MEMORY]);
-    }
+    return entry;
   },
-  registerMemory(context, dv, targetDV = null, targetAlign = undefined) {
-    const { memoryList } = context;
-    const address = this.getViewAddress(dv);
-    const index = findMemoryIndex(memoryList, address);
-    memoryList.splice(index, 0, { address, dv, len: dv.byteLength, targetDV, targetAlign });
-    return address;
-  },
-  unregisterMemory(context, address) {
-    const { memoryList } = context;
-    const index = findMemoryIndex(memoryList, address);
-    const entry = memoryList[index - 1];
-    if (entry?.address === address) {
-      memoryList.splice(index - 1, 1);
-      return entry.dv;
+  unregisterMemory(address, len) {
+    const index = findMemoryIndex(this.memoryList, address);
+    const entry = this.memoryList[index - 1];
+    if (entry?.address === address && entry.len === len) {
+      this.memoryList.splice(index - 1, 1);
+      return entry;
     }
   },
   findMemory(context, address, count, size) {
@@ -3675,35 +3665,42 @@ var memoryMapping = mixin({
       return null;
     }
     let len = count * (size ?? 0);
-    // check for null address (=== can't be used since address can be both number and bigint)
-    if (context) {
-      // see if the address points to the call context; if so, we need to retain the context
-      // because a copy of the allocator is stored in a returned structure
-      if (size === undefined && context.id === address) {
-        context.retained = true;
+    const index = findMemoryIndex(this.memoryList, address);
+    const entry = this.memoryList[index - 1];
+    let dv;
+    if (entry?.address === address && entry.len === len) {
+      dv = entry.targetDV;
+    } else if (entry?.address <= address && address < adjustAddress(entry.address, entry.len)) {
+      const offset = Number(address - entry.address);
+      const isOpaque = size === undefined;
+      const { targetDV } = entry;
+      if (isOpaque) {
+        len = targetDV.byteLength - offset;
       }
-      const { memoryList } = context;
-      const index = findMemoryIndex(memoryList, address);
-      const entry = memoryList[index - 1];
-      if (entry?.address === address && entry.len === len) {
-        return entry.targetDV ?? entry.dv;
-      } else if (entry?.address <= address && address < adjustAddress(entry.address, entry.len)) {
-        const offset = Number(address - entry.address);
-        const targetDV = entry.targetDV ?? entry.dv;
-        const isOpaque = size === undefined;
-        if (isOpaque) {
-          len = targetDV.byteLength - offset;
-        }
-        const dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
-        if (isOpaque) {
-          // opaque structure--need to save the alignment
-          dv[ALIGN] = entry.targetAlign;
-        }
-        return dv;
+      dv = this.obtainView(targetDV.buffer, targetDV.byteOffset + offset, len);
+      if (isOpaque) {
+        // opaque structure--need to save the alignment
+        dv[ALIGN] = entry.align;
       }
+    }
+    if (dv) {
+      if (entry.shadowDV && context) {
+        // add entry to context so memory get sync'ed
+        if (!context.shadowList.includes(entry)) {
+          context.shadowList.push(entry);
+        }
+      }
+      return dv;
     }
     // not found in any of the buffers we've seen--assume it's Zig memory
     return this.obtainZigView(address, len);
+  },
+  findShadowView(dv) {
+    for (const { shadowDV, targetDV } of this.memoryList) {
+      if (targetDV === dv) {
+        return shadowDV;
+      }
+    }
   },
   allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
@@ -3773,7 +3770,7 @@ var memoryMapping = mixin({
       const { buffer } = this.memory;
       return this.obtainView(buffer, address, len);
     },
-    getTargetAddress(context, target, cluster) {
+    getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
       if (dv[ZIG]) {
         return this.getViewAddress(dv);
@@ -3781,7 +3778,8 @@ var memoryMapping = mixin({
         // it's a null pointer/empty slice
         return 0;
       }
-      // relocatable buffers always need shadowing
+      // JS buffers always need shadowing
+      return this.getShadowAddress(context, target, cluster, writable);
     },
     getBufferAddress(buffer) {
       return 0;
@@ -4101,43 +4099,44 @@ var objectLinkage = mixin({
   });
 
 var pointerSynchronization = mixin({
-  updatePointerAddresses(context, args) {
+  updatePointerAddresses(context, object) {
     // first, collect all the pointers
     const pointerMap = new Map();
     const bufferMap = new Map();
     const potentialClusters = [];
-    const callback = function({ isActive }) {
-      if (isActive(this)) {
-        // bypass proxy
-        const pointer = this[POINTER];
-        if (!pointerMap.get(pointer)) {
-          const target = pointer[SLOTS][0];
-          if (target) {
-            pointerMap.set(pointer, target);
-            // only relocatable targets need updating
-            const dv = target[MEMORY];
-            if (!dv[ZIG]) {
-              // see if the buffer is shared with other objects
-              const other = bufferMap.get(dv.buffer);
-              if (other) {
-                const array = Array.isArray(other) ? other : [ other ];
-                const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
-                array.splice(index, 0, target);
-                if (!Array.isArray(other)) {
-                  bufferMap.set(dv.buffer, array);
-                  potentialClusters.push(array);
-                }
-              } else {
-                bufferMap.set(dv.buffer, target);
+    const callback = function(flags) {
+      // bypass proxy
+      const pointer = this[POINTER];
+      if (!pointerMap.get(pointer)) {
+        const target = pointer[SLOTS][0];
+        if (target) {
+          const writable = !pointer.constructor.const;
+          const entry = { target, writable };
+          pointerMap.set(pointer, target);
+          // only targets in JS memory need updating
+          const dv = target[MEMORY];
+          if (!dv[ZIG]) {
+            // see if the buffer is shared with other objects
+            const other = bufferMap.get(dv.buffer);
+            if (other) {
+              const array = Array.isArray(other) ? other : [ other ];
+              const index = findSortedIndex(array, dv.byteOffset, e => e.target[MEMORY].byteOffset);
+              array.splice(index, 0, entry);
+              if (!Array.isArray(other)) {
+                bufferMap.set(dv.buffer, array);
+                potentialClusters.push(array);
               }
-              // scan pointers in target
-              target[VISIT]?.(callback);
+            } else {
+              bufferMap.set(dv.buffer, entry);
             }
+            // scan pointers in target
+            target[VISIT]?.(callback, 0);
           }
         }
       }
     };
-    args[VISIT](callback);
+    const flags = VisitorFlag.IgnoreRetval | VisitorFlag.IgnoreInactive;
+    object[VISIT](callback, flags);
     // find targets that overlap each other
     const clusters = this.findTargetClusters(potentialClusters);
     const clusterMap = new Map();
@@ -4150,50 +4149,51 @@ var pointerSynchronization = mixin({
     for (const [ pointer, target ] of pointerMap) {
       if (!pointer[MEMORY][ZIG]) {
         const cluster = clusterMap.get(target);
-        const address = this.getTargetAddress(context, target, cluster)
-                     ?? this.getShadowAddress(context, target, cluster);
-        // update the pointer
-        pointer[ADDRESS] = address;
+        const writable = cluster?.writable ?? !pointer.constructor.const;
+        pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);
         if (LENGTH in pointer) {
           pointer[LENGTH] = target.length;
         }
       }
     }
   },
-  updatePointerTargets(context, args) {
+  updatePointerTargets(context, object, inbound = false) {
     const pointerMap = new Map();
-    const callback = function({ isActive, isMutable }) {
+    const callback = function(flags) {
       // bypass proxy
-      const pointer = this[POINTER] /* c8 ignore next */ ?? this;
+      const pointer = this[POINTER];
       if (!pointerMap.get(pointer)) {
         pointerMap.set(pointer, true);
-        const writable = !pointer.constructor.const;
         const currentTarget = pointer[SLOTS][0];
-        const newTarget = (!currentTarget || isMutable(this))
-        ? pointer[UPDATE](context, true, isActive(this))
+        const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
+        ? pointer[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
         : currentTarget;
-        // update targets of pointers in original target if it's in relocatable memory
-        // pointers in Zig memory are updated on access so we don't need to do it here
-        // (and they should never point to reloctable memory)
-        if (currentTarget && !currentTarget[MEMORY][ZIG]) {
-          currentTarget[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+        const targetFlags = (pointer.constructor.const) ? VisitorFlag.IsImmutable : 0;
+        if (!(targetFlags & VisitorFlag.IsImmutable)) {
+          // update targets of pointers in original target if it's in JS memory
+          // pointers in Zig memory are updated on access so we don't need to do it here
+          // (and they should never point to reloctable memory)
+          if (currentTarget && !currentTarget[MEMORY][ZIG]) {
+            currentTarget[VISIT]?.(callback, targetFlags);
+          }
         }
         if (newTarget !== currentTarget) {
+          // acquire targets of pointers in new target if it;s in JS memory
           if (newTarget && !newTarget[MEMORY][ZIG]) {
-            // acquire targets of pointers in new target
-            newTarget?.[VISIT]?.(callback, { vivificate: true, isMutable: () => writable });
+            newTarget?.[VISIT]?.(callback, targetFlags);
           }
         }
       }
     };
-    args[VISIT](callback, { vivificate: true });
+    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
+    object[VISIT](callback, flags);
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];
-    for (const targets of potentialClusters) {
+    for (const entries of potentialClusters) {
       let prevTarget = null, prevStart = 0, prevEnd = 0;
       let currentCluster = null;
-      for (const target of targets) {
+      for (const { target, writable } of entries) {
         const dv = target[MEMORY];
         const { byteOffset: start, byteLength } = dv;
         const end = start + byteLength;
@@ -4208,8 +4208,11 @@ var pointerSynchronization = mixin({
                 end: prevEnd,
                 address: undefined,
                 misaligned: undefined,
+                writable,
               };
               clusters.push(currentCluster);
+            } else {
+              currentCluster.writable ||= writable;
             }
             currentCluster.targets.push(target);
             if (end > prevEnd) {
@@ -4235,33 +4238,40 @@ var pointerSynchronization = mixin({
 });
 
 var promiseCallback = mixin({
-  createCallback(args, structure, callback) {
-    if (callback) {
-      if (typeof(callback) !== 'function') {
-        throw new TypeMismatch('function', callback);
+  createCallback(args, structure, func) {
+    if (func) {
+      if (typeof(func) !== 'function') {
+        throw new TypeMismatch('function', func);
       }
     } else {
-      let resolve, reject;
-      args[PROMISE] = new Promise((...args) => {
-        resolve = args[0];
-        reject = args[1];
-      });
-      callback = (result) => {
-        if (result?.[MEMORY]?.[ZIG]) {
-          // the memory in the result object is stack memory, which will go bad after the function
-          // returns; we need to copy the content into JavaScript memory
-          result = new result.constructor(result);
-        }
-        const f = (result instanceof Error) ? reject : resolve;
-        f(result);
-      };
+      args[PROMISE] = new Promise((resolve, reject) => {
+        func = (result) => {
+          if (result?.[MEMORY]?.[ZIG]) {
+            // the memory in the result object is stack memory, which will go bad after the function
+            // returns; we need to copy the content into JavaScript memory
+            result = new result.constructor(result);
+          }
+          if (result instanceof Error) {
+            reject(result);
+          } else {
+            resolve(result);
+          }        };
+        });
     }
-    return (result) => {
-      if (!(result instanceof Error)) {
+    const cb = args[CALLBACK] = (result) => {
+      const isError = result instanceof Error;
+      if (!isError) {
         args[FINALIZE]();
       }
-      return callback(result);
+      const id = this.getFunctionId(cb);
+      this.releaseFunction(id);
+      if (func.length === 2) {
+        return func(isError ? result : null, isError ? null : result);
+      } else {
+        return func(result);
+      }
     };
+    return cb;
   },
 });
 
@@ -4488,7 +4498,6 @@ var structureAcquisition = mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
-      this[CONTEXT] = new CallContext();
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
@@ -4620,7 +4629,7 @@ var structureAcquisition = mixin({
     return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
-    return `E${this.structureCounters.enum++}`;
+    return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
     const { instance: { members: [ payload ] } } = s;
@@ -4642,7 +4651,8 @@ var structureAcquisition = mixin({
         prefix = '[*]';
       }
     }
-    const sentinel = target.constructor[SENTINEL];
+    // constructor can be null when a structure is recursive
+    const sentinel = target.structure.constructor?.[SENTINEL];
     if (sentinel) {
       prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
     }
@@ -4668,7 +4678,7 @@ var structureAcquisition = mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}) ${rvName})`;
   },
   getVariadicStructName(s) {
     const { instance: { members } } = s;
@@ -4676,7 +4686,7 @@ var structureAcquisition = mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
     const { instance: { members: [ args ] } } = s;
@@ -5094,7 +5104,7 @@ function protectElements(array) {
   df(array, 'get', { value: getReadOnly });
 }
 
-var all$1 = mixin({
+var all$2 = mixin({
   defineMember(member, applyTransform = true) {
     if (!member) {
       return {};
@@ -5128,8 +5138,8 @@ function bindSlot(slot, { get, set }) {
         return get.call(this, slot);
       },
       set: (set)
-      ? function(arg) {
-          return set.call(this, slot, arg);
+      ? function(arg, allocator) {
+          return set.call(this, slot, arg, allocator);
         }
       : undefined,
     };
@@ -5265,84 +5275,10 @@ function getObject(slot) {
   return object;
 }
 
-function setValue(slot, value) {
+function setValue(slot, value, allocator) {
   const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  object.$ = value;
+  object[INITIALIZE](value, allocator);
 }
-
-var pointerInArray = mixin({
-  defineVisitorArray(structure) {
-    const value = function visitPointers(cb, options = {}) {
-      const {
-        source,
-        vivificate = false,
-        isActive = always,
-        isMutable = always,
-      } = options;
-      const childOptions = {
-        ...options,
-        isActive: () => isActive(this),
-        isMutable: () => isMutable(this),
-      };
-      for (let i = 0, len = this.length; i < len; i++) {
-        // no need to check for empty slots, since that isn't possible
-        if (source) {
-          childOptions.source = source?.[SLOTS][i];
-        }
-        const child = this[SLOTS][i] ?? (vivificate ? this[VIVIFICATE](i) : null);
-        if (child) {
-          child[VISIT](cb, childOptions);
-        }
-      }
-    };
-    return { value };
-  },
-});
-
-var pointerInStruct = mixin({
-  defineVisitorStruct(structure, visitorOptions = {}) {
-    const {
-      isChildActive = always,
-      isChildMutable = always,
-    } = visitorOptions;
-    const { instance: { members } } = structure;
-    const pointerMembers = members.filter(m => m.structure?.flags & StructureFlag.HasPointer);
-    const value = function visitPointers(cb, options = {}) {
-      const {
-        source,
-        vivificate = false,
-        isActive = always,
-        isMutable = always,
-      } = options;
-      const childOptions = {
-        ...options,
-        isActive: (object) => {
-          // make sure parent object is active, then check whether the child is active
-          return isActive(this) && isChildActive.call(this, object);
-        },
-        isMutable: (object) => {
-          return isMutable(this) && isChildMutable.call(this, object);
-        },
-      };
-      for (const { slot } of pointerMembers) {
-        if (source) {
-          // when src is a the struct's template, most slots will likely be empty,
-          // since pointer fields aren't likely to have default values
-          const srcChild = source[SLOTS]?.[slot];
-          if (!srcChild) {
-            continue;
-          }
-          childOptions.source = srcChild;
-        }
-        const child = this[SLOTS][slot] ?? (vivificate ? this[VIVIFICATE](slot) : null);
-        if (child) {
-          child[VISIT](cb, childOptions);
-        }
-      }
-    };
-    return { value };
-  }
-});
 
 var primitive$1 = mixin({
   ...({
@@ -5877,7 +5813,7 @@ function getErrorHandler(options) {
   : (cb) => cb();
 }
 
-var all = mixin({
+var all$1 = mixin({
   defineStructure(structure) {
     const {
       type,
@@ -6136,7 +6072,7 @@ var all = mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.('copy', { vivificate: true, source: template });
+          this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
         }
       }
       for (const key of argKeys) {
@@ -6206,7 +6142,6 @@ var argStruct = mixin({
         if (args.length !== length) {
           throw new ArgumentCountMismatch(length, args.length);
         }
-        this[CONTEXT] = new CallContext();
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }
@@ -6218,16 +6153,9 @@ var argStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: rvSlot, type: rvType } = members[0];
-    const isChildMutable = (rvType === MemberType.Object)
-    ? function(object) {
-        const child = this[VIVIFICATE](rvSlot);
-        return object === child;
-      }
-    : never;
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildMutable });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       this.detectArgumentFeatures(argMembers);
@@ -6339,11 +6267,11 @@ var array = mixin({
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else {
         if (typeof(arg) === 'string' && flags & ArrayFlag.IsString) {
@@ -6356,7 +6284,7 @@ var array = mixin({
           }
           let i = 0;
           for (const value of arg) {
-            set.call(this, i++, value);
+            set.call(this, i++, value, allocator);
           }
         } else if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {
@@ -6384,7 +6312,7 @@ var array = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeArray(structure, staticDescriptors) {
@@ -6707,12 +6635,12 @@ class ZigErrorBase extends Error {
 var errorUnion = mixin({
   defineErrorUnion(structure, descriptors) {
     const {
-      instance: { members },
+      instance: { members: [ valueMember, errorMember ] },
       flags,
     } = structure;
-    const { get: getValue, set: setValue } = this.defineMember(members[0]);
-    const { get: getError, set: setError } = this.defineMember(members[1]);
-    const { get: getErrorNumber, set: setErrorNumber } = this.defineMember(members[1], false);
+    const { get: getValue, set: setValue } = this.defineMember(valueMember);
+    const { get: getError, set: setError } = this.defineMember(errorMember);
+    const { get: getErrorNumber, set: setErrorNumber } = this.defineMember(errorMember, false);
     const get = function() {
       const errNum = getErrorNumber.call(this);
       if (errNum) {
@@ -6721,37 +6649,40 @@ var errorUnion = mixin({
         return getValue.call(this);
       }
     };
-    const isValueVoid = members[0].type === MemberType.Void;
-    const errorSet = members[1].structure.constructor;
-    const isChildActive = function() {
-      return !getErrorNumber.call(this);
-    };
+    const isValueVoid = valueMember.type === MemberType.Void;
+    const ErrorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.('reset');
+      this[VISIT]?.('reset', 0);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          if (isChildActive.call(this)) {
-            this[VISIT]('copy', { vivificate: true, source: arg });
+          if (!getErrorNumber.call(this)) {
+            this[VISIT]('copy', 0, arg);
           }
         }
-      } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
+      } else if (arg instanceof ErrorSet[CLASS] && ErrorSet(arg)) {
         setError.call(this, arg);
         clearValue.call(this);
       } else if (arg !== undefined || isValueVoid) {
         try {
           // call setValue() first, in case it throws
-          setValue.call(this, arg);
+          setValue.call(this, arg, allocator);
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            // we gave setValue a chance to see if the error is actually an acceptable value
-            // now is time to throw an error
-            throw new NotInErrorSet(structure);
+            const match = ErrorSet[arg] ?? ErrorSet.Unexpected;
+            if (match) {
+              setError.call(this, match);
+              clearValue.call(this);
+            } else {
+              // we gave setValue a chance to see if the error is actually an acceptable value
+              // now is time to throw an error
+              throw new NotInErrorSet(structure);
+            }
           } else if (isErrorJSON(arg)) {
             // setValue() failed because the argument actually is an error as JSON
             setError.call(this, arg);
@@ -6768,7 +6699,7 @@ var errorUnion = mixin({
         }
       }
     };
-    const { bitOffset, byteSize } = members[0];
+    const { bitOffset, byteSize } = valueMember;
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -6776,7 +6707,7 @@ var errorUnion = mixin({
     // for clear value after error union is set to an an error (from mixin "features/data-copying")
     descriptors[RESET] = this.defineResetter(bitOffset / 8, byteSize);
     // for operating on pointers contained in the error union
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorErrorUnion(valueMember, getErrorNumber);
     return constructor;
   },
 });
@@ -6880,11 +6811,11 @@ var opaque = mixin({
 var optional = mixin({
   defineOptional(structure, descriptors) {
     const {
-      instance: { members },
+      instance: { members: [ valueMember, presentMember ] },
       flags,
     } = structure;
-    const { get: getValue, set: setValue } = this.defineMember(members[0]);
-    const { get: getPresent, set: setPresent } = this.defineMember(members[1]);
+    const { get: getValue, set: setValue } = this.defineMember(valueMember);
+    const { get: getPresent, set: setPresent } = this.defineMember(presentMember);
     const get = function() {
       const present = getPresent.call(this);
       if (present) {
@@ -6894,18 +6825,14 @@ var optional = mixin({
         return null;
       }
     };
-    const isValueVoid = members[0].type === MemberType.Void;
-    const isChildPointer = members[0].structure.type === StructureType.Pointer;
-    const isChildActive = function () {
-      return !!getPresent.call(this);
-    };
-    const initializer = function(arg) {
+    const isValueVoid = valueMember.type === MemberType.Void;
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
-          if (isChildActive.call(arg)) {
-            this[VISIT]('copy', { vivificate: true, source: arg });
+          if (getPresent.call(this)) {
+            this[VISIT]('copy', VisitorFlag.Vivificate, arg);
           }
         }
       } else if (arg === null) {
@@ -6915,17 +6842,17 @@ var optional = mixin({
         this[VISIT]?.('reset');
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
-        setValue.call(this, arg);
-        if (flags & OptionalFlag.HasSelector || (isChildPointer && !this[MEMORY][ZIG])) {
+        setValue.call(this, arg, allocator);
+        if (flags & OptionalFlag.HasSelector || !this[MEMORY][ZIG]) {
           // since setValue() wouldn't write address into memory when the pointer is in
-          // relocatable memory, we need to use setPresent() in order to write something
+          // JS memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
           setPresent.call(this, 1);
         }
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure);
-    const { bitOffset, byteSize } = members[0];
+    const { bitOffset, byteSize } = valueMember;
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
@@ -6933,7 +6860,7 @@ var optional = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, { isChildActive });
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorOptional(valueMember, getPresent);
     return constructor;
   },
 });
@@ -6941,7 +6868,6 @@ var optional = mixin({
 var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
-      name,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -7010,7 +6936,8 @@ var pointer = mixin({
     : null;
     const getTargetObject = function() {
       const pointer = this[POINTER] ?? this;
-      const target = updateTarget.call(pointer, null, false);
+      const empty = !pointer[SLOTS][0];
+      const target = updateTarget.call(pointer, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;
@@ -7024,12 +6951,17 @@ var pointer = mixin({
         return;
       }
       const pointer = this[POINTER] ?? this;
-      // the target sits in Zig memory--apply the change immediately
       if (arg) {
-        if (arg[MEMORY][ZIG]) {
-          const address = thisEnv.getViewAddress(arg[MEMORY]);
+        const zig = arg[MEMORY][ZIG];
+        if (zig) {
+          // the target sits in Zig memory--apply the change immediately
+          const { address, js } = zig;
           setAddress.call(this, address);
           setLength?.call?.(this, arg.length);
+          if (js) {
+            // remove the fake Zig memory attributes now that we've bypassed the check
+            arg[MEMORY][ZIG] = undefined;
+          }
         } else {
           if (pointer[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired(structure, arg);
@@ -7094,12 +7026,6 @@ var pointer = mixin({
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
       : thisEnv.obtainZigView(zig.address, byteLength);
-      const free = zig?.free;
-      if (free) {
-        // transfer free function to new view
-        newDV[ZIG].free = free;
-        zig.free = null;
-      }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);
@@ -7229,7 +7155,7 @@ var pointer = mixin({
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };
     descriptors[LENGTH] = { set: setLength };
-    descriptors[VISIT] = defineValue(visitPointer);
+    descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
     // disable these so the target's properties are returned instead through auto-dereferencing
@@ -7271,47 +7197,6 @@ var pointer = mixin({
     };
   }
 });
-
-function throwInaccessible() {
-  throw new InaccessiblePointer();
-}
-const builtinVisitors = {
-  copy({ source }) {
-    const target = source[SLOTS][0];
-    if (target) {
-      this[TARGET] = target;
-    }
-  },
-  reset({ isActive }) {
-    if (this[SLOTS][0] && !isActive(this)) {
-      this[SLOTS][0] = undefined;
-    }
-  },
-  disable() {
-    const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-    defineProperties(this[POINTER], {
-      '*': disabledProp,
-      '$': disabledProp,
-      [POINTER]: disabledProp,
-      [TARGET]: disabledProp,
-    });
-  },
-};
-
-function visitPointer(visitor, options = {}) {
-  const {
-    source,
-    isActive = always,
-    isMutable = always,
-  } = options;
-  let fn;
-  if (typeof(visitor) === 'string') {
-    fn = builtinVisitors[visitor];
-  } else {
-    fn = visitor;
-  }
-  fn.call(this, { source, isActive, isMutable });
-}
 
 function isPointerOf(arg, Target) {
   return (arg?.constructor?.child === Target && arg['*']);
@@ -7501,7 +7386,7 @@ var slice = mixin({
         }
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else if (typeof(arg) === 'string' && flags & SliceFlag.IsString) {
         initializer.call(this, { string: arg }, allocator);
@@ -7515,7 +7400,7 @@ var slice = mixin({
         let i = 0;
         for (const value of arg) {
           constructor[SENTINEL]?.validateValue(value, i, arg.length);
-          set.call(this, i++, value);
+          set.call(this, i++, value, allocator);
         }
       } else if (typeof(arg) === 'number') {
         if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {
@@ -7578,7 +7463,7 @@ var slice = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {
@@ -7650,14 +7535,14 @@ var struct = mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', 0, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
-        propApplier.call(this, arg);
+        propApplier.call(this, arg, allocator);
       } else if ((typeof(arg) === 'number' || typeof(arg) === 'bigint') && backingInt) {
         backingInt.set.call(this, arg);
       } else if (arg !== undefined) {
@@ -7707,7 +7592,7 @@ var struct = mixin({
     // for creating complex fields on access
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
-    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
     descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
     descriptors[PROPS] = defineValue(props);
     if (flags & StructFlag.IsAllocator) {
@@ -7749,11 +7634,11 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
-          this[VISIT]('copy', { vivificate: true, source: arg });
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
       } else if (arg && typeof(arg) === 'object') {
         let found = 0;
@@ -7765,7 +7650,7 @@ var union = mixin({
         if (found > 1) {
           throw new MultipleUnionInitializers(structure);
         }
-        if (propApplier.call(this, arg) === 0) {
+        if (propApplier.call(this, arg, allocator) === 0) {
           throw new MissingUnionInitializer(structure, arg, exclusion);
         }
       } else if (arg !== undefined) {
@@ -7837,21 +7722,15 @@ var union = mixin({
     descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT]('disable', { vivificate: true });
+        this[VISIT](disablePointer);
+        // no need to visit them again
+        this[VISIT] = empty;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(structure, {
-      isChildActive: (flags & UnionFlag.HasTag)
-      ? function(child) {
-          const name = getActiveField.call(this);
-          const active = getters[name].call(this);
-          return child === active;
-        }
-      : () => false,
-    });
+    descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, (flags & UnionFlag.HasTag) ? getSelectorNumber : null);
     descriptors[ENTRIES] = { get: getUnionEntries };
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
@@ -7872,6 +7751,19 @@ var union = mixin({
   }
 });
 
+function throwInaccessible() {
+  throw new InaccessiblePointer();
+}
+function disablePointer() {
+  const disabledProp = { get: throwInaccessible, set: throwInaccessible };
+  defineProperties(this[POINTER], {
+    '*': disabledProp,
+    '$': disabledProp,
+    [POINTER]: disabledProp,
+    [TARGET]: disabledProp,
+  });
+}
+
 var variadicStruct = mixin({
   defineVariadicStruct(structure, descriptors) {
     const {
@@ -7881,9 +7773,8 @@ var variadicStruct = mixin({
       length,
       instance: { members },
     } = structure;
-    const argMembers = members.slice(1);
-    const maxSlot = members.map(m => m.slot).sort().pop();
     const thisEnv = this;
+    const argMembers = members.slice(1);
     const constructor = function(args) {
       if (args.length < length) {
         throw new ArgumentCountMismatch(length, args.length, true);
@@ -7921,8 +7812,12 @@ var variadicStruct = mixin({
       // copy fixed args
       thisEnv.copyArguments(this, args, argMembers);
       // set their attributes
-      for (const [ index, { bitOffset, bitSize, type, structure: { align } } ] of argMembers.entries()) {
+      let maxSlot = -1;
+      for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
         attrs.set(index, bitOffset / 8, bitSize, align, type);
+        if (slot > maxSlot) {
+          maxSlot = slot;
+        }
       }
       // create additional child objects and copy arguments into them
       for (const [ index, arg ] of varArgs.entries()) {
@@ -7939,18 +7834,10 @@ var variadicStruct = mixin({
         attrs.set(length + index, offset, bitSize, align, type);
       }
       this[ATTRIBUTES] = attrs;
-      this[CONTEXT] = new CallContext();
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
-    const { slot: retvalSlot, type: retvalType } = members[0];
-    const isChildMutable = (retvalType === MemberType.Object)
-    ? function(object) {
-        const child = this[VIVIFICATE](retvalSlot);
-        return object === child;
-      }
-    : function() { return false };
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -7977,26 +7864,7 @@ var variadicStruct = mixin({
     });
     descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    descriptors[VISIT] = {
-      value(cb, options = {}) {
-        const {
-          vivificate = false,
-          isActive = always,
-          isMutable = always,
-        } = options;
-        const childOptions = {
-          ...options,
-          isActive,
-          isMutable: (object) => isMutable(this) && isChildMutable.call(this, object),
-        };
-        if (vivificate && retvalType === MemberType.Object) {
-          this[VIVIFICATE](retvalSlot);
-        }
-        for (const child of Object.values(this[SLOTS])) {
-          child?.[VISIT]?.(cb, childOptions);
-        }
-      },
-    };
+    descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {
@@ -8064,11 +7932,191 @@ var vector = mixin({
   },
 });
 
+var all = mixin({
+  defineVisitor() {
+    return {
+      value(cb, flags, src) {
+        let fn;
+        if (typeof(cb) === 'string') {
+          fn = builtinVisitors[cb];
+        } else {
+          fn = cb;
+        }
+        fn.call(this, flags, src);
+      }
+    };
+  },
+});
+
+function visitChild(slot, cb, flags, src) {
+  let child = this[SLOTS][slot];
+  if (!child) {
+    if (!(flags & VisitorFlag.IgnoreUncreated)) {
+      child = this[VIVIFICATE](slot);
+    } else {
+      return;
+    }
+  }
+  let srcChild;
+  if (src) {
+    srcChild = src[SLOTS][slot];
+    if (!srcChild) {
+      return;
+    }
+  }
+  child[VISIT](cb, flags, srcChild);
+}
+
+const builtinVisitors = {
+  copy(flags, src) {
+    const target = src[SLOTS][0];
+    if (target) {
+      this[TARGET] = target;
+    }
+  },
+  reset(flags) {
+    if (flags & VisitorFlag.IsInactive) {
+      this[SLOTS][0] = undefined;
+    }
+  },
+};
+
+var inArgStruct = mixin({
+  defineVisitorArgStruct(members) {
+    const argSlots = [];
+    let rvSlot = undefined;
+    for (const [ index, { slot, structure } ] of members.entries()) {
+      if (structure.flags & StructureFlag.HasPointer) {
+        if (index === 0) {
+          rvSlot = slot;
+        } else {
+          argSlots.push(slot);
+        }
+      }
+    }
+    return {
+      value(cb, flags, src) {
+        if (!(flags & VisitorFlag.IgnoreArguments) && argSlots.length > 0) {
+          for (const slot of argSlots) {
+            visitChild.call(this, slot, cb, flags | VisitorFlag.IsImmutable, src);
+          }
+        }
+        if (!(flags & VisitorFlag.IgnoreRetval) && rvSlot !== undefined) {
+          visitChild.call(this, rvSlot, cb, flags, src);
+        }
+      }
+    };
+  }
+});
+
+var inArray = mixin({
+  defineVisitorArray() {
+    return {
+      value(cb, flags, src) {
+        for (let slot = 0, len = this.length; slot < len; slot++) {
+          visitChild.call(this, slot, cb, flags, src);
+        }
+      }
+    };
+  },
+});
+
+var inErrorUnion = mixin({
+  defineVisitorErrorUnion(valueMember, getErrorNumber) {
+    const { slot } = valueMember;
+    return {
+      value(cb, flags, src) {
+        if (getErrorNumber.call(this)) {
+          flags |= VisitorFlag.IsInactive;
+        }
+        if (!(flags & VisitorFlag.IsInactive) || !(flags & VisitorFlag.IgnoreInactive)) {
+          visitChild.call(this, slot, cb, flags, src);
+        }
+      }
+    };
+  }
+});
+
+var inOptional = mixin({
+  defineVisitorOptional(valueMember, getPresent) {
+    const { slot } = valueMember;
+    return {
+      value(cb, flags, src) {
+        if (!getPresent.call(this)) {
+          flags |= VisitorFlag.IsInactive;
+        }
+        if (!(flags & VisitorFlag.IsInactive) || !(flags & VisitorFlag.IgnoreInactive)) {
+          visitChild.call(this, slot, cb, flags, src);
+        }
+      }
+    };
+  }
+});
+
+var inStruct = mixin({
+  defineVisitorStruct(members) {
+    const slots = members.filter(m => m.structure?.flags & StructureFlag.HasPointer).map(m => m.slot);
+    return {
+      value(cb, flags, src) {
+        for (const slot of slots) {
+          visitChild.call(this, slot, cb, flags, src);
+        }
+      }
+    };
+  }
+});
+
+var inUnion = mixin({
+  defineVisitorUnion(members, getSelectorNumber) {
+    const pointers = [];
+    for (const [ index, { slot, structure } ] of members.entries()) {
+      if (structure?.flags & StructureFlag.HasPointer) {
+        pointers.push({ index, slot });
+      }
+    }
+    return {
+      value(cb, flags, src) {
+        const selected = getSelectorNumber?.call(this);
+        for (const { index, slot } of pointers) {
+          let fieldFlags = flags;
+          if (index !== selected) {
+            fieldFlags |= VisitorFlag.IsInactive;
+          }
+          if (!(fieldFlags & VisitorFlag.IsInactive) || !(fieldFlags & VisitorFlag.IgnoreInactive)) {
+            visitChild.call(this, slot, cb, fieldFlags, src);
+          }
+        }
+      }
+    };
+  }
+});
+
+var inVariadicStruct = mixin({
+  defineVisitorVariadicStruct(members) {
+    const rvMember = members[0];
+    const rvSlot = (rvMember.structure.flags & StructureFlag.HasPointer) ? rvMember.slot : undefined;
+    return {
+      value(cb, flags, src) {
+        if (!(flags & VisitorFlag.IgnoreArguments)) {
+          for (const [ slot, child ] of Object.entries(this[SLOTS])) {
+            if (slot !== rvSlot && VISIT in child) {
+              visitChild.call(this, slot, cb, flags | VisitorFlag.IsImmutable, src);
+            }
+          }
+        }
+        if (!(flags & VisitorFlag.IgnoreRetval) && rvSlot !== undefined) {
+          visitChild.call(this, rvSlot, cb, flags, src);
+        }
+      }
+    };
+  }
+});
+
 // generated by rollup.config.js
 
 var mixins = /*#__PURE__*/Object.freeze({
   __proto__: null,
-  AccessorAll: all$2,
+  AccessorAll: all$3,
   AccessorBigInt: bigInt,
   AccessorBigUint: bigUint,
   AccessorBool: bool$1,
@@ -8104,7 +8152,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,
-  MemberAll: all$1,
+  MemberAll: all$2,
   MemberBase64: base64,
   MemberBool: bool,
   MemberClampedArray: clampedArray,
@@ -8114,8 +8162,6 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberLiteral: literal,
   MemberNull: _null,
   MemberObject: object,
-  MemberPointerInArray: pointerInArray,
-  MemberPointerInStruct: pointerInStruct,
   MemberPrimitive: primitive$1,
   MemberSentinel: sentinel,
   MemberString: string,
@@ -8127,7 +8173,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberUnsupported: unsupported,
   MemberValueOf: valueOf,
   MemberVoid: _void,
-  StructureAll: all,
+  StructureAll: all$1,
   StructureArgStruct: argStruct,
   StructureArray: array,
   StructureArrayLike: arrayLike,
@@ -8144,7 +8190,15 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureStructLike: structLike,
   StructureUnion: union,
   StructureVariadicStruct: variadicStruct,
-  StructureVector: vector
+  StructureVector: vector,
+  VisitorAll: all,
+  VisitorInArgStruct: inArgStruct,
+  VisitorInArray: inArray,
+  VisitorInErrorUnion: inErrorUnion,
+  VisitorInOptional: inOptional,
+  VisitorInStruct: inStruct,
+  VisitorInUnion: inUnion,
+  VisitorInVariadicStruct: inVariadicStruct
 });
 
 const MagicNumber = 0x6d736100;
