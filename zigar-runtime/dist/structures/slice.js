@@ -58,7 +58,7 @@ var slice = mixin({
         let i = 0;
         for (const value of arg) {
           constructor[SENTINEL]?.validateValue(value, i, arg.length);
-          set.call(this, i++, value);
+          set.call(this, i++, value, allocator);
         }
       } else if (typeof(arg) === 'number') {
         if (!this[MEMORY] && arg >= 0 && isFinite(arg)) {

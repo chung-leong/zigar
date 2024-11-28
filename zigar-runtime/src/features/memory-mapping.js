@@ -145,7 +145,7 @@ export default mixin({
       }
     }
     if (dv) {
-      if (entry.shadowDV) {
+      if (entry.shadowDV && context) {
         // add entry to context so memory get sync'ed
         if (!context.shadowList.includes(entry)) {
           context.shadowList.push(entry);

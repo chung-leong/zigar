@@ -1,7 +1,7 @@
 import { StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UndefinedArgument, adjustArgumentError, ZigError, Exit } from '../errors.js';
-import { CONTEXT, ATTRIBUTES, MEMORY, FINALIZE, PROMISE, VISIT } from '../symbols.js';
+import { ATTRIBUTES, MEMORY, FINALIZE, PROMISE, CALLBACK, VISIT } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -17,7 +17,24 @@ var callMarshalingOutbound = mixin({
       try {
         const argStruct = new ArgStruct(args);
         thisEnv.invokeThunk(thunk, self, argStruct);
-        return argStruct[PROMISE] ?? argStruct.retval;
+        const promise = argStruct[PROMISE];
+        const callback = argStruct[CALLBACK];
+        if (callback) {
+          try {
+            // ensure the function hasn't return an error
+            const { retval } = argStruct;
+            if (retval != null) {
+              // if a function returns a value, then the promise is fulfilled immediately
+              callback(retval);
+            }
+          } catch (err) {
+            callback(err);
+          }
+          // this would be undefined if a callback function is used instead
+          return promise;
+        } else {
+          return argStruct.retval;
+        }
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -79,7 +96,7 @@ var callMarshalingOutbound = mixin({
     }
   },
   invokeThunk(thunk, fn, args) {
-    const context = args[CONTEXT];
+    const context = this.startContext();
     const attrs = args[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
@@ -88,7 +105,7 @@ var callMarshalingOutbound = mixin({
       this.updatePointerAddresses(context, args);
     }
     // return address of shadow for argumnet struct
-    const argAddress = this.getShadowAddress(context, args)
+    const argAddress = this.getShadowAddress(context, args, null, true)
     ;
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
@@ -98,6 +115,7 @@ var callMarshalingOutbound = mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
+      this.endContext();
       throw new ZigError();
     }
     const finalize = () => {
@@ -106,12 +124,11 @@ var callMarshalingOutbound = mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
-      this.releaseShadows(context);
-      this.releaseCallContext?.(context);
       if (this.libc) {
         this.flushStdout?.();
       }
       this.flushConsole?.();
+      this.endContext();
     };
     if (FINALIZE in args) {
       // async function--finalization happens when callback is invoked

@@ -1,6 +1,6 @@
-import { StructureType, StructFlag, Action, CallResult } from '../constants.js';
+import { StructureType, StructFlag, MemberType, Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, SLOTS, THROWING } from '../symbols.js';
+import { MEMORY, ZIG, CALLBACK, VISIT, THROWING } from '../symbols.js';
 
 var callMarshalingInbound = mixin({
   jsFunctionThunkMap: new Map(),
@@ -41,34 +41,56 @@ var callMarshalingInbound = mixin({
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
-        const onError = (err) => {
-          if (ArgStruct[THROWING] && err instanceof Error) {
-            // see if the error is part of the error set of the error union returned by function
-            try {
+        if (VISIT in argStruct) {
+          const context = this.startContext();
+          this.updatePointerTargets(context, argStruct, true);
+          this.updateShadowTargets(context);
+          this.endContext();
+        }
+        const onError = function(err) {
+          try {
+            const cb = argStruct[CALLBACK];
+            // if the error is not part of the error set returned by the function,
+            // the following will throw
+            if (cb) {
+              cb(err);
+            } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct.retval = err;
-              return;
-            } catch (_) {
+            } else {
+              throw err;
             }
+          } catch (_) {
+            result = CallResult.Failure;
+            console.error(err);
           }
-          console.error(err);
-          result = CallResult.Failure;
         };
-        const onReturn = (value) => {
-          argStruct.retval = value;
+        const onReturn = function(value) {
+          const cb = argStruct[CALLBACK];
+          try {
+            if (cb) {
+              cb(value);
+            } else {
+              argStruct.retval = value;
+            }
+          } catch (err) {
+            result = CallResult.Failure;
+            console.error(err);
+          }
         };
         try {
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle) {
-              retval.then(onReturn, onError).then(() => {
-                this.finalizeAsyncCall(futexHandle, result);
-              });
+            if (futexHandle || argStruct[CALLBACK]) {
+              const promise = retval.then(onReturn, onError);
+              if (futexHandle) {
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
+              }
               awaiting = true;
               result = CallResult.OK;
             } else {
               result = CallResult.Deadlock;
             }
-          } else {
+          } else if (retval !== undefined) {
             onReturn(retval);
           }
         } catch (err) {
@@ -98,27 +120,45 @@ var callMarshalingInbound = mixin({
         let options;
         let allocatorCount = 0, callbackCount = 0, signalCount = 0;
         const args = [];
-        for (const [ srcIndex, { structure } ] of members.entries()) {
+        for (const [ srcIndex, { structure, type } ] of members.entries()) {
           // error unions will throw on access, in which case we pass the error as the argument
           try {
-            const arg = this[srcIndex];
+            let arg = this[srcIndex];
+            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+              // create copy in JS memory
+              arg = new arg.constructor(arg);
+            }
             let optName, opt;
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
                 opt = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
-                optName = (++callbackCount === 1) ? 'callback' : '';
-                opt = arg.callback['*'];
+                optName = 'callback';
+                if (++callbackCount === 1) {
+                  const callback = this[CALLBACK] = arg.callback['*'];
+                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
+                }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
-                optName = (++signalCount === 1) ? 'signal' : '';
-                const target = arg.ptr[SLOTS][0];
-                const dv = target[MEMORY];
-                opt = Int32Array(dv.buffer, 0, 1);
+                optName = 'signal';
+                if (++signalCount === 1) {
+                  const controller = new AbortController();
+                  if (arg.ptr['*']) {
+                    controller.abort();
+                  } else {
+                    const interval = setInterval(() => {
+                      if (arg.ptr['*']) {
+                        controller.abort();
+                        clearInterval(interval);
+                      }
+                    }, 50);
+                  }
+                  opt = controller.signal;
+                }
               }
             }
             if (optName !== undefined) {
-              if (optName) {
+              if (opt !== undefined) {
                 options ??= {};
                 options[optName] = opt;
               }
@@ -160,7 +200,7 @@ var callMarshalingInbound = mixin({
     if (thunk && controller) {
       const controllerAddress = this.getViewAddress(controller[MEMORY]);
       const thunkAddress = this.getViewAddress(thunk);
-      const id = this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.destroyJsThunk(controllerAddress, thunkAddress);
       this.releaseZigView(thunk);
       if (id) {
         this.jsFunctionThunkMap.delete(id);

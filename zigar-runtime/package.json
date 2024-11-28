@@ -16,7 +16,7 @@
     "test:node": "./test/x-node",
     "test:both": "./test/x-both",
     "debug": "./test/x-wasm-debug",
-    "debug:node": "./test/x-wasm-debug",
+    "debug:node": "./test/x-node-debug",
     "coverage": "c8 ./test/x-both",
     "rollup": "rollup -c rollup.config.js"
   },

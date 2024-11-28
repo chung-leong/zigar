@@ -1353,6 +1353,60 @@ describe('Structure: pointer', function() {
       expect(pointer['*']).to.be.instanceOf(I8Slice);
       expect([ ...pointer ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
+    it('should correctly handle buffer from default allocator', function() {
+      const env = new Env();
+      const uintStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 1,
+      });
+      env.attachMember(uintStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      env.defineStructure(uintStructure);
+      env.endStructure(uintStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: uintStructure,
+      });
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
+      const { constructor: U8Slice } = sliceStructure;
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        name: '[]u8',
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      const U8SlicePtr = env.defineStructure(structure);
+      env.endStructure(structure);
+      const buffer = new ArrayBuffer(16);
+      const dv = env.obtainView(buffer, 0, 16);
+      dv[ZIG] = { address: usize(0x1000), len: 16, js: true };
+      const pointer = new U8SlicePtr(buffer);
+      const targetDV = pointer['*'][MEMORY];
+      expect(targetDV).to.equal(dv);
+      expect(targetDV[ZIG]).to.be.undefined;
+    })
     it('should require explicit casting of a buffer to a slice of structs', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({

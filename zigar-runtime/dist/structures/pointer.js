@@ -7,7 +7,6 @@ import { getProxy, defineValue, usizeInvalid, findElements } from '../utils.js';
 var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
-      name,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -76,7 +75,8 @@ var pointer = mixin({
     : null;
     const getTargetObject = function() {
       const pointer = this[POINTER] ?? this;
-      const target = updateTarget.call(pointer, null, false);
+      const empty = !pointer[SLOTS][0];
+      const target = updateTarget.call(pointer, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;
@@ -90,12 +90,17 @@ var pointer = mixin({
         return;
       }
       const pointer = this[POINTER] ?? this;
-      // the target sits in Zig memory--apply the change immediately
       if (arg) {
-        if (arg[MEMORY][ZIG]) {
-          const address = thisEnv.getViewAddress(arg[MEMORY]);
+        const zig = arg[MEMORY][ZIG];
+        if (zig) {
+          // the target sits in Zig memory--apply the change immediately
+          const { address, js } = zig;
           setAddress.call(this, address);
           setLength?.call?.(this, arg.length);
+          if (js) {
+            // remove the fake Zig memory attributes now that we've bypassed the check
+            arg[MEMORY][ZIG] = undefined;
+          }
         } else {
           if (pointer[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired(structure, arg);
@@ -160,12 +165,6 @@ var pointer = mixin({
       ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
       // need to ask V8 for a larger external buffer
       : thisEnv.obtainZigView(zig.address, byteLength);
-      const free = zig?.free;
-      if (free) {
-        // transfer free function to new view
-        newDV[ZIG].free = free;
-        zig.free = null;
-      }
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);

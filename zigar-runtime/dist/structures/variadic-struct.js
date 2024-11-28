@@ -1,8 +1,8 @@
 import { StructureFlag, ArgStructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { ALIGN, COPY, RESTORE, VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES, CONTEXT } from '../symbols.js';
-import { defineProperties, defineValue, CallContext } from '../utils.js';
+import { ALIGN, COPY, RESTORE, VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
+import { defineProperties, defineValue } from '../utils.js';
 
 var variadicStruct = mixin({
   defineVariadicStruct(structure, descriptors) {
@@ -74,7 +74,6 @@ var variadicStruct = mixin({
         attrs.set(length + index, offset, bitSize, align, type);
       }
       this[ATTRIBUTES] = attrs;
-      this[CONTEXT] = new CallContext();
     };
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);

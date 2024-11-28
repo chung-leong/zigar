@@ -263,11 +263,4 @@ class ObjectCache {
   }
 }
 
-class CallContext {
-  memoryList = [];
-  shadowMap = null;
-  id = usizeMin;
-  async = false;
-}
-
-export { CallContext, ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getLength, getPrimitiveName, getProxy, getSelf, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getLength, getPrimitiveName, getProxy, getSelf, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };

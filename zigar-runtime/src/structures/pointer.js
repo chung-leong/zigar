@@ -18,7 +18,6 @@ import { defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 export default mixin({
   definePointer(structure, descriptors) {
     const {
-      name,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -87,7 +86,8 @@ export default mixin({
     : null;
     const getTargetObject = function() {
       const pointer = this[POINTER] ?? this;
-      const target = updateTarget.call(pointer, null, false);
+      const empty = !pointer[SLOTS][0];
+      const target = updateTarget.call(pointer, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;

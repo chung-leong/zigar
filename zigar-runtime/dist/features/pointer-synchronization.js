@@ -15,6 +15,8 @@ var pointerSynchronization = mixin({
       if (!pointerMap.get(pointer)) {
         const target = pointer[SLOTS][0];
         if (target) {
+          const writable = !pointer.constructor.const;
+          const entry = { target, writable };
           pointerMap.set(pointer, target);
           // only targets in JS memory need updating
           const dv = target[MEMORY];
@@ -23,14 +25,14 @@ var pointerSynchronization = mixin({
             const other = bufferMap.get(dv.buffer);
             if (other) {
               const array = Array.isArray(other) ? other : [ other ];
-              const index = findSortedIndex(array, dv.byteOffset, t => t[MEMORY].byteOffset);
-              array.splice(index, 0, target);
+              const index = findSortedIndex(array, dv.byteOffset, e => e.target[MEMORY].byteOffset);
+              array.splice(index, 0, entry);
               if (!Array.isArray(other)) {
                 bufferMap.set(dv.buffer, array);
                 potentialClusters.push(array);
               }
             } else {
-              bufferMap.set(dv.buffer, target);
+              bufferMap.set(dv.buffer, entry);
             }
             // scan pointers in target
             target[VISIT]?.(callback, 0);
@@ -52,10 +54,8 @@ var pointerSynchronization = mixin({
     for (const [ pointer, target ] of pointerMap) {
       if (!pointer[MEMORY][ZIG]) {
         const cluster = clusterMap.get(target);
-        const address = this.getTargetAddress(context, target, cluster)
-                     ?? this.getShadowAddress(context, target, cluster);
-        // update the pointer
-        pointer[ADDRESS] = address;
+        const writable = cluster?.writable ?? !pointer.constructor.const;
+        pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);
         if (LENGTH in pointer) {
           pointer[LENGTH] = target.length;
         }
@@ -95,10 +95,10 @@ var pointerSynchronization = mixin({
   },
   findTargetClusters(potentialClusters) {
     const clusters = [];
-    for (const targets of potentialClusters) {
+    for (const entries of potentialClusters) {
       let prevTarget = null, prevStart = 0, prevEnd = 0;
       let currentCluster = null;
-      for (const target of targets) {
+      for (const { target, writable } of entries) {
         const dv = target[MEMORY];
         const { byteOffset: start, byteLength } = dv;
         const end = start + byteLength;
@@ -113,8 +113,11 @@ var pointerSynchronization = mixin({
                 end: prevEnd,
                 address: undefined,
                 misaligned: undefined,
+                writable,
               };
               clusters.push(currentCluster);
+            } else {
+              currentCluster.writable ||= writable;
             }
             currentCluster.targets.push(target);
             if (end > prevEnd) {

@@ -861,7 +861,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
-        byteSize: 4,
+        byteSize: addressByteSize,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -893,7 +893,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: MemberType.Object,
         bitSize: addressByteSize * 8,
         bitOffset: 32,
-        byteSize: 4,
+        byteSize: addressByteSize,
         structure: signalStructure,
         slot: 0,
       });
@@ -910,7 +910,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: MemberType.Object,
         bitSize: addressByteSize * 8,
         bitOffset: (4 + addressByteSize + 4) * 8,
-        byteSize: 4,
+        byteSize: addressByteSize,
         structure: signalStructure,
         slot: 1,
       });
@@ -986,7 +986,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
-        byteSize: 4,
+        byteSize: addressByteSize,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -1018,7 +1018,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: MemberType.Object,
         bitSize: addressByteSize * 8,
         bitOffset: 32,
-        byteSize: 4,
+        byteSize: addressByteSize,
         structure: signalStructure,
         slot: 0,
       });
@@ -1035,7 +1035,7 @@ describe('Feature: call-marshaling-inbound', function() {
         type: MemberType.Object,
         bitSize: addressByteSize * 8,
         bitOffset: (4 + addressByteSize + 4) * 8,
-        byteSize: 4,
+        byteSize: addressByteSize,
         structure: signalStructure,
         slot: 1,
       });

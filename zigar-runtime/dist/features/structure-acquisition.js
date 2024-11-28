@@ -1,7 +1,7 @@
-import { SLOTS, MEMORY, ENVIRONMENT, COPY, CONST_TARGET, ZIG, SENTINEL, CONTEXT } from '../symbols.js';
+import { SLOTS, MEMORY, ENVIRONMENT, COPY, CONST_TARGET, ZIG, SENTINEL } from '../symbols.js';
 import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { defineProperty, findObjects, decodeText, CallContext } from '../utils.js';
+import { defineProperty, findObjects, decodeText } from '../utils.js';
 
 var structureAcquisition = mixin({
   comptime: false,
@@ -137,7 +137,6 @@ var structureAcquisition = mixin({
       }
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
-      this[CONTEXT] = new CallContext();
     };
     defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
@@ -263,7 +262,7 @@ var structureAcquisition = mixin({
     return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
-    return `E${this.structureCounters.enum++}`;
+    return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
     const { instance: { members: [ payload ] } } = s;
@@ -285,7 +284,8 @@ var structureAcquisition = mixin({
         prefix = '[*]';
       }
     }
-    const sentinel = target.constructor[SENTINEL];
+    // constructor can be null when a structure is recursive
+    const sentinel = target.structure.constructor?.[SENTINEL];
     if (sentinel) {
       prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
     }
@@ -311,7 +311,7 @@ var structureAcquisition = mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}) ${rvName})`;
   },
   getVariadicStructName(s) {
     const { instance: { members } } = s;
@@ -319,7 +319,7 @@ var structureAcquisition = mixin({
     const args = members.slice(1);
     const rvName = retval.structure.name;
     const argNames = args.map(a => a.structure.name);
-    return `Arg(fn (${argNames.join(' ,')}, ...) ${rvName})`;
+    return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
     const { instance: { members: [ args ] } } = s;

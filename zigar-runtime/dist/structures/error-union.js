@@ -22,13 +22,13 @@ var errorUnion = mixin({
       }
     };
     const isValueVoid = valueMember.type === MemberType.Void;
-    const errorSet = errorMember.structure.constructor;
+    const ErrorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
       this[VISIT]?.('reset', 0);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = function(arg, allocator) {
       if (arg instanceof constructor) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -36,19 +36,25 @@ var errorUnion = mixin({
             this[VISIT]('copy', 0, arg);
           }
         }
-      } else if (arg instanceof errorSet[CLASS] && errorSet(arg)) {
+      } else if (arg instanceof ErrorSet[CLASS] && ErrorSet(arg)) {
         setError.call(this, arg);
         clearValue.call(this);
       } else if (arg !== undefined || isValueVoid) {
         try {
           // call setValue() first, in case it throws
-          setValue.call(this, arg);
+          setValue.call(this, arg, allocator);
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            // we gave setValue a chance to see if the error is actually an acceptable value
-            // now is time to throw an error
-            throw new NotInErrorSet(structure);
+            const match = ErrorSet[arg] ?? ErrorSet.Unexpected;
+            if (match) {
+              setError.call(this, match);
+              clearValue.call(this);
+            } else {
+              // we gave setValue a chance to see if the error is actually an acceptable value
+              // now is time to throw an error
+              throw new NotInErrorSet(structure);
+            }
           } else if (isErrorJSON(arg)) {
             // setValue() failed because the argument actually is an error as JSON
             setError.call(this, arg);

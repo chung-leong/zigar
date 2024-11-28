@@ -1,35 +1,42 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { PROMISE, MEMORY, ZIG, FINALIZE } from '../symbols.js';
+import { PROMISE, MEMORY, ZIG, CALLBACK, FINALIZE } from '../symbols.js';
 
 var promiseCallback = mixin({
-  createCallback(args, structure, callback) {
-    if (callback) {
-      if (typeof(callback) !== 'function') {
-        throw new TypeMismatch('function', callback);
+  createCallback(args, structure, func) {
+    if (func) {
+      if (typeof(func) !== 'function') {
+        throw new TypeMismatch('function', func);
       }
     } else {
-      let resolve, reject;
-      args[PROMISE] = new Promise((...args) => {
-        resolve = args[0];
-        reject = args[1];
-      });
-      callback = (result) => {
-        if (result?.[MEMORY]?.[ZIG]) {
-          // the memory in the result object is stack memory, which will go bad after the function
-          // returns; we need to copy the content into JavaScript memory
-          result = new result.constructor(result);
-        }
-        const f = (result instanceof Error) ? reject : resolve;
-        f(result);
-      };
+      args[PROMISE] = new Promise((resolve, reject) => {
+        func = (result) => {
+          if (result?.[MEMORY]?.[ZIG]) {
+            // the memory in the result object is stack memory, which will go bad after the function
+            // returns; we need to copy the content into JavaScript memory
+            result = new result.constructor(result);
+          }
+          if (result instanceof Error) {
+            reject(result);
+          } else {
+            resolve(result);
+          }        };
+        });
     }
-    return (result) => {
-      if (!(result instanceof Error)) {
+    const cb = args[CALLBACK] = (result) => {
+      const isError = result instanceof Error;
+      if (!isError) {
         args[FINALIZE]();
       }
-      return callback(result);
+      const id = this.getFunctionId(cb);
+      this.releaseFunction(id);
+      if (func.length === 2) {
+        return func(isError ? result : null, isError ? null : result);
+      } else {
+        return func(result);
+      }
     };
+    return cb;
   },
 });
 
