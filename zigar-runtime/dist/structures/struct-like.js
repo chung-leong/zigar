@@ -1,7 +1,7 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
-import { MEMORY, SLOTS, PARENT } from '../symbols.js';
+import { RESTORE, MEMORY, SLOTS, PARENT } from '../symbols.js';
 
 var structLike = mixin({
   defineVivificatorStruct(structure) {
@@ -15,6 +15,9 @@ var structLike = mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
+        {
+          this[RESTORE]?.();
+        }
         const dv = this[MEMORY];
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);

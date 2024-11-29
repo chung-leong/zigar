@@ -15,7 +15,6 @@ var moduleLoading = mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.freeDefaultAllocator?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;

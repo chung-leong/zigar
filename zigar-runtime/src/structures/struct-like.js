@@ -1,7 +1,7 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
-import { MEMORY, PARENT, SLOTS } from '../symbols.js';
+import { MEMORY, PARENT, RESTORE, SLOTS } from '../symbols.js';
 
 export default mixin({
   defineVivificatorStruct(structure) {
@@ -15,6 +15,9 @@ export default mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
+        if (process.env.TARGET === 'wasm') {
+          this[RESTORE]?.();
+        }
         const dv = this[MEMORY];
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);

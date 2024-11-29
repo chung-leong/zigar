@@ -90,8 +90,14 @@ export default mixin({
   },
   updateShadowTargets(context) {
     const copy = this.getCopyFunction();
-    for (const { targetDV, shadowDV, writable } of context.shadowList) {
+    for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
+        if (process.env.TARGET === 'wasm') {
+          const { len, address } = shadowDV[ZIG];
+          if (len > 0 && shadowDV.buffer.byteLength === 0) {
+            shadowDV = this.obtainZigView(address, len);
+          }
+        }
         copy(targetDV, shadowDV);
       }
     }
@@ -149,6 +155,7 @@ export default mixin({
         // add entry to context so memory get sync'ed
         if (!context.shadowList.includes(entry)) {
           context.shadowList.push(entry);
+          console.log({ entry });
         }
       }
       return dv;

@@ -122,10 +122,10 @@ export default mixin({
     }
     const finalize = () => {
       // create objects that pointers point to
-      this.updateShadowTargets(context);
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
+      this.updateShadowTargets(context);
       if (this.libc) {
         this.flushStdout?.();
       }

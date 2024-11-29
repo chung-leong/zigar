@@ -22,6 +22,9 @@ var arrayLike = mixin({
     const thisEnv = this;
     const value = function getChild(index) {
       const { constructor } = elementStructure;
+      {
+        this[RESTORE]?.();
+      }
       const dv = this[MEMORY];
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;

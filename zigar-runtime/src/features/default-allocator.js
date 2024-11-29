@@ -1,34 +1,38 @@
 import { mixin } from '../environment.js';
-import { ALIGN, MEMORY, SIZE, ZIG } from '../symbols.js';
+import { MEMORY, ZIG } from '../symbols.js';
 import { usizeMax } from '../utils.js';
 
 export default mixin({
-  allocatorVTable: null,
+  defaultAllocator: null,
+  vtableFnIds: null,
 
   createDefaultAllocator(args, structure) {
-    const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVTable;
-    if (!vtable) {
-      // create vtable in Zig memory
+    let allocator = this.defaultAllocator;
+    if (!allocator) {
+      const { constructor: Allocator } = structure;
       const { VTable, noResize } = Allocator;
-      const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.allocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign);
-      vtable.free = (ptr, buf, ptrAlign) => {
-        const address = this.getViewAddress(buf['*'][MEMORY]);
-        const len = buf.length;
-        this.freeHostMemory(address, len, 1 << ptrAlign);
+      const vtable = {
+        alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
+        free: (ptr, buf, ptrAlign) => {
+          const address = this.getViewAddress(buf['*'][MEMORY]);
+          const len = buf.length;
+          this.freeHostMemory(address, len, 1 << ptrAlign);
+        },
+        resize: noResize,
       };
-      vtable.resize = noResize;
+      const ptr = this.obtainZigView(usizeMax, 0);
+      allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
+      this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
     }
-    const ptr = this.obtainZigView(usizeMax, 0);
-    return new Allocator({ ptr, vtable });
+    return allocator;
   },
   freeDefaultAllocator() {
-    if (this.allocatorVTable) {
-      const dv = this.allocatorVTable[MEMORY];
-      this.allocatorVTable = null;
-      this.freeZigMemory(dv);
+    if (this.vtableFnIds) {
+      for (const id of this.vtableFnIds) {
+        this.releaseFunction(id);
+      }
+      this.defaultAllocator = null;
+      this.vtableFnIds = null;
     }
   },
   allocateHostMemory(len, align) {
