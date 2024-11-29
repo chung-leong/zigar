@@ -2,7 +2,7 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferSizeMismatch, BufferExpected } from '../errors.js';
 import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG } from '../symbols.js';
-import { findElements } from '../utils.js';
+import { findElements, usizeInvalid } from '../utils.js';
 
 var viewManagement = mixin({
   viewMap: new Map(),
@@ -100,6 +100,12 @@ var viewManagement = mixin({
         }
       } else {
         existing = entry.get(`${offset}:${len}`);
+      }
+    }
+    {
+      if (existing?.[ZIG]?.address === usizeInvalid) {
+        // view was of previously freed memory
+        existing = null;
       }
     }
     return { existing, entry };

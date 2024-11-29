@@ -4,7 +4,7 @@ import {
   ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
 } from '../errors.js';
 import { COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
-import { adjustAddress, alignForward, findElements } from '../utils.js';
+import { adjustAddress, alignForward, findElements, usizeInvalid } from '../utils.js';
 
 export default mixin({
   viewMap: new Map(),
@@ -104,6 +104,12 @@ export default mixin({
         }
       } else {
         existing = entry.get(`${offset}:${len}`);
+      }
+    }
+    if (process.env.TARGET === 'wasm') {
+      if (existing?.[ZIG]?.address === usizeInvalid) {
+        // view was of previously freed memory
+        existing = null;
       }
     }
     return { existing, entry };

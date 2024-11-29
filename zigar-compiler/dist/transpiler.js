@@ -2799,8 +2799,10 @@ var allocatorMethods = mixin({
           throw new TypeMismatch('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
-        if (!address || address === usizeInvalid) {
+        if (address === usizeInvalid) {
           throw new PreviouslyFreed(arg);
+        } else if (!address) {
+          return;
         }
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
@@ -3289,10 +3291,10 @@ var callMarshalingOutbound = mixin({
     }
     const finalize = () => {
       // create objects that pointers point to
-      this.updateShadowTargets(context);
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
+      this.updateShadowTargets(context);
       if (this.libc) {
         this.flushStdout?.();
       }
@@ -3466,32 +3468,36 @@ var dataCopying = mixin({
 });
 
 var defaultAllocator = mixin({
-  allocatorVTable: null,
+  defaultAllocator: null,
+  vtableFnIds: null,
 
   createDefaultAllocator(args, structure) {
-    const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVTable;
-    if (!vtable) {
-      // create vtable in Zig memory
+    let allocator = this.defaultAllocator;
+    if (!allocator) {
+      const { constructor: Allocator } = structure;
       const { VTable, noResize } = Allocator;
-      const dv = this.allocateZigMemory(VTable[SIZE], VTable[ALIGN]);
-      vtable = this.allocatorVTable = VTable(dv);
-      vtable.alloc = (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign);
-      vtable.free = (ptr, buf, ptrAlign) => {
-        const address = this.getViewAddress(buf['*'][MEMORY]);
-        const len = buf.length;
-        this.freeHostMemory(address, len, 1 << ptrAlign);
+      const vtable = {
+        alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
+        free: (ptr, buf, ptrAlign) => {
+          const address = this.getViewAddress(buf['*'][MEMORY]);
+          const len = buf.length;
+          this.freeHostMemory(address, len, 1 << ptrAlign);
+        },
+        resize: noResize,
       };
-      vtable.resize = noResize;
+      const ptr = this.obtainZigView(usizeMax, 0);
+      allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
+      this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
     }
-    const ptr = this.obtainZigView(usizeMax, 0);
-    return new Allocator({ ptr, vtable });
+    return allocator;
   },
   freeDefaultAllocator() {
-    if (this.allocatorVTable) {
-      const dv = this.allocatorVTable[MEMORY];
-      this.allocatorVTable = null;
-      this.freeZigMemory(dv);
+    if (this.vtableFnIds) {
+      for (const id of this.vtableFnIds) {
+        this.releaseFunction(id);
+      }
+      this.defaultAllocator = null;
+      this.vtableFnIds = null;
     }
   },
   allocateHostMemory(len, align) {
@@ -3629,8 +3635,14 @@ var memoryMapping = mixin({
   },
   updateShadowTargets(context) {
     const copy = this.getCopyFunction();
-    for (const { targetDV, shadowDV, writable } of context.shadowList) {
+    for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
+        {
+          const { len, address } = shadowDV[ZIG];
+          if (len > 0 && shadowDV.buffer.byteLength === 0) {
+            shadowDV = this.obtainZigView(address, len);
+          }
+        }
         copy(targetDV, shadowDV);
       }
     }
@@ -3688,6 +3700,7 @@ var memoryMapping = mixin({
         // add entry to context so memory get sync'ed
         if (!context.shadowList.includes(entry)) {
           context.shadowList.push(entry);
+          console.log({ entry });
         }
       }
       return dv;
@@ -3838,7 +3851,6 @@ var moduleLoading = mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.freeDefaultAllocator?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;
@@ -4930,6 +4942,12 @@ var viewManagement = mixin({
         }
       } else {
         existing = entry.get(`${offset}:${len}`);
+      }
+    }
+    {
+      if (existing?.[ZIG]?.address === usizeInvalid) {
+        // view was of previously freed memory
+        existing = null;
       }
     }
     return { existing, entry };
@@ -6188,6 +6206,9 @@ var arrayLike = mixin({
     const thisEnv = this;
     const value = function getChild(index) {
       const { constructor } = elementStructure;
+      {
+        this[RESTORE]?.();
+      }
       const dv = this[MEMORY];
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
@@ -7507,6 +7528,9 @@ var structLike = mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
+        {
+          this[RESTORE]?.();
+        }
         const dv = this[MEMORY];
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ARRAY, MEMORY, PARENT, PROXY, SLOTS } from '../symbols.js';
+import { ARRAY, MEMORY, PARENT, PROXY, RESTORE, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 export default mixin({

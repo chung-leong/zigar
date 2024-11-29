@@ -207,7 +207,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_const = pt.is_const,
                         .is_single = pt.size == .One or pt.size == .C,
                         .is_multiple = pt.size != .One,
-                        .is_nullable = pt.is_allowzero,
+                        .is_nullable = pt.is_allowzero or pt.child == anyopaque,
                     },
                 },
                 .Opaque => .{

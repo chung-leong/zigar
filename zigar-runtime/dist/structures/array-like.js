@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { PROXY, ARRAY, MEMORY, SLOTS, PARENT } from '../symbols.js';
+import { PROXY, ARRAY, RESTORE, MEMORY, SLOTS, PARENT } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 var arrayLike = mixin({
