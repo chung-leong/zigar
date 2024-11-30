@@ -1,7 +1,7 @@
 import { StructureFlag, ArgStructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { ALIGN, COPY, RESTORE, VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
+import { ALIGN, VIVIFICATE, VISIT, COPY, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
 var variadicStruct = mixin({
@@ -97,14 +97,12 @@ var variadicStruct = mixin({
     });
     defineProperties(ArgAttributes.prototype, {
       set: defineValue(setAttributes),
-      [COPY]: this.defineCopier(4, true),
-      ...({
-        [RESTORE]: this.defineRestorer(),
-      } ),
     });
-    descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
+    {
+      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+    }
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

@@ -1,6 +1,6 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, RESTORE } from '../symbols.js';
+import { MEMORY, RESTORE, ZIG } from '../symbols.js';
 import { empty } from '../utils.js';
 
 export default mixin({
@@ -133,5 +133,23 @@ export default mixin({
         }
       },
     };
-  }
+  },
+  ...(process.env.TARGET === 'wasm' ? {
+    defineRetvalCopier({ byteSize, bitOffset }) {
+      if (byteSize > 0) {
+        const thisEnv = this;
+        const offset = bitOffset >> 3;
+        const copy = this.getCopyFunction(byteSize);
+        return {
+          value(shadowDV) {
+            const dv = this[MEMORY];
+            const { address } = shadowDV[ZIG];
+            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
+            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
+            copy(dest, src);
+          }
+        };
+      }
+    }
+  } : undefined)
 });

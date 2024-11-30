@@ -2,9 +2,7 @@ import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, ArgumentCountMismatch, InvalidVariadicArgument } from '../errors.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE,
-  COPY, MEMORY, PARENT, PRIMITIVE, RESTORE, SLOTS, THROWING,
-  VISIT, VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, SLOTS, THROWING, VISIT, VIVIFICATE
 } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
@@ -101,14 +99,12 @@ export default mixin({
     });
     defineProperties(ArgAttributes.prototype, {
       set: defineValue(setAttributes),
-      [COPY]: this.defineCopier(4, true),
-      ...(process.env.TARGET === 'wasm' ? {
-        [RESTORE]: this.defineRestorer(),
-      } : undefined),
     });
-    descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
+    if (process.env.TARGET === 'wasm') {
+      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+    }
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {

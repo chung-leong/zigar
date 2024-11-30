@@ -1,6 +1,6 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { RESTORE, MEMORY } from '../symbols.js';
+import { RESTORE, MEMORY, ZIG } from '../symbols.js';
 import { empty } from '../utils.js';
 
 var dataCopying = mixin({
@@ -133,7 +133,25 @@ var dataCopying = mixin({
         }
       },
     };
-  }
+  },
+  ...({
+    defineRetvalCopier({ byteSize, bitOffset }) {
+      if (byteSize > 0) {
+        const thisEnv = this;
+        const offset = bitOffset >> 3;
+        const copy = this.getCopyFunction(byteSize);
+        return {
+          value(shadowDV) {
+            const dv = this[MEMORY];
+            const { address } = shadowDV[ZIG];
+            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
+            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
+            copy(dest, src);
+          }
+        };
+      }
+    }
+  } )
 });
 
 export { dataCopying as default };

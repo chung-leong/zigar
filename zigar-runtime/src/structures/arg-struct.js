@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { COPY, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE, ZIG } from '../symbols.js';
+import { COPY, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -57,17 +57,7 @@ export default mixin({
     const { byteSize: retvalSize, bitOffset: retvalBitOffset } = members[0];
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.TARGET === 'wasm') {
-      const copy = this.getCopyFunction(retvalSize);
-      const retvalOffset = retvalBitOffset >> 3;
-      descriptors[COPY] = (retvalSize > 0) ? {
-        value(shadowDV) {
-          const dv = this[MEMORY];
-          const { address } = shadowDV[ZIG];
-          const src = new DataView(thisEnv.memory.buffer, address + retvalOffset, retvalSize);
-          const dest = new DataView(dv.buffer, dv.byteOffset + retvalOffset, retvalSize);
-          copy(dest, src);
-        }
-      } : null;
+      descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }
     if (process.env.MIXIN === 'track') {
       this.detectArgumentFeatures(argMembers);

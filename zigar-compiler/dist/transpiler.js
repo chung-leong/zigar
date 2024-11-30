@@ -3466,7 +3466,25 @@ var dataCopying = mixin({
         }
       },
     };
-  }
+  },
+  ...({
+    defineRetvalCopier({ byteSize, bitOffset }) {
+      if (byteSize > 0) {
+        const thisEnv = this;
+        const offset = bitOffset >> 3;
+        const copy = this.getCopyFunction(byteSize);
+        return {
+          value(shadowDV) {
+            const dv = this[MEMORY];
+            const { address } = shadowDV[ZIG];
+            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
+            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
+            copy(dest, src);
+          }
+        };
+      }
+    }
+  } )
 });
 
 var defaultAllocator = mixin({
@@ -6174,20 +6192,10 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    const { byteSize: retvalSize, bitOffset: retvalBitOffset } = members[0];
+    members[0];
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
-      const copy = this.getCopyFunction(retvalSize);
-      const retvalOffset = retvalBitOffset >> 3;
-      descriptors[COPY] = (retvalSize > 0) ? {
-        value(shadowDV) {
-          const dv = this[MEMORY];
-          const { address } = shadowDV[ZIG];
-          const src = new DataView(thisEnv.memory.buffer, address + retvalOffset, retvalSize);
-          const dest = new DataView(dv.buffer, dv.byteOffset + retvalOffset, retvalSize);
-          copy(dest, src);
-        }
-      } : null;
+      descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }
     {
       this.detectArgumentFeatures(argMembers);
@@ -7895,14 +7903,12 @@ var variadicStruct = mixin({
     });
     defineProperties(ArgAttributes.prototype, {
       set: defineValue(setAttributes),
-      [COPY]: this.defineCopier(4, true),
-      ...({
-        [RESTORE]: this.defineRestorer(),
-      } ),
     });
-    descriptors[COPY] = this.defineCopier(undefined, true);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
+    {
+      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+    }
     return constructor;
   },
   finalizeVariadicStruct(structure, staticDescriptors) {
