@@ -1,7 +1,7 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
-import { capture, captureError, delay } from '../test-utils.js';
+import { capture, delay } from '../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -28,16 +28,13 @@ export function addTests(importModule, options) {
         }
         await delay(1000);
         expect(count).to.equal(10);
-        const [ line ] = await captureError(async () => {
-          const [ line ] = await capture(async () => {
-            spawn(() => {
-              throw new Error("Doh!");
-            });
-            await delay(250);
+        const [ line ] = await capture(async () => {
+          spawn(() => {
+            throw new Error("Doh!");
           });
-          expect(line).to.equal('Unexpected');
+          await delay(250);
         });
-        expect(line).to.equal('Error: Doh!');
+        expect(line).to.equal('Error: Unexpected');
       } finally {
         shutdown();
       }
@@ -59,52 +56,6 @@ export function addTests(importModule, options) {
         }
         await delay(200);
         expect(count).to.equal(10);
-      } finally {
-        shutdown();
-      }
-    })
-    it('should create thread that accepts an abort signal', async function() {
-      this.timeout(300000);
-      const {
-        spawn,
-        shutdown,
-        default: module,
-      } = await importTest('create-thread-with-abort-signal', { multithreaded: true });
-      try {
-        const controller = new AbortController();
-        const { signal } = controller;
-        spawn({ signal });
-        await delay(200);
-        controller.abort();
-        await delay(50);
-        const value1 = module.count;
-        expect(value1 > 0).to.be.true;
-        await delay(50);
-        const value2 = module.count;
-        expect(value2).to.equal(value1);
-      } finally {
-        shutdown();
-      }
-    })
-    it('should create thread that accepts an abort signal that works atomically', async function() {
-      this.timeout(300000);
-      const {
-        spawn,
-        shutdown,
-        default: module,
-      } = await importTest('create-thread-with-abort-signal-atomic', { multithreaded: true });
-      try {
-        const controller = new AbortController();
-        const { signal } = controller;
-        spawn({ signal });
-        await delay(200);
-        controller.abort();
-        await delay(50);
-        const value1 = module.count;
-        expect(value1 > 0).to.be.true;
-        await delay(50);
-        const value2 = module.count;
-        expect(value2).to.equal(value1);
       } finally {
         shutdown();
       }
@@ -165,12 +116,43 @@ export function addTests(importModule, options) {
       const promise = spawn();
       await expect(promise).to.eventually.be.rejectedWith(Error).with.property('message', 'Thread creation failure');
     })
-    it('should create thread that resolves a promise on abort', async function() {
+    it('should create thread that accepts an abort signal', async function() {
       this.timeout(300000);
       const {
         spawn,
         shutdown,
-      } = await importTest('create-thread-with-promise-and-abort-signal', { multithreaded: true });
+      } = await importTest('create-thread-with-abort-signal', { multithreaded: true });
+      try {
+        const controller1 = new AbortController();
+        const promise1 = spawn(true, { signal: controller1.signal });
+        setTimeout(() => controller1.abort(), 100);
+        let result, error;
+        try {
+          result = await promise1;
+        } catch (err) {
+          error = err;
+        }
+        expect(error).to.be.an('error');
+        error = null;
+        const controller2 = new AbortController();
+        const promise2 = spawn(false, { signal: controller2.signal });
+        setTimeout(() => controller2.abort(), 100);
+        try {
+          result = await promise2;
+        } catch (err) {
+          error = err;
+        }
+        expect(result).to.equal(1234);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create thread that accepts an abort signal that works atomically', async function() {
+      this.timeout(300000);
+      const {
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-abort-signal-atomic', { multithreaded: true });
       try {
         const controller1 = new AbortController();
         const promise1 = spawn(true, { signal: controller1.signal });

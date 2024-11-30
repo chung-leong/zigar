@@ -3,20 +3,23 @@ const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub var count: u64 = 0;
+const Error = error{Aborted};
 
-pub fn spawn(signal: zigar.function.AbortSignal) !void {
+pub fn spawn(
+    fail: bool,
+    promise: zigar.function.Promise(Error!i32),
+    signal: zigar.function.AbortSignal,
+) !void {
     try zigar.thread.use(true);
     const ns = struct {
-        fn run(s: zigar.function.AbortSignal) void {
-            while (@atomicLoad(i32, s.ptr, .acquire) == 0) {
-                count += 1;
-            }
+        fn run(f: bool, p: zigar.function.Promise(Error!i32), s: zigar.function.AbortSignal) void {
+            while (@atomicLoad(i32, s.ptr, .acquire) == 0) {}
+            p.resolve(if (f) Error.Aborted else 1234);
         }
     };
     _ = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
-    }, ns.run, .{signal});
+    }, ns.run, .{ fail, promise, signal });
 }
 
 pub fn shutdown() !void {

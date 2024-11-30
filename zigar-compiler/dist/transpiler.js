@@ -3036,7 +3036,7 @@ var callMarshalingInbound = mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else if (retval !== undefined) {
+          } else {
             onReturn(retval);
           }
         } catch (err) {
@@ -3186,26 +3186,7 @@ var callMarshalingOutbound = mixin({
         }
       }
       try {
-        const argStruct = new ArgStruct(args);
-        thisEnv.invokeThunk(thunk, self, argStruct);
-        const promise = argStruct[PROMISE];
-        const callback = argStruct[CALLBACK];
-        if (callback) {
-          try {
-            // ensure the function hasn't return an error
-            const { retval } = argStruct;
-            if (retval != null) {
-              // if a function returns a value, then the promise is fulfilled immediately
-              callback(retval);
-            }
-          } catch (err) {
-            callback(err);
-          }
-          // this would be undefined if a callback function is used instead
-          return promise;
-        } else {
-          return argStruct.retval;
-        }
+        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args));
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -3276,7 +3257,7 @@ var callMarshalingOutbound = mixin({
       this.updatePointerAddresses(context, args);
     }
     // return address of shadow for argumnet struct
-    const argAddress = this.getShadowAddress(context, args, null, true)
+    const argAddress = this.getShadowAddress(context, args, null, false)
     ;
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
@@ -3301,11 +3282,32 @@ var callMarshalingOutbound = mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    {
+      // copy retval from shadow view
+      args[COPY]?.(this.findShadowView(args[MEMORY]));
+    }
     if (FINALIZE in args) {
-      // async function--finalization happens when callback is invoked
       args[FINALIZE] = finalize;
     } else {
       finalize();
+    }
+    const promise = args[PROMISE];
+    const callback = args[CALLBACK];
+    if (callback) {
+      try {
+        // ensure the function hasn't return an error
+        const { retval } = args;
+        if (retval != null) {
+          // if a function returns a value, then the promise is fulfilled immediately
+          callback(retval);
+        }
+      } catch (err) {
+        callback(err);
+      }
+      // this would be undefined if a callback function is used instead
+      return promise;
+    } else {
+      return args.retval;
     }
   },
   ...({
@@ -3700,7 +3702,6 @@ var memoryMapping = mixin({
         // add entry to context so memory get sync'ed
         if (!context.shadowList.includes(entry)) {
           context.shadowList.push(entry);
-          console.log({ entry });
         }
       }
       return dv;
@@ -4511,7 +4512,6 @@ var structureAcquisition = mixin({
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
     };
-    defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
     this.comptime = true;
     this.invokeThunk(thunk, thunk, args);
@@ -6174,7 +6174,21 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
+    const { byteSize: retvalSize, bitOffset: retvalBitOffset } = members[0];
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
+    {
+      const copy = this.getCopyFunction(retvalSize);
+      const retvalOffset = retvalBitOffset >> 3;
+      descriptors[COPY] = (retvalSize > 0) ? {
+        value(shadowDV) {
+          const dv = this[MEMORY];
+          const { address } = shadowDV[ZIG];
+          const src = new DataView(thisEnv.memory.buffer, address + retvalOffset, retvalSize);
+          const dest = new DataView(dv.buffer, dv.byteOffset + retvalOffset, retvalSize);
+          copy(dest, src);
+        }
+      } : null;
+    }
     {
       this.detectArgumentFeatures(argMembers);
     }

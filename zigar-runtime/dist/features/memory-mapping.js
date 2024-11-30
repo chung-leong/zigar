@@ -151,7 +151,6 @@ var memoryMapping = mixin({
         // add entry to context so memory get sync'ed
         if (!context.shadowList.includes(entry)) {
           context.shadowList.push(entry);
-          console.log({ entry });
         }
       }
       return dv;

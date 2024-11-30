@@ -8,7 +8,7 @@ pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
     const ns = struct {
         fn run(f: *const fn () error{Unexpected}!void) void {
             f() catch |err| {
-                std.debug.print("{s}\n", .{@errorName(err)});
+                std.debug.print("Error: {s}\n", .{@errorName(err)});
             };
         }
     };

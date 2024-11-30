@@ -198,6 +198,9 @@ describe('Feature: memory-mapping', function() {
       const len = 5;
       const targetDV = new DataView(new ArrayBuffer(len));
       const shadowDV = new DataView(new ArrayBuffer(len));
+      if (process.env.TARGET === 'wasm') {
+        shadowDV[ZIG] = { address: usize(0x4000), len };
+      }
       const address = usize(0x1000);
       const context = env.startContext();
       const entry = env.registerMemory(address, len, 1, true, targetDV, shadowDV);

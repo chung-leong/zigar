@@ -116,49 +116,6 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(argStruct[0]).to.equal(1);
       expect(argStruct[1]).to.equal(2);
     })
-    it('should create a caller that returns a promise', function() {
-      const env = new Env();
-      const ArgStruct = function() {
-        this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = resolve;
-        });
-        this.retval = 1234;
-      };
-      const thunk = {};
-      const self = env.createOutboundCaller(thunk, ArgStruct)
-      env.invokeThunk = env.runThunk = () => {};
-      expect(self()).to.eventually.equal(1234);
-    })
-    it('should reject a promise when retrieval of retval throws', function() {
-      const env = new Env();
-      const ArgStruct = function() {
-        this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = resolve;
-        });
-        defineProperty(this, 'retval', {
-          get() {
-            throw new Error('Doh!');
-          }
-        });
-      };
-      const thunk = {};
-      const self = env.createOutboundCaller(thunk, ArgStruct)
-      env.invokeThunk = env.runThunk = () => {};
-      expect(self()).to.eventually.be.rejected;
-    })
-    it('should invoke callback function', function() {
-      const env = new Env();
-      let retval;
-      const ArgStruct = function() {
-        this[CALLBACK] = (arg) => retval = arg;
-        this.retval = 1234;
-      };
-      const thunk = {};
-      const self = env.createOutboundCaller(thunk, ArgStruct)
-      env.invokeThunk = env.runThunk = () => {};
-      self();
-      expect(retval).to.equal(1234);
-    })
     it('should add function name to argument error', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -227,9 +184,6 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        defineProperties(Arg.prototype, {
-          [COPY]: env.defineCopier(4),
-        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
@@ -890,9 +844,6 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
       };
-      defineProperties(Arg.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const args = new Arg();
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
@@ -923,9 +874,6 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY][ALIGN] = 4;
         this[FINALIZE] = null;
       };
-      defineProperties(Arg.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const args = new Arg();
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
@@ -959,7 +907,6 @@ describe('Feature: call-marshaling-outbound', function() {
       };
       let called = false;
       defineProperties(Arg.prototype, {
-        [COPY]: env.defineCopier(4),
         [VISIT]: {
           value() {
             called = true;
@@ -993,9 +940,6 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         this[MEMORY][ALIGN] = 4;
       };
-      defineProperties(Arg.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const args = new Arg();
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
@@ -1034,9 +978,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const Attributes = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
       };
-      defineProperties(Attributes.prototype, {
-        [COPY]: env.defineCopier(undefined),
-      });
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
@@ -1044,9 +985,6 @@ describe('Feature: call-marshaling-outbound', function() {
         this[ATTRIBUTES] = new Attributes();
         this.retval = 123;
       };
-      defineProperties(Arg.prototype, {
-        [COPY]: env.defineCopier(16),
-      });
       const args = new Arg();
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
@@ -1057,6 +995,110 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(argAddress).to.equal(usize(0x1000));
       expect(attrAddress).to.equal(usize(0x2000));
     })
+    it('should return a promise when arg struct has an attached callback', function() {
+      const env = new Env();
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[PROMISE] = new Promise((resolve) => {
+          this[CALLBACK] = resolve;
+        });
+        this.retval = 1234;
+      };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
+      const args = new Arg();
+      env.runThunk = () => true;
+      let nextAddress = 0x1000;
+      if (process.env.TARGET === 'wasm') {
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return address;
+        };
+        env.freeExternMemory = function() {};
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.getBufferAddress = function(buffer) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return usize(address);
+        };
+      }
+      const result = env.invokeThunk(thunk, fn, args);
+      expect(result).to.be.a('promise');
+    })
+    it('should reject a promise when retrieval of retval throws', function() {
+      const env = new Env();
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[PROMISE] = new Promise((resolve) => {
+          this[CALLBACK] = resolve;
+        });
+        defineProperty(this, 'retval', {
+          get() {
+            throw new Error('Doh!');
+          }
+        });
+      };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
+      const args = new Arg();
+      env.runThunk = () => true;
+      let nextAddress = 0x1000;
+      if (process.env.TARGET === 'wasm') {
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return address;
+        };
+        env.freeExternMemory = function() {};
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.getBufferAddress = function(buffer) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return usize(address);
+        };
+      }
+      const result = env.invokeThunk(thunk, fn, args);
+      expect(result).to.eventually.be.rejected;
+    })
+    it('should invoke callback function', function() {
+      const env = new Env();
+      let retval;
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[CALLBACK] = (arg) => retval = arg;
+        this.retval = 1234;
+      };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
+      const args = new Arg();
+      env.runThunk = () => true;
+      let nextAddress = 0x1000;
+      if (process.env.TARGET === 'wasm') {
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return address;
+        };
+        env.freeExternMemory = function() {};
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.getBufferAddress = function(buffer) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return usize(address);
+        };
+      }
+      const result = env.invokeThunk(thunk, fn, args);
+      expect(result).to.be.undefined;
+      expect(retval).to.equal(1234);
+    })
+
   })
   describe('detectArgumentFeatures', function() {
     it('should set usingDefaultAllocator when a function argument is an allocator', function() {

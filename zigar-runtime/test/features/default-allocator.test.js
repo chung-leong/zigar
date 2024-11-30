@@ -60,7 +60,7 @@ describe('Feature: default-allocator', function() {
     })
   })
   describe('freeDefaultAllocator', function() {
-    it('should free default allocator vtable', function() {
+    it('should free default allocator', function() {
       const env = new Env();
       const args = {};
       const constructor = function({ vtable, ptr }) {
@@ -79,28 +79,10 @@ describe('Feature: default-allocator', function() {
       VTable[SIZE] = 3 * 8;
       VTable[ALIGN] = 8;
       const structure = { constructor };
-      let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(len, align) {
-        const address = nextAddress;
-        nextAddress += usize(0x1000);
-        return address;
-      };
-      let freed;
-      env.freeExternMemory = function(type, address, len, align) {
-        freed = { type, address, len, align };
-      };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 1 });
-      } else {
-        env.obtainExternBuffer = function(address, len) {
-          const buffer = new ArrayBuffer(len);
-          buffer[ZIG] = { address, len };
-          return buffer;
-        };
-      }
       env.createDefaultAllocator(args, structure);
       env.freeDefaultAllocator();
-      expect(freed).to.eql({ type: 0, address: usize(0x1000), len: 24, align: 8 });
+      expect(env.defaultAllocator).to.be.null;
+      expect(env.vtableFnIds).to.be.null;
     })
   })
   describe('allocateHostMemory', function() {

@@ -1,7 +1,7 @@
-import { SLOTS, MEMORY, ENVIRONMENT, COPY, CONST_TARGET, ZIG, SENTINEL } from '../symbols.js';
+import { SLOTS, MEMORY, ENVIRONMENT, CONST_TARGET, ZIG, SENTINEL } from '../symbols.js';
 import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { defineProperty, findObjects, decodeText } from '../utils.js';
+import { findObjects, decodeText } from '../utils.js';
 
 var structureAcquisition = mixin({
   comptime: false,
@@ -138,7 +138,6 @@ var structureAcquisition = mixin({
       dv.setUint32(0, flags, littleEndian);
       this[MEMORY] = dv;
     };
-    defineProperty(FactoryArg.prototype, COPY, this.defineCopier(4));
     const args = new FactoryArg(options);
     this.comptime = true;
     this.invokeThunk(thunk, thunk, args);

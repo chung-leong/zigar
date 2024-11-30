@@ -1,7 +1,7 @@
 import { StructureFlag, ArgStructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { VIVIFICATE, VISIT, THROWING, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
+import { VIVIFICATE, VISIT, COPY, MEMORY, ZIG, THROWING, SLOTS, FINALIZE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var argStruct = mixin({
@@ -54,7 +54,21 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
+    const { byteSize: retvalSize, bitOffset: retvalBitOffset } = members[0];
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
+    {
+      const copy = this.getCopyFunction(retvalSize);
+      const retvalOffset = retvalBitOffset >> 3;
+      descriptors[COPY] = (retvalSize > 0) ? {
+        value(shadowDV) {
+          const dv = this[MEMORY];
+          const { address } = shadowDV[ZIG];
+          const src = new DataView(thisEnv.memory.buffer, address + retvalOffset, retvalSize);
+          const dest = new DataView(dv.buffer, dv.byteOffset + retvalOffset, retvalSize);
+          copy(dest, src);
+        }
+      } : null;
+    }
     return constructor;
   },
   finalizeArgStruct(structure, staticDescriptors) {

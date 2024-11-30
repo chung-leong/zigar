@@ -90,7 +90,7 @@ var callMarshalingInbound = mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else if (retval !== undefined) {
+          } else {
             onReturn(retval);
           }
         } catch (err) {
