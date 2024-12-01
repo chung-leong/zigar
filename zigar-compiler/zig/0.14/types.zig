@@ -1310,11 +1310,7 @@ pub const TypeDataCollector = struct {
                 if (!f.is_generic) {
                     td.attrs.is_supported = comptime for (f.params) |param| {
                         if (param.is_generic) break false;
-                        const PT = param.type orelse break false;
-                        const param_attrs = self.getAttributes(PT);
-                        if (param_attrs.is_comptime_only) {
-                            @compileLog(param);
-                        }
+                        if (param.type == null) break false;
                     } else for (.{1}) |_| {
                         const RT = f.return_type orelse break false;
                         const retval_attrs = self.getAttributes(RT);

@@ -206,7 +206,12 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-
+    it('should not compile when a function accepts an AbortSignal without Promise', async function() {
+      this.timeout(300000);
+      const promise = importTest('abort-signal-without-promise');
+      expect(promise).to.be.eventually.be.rejectedWith(Error)
+        .with.property('message').that.contains('AbortSignal');
+    })
   })
 }
 

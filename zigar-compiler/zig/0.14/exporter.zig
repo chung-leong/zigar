@@ -367,7 +367,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 // finalize the shape so that static members can be instances of the structure
                 _ = try host.defineStructure(structure);
                 // don't export decls of internal structs like promise and abort signal
-                if (!td.isInternal()) {
+                if (comptime !td.isInternal()) {
                     try self.addStaticMembers(structure, td);
                 }
                 try host.endStructure(structure);
@@ -692,6 +692,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => !self.options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {
+                                checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
                                 try host.attachMember(structure, .{
                                     .name = decl.name,
@@ -767,6 +768,29 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
             if (template_maybe) |template| {
                 try host.attachTemplate(structure, template, true);
+            }
+        }
+
+        fn checkStaticMember(comptime T: anytype) void {
+            comptime {
+                switch (@typeInfo(T)) {
+                    .@"fn" => |f| {
+                        var has_abort_signal = false;
+                        var has_promise = false;
+                        for (f.params) |param| {
+                            const param_td = tdb.get(param.type.?);
+                            if (param_td.isAbortSignal()) {
+                                has_abort_signal = true;
+                            } else if (param_td.isPromise()) {
+                                has_promise = true;
+                            }
+                        }
+                        if (has_abort_signal and !has_promise) {
+                            @compileError("Function accepting AbortSignal as an argument must accept a Promise as well");
+                        }
+                    },
+                    else => {},
+                }
             }
         }
 
