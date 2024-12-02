@@ -3271,11 +3271,11 @@ var callMarshalingOutbound = mixin({
       throw new ZigError();
     }
     const finalize = () => {
+      this.updateShadowTargets(context);
       // create objects that pointers point to
       if (hasPointers) {
         this.updatePointerTargets(context, args);
       }
-      this.updateShadowTargets(context);
       if (this.libc) {
         this.flushStdout?.();
       }
@@ -3715,17 +3715,17 @@ var memoryMapping = mixin({
         dv[ALIGN] = entry.align;
       }
     }
-    if (dv) {
-      if (entry.shadowDV && context) {
-        // add entry to context so memory get sync'ed
-        if (!context.shadowList.includes(entry)) {
-          context.shadowList.push(entry);
-        }
+    if (!dv) {
+      // not found in any of the buffers we've seen--assume it's Zig memory
+      dv = this.obtainZigView(address, len);
+    } else {
+      const { targetDV, shadowDV } = entry;
+      if (shadowDV && context && !context.shadowList.includes(entry)) {
+        const copy = this.getCopyFunction();
+        copy(targetDV, shadowDV);
       }
-      return dv;
     }
-    // not found in any of the buffers we've seen--assume it's Zig memory
-    return this.obtainZigView(address, len);
+    return dv;
   },
   findShadowView(dv) {
     for (const { shadowDV, targetDV } of this.memoryList) {
@@ -7832,15 +7832,11 @@ var variadicStruct = mixin({
       const offsets = {};
       for (const [ index, arg ] of varArgs.entries()) {
         const dv = arg?.[MEMORY];
-        let argAlign = arg?.constructor?.[ALIGN];
+        const argAlign = Math.max(4, arg?.constructor?.[ALIGN])
+        ;
         if (!dv || !argAlign) {
           const err = new InvalidVariadicArgument();
           throw adjustArgumentError.call(err, length + index, args.length);
-        }
-        {
-          // the arg struct is passed to the function in WebAssembly and fields are
-          // expected to aligned to at least 4
-          argAlign = Math.max(4, argAlign);
         }
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
@@ -7914,6 +7910,9 @@ var variadicStruct = mixin({
   finalizeVariadicStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
+    // variadic struct doesn't have a known alignment--we attach the necessary alignment to the
+    // data view instead (see above)
+    staticDescriptors[ALIGN] = defineValue(undefined);
   },
 });
 

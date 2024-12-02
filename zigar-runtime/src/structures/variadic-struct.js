@@ -28,15 +28,14 @@ export default mixin({
       const offsets = {};
       for (const [ index, arg ] of varArgs.entries()) {
         const dv = arg?.[MEMORY]
-        let argAlign = arg?.constructor?.[ALIGN];
+        const argAlign = (process.env.TARGET === 'wasm')
+        // the arg struct is passed to the function in WebAssembly and fields are
+        // expected to aligned to at least 4
+        ? Math.max(4, arg?.constructor?.[ALIGN])
+        : arg?.constructor?.[ALIGN];
         if (!dv || !argAlign) {
           const err = new InvalidVariadicArgument();
           throw adjustArgumentError.call(err, length + index, args.length);
-        }
-        if (process.env.TARGET === 'wasm') {
-          // the arg struct is passed to the function in WebAssembly and fields are
-          // expected to aligned to at least 4
-          argAlign = Math.max(4, argAlign);
         }
         if (argAlign > maxAlign) {
           maxAlign = argAlign;
@@ -110,5 +109,8 @@ export default mixin({
   finalizeVariadicStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
+    // variadic struct doesn't have a known alignment--we attach the necessary alignment to the
+    // data view instead (see above)
+    staticDescriptors[ALIGN] = defineValue(undefined);
   },
 });
