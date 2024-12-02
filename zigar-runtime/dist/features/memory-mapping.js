@@ -146,17 +146,17 @@ var memoryMapping = mixin({
         dv[ALIGN] = entry.align;
       }
     }
-    if (dv) {
-      if (entry.shadowDV && context) {
-        // add entry to context so memory get sync'ed
-        if (!context.shadowList.includes(entry)) {
-          context.shadowList.push(entry);
-        }
+    if (!dv) {
+      // not found in any of the buffers we've seen--assume it's Zig memory
+      dv = this.obtainZigView(address, len);
+    } else {
+      const { targetDV, shadowDV } = entry;
+      if (shadowDV && context && !context.shadowList.includes(entry)) {
+        const copy = this.getCopyFunction();
+        copy(targetDV, shadowDV);
       }
-      return dv;
     }
-    // not found in any of the buffers we've seen--assume it's Zig memory
-    return this.obtainZigView(address, len);
+    return dv;
   },
   findShadowView(dv) {
     for (const { shadowDV, targetDV } of this.memoryList) {
