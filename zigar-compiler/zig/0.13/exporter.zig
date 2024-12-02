@@ -708,11 +708,14 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     .Fn => false,
                                     else => decl_ptr_td.isConst(),
                                 };
-                                // deal with inline functions
-                                const target_ptr = switch (@typeInfo(DT)) {
-                                    .Fn => |f| switch (f.calling_convention) {
-                                        .Inline => &uninline(decl_value),
-                                        else => decl_ptr,
+                                const target_ptr = comptime switch (@typeInfo(DT)) {
+                                    .Fn => |f| fn_ptr: {
+                                        // deal with inline functions
+                                        const function = switch (f.calling_convention) {
+                                            .Inline => uninline(decl_value),
+                                            else => decl_value,
+                                        };
+                                        break :fn_ptr thunk_zig.getFunctionPointer(function);
                                     },
                                     else => decl_ptr,
                                 };
@@ -795,7 +798,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn exportPointerTarget(self: @This(), comptime ptr: anytype, comptime is_comptime: bool) !Value {
-            const td = tdb.get(@TypeOf(ptr.*));
+            const pt = @typeInfo(@TypeOf(ptr)).Pointer;
+            const td = tdb.get(pt.child);
             const value_ptr = get: {
                 // values that only exist at comptime need to have their comptime part replaced with void
                 // (comptime keyword needed here since expression evaluates to different pointer types)
