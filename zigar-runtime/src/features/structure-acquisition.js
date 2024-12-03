@@ -4,7 +4,7 @@ import {
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
-  StructureFlag, structureNames, StructureType,
+  structureNames, StructureType
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, findObjects } from '../utils.js';
@@ -82,7 +82,7 @@ export default mixin({
     this.structures.push(structure);
     this.finalizeStructure(structure);
   },
-  captureView(address, len, copy) {
+  captureView(address, len, copy, handle) {
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -92,33 +92,21 @@ export default mixin({
       return dv;
     } else {
       // link into Zig memory
-      return this.obtainZigView(address, len);
+      const dv = this.obtainZigView(address, len);
+      if (handle) {
+        dv[ZIG].handle = handle;
+      }
+      return dv;
     }
   },
-  castView(address, len, copy, structure) {
+  castView(address, len, copy, structure, handle) {
     const { constructor, flags } = structure;
-    const dv = this.captureView(address, len, copy);
+    const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
     return object;
-  },
-  acquireDefaultPointers() {
-    for (const structure of this.structures) {
-      const { constructor, flags, instance: { template } } = structure;
-      if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
-        // create a placeholder for retrieving default pointers
-        const placeholder = Object.create(constructor.prototype);
-        placeholder[MEMORY] = template[MEMORY];
-        placeholder[SLOTS] = template[SLOTS];
-        this.updatePointerTargets(null, placeholder);
-      }
-    }
   },
   acquireStructures(options) {
     const attrs = this.getModuleAttributes();
@@ -157,56 +145,21 @@ export default mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    this.acquireDefaultPointers();
-    this.prepareObjectsForExport();
+    if (process.env.MIXIN === 'track') {
+      for (const object of findObjects(this.structures, SLOTS)) {
+        const zig = object[MEMORY]?.[ZIG];
+        if (zig) {
+          // mixin "features/object-linkage" is used when there are objects linked to Zig memory
+          this.useObjectLinkage();
+        }
+      }
+    }
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET },
+      keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
     };
-  },
-  prepareObjectsForExport() {
-    const objects = findObjects(this.structures, SLOTS);
-    const list = [];
-    for (const object of objects) {
-      if (object[MEMORY]?.[ZIG]) {
-        // replace Zig memory
-        const dv = object[MEMORY];
-        const address = this.getViewAddress(dv);
-        const offset = this.getMemoryOffset(address);
-        const len = dv.byteLength;
-        const relocDV = this.captureView(address, len, true);
-        relocDV.reloc = offset;
-        object[MEMORY] = relocDV;
-        list.push({ offset, len, owner: object, replaced: false });
-      }
-    }
-    // larger memory blocks come first
-    list.sort((a, b) => b.len - a.len);
-    for (const a of list) {
-      if (!a.replaced) {
-        for (const b of list) {
-          if (a !== b && !b.replaced) {
-            if (a.offset <= b.offset && b.offset < a.offset + a.len) {
-              // B is inside A--replace it with a view of A's buffer
-              const dv = a.owner[MEMORY];
-              const pos = b.offset - a.offset + dv.byteOffset;
-              const newDV = this.obtainView(dv.buffer, pos, b.len);
-              newDV.reloc = b.offset;
-              b.owner[MEMORY] = newDV;
-              b.replaced = true;
-            }
-          }
-        }
-      }
-    }
-    if (process.env.MIXIN === 'track') {
-      if (list.length > 0) {
-        // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-        this.useObjectLinkage();
-      }
-    }
   },
   useStructures() {
     const module = this.getRootModule();
@@ -340,8 +293,8 @@ export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
       captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iib', returnType: 'v' },
-      castView: { argType: 'iibv', returnType: 'v' },
+      captureView: { argType: 'iibi', returnType: 'v' },
+      castView: { argType: 'iibvi', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
@@ -372,10 +325,6 @@ export default mixin({
       const ta = new Uint8Array(buffer, address, len);
       return decodeText(ta);
     },
-    getMemoryOffset(address) {
-      // WASM address space starts at 0
-      return address;
-    },
   } : process.env.TARGET === 'node' ? {
     exports: {
       captureView: null,
@@ -392,7 +341,6 @@ export default mixin({
     imports: {
       getFactoryThunk: null,
       getModuleAttributes: null,
-      getMemoryOffset: null,
     },
   /* c8 ignore next */
   } : undefined),

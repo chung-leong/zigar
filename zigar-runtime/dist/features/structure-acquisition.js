@@ -1,5 +1,5 @@
-import { SLOTS, MEMORY, ENVIRONMENT, CONST_TARGET, ZIG, SENTINEL } from '../symbols.js';
-import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
+import { SLOTS, MEMORY, ZIG, ENVIRONMENT, CONST_TARGET, SENTINEL } from '../symbols.js';
+import { ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { findObjects, decodeText } from '../utils.js';
 
@@ -76,7 +76,7 @@ var structureAcquisition = mixin({
     this.structures.push(structure);
     this.finalizeStructure(structure);
   },
-  captureView(address, len, copy) {
+  captureView(address, len, copy, handle) {
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -86,33 +86,21 @@ var structureAcquisition = mixin({
       return dv;
     } else {
       // link into Zig memory
-      return this.obtainZigView(address, len);
+      const dv = this.obtainZigView(address, len);
+      if (handle) {
+        dv[ZIG].import = handle;
+      }
+      return dv;
     }
   },
-  castView(address, len, copy, structure) {
+  castView(address, len, copy, structure, handle) {
     const { constructor, flags } = structure;
-    const dv = this.captureView(address, len, copy);
+    const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
     return object;
-  },
-  acquireDefaultPointers() {
-    for (const structure of this.structures) {
-      const { constructor, flags, instance: { template } } = structure;
-      if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
-        // create a placeholder for retrieving default pointers
-        const placeholder = Object.create(constructor.prototype);
-        placeholder[MEMORY] = template[MEMORY];
-        placeholder[SLOTS] = template[SLOTS];
-        this.updatePointerTargets(null, placeholder);
-      }
-    }
   },
   acquireStructures(options) {
     const attrs = this.getModuleAttributes();
@@ -151,50 +139,12 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    this.acquireDefaultPointers();
-    this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
       keys: { MEMORY, SLOTS, CONST_TARGET },
     };
-  },
-  prepareObjectsForExport() {
-    const objects = findObjects(this.structures, SLOTS);
-    const list = [];
-    for (const object of objects) {
-      if (object[MEMORY]?.[ZIG]) {
-        // replace Zig memory
-        const dv = object[MEMORY];
-        const address = this.getViewAddress(dv);
-        const offset = this.getMemoryOffset(address);
-        const len = dv.byteLength;
-        const relocDV = this.captureView(address, len, true);
-        relocDV.reloc = offset;
-        object[MEMORY] = relocDV;
-        list.push({ offset, len, owner: object, replaced: false });
-      }
-    }
-    // larger memory blocks come first
-    list.sort((a, b) => b.len - a.len);
-    for (const a of list) {
-      if (!a.replaced) {
-        for (const b of list) {
-          if (a !== b && !b.replaced) {
-            if (a.offset <= b.offset && b.offset < a.offset + a.len) {
-              // B is inside A--replace it with a view of A's buffer
-              const dv = a.owner[MEMORY];
-              const pos = b.offset - a.offset + dv.byteOffset;
-              const newDV = this.obtainView(dv.buffer, pos, b.len);
-              newDV.reloc = b.offset;
-              b.owner[MEMORY] = newDV;
-              b.replaced = true;
-            }
-          }
-        }
-      }
-    }
   },
   useStructures() {
     const module = this.getRootModule();
@@ -328,8 +278,8 @@ var structureAcquisition = mixin({
   ...({
     exports: {
       captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iib', returnType: 'v' },
-      castView: { argType: 'iibv', returnType: 'v' },
+      captureView: { argType: 'iibi', returnType: 'v' },
+      castView: { argType: 'iibvi', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
@@ -359,10 +309,6 @@ var structureAcquisition = mixin({
       const { buffer } = this.memory;
       const ta = new Uint8Array(buffer, address, len);
       return decodeText(ta);
-    },
-    getMemoryOffset(address) {
-      // WASM address space starts at 0
-      return address;
     },
   } ),
 });

@@ -21,10 +21,7 @@ pub fn call(
     attr_ptr: *const anyopaque,
     arg_count: usize,
 ) !void {
-    const function: *const FT = switch (is_wasm) {
-        true => @ptrCast(fn_ptr),
-        false => @as(*const *const FT, @ptrCast(@alignCast(fn_ptr))).*,
-    };
+    const function: *const FT = @ptrCast(fn_ptr);
     const f = @typeInfo(FT).Fn;
     const Args = types.ArgumentStruct(FT);
     const arg_struct: *Args = @ptrCast(@alignCast(arg_ptr));

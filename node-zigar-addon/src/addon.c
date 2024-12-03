@@ -88,13 +88,16 @@ result capture_string(module_data* md,
 
 result capture_view(module_data* md,
                     const memory* mem,
+                    size_t handle,
                     napi_value* dest) {
     napi_env env = md->env;
-    napi_value args[3];
+    napi_value args[4];
+    uintptr_t pi_handle = (handle) ? handle - md->base_address : 0;
     if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
-     && call_js_function(md, captureView, 3, args, dest)) {
+     && napi_create_uintptr(env, pi_handle, &args[3]) == napi_ok
+     && call_js_function(md, captureView, 4, args, dest)) {
         return OK;
     }
     return FAILURE;
@@ -103,13 +106,16 @@ result capture_view(module_data* md,
 result cast_view(module_data* md,
                  const memory* mem,
                  napi_value structure,
+                 size_t handle,
                  napi_value* dest) {
     napi_env env = md->env;
-    napi_value args[4] = { NULL, NULL, NULL, structure };
+    napi_value args[5] = { NULL, NULL, NULL, structure, NULL };
+    uintptr_t pi_handle = (handle) ? handle - md->base_address : 0;
     if (napi_create_uintptr(env, (uintptr_t) mem->bytes, &args[0]) == napi_ok
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
-     && call_js_function(md, castView, 4, args, dest)) {
+     && napi_create_uintptr(env, pi_handle, &args[4]) == napi_ok
+     && call_js_function(md, castView, 6, args, dest)) {
         return OK;
     }
     return FAILURE;
@@ -655,41 +661,20 @@ napi_value destroy_js_thunk(napi_env env,
     return result;
 }
 
-napi_value get_memory_offset(napi_env env,
-                             napi_callback_info info) {
-    module_data* md;
-    size_t argc = 1;
-    napi_value args[1];
-    uintptr_t address;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uintptr(env, args[0], &address) != napi_ok) {
-        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
-    }
-    size_t base = md->base_address;
-    if (address < base) {
-        // this happens when we encounter a regular ArrayBuffer with byteLength = 0
-        address = base;
-    }
-    napi_value offset;
-    if (napi_create_double(env, address - base, &offset) != napi_ok) {
-        return throw_last_error(env);
-    }
-    return offset;
-}
-
 napi_value recreate_address(napi_env env,
                             napi_callback_info info) {
     module_data* md;
     size_t argc = 1;
     napi_value args[1];
-    double reloc;
+    double handle;
     if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_double(env, args[0], &reloc) != napi_ok) {
-        return throw_error(env, "Offset must be a number");
+     || napi_get_value_double(env, args[0], &handle) != napi_ok) {
+        return throw_error(env, "Handle must be a number");
     }
-    uintptr_t base = md->base_address;
+    size_t address_value;
+    md->mod->imports->get_export_address(md->base_address + handle, &address_value);
     napi_value address;
-    if (napi_create_uintptr(env, base + reloc, &address) != napi_ok) {
+    if (napi_create_uintptr(env, address_value, &address) != napi_ok) {
         return throw_last_error(env);
     }
     return address;
@@ -936,7 +921,6 @@ struct {
     { "runVariadicThunk", run_variadic_thunk },
     { "createJsThunk", create_js_thunk },
     { "destroyJsThunk", destroy_js_thunk },
-    { "getMemoryOffset", get_memory_offset },
     { "recreateAddress", recreate_address },
     { "finalizeAsyncCall", finalize_async_call },
     { "getNumericValue", get_numeric_value },

@@ -81,7 +81,7 @@ const native = struct {
                 }
             }
         };
-        return ft_ns.control;
+        return &ft_ns.control;
     }
 
     test "createThunkController" {
@@ -175,7 +175,7 @@ const wasm = struct {
                 }
             }
         };
-        return tc_ns.control;
+        return &tc_ns.control;
     }
 
     test "createThunkController" {

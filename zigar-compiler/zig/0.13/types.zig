@@ -936,6 +936,13 @@ pub const TypeData = struct {
         };
     }
 
+    pub fn isFunction(comptime self: @This()) bool {
+        return switch (@typeInfo(self.type)) {
+            .Fn => true,
+            else => false,
+        };
+    }
+
     pub fn isArguments(comptime self: @This()) bool {
         return self.attrs.is_arguments;
     }
@@ -1010,6 +1017,10 @@ pub const TypeDataCollector = struct {
                 self.setSlot(td);
             }
         }
+    }
+
+    pub fn add(comptime self: *@This(), comptime T: type) void {
+        self.append(.{ .type = T });
     }
 
     pub fn createDatabase(comptime self: *const @This()) TypeDatabase(self.types.len) {
@@ -1162,10 +1173,6 @@ pub const TypeDataCollector = struct {
             },
             else => {},
         }
-    }
-
-    fn add(comptime self: *@This(), comptime T: type) void {
-        self.append(.{ .type = T });
     }
 
     fn addTypeOf(comptime self: *@This(), comptime value: anytype) void {

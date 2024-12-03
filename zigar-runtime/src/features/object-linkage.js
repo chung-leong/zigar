@@ -13,8 +13,8 @@ export default mixin({
       }
     }
     const pointers = [];
-    for (const { object, reloc } of this.variables) {
-      this.linkObject(object, reloc, writeBack);
+    for (const { object, handle } of this.variables) {
+      this.linkObject(object, handle, writeBack);
       if (TARGET in object && object[SLOTS][0]) {
         pointers.push(object);
       }
@@ -29,12 +29,12 @@ export default mixin({
       }
     }
   },
-  linkObject(object, reloc, writeBack) {
+  linkObject(object, handle, writeBack) {
     if (object[MEMORY][ZIG]) {
       return;
     }
     const dv = object[MEMORY];
-    const address = this.recreateAddress(reloc);
+    const address = this.recreateAddress(handle);
     const length = dv.byteLength;
     const zigDV = this.obtainZigView(address, length);
     if (writeBack && length > 0) {
@@ -72,17 +72,17 @@ export default mixin({
       object[RESTORE]?.();
     }
     const dv = object[MEMORY];
-    const relocDV = this.allocateMemory(dv.byteLength);
+    const jsDV = this.allocateMemory(dv.byteLength);
     if (object[COPY]) {
       const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = relocDV;
+      dest[MEMORY] = jsDV;
       dest[COPY](object);
     }
-    object[MEMORY] = relocDV;
+    object[MEMORY] = jsDV;
   },
   ...(process.env.TARGET === 'wasm' ? {
-    recreateAddress(reloc) {
-      return reloc;
+    imports: {
+      recreateAddress: { argType: 'i', returnType: 'i' },
     },
   } : process.env.TARGET === 'node' ? {
     imports: {

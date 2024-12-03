@@ -69,19 +69,19 @@ pub fn captureString(memory: Memory) !Value {
     return value;
 }
 
-pub fn captureView(memory: Memory) !Value {
+pub fn captureView(memory: Memory, export_handle: ?usize) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.capture_view(md, &memory, &value) != .ok) {
+    if (imports.capture_view(md, &memory, export_handle orelse 0, &value) != .ok) {
         return Error.UnableToCreateDataView;
     }
     return value;
 }
 
-pub fn castView(memory: Memory, structure: Value) !Value {
+pub fn castView(memory: Memory, structure: Value, export_handle: ?usize) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.cast_view(md, &memory, structure, &value) != .ok) {
+    if (imports.cast_view(md, &memory, structure, export_handle orelse 0, &value) != .ok) {
         return Error.UnableToCreateObject;
     }
     return value;
@@ -94,6 +94,15 @@ pub fn getSlotNumber(scope: u32, key: u32) !usize {
         return Error.UnableToObtainSlot;
     }
     return result;
+}
+
+pub fn getExportHandle(comptime ptr: anytype) usize {
+    const ns = struct {
+        fn getAddress() usize {
+            return @intFromPtr(ptr);
+        }
+    };
+    return @intFromPtr(&ns.getAddress);
 }
 
 pub fn readSlot(target: ?Value, id: usize) !Value {
@@ -333,6 +342,12 @@ fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     return if (result == .ok) .ok else .failure;
 }
 
+pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) Result {
+    const f: *const fn () usize = @ptrFromInt(handle);
+    dest.* = f();
+    return .ok;
+}
+
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
 
 fn runThunk(
@@ -401,8 +416,8 @@ fn wakeCaller(futex_handle: usize, value: u32) callconv(.C) Result {
 // pointer table that's filled on the C side
 const Imports = extern struct {
     capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
-    capture_view: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
-    cast_view: *const fn (*ModuleData, *const Memory, Value, *Value) callconv(.C) Result,
+    capture_view: *const fn (*ModuleData, *const Memory, usize, *Value) callconv(.C) Result,
+    cast_view: *const fn (*ModuleData, *const Memory, Value, usize, *Value) callconv(.C) Result,
     read_slot: *const fn (*ModuleData, ?Value, usize, *Value) callconv(.C) Result,
     write_slot: *const fn (*ModuleData, ?Value, usize, ?Value) callconv(.C) Result,
     begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) Result,
@@ -423,6 +438,7 @@ const Exports = extern struct {
     deinitialize: *const fn (*ModuleData) callconv(.C) Result,
     allocate_extern_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
     free_extern_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
+    get_export_address: *const fn (usize, *usize) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
@@ -456,6 +472,7 @@ pub fn createModule(comptime module: type) Module {
             .deinitialize = deinitialize,
             .allocate_extern_memory = allocateExternMemory,
             .free_extern_memory = freeExternMemory,
+            .get_export_address = getExportAddress,
             .get_factory_thunk = ns.getFactoryThunk,
             .run_thunk = runThunk,
             .run_variadic_thunk = runVariadicThunk,

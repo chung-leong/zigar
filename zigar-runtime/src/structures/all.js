@@ -1,4 +1,4 @@
-import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType, VisitorFlag } from '../constants.js';
+import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   MissingInitializers, NoInitializer, NoProperty
@@ -6,7 +6,7 @@ import {
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
   ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
-  MODIFY, PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY, VISIT,
+  MODIFY, PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -276,7 +276,7 @@ export default mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
+          // this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
         }
       }
       for (const key of argKeys) {

@@ -36,7 +36,7 @@ export default mixin({
         } else {
           const { array, offset, length } = memory;
           const dv = this.obtainView(array.buffer, offset, length);
-          const { reloc, const: isConst } = placeholder;
+          const { handle, const: isConst } = placeholder;
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
           if (isConst) {
@@ -45,10 +45,10 @@ export default mixin({
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);
           }
-          if (reloc !== undefined) {
+          if (handle !== undefined) {
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
-            this.variables.push({ reloc, object });
+            this.variables.push({ handle, object });
           }
           return object;
         }
@@ -62,13 +62,13 @@ export default mixin({
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
-          const { slots, memory, reloc } = scope.template;
+          const { slots, memory, handle } = scope.template;
           const object = scope.template = {};
           if (memory) {
             const { array, offset, length } = memory;
             object[MEMORY] = this.obtainView(array.buffer, offset, length);
-            if (reloc) {
-              this.variables.push({ reloc, object });
+            if (handle) {
+              this.variables.push({ handle, object });
             }
           }
           if (slots) {

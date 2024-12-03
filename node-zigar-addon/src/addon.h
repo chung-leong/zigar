@@ -20,7 +20,7 @@
 
 #define MISSING(T)                      ((T) -1)
 
-#define EXPORT_COUNT    20
+#define EXPORT_COUNT    19
 #define IMPORT_COUNT    11
 
 #if UINTPTR_MAX == UINT64_MAX
@@ -151,8 +151,8 @@ typedef struct {
 
 struct export_table {
     result (__cdecl *capture_string)(module_data*, const memory*, napi_value*);
-    result (__cdecl *capture_view)(module_data*, const memory*, napi_value*);
-    result (__cdecl *cast_view)(module_data*, const memory*, napi_value, napi_value*);
+    result (__cdecl *capture_view)(module_data*, const memory*, size_t, napi_value*);
+    result (__cdecl *cast_view)(module_data*, const memory*, napi_value, size_t, napi_value*);
     result (__cdecl *read_slot)(module_data*, napi_value, size_t, napi_value*);
     result (__cdecl *write_slot)(module_data*, napi_value, size_t, napi_value);
     result (__cdecl *begin_structure)(module_data*, const structure*, napi_value*);
@@ -172,6 +172,7 @@ struct import_table {
     result (__cdecl *deinitialize)(module_data*);
     result (__cdecl *allocate_extern_memory)(uint32_t, size_t, uint16_t, memory*);
     result (__cdecl *free_extern_memory)(uint32_t, const memory*);
+    result (__cdecl *get_export_address)(size_t, size_t*);
     result (__cdecl *get_factory_thunk)(size_t*);
     result (__cdecl *run_thunk)(size_t, size_t, size_t);
     result (__cdecl *run_variadic_thunk)(size_t, size_t, size_t, size_t, size_t);

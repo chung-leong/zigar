@@ -202,7 +202,7 @@ function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, settings, keys } = definition;
-  const { MEMORY, SLOTS, CONST_TARGET } = keys;
+  const { MEMORY, SLOTS, CONST_TARGET, ZIG } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -338,8 +338,9 @@ function addStructureDefinitions(lines, definition) {
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        if (dv.hasOwnProperty('reloc')) {
-          add(`reloc: ${dv.reloc},`);
+        const zig = dv[ZIG];
+        if (zig) {
+          add(`handle: ${zig.handle},`);
         }
         if (object[CONST_TARGET]) {
           add(`const: true,`);
