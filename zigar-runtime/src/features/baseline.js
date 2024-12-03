@@ -28,6 +28,8 @@ export default mixin({
       }
       return dest;
     };
+    // empty arrays aren't replicated
+    const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
     const createObject = (placeholder) => {
       const { memory, structure, actual } = placeholder;
       if (memory) {
@@ -35,7 +37,7 @@ export default mixin({
           return actual;
         } else {
           const { array, offset, length } = memory;
-          const dv = this.obtainView(array.buffer, offset, length);
+          const dv = this.obtainView(getBuffer(array), offset, length);
           const { handle, const: isConst } = placeholder;
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
@@ -66,7 +68,7 @@ export default mixin({
           const object = scope.template = {};
           if (memory) {
             const { array, offset, length } = memory;
-            object[MEMORY] = this.obtainView(array.buffer, offset, length);
+            object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
             if (handle) {
               this.variables.push({ handle, object });
             }

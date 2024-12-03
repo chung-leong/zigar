@@ -159,27 +159,23 @@ function addStructureDefinitions(lines, definition) {
       hasU = true;
     }
   };
-  for (const [ index, dv ] of views.entries()) {
-    if (!arrayBufferNames.get(dv.buffer)) {
-      const varname = `a${index}`;
-      arrayBufferNames.set(dv.buffer, varname);
-      let initializers = '';
-      if (dv.buffer.byteLength > 0) {
-        const ta = new Uint8Array(dv.buffer);
-        let allZeros = true;
-        for (const byte of ta) {
-          if (byte !== 0) {
-            allZeros = false;
-            break;
-          }
-        }
-        if (allZeros) {
-          initializers = `${ta.length}`;
-        } else {
-          initializers = `[ ${ta.join(', ')} ]`;
+  let arrayCount = 0;
+  const emptyBuffer = new ArrayBuffer(0);
+  for (const dv of views) {
+    addU();
+    const buffer = (dv.buffer.byteLength > 0) ? dv.buffer : emptyBuffer;
+    if (!arrayBufferNames.get(buffer)) {
+      const varname = `a${arrayCount++}`;
+      arrayBufferNames.set(buffer, varname);
+      const ta = new Uint8Array(dv.buffer);
+      let allZeros = true;
+      for (const byte of ta) {
+        if (byte !== 0) {
+          allZeros = false;
+          break;
         }
       }
-      addU();
+      const initializers = (allZeros) ? `${ta.length}` : `[ ${ta.join(', ')} ]`;
       add(`const ${varname} = U(${initializers});`);
     }
   }
@@ -203,9 +199,9 @@ function addStructureDefinitions(lines, definition) {
         add(`structure: ${structureNames.get(structure)},`);
       }
       if (dv) {
-        const buffer = arrayBufferNames.get(dv.buffer);
-        const pairs = [ `array: ${buffer}` ];
-        if (dv.byteLength < dv.buffer.byteLength) {
+        const buffer = (dv.buffer.byteLength > 0) ? dv.buffer : emptyBuffer;
+        const pairs = [ `array: ${arrayBufferNames.get(buffer)}` ];
+        if (dv.byteLength < buffer.byteLength) {
           pairs.push(`offset: ${dv.byteOffset}`);
           pairs.push(`length: ${dv.byteLength}`);
         }

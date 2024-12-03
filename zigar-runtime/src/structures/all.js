@@ -276,7 +276,6 @@ export default mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          // this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
         }
       }
       for (const key of argKeys) {
