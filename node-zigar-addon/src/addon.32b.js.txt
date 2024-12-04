@@ -2795,7 +2795,7 @@
 "      }\n"
 "    },\n"
 "    unlinkObject(object) {\n"
-"      const { zig } = object[MEMORY]?.[ZIG];\n"
+"      const zig = object[MEMORY]?.[ZIG];\n"
 "      if (!zig) {\n"
 "        return;\n"
 "      }\n"

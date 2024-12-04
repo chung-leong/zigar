@@ -4103,7 +4103,7 @@ var objectLinkage = mixin({
     }
   },
   unlinkObject(object) {
-    const { zig } = object[MEMORY]?.[ZIG];
+    const zig = object[MEMORY]?.[ZIG];
     if (!zig) {
       return;
     }
