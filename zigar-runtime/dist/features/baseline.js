@@ -28,6 +28,8 @@ var baseline = mixin({
       }
       return dest;
     };
+    // empty arrays aren't replicated
+    const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
     const createObject = (placeholder) => {
       const { memory, structure, actual } = placeholder;
       if (memory) {
@@ -35,8 +37,8 @@ var baseline = mixin({
           return actual;
         } else {
           const { array, offset, length } = memory;
-          const dv = this.obtainView(array.buffer, offset, length);
-          const { reloc, const: isConst } = placeholder;
+          const dv = this.obtainView(getBuffer(array), offset, length);
+          const { handle, const: isConst } = placeholder;
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
           if (isConst) {
@@ -45,10 +47,10 @@ var baseline = mixin({
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);
           }
-          if (reloc !== undefined) {
+          if (handle) {
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
-            this.variables.push({ reloc, object });
+            this.variables.push({ handle, object });
           }
           return object;
         }
@@ -62,13 +64,13 @@ var baseline = mixin({
       // recreate the actual template using the provided placeholder
       for (const scope of [ structure.instance, structure.static ]) {
         if (scope.template) {
-          const { slots, memory, reloc } = scope.template;
+          const { slots, memory, handle } = scope.template;
           const object = scope.template = {};
           if (memory) {
             const { array, offset, length } = memory;
-            object[MEMORY] = this.obtainView(array.buffer, offset, length);
-            if (reloc) {
-              this.variables.push({ reloc, object });
+            object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
+            if (handle) {
+              this.variables.push({ handle, object });
             }
           }
           if (slots) {

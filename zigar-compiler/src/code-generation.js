@@ -206,9 +206,9 @@ function addStructureDefinitions(lines, definition) {
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        const zig = dv[ZIG];
-        if (zig) {
-          add(`handle: ${zig.handle},`);
+        const { handle } = dv;
+        if (handle) {
+          add(`handle: ${handle},`);
         }
         if (object[CONST_TARGET]) {
           add(`const: true,`);

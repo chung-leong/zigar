@@ -87,15 +87,6 @@ pub fn castView(memory: Memory, structure: Value, export_handle: ?usize) !Value 
     return value;
 }
 
-pub fn getSlotNumber(scope: u32, key: u32) !usize {
-    const md = try getModuleData();
-    var result: u32 = undefined;
-    if (imports.get_slot_number(md, scope, key, &result) != .ok) {
-        return Error.UnableToObtainSlot;
-    }
-    return result;
-}
-
 pub fn getExportHandle(comptime ptr: anytype) usize {
     const ns = struct {
         fn getAddress() usize {

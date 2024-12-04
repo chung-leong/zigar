@@ -605,27 +605,23 @@ function addStructureDefinitions(lines, definition) {
       hasU = true;
     }
   };
-  for (const [ index, dv ] of views.entries()) {
-    if (!arrayBufferNames.get(dv.buffer)) {
-      const varname = `a${index}`;
-      arrayBufferNames.set(dv.buffer, varname);
-      let initializers = '';
-      if (dv.buffer.byteLength > 0) {
-        const ta = new Uint8Array(dv.buffer);
-        let allZeros = true;
-        for (const byte of ta) {
-          if (byte !== 0) {
-            allZeros = false;
-            break;
-          }
-        }
-        if (allZeros) {
-          initializers = `${ta.length}`;
-        } else {
-          initializers = `[ ${ta.join(', ')} ]`;
+  let arrayCount = 0;
+  const emptyBuffer = new ArrayBuffer(0);
+  for (const dv of views) {
+    addU();
+    const buffer = (dv.buffer.byteLength > 0) ? dv.buffer : emptyBuffer;
+    if (!arrayBufferNames.get(buffer)) {
+      const varname = `a${arrayCount++}`;
+      arrayBufferNames.set(buffer, varname);
+      const ta = new Uint8Array(dv.buffer);
+      let allZeros = true;
+      for (const byte of ta) {
+        if (byte !== 0) {
+          allZeros = false;
+          break;
         }
       }
-      addU();
+      const initializers = (allZeros) ? `${ta.length}` : `[ ${ta.join(', ')} ]`;
       add(`const ${varname} = U(${initializers});`);
     }
   }
@@ -649,16 +645,16 @@ function addStructureDefinitions(lines, definition) {
         add(`structure: ${structureNames.get(structure)},`);
       }
       if (dv) {
-        const buffer = arrayBufferNames.get(dv.buffer);
-        const pairs = [ `array: ${buffer}` ];
-        if (dv.byteLength < dv.buffer.byteLength) {
+        const buffer = (dv.buffer.byteLength > 0) ? dv.buffer : emptyBuffer;
+        const pairs = [ `array: ${arrayBufferNames.get(buffer)}` ];
+        if (dv.byteLength < buffer.byteLength) {
           pairs.push(`offset: ${dv.byteOffset}`);
           pairs.push(`length: ${dv.byteLength}`);
         }
         add(`memory: { ${pairs.join(', ')} },`);
-        const zig = dv[ZIG];
-        if (zig) {
-          add(`handle: ${zig.handle},`);
+        const { handle } = dv;
+        if (handle) {
+          add(`handle: ${handle},`);
         }
         if (object[CONST_TARGET]) {
           add(`const: true,`);
@@ -2886,6 +2882,8 @@ var baseline = mixin({
       }
       return dest;
     };
+    // empty arrays aren't replicated
+    const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
     const createObject = (placeholder) => {
       const { memory, structure, actual } = placeholder;
       if (memory) {
@@ -2893,7 +2891,7 @@ var baseline = mixin({
           return actual;
         } else {
           const { array, offset, length } = memory;
-          const dv = this.obtainView(array.buffer, offset, length);
+          const dv = this.obtainView(getBuffer(array), offset, length);
           const { handle, const: isConst } = placeholder;
           const constructor = structure?.constructor;
           const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
@@ -2903,7 +2901,7 @@ var baseline = mixin({
           if (placeholder.slots) {
             insertObjects(object[SLOTS], placeholder.slots);
           }
-          if (handle !== undefined) {
+          if (handle) {
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ handle, object });
@@ -2924,7 +2922,7 @@ var baseline = mixin({
           const object = scope.template = {};
           if (memory) {
             const { array, offset, length } = memory;
-            object[MEMORY] = this.obtainView(array.buffer, offset, length);
+            object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
             if (handle) {
               this.variables.push({ handle, object });
             }
@@ -3037,7 +3035,7 @@ var callMarshalingInbound = mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else {
+          } else if (retval != undefined) {
             onReturn(retval);
           }
         } catch (err) {
@@ -3264,7 +3262,6 @@ var callMarshalingOutbound = mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
-    console.log({ thunkAddress, fnAddress, argAddress });
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
@@ -4072,7 +4069,10 @@ var objectLinkage = mixin({
       return;
     }
     const dv = object[MEMORY];
-    const address = this.recreateAddress(handle);
+    // objects in WebAssembly have fixed addresses so the handle is the address
+    // for native code module, locations of objects in memory can change depending on
+    // where the shared library is loaded
+    const address = handle ;
     const length = dv.byteLength;
     const zigDV = this.obtainZigView(address, length);
     if (writeBack && length > 0) {
@@ -4103,14 +4103,12 @@ var objectLinkage = mixin({
     }
   },
   unlinkObject(object) {
-    if (!object[MEMORY][ZIG]) {
+    const { zig } = object[MEMORY][ZIG];
+    if (!zig) {
       return;
     }
-    {
-      object[RESTORE]?.();
-    }
-    const dv = object[MEMORY];
-    const jsDV = this.allocateMemory(dv.byteLength);
+    const { len } = zig;
+    const jsDV = this.allocateMemory(len);
     if (object[COPY]) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = jsDV;
@@ -4471,7 +4469,6 @@ var structureAcquisition = mixin({
     this.finalizeStructure(structure);
   },
   captureView(address, len, copy, handle) {
-    console.log({ address, len, copy, handle });
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -4482,8 +4479,8 @@ var structureAcquisition = mixin({
     } else {
       // link into Zig memory
       const dv = this.obtainZigView(address, len);
-      if (handle) {
-        dv[ZIG].handle = handle;
+      {
+        dv[ZIG].handle = address;
       }
       return dv;
     }
@@ -4534,21 +4531,30 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    {
-      for (const object of findObjects(this.structures, SLOTS)) {
-        const zig = object[MEMORY]?.[ZIG];
-        if (zig) {
-          // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-          this.useObjectLinkage();
-        }
-      }
-    }
+    this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
       keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
     };
+  },
+  prepareObjectsForExport() {
+    for (const object of findObjects(this.structures, SLOTS)) {
+      const zig = object[MEMORY]?.[ZIG];
+      if (zig) {
+        // replace Zig memory
+        const { address, len, handle } = zig;
+        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        if (handle) {
+          jsDV.handle = handle;
+          {
+            // mixin "features/object-linkage" is used when there are objects linked to Zig memory
+            this.useObjectLinkage();
+          }
+        }
+      }
+    }
   },
   useStructures() {
     const module = this.getRootModule();
@@ -4682,8 +4688,8 @@ var structureAcquisition = mixin({
   ...({
     exports: {
       captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iibi', returnType: 'v' },
-      castView: { argType: 'iibvi', returnType: 'v' },
+      captureView: { argType: 'iib', returnType: 'v' },
+      castView: { argType: 'iibv', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
@@ -6060,7 +6066,6 @@ var all$1 = mixin({
           if (template[MEMORY]) {
             this[COPY](template);
           }
-          this[VISIT]?.('copy', VisitorFlag.Vivificate, template);
         }
       }
       for (const key of argKeys) {

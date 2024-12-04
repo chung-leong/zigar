@@ -87,8 +87,8 @@ var structureAcquisition = mixin({
     } else {
       // link into Zig memory
       const dv = this.obtainZigView(address, len);
-      if (handle) {
-        dv[ZIG].import = handle;
+      {
+        dv[ZIG].handle = address;
       }
       return dv;
     }
@@ -139,12 +139,26 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
+    this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET },
+      keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
     };
+  },
+  prepareObjectsForExport() {
+    for (const object of findObjects(this.structures, SLOTS)) {
+      const zig = object[MEMORY]?.[ZIG];
+      if (zig) {
+        // replace Zig memory
+        const { address, len, handle } = zig;
+        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        if (handle) {
+          jsDV.handle = handle;
+        }
+      }
+    }
   },
   useStructures() {
     const module = this.getRootModule();
@@ -278,8 +292,8 @@ var structureAcquisition = mixin({
   ...({
     exports: {
       captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iibi', returnType: 'v' },
-      castView: { argType: 'iibvi', returnType: 'v' },
+      captureView: { argType: 'iib', returnType: 'v' },
+      castView: { argType: 'iibv', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },

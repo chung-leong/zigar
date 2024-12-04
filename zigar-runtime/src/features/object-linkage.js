@@ -1,7 +1,5 @@
 import { mixin } from '../environment.js';
-import {
-  ADDRESS, COPY, LENGTH, MEMORY, RESTORE, SLOTS, TARGET, ZIG,
-} from '../symbols.js';
+import { ADDRESS, COPY, LENGTH, MEMORY, SLOTS, TARGET, ZIG } from '../symbols.js';
 
 export default mixin({
   linkVariables(writeBack) {
@@ -34,7 +32,10 @@ export default mixin({
       return;
     }
     const dv = object[MEMORY];
-    const address = this.recreateAddress(handle);
+    // objects in WebAssembly have fixed addresses so the handle is the address
+    // for native code module, locations of objects in memory can change depending on
+    // where the shared library is loaded
+    const address = (process.env.TARGET === 'wasm') ? handle : this.recreateAddress(handle);
     const length = dv.byteLength;
     const zigDV = this.obtainZigView(address, length);
     if (writeBack && length > 0) {
@@ -65,14 +66,12 @@ export default mixin({
     }
   },
   unlinkObject(object) {
-    if (!object[MEMORY][ZIG]) {
+    const { zig } = object[MEMORY][ZIG];
+    if (!zig) {
       return;
     }
-    if (process.env.TARGET === 'wasm') {
-      object[RESTORE]?.();
-    }
-    const dv = object[MEMORY];
-    const jsDV = this.allocateMemory(dv.byteLength);
+    const { len } = zig;
+    const jsDV = this.allocateMemory(len);
     if (object[COPY]) {
       const dest = Object.create(object.constructor.prototype);
       dest[MEMORY] = jsDV;

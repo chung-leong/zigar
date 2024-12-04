@@ -168,14 +168,19 @@ pub fn captureString(memory: Memory) !Value {
         Error.UnableToCreateString;
 }
 
-pub fn captureView(memory: Memory) !Value {
+pub fn captureView(memory: Memory, _: @TypeOf(null)) !Value {
     return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
         Error.UnableToCreateDataView;
 }
 
-pub fn castView(memory: Memory, structure: Value) !Value {
+pub fn castView(memory: Memory, structure: Value, _: @TypeOf(null)) !Value {
     return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
         Error.UnableToCreateObject;
+}
+
+pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
+    // not used on WASM side since addresses are unchanging
+    return null;
 }
 
 pub fn readSlot(container: ?Value, slot: usize) !Value {

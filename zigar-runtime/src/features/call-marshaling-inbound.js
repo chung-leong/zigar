@@ -90,7 +90,7 @@ export default mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else {
+          } else if (retval != undefined) {
             onReturn(retval);
           }
         } catch (err) {

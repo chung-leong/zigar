@@ -93,7 +93,9 @@ export default mixin({
     } else {
       // link into Zig memory
       const dv = this.obtainZigView(address, len);
-      if (handle) {
+      if (process.env.TARGET === 'wasm') {
+        dv[ZIG].handle = address;
+      } else {
         dv[ZIG].handle = handle;
       }
       return dv;
@@ -145,21 +147,30 @@ export default mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    if (process.env.MIXIN === 'track') {
-      for (const object of findObjects(this.structures, SLOTS)) {
-        const zig = object[MEMORY]?.[ZIG];
-        if (zig) {
-          // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-          this.useObjectLinkage();
-        }
-      }
-    }
+    this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
       keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
     };
+  },
+  prepareObjectsForExport() {
+    for (const object of findObjects(this.structures, SLOTS)) {
+      const zig = object[MEMORY]?.[ZIG];
+      if (zig) {
+        // replace Zig memory
+        const { address, len, handle } = zig;
+        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        if (handle) {
+          jsDV.handle = handle;
+          if (process.env.MIXIN === 'track') {
+            // mixin "features/object-linkage" is used when there are objects linked to Zig memory
+            this.useObjectLinkage();
+          }
+        }
+      }
+    }
   },
   useStructures() {
     const module = this.getRootModule();
@@ -293,8 +304,8 @@ export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
       captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iibi', returnType: 'v' },
-      castView: { argType: 'iibvi', returnType: 'v' },
+      captureView: { argType: 'iib', returnType: 'v' },
+      castView: { argType: 'iibv', returnType: 'v' },
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
