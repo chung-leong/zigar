@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
   describe('Opaque', function() {
     it('should import opaque pointer as static variables', async function() {
       this.timeout(300000);
-      const { default: module, Orange, Apple, print } = await importTest('as-static-variables');
+      const { default: module, Orange, Apple, compare } = await importTest('as-static-variables');
       expect(Orange).to.be.a('function');
       expect(Apple).to.be.a('function');
       expect(() => new Orange()).to.throw();
@@ -23,7 +23,9 @@ export function addTests(importModule, options) {
       const dv2 = module.orange_ptr.dataView;
       expect(dv1.byteLength).to.equal(4);
       expect(dv2.byteLength).to.equal(0);
-      expect(dv1.buffer).to.equal(dv2.buffer);
+      expect(dv2.buffer).to.equal(dv2.buffer);
+      const result = compare(module.int_ptr, module.orange_ptr);
+      expect(result).to.be.true;
     })
     it('should print opaque pointer arguments', async function() {
       this.timeout(300000);

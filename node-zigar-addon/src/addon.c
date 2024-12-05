@@ -461,9 +461,9 @@ napi_value obtain_external_buffer(napi_env env,
     void* src = (void*) address;
     void* dest;
     // need to include at least one byte
-    size_t len = len_float, min_len = !len ? 1 : len;
+    size_t len = len_float;
     if (can_create_external_buffer(env)) {
-        if (napi_create_external_arraybuffer(env, src, min_len, finalize_external_buffer, md, &buffer) != napi_ok) {
+        if (napi_create_external_arraybuffer(env, src, len, finalize_external_buffer, md, &buffer) != napi_ok) {
             return throw_last_error(env);
         }
     } else {
@@ -538,15 +538,13 @@ napi_value find_sentinel(napi_env env,
                     return offset;
                 }
             }
-        } else {
-            napi_value negative_one;
-            if (napi_create_int32(env, -1, &negative_one) != napi_ok) {
-                return throw_last_error(env);
-            }
-            return negative_one;
         }
     }
-    return NULL;
+    napi_value negative_one;
+    if (napi_create_int32(env, -1, &negative_one) != napi_ok) {
+        return throw_last_error(env);
+    }
+    return negative_one;
 }
 
 napi_value get_factory_thunk(napi_env env,

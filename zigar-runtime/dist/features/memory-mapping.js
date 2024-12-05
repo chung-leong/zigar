@@ -4,8 +4,6 @@ import { MEMORY, ALIGN, ZIG, CACHE } from '../symbols.js';
 import { alignForward, adjustAddress, isMisaligned, isInvalidAddress, usizeInvalid, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
-  emptyBuffer: new ArrayBuffer(0),
-  emptyBufferMap: new Map,
   memoryList: [],
   contextCount: 0,
 
@@ -133,7 +131,7 @@ var memoryMapping = mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && address < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -178,31 +176,12 @@ var memoryMapping = mixin({
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   },
-  obtainZigView(address, len) {
-    let dv;
-    if (address && len) {
-      dv = this.obtainExternView(address, len);
-    } else {
-      // pointer to nothing
-      dv = this.emptyBufferMap.get(address);
-      if (!dv) {
-        dv = new DataView(this.emptyBuffer);
-        dv[ZIG] = { address, len: 0 };
-        this.emptyBufferMap.set(address, dv);
-      }
-    }
-    return dv;
-  },
   releaseZigView(dv) {
     const zig = dv[ZIG];
     const address = zig?.address;
     if (address && address !== usizeInvalid) {
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
-      if (!zig.len) {
-        // remove view from empty buffer map
-        this.emptyBufferMap.delete(address);
-      }
     }
   },
   getViewAddress(dv) {
@@ -222,6 +201,7 @@ var memoryMapping = mixin({
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
     },
+    invalidBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
       return this.allocateZigMemory(len, align, MemoryType.Scratch);
@@ -229,9 +209,12 @@ var memoryMapping = mixin({
     freeShadowMemory(dv) {
       return this.freeZigMemory(dv);
     },
-    obtainExternView(address, len) {
-      const { buffer } = this.memory;
-      return this.obtainView(buffer, address, len);
+    obtainZigView(address, len) {
+      if (address !== usizeInvalid) {
+        return this.obtainView(this.memory.buffer, address, len);
+      } else {
+        return this.obtainView(this.invalidBuffer, 0, 0);
+      }
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];

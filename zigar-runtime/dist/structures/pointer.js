@@ -184,7 +184,7 @@ var pointer = mixin({
         }
       } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
-          arg = arg['*']?.[MEMORY];
+          arg = arg[TARGET]?.[MEMORY];
         } else if (arg[MEMORY]) {
           arg = arg[MEMORY];
         } else if (arg?.buffer instanceof ArrayBuffer) {

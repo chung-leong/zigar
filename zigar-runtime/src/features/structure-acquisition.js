@@ -4,10 +4,11 @@ import {
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
+  StructureFlag,
   structureNames, StructureType
 } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, findObjects } from '../utils.js';
+import { adjustAddress, decodeText, findObjects } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -105,6 +106,10 @@ export default mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
+    if (flags & StructureFlag.HasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(null, object);
+    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
@@ -147,6 +152,7 @@ export default mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
+    // this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
@@ -156,6 +162,7 @@ export default mixin({
     };
   },
   prepareObjectsForExport() {
+    const list = [];
     for (const object of findObjects(this.structures, SLOTS)) {
       const zig = object[MEMORY]?.[ZIG];
       if (zig) {
@@ -164,11 +171,31 @@ export default mixin({
         const jsDV = object[MEMORY] = this.captureView(address, len, true);
         if (handle) {
           jsDV.handle = handle;
-          if (process.env.MIXIN === 'track') {
-            // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-            this.useObjectLinkage();
+          list.push({ address, len, owner: object, replaced: false });
+        }
+      }
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.len - a.len);
+    for (const a of list) {
+      if (!a.replaced) {
+        for (const b of list) {
+          if (a !== b && !b.replaced) {
+            if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
+              // B is inside A--replace it with a view of A's buffer
+              const dvA = a.owner[MEMORY];
+              const pos = Number(b.address - a.address) + dvA.byteOffset;
+              b.owner[MEMORY] = this.obtainView(dvA.buffer, pos, b.len);
+              b.replaced = true;
+            }
           }
         }
+      }
+    }
+    if (process.env.MIXIN === 'track') {
+      if (list.length > 0) {
+        // mixin "features/object-linkage" is used when there are objects linked to Zig memory
+        this.useObjectLinkage();
       }
     }
   },

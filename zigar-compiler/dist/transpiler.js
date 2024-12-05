@@ -339,7 +339,6 @@ const alignForward = function(address, align) {
   }
   /* c8 ignore next */
 ;
-const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
@@ -3504,7 +3503,7 @@ var defaultAllocator = mixin({
         },
         resize: noResize,
       };
-      const ptr = this.obtainZigView(usizeMax, 0);
+      const ptr = this.obtainZigView(usizeInvalid, 0);
       allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
       this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
     }
@@ -3572,8 +3571,6 @@ var intConversion = mixin({
 });
 
 var memoryMapping = mixin({
-  emptyBuffer: new ArrayBuffer(0),
-  emptyBufferMap: new Map,
   memoryList: [],
   contextCount: 0,
 
@@ -3701,7 +3698,7 @@ var memoryMapping = mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && address < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -3746,31 +3743,12 @@ var memoryMapping = mixin({
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
   },
-  obtainZigView(address, len) {
-    let dv;
-    if (address && len) {
-      dv = this.obtainExternView(address, len);
-    } else {
-      // pointer to nothing
-      dv = this.emptyBufferMap.get(address);
-      if (!dv) {
-        dv = new DataView(this.emptyBuffer);
-        dv[ZIG] = { address, len: 0 };
-        this.emptyBufferMap.set(address, dv);
-      }
-    }
-    return dv;
-  },
   releaseZigView(dv) {
     const zig = dv[ZIG];
     const address = zig?.address;
     if (address && address !== usizeInvalid) {
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
-      if (!zig.len) {
-        // remove view from empty buffer map
-        this.emptyBufferMap.delete(address);
-      }
     }
   },
   getViewAddress(dv) {
@@ -3790,6 +3768,7 @@ var memoryMapping = mixin({
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
     },
+    invalidBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
       return this.allocateZigMemory(len, align, MemoryType.Scratch);
@@ -3797,9 +3776,12 @@ var memoryMapping = mixin({
     freeShadowMemory(dv) {
       return this.freeZigMemory(dv);
     },
-    obtainExternView(address, len) {
-      const { buffer } = this.memory;
-      return this.obtainView(buffer, address, len);
+    obtainZigView(address, len) {
+      if (address !== usizeInvalid) {
+        return this.obtainView(this.memory.buffer, address, len);
+      } else {
+        return this.obtainView(this.invalidBuffer, 0, 0);
+      }
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -4489,6 +4471,10 @@ var structureAcquisition = mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
+    if (flags & StructureFlag.HasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(null, object);
+    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
@@ -4531,6 +4517,7 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
+    // this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
@@ -4540,6 +4527,7 @@ var structureAcquisition = mixin({
     };
   },
   prepareObjectsForExport() {
+    const list = [];
     for (const object of findObjects(this.structures, SLOTS)) {
       const zig = object[MEMORY]?.[ZIG];
       if (zig) {
@@ -4548,11 +4536,31 @@ var structureAcquisition = mixin({
         const jsDV = object[MEMORY] = this.captureView(address, len, true);
         if (handle) {
           jsDV.handle = handle;
-          {
-            // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-            this.useObjectLinkage();
+          list.push({ address, len, owner: object, replaced: false });
+        }
+      }
+    }
+    // larger memory blocks come first
+    list.sort((a, b) => b.len - a.len);
+    for (const a of list) {
+      if (!a.replaced) {
+        for (const b of list) {
+          if (a !== b && !b.replaced) {
+            if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
+              // B is inside A--replace it with a view of A's buffer
+              const dvA = a.owner[MEMORY];
+              const pos = Number(b.address - a.address) + dvA.byteOffset;
+              b.owner[MEMORY] = this.obtainView(dvA.buffer, pos, b.len);
+              b.replaced = true;
+            }
           }
         }
+      }
+    }
+    {
+      if (list.length > 0) {
+        // mixin "features/object-linkage" is used when there are objects linked to Zig memory
+        this.useObjectLinkage();
       }
     }
   },
@@ -7045,7 +7053,7 @@ var pointer = mixin({
         }
       } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
-          arg = arg['*']?.[MEMORY];
+          arg = arg[TARGET]?.[MEMORY];
         } else if (arg[MEMORY]) {
           arg = arg[MEMORY];
         } else if (arg?.buffer instanceof ArrayBuffer) {

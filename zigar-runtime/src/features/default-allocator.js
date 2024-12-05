@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { MEMORY, ZIG } from '../symbols.js';
-import { usizeMax } from '../utils.js';
+import { usizeInvalid } from '../utils.js';
 
 export default mixin({
   defaultAllocator: null,
@@ -20,7 +20,7 @@ export default mixin({
         },
         resize: noResize,
       };
-      const ptr = this.obtainZigView(usizeMax, 0);
+      const ptr = this.obtainZigView(usizeInvalid, 0);
       allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
       this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
     }
