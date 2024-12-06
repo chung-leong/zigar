@@ -4065,14 +4065,17 @@ var objectLinkage = mixin({
     }
     object[MEMORY] = zigDV;
     const linkChildren = (object) => {
-      if (object[SLOTS]) {
-        for (const child of Object.values(object[SLOTS])) {
+      const slots = object[SLOTS];
+      if (slots) {
+        for (const [ key, child ] of Object.entries(slots)) {
           if (child) {
             const childDV = child[MEMORY];
             if (childDV.buffer === dv.buffer) {
               const offset = childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
+            } else {
+              slots[key] = undefined;
             }
           }
         }
