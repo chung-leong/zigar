@@ -4074,7 +4074,8 @@ var objectLinkage = mixin({
               const offset = childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
-            } else {
+            } else if (object.constructor[TYPE] === StructureType.Pointer) {
+              // clear target so it'd be obtained again, this time from Zig memory
               slots[key] = undefined;
             }
           }
@@ -5943,6 +5944,7 @@ var all$1 = mixin({
       byteSize,
       align,
       flags,
+      name,
       instance: { members, template },
     } = structure;
     const { onCastError } = handlers;

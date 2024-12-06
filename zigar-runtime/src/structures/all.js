@@ -141,6 +141,7 @@ export default mixin({
       byteSize,
       align,
       flags,
+      name,
       instance: { members, template },
     } = structure;
     const { onCastError } = handlers;

@@ -1,5 +1,6 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { TARGET, SLOTS, MEMORY, ADDRESS, LENGTH, ZIG, COPY } from '../symbols.js';
+import { TARGET, SLOTS, MEMORY, ADDRESS, LENGTH, ZIG, COPY, TYPE } from '../symbols.js';
 
 var objectLinkage = mixin({
   linkVariables(writeBack) {
@@ -54,7 +55,8 @@ var objectLinkage = mixin({
               const offset = childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
-            } else {
+            } else if (object.constructor[TYPE] === StructureType.Pointer) {
+              // clear target so it'd be obtained again, this time from Zig memory
               slots[key] = undefined;
             }
           }
