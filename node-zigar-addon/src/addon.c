@@ -115,7 +115,7 @@ result cast_view(module_data* md,
      && napi_create_uint32(env, mem->len, &args[1]) == napi_ok
      && napi_get_boolean(env, mem->attributes.is_comptime, &args[2]) == napi_ok
      && napi_create_uintptr(env, pi_handle, &args[4]) == napi_ok
-     && call_js_function(md, castView, 6, args, dest)) {
+     && call_js_function(md, castView, 5, args, dest)) {
         return OK;
     }
     return FAILURE;
