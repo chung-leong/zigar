@@ -353,7 +353,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn getStructure(self: @This(), comptime T: type) types.Error!Value {
             const td = tdb.get(T);
             const slot = td.getSlot();
-            return host.readSlot(null, slot) catch create: {
+            return host.readSlot(null, slot) catch result: {
                 const def: types.Structure = .{
                     .name = comptime getStructureName(td),
                     .type = getStructureType(td),
@@ -375,7 +375,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     try self.addStaticMembers(structure, td);
                 }
                 try host.endStructure(structure);
-                break :create structure;
+                break :result structure;
             };
         }
 

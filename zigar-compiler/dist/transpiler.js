@@ -339,6 +339,7 @@ const alignForward = function(address, align) {
   }
   /* c8 ignore next */
 ;
+const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
@@ -3503,7 +3504,7 @@ var defaultAllocator = mixin({
         },
         resize: noResize,
       };
-      const ptr = this.obtainZigView(usizeInvalid, 0);
+      const ptr = this.obtainZigView(usizeMax, 0);
       allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
       this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
     }
@@ -3768,7 +3769,7 @@ var memoryMapping = mixin({
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
     },
-    invalidBuffer: new ArrayBuffer(0),
+    usizeMaxBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
       return this.allocateZigMemory(len, align, MemoryType.Scratch);
@@ -3777,10 +3778,10 @@ var memoryMapping = mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (address !== usizeInvalid) {
+      if (address !== usizeMax) {
         return this.obtainView(this.memory.buffer, address, len);
       } else {
-        return this.obtainView(this.invalidBuffer, 0, 0);
+        return this.obtainView(this.usizeMaxBuffer, 0, 0);
       }
     },
     getTargetAddress(context, target, cluster, writable) {
