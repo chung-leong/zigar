@@ -1,5 +1,5 @@
 .{
-    .name = "use-ziglua",
+    .name = "ziglua-example",
     .version = "0.0.0",
     .dependencies = .{
         .ziglua = .{

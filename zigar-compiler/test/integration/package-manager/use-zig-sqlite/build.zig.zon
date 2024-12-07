@@ -1,10 +1,10 @@
 .{
-    .name = "use-ziglua",
+    .name = "ziglite-sample",
     .version = "0.0.0",
     .dependencies = .{
         .sqlite = .{
-            .url = "https://github.com/vrischmann/zig-sqlite/archive/91e5fedd15c5ea3cb42ccceefb3d0f4bb9bad68f.zip",
-            .hash = "1220ba277845cb3cece7a7a1f929b920c97e9085bb644471c5dc8c72571f1485c75f",
+            .url = "https://github.com/vrischmann/zig-sqlite/archive/4040fb06a7d2f452435550aab13ebb0532cf1e27.zip",
+            .hash = "12209a0f00ce4ccccff6ec186611ff591d3b95babd9500e4d0ca20f7d0c74d20b657",
         },
     },
     .paths = .{
