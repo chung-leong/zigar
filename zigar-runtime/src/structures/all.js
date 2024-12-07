@@ -6,7 +6,7 @@ import {
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
   ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
-  MODIFY, PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY
+  PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -207,9 +207,6 @@ export default mixin({
         for (const slot of comptimeFieldSlots) {
           self[SLOTS][slot] = template[SLOTS][slot];
         }
-      }
-      if (MODIFY in self) {
-        self[MODIFY]();
       }
       if (creating) {
         // initialize object unless that's done already

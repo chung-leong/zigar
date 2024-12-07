@@ -1,4 +1,4 @@
-import { SLOTS, MEMORY, ZIG, ENVIRONMENT, CONST_TARGET, SENTINEL } from '../symbols.js';
+import { SLOTS, MEMORY, ZIG, ENVIRONMENT, CONST_TARGET, DISABLED, SENTINEL } from '../symbols.js';
 import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { findObjects, adjustAddress, decodeText } from '../utils.js';
@@ -162,7 +162,16 @@ var structureAcquisition = mixin({
         const jsDV = object[MEMORY] = this.captureView(address, len, true);
         if (handle) {
           jsDV.handle = handle;
-          list.push({ address, len, owner: object, replaced: false });
+        }
+        list.push({ address, len, owner: object, replaced: false, handle });
+      }
+      const slots = object[SLOTS];
+      if (slots) {
+        for (const [ key, child ] of Object.entries(slots)) {
+          if (child[DISABLED]) {
+            // don't recreate disabled pointers
+            slots[key] = undefined;
+          }
         }
       }
     }
@@ -171,7 +180,7 @@ var structureAcquisition = mixin({
     for (const a of list) {
       if (!a.replaced) {
         for (const b of list) {
-          if (a !== b && !b.replaced) {
+          if (a !== b && !b.replaced && !b.handle) {
             if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
               // B is inside A--replace it with a view of A's buffer
               const dvA = a.owner[MEMORY];
@@ -271,10 +280,12 @@ var structureAcquisition = mixin({
         prefix = '[*]';
       }
     }
-    // constructor can be null when a structure is recursive
-    const sentinel = target.structure.constructor?.[SENTINEL];
-    if (sentinel) {
-      prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+    if (!(flags & PointerFlag.IsSingle)) {
+      // constructor can be null when a structure is recursive
+      const sentinel = target.structure.constructor?.[SENTINEL];
+      if (sentinel) {
+        prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+      }
     }
     if (flags & PointerFlag.IsConst) {
       prefix = `${prefix}const `;

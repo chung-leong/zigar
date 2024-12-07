@@ -1,6 +1,5 @@
-import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ADDRESS, COPY, LENGTH, MEMORY, SLOTS, TARGET, TYPE, ZIG } from '../symbols.js';
+import { ADDRESS, COPY, LENGTH, MEMORY, SLOTS, TARGET, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   linkVariables(writeBack) {
@@ -48,24 +47,22 @@ export default mixin({
     const linkChildren = (object) => {
       const slots = object[SLOTS];
       if (slots) {
-        if (object.constructor[TYPE] === StructureType.Pointer) {
-          // clear target so it'd be obtained again, this time from Zig memory
-          slots[0] = undefined;
-        } else {
-          for (const [ key, child ] of Object.entries(slots)) {
-            if (child) {
-              const childDV = child[MEMORY];
-              if (childDV.buffer === dv.buffer) {
-                const offset = childDV.byteOffset - dv.byteOffset;
-                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
-                linkChildren(child);
-              }
+        const parentOffset = zigDV.byteOffset;
+        for (const child of Object.values(slots)) {
+          if (child) {
+            const childDV = child[MEMORY];
+            if (childDV.buffer === dv.buffer) {
+              const offset = parentOffset + childDV.byteOffset - dv.byteOffset;
+              child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+              linkChildren(child);
             }
           }
         }
       }
     };
     linkChildren(object);
+    // clear pointer targets so it'd be obtained again, this time from Zig memory
+    object[VISIT]?.(function() { this[SLOTS][0] = undefined });
   },
   unlinkVariables() {
     for (const { object } of this.variables) {

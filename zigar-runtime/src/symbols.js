@@ -37,6 +37,7 @@ export const THROWING = Symbol('throwing');
 export const PROMISE = Symbol('promise');
 export const CALLBACK = Symbol('callback');
 export const FALLBACK = Symbol('fallback');
+export const DISABLED = Symbol('disabled');
 
 export const UPDATE = Symbol('update');
 export const RESTORE = Symbol('restore');
@@ -45,7 +46,6 @@ export const VIVIFICATE = Symbol('vivificate');
 export const VISIT = Symbol('visit');
 export const COPY = Symbol('copy');
 export const SHAPE = Symbol('shape');
-export const MODIFY = Symbol('modify');
 export const INITIALIZE = Symbol('initialize');
 export const FINALIZE = Symbol('finalize');
 export const CAST = Symbol('cast');

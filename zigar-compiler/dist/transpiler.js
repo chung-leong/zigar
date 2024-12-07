@@ -192,6 +192,7 @@ const TYPED_ARRAY = Symbol('typedArray');
 const THROWING = Symbol('throwing');
 const PROMISE = Symbol('promise');
 const CALLBACK = Symbol('callback');
+const DISABLED = Symbol('disabled');
 
 const UPDATE = Symbol('update');
 const RESTORE = Symbol('restore');
@@ -200,7 +201,6 @@ const VIVIFICATE = Symbol('vivificate');
 const VISIT = Symbol('visit');
 const COPY = Symbol('copy');
 const SHAPE = Symbol('shape');
-const MODIFY = Symbol('modify');
 const INITIALIZE = Symbol('initialize');
 const FINALIZE = Symbol('finalize');
 const CAST = Symbol('cast');
@@ -4067,22 +4067,22 @@ var objectLinkage = mixin({
     const linkChildren = (object) => {
       const slots = object[SLOTS];
       if (slots) {
-        for (const [ key, child ] of Object.entries(slots)) {
+        const parentOffset = zigDV.byteOffset;
+        for (const child of Object.values(slots)) {
           if (child) {
             const childDV = child[MEMORY];
             if (childDV.buffer === dv.buffer) {
-              const offset = childDV.byteOffset - dv.byteOffset;
+              const offset = parentOffset + childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
               linkChildren(child);
-            } else if (object.constructor[TYPE] === StructureType.Pointer) {
-              // clear target so it'd be obtained again, this time from Zig memory
-              slots[key] = undefined;
             }
           }
         }
       }
     };
     linkChildren(object);
+    // clear pointer targets so it'd be obtained again, this time from Zig memory
+    object[VISIT]?.(function() { this[SLOTS][0] = undefined; });
   },
   unlinkVariables() {
     for (const { object } of this.variables) {
@@ -4541,7 +4541,16 @@ var structureAcquisition = mixin({
         const jsDV = object[MEMORY] = this.captureView(address, len, true);
         if (handle) {
           jsDV.handle = handle;
-          list.push({ address, len, owner: object, replaced: false });
+        }
+        list.push({ address, len, owner: object, replaced: false, handle });
+      }
+      const slots = object[SLOTS];
+      if (slots) {
+        for (const [ key, child ] of Object.entries(slots)) {
+          if (child[DISABLED]) {
+            // don't recreate disabled pointers
+            slots[key] = undefined;
+          }
         }
       }
     }
@@ -4550,7 +4559,7 @@ var structureAcquisition = mixin({
     for (const a of list) {
       if (!a.replaced) {
         for (const b of list) {
-          if (a !== b && !b.replaced) {
+          if (a !== b && !b.replaced && !b.handle) {
             if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
               // B is inside A--replace it with a view of A's buffer
               const dvA = a.owner[MEMORY];
@@ -4656,10 +4665,12 @@ var structureAcquisition = mixin({
         prefix = '[*]';
       }
     }
-    // constructor can be null when a structure is recursive
-    const sentinel = target.structure.constructor?.[SENTINEL];
-    if (sentinel) {
-      prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+    if (!(flags & PointerFlag.IsSingle)) {
+      // constructor can be null when a structure is recursive
+      const sentinel = target.structure.constructor?.[SENTINEL];
+      if (sentinel) {
+        prefix = prefix.slice(0, -1) + `:${sentinel.value}` + prefix.slice(-1);
+      }
     }
     if (flags & PointerFlag.IsConst) {
       prefix = `${prefix}const `;
@@ -6010,9 +6021,6 @@ var all$1 = mixin({
         for (const slot of comptimeFieldSlots) {
           self[SLOTS][slot] = template[SLOTS][slot];
         }
-      }
-      if (MODIFY in self) {
-        self[MODIFY]();
       }
       if (creating) {
         // initialize object unless that's done already
@@ -7736,12 +7744,13 @@ var union = mixin({
         }
       }
     };
-    descriptors[MODIFY] = (flags & UnionFlag.HasInaccessible && !this.comptime) && {
+    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
       value() {
         // pointers in non-tagged union are not accessible--we need to disable them
         this[VISIT](disablePointer);
         // no need to visit them again
         this[VISIT] = empty;
+        return this;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -7778,6 +7787,7 @@ function disablePointer() {
     '$': disabledProp,
     [POINTER]: disabledProp,
     [TARGET]: disabledProp,
+    [DISABLED]: defineValue(true),
   });
 }
 

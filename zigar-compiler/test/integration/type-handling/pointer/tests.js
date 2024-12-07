@@ -50,6 +50,7 @@ export function addTests(importModule, options) {
       module.uint32_slice.set(1, 777);
       expect([ ...module.uint32_slice ]).to.eql([ 2, 777, 4 ]);
       expect([ ...module.uint32_array4 ]).to.eql([ 1, 2, 777, 4 ]);
+      expect(module.i32_pointer['*']).to.equal(1234);
       const [ after ] = await capture(() => print());
       expect(after).to.equal('{ 1, 2, 777, 4 }');
       // modifying const pointer
@@ -83,10 +84,7 @@ export function addTests(importModule, options) {
       expect(() => u8_multi_pointer.length = 11).to.not.throw();
       expect(u8_multi_pointer.length).to.equal(11);
       expect(u8_multi_pointer.string).to.equal('Hello world');
-      expect(u8_c_pointer.length).to.equal(1);
-      expect(u8_c_pointer.string).to.equal('H');
-      expect(() => u8_c_pointer.length = 11).to.not.throw();
-      expect(u8_c_pointer.length).to.equal(11);
+      expect(u8_c_pointer.length).to.equal(12);
       expect(u8_c_pointer.string).to.equal('Hello world');
       const subarray = u8_c_pointer.subarray(0, 5);
       expect(subarray.string).to.equal('Hello');
@@ -166,7 +164,8 @@ export function addTests(importModule, options) {
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
-      expect(() => new UnionA({ text: module.alt_text })).to.throw(TypeError)
+      const object = new UnionA({ text: module.alt_text });
+      expect(() => object.text.string).to.throw(TypeError)
         .with.property('message').that.contains('untagged union');
       const c = new UnionA({ number: 123 });
       expect(c.number).to.equal(123);
