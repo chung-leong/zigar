@@ -15,9 +15,9 @@ export function addTests(importModule, options) {
       const { default: module, hello, hello2, hello3, world } = await importTest('as-static-variables');
       expect(module.func['*']).to.be.a('function');
       const lines = await capture(() => {
-        module.func['*']();
+        module.func();
         module.func = world;
-        module.func['*']();
+        module.func();
       });
       expect(lines).to.eql([ 'hello', 'world' ]);
       expect(hello).to.be.a('function');
@@ -119,14 +119,14 @@ export function addTests(importModule, options) {
       const { array, getFunctions } = await importTest('array-of');
       const lines1 = await capture(() => {
         for (const ptr of array) {
-          ptr['*']();
+          ptr();
         }
       });
       expect(lines1).to.eql([ 'hello', 'hello', 'world', 'hello' ]);
       const result = getFunctions();
       const lines2 = await capture(() => {
         for (const ptr of result) {
-          ptr['*']();
+          ptr();
         }
       });
       expect(lines2).to.eql([ 'world', 'world', 'hello', 'world' ]);
@@ -140,20 +140,20 @@ export function addTests(importModule, options) {
       expect(module.struct_a.function1['*']).to.be.a('function');
       expect(module.struct_a.function2['*']).to.be.a('function');
       const lines1 = await capture(() => {
-        module.struct_a.function1['*']();
-        module.struct_a.function2['*']();
+        module.struct_a.function1();
+        module.struct_a.function2();
       });
       expect(lines1).to.eql([ 'hello', 'world' ]);
       const result = getStruct();
       const lines2 = await capture(() => {
-        result.function1['*']();
-        result.function2['*']();
+        result.function1();
+        result.function2();
       });
       expect(lines2).to.eql([ 'world', 'hello' ]);
       module.struct_a = result;
       const lines3 = await capture(() => {
-        module.struct_a.function1['*']();
-        module.struct_a.function2['*']();
+        module.struct_a.function1();
+        module.struct_a.function2();
       });
       expect(lines3).to.eql([ 'world', 'hello' ]);
     })
@@ -192,17 +192,17 @@ export function addTests(importModule, options) {
       const { default: module, getFunction } = await importTest('in-optional');
       expect(module.optional['*']).to.be.a('function');
       const lines1 = await capture(() => {
-        module.optional['*']();
+        module.optional();
       });
       expect(lines1).to.eql([ 'hello' ]);
       const result1 = getFunction(0);
       const lines2 = await capture(() => {
-        result1['*']();
+        result1();
       });
       expect(lines2).to.eql([ 'hello' ]);
       const result2 = getFunction(1);
       const lines3 = await capture(() => {
-        result2['*']();
+        result2();
       });
       expect(lines3).to.eql([ 'world' ]);
       const result3 = getFunction(2);
@@ -213,18 +213,18 @@ export function addTests(importModule, options) {
       const { default: module, getFunction, Error } = await importTest('in-error-union');
       expect(module.error_union['*']).to.be.a('function');
       const lines1 = await capture(() => {
-        module.error_union['*']();
+        module.error_union();
       });
       expect(lines1).to.eql([ 'hello' ]);
       expect(lines1).to.eql([ 'hello' ]);
       const result1 = getFunction(0);
       const lines2 = await capture(() => {
-        result1['*']();
+        result1();
       });
       expect(lines2).to.eql([ 'hello' ]);
       const result2 = getFunction(1);
       const lines3 = await capture(() => {
-        result2['*']();
+        result2();
       });
       expect(lines3).to.eql([ 'world' ]);
       expect(() => getFunction(2)).to.throw(Error.GoldfishDied);

@@ -1,7 +1,7 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
-import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, CAST, ENVIRONMENT, PARENT, POINTER, MEMORY, ZIG, SENTINEL, SIZE, SLOTS, MAX_LENGTH, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
+import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, MAX_LENGTH, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
 import { getProxy, defineValue, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
@@ -283,10 +283,20 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = {
       value() {
-        const handlers = (targetType === StructureType.Pointer) ? {} : proxyHandlers;
-        const proxy = new Proxy(this, handlers);
+        const handlers = (targetType !== StructureType.Pointer) ? proxyHandlers : {};
+        let self;
+        if (targetType === StructureType.Function) {
+          // use an empty function as object so the proxy's apply() method is triggered
+          self = function() {};
+          self[MEMORY] = this[MEMORY];
+          self[SLOTS] = this[SLOTS];
+          Object.setPrototypeOf(self, constructor.prototype);
+        } else {
+          self = this;
+        }
+        const proxy = new Proxy(self, handlers);
         // hide the proxy so console wouldn't display a recursive structure
-        Object.defineProperty(this, PROXY, { value: proxy });
+        Object.defineProperty(self, PROXY, { value: proxy });
         return proxy;
       }
     };
@@ -400,6 +410,10 @@ const proxyHandlers = {
       return name in target;
     }
   },
+  apply(pointer, thisArg, args) {
+    const f = pointer['*'];
+    return f.apply(thisArg, args);
+  },
 };
 
 const constTargetHandlers = {
@@ -422,7 +436,7 @@ const constTargetHandlers = {
       throwReadOnly();
     }
     return true;
-  }
+  },
 };
 
 function isCompatibleBuffer(arg, constructor) {

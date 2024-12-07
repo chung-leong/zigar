@@ -7166,10 +7166,20 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = {
       value() {
-        const handlers = (targetType === StructureType.Pointer) ? {} : proxyHandlers;
-        const proxy = new Proxy(this, handlers);
+        const handlers = (targetType !== StructureType.Pointer) ? proxyHandlers : {};
+        let self;
+        if (targetType === StructureType.Function) {
+          // use an empty function as object so the proxy's apply() method is triggered
+          self = function() {};
+          self[MEMORY] = this[MEMORY];
+          self[SLOTS] = this[SLOTS];
+          Object.setPrototypeOf(self, constructor.prototype);
+        } else {
+          self = this;
+        }
+        const proxy = new Proxy(self, handlers);
         // hide the proxy so console wouldn't display a recursive structure
-        Object.defineProperty(this, PROXY, { value: proxy });
+        Object.defineProperty(self, PROXY, { value: proxy });
         return proxy;
       }
     };
@@ -7283,6 +7293,10 @@ const proxyHandlers = {
       return name in target;
     }
   },
+  apply(pointer, thisArg, args) {
+    const f = pointer['*'];
+    return f.apply(thisArg, args);
+  },
 };
 
 const constTargetHandlers = {
@@ -7305,7 +7319,7 @@ const constTargetHandlers = {
       throwReadOnly();
     }
     return true;
-  }
+  },
 };
 
 function isCompatibleBuffer(arg, constructor) {
