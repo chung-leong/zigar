@@ -178,7 +178,6 @@ export default mixin({
     };
   },
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    console.error({ action, id, argAddress, argSize, futexHandle });
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
       if(process.env.TARGET === 'node') {

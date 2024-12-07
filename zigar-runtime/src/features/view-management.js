@@ -1,9 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import {
-  ArrayLengthMismatch, BufferExpected, BufferSizeMismatch
-} from '../errors.js';
-import { COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
+import { CACHE, COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, findElements, usizeInvalid } from '../utils.js';
 
 export default mixin({
@@ -162,6 +160,34 @@ export default mixin({
     allocateJSMemory(len, align) {
       // alignment doesn't matter since memory always needs to be shadowed
       return this.obtainView(new ArrayBuffer(len), 0, len);
+    },
+    restoreView(dv) {
+      const zig = dv?.[ZIG];
+      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+        dv = this.obtainZigView(zig.address, zig.len);
+        if (zig.align) {
+          dv[ZIG].align = zig.align;
+        }
+      }
+      return dv;
+    },
+    defineRestorer(updateCache = true) {
+      const thisEnv = this;
+      return {
+        value() {
+          const dv = this[MEMORY];
+          const newDV = thisEnv.restoreView(dv);
+          if (dv !== newDV) {
+            this[MEMORY] = newDV;
+            if (updateCache) {
+              this.constructor[CACHE]?.save?.(newDV, this);
+            }
+            return true;
+          } else {
+            return false;
+          }
+        },
+      }
     },
   } : process.env.TARGET === 'node' ? {
     imports: {

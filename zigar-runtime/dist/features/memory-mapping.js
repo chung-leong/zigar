@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
-import { MEMORY, ALIGN, ZIG, CACHE } from '../symbols.js';
+import { MEMORY, ALIGN, ZIG } from '../symbols.js';
 import { alignForward, adjustAddress, isMisaligned, usizeInvalid, isInvalidAddress, usizeMax, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
@@ -78,7 +78,10 @@ var memoryMapping = mixin({
   },
   updateShadows(context) {
     const copy = this.getCopyFunction();
-    for (const { targetDV, shadowDV } of context.shadowList) {
+    for (let { targetDV, shadowDV } of context.shadowList) {
+      {
+        shadowDV = this.restoreView(shadowDV);
+      }
       copy(shadowDV, targetDV);
     }
   },
@@ -87,10 +90,7 @@ var memoryMapping = mixin({
     for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
         {
-          const { len, address } = shadowDV[ZIG];
-          if (len > 0 && shadowDV.buffer.byteLength === 0) {
-            shadowDV = this.obtainZigView(address, len);
-          }
+          shadowDV = this.restoreView(shadowDV);
         }
         copy(targetDV, shadowDV);
       }
@@ -139,8 +139,11 @@ var memoryMapping = mixin({
       // not found in any of the buffers we've seen--assume it's Zig memory
       dv = this.obtainZigView(address, len);
     } else {
-      const { targetDV, shadowDV } = entry;
+      let { targetDV, shadowDV } = entry;
       if (shadowDV && context && !context.shadowList.includes(entry)) {
+        {
+          shadowDV = this.restoreView(shadowDV);
+        }
         const copy = this.getCopyFunction();
         copy(targetDV, shadowDV);
       }
@@ -220,28 +223,6 @@ var memoryMapping = mixin({
     },
     getBufferAddress(buffer) {
       return 0;
-    },
-    defineRestorer(updateCache = true) {
-      const thisEnv = this;
-      return {
-        value() {
-          const dv = this[MEMORY];
-          const zig = dv?.[ZIG];
-          if (zig && zig.len > 0 && dv.buffer.byteLength === 0) {
-            const newDV = thisEnv.obtainZigView(zig.address, zig.len);
-            if (zig.align) {
-              newDV[ZIG].align = zig.align;
-            }
-            this[MEMORY] = newDV;
-            if (updateCache) {
-              this.constructor[CACHE]?.save?.(newDV, this);
-            }
-            return true;
-          } else {
-            return false;
-          }
-        },
-      }
     },
     copyExternBytes(dst, address, len) {
       const { memory } = this;
