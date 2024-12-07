@@ -119,15 +119,6 @@ export default mixin({
     }
   },
   findMemory(context, address, count, size) {
-    if (isInvalidAddress(address)) {
-      if (!count) {
-        address = 0;
-      } else {
-        return null;
-      }
-    } else if (!address && count) {
-      return null;
-    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address, len);
     const entry = this.memoryList[index - 1];
@@ -213,10 +204,10 @@ export default mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (address !== usizeMax) {
-        return this.obtainView(this.memory.buffer, address, len);
-      } else {
+      if (isInvalidAddress(address) || address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
+      } else {
+        return this.obtainView(this.memory.buffer, address, len);
       }
     },
     getTargetAddress(context, target, cluster, writable) {

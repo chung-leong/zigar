@@ -343,7 +343,7 @@ const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaaaaaa;
+    return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
   /* c8 ignore next */
 ;
@@ -3123,6 +3123,7 @@ var callMarshalingInbound = mixin({
     };
   },
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
+    console.error({ action, id, argAddress, argSize, futexHandle });
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
       {
@@ -3684,15 +3685,6 @@ var memoryMapping = mixin({
     }
   },
   findMemory(context, address, count, size) {
-    if (isInvalidAddress(address)) {
-      if (!count) {
-        address = 0;
-      } else {
-        return null;
-      }
-    } else if (!address && count) {
-      return null;
-    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address);
     const entry = this.memoryList[index - 1];
@@ -3778,10 +3770,10 @@ var memoryMapping = mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (address !== usizeMax) {
-        return this.obtainView(this.memory.buffer, address, len);
-      } else {
+      if (isInvalidAddress(address) || address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
+      } else {
+        return this.obtainView(this.memory.buffer, address, len);
       }
     },
     getTargetAddress(context, target, cluster, writable) {
@@ -4522,7 +4514,6 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    // this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
@@ -4547,9 +4538,9 @@ var structureAcquisition = mixin({
       const slots = object[SLOTS];
       if (slots) {
         for (const [ key, child ] of Object.entries(slots)) {
-          if (child[DISABLED]) {
+          if (child?.[DISABLED]) {
             // don't recreate disabled pointers
-            slots[key] = undefined;
+            slots[key] = null;
           }
         }
       }
@@ -4965,7 +4956,7 @@ var viewManagement = mixin({
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
     {
-      if (buffer === this.memory?.buffer) {
+      if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
         dv[ZIG] = { address: offset, len };
       }
       return dv;
@@ -7190,6 +7181,7 @@ var pointer = mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
+    descriptors[DISABLED] = defineValue(false);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;

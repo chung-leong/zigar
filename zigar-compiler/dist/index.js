@@ -87,11 +87,11 @@ const MemberFlag = {
 
 (process.env.BITS === '64')
 ? function(address) {
-    return address === 0xaaaaaaaaaaaaaaaan;
+    return address === 0xaaaa_aaaa_aaaa_aaaan;
   }
 : (process.env.BITS === '32')
 ? function(address) {
-    return address === 0xaaaaaaaa;
+    return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
   /* c8 ignore next */
 : undefined;

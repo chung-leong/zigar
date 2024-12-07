@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
 import { MEMORY, ALIGN, ZIG, CACHE } from '../symbols.js';
-import { alignForward, adjustAddress, isMisaligned, isInvalidAddress, usizeInvalid, usizeMax, findSortedIndex } from '../utils.js';
+import { alignForward, adjustAddress, isMisaligned, usizeInvalid, isInvalidAddress, usizeMax, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
   memoryList: [],
@@ -116,15 +116,6 @@ var memoryMapping = mixin({
     }
   },
   findMemory(context, address, count, size) {
-    if (isInvalidAddress(address)) {
-      if (!count) {
-        address = 0;
-      } else {
-        return null;
-      }
-    } else if (!address && count) {
-      return null;
-    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address);
     const entry = this.memoryList[index - 1];
@@ -210,10 +201,10 @@ var memoryMapping = mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (address !== usizeMax) {
-        return this.obtainView(this.memory.buffer, address, len);
-      } else {
+      if (isInvalidAddress(address) || address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
+      } else {
+        return this.obtainView(this.memory.buffer, address, len);
       }
     },
     getTargetAddress(context, target, cluster, writable) {

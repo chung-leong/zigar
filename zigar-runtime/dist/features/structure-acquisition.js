@@ -143,7 +143,6 @@ var structureAcquisition = mixin({
     return !!this.structures.find(s => s.type === StructureType.Function);
   },
   exportStructures() {
-    // this.acquireDefaultPointers();
     this.prepareObjectsForExport();
     const { structures, runtimeSafety, littleEndian, libc } = this;
     return {
@@ -168,9 +167,9 @@ var structureAcquisition = mixin({
       const slots = object[SLOTS];
       if (slots) {
         for (const [ key, child ] of Object.entries(slots)) {
-          if (child[DISABLED]) {
+          if (child?.[DISABLED]) {
             // don't recreate disabled pointers
-            slots[key] = undefined;
+            slots[key] = null;
           }
         }
       }

@@ -123,7 +123,7 @@ var viewManagement = mixin({
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
     }
     {
-      if (buffer === this.memory?.buffer) {
+      if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
         dv[ZIG] = { address: offset, len };
       }
       return dv;
