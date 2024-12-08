@@ -162,7 +162,7 @@ var viewManagement = mixin({
       }
       return dv;
     },
-    defineRestorer(updateCache = true) {
+    defineRestorer() {
       const thisEnv = this;
       return {
         value() {
@@ -170,9 +170,7 @@ var viewManagement = mixin({
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
             this[MEMORY] = newDV;
-            if (updateCache) {
-              this.constructor[CACHE]?.save?.(newDV, this);
-            }
+            this.constructor[CACHE]?.save?.(newDV, this);
             return true;
           } else {
             return false;

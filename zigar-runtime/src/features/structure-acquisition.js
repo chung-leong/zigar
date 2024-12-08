@@ -3,7 +3,7 @@ import {
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
-  structureNames, StructureType,
+  StructureFlag, structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
@@ -80,6 +80,14 @@ export default mixin({
     }
     this.structures.push(structure);
     this.finalizeStructure(structure);
+    const { constructor, flags, instance: { template } } = structure;
+    if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
+      // create a placeholder for retrieving default pointers
+      const placeholder = Object.create(constructor.prototype);
+      placeholder[MEMORY] = template[MEMORY];
+      placeholder[SLOTS] = template[SLOTS];
+      this.updatePointerTargets(null, placeholder);
+    }
   },
   captureView(address, len, copy, handle) {
     if (copy) {
@@ -104,6 +112,10 @@ export default mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
+    if (flags & StructureFlag.HasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(null, object);
+    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }

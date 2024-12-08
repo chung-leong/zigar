@@ -4062,6 +4062,7 @@ var objectLinkage = mixin({
       dest[COPY](object);
     }
     object[MEMORY] = zigDV;
+    object.constructor[CACHE]?.save?.(zigDV, object);
     const linkChildren = (object) => {
       const slots = object[SLOTS];
       if (slots) {
@@ -4072,6 +4073,7 @@ var objectLinkage = mixin({
             if (childDV.buffer === dv.buffer) {
               const offset = parentOffset + childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+              child.constructor[CACHE]?.save?.(zigDV, child);
               linkChildren(child);
             }
           }
@@ -4079,8 +4081,6 @@ var objectLinkage = mixin({
       }
     };
     linkChildren(object);
-    // clear pointer targets so it'd be obtained again, this time from Zig memory
-    object[VISIT]?.(function() { this[SLOTS][0] = undefined; });
   },
   unlinkVariables() {
     for (const { object } of this.variables) {
@@ -4452,6 +4452,14 @@ var structureAcquisition = mixin({
     }
     this.structures.push(structure);
     this.finalizeStructure(structure);
+    const { constructor, flags, instance: { template } } = structure;
+    if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
+      // create a placeholder for retrieving default pointers
+      const placeholder = Object.create(constructor.prototype);
+      placeholder[MEMORY] = template[MEMORY];
+      placeholder[SLOTS] = template[SLOTS];
+      this.updatePointerTargets(null, placeholder);
+    }
   },
   captureView(address, len, copy, handle) {
     if (copy) {
@@ -4474,6 +4482,10 @@ var structureAcquisition = mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
+    if (flags & StructureFlag.HasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(null, object);
+    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
@@ -4988,7 +5000,7 @@ var viewManagement = mixin({
       }
       return dv;
     },
-    defineRestorer(updateCache = true) {
+    defineRestorer() {
       const thisEnv = this;
       return {
         value() {
@@ -4996,9 +5008,7 @@ var viewManagement = mixin({
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
             this[MEMORY] = newDV;
-            if (updateCache) {
-              this.constructor[CACHE]?.save?.(newDV, this);
-            }
+            this.constructor[CACHE]?.save?.(newDV, this);
             return true;
           } else {
             return false;
@@ -7770,17 +7780,18 @@ var union = mixin({
         }
       }
     };
-    if (!this.comptime) {
-      descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
-        value() {
+    const { comptime } = this;
+    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
+      value() {
+        if (!comptime) {
           // pointers in non-tagged union are not accessible--we need to disable them
           this[VISIT](disablePointer);
-          // no need to visit them again
-          this[VISIT] = empty;
-          return this;
         }
-      };
-    }
+        // no need to visit them again
+        this[VISIT] = empty;
+        return this;
+      }
+    };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);

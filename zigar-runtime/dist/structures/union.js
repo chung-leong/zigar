@@ -120,17 +120,18 @@ var union = mixin({
         }
       }
     };
-    if (!this.comptime) {
-      descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
-        value() {
+    const { comptime } = this;
+    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
+      value() {
+        if (!comptime) {
           // pointers in non-tagged union are not accessible--we need to disable them
           this[VISIT](disablePointer);
-          // no need to visit them again
-          this[VISIT] = empty;
-          return this;
         }
-      };
-    }
+        // no need to visit them again
+        this[VISIT] = empty;
+        return this;
+      }
+    };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);

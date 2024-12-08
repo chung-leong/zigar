@@ -1,5 +1,5 @@
 import { SLOTS, MEMORY, ZIG, ENVIRONMENT, CONST_TARGET, SENTINEL } from '../symbols.js';
-import { ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
+import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { findObjects, adjustAddress, decodeText } from '../utils.js';
 
@@ -75,6 +75,14 @@ var structureAcquisition = mixin({
     }
     this.structures.push(structure);
     this.finalizeStructure(structure);
+    const { constructor, flags, instance: { template } } = structure;
+    if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
+      // create a placeholder for retrieving default pointers
+      const placeholder = Object.create(constructor.prototype);
+      placeholder[MEMORY] = template[MEMORY];
+      placeholder[SLOTS] = template[SLOTS];
+      this.updatePointerTargets(null, placeholder);
+    }
   },
   captureView(address, len, copy, handle) {
     if (copy) {
@@ -97,6 +105,10 @@ var structureAcquisition = mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
+    if (flags & StructureFlag.HasPointer) {
+      // acquire targets of pointers
+      this.updatePointerTargets(null, object);
+    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }

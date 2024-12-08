@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ADDRESS, COPY, LENGTH, MEMORY, SLOTS, TARGET, VISIT, ZIG } from '../symbols.js';
+import { ADDRESS, CACHE, COPY, LENGTH, MEMORY, SLOTS, TARGET, ZIG } from '../symbols.js';
 
 export default mixin({
   linkVariables(writeBack) {
@@ -44,6 +44,7 @@ export default mixin({
       dest[COPY](object);
     }
     object[MEMORY] = zigDV;
+    object.constructor[CACHE]?.save?.(zigDV, object);
     const linkChildren = (object) => {
       const slots = object[SLOTS];
       if (slots) {
@@ -54,6 +55,7 @@ export default mixin({
             if (childDV.buffer === dv.buffer) {
               const offset = parentOffset + childDV.byteOffset - dv.byteOffset;
               child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+              child.constructor[CACHE]?.save?.(zigDV, child);
               linkChildren(child);
             }
           }
@@ -61,8 +63,6 @@ export default mixin({
       }
     };
     linkChildren(object);
-    // clear pointer targets so it'd be obtained again, this time from Zig memory
-    object[VISIT]?.(function() { this[SLOTS][0] = undefined });
   },
   unlinkVariables() {
     for (const { object } of this.variables) {
