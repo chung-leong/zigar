@@ -606,22 +606,42 @@ function addStructureDefinitions(lines, definition) {
   };
   let arrayCount = 0;
   const emptyBuffer = new ArrayBuffer(0);
+  const zeroInit = function(ta) {
+    for (const byte of ta) {
+      if (byte !== 0) {
+        return;
+      }
+    }
+    return `${ta.length}`;
+  };
+  const existingInit = function(ta) {
+    for (const [ buffer, name ] of arrayBufferNames) {
+      if (buffer.byteLength === ta.byteLength) {
+        const existing = new Uint8Array(buffer);
+        let different = false;
+        for (let i = 0; i < ta.length; i++) {
+          if (existing[i] !== ta[i]) {
+            different = true;
+            break;
+          }
+        }
+        if (!different) {
+          return name;
+        }
+      }
+    }
+  };
+  const listInit = function(ta) {
+    return `[ ${ta.join(', ')} ]`;
+  };
   for (const dv of views) {
     addU();
     const buffer = (dv.buffer.byteLength > 0) ? dv.buffer : emptyBuffer;
     if (!arrayBufferNames.get(buffer)) {
       const varname = `a${arrayCount++}`;
+      const a = new Uint8Array(dv.buffer);
+      add(`const ${varname} = U(${zeroInit(a) ?? existingInit(a) ?? listInit(a)});`);
       arrayBufferNames.set(buffer, varname);
-      const ta = new Uint8Array(dv.buffer);
-      let allZeros = true;
-      for (const byte of ta) {
-        if (byte !== 0) {
-          allZeros = false;
-          break;
-        }
-      }
-      const initializers = (allZeros) ? `${ta.length}` : `[ ${ta.join(', ')} ]`;
-      add(`const ${varname} = U(${initializers});`);
     }
   }
   // add properties to objects
