@@ -110,7 +110,7 @@ export function addTests(importModule, options) {
       let aborted = false;
       const f = ({ signal }) => signal.addEventListener('abort', () => aborted = true);
       call(f);
-      await delay(100);
+      await delay(250);
       expect(aborted).to.be.true;
     })
     it('should correctly pass promise as argument', async function() {

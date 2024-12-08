@@ -1917,7 +1917,7 @@
 "              } else {\n"
 "                result = CallResult.Deadlock;\n"
 "              }\n"
-"            } else if (retval != undefined) {\n"
+"            } else if (retval != undefined || !argStruct[CALLBACK]) {\n"
 "              onReturn(retval);\n"
 "            }\n"
 "          } catch (err) {\n"
