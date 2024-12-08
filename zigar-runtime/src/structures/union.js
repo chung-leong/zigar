@@ -6,8 +6,8 @@ import {
 } from '../errors.js';
 import { getUnionEntries, getUnionIterator, getZigIterator } from '../iterators.js';
 import {
-  COPY, DISABLED, ENTRIES, FINALIZE, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, SETTERS, TAG,
-  TARGET, VISIT, VIVIFICATE,
+  COPY, ENTRIES, FINALIZE, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, SETTERS, TAG, TARGET,
+  VISIT, VIVIFICATE,
 } from '../symbols.js';
 import { defineProperties, defineValue, empty } from '../utils.js';
 
@@ -126,15 +126,17 @@ export default mixin({
         }
       }
     };
-    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
-      value() {
-        // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT](disablePointer);
-        // no need to visit them again
-        this[VISIT] = empty;
-        return this;
-      }
-    };
+    if (!this.comptime) {
+      descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
+        value() {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+          // no need to visit them again
+          this[VISIT] = empty;
+          return this;
+        }
+      };
+    }
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
@@ -170,6 +172,5 @@ function disablePointer() {
     '$': disabledProp,
     [POINTER]: disabledProp,
     [TARGET]: disabledProp,
-    [DISABLED]: defineValue(true),
   });
 };

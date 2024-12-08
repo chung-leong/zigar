@@ -202,7 +202,7 @@ function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, settings, keys } = definition;
-  const { MEMORY, SLOTS, CONST_TARGET, ZIG } = keys;
+  const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -342,14 +342,21 @@ function addStructureDefinitions(lines, definition) {
           add(`const: true,`);
         }
       }
-      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
-      if (entries.length > 0) {
-        add(`slots: {`);
-        const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
-        for (const slice of chunk(pairs, 10)) {
-          add(slice.join(', ') + ',');
+      if (slots) {
+        const pairs = [];
+        for (const [ slot, child ] of Object.entries(slots)) {
+          const varname = objectNames.get(child);
+          if (varname) {
+            pairs.push(`${slot}: ${varname}`);
+          }
         }
-        add(`},`);
+        if (pairs.length > 0) {
+          add(`slots: {`);
+          for (const slice of chunk(pairs, 10)) {
+            add(slice.join(', ') + ',');
+          }
+          add(`},`);
+        }
       }
       add(`});`);
     }

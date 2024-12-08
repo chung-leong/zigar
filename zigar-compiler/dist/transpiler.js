@@ -192,7 +192,6 @@ const TYPED_ARRAY = Symbol('typedArray');
 const THROWING = Symbol('throwing');
 const PROMISE = Symbol('promise');
 const CALLBACK = Symbol('callback');
-const DISABLED = Symbol('disabled');
 
 const UPDATE = Symbol('update');
 const RESTORE = Symbol('restore');
@@ -520,7 +519,7 @@ function generateCode(definition, params) {
 
 function addStructureDefinitions(lines, definition) {
   const { structures, settings, keys } = definition;
-  const { MEMORY, SLOTS, CONST_TARGET, ZIG } = keys;
+  const { MEMORY, SLOTS, CONST_TARGET } = keys;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -660,14 +659,21 @@ function addStructureDefinitions(lines, definition) {
           add(`const: true,`);
         }
       }
-      const entries = (slots) ? Object.entries(slots).filter(a => a[1]) : [];
-      if (entries.length > 0) {
-        add(`slots: {`);
-        const pairs = entries.map(([slot, child]) => `${slot}: ${objectNames.get(child)}`);
-        for (const slice of chunk(pairs, 10)) {
-          add(slice.join(', ') + ',');
+      if (slots) {
+        const pairs = [];
+        for (const [ slot, child ] of Object.entries(slots)) {
+          const varname = objectNames.get(child);
+          if (varname) {
+            pairs.push(`${slot}: ${varname}`);
+          }
         }
-        add(`},`);
+        if (pairs.length > 0) {
+          add(`slots: {`);
+          for (const slice of chunk(pairs, 10)) {
+            add(slice.join(', ') + ',');
+          }
+          add(`},`);
+        }
       }
       add(`});`);
     }
@@ -4448,10 +4454,6 @@ var structureAcquisition = mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
@@ -4499,7 +4501,7 @@ var structureAcquisition = mixin({
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
+      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
   prepareObjectsForExport() {
@@ -4514,15 +4516,6 @@ var structureAcquisition = mixin({
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });
-      }
-      const slots = object[SLOTS];
-      if (slots) {
-        for (const [ key, child ] of Object.entries(slots)) {
-          if (child?.[DISABLED]) {
-            // don't recreate disabled pointers
-            slots[key] = null;
-          }
-        }
       }
     }
     // larger memory blocks come first
@@ -7189,7 +7182,6 @@ var pointer = mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
-    descriptors[DISABLED] = defineValue(false);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;
@@ -7758,15 +7750,17 @@ var union = mixin({
         }
       }
     };
-    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
-      value() {
-        // pointers in non-tagged union are not accessible--we need to disable them
-        this[VISIT](disablePointer);
-        // no need to visit them again
-        this[VISIT] = empty;
-        return this;
-      }
-    };
+    if (!this.comptime) {
+      descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
+        value() {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+          // no need to visit them again
+          this[VISIT] = empty;
+          return this;
+        }
+      };
+    }
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
@@ -7801,7 +7795,6 @@ function disablePointer() {
     '$': disabledProp,
     [POINTER]: disabledProp,
     [TARGET]: disabledProp,
-    [DISABLED]: defineValue(true),
   });
 }
 

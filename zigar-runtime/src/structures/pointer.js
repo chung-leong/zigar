@@ -3,15 +3,14 @@ import {
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
-  ConstantConstraint,
-  InvalidPointerTarget, InvalidSliceLength,
-  NoCastingToPointer, NullPointer, PreviouslyFreed, ReadOnlyTarget, throwReadOnly,
-  warnImplicitArrayCreation, ZigMemoryTargetRequired
+  ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
+  PreviouslyFreed, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation,
+  ZigMemoryTargetRequired
 } from '../errors.js';
 import {
-  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, DISABLED, ENVIRONMENT, FINALIZE, INITIALIZE,
-  LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL,
-  SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG,
+  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS,
+  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
+  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG
 } from '../symbols.js';
 import { defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
 
@@ -318,7 +317,6 @@ export default mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
-    descriptors[DISABLED] = defineValue(false);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;

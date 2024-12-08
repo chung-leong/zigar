@@ -1,10 +1,9 @@
 import {
-  CONST_TARGET, DISABLED, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG,
+  CONST_TARGET, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
-  StructureFlag,
-  structureNames, StructureType
+  structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
@@ -105,10 +104,6 @@ export default mixin({
     const { constructor, flags } = structure;
     const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (copy && len > 0) {
       this.makeReadOnly?.(object);
     }
@@ -156,7 +151,7 @@ export default mixin({
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET, ZIG },
+      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
   prepareObjectsForExport() {
@@ -171,15 +166,6 @@ export default mixin({
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });
-      }
-      const slots = object[SLOTS];
-      if (slots) {
-        for (const [ key, child ] of Object.entries(slots)) {
-          if (child?.[DISABLED]) {
-            // don't recreate disabled pointers
-            slots[key] = null;
-          }
-        }
       }
     }
     // larger memory blocks come first
