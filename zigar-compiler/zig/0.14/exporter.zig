@@ -14,6 +14,10 @@ fn Factory(comptime host: type, comptime module: type) type {
     @setEvalBranchQuota(2000000);
     const tdb = comptime result: {
         var tdc = types.TypeDataCollector.init(256);
+        tdc.add(*const fn (*const anyopaque, *anyopaque) anyerror!void);
+        tdc.add(*const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void);
+        tdc.add(*const fn (?*anyopaque, thunk_js.ActionType, usize) anyerror!usize);
+        tdc.add(*const anyopaque);
         tdc.scan(module);
         break :result tdc.createDatabase();
     };
@@ -349,7 +353,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn getStructure(self: @This(), comptime T: type) types.Error!Value {
             const td = tdb.get(T);
             const slot = td.getSlot();
-            return host.readSlot(null, slot) catch create: {
+            return host.readSlot(null, slot) catch result: {
                 const def: types.Structure = .{
                     .name = comptime getStructureName(td),
                     .type = getStructureType(td),
@@ -371,7 +375,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     try self.addStaticMembers(structure, td);
                 }
                 try host.endStructure(structure);
-                break :create structure;
+                break :result structure;
             };
         }
 
@@ -436,7 +440,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn addSentinelMember(self: @This(), structure: Value, comptime td: TypeData, comptime child_td: TypeData) !void {
-            if (td.getSentinel()) |sentinel| {
+            if (comptime td.getSentinel()) |sentinel| {
                 try host.attachMember(structure, .{
                     .type = getMemberType(child_td, false),
                     .flags = .{
@@ -448,8 +452,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .byte_size = child_td.getByteSize(),
                     .structure = try self.getStructure(child_td.type),
                 }, false);
-                const memory = Memory.from(&sentinel.value, true);
-                const dv = try host.captureView(memory);
+                const dv = try self.exportPointerTarget(&sentinel.value, false);
                 const template = try host.createTemplate(dv);
                 try host.attachTemplate(structure, template, false);
             }
@@ -515,34 +518,20 @@ fn Factory(comptime host: type, comptime module: type) type {
             if (!td.isArguments()) {
                 // add default values
                 var template_maybe: ?Value = null;
-                // strip out comptime content (e.g ?type -> ?void)
-                const CFT = ComptimeFree(td.type);
-                if (@sizeOf(CFT) > 0) {
-                    var values: CFT = undefined;
-                    // obtain byte array containing data of default values
-                    // can't use std.mem.zeroInit() here, since it'd fail with unions
-                    const bytes: []u8 = std.mem.asBytes(&values);
-                    for (bytes) |*byte_ptr| {
-                        byte_ptr.* = 0;
-                    }
-                    inline for (st.fields) |field| {
-                        if (field.default_value) |opaque_ptr| {
-                            const FT = @TypeOf(@field(values, field.name));
-                            if (@sizeOf(FT) != 0) {
-                                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                                if (FT == field.type) {
+                if (@sizeOf(td.type) > 0) {
+                    const default_values = comptime init: {
+                        var values: td.type = undefined;
+                        for (st.fields) |field| {
+                            if (!field.is_comptime) {
+                                if (field.default_value) |opaque_ptr| {
+                                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                                     @field(values, field.name) = default_value_ptr.*;
-                                } else {
-                                    // need cast here, as destination field is a different type with matching layout
-                                    // (e.g. ?type has just the present flag and so does a ?void)
-                                    const dest_ptr: *field.type = @ptrCast(&@field(values, field.name));
-                                    dest_ptr.* = default_value_ptr.*;
                                 }
                             }
                         }
-                    }
-                    const memory = Memory.from(&values, true);
-                    const dv = try host.captureView(memory);
+                        break :init values;
+                    };
+                    const dv = try self.exportPointerTarget(&default_values, false);
                     template_maybe = try host.createTemplate(dv);
                 }
                 inline for (st.fields, 0..) |field, index| {
@@ -653,18 +642,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .structure = try self.getStructure(arg_td.type),
             }, false);
             // store thunk as instance template
-            const thunk = thunk_zig.createThunk(FT);
-            const thunk_memory = Memory.from(thunk, false);
-            const thunk_dv = try host.captureView(thunk_memory);
+            const thunk = comptime thunk_zig.createThunk(FT);
+            const thunk_dv = try self.exportPointerTarget(thunk, false);
             const instance_template = try host.createTemplate(thunk_dv);
             try host.attachTemplate(structure, instance_template, false);
             const PT = *const FT;
             if (comptime tdb.has(PT) and tdb.get(PT).isInUse()) {
                 // store JS thunk controller as static template
-                const js_thunk_constructor = thunk_js.createThunkController(host, FT);
-                const js_thunk_constructor_memory = Memory.from(js_thunk_constructor, false);
-                const js_thunk_constructor_dv = try host.captureView(js_thunk_constructor_memory);
-                const static_template = try host.createTemplate(js_thunk_constructor_dv);
+                const controller = comptime thunk_js.createThunkController(host, FT);
+                const controller_dv = try self.exportPointerTarget(controller, false);
+                const static_template = try host.createTemplate(controller_dv);
                 try host.attachTemplate(structure, static_template, true);
             }
         }
@@ -704,22 +691,14 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     .slot = index,
                                     .structure = try self.getStructure(DT),
                                 }, true);
-                                const is_comptime = comptime switch (@typeInfo(DT)) {
-                                    .@"fn" => false,
-                                    else => decl_ptr_td.isConst(),
-                                };
                                 const target_ptr = comptime switch (@typeInfo(DT)) {
-                                    .@"fn" => |f| fn_ptr: {
-                                        // deal with inline functions
-                                        const function = switch (f.calling_convention) {
-                                            .@"inline" => uninline(decl_value),
-                                            else => decl_value,
-                                        };
-                                        break :fn_ptr thunk_zig.getFunctionPointer(function);
+                                    .@"fn" => |f| switch (f.calling_convention) {
+                                        .@"inline" => &uninline(decl_value),
+                                        else => decl_ptr,
                                     },
                                     else => decl_ptr,
                                 };
-                                const value_obj = try self.exportPointerTarget(target_ptr, is_comptime);
+                                const value_obj = try self.exportPointerTarget(target_ptr, true);
                                 template_maybe = template_maybe orelse try host.createTemplate(null);
                                 try host.writeSlot(template_maybe.?, index, value_obj);
                             }
@@ -797,31 +776,37 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
         }
 
-        fn exportPointerTarget(self: @This(), comptime ptr: anytype, comptime is_comptime: bool) !Value {
+        fn exportPointerTarget(self: @This(), comptime ptr: anytype, comptime casting: bool) !Value {
             const pt = @typeInfo(@TypeOf(ptr)).pointer;
-            const td = tdb.get(pt.child);
-            const value_ptr = get: {
+            const target_td = tdb.get(pt.child);
+            const value_ptr = ptr: {
                 // values that only exist at comptime need to have their comptime part replaced with void
                 // (comptime keyword needed here since expression evaluates to different pointer types)
-                if (comptime td.isComptimeOnly()) {
-                    var runtime_value: ComptimeFree(td.type) = removeComptimeValues(ptr.*);
-                    break :get &runtime_value;
+                if (comptime target_td.isComptimeOnly()) {
+                    var runtime_value: ComptimeFree(target_td.type) = removeComptimeValues(ptr.*);
+                    break :ptr &runtime_value;
                 } else {
-                    break :get ptr;
+                    break :ptr ptr;
                 }
             };
+            const is_comptime = comptime pt.is_const and !target_td.isFunction() and !target_td.hasPointer();
+            const export_handle = if (!is_comptime) host.getExportHandle(ptr) else null;
             const memory = Memory.from(value_ptr, is_comptime);
-            const structure = try self.getStructure(td.type);
-            const obj = try host.castView(memory, structure);
-            if (comptime td.isComptimeOnly()) {
-                try self.attachComptimeValues(obj, ptr.*);
+            if (casting) {
+                const structure = try self.getStructure(target_td.type);
+                const obj = try host.castView(memory, structure, export_handle);
+                if (comptime target_td.isComptimeOnly()) {
+                    try self.attachComptimeValues(obj, ptr.*);
+                }
+                return obj;
+            } else {
+                return host.captureView(memory, export_handle);
             }
-            return obj;
         }
 
         fn exportError(_: @This(), err: anyerror, structure: Value) !Value {
             const memory = Memory.from(&err, true);
-            const obj = try host.castView(memory, structure);
+            const obj = try host.castView(memory, structure, null);
             return obj;
         }
 

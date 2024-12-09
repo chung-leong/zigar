@@ -92,33 +92,43 @@ export fn runVariadicThunk(
     return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 
+var js_thunk_list = std.ArrayList(struct {
+    fn_id: usize,
+    address: usize,
+}).init(allocator);
+
 export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // try to use preallocated thunks within module first; if they've been used up,
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    if (controller(null, .create, fn_id)) |thunk_address| {
-        return thunk_address;
-    } else |_| {
-        if (builtin.single_threaded and main_thread) {
-            return _allocateJsThunk(controller_address, fn_id);
-        } else {
-            return 0;
-        }
+    const is_main = builtin.single_threaded and main_thread;
+    const thunk_address = controller(null, .create, fn_id) catch switch (is_main) {
+        true => _allocateJsThunk(controller_address, fn_id),
+        false => 0,
+    };
+    if (is_main and thunk_address > 0) {
+        js_thunk_list.append(.{ .fn_id = fn_id, .address = thunk_address }) catch {};
     }
+    return thunk_address;
 }
 
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    if (controller(null, .destroy, thunk_address)) |fn_id| {
-        return fn_id;
-    } else |_| {
-        if (builtin.single_threaded and main_thread) {
-            return _freeJsThunk(controller_address, thunk_address);
-        } else {
-            return 0;
+    const is_main = builtin.single_threaded and main_thread;
+    const fn_id = controller(null, .destroy, thunk_address) catch switch (is_main) {
+        true => _freeJsThunk(controller_address, thunk_address),
+        false => 0,
+    };
+    if (is_main and fn_id > 0) {
+        for (js_thunk_list.items, 0..) |item, i| {
+            if (item.address == thunk_address) {
+                _ = js_thunk_list.swapRemove(i);
+                break;
+            }
         }
     }
+    return fn_id;
 }
 
 export fn flushStdout() void {
@@ -168,14 +178,19 @@ pub fn captureString(memory: Memory) !Value {
         Error.UnableToCreateString;
 }
 
-pub fn captureView(memory: Memory) !Value {
+pub fn captureView(memory: Memory, _: @TypeOf(null)) !Value {
     return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
         Error.UnableToCreateDataView;
 }
 
-pub fn castView(memory: Memory, structure: Value) !Value {
+pub fn castView(memory: Memory, structure: Value, _: @TypeOf(null)) !Value {
     return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
         Error.UnableToCreateObject;
+}
+
+pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
+    // not used on WASM side since addresses are unchanging
+    return null;
 }
 
 pub fn readSlot(container: ?Value, slot: usize) !Value {
@@ -296,10 +311,10 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
 }
 
 pub fn releaseFunction(fn_ptr: anytype) !void {
-    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const control = thunk_js.createThunkController(@This(), FT);
-    const fn_id = try control(null, .get_id, thunk_address);
+    const fn_id = for (js_thunk_list.items) |item| {
+        if (item.address == thunk_address) break item.fn_id;
+    } else return thunk_js.Error.UnableToFindThunk;
     if (main_thread) {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {

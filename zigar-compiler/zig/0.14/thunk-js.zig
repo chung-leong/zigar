@@ -81,7 +81,7 @@ const native = struct {
                 }
             }
         };
-        return ft_ns.control;
+        return &ft_ns.control;
     }
 
     test "createThunkController" {
@@ -163,19 +163,11 @@ const wasm = struct {
                             }
                         } else Error.UnableToFindThunk;
                     },
-                    .get_id => {
-                        const thunk: *const BFT = @ptrFromInt(arg);
-                        return for (thunks, &fn_ids) |f, *id_ptr| {
-                            if (f == thunk) {
-                                break id_ptr.*;
-                            }
-                        } else Error.UnableToFindThunk;
-                    },
                     else => unreachable,
                 }
             }
         };
-        return tc_ns.control;
+        return &tc_ns.control;
     }
 
     test "createThunkController" {
