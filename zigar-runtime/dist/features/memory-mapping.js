@@ -204,7 +204,9 @@ var memoryMapping = mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (isInvalidAddress(address) || address === usizeMax) {
+      if (!address || isInvalidAddress(address)) {
+        return null;
+      } else if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
       } else {
         return this.obtainView(this.memory.buffer, address, len);

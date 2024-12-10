@@ -207,7 +207,9 @@ export default mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (isInvalidAddress(address) || address === usizeMax) {
+      if (!address || isInvalidAddress(address)) {
+        return null;
+      } else if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
       } else {
         return this.obtainView(this.memory.buffer, address, len);
@@ -259,18 +261,25 @@ export default mixin({
       // nothing needs to happen
     },
     obtainZigView(address, len) {
-      const index = findMemoryIndex(this.externBufferList, address);
-      const entry = this.externBufferList[index - 1];
-      let buffer;
-      if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
-        buffer = entry.buffer;
+      if (!address || isInvalidAddress(address)) {
+        return null;
       } else {
-        // cannot obtain zero-length buffer
-        buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-        buffer[ZIG] = { address, len };
-        this.externBufferList.splice(index, 0, { address, len, buffer })
+        const index = findMemoryIndex(this.externBufferList, address);
+        const entry = this.externBufferList[index - 1];
+        let buffer;
+        if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+          buffer = entry.buffer;
+        } else {
+          if (!address) {
+            return null;
+          }
+          // cannot obtain zero-length buffer
+          buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
+          buffer[ZIG] = { address, len };
+          this.externBufferList.splice(index, 0, { address, len, buffer })
+        }
+        return this.obtainView(buffer, 0, len);
       }
-      return this.obtainView(buffer, 0, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const targetDV = target[MEMORY];

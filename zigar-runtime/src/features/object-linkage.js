@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { ADDRESS, CACHE, COPY, LENGTH, MEMORY, SLOTS, TARGET, ZIG } from '../symbols.js';
+import { CACHE, COPY, MEMORY, SLOTS, TARGET, ZIG } from '../symbols.js';
 
 export default mixin({
   linkVariables(writeBack) {
@@ -15,15 +15,6 @@ export default mixin({
       this.linkObject(object, handle, writeBack);
       if (TARGET in object && object[SLOTS][0]) {
         pointers.push(object);
-      }
-    }
-    // save locations of pointer targets
-    for (const pointer of pointers) {
-      const target = pointer[TARGET];
-      const address = this.getViewAddress(target[MEMORY]);
-      pointer[ADDRESS] = address;
-      if (LENGTH in pointer) {
-        pointer[LENGTH] = target.length;
       }
     }
   },
