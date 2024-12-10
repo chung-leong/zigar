@@ -1,6 +1,8 @@
+import { Unsupported } from '../../dist/errors.js';
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch, NoCastingToFunction } from '../errors.js';
-import { ENVIRONMENT, MEMORY } from '../symbols.js';
+import { TYPE, ENVIRONMENT, MEMORY } from '../symbols.js';
 import { ObjectCache, defineValue, getSelf, defineProperties } from '../utils.js';
 
 var _function = mixin({
@@ -22,6 +24,9 @@ var _function = mixin({
         }
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
+        }
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct) {
+          throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);

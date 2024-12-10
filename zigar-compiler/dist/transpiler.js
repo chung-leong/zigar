@@ -2320,11 +2320,11 @@ class InvalidIntConversion extends SyntaxError {
   }
 }
 
-class Unsupported extends TypeError {
+let Unsupported$1 = class Unsupported extends TypeError {
   constructor() {
     super(`Unsupported`);
   }
-}
+};
 
 class NoInitializer extends TypeError {
   constructor(structure) {
@@ -3798,7 +3798,9 @@ var memoryMapping = mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (isInvalidAddress(address) || address === usizeMax) {
+      if (!address || isInvalidAddress(address)) {
+        return null;
+      } else if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
       } else {
         return this.obtainView(this.memory.buffer, address, len);
@@ -4028,21 +4030,9 @@ var objectLinkage = mixin({
         return;
       }
     }
-    const pointers = [];
     for (const { object, handle } of this.variables) {
       this.linkObject(object, handle, writeBack);
-      if (TARGET in object && object[SLOTS][0]) {
-        pointers.push(object);
-      }
-    }
-    // save locations of pointer targets
-    for (const pointer of pointers) {
-      const target = pointer[TARGET];
-      const address = this.getViewAddress(target[MEMORY]);
-      pointer[ADDRESS] = address;
-      if (LENGTH in pointer) {
-        pointer[LENGTH] = target.length;
-      }
+      if (TARGET in object && object[SLOTS][0]) ;
     }
   },
   linkObject(object, handle, writeBack) {
@@ -5642,7 +5632,7 @@ var _undefined = mixin({
 var unsupported = mixin({
   defineMemberUnsupported(member) {
     const throwUnsupported = function() {
-      throw new Unsupported();
+      throw new Unsupported$1();
     };
     return { get: throwUnsupported, set: throwUnsupported };
   },
@@ -6756,6 +6746,12 @@ var errorUnion = mixin({
   },
 });
 
+class Unsupported extends TypeError {
+  constructor() {
+    super(`Unsupported`);
+  }
+}
+
 var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
@@ -6775,6 +6771,9 @@ var _function = mixin({
         }
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
+        }
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct) {
+          throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
         dv = thisEnv.getFunctionThunk(arg, jsThunkController);

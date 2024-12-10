@@ -150,5 +150,12 @@ export function addTests(importModule, options) {
       const [ line2 ] = await capture(() => call(f2));
       expect(line2).to.equal('value = Hello world');
     })
+    it('should throw when JavaScript is used as target of pointer to variadic function', async function() {
+      this.timeout(300000);
+      const { call, printI32 } = await importTest('variadic-function');
+      const lines = await capture(() => call(printI32));
+      expect(lines).to.eql([ '123', '456', '789' ]);
+      expect(() => call(() => {})).to.throw();
+    })
   })
 }

@@ -647,7 +647,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             const instance_template = try host.createTemplate(thunk_dv);
             try host.attachTemplate(structure, instance_template, false);
             const PT = *const FT;
-            if (comptime tdb.has(PT) and tdb.get(PT).isInUse()) {
+            if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic()) {
                 // store JS thunk controller as static template
                 const controller = comptime thunk_js.createThunkController(host, FT);
                 const controller_dv = try self.exportPointerTarget(controller, false);

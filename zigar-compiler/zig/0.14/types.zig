@@ -943,6 +943,13 @@ pub const TypeData = struct {
         };
     }
 
+    pub fn isVariadic(comptime self: @This()) bool {
+        return switch (@typeInfo(self.type)) {
+            .@"fn" => |f| f.is_var_args,
+            else => false,
+        };
+    }
+
     pub fn isArguments(comptime self: @This()) bool {
         return self.attrs.is_arguments;
     }
