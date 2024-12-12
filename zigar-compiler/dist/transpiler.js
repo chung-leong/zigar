@@ -4442,14 +4442,6 @@ var structureAcquisition = mixin({
     }
     this.structures.push(structure);
     this.finalizeStructure(structure);
-    const { constructor, flags, instance: { template } } = structure;
-    if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
-      // create a placeholder for retrieving default pointers
-      const placeholder = Object.create(constructor.prototype);
-      placeholder[MEMORY] = template[MEMORY];
-      placeholder[SLOTS] = template[SLOTS];
-      this.updatePointerTargets(null, placeholder);
-    }
   },
   captureView(address, len, copy, handle) {
     if (copy) {
@@ -4509,6 +4501,17 @@ var structureAcquisition = mixin({
     this.comptime = true;
     this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
+    // acquire default pointers now that we have all constructors
+    for (const structure of this.structures) {
+      const { constructor, flags, instance: { template } } = structure;
+      if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
+        // create a placeholder object
+        const placeholder = Object.create(constructor.prototype);
+        placeholder[MEMORY] = template[MEMORY];
+        placeholder[SLOTS] = template[SLOTS];
+        this.updatePointerTargets(null, placeholder);
+      }
+    }
   },
   getRootModule() {
     const root = this.structures[this.structures.length - 1];
