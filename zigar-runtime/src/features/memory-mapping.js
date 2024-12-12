@@ -163,8 +163,11 @@ export default mixin({
   allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
     const dv = this.obtainZigView(address, len);
-    dv[ZIG].align = align;
-    dv[ZIG].type = type;
+    const zig = dv[ZIG];
+    if (zig) {
+      zig.align = align;
+      zig.type = type;
+    }
     return dv;
   },
   freeZigMemory(dv) {
@@ -210,9 +213,10 @@ export default mixin({
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
-      if (!address) {
+      if (!address && len) {
         return null;
-      } else if (address === usizeMax) {
+      }
+      if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
       } else {
         return this.obtainView(this.memory.buffer, address, len);
@@ -267,25 +271,21 @@ export default mixin({
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
-      if (!address) {
+      if (!address && len) {
         return null;
-      } else {
-        const index = findMemoryIndex(this.externBufferList, address);
-        const entry = this.externBufferList[index - 1];
-        let buffer;
-        if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
-          buffer = entry.buffer;
-        } else {
-          if (!address) {
-            return null;
-          }
-          // cannot obtain zero-length buffer
-          buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-          buffer[ZIG] = { address, len };
-          this.externBufferList.splice(index, 0, { address, len, buffer })
-        }
-        return this.obtainView(buffer, 0, len);
       }
+      const index = findMemoryIndex(this.externBufferList, address);
+      const entry = this.externBufferList[index - 1];
+      let buffer;
+      if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+        buffer = entry.buffer;
+      } else {
+        // cannot obtain zero-length buffer
+        buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
+        buffer[ZIG] = { address, len };
+        this.externBufferList.splice(index, 0, { address, len, buffer })
+      }
+      return this.obtainView(buffer, 0, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const targetDV = target[MEMORY];

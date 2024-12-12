@@ -160,8 +160,11 @@ var memoryMapping = mixin({
   allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
     const dv = this.obtainZigView(address, len);
-    dv[ZIG].align = align;
-    dv[ZIG].type = type;
+    const zig = dv[ZIG];
+    if (zig) {
+      zig.align = align;
+      zig.type = type;
+    }
     return dv;
   },
   freeZigMemory(dv) {
@@ -207,9 +210,10 @@ var memoryMapping = mixin({
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
-      if (!address) {
+      if (!address && len) {
         return null;
-      } else if (address === usizeMax) {
+      }
+      if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
       } else {
         return this.obtainView(this.memory.buffer, address, len);
