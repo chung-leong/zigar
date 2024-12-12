@@ -207,7 +207,10 @@ export default mixin({
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
-      if (!address || isInvalidAddress(address)) {
+      if (isInvalidAddress(address)) {
+        address = (len > 0) ? 0 : usizeMax;
+      }
+      if (!address) {
         return null;
       } else if (address === usizeMax) {
         return this.obtainView(this.usizeMaxBuffer, 0, 0);
@@ -261,7 +264,10 @@ export default mixin({
       // nothing needs to happen
     },
     obtainZigView(address, len) {
-      if (!address || isInvalidAddress(address)) {
+      if (isInvalidAddress(address)) {
+        address = (len > 0) ? 0 : usizeMax;
+      }
+      if (!address) {
         return null;
       } else {
         const index = findMemoryIndex(this.externBufferList, address);
