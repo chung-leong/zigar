@@ -68,6 +68,9 @@ export function decodeText(arrays, encoding = 'utf-8') {
   } else {
     array = arrays;
   }
+  if (array.buffer[Symbol.toStringTag] === 'SharedArrayBuffer') {
+    array = new array.constructor(array);
+  }
   return decoder.decode(array);
 }
 
