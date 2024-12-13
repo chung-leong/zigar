@@ -38,7 +38,7 @@ var workerSupport = mixin({
       /* c8 ignore start */
       if (typeof(Worker) === 'function' || "" !== 'node') {
         // web worker
-        const url = new URL('data:,' + encodeURIComponent(code));
+        const url = URL.createObjectURL(new Blob([ code ], { type: 'text/javascript' }));
         const worker = new Worker(url, { type: 'module', name: 'zig' });
         const listener = evt => handler(worker, evt.data);
         worker.addEventListener(evtName, listener);

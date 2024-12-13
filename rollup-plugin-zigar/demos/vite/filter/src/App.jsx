@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutput } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -23,6 +23,10 @@ function App() {
   const onRangeChange = useCallback((evt) => {
     setIntensity(evt.target.value);
   }, [])
+  useEffect(() => {
+    startThreadPool(navigator.hardwareConcurrency)
+    // return () => stopThreadPool();
+  }, []);
   useEffect(() => {
     // load initial sample image
     (async () => {
@@ -86,6 +90,6 @@ export default App
 
 async function createImageData(width, height, source, params) {
   const input = { src: source };
-  const output = await createOutput(width, height, input, params);
+  const output = await createOutputAsync(width, height, input, params);
   return new ImageData(output.dst.data.clampedArray, width, height);
 }
