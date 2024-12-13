@@ -271,6 +271,9 @@ function decodeText(arrays, encoding = 'utf-8') {
   } else {
     array = arrays;
   }
+  if (array.buffer[Symbol.toStringTag] === 'SharedArrayBuffer') {
+    array = new array.constructor(array);
+  }
   return decoder.decode(array);
 }
 
@@ -3520,7 +3523,7 @@ var defaultAllocator = mixin({
     let allocator = this.defaultAllocator;
     if (!allocator) {
       const { constructor: Allocator } = structure;
-      const { VTable, noResize } = Allocator;
+      const { noResize } = Allocator;
       const vtable = {
         alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
         free: (ptr, buf, ptrAlign) => {
@@ -6887,11 +6890,15 @@ var optional = mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);
-        if (flags & OptionalFlag.HasSelector || !this[MEMORY][ZIG]) {
-          // since setValue() wouldn't write address into memory when the pointer is in
+        if (flags & OptionalFlag.HasSelector) {
+          setPresent.call(this, 1);
+        } else if (flags & StructureFlag.HasPointer) {
+          // since setValue() wouldn't write address into memory when the target is in
           // JS memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
-          setPresent.call(this, 1);
+          if (!getPresent.call(this)) {
+            setPresent.call(this, 13);
+          }
         }
       }
     };

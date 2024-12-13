@@ -1,6 +1,6 @@
 import { MemberType, OptionalFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { COPY, INITIALIZE, MEMORY, RESET, VISIT, VIVIFICATE, ZIG } from '../symbols.js';
+import { COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -38,11 +38,15 @@ export default mixin({
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);
-        if (flags & OptionalFlag.HasSelector || !this[MEMORY][ZIG]) {
-          // since setValue() wouldn't write address into memory when the pointer is in
+        if (flags & OptionalFlag.HasSelector) {
+          setPresent.call(this, 1);
+        } else if (flags & StructureFlag.HasPointer) {
+          // since setValue() wouldn't write address into memory when the target is in
           // JS memory, we need to use setPresent() in order to write something
           // non-zero there so that we know the field is populated
-          setPresent.call(this, 1);
+          if (!getPresent.call(this)) {
+            setPresent.call(this, 13);
+          }
         }
       }
     };

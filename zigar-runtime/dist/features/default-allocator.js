@@ -10,7 +10,7 @@ var defaultAllocator = mixin({
     let allocator = this.defaultAllocator;
     if (!allocator) {
       const { constructor: Allocator } = structure;
-      const { VTable, noResize } = Allocator;
+      const { noResize } = Allocator;
       const vtable = {
         alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
         free: (ptr, buf, ptrAlign) => {
