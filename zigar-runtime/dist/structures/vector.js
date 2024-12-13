@@ -1,8 +1,8 @@
-import { VectorFlag } from '../constants.js';
+import { StructureFlag, VectorFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getVectorEntries, getVectorIterator } from '../iterators.js';
-import { INITIALIZE, ENTRIES, COPY } from '../symbols.js';
+import { INITIALIZE, ENTRIES, VIVIFICATE, VISIT, COPY } from '../symbols.js';
 import { getSelf, defineValue } from '../utils.js';
 
 var vector = mixin({
@@ -16,6 +16,9 @@ var vector = mixin({
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
+        if (flags & StructureFlag.HasPointer) {
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
+        }
       } else if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
         if (typeof(argLen) !== 'number') {
@@ -40,7 +43,11 @@ var vector = mixin({
     const constructor = this.createConstructor(structure, { initializer });
     const { bitSize: elementBitSize } = member;
     for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-      descriptors[i] = this.defineMember({ ...member, bitOffset });
+      if (flags & StructureFlag.HasPointer) {
+        descriptors[i] = this.defineMember({ ...member, slot: i });
+      } else {
+        descriptors[i] = this.defineMember({ ...member, bitOffset });
+      }
     }
     descriptors.$ = { get: getSelf, set: initializer };
     descriptors.length = defineValue(length);
@@ -54,6 +61,8 @@ var vector = mixin({
     descriptors[Symbol.iterator] = defineValue(getVectorIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[ENTRIES] = { get: getVectorEntries };
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeVector(structure, staticDescriptors) {

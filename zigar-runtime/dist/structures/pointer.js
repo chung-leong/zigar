@@ -1,7 +1,7 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
-import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, MAX_LENGTH, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
+import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
 import { getProxy, defineValue, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
@@ -53,7 +53,7 @@ var pointer = mixin({
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
             if (flags & PointerFlag.HasLength) {
-              this[MAX_LENGTH] = undefined;
+              this[MAX_LENGTH] = null;
             }
             return newTarget;
           }
@@ -112,7 +112,7 @@ var pointer = mixin({
       }
       pointer[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = undefined;
+        pointer[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
@@ -307,6 +307,7 @@ var pointer = mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
+    descriptors[MAX_LENGTH] = (flags & PointerFlag.HasLength) && defineValue(null);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;

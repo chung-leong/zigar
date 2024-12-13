@@ -141,7 +141,6 @@ export default mixin({
       byteSize,
       align,
       flags,
-      name,
       instance: { members, template },
     } = structure;
     const { onCastError } = handlers;
@@ -220,6 +219,11 @@ export default mixin({
       return cache.save(dv, self);
     };
     defineProperty(constructor, CACHE, defineValue(cache));
+    if (process.env.TARGET === 'wasm') {
+      if (template?.[MEMORY]) {
+        defineProperty(template, RESTORE, this.defineRestorer());
+      }
+    }
     return constructor;
   },
   createApplier(structure) {

@@ -129,7 +129,6 @@ var all = mixin({
       byteSize,
       align,
       flags,
-      name,
       instance: { members, template },
     } = structure;
     const { onCastError } = handlers;
@@ -208,6 +207,11 @@ var all = mixin({
       return cache.save(dv, self);
     };
     defineProperty(constructor, CACHE, defineValue(cache));
+    {
+      if (template?.[MEMORY]) {
+        defineProperty(template, RESTORE, this.defineRestorer());
+      }
+    }
     return constructor;
   },
   createApplier(structure) {

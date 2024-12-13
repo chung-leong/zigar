@@ -11,6 +11,7 @@ var slice = mixin({
       align,
       flags,
       byteSize,
+      name,
       instance: {
         members: [ member ],
       },

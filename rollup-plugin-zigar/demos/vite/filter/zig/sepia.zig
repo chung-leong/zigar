@@ -125,27 +125,20 @@ pub const Output = KernelOutput(u8, kernel);
 pub const Parameters = KernelParameters(kernel);
 
 pub fn createOutput(allocator: std.mem.Allocator, width: u32, height: u32, input: Input, params: Parameters) !Output {
-    return createPartialOutput(allocator, width, height, 0, height, input, params);
-}
-
-pub fn createPartialOutput(allocator: std.mem.Allocator, width: u32, height: u32, start: u32, count: u32, input: Input, params: Parameters) !Output {
     var output: Output = undefined;
     inline for (std.meta.fields(Output)) |field| {
         const ImageT = @TypeOf(@field(output, field.name));
         @field(output, field.name) = .{
-            .data = try allocator.alloc(ImageT.Pixel, count * width),
+            .data = try allocator.alloc(ImageT.Pixel, width * height),
             .width = width,
             .height = height,
-            .offset = start * width,
         };
     }
     var instance = kernel.create(input, output, params);
     if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
         instance.evaluateDependents();
     }
-    const end = start + count;
-    instance.outputCoord[1] = start;
-    while (instance.outputCoord[1] < end) : (instance.outputCoord[1] += 1) {
+    while (instance.outputCoord[1] < height) : (instance.outputCoord[1] += 1) {
         instance.outputCoord[0] = 0;
         while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
             instance.evaluatePixel();
@@ -153,6 +146,100 @@ pub fn createPartialOutput(allocator: std.mem.Allocator, width: u32, height: u32
     }
     return output;
 }
+
+pub usingnamespace switch (@import("builtin").single_threaded) {
+    false => async_support,
+    true => struct {},
+};
+
+const async_support = struct {
+    const zigar = @import("zigar");
+    const Allocator = std.mem.Allocator;
+    const Promise = zigar.function.Promise(OutputError!Output);
+    const AbortSignal = zigar.function.AbortSignal;
+
+    pub const OutputError = error{
+        NoThreadsAvailable,
+        Aborted,
+    };
+
+    var thread_pool: std.Thread.Pool = undefined;
+    var thread_count: u32 = 0;
+
+    pub fn startThreadPool(count: u32) !void {
+        try zigar.thread.use(true);
+        try thread_pool.init(.{
+            .n_jobs = count,
+            .allocator = zigar.mem.getDefaultAllocator(),
+        });
+        thread_count = count;
+    }
+
+    pub fn stopThreadPool() !void {
+        thread_count = 0;
+        thread_pool.deinit();
+        try zigar.thread.use(false);
+    }
+
+    pub fn createOutputAsync(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) !void {
+        if (thread_count == 0) {
+            return OutputError.NoThreadsAvailable;
+        }
+        var output: Output = undefined;
+        inline for (std.meta.fields(Output)) |field| {
+            const ImageT = @TypeOf(@field(output, field.name));
+            @field(output, field.name) = .{
+                .data = try allocator.alloc(ImageT.Pixel, width * height),
+                .width = width,
+                .height = height,
+            };
+        }
+        return thread_pool.spawn(createOutputInThreads, .{ promise, signal, width, height, input, output, params }) catch OutputError.NoThreadsAvailable;
+    }
+
+    fn createOutputInThreads(promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, output: Output, params: Parameters) void {
+        const scanlines: u32 = if (thread_count > 0) height / thread_count else 0;
+        if (thread_count > 1 and scanlines > 0) {
+            const child_count: u32 = thread_count - 1;
+            var wg: std.Thread.WaitGroup = .{};
+            var thread_num: u32 = 0;
+            while (thread_num < child_count) : (thread_num += 1) {
+                thread_pool.spawnWg(&wg, processSlice, .{
+                    signal,
+                    width,
+                    scanlines * thread_num,
+                    scanlines,
+                    input,
+                    output,
+                    params,
+                });
+            }
+            const remaining_start = scanlines * child_count;
+            const remaining_count = height - remaining_start;
+            processSlice(signal, width, remaining_start, remaining_count, input, output, params);
+            wg.wait();
+        } else {
+            processSlice(signal, width, 0, height, input, output, params);
+        }
+        promise.resolve(if (signal.off()) output else OutputError.Aborted);
+    }
+
+    fn processSlice(signal: AbortSignal, width: u32, start: u32, count: u32, input: Input, output: Output, params: Parameters) void {
+        var instance = kernel.create(input, output, params);
+        if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
+            instance.evaluateDependents();
+        }
+        const end = start + count;
+        instance.outputCoord[1] = start;
+        while (instance.outputCoord[1] < end) : (instance.outputCoord[1] += 1) {
+            instance.outputCoord[0] = 0;
+            while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
+                instance.evaluatePixel();
+                if (signal.on()) return;
+            }
+        }
+    }
+};
 
 const ColorSpace = enum { srgb, @"display-p3" };
 
@@ -166,7 +253,6 @@ pub fn Image(comptime T: type, comptime len: comptime_int, comptime writable: bo
         width: u32,
         height: u32,
         colorSpace: ColorSpace = .srgb,
-        offset: usize = 0,
 
         fn constrain(v: anytype, min: f32, max: f32) @TypeOf(v) {
             const lower: @TypeOf(v) = @splat(min);
@@ -229,7 +315,7 @@ pub fn Image(comptime T: type, comptime len: comptime_int, comptime writable: bo
         }
 
         fn getPixel(self: @This(), x: u32, y: u32) FPixel {
-            const index = (y * self.width) + x - self.offset;
+            const index = (y * self.width) + x;
             const src_pixel = self.data[index];
             const pixel: FPixel = switch (@typeInfo(T)) {
                 .Float => pbPixelFromFloatPixel(src_pixel),
@@ -243,7 +329,7 @@ pub fn Image(comptime T: type, comptime len: comptime_int, comptime writable: bo
             if (comptime !writable) {
                 return;
             }
-            const index = (y * self.width) + x - self.offset;
+            const index = (y * self.width) + x;
             const dst_pixel: Pixel = switch (@typeInfo(T)) {
                 .Float => floatPixelFromPBPixel(pixel),
                 .Int => intPixelFromPBPixel(pixel),
@@ -359,13 +445,14 @@ pub fn KernelParameters(comptime Kernel: type) type {
     inline for (param_fields, 0..) |field, index| {
         const param = @field(Kernel.parameters, field.name);
         const default_value: ?*const anyopaque = get_def: {
-            const value: param.type = if (@hasField(@TypeOf(param), "defaultValue"))
-                param.defaultValue
-            else switch (@typeInfo(param.type)) {
-                .Int, .Float => 0,
-                .Bool => false,
-                .Vector => @splat(0),
-                else => @compileError("Unrecognized parameter type: " ++ @typeName(param.type)),
+            const value: param.type = switch (@hasField(@TypeOf(param), "defaultValue")) {
+                true => param.defaultValue,
+                false => switch (@typeInfo(param.type)) {
+                    .Int, .Float => 0,
+                    .Bool => false,
+                    .Vector => @splat(0),
+                    else => @compileError("Unrecognized parameter type: " ++ @typeName(param.type)),
+                },
             };
             break :get_def @ptrCast(&value);
         };

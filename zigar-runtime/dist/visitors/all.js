@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS, TARGET, VIVIFICATE, VISIT } from '../symbols.js';
+import { SLOTS, VIVIFICATE, VISIT } from '../symbols.js';
 
 var all = mixin({
   defineVisitor() {
@@ -39,10 +39,7 @@ function visitChild(slot, cb, flags, src) {
 
 const builtinVisitors = {
   copy(flags, src) {
-    const target = src[SLOTS][0];
-    if (target) {
-      this[TARGET] = target;
-    }
+    this[SLOTS][0] = src[SLOTS][0];
   },
   reset(flags) {
     if (flags & VisitorFlag.IsInactive) {

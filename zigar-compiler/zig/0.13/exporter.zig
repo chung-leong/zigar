@@ -113,7 +113,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_sentinel = td.type.sentinel != null,
                             .is_string = td.getElementType() == u8 or td.getElementType() == u16,
                             .is_typed_array = isTypedArray(td),
-                            .is_clamped_array = td.getElementType() == u8 and isTypedArray(td),
+                            .is_clamped_array = getTypedArrayBits(td) == 8,
                             .is_opaque = td.type.is_opaque,
                         },
                     } else .{
@@ -196,7 +196,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_sentinel = td.getSentinel() != null,
                             .is_string = td.getElementType() == u8 or td.getElementType() == u16,
                             .is_typed_array = isTypedArray(td),
-                            .is_clamped_array = td.getElementType() == u8 and isTypedArray(td),
+                            .is_clamped_array = getTypedArrayBits(td) == 8,
                         },
                     };
                 },
@@ -336,22 +336,26 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        fn isTypedArray(comptime td: TypeData) bool {
+        fn getTypedArrayBits(comptime td: TypeData) ?comptime_int {
             return switch (@typeInfo(td.type)) {
                 .Int => |int| inline for (.{ 8, 16, 32, 64 }) |bits| {
-                    if (int.bits == bits) break true;
-                } else false,
+                    if (int.bits == bits) break bits;
+                } else null,
                 .Float => |float| inline for (.{ 32, 64 }) |bits| {
-                    if (float.bits == bits) break true;
-                } else false,
-                .Array => |ar| isTypedArray(tdb.get(ar.child)),
-                .Vector => |ve| isTypedArray(tdb.get(ve.child)),
-                .Struct => switch (comptime td.isSlice()) {
-                    true => isTypedArray(tdb.get(td.type.ElementType)),
-                    false => false,
+                    if (float.bits == bits) break bits;
+                } else null,
+                .Array => |ar| getTypedArrayBits(tdb.get(ar.child)),
+                .Vector => |ve| getTypedArrayBits(tdb.get(ve.child)),
+                .Struct => switch (comptime td.isSlice() and !td.type.is_opaque) {
+                    true => getTypedArrayBits(tdb.get(td.type.ElementType)),
+                    false => null,
                 },
-                else => false,
+                else => null,
             };
+        }
+
+        fn isTypedArray(comptime td: TypeData) bool {
+            return getTypedArrayBits(td) != null;
         }
 
         // NOTE: error type has to be specified here since the function is called recursively

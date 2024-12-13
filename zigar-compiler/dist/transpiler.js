@@ -4037,66 +4037,51 @@ var objectLinkage = mixin({
         return;
       }
     }
+    const copy = this.getCopyFunction();
     for (const { object, handle } of this.variables) {
-      this.linkObject(object, handle, writeBack);
-      if (TARGET in object && object[SLOTS][0]) ;
-    }
-  },
-  linkObject(object, handle, writeBack) {
-    if (object[MEMORY][ZIG]) {
-      return;
-    }
-    const dv = object[MEMORY];
-    // objects in WebAssembly have fixed addresses so the handle is the address
-    // for native code module, locations of objects in memory can change depending on
-    // where the shared library is loaded
-    const address = handle ;
-    const length = dv.byteLength;
-    const zigDV = this.obtainZigView(address, length);
-    if (writeBack && length > 0) {
-      const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = zigDV;
-      dest[COPY](object);
-    }
-    object[MEMORY] = zigDV;
-    object.constructor[CACHE]?.save?.(zigDV, object);
-    const linkChildren = (object) => {
-      const slots = object[SLOTS];
-      if (slots) {
-        const parentOffset = zigDV.byteOffset;
-        for (const child of Object.values(slots)) {
-          if (child) {
-            const childDV = child[MEMORY];
-            if (childDV.buffer === dv.buffer) {
-              const offset = parentOffset + childDV.byteOffset - dv.byteOffset;
-              child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
-              child.constructor[CACHE]?.save?.(zigDV, child);
-              linkChildren(child);
+      const jsDV = object[MEMORY];
+      // objects in WebAssembly have fixed addresses so the handle is the address
+      // for native code module, locations of objects in memory can change depending on
+      // where the shared library is loaded
+      const address = handle ;
+      const len = jsDV.byteLength;
+      const zigDV = object[MEMORY] = this.obtainZigView(address, len);
+      if (writeBack && len > 0) {
+        copy(zigDV, jsDV);
+      }
+      object.constructor[CACHE]?.save?.(zigDV, object);
+      const linkChildren = (object) => {
+        const slots = object[SLOTS];
+        if (slots) {
+          const parentOffset = zigDV.byteOffset;
+          for (const child of Object.values(slots)) {
+            if (child) {
+              const childDV = child[MEMORY];
+              if (childDV.buffer === jsDV.buffer) {
+                const offset = parentOffset + childDV.byteOffset - jsDV.byteOffset;
+                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+                child.constructor[CACHE]?.save?.(zigDV, child);
+                linkChildren(child);
+              }
             }
           }
         }
-      }
-    };
-    linkChildren(object);
+      };
+      linkChildren(object);
+      // update pointer targets
+      object[VISIT]?.(function() { this[UPDATE](); });
+    }
   },
   unlinkVariables() {
+    const copy = this.getCopyFunction();
     for (const { object } of this.variables) {
-      this.unlinkObject(object);
+      const zigDV = object[MEMORY];
+      const { len } = zigDV[ZIG];
+      const jsDV = object[MEMORY] = this.allocateMemory(len);
+      if (len > 0) {
+        copy(jsDV, zigDV);
+      }
     }
-  },
-  unlinkObject(object) {
-    const zig = object[MEMORY]?.[ZIG];
-    if (!zig) {
-      return;
-    }
-    const { len } = zig;
-    const jsDV = this.allocateMemory(len);
-    if (object[COPY]) {
-      const dest = Object.create(object.constructor.prototype);
-      dest[MEMORY] = jsDV;
-      dest[COPY](object);
-    }
-    object[MEMORY] = jsDV;
   },
   ...({
     imports: {
@@ -4120,15 +4105,15 @@ var pointerSynchronization = mixin({
     const callback = function(flags) {
       // bypass proxy
       const pointer = this[POINTER];
-      if (!pointerMap.get(pointer)) {
+      if (pointerMap.get(pointer) === undefined) {
         const target = pointer[SLOTS][0];
         if (target) {
           const writable = !pointer.constructor.const;
           const entry = { target, writable };
-          pointerMap.set(pointer, target);
           // only targets in JS memory need updating
           const dv = target[MEMORY];
           if (!dv[ZIG]) {
+            pointerMap.set(pointer, target);
             // see if the buffer is shared with other objects
             const other = bufferMap.get(dv.buffer);
             if (other) {
@@ -4144,6 +4129,9 @@ var pointerSynchronization = mixin({
             }
             // scan pointers in target
             target[VISIT]?.(callback, 0);
+          } else {
+            // in Zig memory--no need to update
+            pointerMap.set(pointer, null);
           }
         }
       }
@@ -4160,7 +4148,7 @@ var pointerSynchronization = mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      if (!pointer[MEMORY][ZIG]) {
+      if (target) {
         const cluster = clusterMap.get(target);
         const writable = cluster?.writable ?? !pointer.constructor.const;
         pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);
@@ -5977,7 +5965,6 @@ var all$1 = mixin({
       byteSize,
       align,
       flags,
-      name,
       instance: { members, template },
     } = structure;
     const { onCastError } = handlers;
@@ -6056,6 +6043,11 @@ var all$1 = mixin({
       return cache.save(dv, self);
     };
     defineProperty(constructor, CACHE, defineValue(cache));
+    {
+      if (template?.[MEMORY]) {
+        defineProperty(template, RESTORE, this.defineRestorer());
+      }
+    }
     return constructor;
   },
   createApplier(structure) {
@@ -6967,7 +6959,7 @@ var pointer = mixin({
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
             if (flags & PointerFlag.HasLength) {
-              this[MAX_LENGTH] = undefined;
+              this[MAX_LENGTH] = null;
             }
             return newTarget;
           }
@@ -7026,7 +7018,7 @@ var pointer = mixin({
       }
       pointer[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = undefined;
+        pointer[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
@@ -7221,6 +7213,7 @@ var pointer = mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
+    descriptors[MAX_LENGTH] = (flags & PointerFlag.HasLength) && defineValue(null);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;
@@ -7420,6 +7413,7 @@ var slice = mixin({
       align,
       flags,
       byteSize,
+      name,
       instance: {
         members: [ member ],
       },
@@ -7955,6 +7949,9 @@ var vector = mixin({
     const initializer = function(arg) {
       if (arg instanceof constructor) {
         this[COPY](arg);
+        if (flags & StructureFlag.HasPointer) {
+          this[VISIT]('copy', VisitorFlag.Vivificate, arg);
+        }
       } else if (arg?.[Symbol.iterator]) {
         let argLen = arg.length;
         if (typeof(argLen) !== 'number') {
@@ -7979,7 +7976,11 @@ var vector = mixin({
     const constructor = this.createConstructor(structure, { initializer });
     const { bitSize: elementBitSize } = member;
     for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
-      descriptors[i] = this.defineMember({ ...member, bitOffset });
+      if (flags & StructureFlag.HasPointer) {
+        descriptors[i] = this.defineMember({ ...member, slot: i });
+      } else {
+        descriptors[i] = this.defineMember({ ...member, bitOffset });
+      }
     }
     descriptors.$ = { get: getSelf, set: initializer };
     descriptors.length = defineValue(length);
@@ -7993,6 +7994,8 @@ var vector = mixin({
     descriptors[Symbol.iterator] = defineValue(getVectorIterator);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[ENTRIES] = { get: getVectorEntries };
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
   },
   finalizeVector(structure, staticDescriptors) {
@@ -8040,10 +8043,7 @@ function visitChild(slot, cb, flags, src) {
 
 const builtinVisitors = {
   copy(flags, src) {
-    const target = src[SLOTS][0];
-    if (target) {
-      this[TARGET] = target;
-    }
+    this[SLOTS][0] = src[SLOTS][0];
   },
   reset(flags) {
     if (flags & VisitorFlag.IsInactive) {
