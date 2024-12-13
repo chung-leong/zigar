@@ -77,7 +77,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_size = td.type == usize or td.type == isize,
                     },
                 },
-                .@"struct" => |st| get: {
+                .@"struct" => |st| init: {
                     const has_object = inline for (st.fields) |field| {
                         const field_td = tdb.get(field.type);
                         if (field_td.isObject()) break true;
@@ -86,7 +86,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         const field_td = tdb.get(field.type);
                         if (field_td.isObject() or field_td.isComptimeOnly() or field.is_comptime) break true;
                     } else false;
-                    break :get if (comptime td.isArguments()) .{
+                    break :init if (comptime td.isArguments()) .{
                         .arg_struct = .{
                             .has_object = has_object,
                             .has_slot = has_slot,
@@ -131,7 +131,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         },
                     };
                 },
-                .@"union" => |un| get: {
+                .@"union" => |un| init: {
                     const has_object = inline for (un.fields) |field| {
                         const field_td = tdb.get(field.type);
                         if (field_td.isObject()) break true;
@@ -140,7 +140,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         const field_td = tdb.get(field.type);
                         if (field_td.isObject() or field_td.isComptimeOnly()) break true;
                     } else false;
-                    break :get .{
+                    break :init .{
                         .@"union" = .{
                             .has_object = has_object,
                             .has_slot = has_slot,
@@ -154,9 +154,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                         },
                     };
                 },
-                .error_union => |eu| get: {
+                .error_union => |eu| init: {
                     const payload_td = tdb.get(eu.payload);
-                    break :get .{
+                    break :init .{
                         .error_union = .{
                             .has_object = payload_td.isObject(),
                             .has_slot = payload_td.isObject() or payload_td.isComptimeOnly(),
@@ -164,9 +164,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                         },
                     };
                 },
-                .optional => |op| get: {
+                .optional => |op| init: {
                     const child_td = tdb.get(op.child);
-                    break :get .{
+                    break :init .{
                         .optional = .{
                             .has_object = child_td.isObject(),
                             .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
@@ -186,13 +186,13 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_global = td.type == anyerror,
                     },
                 },
-                .array => |ar| get: {
+                .array => |ar| init: {
                     const child_td = tdb.get(ar.child);
-                    break :get .{
+                    break :init .{
                         .array = .{
                             .has_object = child_td.isObject(),
                             .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
-                            .has_pointer = td.attrs.has_pointer,
+                            .has_pointer = child_td.hasPointer(),
                             .has_sentinel = td.getSentinel() != null,
                             .is_string = td.getElementType() == u8 or td.getElementType() == u16,
                             .is_typed_array = isTypedArray(td),
@@ -200,10 +200,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                         },
                     };
                 },
-                .vector => .{
-                    .vector = .{
-                        .is_typed_array = isTypedArray(td),
-                    },
+                .vector => |ve| init: {
+                    const child_td = tdb.get(ve.child);
+                    break :init .{
+                        .vector = .{
+                            .has_object = child_td.isObject(),
+                            .has_slot = child_td.isObject(),
+                            .has_pointer = child_td.hasPointer(),
+                            .is_typed_array = isTypedArray(td),
+                        },
+                    };
                 },
                 .pointer => |pt| .{
                     .pointer = .{

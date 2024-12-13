@@ -12,15 +12,15 @@ export default mixin({
     const callback = function(flags) {
       // bypass proxy
       const pointer = this[POINTER];
-      if (!pointerMap.get(pointer)) {
+      if (pointerMap.get(pointer) === undefined) {
         const target = pointer[SLOTS][0];
         if (target) {
           const writable = !pointer.constructor.const;
           const entry = { target, writable };
-          pointerMap.set(pointer, target);
           // only targets in JS memory need updating
           const dv = target[MEMORY];
           if (!dv[ZIG]) {
+            pointerMap.set(pointer, target);
             // see if the buffer is shared with other objects
             const other = bufferMap.get(dv.buffer);
             if (other) {
@@ -36,6 +36,9 @@ export default mixin({
             }
             // scan pointers in target
             target[VISIT]?.(callback, 0);
+          } else {
+            // in Zig memory--no need to update
+            pointerMap.set(pointer, null);
           }
         }
       }
@@ -52,7 +55,7 @@ export default mixin({
     }
     // process the pointers
     for (const [ pointer, target ] of pointerMap) {
-      if (!pointer[MEMORY][ZIG]) {
+      if (target) {
         const cluster = clusterMap.get(target);
         const writable = cluster?.writable ?? !pointer.constructor.const;
         pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);

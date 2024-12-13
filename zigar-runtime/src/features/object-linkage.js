@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { CACHE, COPY, MEMORY, SLOTS, TARGET, ZIG } from '../symbols.js';
+import { CACHE, COPY, MEMORY, SLOTS, TARGET, UPDATE, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   linkVariables(writeBack) {
@@ -54,6 +54,8 @@ export default mixin({
       }
     };
     linkChildren(object);
+    // update pointers
+    object[VISIT]?.(function() { this[UPDATE]() });
   },
   unlinkVariables() {
     for (const { object } of this.variables) {

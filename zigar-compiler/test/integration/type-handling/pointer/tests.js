@@ -224,9 +224,14 @@ export function addTests(importModule, options) {
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
     })
-    it('should not compile code containing pointer vector', async function() {
+    it('should handle pointer in vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;
+      const { default: module, vector_const, change } = await importTest('vector-of');
+      expect(vector_const.valueOf()).to.eql([ 1, 1, 1, 1 ]);
+      expect(module.vector.valueOf()).to.eql([ 1, 1, 1, 1 ]);
+      change(123);
+      expect(vector_const.valueOf()).to.eql([ 123, 123, 123, 123 ]);
+      expect(module.vector.valueOf()).to.eql([ 123, 123, 123, 123 ]);
     })
   })
 }

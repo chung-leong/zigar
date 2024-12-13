@@ -63,7 +63,7 @@ export default mixin({
             this[LAST_ADDRESS] = address;
             this[LAST_LENGTH] = length;
             if (flags & PointerFlag.HasLength) {
-              this[MAX_LENGTH] = undefined;
+              this[MAX_LENGTH] = null;
             }
             return newTarget;
           }
@@ -122,7 +122,7 @@ export default mixin({
       }
       pointer[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = undefined;
+        pointer[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
@@ -317,6 +317,7 @@ export default mixin({
     descriptors[VISIT] = this.defineVisitor();
     descriptors[LAST_ADDRESS] = defineValue(0);
     descriptors[LAST_LENGTH] = defineValue(0);
+    descriptors[MAX_LENGTH] = (flags & PointerFlag.HasLength) && defineValue(null);
     // disable these so the target's properties are returned instead through auto-dereferencing
     descriptors.dataView = descriptors.base64 = undefined;
     return constructor;

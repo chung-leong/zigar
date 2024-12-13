@@ -153,9 +153,16 @@ export function addTests(importModule, options) {
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('4567');
     })
-    it('should not compile code containing opaque pointer vector', async function() {
+    it('should handle opaque pointer in vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;
+      const { default: module, vector_const, print, change } = await importTest('vector-of');
+      const [ line1 ] = await capture(() => print(vector_const));
+      expect(line1).to.equal('{ 1234, 1234, 1234, 1234 }');
+      const [ line2 ] = await capture(() => print(module.vector));
+      expect(line2).to.equal('{ 1234, 1234, 1234, 1234 }');
+      change(2);
+      const [ line3 ] = await capture(() => print(module.vector));
+      expect(line3).to.equal('{ 2456, 2456, 2456, 2456 }');
     })
   })
 }

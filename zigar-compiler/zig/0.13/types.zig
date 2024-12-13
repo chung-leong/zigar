@@ -1260,7 +1260,6 @@ pub const TypeDataCollector = struct {
             .ErrorSet,
             .Enum,
             .Opaque,
-            .Vector,
             .NoReturn,
             => td.attrs.is_supported = true,
             .Type,
@@ -1285,7 +1284,7 @@ pub const TypeDataCollector = struct {
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
             },
-            inline .Array, .Optional => |ar| {
+            inline .Array, .Vector, .Optional => |ar| {
                 const child_attrs = self.getAttributes(ar.child);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
