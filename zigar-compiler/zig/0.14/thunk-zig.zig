@@ -33,7 +33,7 @@ pub fn createThunk(comptime FT: type) ThunkType(FT) {
             inline for (fields) |field| {
                 @field(args, field.name) = @field(arg_struct, field.name);
             }
-            const function: *const FT = @ptrCast(fn_ptr);
+            const function: *const FT = @ptrCast(@alignCast(fn_ptr));
             const retval = @call(.auto, function, args);
             if (comptime @TypeOf(retval) != noreturn) {
                 arg_struct.retval = retval;
