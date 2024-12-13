@@ -230,9 +230,16 @@ export function addTests(importModule, options) {
       expect(() => getFunction(2)).to.throw(Error.GoldfishDied);
       expect(() => getFunction(4)).to.throw(Error.NoMoney);
     })
-    it('should not compile code containing function vector', async function() {
+    it('should handle function pointer in vector', async function() {
       this.timeout(300000);
-      await expect(importTest('vector-of')).to.eventually.be.rejected;
+      const { default: module, vector_const, change } = await importTest('vector-of');
+      const [ line1 ] = await capture(() => vector_const[0]());
+      expect(line1).to.equal('hello');
+      const [ line2 ] = await capture(() => module.vector[2]());
+      expect(line2).to.equal('hello');
+      change(2);
+      const [ line3 ] = await capture(() => module.vector[3]());
+      expect(line3).to.equal('world');
     })
   })
 }
