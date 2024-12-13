@@ -4044,9 +4044,8 @@ var objectLinkage = mixin({
       // for native code module, locations of objects in memory can change depending on
       // where the shared library is loaded
       const address = handle ;
-      const len = jsDV.byteLength;
-      const zigDV = object[MEMORY] = this.obtainZigView(address, len);
-      if (writeBack && len > 0) {
+      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      if (writeBack) {
         copy(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
@@ -4074,11 +4073,11 @@ var objectLinkage = mixin({
   },
   unlinkVariables() {
     const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
+    for (const { object, handle } of this.variables) {
       const zigDV = object[MEMORY];
-      const { len } = zigDV[ZIG];
-      const jsDV = object[MEMORY] = this.allocateMemory(len);
-      if (len > 0) {
+      const zig = zigDV[ZIG];
+      if (zig) {
+        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
         copy(jsDV, zigDV);
       }
     }
