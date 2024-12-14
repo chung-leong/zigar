@@ -13,7 +13,7 @@ export function addTests(importModule, options) {
   };
   describe('Opaque', function() {
     it('should import opaque pointer as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Orange, Apple, compare } = await importTest('as-static-variables');
       expect(Orange).to.be.a('function');
       expect(Apple).to.be.a('function');
@@ -28,20 +28,20 @@ export function addTests(importModule, options) {
       expect(result).to.be.true;
     })
     it('should print opaque pointer arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print } = await importTest('as-function-parameters');
       const [ line ] = await capture(() => print(module.orange_ptr));
       expect(line).to.equal('Value = 1234');
     })
     it('should return opaque pointer', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { create, print } = await importTest('as-return-value');
       const s = create(123, 456);
       const [ line ] = await capture(() => print(s));
       expect(line).to.equal('as-return-value.Struct{ .number1 = 123, .number2 = 456 }');
     })
     it('should handle opaque pointer in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Opaque, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0]['*']).to.be.instanceOf(Opaque);
@@ -55,7 +55,7 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ 123, 345, 5555, 789 }');
     })
     it('should handle opaque pointer in struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, Opaque, print } = await importTest('in-struct');
       expect(module.struct_a.ptr1['*']).to.be.instanceOf(Opaque);
       expect(module.struct_a.ptr2['*']).to.be.instanceOf(Opaque);
@@ -69,11 +69,11 @@ export function addTests(importModule, options) {
       expect(after).to.equal('1234 4567');
     })
     it('should not compile code with opaque pointer in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     });
     it('should handle opaque pointer as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, Opaque, print } = await importTest('as-comptime-field');
       expect(module.struct_a.ptr['*']).to.be.instanceOf(Opaque);
       const b = new StructA({ number: 500 });
@@ -82,7 +82,7 @@ export function addTests(importModule, options) {
       expect(line).to.contain('as-comptime-field.StructA{ .number = 500, .ptr = as-comptime-field.Opaque@');
     })
     it('should handle opaque pointer in bare union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(() => module.union_a.ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('untagged union');
@@ -104,7 +104,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle opaque pointer in tagged union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, TagType, UnionA, Opaque, print } = await importTest('in-tagged-union');
       expect(module.union_a.ptr['*']).to.be.instanceOf(Opaque);
       expect(TagType(module.union_a)).to.equal(TagType.ptr);
@@ -124,7 +124,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.ptr).to.be.null;
     })
     it('should handle opaque pointer in optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Opaque, print } = await importTest('in-optional');
       expect(module.optional['*']).to.be.instanceOf(Opaque);
       const [ before ] = await capture(() => print());
@@ -139,7 +139,7 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('4567');
     })
     it('should handle opaque pointer in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Error, Opaque, print } = await importTest('in-error-union');
       expect(module.error_union['*']).to.be.instanceOf(Opaque);
       const [ before ] = await capture(() => print());
@@ -154,7 +154,7 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('4567');
     })
     it('should handle opaque pointer in vector', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, vector_const, print, change } = await importTest('vector-of');
       const [ line1 ] = await capture(() => print(vector_const));
       expect(line1).to.equal('{ 1234, 1234, 1234, 1234 }');

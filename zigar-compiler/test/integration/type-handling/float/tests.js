@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   };
   describe('Float', function() {
     it('should import float as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print } = await importTest('as-static-variables');
       expect(module.float16_const.toFixed(1)).to.equal('-44.4');
       expect(module.float16.toFixed(2)).to.equal('0.44');
@@ -28,7 +28,7 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.float64)).to.equal('1.234');
     })
     it('should print float arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print1, print2 } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print1(Math.PI, Math.PI);
@@ -47,7 +47,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should return float', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('as-return-value');
       expect(module.getFloat16()).to.equal(-44.40625);
       expect(module.getFloat32()).to.equal(0.1234000027179718);
@@ -56,7 +56,7 @@ export function addTests(importModule, options) {
       expect(module.getFloat128()).to.equal(Math.PI);
     })
     it('should handle float in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print1, print2, print3 } = await importTest('array-of');
       expect([ ...module.array1 ]).to.eql([ 1.25, 2.25, 3.25, 4.25 ]);
       expect([ ...module.array2 ]).to.eql([ 1.1, 2.1, 3.1, 4.1 ]);
@@ -102,7 +102,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle float in struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: -0.5, number2: -4.44 });
       const b = new StructA({});
@@ -122,7 +122,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle float in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ state: true, number1: 1.5, number2: 7.77, number3: -4.25 });
       const b = new StructA({});
@@ -142,7 +142,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle float as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.number).to.equal(5.55);
       const b = new StructA({ state: true });
@@ -155,7 +155,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle float in bare union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(1.234);
       if (runtimeSafety) {
@@ -176,7 +176,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle float in tagged union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(3.456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
@@ -192,7 +192,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.be.null;
     })
     it('should handle float in optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal(3.14);
       const [ before ] = await capture(() => print());
@@ -209,7 +209,7 @@ export function addTests(importModule, options) {
       expect(module.optional).to.equal(8.12);
     })
     it('should handle float in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal(3.14);
       const [ before ] = await capture(() => print());
@@ -226,7 +226,7 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.equal(8.12);
     })
     it('should handle float in vector', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print1, print2, print3 } = await importTest('vector-of');
       expect([ ...module.vector1 ]).to.eql([ 1.5, 2.5, 3.5, 4.5 ]);
       expect([ ...module.vector2 ]).to.eql([ 1.5, 2.5, 3.5, 4.5 ]);

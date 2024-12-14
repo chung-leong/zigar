@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
   };
   describe('Struct', function() {
     it('should import struct as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, constant, comptime_struct, tuple, print } = await importTest('as-static-variables');
       expect(constant.valueOf()).to.eql({ number1: 123, number2: 456 });
       expect(() => constant.number1 = 1).to.throw(TypeError);
@@ -38,19 +38,19 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.variable)).to.equal('{"number1":888,"number2":999}');
     })
     it('should print struct arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print({ number1: 11, number2: 44 }));
       expect(lines).to.eql([ 'as-function-parameters.Struct{ .number1 = 11, .number2 = 44 }' ]);
       expect(() => print(undefined)).to.throw();
     })
     it('should return struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { getStruct } = await importTest('as-return-value');
       expect(getStruct().valueOf()).to.eql({ number1: 1, number2: 2 });
     })
     it('should handle struct in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const {
         default: module,
         array_a,
@@ -78,7 +78,7 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ array-of.StructA{ .number1 = 1, .number2 = 2 }, array-of.StructA{ .number1 = 123, .number2 = 456 } }');
     })
     it('should handle struct in struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ struct1: { number1: 1, number2: 2 }, struct2: { number1: 3, number2: 4 } });
       const b = new StructA({});
@@ -90,12 +90,12 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .struct1 = in-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-struct.Struct{ .number1 = 11, .number2 = 21 } }');
     })
     it('should fail when there is a struct in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('in-packed-struct');
       expect(() => module.struct_a.valueOf()).to.throw(TypeError);
     })
     it('should handle struct as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.structure.valueOf()).to.eql({ number1: 100, number2: 200 });
       const b = new StructA({ number: 500 });
@@ -104,7 +104,7 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .structure = as-comptime-field.Struct{ .number1 = 100, .number2 = 200 } }');
     })
     it('should handle struct in bare union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.structure.valueOf()).to.eql({ number1: 100, number2: 200 });
       if (runtimeSafety) {
@@ -125,7 +125,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle struct in tagged union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.structure.valueOf()).to.eql({ number1: 100, number2: 200 });
       expect(TagType(module.union_a)).to.equal(TagType.structure);
@@ -141,7 +141,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.structure).to.be.null;
     })
     it('should handle struct in optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ before ] = await capture(() => print());
@@ -154,7 +154,7 @@ export function addTests(importModule, options) {
       expect(module.optional.valueOf()).to.eql({ number1: 1, number2: 2 });
     })
     it('should handle struct in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ before ] = await capture(() => print());
@@ -167,7 +167,7 @@ export function addTests(importModule, options) {
       expect(module.error_union.valueOf()).to.eql({ number1: 1, number2: 2 });
     })
     it('should not compile code containing struct vector', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

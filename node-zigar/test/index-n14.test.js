@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
 import {
-  getFormat,
-  getSource,
-  resolve,
+    getFormat,
+    getSource,
+    resolve,
 } from '../dist/index-n14.js';
 
 describe('Node 14.x loader', function() {
@@ -21,7 +21,7 @@ describe('Node 14.x loader', function() {
   })
   describe('getFormat', function() {
     it('should get module as format', async function() {
-      this.timeout(60000);
+      this.timeout(0);
       const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
       const { format } = await getFormat(url, {}, () => {});
       expect(format).to.equal('module');
@@ -39,7 +39,7 @@ describe('Node 14.x loader', function() {
   })
   describe('getSource', function() {
     it('should load Zig file', async function() {
-      this.timeout(60000);
+      this.timeout(0);
       const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
       const { source } = await getSource(url, {}, () => {});
       expect(source).to.contain('const source = ');

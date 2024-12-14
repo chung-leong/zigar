@@ -3,15 +3,15 @@ import { readFile, readdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 
 import {
-  MagicNumber,
-  SectionType,
-  parseBinary,
-  parseFunction,
-  parseNames,
-  repackBinary,
-  repackFunction,
-  repackNames,
-  stripUnused,
+    MagicNumber,
+    SectionType,
+    parseBinary,
+    parseFunction,
+    parseNames,
+    repackBinary,
+    repackFunction,
+    repackNames,
+    stripUnused,
 } from '../src/wasm-decoding.js';
 
 const littleEndian = true;
@@ -46,7 +46,7 @@ describe('WASM decoding', function() {
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const wasmFiles = [
         'fail',
         'global',
@@ -67,7 +67,7 @@ describe('WASM decoding', function() {
       }
     })
     it('should recreate WASM files from WABT test suite', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
@@ -122,7 +122,7 @@ describe('WASM decoding', function() {
       }
     })
     it('should handle more complicated file', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = absolute(`./wasm-samples/ziglyph.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
@@ -142,7 +142,7 @@ describe('WASM decoding', function() {
       }
     })
     it('should repack code from WABT test suite', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);

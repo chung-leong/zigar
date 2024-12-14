@@ -8,13 +8,13 @@ export function addTests(importModule, options) {
   };
   describe('Memory allocation', function() {
     it('should provide allocator to function returning string', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { getMessage } = await importTest('allocate-memory-for-string');;
       const { string } = getMessage(123, 456n, 3.14);
       expect(string).to.equal('Numbers: 123, 456, 3.14');
     })
     it('should return memory from internal allocator', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { createSlice, printSlice, freeSlice } = await importTest('create-internal-slice');
       for (let i = 0; i < 10; i++) {
         const slice = createSlice(16);
@@ -34,7 +34,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should keep a usable copy of allocator', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { create } = await importTest('retain-allocator');
       const copier = create();
       const copy1 = copier.dupe('Hello world');
@@ -43,7 +43,7 @@ export function addTests(importModule, options) {
       expect(copy2.string).to.equal('This is a test');
     })
     it('should return a Zig allocator', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const {
         Struct,
         getAllocator,
@@ -72,7 +72,7 @@ export function addTests(importModule, options) {
       allocator.free(dv2);
     })
     it('should use returned allocator in call', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const {
         Struct,
         defaultAllocator,

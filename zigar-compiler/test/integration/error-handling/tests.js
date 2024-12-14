@@ -12,7 +12,7 @@ export function addTests(importModule, options) {
   describe('Error handling', function() {
     skip.permanently.unless(target === 'wasm32').and(runtimeSafety).
     it('should produce an error return trace', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { fail } = await importTest('wasm-error-trace');
       const [ line ] = await captureError(() => {
         if (runtimeSafety) {

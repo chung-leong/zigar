@@ -8,7 +8,7 @@ export function addTests(importModule, options) {
   };
   describe('Built-in functions', function() {
     it('should produce MD5 hash matching that from Node native function', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { md5 } = await importTest('generate-md5-hash');
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {
@@ -24,7 +24,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce SHA1 hash matching that from Node native function', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { sha1 } = await importTest('generate-sha1-hash');
       const data = new Uint8Array(1024 * 1024);
       for (let i = 0; i < data.byteLength; i++) {

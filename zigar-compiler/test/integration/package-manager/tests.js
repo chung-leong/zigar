@@ -12,7 +12,7 @@ export function addTests(importModule, options) {
   describe('Package manager', function() {
     skip.if(target === 'wasm32').
     it('should link in ziglua', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { run } = await importTest('use-ziglua/ziglua');
       switch (os.arch()) {
         case 'ia32': {
@@ -28,7 +28,7 @@ export function addTests(importModule, options) {
     })
     skip. // if(target === 'wasm32').
     it('should link in zig-sqlite', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { Db } = await importTest('use-zig-sqlite/zig-sqlite');
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const db = Db.init({

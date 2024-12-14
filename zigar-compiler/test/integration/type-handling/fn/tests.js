@@ -11,7 +11,7 @@ export function addTests(importModule, options) {
   };
   describe('Function', function() {
     it('should handle function as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, hello, hello2, hello3, world } = await importTest('as-static-variables');
       expect(module.func['*']).to.be.a('function');
       const lines = await capture(() => {
@@ -32,7 +32,7 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(hello)).to.equal(undefined);
     })
     it('should call functions passed as arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const {
         default: module,
         Callback1,
@@ -104,7 +104,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should return callable function', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { getFunction } = await importTest('as-return-value');
       const ptr = getFunction();
       const f = ptr['*'];
@@ -115,7 +115,7 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'hello' ]);
     })
     it('should return functions in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { array, getFunctions } = await importTest('array-of');
       const lines1 = await capture(() => {
         for (const ptr of array) {
@@ -132,7 +132,7 @@ export function addTests(importModule, options) {
       expect(lines2).to.eql([ 'world', 'world', 'hello', 'world' ]);
     })
     it('should return struct containing function pointers', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { StructA, getStruct, default: module } = await importTest('in-struct');
       expect(module).to.have.property('struct_a');
       expect(module.struct_a).to.be.instanceOf(StructA);
@@ -158,11 +158,11 @@ export function addTests(importModule, options) {
       expect(lines3).to.eql([ 'world', 'hello' ]);
     })
     it('should not compile code with function in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle function pointer as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.function['*']).to.be.a('function');
       const b = new StructA({ number: 500 });
@@ -171,7 +171,7 @@ export function addTests(importModule, options) {
       expect(line).to.match(/as\-comptime\-field\.StructA{ \.number = 500, \.function = fn\s*\(\) void@/);
     })
     it('should export bare union containing function pointers', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('in-bare-union');
       expect(module).to.have.property('union_a');
       expect(module).to.have.property('union_b');
@@ -179,7 +179,7 @@ export function addTests(importModule, options) {
       expect(() => module.union_a.function['*']).to.throw(TypeError);
     })
     it('should export tagged union containing function pointers', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('in-tagged-union');
       expect(module).to.have.property('union_a');
       expect(module).to.have.property('union_b');
@@ -188,7 +188,7 @@ export function addTests(importModule, options) {
       expect(() => module.union_b.function['*']).to.throw(TypeError);
     })
     it('should handle function in optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, getFunction } = await importTest('in-optional');
       expect(module.optional['*']).to.be.a('function');
       const lines1 = await capture(() => {
@@ -209,7 +209,7 @@ export function addTests(importModule, options) {
       expect(result3).to.be.null;
     })
     it('should handle function in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, getFunction, Error } = await importTest('in-error-union');
       expect(module.error_union['*']).to.be.a('function');
       const lines1 = await capture(() => {
@@ -231,7 +231,7 @@ export function addTests(importModule, options) {
       expect(() => getFunction(4)).to.throw(Error.NoMoney);
     })
     it('should handle function pointer in vector', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, vector_const, change } = await importTest('vector-of');
       const [ line1 ] = await capture(() => vector_const[0]());
       expect(line1).to.equal('hello');

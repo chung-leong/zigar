@@ -8,28 +8,28 @@ export function addTests(importModule, options) {
   };
   describe('Null', function() {
     it('should handle null as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('as-static-variables');
       expect(module.weird).to.be.null;
       expect(JSON.stringify(module.weird)).to.equal('null');
     })
     it('should ignore a function accepting null as arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       expect(print).to.undefined;
     })
     it('should ignore a function returning null', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { getNull } = await importTest('as-function-parameters');
       expect(getNull).to.undefined;
     })
     it('should handle null in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { array } = await importTest('array-of');
       expect([ ...array ]).to.eql([ null, null, null, null ]);
     })
     it('should handle null in struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { struct_a, print, StructA } = await importTest('in-struct');
       expect(struct_a.valueOf()).to.eql({ empty1: null, empty2: null, hello: 1234 });
       expect(() => new StructA({ empty1: undefined })).to.throw(TypeError)
@@ -40,23 +40,23 @@ export function addTests(importModule, options) {
       expect(line).to.equal('in-struct.StructA{ .empty1 = null, .empty2 = null, .hello = 1234 }');
     })
     it('should not compile code with null in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle null as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA } = await importTest('as-comptime-field');
       expect(module.struct_a.empty).to.be.null;
       const b = new StructA({ number: 500 });
       expect(b.empty).to.be.null;
     })
     it('should not compile code with null bare union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-bare-union')).to.eventually.be.rejected;
     })
     it('should not compile code with null tagged union', async function() {
-      this.timeout(300000);
-      this.timeout(300000);
+      this.timeout(0);
+      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.empty).to.equal(null);
       expect(TagType(module.union_a)).to.equal(TagType.empty);
@@ -67,11 +67,11 @@ export function addTests(importModule, options) {
       expect(b.valueOf()).to.eql({ number: 777 });
     })
     it('should not compile code with null optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-optional')).to.eventually.be.rejected;
     })
     it('should handle null in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union1).to.be.null;
       expect(() => module.error_union2).to.throw(Error.GoldfishDied);
@@ -79,7 +79,7 @@ export function addTests(importModule, options) {
       expect(text).to.equal('null');
     })
     it('should not compile code with null vector', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

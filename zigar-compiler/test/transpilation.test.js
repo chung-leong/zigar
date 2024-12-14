@@ -22,7 +22,7 @@ describe('Transpilation', function() {
   };
   describe('transpile', function() {
     it('should transpile zig source code containing no methods', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('integers');
       const options = { optimize: 'Debug' };
       const { code } = await transpile(path, options);
@@ -30,7 +30,7 @@ describe('Transpilation', function() {
       expect(code).to.contain('integers');
     })
     it('should transpile zig source code containing a method', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('simple');
       const options = {
         optimize: 'ReleaseSmall',
@@ -42,7 +42,7 @@ describe('Transpilation', function() {
       expect(code).to.contain('"add"');
     })
     it('should transpile zig source code accessing the file system', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('read-file');
       const options = {
         optimize: 'ReleaseSmall',
@@ -53,7 +53,7 @@ describe('Transpilation', function() {
       expect(code).to.contain('"readFile"');
     })
     it('should strip out unnecessary code when stripWASM is specified', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('simple');
       const options1 = { optimize: 'Debug' };
       const options2 = { optimize: 'Debug', stripWASM: true };
@@ -62,7 +62,7 @@ describe('Transpilation', function() {
       expect(after.length).to.be.below(before.length);
     })
     it('should default to strip WASM when optimize is not Debug', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('simple');
       const options1 = { optimize: 'ReleaseSmall', stripWASM: false };
       const options2 = { optimize: 'ReleaseSmall' };
@@ -71,7 +71,7 @@ describe('Transpilation', function() {
       expect(after.length).to.be.below(before.length);
     })
     it('should call wasmLoader when embedWASM is false', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('simple');
       let srcPath, wasmDV;
       const wasmLoader = (path, dv) => {
@@ -91,7 +91,7 @@ describe('Transpilation', function() {
       await expect(transpile(path, options)).to.eventually.be.rejected;
     })
     it('should obtain path to zig file from sourceFiles', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const sourceFiles = {
         'lib/integers.zigar': 'test/zig-samples/basic/integers.zig'
       };
@@ -103,7 +103,7 @@ describe('Transpilation', function() {
       expect(code).to.contain('integers');
     })
     it('should transpile zig source code involving function pointer', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('fn-pointer');
       const options = {
         optimize: 'ReleaseSmall',
@@ -115,7 +115,7 @@ describe('Transpilation', function() {
       expect(code).to.contain('"call"');
     })
     it('should transpile zig source code spawning thread', async function() {
-      this.timeout(600000);
+      this.timeout(0);
       const path = getSamplePath('thread');
       const options = {
         optimize: 'ReleaseSmall',

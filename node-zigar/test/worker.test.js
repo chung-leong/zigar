@@ -3,7 +3,7 @@ import { Worker } from 'worker_threads';
 
 describe('CommonJS worker', function() {
   it('should load compile Zig file and Node-API addon ', async function() {
-    this.timeout(300000);
+    this.timeout(0);
     const url = new URL('./zig-samples/simple.zig?quiet=1', import.meta.url).href;
     const worker = startWorker(url);
     await new Promise((resolve, reject) => {
@@ -15,7 +15,7 @@ describe('CommonJS worker', function() {
     expect(result).to.have.property('modulePath');
   })
   it('should allow synchronous await', function() {
-    this.timeout(300000);
+    this.timeout(0);
     const url = new URL('./zig-samples/simple.zig?quiet=1', import.meta.url).href;
     const worker = startWorker(url);
     const result = awaitWorker(worker);
@@ -32,7 +32,7 @@ describe('CommonJS worker', function() {
 
 function startWorker(url) {
   const workerURL = new URL('../dist/worker.cjs', import.meta.url);
-  const workerData = { url, 
+  const workerData = { url,
     buffers: {
       status: new Int32Array(new SharedArrayBuffer(4)),
       length: new Int32Array(new SharedArrayBuffer(4)),

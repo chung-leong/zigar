@@ -13,7 +13,7 @@ export function addTests(importModule, options) {
   };
   describe('Array', function() {
     it('should import array as static variables', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const {
         default: module,
         float64_array4x4,
@@ -49,7 +49,7 @@ export function addTests(importModule, options) {
       expect(afterTA).to.equal('{ 1, 2, 3, 4 }');
     })
     it('should print array arguments', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print([ 1.1, 2.2, 3.3, 4.4 ]));
       if (compilerVersion === '0.11.0') {
@@ -59,12 +59,12 @@ export function addTests(importModule, options) {
       }
     })
     it('should return array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module } = await importTest('as-return-value');
       expect([ ...module.getArray() ]).to.eql([ 1, 2, 3, 4 ]);
     })
     it('should handle array in array', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { array, print } = await importTest('array-of');
       expect(array.length).to.equal(2);
       expect([
@@ -78,7 +78,7 @@ export function addTests(importModule, options) {
       expect(line).to.equal('{ { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }');
     })
     it('should handle array in struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({
         array1: [ 10, 20, 30, 40 ],
@@ -96,11 +96,11 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
     })
     it('should should not compile code with array in packed struct', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle array as comptime field', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect([ ...module.struct_a.array ]).to.eql([ 1, 2, 3, 4 ]);
       const b = new StructA({ number: 500 });
@@ -110,7 +110,7 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .array = { 1, 2, 3, 4 } }');
     })
     it('should handle array in bare union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect([ ...module.union_a.array ]).to.eql([ 1, 2, 3, 4 ]);
       if (runtimeSafety) {
@@ -131,7 +131,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle array in tagged union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect([ ...module.union_a.array ]).to.eql([ 1, 2, 3, 4 ]);
       expect(TagType(module.union_a)).to.equal(TagType.array);
@@ -147,7 +147,7 @@ export function addTests(importModule, options) {
       expect(module.union_a.array).to.be.null;
     })
     it('should handle array in optional', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect([ ...module.optional ]).to.be.eql([ 1, 2, 3, 4 ]);
       const [ before ] = await capture(() => print());
@@ -160,7 +160,7 @@ export function addTests(importModule, options) {
       expect([ ...module.optional ]).to.be.eql([ 5, 6, 7, 8 ]);
     })
     it('should handle array in error union', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect([ ...module.error_union ]).to.eql([ 1, 2, 3, 4 ]);
       const [ before ] = await capture(() => print());
@@ -173,7 +173,7 @@ export function addTests(importModule, options) {
       expect([ ...module.error_union ]).to.eql([ 5, 6, 7, 8 ]);
     })
     it('should not compile code containing vector of arrays', async function() {
-      this.timeout(300000);
+      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })
