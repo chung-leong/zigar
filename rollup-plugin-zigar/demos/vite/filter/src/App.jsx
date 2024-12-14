@@ -56,11 +56,17 @@ function App() {
         const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
         const { width, height } = srcCanvas;
         const srcImageData = srcCTX.getImageData(0, 0, width, height);
-        const dstImageData = await createImageData(width, height, srcImageData, { intensity });
-        dstCanvas.width = width;
-        dstCanvas.height = height;
-        const dstCTX = dstCanvas.getContext('2d');
-        dstCTX.putImageData(dstImageData, 0, 0);
+        try {
+          const dstImageData = await createImageData(width, height, srcImageData, { intensity });
+          dstCanvas.width = width;
+          dstCanvas.height = height;
+          const dstCTX = dstCanvas.getContext('2d');
+          dstCTX.putImageData(dstImageData, 0, 0);
+        } catch (err) {
+          if (err.message != 'Aborted') {
+            console.error(err);
+          }
+        }
       }
     })();
   }, [ bitmap, intensity ]);
@@ -88,8 +94,12 @@ function App() {
 
 export default App
 
+let prevOp;
+
 async function createImageData(width, height, source, params) {
+  prevOp?.abort();
+  const { signal } = prevOp = new AbortController;
   const input = { src: source };
-  const output = await createOutputAsync(width, height, input, params);
+  const output = await createOutputAsync(width, height, input, params, { signal });
   return new ImageData(output.dst.data.clampedArray, width, height);
 }

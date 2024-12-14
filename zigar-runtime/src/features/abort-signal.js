@@ -12,8 +12,12 @@ export default mixin({
           // WASM doesn't directly access JavaScript memory, we need to find the
           // shadow memory that's been assigned to the object and store the value there
           const shadowDV = this.findShadowView(int32[MEMORY]);
-          const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
-          Atomics.store(shadowTA, 0, 1);
+          if (shadowDV) {
+            // we'd only find the shadow before the function return
+            // nothing happens if the controller's fired afterward
+            const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
+            Atomics.store(shadowTA, 0, 1);
+          }
         } else if (process.env.TARGET === 'node') {
           // node has direct access on the other hand
           Atomics.store(ta, 0, 1);
