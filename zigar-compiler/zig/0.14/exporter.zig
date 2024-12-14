@@ -346,7 +346,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 } else null,
                 .array => |ar| getTypedArrayBits(tdb.get(ar.child)),
                 .vector => |ve| getTypedArrayBits(tdb.get(ve.child)),
-                .@"struct" => switch (comptime td.isSlice() and !td.type.is_opaque) {
+                .@"struct" => switch (comptime td.isSlice()) {
                     true => getTypedArrayBits(tdb.get(td.type.ElementType)),
                     false => null,
                 },

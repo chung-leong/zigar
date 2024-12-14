@@ -159,6 +159,7 @@ const async_support = struct {
     const AbortSignal = zigar.function.AbortSignal;
 
     pub const OutputError = error{
+        OutOfMemory,
         NoThreadsAvailable,
         Aborted,
     };
@@ -185,19 +186,27 @@ const async_support = struct {
         if (thread_count == 0) {
             return OutputError.NoThreadsAvailable;
         }
+        return thread_pool.spawn(createOutputInThreads, .{ allocator, promise, signal, width, height, input, params }) catch OutputError.NoThreadsAvailable;
+    }
+
+    fn createOutputInThreads(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) void {
         var output: Output = undefined;
-        inline for (std.meta.fields(Output)) |field| {
+        const fields = std.meta.fields(Output);
+        inline for (fields, 0..) |field, i| {
             const ImageT = @TypeOf(@field(output, field.name));
+            const data = allocator.alloc(ImageT.Pixel, width * height) catch {
+                inline for (0..i) |j| {
+                    allocator.free(@field(output, fields[j].name).data);
+                }
+                promise.resolve(OutputError.OutOfMemory);
+                return;
+            };
             @field(output, field.name) = .{
-                .data = try allocator.alloc(ImageT.Pixel, width * height),
+                .data = data,
                 .width = width,
                 .height = height,
             };
         }
-        return thread_pool.spawn(createOutputInThreads, .{ promise, signal, width, height, input, output, params }) catch OutputError.NoThreadsAvailable;
-    }
-
-    fn createOutputInThreads(promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, output: Output, params: Parameters) void {
         const scanlines: u32 = if (thread_count > 0) height / thread_count else 0;
         if (thread_count > 1 and scanlines > 0) {
             const child_count: u32 = thread_count - 1;
@@ -221,7 +230,14 @@ const async_support = struct {
         } else {
             processSlice(signal, width, 0, height, input, output, params);
         }
-        promise.resolve(if (signal.off()) output else OutputError.Aborted);
+        if (signal.off()) {
+            promise.resolve(output);
+        } else {
+            inline for (std.meta.fields(Output)) |field| {
+                allocator.free(@field(output, field.name).data);
+            }
+            promise.resolve(OutputError.Aborted);
+        }
     }
 
     fn processSlice(signal: AbortSignal, width: u32, start: u32, count: u32, input: Input, output: Output, params: Parameters) void {
