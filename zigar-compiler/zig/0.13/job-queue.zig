@@ -144,7 +144,7 @@ pub fn JobQueue(comptime f: anytype) type {
                 try self.pool.init(options);
             }
             self.queue = .{ .allocator = options.allocator };
-            self.thread = try std.Thread.spawn(.{}, handleJobs, .{self});
+            self.thread = try std.Thread.spawn(.{ .allocator = options.allocator }, handleJobs, .{self});
         }
 
         pub fn deinit(self: *@This()) void {

@@ -157,6 +157,7 @@ const async_support = struct {
     const Allocator = std.mem.Allocator;
     const Promise = zigar.function.Promise(OutputError!Output);
     const AbortSignal = zigar.function.AbortSignal;
+    const JobQueue = zigar.thread.JobQueue;
 
     pub const OutputError = error{
         OutOfMemory,
@@ -164,29 +165,33 @@ const async_support = struct {
         Aborted,
     };
 
-    var thread_pool: std.Thread.Pool = undefined;
-    var thread_count: u32 = 0;
+    var job_queue: JobQueue(createOutputInThreads) = undefined;
+    var job_queue_initialized: bool = false;
 
     pub fn startThreadPool(count: u32) !void {
-        try zigar.thread.use(true);
-        try thread_pool.init(.{
-            .n_jobs = count,
-            .allocator = zigar.mem.getDefaultAllocator(),
-        });
-        thread_count = count;
+        if (!job_queue_initialized) {
+            job_queue_initialized = true;
+            try zigar.thread.use(true);
+            try job_queue.init(.{
+                .n_jobs = count,
+                .allocator = zigar.mem.getDefaultAllocator(),
+            });
+        }
     }
 
     pub fn stopThreadPool() !void {
-        thread_count = 0;
-        thread_pool.deinit();
-        try zigar.thread.use(false);
+        if (job_queue_initialized) {
+            job_queue.deinit();
+            try zigar.thread.use(false);
+            job_queue_initialized = false;
+        }
     }
 
     pub fn createOutputAsync(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) !void {
-        if (thread_count == 0) {
+        if (!job_queue_initialized) {
             return OutputError.NoThreadsAvailable;
         }
-        return thread_pool.spawn(createOutputInThreads, .{ allocator, promise, signal, width, height, input, params }) catch OutputError.NoThreadsAvailable;
+        return job_queue.push(.{ allocator, promise, signal, width, height, input, params });
     }
 
     fn createOutputInThreads(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) void {
@@ -207,13 +212,14 @@ const async_support = struct {
                 .height = height,
             };
         }
-        const scanlines: u32 = if (thread_count > 0) height / thread_count else 0;
-        if (thread_count > 1 and scanlines > 0) {
-            const child_count: u32 = thread_count - 1;
+        const n_jobs = job_queue.n_jobs;
+        const scanlines: u32 = if (n_jobs > 0) height / n_jobs else 0;
+        if (n_jobs > 1 and scanlines > 0) {
+            const child_count: u32 = n_jobs - 1;
             var wg: std.Thread.WaitGroup = .{};
             var thread_num: u32 = 0;
             while (thread_num < child_count) : (thread_num += 1) {
-                thread_pool.spawnWg(&wg, processSlice, .{
+                job_queue.pool.spawnWg(&wg, processSlice, .{
                     signal,
                     width,
                     scanlines * thread_num,
