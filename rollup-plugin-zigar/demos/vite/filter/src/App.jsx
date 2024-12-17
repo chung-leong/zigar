@@ -24,7 +24,7 @@ function App() {
     setIntensity(evt.target.value);
   }, [])
   useEffect(() => {
-    startThreadPool(navigator.hardwareConcurrency)
+    startThreadPool(1)
     // return () => stopThreadPool();
   }, []);
   useEffect(() => {
@@ -94,12 +94,35 @@ function App() {
 
 export default App
 
-let prevOp;
+class AbortManager {
+  currentOp = null;
+
+  async call(cb) {
+    const controller = new AbortController;
+    const { signal } = controller;
+    const prevOp = this.currentOp;
+    const thisOp = this.currentOp = { controller, promise: null };
+    if (prevOp) {
+      // abort previous and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
+    }
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
+    }
+    const result = await (this.currentOp.promise = cb(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
+  }
+}
+const am = new AbortManager();
 
 async function createImageData(width, height, source, params) {
-  prevOp?.abort();
-  const { signal } = prevOp = new AbortController;
   const input = { src: source };
-  const output = await createOutputAsync(width, height, input, params, { signal });
+  const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal })) ;
   return new ImageData(output.dst.data.clampedArray, width, height);
 }

@@ -16,7 +16,7 @@ export default mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[VISIT]?.('reset');
+        this[VISIT]?.('clear');
         return null;
       }
     };
@@ -34,7 +34,7 @@ export default mixin({
         setPresent.call(this, 0);
         this[RESET]?.();
         // clear references so objects can be garbage-collected
-        this[VISIT]?.('reset');
+        this[VISIT]?.('clear');
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);

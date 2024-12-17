@@ -85,7 +85,7 @@ export default mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('reset');
+          this[VISIT]?.('clear');
           return getValue.call(this);
         }
       : getValue;
@@ -102,7 +102,7 @@ export default mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISIT]?.('reset');
+          this[VISIT]?.('clear');
         }
       : setValue;
       descriptors[name] = { get, set };

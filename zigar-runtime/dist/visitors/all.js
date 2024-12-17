@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS, VIVIFICATE, VISIT } from '../symbols.js';
+import { SLOTS, LAST_ADDRESS, VIVIFICATE, VISIT } from '../symbols.js';
 
 var all = mixin({
   defineVisitor() {
@@ -41,10 +41,14 @@ const builtinVisitors = {
   copy(flags, src) {
     this[SLOTS][0] = src[SLOTS][0];
   },
-  reset(flags) {
+  clear(flags) {
     if (flags & VisitorFlag.IsInactive) {
       this[SLOTS][0] = undefined;
     }
+  },
+  reset() {
+    this[SLOTS][0] = undefined;
+    this[LAST_ADDRESS] = undefined;
   },
 };
 

@@ -25,7 +25,7 @@ var errorUnion = mixin({
     const ErrorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.('reset', 0);
+      this[VISIT]?.('clear');
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
