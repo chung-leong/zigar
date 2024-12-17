@@ -24,7 +24,7 @@ function App() {
     setIntensity(evt.target.value);
   }, [])
   useEffect(() => {
-    startThreadPool(1)
+    startThreadPool(navigator.hardwareConcurrency);
     // return () => stopThreadPool();
   }, []);
   useEffect(() => {
@@ -103,7 +103,7 @@ class AbortManager {
     const prevOp = this.currentOp;
     const thisOp = this.currentOp = { controller, promise: null };
     if (prevOp) {
-      // abort previous and wait for promise rejection
+      // abort previous call and wait for promise rejection
       prevOp.controller.abort();
       await prevOp.promise?.catch(() => {});
     }

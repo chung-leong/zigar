@@ -33,12 +33,11 @@ var workerSupport = mixin({
           }
         }
       };
-      const code = getWorkerCode();
       const evtName = 'message';
       /* c8 ignore start */
       if (typeof(Worker) === 'function' || "node" !== 'node') {
         // web worker
-        const url = URL.createObjectURL(new Blob([ code ], { type: 'text/javascript' }));
+        const url = getWorkerURL();
         const worker = new Worker(url, { type: 'module', name: 'zig' });
         const listener = evt => handler(worker, evt.data);
         worker.addEventListener(evtName, listener);
@@ -50,6 +49,7 @@ var workerSupport = mixin({
       else {
         // Node.js worker-thread
         import('worker_threads').then(({ Worker }) => {
+          const code = getWorkerCode();
           const worker = new Worker(code, { workerData, eval: true });
           const listener = msg => handler(worker, msg);
           worker.on(evtName, listener);
@@ -72,6 +72,16 @@ function getWorkerCode() {
   const si = s.indexOf('{') + 1;
   const ei = s.lastIndexOf('}');
   return s.slice(si, ei);
+}
+
+let workerURL;
+
+function getWorkerURL() {
+  if (!workerURL) {
+    const code = getWorkerCode();
+    workerURL = URL.createObjectURL(new Blob([ code ], { type: 'text/javascript' }));
+  }
+  return workerURL;
 }
 
 /* c8 ignore start */
