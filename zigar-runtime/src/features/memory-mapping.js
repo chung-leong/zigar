@@ -162,8 +162,11 @@ export default mixin({
   },
   allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
+    if (!address && len) {
+      throw new Error('Out of memory');
+    }
     const dv = this.obtainZigView(address, len);
-    const zig = dv[ZIG];
+    const zig = dv?.[ZIG];
     if (zig) {
       zig.align = align;
       zig.type = type;

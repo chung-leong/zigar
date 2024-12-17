@@ -38,10 +38,14 @@ var defaultAllocator = mixin({
   allocateHostMemory(len, align) {
     const targetDV = this.allocateJSMemory(len, align);
     {
-      const shadowDV = this.allocateShadowMemory(len, align);
-      const address = this.getViewAddress(shadowDV);
-      this.registerMemory(address, len, align, true, targetDV, shadowDV);
-      return shadowDV;
+      try {
+        const shadowDV = this.allocateShadowMemory(len, align);
+        const address = this.getViewAddress(shadowDV);
+        this.registerMemory(address, len, align, true, targetDV, shadowDV);
+        return shadowDV;
+      } catch (err) {
+        return null;
+      }
     }
   },
   freeHostMemory(address, len, align) {

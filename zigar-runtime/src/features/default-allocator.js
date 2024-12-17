@@ -38,10 +38,14 @@ export default mixin({
   allocateHostMemory(len, align) {
     const targetDV = this.allocateJSMemory(len, align);
     if (process.env.TARGET === 'wasm') {
-      const shadowDV = this.allocateShadowMemory(len, align);
-      const address = this.getViewAddress(shadowDV);
-      this.registerMemory(address, len, align, true, targetDV, shadowDV);
-      return shadowDV;
+      try {
+        const shadowDV = this.allocateShadowMemory(len, align);
+        const address = this.getViewAddress(shadowDV);
+        this.registerMemory(address, len, align, true, targetDV, shadowDV);
+        return shadowDV;
+      } catch (err) {
+        return null;
+      }
     } else {
       const address = this.getViewAddress(targetDV);
       this.registerMemory(address, len, align, true, targetDV);
