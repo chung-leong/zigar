@@ -26,9 +26,7 @@ export default mixin({
     }
     const cb = args[CALLBACK] = (result) => {
       const isError = result instanceof Error;
-      if (!isError) {
-        args[FINALIZE]();
-      }
+      args[FINALIZE](!isError);
       const id = this.getFunctionId(cb);
       this.releaseFunction(id);
       if (func.length === 2) {

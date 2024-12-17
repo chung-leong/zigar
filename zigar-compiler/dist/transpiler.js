@@ -3020,6 +3020,9 @@ var callMarshalingInbound = mixin({
       try {
         const argStruct = ArgStruct(dv);
         if (VISIT in argStruct) {
+          // reset pointers in arg so we don't pick up old pointers
+          // objects in stack memory really shouldn't be cached
+          argStruct[VISIT]('reset');
           const context = this.startContext();
           this.updatePointerTargets(context, argStruct, true);
           this.updateShadowTargets(context);
@@ -3298,15 +3301,13 @@ var callMarshalingOutbound = mixin({
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
-    if (!success) {
-      this.endContext();
-      throw new ZigError();
-    }
-    const finalize = () => {
-      this.updateShadowTargets(context);
-      // create objects that pointers point to
-      if (hasPointers) {
-        this.updatePointerTargets(context, args);
+    const finalize = (success) => {
+      if (success) {
+        this.updateShadowTargets(context);
+        // create objects that pointers point to
+        if (hasPointers) {
+          this.updatePointerTargets(context, args);
+        }
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -3314,6 +3315,10 @@ var callMarshalingOutbound = mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    if (!success) {
+      finalize(false);
+      throw new ZigError();
+    }
     {
       // copy retval from shadow view
       args[COPY]?.(this.findShadowView(args[MEMORY]));
@@ -3321,7 +3326,7 @@ var callMarshalingOutbound = mixin({
     if (FINALIZE in args) {
       args[FINALIZE] = finalize;
     } else {
-      finalize();
+      finalize(true);
     }
     const promise = args[PROMISE];
     const callback = args[CALLBACK];
@@ -3555,10 +3560,14 @@ var defaultAllocator = mixin({
   allocateHostMemory(len, align) {
     const targetDV = this.allocateJSMemory(len, align);
     {
-      const shadowDV = this.allocateShadowMemory(len, align);
-      const address = this.getViewAddress(shadowDV);
-      this.registerMemory(address, len, align, true, targetDV, shadowDV);
-      return shadowDV;
+      try {
+        const shadowDV = this.allocateShadowMemory(len, align);
+        const address = this.getViewAddress(shadowDV);
+        this.registerMemory(address, len, align, true, targetDV, shadowDV);
+        return shadowDV;
+      } catch (err) {
+        return null;
+      }
     }
   },
   freeHostMemory(address, len, align) {
@@ -3760,8 +3769,11 @@ var memoryMapping = mixin({
   },
   allocateZigMemory(len, align, type = MemoryType.Normal) {
     const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
+    if (!address && len) {
+      throw new Error('Out of memory');
+    }
     const dv = this.obtainZigView(address, len);
-    const zig = dv[ZIG];
+    const zig = dv?.[ZIG];
     if (zig) {
       zig.align = align;
       zig.type = type;
@@ -4267,9 +4279,7 @@ var promiseCallback = mixin({
     }
     const cb = args[CALLBACK] = (result) => {
       const isError = result instanceof Error;
-      if (!isError) {
-        args[FINALIZE]();
-      }
+      args[FINALIZE](!isError);
       const id = this.getFunctionId(cb);
       this.releaseFunction(id);
       if (func.length === 2) {
@@ -6695,7 +6705,7 @@ var errorUnion = mixin({
     const ErrorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.('reset', 0);
+      this[VISIT]?.('clear');
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
@@ -6872,7 +6882,7 @@ var optional = mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[VISIT]?.('reset');
+        this[VISIT]?.('clear');
         return null;
       }
     };
@@ -6890,7 +6900,7 @@ var optional = mixin({
         setPresent.call(this, 0);
         this[RESET]?.();
         // clear references so objects can be garbage-collected
-        this[VISIT]?.('reset');
+        this[VISIT]?.('clear');
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);
@@ -7752,7 +7762,7 @@ var union = mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('reset');
+          this[VISIT]?.('clear');
           return getValue.call(this);
         }
       : getValue;
@@ -7769,7 +7779,7 @@ var union = mixin({
       ? function(value) {
           setActiveField.call(this, name);
           setValue.call(this, value);
-          this[VISIT]?.('reset');
+          this[VISIT]?.('clear');
         }
       : setValue;
       descriptors[name] = { get, set };
@@ -8055,10 +8065,14 @@ const builtinVisitors = {
   copy(flags, src) {
     this[SLOTS][0] = src[SLOTS][0];
   },
-  reset(flags) {
+  clear(flags) {
     if (flags & VisitorFlag.IsInactive) {
       this[SLOTS][0] = undefined;
     }
+  },
+  reset() {
+    this[SLOTS][0] = undefined;
+    this[LAST_ADDRESS] = undefined;
   },
 };
 

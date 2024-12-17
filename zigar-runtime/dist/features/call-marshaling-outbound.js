@@ -95,15 +95,13 @@ var callMarshalingOutbound = mixin({
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
-    if (!success) {
-      this.endContext();
-      throw new ZigError();
-    }
-    const finalize = () => {
-      this.updateShadowTargets(context);
-      // create objects that pointers point to
-      if (hasPointers) {
-        this.updatePointerTargets(context, args);
+    const finalize = (success) => {
+      if (success) {
+        this.updateShadowTargets(context);
+        // create objects that pointers point to
+        if (hasPointers) {
+          this.updatePointerTargets(context, args);
+        }
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -111,6 +109,10 @@ var callMarshalingOutbound = mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    if (!success) {
+      finalize(false);
+      throw new ZigError();
+    }
     {
       // copy retval from shadow view
       args[COPY]?.(this.findShadowView(args[MEMORY]));
@@ -118,7 +120,7 @@ var callMarshalingOutbound = mixin({
     if (FINALIZE in args) {
       args[FINALIZE] = finalize;
     } else {
-      finalize();
+      finalize(true);
     }
     const promise = args[PROMISE];
     const callback = args[CALLBACK];
