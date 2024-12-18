@@ -43,13 +43,12 @@ export function generateCode(definition, params) {
     add(`env.linkVariables(${!topLevelAwait});`);
   }
   add(`\n// export root namespace and its methods and constants`);
-  if (omitExports) {
-    add(`const { constructor } = root;`);
-    add(`const __zigar = env.getSpecialExports();`);
-  } else {
+  let specialVarName;
+  if (!omitExports) {
     // the first two exports are default and __zigar
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
+    specialVarName = 'v1';
     if (exports.length > 2) {
       add(`const {`)
       for (const [ index, name ] of exports.entries()) {
@@ -64,9 +63,13 @@ export function generateCode(definition, params) {
       add(`v${index} as ${name},`);
     }
     add(`};`)
+  } else {
+    add(`const { constructor } = root;`);
+    add(`const __zigar = env.getSpecialExports();`);
+    specialVarName = '__zigar'
   }
   if (topLevelAwait && binarySource) {
-    add(`await v1.init();`);
+    add(`await ${specialVarName}.init();`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };
