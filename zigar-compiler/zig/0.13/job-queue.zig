@@ -178,17 +178,23 @@ pub fn JobQueue(comptime fn_map: anytype) type {
         pub fn deinit(self: *@This()) void {
             self.queue.deinit();
             if (comptime builtin.os.tag == .wasi) {
+                // in the web browser we can't call std.Thread.join() since synchronnous
+                // wait is not permitted in the main thread; in order to free memory
+                // used by the thread, we need to ask JavaScript to perform an async wait
+                // on the thread id (which gets set to zero when the thread exits)
                 const thread = self.thread.impl.thread;
                 const wasi = struct {
                     const WasiThread = @TypeOf(thread);
-                    export fn wasi_thread_free(arg: WasiThread) void {
+                    const Callback = *const fn (*anyopaque) callconv(.C) void;
+                    fn freeThread(arg: *anyopaque) callconv(.C) void {
+                        const t: WasiThread = @ptrCast(@alignCast(arg));
                         // need a copy of the allocator struct since it's stored in the memory being freed
-                        var allocator = arg.allocator;
-                        allocator.free(arg.memory);
+                        var allocator = t.allocator;
+                        allocator.free(t.memory);
                     }
-                    extern "wasi" fn @"thread-join"(tid: *i32, arg: WasiThread) void;
+                    extern "wasi" fn @"wait-async"(tid: *i32, cb: Callback, arg: *anyopaque) void;
                 };
-                wasi.@"thread-join"(&thread.tid.raw, thread);
+                wasi.@"wait-async"(&thread.tid.raw, wasi.freeThread, thread);
             } else {
                 self.thread.join();
             }
@@ -198,9 +204,14 @@ pub fn JobQueue(comptime fn_map: anytype) type {
             try self.queue.push(@unionInit(Job, @tagName(key), args));
         }
 
-        pub fn clear(self: *@This()) void {
+        pub fn detach(self: *@This()) bool {
             while (self.queue.pull() != null) {}
-            self.pool = null;
+            if (self.pool != null) {
+                self.pool = null;
+                return true;
+            } else {
+                return false;
+            }
         }
 
         fn handleJobs(self: *@This()) void {

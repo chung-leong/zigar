@@ -3,14 +3,11 @@ import { mixin } from '../environment.js';
 var workerSupport = mixin({
     nextThreadId: 1,
     workers: [],
-    imports: {
-      wasi_thread_free: { argType: 'i' },
-    },
 
     getThreadHandler(name) {
       switch (name) {
         case 'thread-spawn': return this.spawnThread.bind(this);
-        case 'thread-join': return this.joinThread.bind(this);
+        case 'wait-async': return this.waitAsync.bind(this);
       }
     },
     spawnThread(arg) {
@@ -50,15 +47,16 @@ var workerSupport = mixin({
       }
       return tid;
     },
-    joinThread(tidAddress, argAddress) {
+    waitAsync(tidAddress, cbIndex, arg) {
       const ta = new Int32Array(this.memory.buffer, tidAddress, 1);
       const tid = Atomics.load(ta, 0);
-      const free = () => this.wasi_thread_free(argAddress);
+      const cb = this.table.get(cbIndex);
+      const call = () => cb(arg);
       const result = (tid !== 0) ? Atomics.waitAsync(ta, 0, tid) : { async: false };
       if (result.async) {
-        result.value.then(free);
+        result.value.then(call);
       } else {
-        free();
+        call();
       }
     },
 });

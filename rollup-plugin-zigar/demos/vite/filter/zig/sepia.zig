@@ -427,11 +427,9 @@ const async_support = struct {
         }
         thread_start_count -= 1;
         if (thread_start_count == 0) {
-            const had_pool = job_queue.pool != null;
             thread_count = 0;
             // remove queued jobs and detached thread pool
-            job_queue.clear();
-            if (had_pool) {
+            if (job_queue.detach()) {
                 // use helper thread to shut down thread pool
                 try job_queue.push(.stop, .{});
             }
