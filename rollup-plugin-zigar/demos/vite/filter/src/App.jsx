@@ -102,28 +102,23 @@ class AbortManager {
   async call(cb) {
     const controller = new AbortController;
     const { signal } = controller;
-    const thisOp = { controller, promise: null };
-    this.replace(thisOp);
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
-  }
-
-  async replace(newOp) {
     const prevOp = this.currentOp;
-    this.currentOp = newOp;
+    const thisOp = this.currentOp = { controller, promise: null };
     if (prevOp) {
       // abort previous call and wait for promise rejection
       prevOp.controller.abort();
       await prevOp.promise?.catch(() => {});
     }
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
+    }
+    const result = await (this.currentOp.promise = cb?.(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
   }
 }
 const am = new AbortManager();
@@ -135,5 +130,5 @@ async function createImageData(width, height, source, params) {
 }
 
 async function stopImageCreation() {
-  am.replace(null);
+  am.call(null);
 }
