@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const expect = std.testing.expect;
 
 fn Queue(comptime T: type) type {
@@ -51,7 +52,6 @@ fn Queue(comptime T: type) type {
         }
 
         pub fn deinit(self: *@This()) void {
-            while (self.pull() != null) {}
             self.stopped = true;
             // wake up awaking threads and prevent them from sleep again
             self.count.store(std.math.maxInt(u32), .release);
@@ -116,63 +116,102 @@ test "Queue" {
     try expect(value3 == null);
     try queue.push(888);
     queue.deinit();
-    const value4 = queue.pull();
-    try expect(value4 == null);
 }
 
-pub fn JobQueue(comptime f: anytype) type {
-    const ArgsTuple = std.meta.ArgsTuple(@TypeOf(f));
-    const tuple_fields = std.meta.fields(ArgsTuple);
-    // define struct type for queue
-    const Args = @Type(.{
-        .Struct = .{
-            .layout = .auto,
-            .fields = tuple_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+pub fn JobQueue(comptime fn_map: anytype) type {
+    const st = @typeInfo(@TypeOf(fn_map)).Struct;
     return struct {
-        n_jobs: u32,
-        pool: std.Thread.Pool,
-        queue: Queue(Args),
-        thread: std.Thread,
-
-        pub fn init(self: *@This(), options: std.Thread.Pool.Options) !void {
-            self.n_jobs = options.n_jobs orelse 1;
-            if (self.n_jobs > 1) {
-                try self.pool.init(options);
+        pub const JobEnum = init: {
+            var enum_fields: [st.fields.len]std.builtin.Type.EnumField = undefined;
+            for (st.fields, 0..) |field, i| {
+                enum_fields[i] = .{ .name = field.name, .value = i };
             }
-            self.queue = .{ .allocator = options.allocator };
-            self.thread = try std.Thread.spawn(.{ .allocator = options.allocator }, handleJobs, .{self});
+            break :init @Type(.{
+                .Enum = .{
+                    .tag_type = if (enum_fields.len <= 256) u8 else u16,
+                    .fields = &enum_fields,
+                    .decls = &.{},
+                    .is_exhaustive = false,
+                },
+            });
+        };
+        pub const Job = init: {
+            var union_fields: [st.fields.len]std.builtin.Type.UnionField = undefined;
+            for (st.fields, 0..) |field, i| {
+                union_fields[i] = .{
+                    .name = field.name,
+                    .type = ArgStruct(field.type),
+                    .alignment = @alignOf(ArgStruct(field.type)),
+                };
+            }
+            break :init @Type(.{
+                .Union = .{
+                    .layout = .auto,
+                    .tag_type = JobEnum,
+                    .fields = &union_fields,
+                    .decls = &.{},
+                },
+            });
+        };
+        fn ArgStruct(comptime FT: type) type {
+            const ArgsTuple = std.meta.ArgsTuple(FT);
+            return @Type(.{
+                .Struct = .{
+                    .layout = .auto,
+                    .fields = std.meta.fields(ArgsTuple),
+                    .decls = &.{},
+                    .is_tuple = false,
+                },
+            });
+        }
+
+        queue: Queue(Job),
+        thread: std.Thread,
+        pool: ?*std.Thread.Pool,
+
+        pub fn init(self: *@This(), allocator: std.mem.Allocator, pool: ?*std.Thread.Pool) !void {
+            self.pool = pool;
+            self.queue = .{ .allocator = allocator };
+            self.thread = try std.Thread.spawn(.{ .allocator = allocator }, handleJobs, .{self});
         }
 
         pub fn deinit(self: *@This()) void {
             self.queue.deinit();
-            self.thread.join();
-            if (self.n_jobs > 1) {
-                self.pool.deinit();
+            if (comptime builtin.os.tag == .wasi) {
+                const thread = self.thread.impl.thread;
+                const wasi = struct {
+                    const WasiThread = @TypeOf(thread);
+                    export fn wasi_thread_free(arg: WasiThread) void {
+                        // need a copy of the allocator struct since it's stored in the memory being freed
+                        var allocator = arg.allocator;
+                        allocator.free(arg.memory);
+                    }
+                    extern "wasi" fn @"thread-join"(tid: *i32, arg: WasiThread) void;
+                };
+                wasi.@"thread-join"(&thread.tid.raw, thread);
+            } else {
+                self.thread.join();
             }
         }
 
-        pub fn push(self: *@This(), args_tuple: anytype) !void {
-            var args: Args = undefined;
-            inline for (tuple_fields) |field| {
-                @field(args, field.name) = @field(args_tuple, field.name);
-            }
-            try self.queue.push(args);
+        pub fn push(self: *@This(), comptime key: JobEnum, args: anytype) !void {
+            try self.queue.push(@unionInit(Job, @tagName(key), args));
+        }
+
+        pub fn clear(self: *@This()) void {
+            while (self.queue.pull() != null) {}
+            self.pool = null;
         }
 
         fn handleJobs(self: *@This()) void {
             while (true) {
-                if (self.queue.pull()) |args| {
-                    if (self.n_jobs > 1) {
-                        self.pool.spawn(invokeFunction, .{args}) catch {
-                            invokeFunction(args);
-                        };
+                if (self.queue.pull()) |job| {
+                    if (self.pool) |pool| {
+                        // spawn can fail in low-memory situation, in which case we just
+                        // run the function here
+                        pool.spawn(invokeFunction, .{job}) catch invokeFunction(job);
                     } else {
-                        // just call the function here when there's only one thread
-                        invokeFunction(args);
+                        invokeFunction(job);
                     }
                 } else {
                     if (self.queue.stopped) {
@@ -184,12 +223,20 @@ pub fn JobQueue(comptime f: anytype) type {
             }
         }
 
-        fn invokeFunction(args: Args) void {
-            var args_tuple: ArgsTuple = undefined;
-            inline for (tuple_fields) |field| {
-                @field(args_tuple, field.name) = @field(args, field.name);
+        fn invokeFunction(job: Job) void {
+            inline for (st.fields) |field| {
+                const key = @field(JobEnum, field.name);
+                if (job == key) {
+                    const ArgsTuple = std.meta.ArgsTuple(field.type);
+                    const f = @field(fn_map, field.name);
+                    const args = @field(job, field.name);
+                    var args_tuple: ArgsTuple = undefined;
+                    inline for (std.meta.fields(ArgsTuple)) |arg_field| {
+                        @field(args_tuple, arg_field.name) = @field(args, arg_field.name);
+                    }
+                    _ = @call(.auto, f, args_tuple);
+                }
             }
-            _ = @call(.auto, f, args_tuple);
         }
     };
 }
@@ -201,20 +248,19 @@ test "JobQueue" {
         fn hello(num: i32) void {
             total += num;
         }
+
+        fn world() void {}
     };
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var queue1: JobQueue(ns.hello) = undefined;
-    try queue1.init(.{ .n_jobs = 1, .allocator = gpa.allocator() });
-    try queue1.push(.{123});
-    try queue1.push(.{456});
+    var queue: JobQueue(.{
+        .hi = ns.hello,
+        .ho = ns.world,
+    }) = undefined;
+    try queue.init(gpa.allocator(), null);
+    try queue.push(.hi, .{123});
+    try queue.push(.hi, .{456});
+    try queue.push(.ho, .{});
     std.time.sleep(1e+8);
     try expect(ns.total == 123 + 456);
-    queue1.deinit();
-    var queue2: JobQueue(ns.hello) = undefined;
-    try queue2.init(.{ .n_jobs = 2, .allocator = gpa.allocator() });
-    try queue2.push(.{123});
-    try queue2.push(.{456});
-    std.time.sleep(1e+8);
-    try expect(ns.total == (123 + 456) * 2);
-    queue2.deinit();
+    queue.deinit();
 }

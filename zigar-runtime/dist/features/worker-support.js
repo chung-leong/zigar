@@ -3,12 +3,15 @@ import { mixin } from '../environment.js';
 var workerSupport = mixin({
     nextThreadId: 1,
     workers: [],
-    exports: {
-      _detachThreads: { argType: '' },
+    imports: {
+      wasi_thread_free: { argType: 'i' },
     },
 
-    getThreadHandler() {
-      return this.spawnThread.bind(this);
+    getThreadHandler(name) {
+      switch (name) {
+        case 'thread-spawn': return this.spawnThread.bind(this);
+        case 'thread-join': return this.joinThread.bind(this);
+      }
     },
     spawnThread(arg) {
       const tid = this.nextThreadId;
@@ -47,11 +50,16 @@ var workerSupport = mixin({
       }
       return tid;
     },
-    _detachThreads() {
-      for (const worker of this.workers) {
-        worker.detach();
+    joinThread(tidAddress, argAddress) {
+      const ta = new Int32Array(this.memory.buffer, tidAddress, 1);
+      const tid = Atomics.load(ta, 0);
+      const free = () => this.wasi_thread_free(argAddress);
+      const result = (tid !== 0) ? Atomics.waitAsync(ta, 0, tid) : { async: false };
+      if (result.async) {
+        result.value.then(free);
+      } else {
+        free();
       }
-      this.workers.splice(0);
     },
 });
 

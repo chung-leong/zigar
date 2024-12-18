@@ -147,122 +147,6 @@ pub fn createOutput(allocator: std.mem.Allocator, width: u32, height: u32, input
     return output;
 }
 
-pub usingnamespace switch (@import("builtin").single_threaded) {
-    false => async_support,
-    true => struct {},
-};
-
-const async_support = struct {
-    const zigar = @import("zigar");
-    const Allocator = std.mem.Allocator;
-    const Promise = zigar.function.Promise(OutputError!Output);
-    const AbortSignal = zigar.function.AbortSignal;
-    const JobQueue = zigar.thread.JobQueue;
-
-    pub const OutputError = error{
-        OutOfMemory,
-        NoThreadsAvailable,
-        Aborted,
-    };
-
-    var job_queue: JobQueue(createOutputInThreads) = undefined;
-    var job_queue_initialized: bool = false;
-
-    pub fn startThreadPool(count: u32) !void {
-        if (!job_queue_initialized) {
-            job_queue_initialized = true;
-            try zigar.thread.use(true);
-            try job_queue.init(.{
-                .n_jobs = count,
-                .allocator = zigar.mem.getDefaultAllocator(),
-            });
-        }
-    }
-
-    pub fn stopThreadPool() !void {
-        if (job_queue_initialized) {
-            job_queue.deinit();
-            try zigar.thread.use(false);
-            job_queue_initialized = false;
-        }
-    }
-
-    pub fn createOutputAsync(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) !void {
-        if (!job_queue_initialized) {
-            return OutputError.NoThreadsAvailable;
-        }
-        return job_queue.push(.{ allocator, promise, signal, width, height, input, params });
-    }
-
-    fn createOutputInThreads(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) void {
-        var output: Output = undefined;
-        const fields = std.meta.fields(Output);
-        inline for (fields, 0..) |field, i| {
-            const ImageT = @TypeOf(@field(output, field.name));
-            const data = allocator.alloc(ImageT.Pixel, width * height) catch {
-                inline for (0..i) |j| {
-                    allocator.free(@field(output, fields[j].name).data);
-                }
-                promise.resolve(OutputError.OutOfMemory);
-                return;
-            };
-            @field(output, field.name) = .{
-                .data = data,
-                .width = width,
-                .height = height,
-            };
-        }
-        const n_jobs = job_queue.n_jobs;
-        const scanlines: u32 = if (n_jobs > 0) height / n_jobs else 0;
-        if (n_jobs > 1 and scanlines > 0) {
-            const child_count: u32 = n_jobs - 1;
-            var wg: std.Thread.WaitGroup = .{};
-            var thread_num: u32 = 0;
-            while (thread_num < child_count) : (thread_num += 1) {
-                job_queue.pool.spawnWg(&wg, processSlice, .{
-                    signal,
-                    width,
-                    scanlines * thread_num,
-                    scanlines,
-                    input,
-                    output,
-                    params,
-                });
-            }
-            const remaining_start = scanlines * child_count;
-            const remaining_count = height - remaining_start;
-            processSlice(signal, width, remaining_start, remaining_count, input, output, params);
-            wg.wait();
-        } else {
-            processSlice(signal, width, 0, height, input, output, params);
-        }
-        if (signal.off()) {
-            promise.resolve(output);
-        } else {
-            inline for (std.meta.fields(Output)) |field| {
-                allocator.free(@field(output, field.name).data);
-            }
-            promise.resolve(OutputError.Aborted);
-        }
-    }
-
-    fn processSlice(signal: AbortSignal, width: u32, start: u32, count: u32, input: Input, output: Output, params: Parameters) void {
-        var instance = kernel.create(input, output, params);
-        if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
-            instance.evaluateDependents();
-        }
-        const end = start + count;
-        instance.outputCoord[1] = start;
-        while (instance.outputCoord[1] < end) : (instance.outputCoord[1] += 1) {
-            instance.outputCoord[0] = 0;
-            while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
-                instance.evaluatePixel();
-                if (signal.on()) return;
-            }
-        }
-    }
-};
-
 const ColorSpace = enum { srgb, @"display-p3" };
 
 pub fn Image(comptime T: type, comptime len: comptime_int, comptime writable: bool) type {
@@ -495,3 +379,142 @@ pub fn KernelParameters(comptime Kernel: type) type {
         },
     });
 }
+
+pub usingnamespace switch (@import("builtin").single_threaded) {
+    false => async_support,
+    true => struct {},
+};
+
+const async_support = struct {
+    const zigar = @import("zigar");
+    const Allocator = std.mem.Allocator;
+    const Promise = zigar.function.Promise(OutputError!Output);
+    const AbortSignal = zigar.function.AbortSignal;
+    const JobQueue = zigar.thread.JobQueue;
+
+    pub const OutputError = error{
+        OutOfMemory,
+        NoThreadsAvailable,
+        Aborted,
+    };
+
+    var job_queue: JobQueue(.{
+        .create = createOutputInThreads,
+        .stop = stopThreadPoolInThread,
+    }) = undefined;
+    var thread_pool: std.Thread.Pool = undefined;
+    var thread_count: u32 = 0;
+    var thread_start_count: u32 = 0;
+
+    pub fn startThreadPool(count: u32) !void {
+        thread_start_count += 1;
+        if (thread_start_count == 1) {
+            const allocator = zigar.mem.getDefaultAllocator();
+            try zigar.thread.use(true);
+            if (count > 1) {
+                try job_queue.init(allocator, &thread_pool);
+                try thread_pool.init(.{ .n_jobs = count, .allocator = allocator });
+            } else {
+                try job_queue.init(allocator, null);
+            }
+            thread_count = count;
+        }
+    }
+
+    pub fn stopThreadPool() !void {
+        if (thread_start_count == 0) {
+            return;
+        }
+        thread_start_count -= 1;
+        if (thread_start_count == 0) {
+            const had_pool = job_queue.pool != null;
+            thread_count = 0;
+            // remove queued jobs and detached thread pool
+            job_queue.clear();
+            if (had_pool) {
+                // use helper thread to shut down thread pool
+                try job_queue.push(.stop, .{});
+            }
+            job_queue.deinit();
+            try zigar.thread.use(false);
+        }
+    }
+
+    fn stopThreadPoolInThread() void {
+        thread_pool.deinit();
+    }
+
+    pub fn createOutputAsync(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) !void {
+        if (thread_count == 0) {
+            return OutputError.NoThreadsAvailable;
+        }
+        return job_queue.push(.create, .{ allocator, promise, signal, width, height, input, params });
+    }
+
+    fn createOutputInThreads(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) void {
+        var output: Output = undefined;
+        const fields = std.meta.fields(Output);
+        inline for (fields, 0..) |field, i| {
+            const ImageT = @TypeOf(@field(output, field.name));
+            const data = allocator.alloc(ImageT.Pixel, width * height) catch {
+                inline for (0..i) |j| {
+                    allocator.free(@field(output, fields[j].name).data);
+                }
+                promise.resolve(OutputError.OutOfMemory);
+                return;
+            };
+            @field(output, field.name) = .{
+                .data = data,
+                .width = width,
+                .height = height,
+            };
+        }
+        const scanlines: u32 = if (thread_count > 0) height / thread_count else 0;
+        if (thread_count > 1 and scanlines > 0 and false) {
+            const child_count: u32 = thread_count - 1;
+            var wg: std.Thread.WaitGroup = .{};
+            var thread_num: u32 = 0;
+            while (thread_num < child_count) : (thread_num += 1) {
+                thread_pool.spawnWg(&wg, processSlice, .{
+                    signal,
+                    width,
+                    scanlines * thread_num,
+                    scanlines,
+                    input,
+                    output,
+                    params,
+                });
+            }
+            const remaining_start = scanlines * child_count;
+            const remaining_count = height - remaining_start;
+            processSlice(signal, width, remaining_start, remaining_count, input, output, params);
+            wg.wait();
+        } else {
+            processSlice(signal, width, 0, height, input, output, params);
+        }
+        if (signal.off()) {
+            promise.resolve(output);
+        } else {
+            inline for (std.meta.fields(Output)) |field| {
+                allocator.free(@field(output, field.name).data);
+            }
+            promise.resolve(OutputError.Aborted);
+        }
+    }
+
+    fn processSlice(signal: AbortSignal, width: u32, start: u32, count: u32, input: Input, output: Output, params: Parameters) void {
+        var instance = kernel.create(input, output, params);
+        if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
+            instance.evaluateDependents();
+        }
+        const end = start + count;
+        instance.outputCoord[1] = start;
+        while (instance.outputCoord[1] < end) : (instance.outputCoord[1] += 1) {
+            instance.outputCoord[0] = 0;
+            while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
+                instance.evaluatePixel();
+                if (signal.on()) return;
+            }
+        }
+    }
+};

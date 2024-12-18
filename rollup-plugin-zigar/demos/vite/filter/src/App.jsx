@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutputAsync, startThreadPool } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool, stopThreadPool } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -25,7 +25,10 @@ function App() {
   }, [])
   useEffect(() => {
     startThreadPool(navigator.hardwareConcurrency);
-    // return () => stopThreadPool();
+    return async () => {
+      await stopImageCreation();
+      stopThreadPool();
+    };
   }, []);
   useEffect(() => {
     // load initial sample image
@@ -70,7 +73,6 @@ function App() {
       }
     })();
   }, [ bitmap, intensity ]);
-
   return (
     <div className="App">
       <div className="nav">
@@ -100,13 +102,8 @@ class AbortManager {
   async call(cb) {
     const controller = new AbortController;
     const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
-    }
+    const thisOp = { controller, promise: null };
+    this.replace(thisOp);
     if (signal.aborted) {
       // throw error now if the operation was aborted,
       // before the function is even called
@@ -118,6 +115,16 @@ class AbortManager {
     }
     return result;
   }
+
+  async replace(newOp) {
+    const prevOp = this.currentOp;
+    this.currentOp = newOp;
+    if (prevOp) {
+      // abort previous call and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
+    }
+  }
 }
 const am = new AbortManager();
 
@@ -125,4 +132,8 @@ async function createImageData(width, height, source, params) {
   const input = { src: source };
   const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal })) ;
   return new ImageData(output.dst.data.clampedArray, width, height);
+}
+
+async function stopImageCreation() {
+  am.replace(null);
 }

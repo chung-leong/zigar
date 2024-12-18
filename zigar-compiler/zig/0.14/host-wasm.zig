@@ -36,7 +36,6 @@ extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
 extern fn _performJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize) ActionResult;
 extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) ActionResult;
-extern fn _detachThreads() void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
 threadlocal var main_thread: bool = false;
@@ -333,12 +332,7 @@ pub fn setMultithread(state: bool) !void {
     if (!main_thread) {
         return Error.NotInMainThread;
     }
-    if (multithread != state) {
-        if (state == false) {
-            _detachThreads();
-        }
-        multithread = state;
-    }
+    multithread = state;
 }
 
 const allocator: std.mem.Allocator = .{
