@@ -9,6 +9,7 @@ function App() {
   const fileInputRef = useRef();
   const [ bitmap, setBitmap ] = useState();
   const [ intensity, setIntensity ] = useState(0.3);
+  const [ am ] = useState(new AbortManager());
 
   const onOpenClick = useCallback(() => {
     fileInputRef.current.click();
@@ -23,13 +24,6 @@ function App() {
   const onRangeChange = useCallback((evt) => {
     setIntensity(evt.target.value);
   }, [])
-  useEffect(() => {
-    startThreadPool(navigator.hardwareConcurrency);
-    return async () => {
-      await stopImageCreation();
-      stopThreadPool();
-    };
-  }, []);
   useEffect(() => {
     // load initial sample image
     (async () => {
@@ -53,26 +47,35 @@ function App() {
   useEffect(() => {
     // update the result when the bitmap or intensity parameter changes
     (async() => {
-      if (bitmap) {
-        const srcCanvas = srcCanvasRef.current;
-        const dstCanvas = dstCanvasRef.current;
-        const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
-        const { width, height } = srcCanvas;
-        const srcImageData = srcCTX.getImageData(0, 0, width, height);
-        try {
-          const dstImageData = await createImageData(width, height, srcImageData, { intensity });
+      try {
+        if (bitmap) {
+          const srcCanvas = srcCanvasRef.current;
+          const dstCanvas = dstCanvasRef.current;
+          const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
+          const { width, height } = srcCanvas;
+          const srcImageData = srcCTX.getImageData(0, 0, width, height);
+          const dstImageData = await am.call((signal) => {
+            return createImageDataAsync(width, height, srcImageData, { intensity }, { signal });
+          });
           dstCanvas.width = width;
           dstCanvas.height = height;
           const dstCTX = dstCanvas.getContext('2d');
           dstCTX.putImageData(dstImageData, 0, 0);
-        } catch (err) {
-          if (err.message != 'Aborted') {
-            console.error(err);
-          }
+        }
+      } catch (err) {
+        if (err.message != 'Aborted') {
+          console.error(err);
         }
       }
     })();
   }, [ bitmap, intensity ]);
+  useEffect(() => {
+    startThreadPool(navigator.hardwareConcurrency);
+    return async () => {
+      await am.stop();
+      stopThreadPool();
+    };
+  }, []);
   return (
     <div className="App">
       <div className="nav">
@@ -120,15 +123,13 @@ class AbortManager {
     }
     return result;
   }
-}
-const am = new AbortManager();
 
-async function createImageData(width, height, source, params) {
+  async stop() {
+    await this.call(null);
+  }
+}
+async function createImageDataAsync(width, height, source, params, options) {
   const input = { src: source };
-  const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal })) ;
+  const output = await createOutputAsync(width, height, input, params, options);
   return new ImageData(output.dst.data.clampedArray, width, height);
-}
-
-async function stopImageCreation() {
-  am.call(null);
 }

@@ -6,8 +6,16 @@ var workerSupport = mixin({
 
     getThreadHandler(name) {
       switch (name) {
-        case 'thread-spawn': return this.spawnThread.bind(this);
-        case 'wait-async': return this.waitAsync.bind(this);
+        case 'thread-spawn':
+          if (typeof(window) === 'object' && !window.crossOriginIsolated) {
+            console.warn(
+              '%cHTML document is not cross-origin isolated %c\n\nWebAssembly multithreading in the browser is only possibly when %cwindow.crossOriginIsolated%c = true. Visit https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated for information on how to enable it.',
+              'color: red;font-size: 200%;font-weight:bold', '', 'background-color: lightgrey;font-weight:bold', ''
+            );
+          }
+          return this.spawnThread.bind(this);
+        case 'wait-async':
+          return this.waitAsync.bind(this);
       }
     },
     spawnThread(arg) {
