@@ -167,10 +167,8 @@ pub fn JobQueue(comptime fn_map: anytype) type {
 
         queue: Queue(Job),
         thread: std.Thread,
-        pool: ?*std.Thread.Pool,
 
-        pub fn init(self: *@This(), allocator: std.mem.Allocator, pool: ?*std.Thread.Pool) !void {
-            self.pool = pool;
+        pub fn init(self: *@This(), allocator: std.mem.Allocator) !void {
             self.queue = .{ .allocator = allocator };
             self.thread = try std.Thread.spawn(.{ .allocator = allocator }, handleJobs, .{self});
         }
@@ -204,26 +202,14 @@ pub fn JobQueue(comptime fn_map: anytype) type {
             try self.queue.push(@unionInit(Job, @tagName(key), args));
         }
 
-        pub fn detach(self: *@This()) bool {
+        pub fn clear(self: *@This()) void {
             while (self.queue.pull() != null) {}
-            if (self.pool != null) {
-                self.pool = null;
-                return true;
-            } else {
-                return false;
-            }
         }
 
         fn handleJobs(self: *@This()) void {
             while (true) {
                 if (self.queue.pull()) |job| {
-                    if (self.pool) |pool| {
-                        // spawn can fail in low-memory situation, in which case we just
-                        // run the function here
-                        pool.spawn(invokeFunction, .{job}) catch invokeFunction(job);
-                    } else {
-                        invokeFunction(job);
-                    }
+                    invokeFunction(job);
                 } else {
                     if (self.queue.stopped) {
                         break;
