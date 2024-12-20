@@ -2,7 +2,11 @@ const { writeFile } = require('fs/promises');
 const { resolve } = require('path');
 const { pathToFileURL } = require('url');
 require('node-zigar/cjs');
-const { createOutput } = require('./lib/sepia.zigar');
+try {
+  const { createOutput } = require('./zig/sepia.zig');
+} catch (err) {
+  process.stderr.write(err.message);
+}
 
 const isMac = process.platform === 'darwin'
 
@@ -14,7 +18,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
   };
   const onSaveClick = () => {
     const { window: { document } } = browser;
-    document.getElementById('fileSave').click(); 
+    document.getElementById('fileSave').click();
   };
   const onCloseClick = () => {
     browser.close();
@@ -27,12 +31,12 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
   fileMenu.append(new nw.MenuItem({ type: 'separator' }));
   fileMenu.append(new nw.MenuItem({ label: (isMac) ? 'Close' : 'Quit', click: onCloseClick }));
   menuBar.append(new nw.MenuItem({ label: 'File', submenu: fileMenu }));
-  browser.menu = menuBar;    
+  browser.menu = menuBar;
 
   browser.window.onload = async () => {
     // find page elements
     const { window: { document } } = browser;
-    const fileOpen = document.getElementById('fileOpen'); 
+    const fileOpen = document.getElementById('fileOpen');
     const fileSave = document.getElementById('fileSave');
     const srcCanvas = document.getElementById('srcCanvas');
     const dstCanvas = document.getElementById('dstCanvas');
@@ -69,7 +73,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       // img.decode() doesn't work for some reason
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = reject; 
+        img.onerror = reject;
       });
       const bitmap = await createImageBitmap(img);
       srcCanvas.width = bitmap.width;
@@ -78,7 +82,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       ctx.drawImage(bitmap, 0, 0);
       applyFilter();
     }
-  
+
     function applyFilter() {
       const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
       const { width, height } = srcCanvas;
@@ -88,7 +92,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       dstCanvas.width = width;
       dstCanvas.height = height;
       const dstCTX = dstCanvas.getContext('2d');
-      dstCTX.putImageData(dstImageData, 0, 0);  
+      dstCTX.putImageData(dstImageData, 0, 0);
     }
 
     function createImageData(width, height, source, params) {
@@ -97,8 +101,8 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       const ta = output.dst.data.typedArray;
       const clampedArray = new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
       return new ImageData(clampedArray, width, height);
-    }  
-  
+    }
+
     async function saveImage(path, type) {
       const blob = await new Promise((resolve, reject) => {
         const callback = (result) => {
@@ -109,9 +113,9 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
           }
         };
         dstCanvas.toBlob(callback, type)
-      });   
+      });
       const buffer = await blob.arrayBuffer();
-      await writeFile(path, new DataView(buffer)); 
+      await writeFile(path, new DataView(buffer));
     }
   };
 });
