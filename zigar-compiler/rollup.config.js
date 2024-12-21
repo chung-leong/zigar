@@ -13,10 +13,16 @@ export default [
         },
       })
     ],
-    output: {
-      file: './dist/index.js',
-      format: 'esm',
-    },
+    output: [
+      {
+        file: './dist/index.js',
+        format: 'esm',
+      },
+      {
+        file: './dist/index.cjs',
+        format: 'commonjs',
+      },
+    ],
   },
   {
     input: './src/transpiler.js',

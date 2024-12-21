@@ -3,7 +3,7 @@ import { openSync, readSync, closeSync, writeFileSync } from 'fs';
 import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
 

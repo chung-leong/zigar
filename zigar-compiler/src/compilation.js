@@ -1,9 +1,9 @@
 import ChildProcess from 'child_process';
 import { writeFileSync } from 'fs';
-import { readFile, readdir, stat, writeFile } from 'fs/promises';
+import { readdir, readFile, stat, writeFile } from 'fs/promises';
 import os from 'os';
 import { basename, isAbsolute, join, parse } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import {
   acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getDirectoryStats, getPlatform,

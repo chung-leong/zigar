@@ -5,6 +5,7 @@
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
+    "./cjs": "./dist/index.cjs",
     "./transpiler": "./dist/transpiler.js"
   },
   "type": "module",

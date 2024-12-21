@@ -37,6 +37,7 @@ export default [
           'process.env.DEV': 'false',
           'process.env.BITS': '"32"',
           'process.env.TARGET': '"node"',
+          'process.env.MIXIN': '""',
         },
       })
     ],

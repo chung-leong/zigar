@@ -1,12 +1,15 @@
-import childProcess from 'child_process';
-import { openSync, readSync, closeSync, writeFileSync } from 'fs';
-import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
-import os from 'os';
-import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
-import { fileURLToPath, URL } from 'url';
-import { promisify } from 'util';
-import { createHash } from 'crypto';
+'use strict';
 
+var childProcess = require('child_process');
+var fs = require('fs');
+var promises = require('fs/promises');
+var os = require('os');
+var path = require('path');
+var url = require('url');
+var util = require('util');
+var crypto = require('crypto');
+
+var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const StructureType = {
   Primitive: 0,
   Array: 1,
@@ -519,13 +522,13 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile$1 = promisify(childProcess.execFile);
+const execFile$1 = util.promisify(childProcess.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
-      await createDirectory(dirname(pidPath));
-      const handle = await open(pidPath, 'wx');
+      await createDirectory(path.dirname(pidPath));
+      const handle = await promises.open(pidPath, 'wx');
       handle.write(`${process.pid}`);
       handle.close();
       break;
@@ -565,7 +568,7 @@ async function checkPidFile(pidPath, staleTime) {
       }
       /* c8 ignore end */
     }
-    const stats = await stat(pidPath);
+    const stats = await promises.stat(pidPath);
     const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
@@ -580,15 +583,15 @@ async function checkPidFile(pidPath, staleTime) {
 }
 
 async function copyFile(srcPath, dstPath) {
-  const info = await stat(srcPath);
-  const data = await readFile(srcPath);
-  await writeFile(dstPath, data);
-  await chmod(dstPath, info.mode);
+  const info = await promises.stat(srcPath);
+  const data = await promises.readFile(srcPath);
+  await promises.writeFile(dstPath, data);
+  await promises.chmod(dstPath, info.mode);
 }
 
 async function loadFile(path, def) {
   try {
-    return await readFile(path, 'utf8');
+    return await promises.readFile(path, 'utf8');
   } catch (err) {
     return def;
   }
@@ -596,7 +599,7 @@ async function loadFile(path, def) {
 
 async function deleteFile(path) {
   try {
-    await unlink(path);
+    await promises.unlink(path);
   } catch (err) {
     if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
@@ -604,14 +607,14 @@ async function deleteFile(path) {
   }
 }
 
-async function createDirectory(path) {
+async function createDirectory(path$1) {
   try {
-    await stat(path);
+    await promises.stat(path$1);
   } catch (err) {
-    const dir = dirname(path);
+    const dir = path.dirname(path$1);
     await createDirectory(dir);
     try {
-      await mkdir(path);
+      await promises.mkdir(path$1);
       /* c8 ignore next 5 */
     } catch (err) {
       if (err.code != 'EEXIST') {
@@ -623,17 +626,17 @@ async function createDirectory(path) {
 
 async function deleteDirectory(dir) {
   try {
-    const list = await readdir(dir);
+    const list = await promises.readdir(dir);
     for (const name of list) {
-      const path = join(dir, name);
-      const info = await lstat(path);
+      const path$1 = path.join(dir, name);
+      const info = await promises.lstat(path$1);
       if (info.isDirectory()) {
-        await deleteDirectory(path);
+        await deleteDirectory(path$1);
       } else if (info) {
-        await deleteFile(path);
+        await deleteFile(path$1);
       }
     }
-    await rmdir(dir);
+    await promises.rmdir(dir);
   } catch (err) {
     if (err.code !== 'ENOENT') {
       throw err;
@@ -646,7 +649,7 @@ async function delay(ms) {
 }
 
 function md5(text) {
-  const hash = createHash('md5');
+  const hash = crypto.createHash('md5');
   hash.update(text);
   return hash.digest('hex');
 }
@@ -677,9 +680,9 @@ function getPlatform() {
 function findElfDependencies(path) {
   const list = [];
   try {
-    const fd = openSync(path, 'r');
+    const fd = fs.openSync(path, 'r');
     const sig = new Uint8Array(8);
-    readSync(fd, sig);
+    fs.readSync(fd, sig);
     for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
       if (sig[index] !== value.charCodeAt(0)) {
         throw new Error('Incorrect magic number');
@@ -699,7 +702,7 @@ function findElfDependencies(path) {
     const Usize = (bits === 64) ? BigInt : Number;
     const read = (position, size) => {
       const buf = new DataView(new ArrayBuffer(Number(size)));
-      readSync(fd, buf, { position });
+      fs.readSync(fd, buf, { position });
       buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
       return buf;
     };
@@ -738,7 +741,7 @@ function findElfDependencies(path) {
         }
       }
     }
-    closeSync(fd);
+    fs.closeSync(fd);
   } catch (err) {
   }
   return list;
@@ -748,27 +751,27 @@ function getArch() {
   return os.arch();
 }
 
-function normalizePath(url) {
+function normalizePath(url$1) {
   let archive;
-  const parts = fileURLToPath(url).split(sep).map((part) => {
+  const parts = url.fileURLToPath(url$1).split(path.sep).map((part) => {
     if (part === 'app.asar') {
       archive = 'asar';
       return part + '.unpacked';
     }
     return part;
   });
-  const path = parts.join(sep);
-  return { path, archive }
+  const path$1 = parts.join(path.sep);
+  return { path: path$1, archive }
 }
 
 async function getDirectoryStats(dirPath) {
   let size = 0, mtimeMs = 0;
-  const names = await readdir(dirPath);
+  const names = await promises.readdir(dirPath);
   for (const name of names) {
-    const path = join(dirPath, name);
-    let info = await stat(path);
+    const path$1 = path.join(dirPath, name);
+    let info = await promises.stat(path$1);
     if(info.isDirectory()) {
-      info = await getDirectoryStats(path);
+      info = await getDirectoryStats(path$1);
     } else if (!info.isFile()) {
       continue;
     }
@@ -780,12 +783,12 @@ async function getDirectoryStats(dirPath) {
   return { size, mtimeMs };
 }
 
-const execFile = promisify(childProcess.execFile);
+const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? await stat(srcPath) : null;
+  const srcInfo = (srcPath) ? await promises.stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
-    srcPath = join(srcPath, '?');
+    srcPath = path.join(srcPath, '?');
   }
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
@@ -794,16 +797,16 @@ async function compile(srcPath, modPath, options) {
   if (srcPath) {
     // add custom build file
     try {
-      const path = join(moduleDir, 'build.zig');
-      await stat(path);
-      config.buildFilePath = path;
+      const path$1 = path.join(moduleDir, 'build.zig');
+      await promises.stat(path$1);
+      config.buildFilePath = path$1;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
-      const path = join(moduleDir, 'build.zig.zon');
-      await stat(path);
-      config.packageConfigPath = path;
+      const path$1 = path.join(moduleDir, 'build.zig.zon');
+      await promises.stat(path$1);
+      config.packageConfigPath = path$1;
     } catch (err) {
     }
     const { zigPath, zigArgs, moduleBuildDir } = config;
@@ -812,7 +815,7 @@ async function compile(srcPath, modPath, options) {
     await acquireLock(pidPath);
     const getOutputMTime = async () => {
       try {
-        const stats = await stat(outputPath);
+        const stats = await promises.stat(outputPath);
         return stats.mtimeMs;
       } catch (err) {
       }
@@ -869,16 +872,16 @@ async function runCompiler(path, args, options) {
 }
 
 class CompilationError extends Error {
-  constructor(path, args, cwd, err) {
+  constructor(path$1, args, cwd, err) {
     super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
-    this.path = path;
+    this.path = path$1;
     this.args = args;
     this.errno = err.errno;
     this.code = err.code;
     if (err.stderr) {
       try {
-        const logPath = join(cwd, 'log');
-        writeFileSync(logPath, err.stderr);
+        const logPath = path.join(cwd, 'log');
+        fs.writeFileSync(logPath, err.stderr);
         this.log = logPath;
         /* c8 ignore next 2 */
       } catch (err) {
@@ -911,12 +914,12 @@ function formatProjectConfig(config) {
 async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
-  const cfgFilePath = join(dir, 'build-cfg.zig');
-  await writeFile(cfgFilePath, content);
-  const buildFilePath = join(dir, 'build.zig');
+  const cfgFilePath = path.join(dir, 'build-cfg.zig');
+  await promises.writeFile(cfgFilePath, content);
+  const buildFilePath = path.join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
-    const packageConfigPath = join(dir, 'build.zig.zon');
+    const packageConfigPath = path.join(dir, 'build.zig.zon');
     await copyFile(config.packageConfigPath, packageConfigPath);
   }
 }
@@ -925,7 +928,7 @@ const cwd = process.cwd();
 
 function getCachePath(options) {
   const {
-    cacheDir = join(cwd, '.zigar-cache'),
+    cacheDir = path.join(cwd, '.zigar-cache'),
   } = options;
   return cacheDir;
 }
@@ -934,10 +937,10 @@ function getModuleCachePath(srcPath, options) {
   const {
     optimize,
   } = options;
-  const src = parse(srcPath);
-  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const src = path.parse(srcPath);
+  const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
-  return join(cacheDir, folder, optimize, `${src.name}.zigar`);
+  return path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
 function createConfig(srcPath, modPath, options = {}) {
@@ -948,32 +951,32 @@ function createConfig(srcPath, modPath, options = {}) {
     isWASM = false,
     useLibc = isWASM ? false : true,
     clean = false,
-    buildDir = join(os.tmpdir(), 'zigar-build'),
+    buildDir = path.join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 1000000000,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
     multithreaded = (isWASM) ? false : true,
     maxMemory = (isWASM && multithreaded) ? 10240 * 65536 : undefined,
   } = options;
-  const src = parse(srcPath ?? '');
-  const mod = parse(modPath ?? '');
+  const src = path.parse(srcPath ?? '');
+  const mod = path.parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
   const moduleDir = src.dir;
-  const modulePrefix = basename(moduleName).slice(0, 16);
+  const modulePrefix = path.basename(moduleName).slice(0, 16);
   const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
-  const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);
+  const moduleBuildDir = path.join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {
       // save output in build folder
-      return join(moduleBuildDir, optimize, `${src.name}.wasm`);
+      return path.join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
       const extensions = {
         darwin: 'dylib',
         win32: 'dll',
       };
       const ext = extensions[platform] || 'so';
-      return join(modPath, `${platform}.${arch}.${ext}`);
+      return path.join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
@@ -1018,8 +1021,8 @@ function createConfig(srcPath, modPath, options = {}) {
       zigArgs.push(`-Dcpu=bleeding_edge`);
     }
   }
-  const zigarSrcPath = fileURLToPath(new URL('../zig/', import.meta.url));
-  const buildFilePath = join(zigarSrcPath, `build.zig`);
+  const zigarSrcPath = url.fileURLToPath(new url.URL('../zig/', (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
+  const buildFilePath = path.join(zigarSrcPath, `build.zig`);
   return {
     platform,
     arch,
@@ -1048,18 +1051,18 @@ async function getManifestLists(buildPath) {
   let dirPath;
   let names;
   try {
-    dirPath = join(buildPath, '.zig-cache', 'h');
-    names = await readdir(dirPath);
+    dirPath = path.join(buildPath, '.zig-cache', 'h');
+    names = await promises.readdir(dirPath);
     /* c8 ignore next 8 */
   } catch (err) {
     try {
-      dirPath = join(buildPath, 'zig-cache', 'h');
-      names = await readdir(dirPath);
+      dirPath = path.join(buildPath, 'zig-cache', 'h');
+      names = await promises.readdir(dirPath);
     } catch (err) {
       names = [];
     }
   }
-  return names.filter(n => /\.txt$/.test(n)).map(n => join(dirPath, n));
+  return names.filter(n => /\.txt$/.test(n)).map(n => path.join(dirPath, n));
 }
 
 async function findSourcePaths(buildPath) {
@@ -1067,7 +1070,7 @@ async function findSourcePaths(buildPath) {
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
-      const data = await readFile(manifestPath, 'utf-8');
+      const data = await promises.readFile(manifestPath, 'utf-8');
       if (data.length > 0) {
         const lines = data.split(/\r?\n/);
         // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
@@ -1077,7 +1080,7 @@ async function findSourcePaths(buildPath) {
           const m = re.exec(line);
           if (m) {
             const srcPath = m[1];
-            if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+            if(path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
               involved[srcPath] = true;
             }
           }
@@ -1093,16 +1096,16 @@ async function findSourcePaths(buildPath) {
 async function cleanBuildDirectory(config) {
   const { buildDir, buildDirSize } = config;
   try {
-    const names = await readdir(buildDir);
+    const names = await promises.readdir(buildDir);
     const list = [];
     let total = 0;
     for (const name of names) {
-      const path = join(buildDir, name);
-      const info = await stat(path);
+      const path$1 = path.join(buildDir, name);
+      const info = await promises.stat(path$1);
       if (info.isDirectory()) {
-        const { size, mtimeMs } = await getDirectoryStats(path);
+        const { size, mtimeMs } = await getDirectoryStats(path$1);
         total += size;
-        list.push({ path, size, mtimeMs });
+        list.push({ path: path$1, size, mtimeMs });
       }
     }
     list.sort((a, b) => a.mtimeMs - b.mtimeMs);
@@ -1262,12 +1265,12 @@ class UnknownOption extends Error {
 }
 
 async function findConfigFile(name, dir) {
-  const path = join(dir, name);
+  const path$1 = path.join(dir, name);
   try {
-    await stat(path);
-    return path;
+    await promises.stat(path$1);
+    return path$1;
   } catch (err) {
-    const parent = dirname(dir);
+    const parent = path.dirname(dir);
     if (parent !== dir) {
       return findConfigFile(name, parent);
     }
@@ -1290,7 +1293,7 @@ function processConfigFile(text, cfgPath, availableOptions) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
   }
-  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, dirname(cfgPath));
+  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, path.dirname(cfgPath));
   return options;
 }
 
@@ -1298,8 +1301,8 @@ function getAbsoluteMapping(sourceFiles, cfgDir) {
   const map = {};
   if (sourceFiles) {
     for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = resolve(cfgDir, module);
-      const sourcePath = resolve(cfgDir, source);
+      const modulePath = path.resolve(cfgDir, module);
+      const sourcePath = path.resolve(cfgDir, source);
       map[modulePath] = sourcePath;
     }
   }
@@ -1311,4 +1314,16 @@ function findSourceFile(modulePath, options) {
   return sourceFiles?.[modulePath];
 }
 
-export { compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile, optionsForTranspile };
+exports.compile = compile;
+exports.extractOptions = extractOptions;
+exports.findConfigFile = findConfigFile;
+exports.findSourceFile = findSourceFile;
+exports.generateCode = generateCode;
+exports.getArch = getArch;
+exports.getCachePath = getCachePath;
+exports.getModuleCachePath = getModuleCachePath;
+exports.getPlatform = getPlatform;
+exports.loadConfigFile = loadConfigFile;
+exports.normalizePath = normalizePath;
+exports.optionsForCompile = optionsForCompile;
+exports.optionsForTranspile = optionsForTranspile;
