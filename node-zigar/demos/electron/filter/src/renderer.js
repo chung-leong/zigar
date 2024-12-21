@@ -24,16 +24,15 @@ async function applyFilter() {
   const { width, height } = srcCanvas;
   const params = { intensity: parseFloat(intensity.value) };
   const srcImageData = srcCTX.getImageData(0, 0, width, height);
-  const dstImageData = await createImageData(width, height, srcImageData, params);
-  dstCanvas.width = width;
-  dstCanvas.height = height;
-  const dstCTX = dstCanvas.getContext('2d');
-  dstCTX.putImageData(dstImageData, 0, 0);  
-}
-
-async function createImageData(width, height, source, params) {  
-  const outputData = await window.electronAPI.filterImage(width, height, source.data, params);
-  return new ImageData(outputData, width, height);
+  const inputData = srcImageData.data;
+  const outputData = await window.electronAPI.filterImage(width, height, inputData, params);
+  if (outputData) {
+    const dstImageData = new ImageData(outputData, width, height);
+    dstCanvas.width = width;
+    dstCanvas.height = height;
+    const dstCTX = dstCanvas.getContext('2d');
+    dstCTX.putImageData(dstImageData, 0, 0);
+  }
 }
 
 async function saveImage(path, type) {
@@ -46,7 +45,7 @@ async function saveImage(path, type) {
       }
     };
     dstCanvas.toBlob(callback, type);
-  });   
+  });
   const buffer = await blob.arrayBuffer();
   await window.electronAPI.writeFile(path, buffer);
 }

@@ -2,13 +2,47 @@ const { app, dialog, ipcMain, BrowserWindow, Menu } = require('electron');
 const { writeFile } = require('fs/promises');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { availableParallelism } = require('os');
 require('node-zigar/cjs');
-const { createOutput } = require('../lib/sepia.zigar');
+const { createOutputAsync, startThreadPool } = require('../lib/sepia.zigar');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+startThreadPool(availableParallelism());
+
+class AbortManager {
+  currentOp = null;
+
+  async call(cb) {
+    const controller = new AbortController;
+    const { signal } = controller;
+    const prevOp = this.currentOp;
+    const thisOp = this.currentOp = { controller, promise: null };
+    if (prevOp) {
+      // abort previous call and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
+    }
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
+    }
+    const result = await (this.currentOp.promise = cb?.(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
+  }
+
+  async stop() {
+    return this.call(null);
+  }
+}
+const am = new AbortManager();
 
 const createWindow = async () => {
   // Create the browser window.
@@ -82,10 +116,15 @@ const createWindow = async () => {
 app.whenReady().then(() => {
   ipcMain.handle('write-file', async (_event, path, buf) => writeFile(path, new DataView(buf)));
   ipcMain.handle('filter-image', async (_event, width, height, data, params) => {
-    const src = { width, height, data };
-    const { dst } = await createOutput(width, height, { src }, params);
-    const ta = dst.data.typedArray;
-    return new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
+    try {
+      const src = { width, height, data };
+      const { dst } = await am.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
+      return dst.data.clampedArray;
+    } catch (err) {
+      if (err.message !== 'Aborted') {
+        console.error(err);
+      }
+    }
   });
 
   createWindow();

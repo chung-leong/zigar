@@ -1,14 +1,44 @@
 const { writeFile } = require('fs/promises');
 const { resolve } = require('path');
 const { pathToFileURL } = require('url');
+const { availableParallelism } = require('os');
 require('node-zigar/cjs');
-try {
-  const { createOutput } = require('./zig/sepia.zig');
-} catch (err) {
-  process.stderr.write(err.message);
-}
+const { createOutputAsync, startThreadPool } = require('./zig/sepia.zig');
 
 const isMac = process.platform === 'darwin'
+
+startThreadPool(availableParallelism());
+
+class AbortManager {
+  currentOp = null;
+
+  async call(cb) {
+    const controller = new AbortController;
+    const { signal } = controller;
+    const prevOp = this.currentOp;
+    const thisOp = this.currentOp = { controller, promise: null };
+    if (prevOp) {
+      // abort previous call and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
+    }
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
+    }
+    const result = await (this.currentOp.promise = cb?.(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
+  }
+
+  async stop() {
+    return this.call(null);
+  }
+}
+const am = new AbortManager();
 
 nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (browser) => {
   // handle menu click
@@ -83,24 +113,24 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
       applyFilter();
     }
 
-    function applyFilter() {
-      const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
-      const { width, height } = srcCanvas;
-      const params = { intensity: parseFloat(intensity.value) };
-      const srcImageData = srcCTX.getImageData(0, 0, width, height);
-      const dstImageData = createImageData(width, height, srcImageData, params);
-      dstCanvas.width = width;
-      dstCanvas.height = height;
-      const dstCTX = dstCanvas.getContext('2d');
-      dstCTX.putImageData(dstImageData, 0, 0);
-    }
-
-    function createImageData(width, height, source, params) {
-      const input = { src: source };
-      const output = createOutput(width, height, input, params);
-      const ta = output.dst.data.typedArray;
-      const clampedArray = new Uint8ClampedArray(ta.buffer, ta.byteOffset, ta.byteLength);
-      return new ImageData(clampedArray, width, height);
+    async function applyFilter() {
+      try {
+        const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
+        const { width, height } = srcCanvas;
+        const params = { intensity: parseFloat(intensity.value) };
+        const srcImageData = srcCTX.getImageData(0, 0, width, height);
+        const input = { src: srcImageData };
+        const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal }));
+        const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
+        dstCanvas.width = width;
+        dstCanvas.height = height;
+        const dstCTX = dstCanvas.getContext('2d');
+        dstCTX.putImageData(dstImageData, 0, 0);
+      } catch (err) {
+        if (err.message !== 'Aborted') {
+          process.stderr.write(err.message);
+        }
+      }
     }
 
     async function saveImage(path, type) {
