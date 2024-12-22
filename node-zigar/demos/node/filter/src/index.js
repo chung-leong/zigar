@@ -32,7 +32,6 @@ fastify.get('/', (req, reply) => {
   <body>${tags.join('')}</body>
 </html>`;
 });
-let deinitThreadPool;
 fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
   const { name, filter, base64 } = req.params;
   const json = Buffer.from(base64, 'base64');
@@ -63,6 +62,7 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
   reply.type('image/jpeg');
   return outputImage.jpeg().toBuffer();
 });
+let deinitThreadPool;
 fastify.addHook('onClose', () => deinitThreadPool?.());
 const address = await fastify.listen({ port: 3000 });
 console.log(`Listening at ${address}`);
