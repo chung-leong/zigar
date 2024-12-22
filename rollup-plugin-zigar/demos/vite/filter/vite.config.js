@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), zigar({ multithreaded: true, topLevelAwait: false })],
+  plugins: [react(), zigar({ topLevelAwait: false, multithreaded: true })],
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',

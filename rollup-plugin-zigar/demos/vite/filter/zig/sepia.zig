@@ -402,35 +402,35 @@ const async_support = struct {
         .create = createOutputInThreads,
         .stop = stopThreadPoolInThread,
     }) = undefined;
+    var start_count: u32 = 0;
     var thread_pool: std.Thread.Pool = undefined;
     var thread_count: u32 = 0;
-    var thread_start_count: u32 = 0;
 
     pub fn startThreadPool(count: u32) !void {
-        thread_start_count += 1;
-        if (thread_start_count == 1) {
+        start_count += 1;
+        if (start_count == 1) {
             const allocator = zigar.mem.getDefaultAllocator();
             try zigar.thread.use(true);
+            try job_queue.init(allocator);
             if (count > 1) {
-                try job_queue.init(allocator, &thread_pool);
                 try thread_pool.init(.{ .n_jobs = count, .allocator = allocator });
-            } else {
-                try job_queue.init(allocator, null);
             }
             thread_count = count;
         }
     }
 
     pub fn stopThreadPool() !void {
-        if (thread_start_count == 0) {
+        if (start_count == 0) {
             return;
         }
-        thread_start_count -= 1;
-        if (thread_start_count == 0) {
+        start_count -= 1;
+        if (start_count == 0) {
+            const count = thread_count;
             thread_count = 0;
-            // remove queued jobs and detached thread pool
-            if (job_queue.detach()) {
-                // use helper thread to shut down thread pool
+            // remove queued jobs
+            job_queue.clear();
+            // use helper thread to shut down thread pool
+            if (count > 1) {
                 try job_queue.push(.stop, .{});
             }
             job_queue.deinit();
@@ -468,7 +468,7 @@ const async_support = struct {
             };
         }
         const scanlines: u32 = if (thread_count > 0) height / thread_count else 0;
-        if (thread_count > 1 and scanlines > 0 and false) {
+        if (thread_count > 1 and scanlines > 0) {
             const child_count: u32 = thread_count - 1;
             var wg: std.Thread.WaitGroup = .{};
             var thread_num: u32 = 0;

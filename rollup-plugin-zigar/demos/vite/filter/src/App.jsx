@@ -54,9 +54,10 @@ function App() {
           const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
           const { width, height } = srcCanvas;
           const srcImageData = srcCTX.getImageData(0, 0, width, height);
-          const dstImageData = await am.call((signal) => {
-            return createImageDataAsync(width, height, srcImageData, { intensity }, { signal });
-          });
+          const input = { src: srcImageData };
+          const params = { intensity };
+          const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal }));
+          const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
           dstCanvas.width = width;
           dstCanvas.height = height;
           const dstCTX = dstCanvas.getContext('2d');
@@ -127,9 +128,4 @@ class AbortManager {
   async stop() {
     await this.call(null);
   }
-}
-async function createImageDataAsync(width, height, source, params, options) {
-  const input = { src: source };
-  const output = await createOutputAsync(width, height, input, params, options);
-  return new ImageData(output.dst.data.clampedArray, width, height);
 }
