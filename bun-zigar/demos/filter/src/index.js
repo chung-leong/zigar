@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
+import { availableParallelism } from 'os';
 import Sharp from 'sharp';
 import { fileURLToPath } from 'url';
-import '../lib/sepia.zigar';
 
 const fastify = Fastify();
 
@@ -43,7 +43,11 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
   const inputImage = Sharp(path).ensureAlpha().resize(width, height);
   const { data, info } = await inputImage.raw().toBuffer({ resolveWithObject: true });
   // push data through filter
-  const { createOutput } = await import(`../lib/${filter}.zigar`);
+  const { createOutputAsync, startThreadPool, stopThreadPool } = await import(`../lib/${filter}.zigar`);
+  if (!deinitThreadPool) {
+    startThreadPool(availableParallelism());
+    deinitThreadPool = () => stopThreadPool();
+  }
   const input = {
     src: {
       data,
@@ -51,12 +55,14 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
       height: info.height,
     }
   };
-  const output = createOutput(info.width, info.height, input, filterParams);
+  const output = await createOutputAsync(info.width, info.height, input, filterParams);
   const { dst } = output;
   // place raw data into new image and output it as JPEG
   const outputImage = Sharp(dst.data.typedArray, { raw: info });
   reply.type('image/jpeg');
   return outputImage.jpeg().toBuffer();
 });
+let deinitThreadPool;
+fastify.addHook('onClose', () => deinitThreadPool?.());
 const address = await fastify.listen({ port: 3000 });
 console.log(`Listening at ${address}`);
