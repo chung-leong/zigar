@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
+import { createOutputAsync, startThreadPool, stopThreadPool } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
   const fileInputRef = useRef();
   const [ bitmap, setBitmap ] = useState();
   const [ intensity, setIntensity ] = useState(0.3);
+  const [ am ] = useState(new AbortManager());
 
   const onOpenClick = useCallback(() => {
     fileInputRef.current.click();
@@ -17,7 +19,7 @@ function App() {
     if (file) {
       const bitmap = await createImageBitmap(file);
       setBitmap(bitmap);
-    }    
+    }
   }, []);
   const onRangeChange = useCallback((evt) => {
     setIntensity(evt.target.value);
@@ -44,23 +46,37 @@ function App() {
   }, [ bitmap ]);
   useEffect(() => {
     // update the result when the bitmap or intensity parameter changes
-    (async() => {
-      if (bitmap) {      
-        const srcCanvas = srcCanvasRef.current;
-        const dstCanvas = dstCanvasRef.current;
-        const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
-        const { width, height } = srcCanvas;
-        const srcImageData = srcCTX.getImageData(0, 0, width, height);
-        purgeQueue();
-        const dstImageData = await createImageData(width, height, srcImageData, { intensity });
-        dstCanvas.width = width;
-        dstCanvas.height = height;
-        const dstCTX = dstCanvas.getContext('2d');
-        dstCTX.putImageData(dstImageData, 0, 0);
-      }  
+    (async () => {
+      try {
+        if (bitmap) {
+          const srcCanvas = srcCanvasRef.current;
+          const dstCanvas = dstCanvasRef.current;
+          const srcCTX = srcCanvas.getContext('2d', { willReadFrequently: true });
+          const { width, height } = srcCanvas;
+          const srcImageData = srcCTX.getImageData(0, 0, width, height);
+          const input = { src: srcImageData };
+          const params = { intensity };
+          const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal }));
+          const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
+          dstCanvas.width = width;
+          dstCanvas.height = height;
+          const dstCTX = dstCanvas.getContext('2d');
+          dstCTX.putImageData(srcImageData, 0, 0);
+        }
+      } catch (err) {
+        if (err.message != 'Aborted') {
+          console.error(err);
+        }
+      }
     })();
   }, [ bitmap, intensity ]);
-
+  useEffect(() => {
+    startThreadPool(navigator.hardwareConcurrency);
+    return async () => {
+      await am.stop();
+      stopThreadPool();
+    };
+  }, []);
   return (
     <div className="App">
       <div className="nav">
@@ -84,92 +100,32 @@ function App() {
 
 export default App
 
-async function createImageData(width, height, source, params) {
-  const args = [ width, height, source, params ];
-  const transfer = [ source.data.buffer ];
-  return startJob('createImageData', args, transfer);
-}
+class AbortManager {
+  currentOp = null;
 
-function purgeQueue() {
-  pendingRequests.splice(0);
-}
-
-let keepAlive = true;
-let maxCount = navigator.hardwareConcurrency;
-
-const activeWorkers = [];
-const idleWorkers = [];
-const pendingRequests = [];
-const jobs = [];
-
-let nextJobId = 1;
-
-async function acquireWorker() {
-  let worker = idleWorkers.shift();
-  if (!worker) {
-    if (maxCount < 1) {
-      throw new Error(`Unable to start worker because maxCount is ${maxCount}`);
+  async call(cb) {
+    const controller = new AbortController;
+    const { signal } = controller;
+    const prevOp = this.currentOp;
+    const thisOp = this.currentOp = { controller, promise: null };
+    if (prevOp) {
+      // abort previous call and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
     }
-    if (activeWorkers.length < maxCount) {
-      // start a new one
-      worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-      // wait for start-up message from worker
-      await new Promise((resolve, reject) => {
-        worker.onmessage = resolve;
-        worker.onerror = reject;
-      });     
-      worker.onmessage = handleMessage;
-      worker.onerror = (evt) => console.error(evt);
-    } else {
-      // wait for the next worker to become available again
-      return new Promise(resolve => pendingRequests.push(resolve));
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
     }
+    const result = await (this.currentOp.promise = cb?.(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
   }
-  activeWorkers.push(worker);
-  return worker;
-}
 
-async function startJob(name, args = [], transfer = []) {
-  const worker = await acquireWorker();
-  const job = {
-    id: nextJobId++,
-    promise: null,
-    resolve: null,
-    reject: null,
-    worker,
-  };
-  job.promise = new Promise((resolve, reject) => {
-    job.resolve = resolve;
-    job.reject = reject;
-  });
-  jobs.push(job);
-  worker.onmessageerror = () => reject(new Error('Message error'));
-  worker.postMessage([ name, job.id, ...args], { transfer });
-  return job.promise;
-}
-
-function handleMessage(evt) {
-  const [ name, jobId, result ] = evt.data;
-  const jobIndex = jobs.findIndex(j => j.id === jobId);
-  const job = jobs[jobIndex];
-  jobs.splice(jobIndex, 1);
-  const { worker, resolve, reject } = job;
-  if (name !== 'error') {
-    resolve(result);
-  } else {
-    reject(result);
-  }
-  // work on pending request if any
-  const next = pendingRequests.shift();
-  if (next) {
-    next(worker);
-  } else {
-    const workerIndex = activeWorkers.indexOf(worker);
-    if (workerIndex !== -1) {
-      activeWorkers.splice(workerIndex, 1);
-    }
-    if (keepAlive && idleWorkers.length < maxCount) {
-      idleWorkers.push(worker);
-    }
+  async stop() {
+    await this.call(null);
   }
 }
