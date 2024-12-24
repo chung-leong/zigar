@@ -1,14 +1,16 @@
 import nodeResolve from '@rollup/plugin-node-resolve';
+import terser from '@rollup/plugin-terser';
 import zigar from 'rollup-plugin-zigar';
 
 export default [
   {
     input: './src/sepia.js',
     plugins: [
-      zigar({ 
+      zigar({
         optimize: 'ReleaseSmall',
         embedWASM: true,
         topLevelAwait: false,
+        multithreaded: true,
       }),
       nodeResolve(),
     ],
@@ -17,6 +19,9 @@ export default [
       format: 'umd',
       exports: 'named',
       name: 'Sepia',
+      plugins: [
+        terser(),
+      ]
     },
   },
 ];

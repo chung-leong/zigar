@@ -6,15 +6,15 @@
 </head>
   <body>
     <p>
-        <h3>Original</h3>
-        <img id="srcImage" src="./sample.png">
+      <h3>Original</h3>
+      <img id="srcImage" src="./sample.png">
     </p>
     <p>
-        <h3>Result</h3>
-        <canvas id="dstCanvas"></canvas>
+      <h3>Result</h3>
+      <canvas id="dstCanvas"></canvas>
     </p>
     <p>
-        Intensity: <input id="intensity" type="range" min="0" max="1" step="0.0001" value="0.3">
+      Intensity: <input id="intensity" type="range" min="0" max="1" step="0.0001" value="0.3">
     </p>
   </body>
   <script src="./sepia.js"></script>
@@ -23,15 +23,15 @@
     const dstCanvas = document.getElementById('dstCanvas');
     const intensity = document.getElementById('intensity');
 
+    if (srcImage.complete) {
+      applyFilter();
+    } else {
+      srcImage.onload = applyFilter;
+    }
     intensity.oninput = applyFilter;
 
-    if (srcImage.complete) {
-        applyFilter();
-    } else {
-        srcImage.onload = applyFilter;
-    }
-
     async function applyFilter() {
+      try {
         const { naturalWidth: width, naturalHeight: height } = srcImage;
         const srcCanvas = document.createElement('CANVAS');
         srcCanvas.width = width;
@@ -40,13 +40,17 @@
         srcCTX.drawImage(srcImage, 0, 0);
         const params = { intensity: parseFloat(intensity.value) };
         const srcImageData = srcCTX.getImageData(0, 0, width, height);
-        const dstImageData = await Sepia.createImageData(srcImageData, params);
+        const dstImageData = await Sepia.createImageDataAsync(srcImageData, params);
         dstCanvas.width = width;
         dstCanvas.height = height;
         const dstCTX = dstCanvas.getContext('2d');
-        dstCTX.putImageData(dstImageData, 0, 0);  
+        dstCTX.putImageData(dstImageData, 0, 0);
+      } catch (err) {
+        if (err.message !== 'Aborted' ) {
+          console.error(err);
+        }
+      }
     }
-
   </script>
 </html>
 
