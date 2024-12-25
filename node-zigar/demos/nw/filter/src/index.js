@@ -9,37 +9,6 @@ const isMac = process.platform === 'darwin'
 
 startThreadPool(availableParallelism());
 
-class AbortManager {
-  currentOp = null;
-
-  async call(cb) {
-    const controller = new AbortController;
-    const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
-    }
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb?.(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
-  }
-
-  async stop() {
-    return this.call(null);
-  }
-}
-const am = new AbortManager();
-
 nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (browser) => {
   // handle menu click
   const onOpenClick = () => {
@@ -149,3 +118,34 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
     }
   };
 });
+
+class AbortManager {
+  currentOp = null;
+
+  async call(cb) {
+    const controller = new AbortController;
+    const { signal } = controller;
+    const prevOp = this.currentOp;
+    const thisOp = this.currentOp = { controller, promise: null };
+    if (prevOp) {
+      // abort previous call and wait for promise rejection
+      prevOp.controller.abort();
+      await prevOp.promise?.catch(() => {});
+    }
+    if (signal.aborted) {
+      // throw error now if the operation was aborted,
+      // before the function is even called
+      throw new Error('Aborted');
+    }
+    const result = await (this.currentOp.promise = cb?.(signal));
+    if (thisOp === this.currentOp) {
+      this.currentOp = null;
+    }
+    return result;
+  }
+
+  async stop() {
+    return this.call(null);
+  }
+}
+const am = new AbortManager();
