@@ -1,0 +1,16 @@
+{
+  "name": "zzz",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader=node-zigar --no-warnings src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-zigar": "^0.13.3-alpha.3"
+  }
+}
