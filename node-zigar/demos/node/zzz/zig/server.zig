@@ -13,26 +13,38 @@ const Router = http.Router;
 const Context = http.Context;
 const Route = http.Route;
 
-const allocator = zigar.mem.getDefaultAllocator();
+pub const JSResponse = struct {
+    mime: []u8,
+    data: []u8,
+
+    fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.mime);
+        allocator.free(self.data);
+    }
+};
+pub const JSError = error{Unexpected};
+pub const JSResponder = fn (std.mem.Allocator) JSError!JSResponse;
+
+var js_func: ?*const JSResponder = null;
 
 fn root_handler(ctx: *Context, _: void) !void {
-    const body_fmt =
-        \\ <!DOCTYPE html>
-        \\ <html>
-        \\ <body>
-        \\ <h1>Hello, World!</h1>
-        \\ </body>
-        \\ </html>
-    ;
-    const body = try std.fmt.allocPrint(ctx.allocator, body_fmt, .{});
-    return try ctx.respond(.{
-        .status = .OK,
-        .mime = http.Mime.HTML,
-        .body = body,
-    });
+    if (js_func) |f| {
+        if (f(ctx.allocator)) |r| {
+            defer r.deinit(ctx.allocator);
+            return try ctx.respond(.{
+                .status = .OK,
+                .mime = http.Mime.from_content_type(r.mime),
+                .body = r.data,
+            });
+        } else |_| {
+            std.debug.print("JavaScript handler failed\n", .{});
+        }
+    }
+    try ctx.respond(.{ .status = .@"Service Unavailable" });
 }
 
 fn runServer(host: []const u8, port: u16) !void {
+    const allocator = zigar.mem.getDefaultAllocator();
     var t = try Tardy.init(.{
         .allocator = allocator,
         .threading = .auto,
@@ -73,7 +85,10 @@ fn runServer(host: []const u8, port: u16) !void {
 pub fn startServer(host: []const u8, port: u16) !void {
     try zigar.thread.use(true);
     _ = try std.Thread.spawn(.{
-        .allocator = allocator,
+        .allocator = zigar.mem.getDefaultAllocator(),
     }, runServer, .{ host, port });
 }
 
+pub fn setResponder(f: *const JSResponder) void {
+    js_func = f;
+}
