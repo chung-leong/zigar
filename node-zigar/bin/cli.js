@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { writeFile } from 'fs/promises';
+import { copyFile, writeFile } from 'fs/promises';
+import { createRequire } from 'module';
 import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
-import { dirname, join, parse } from 'path';
+import { dirname, join, parse, resolve } from 'path';
 import { compile, findConfigFile, loadConfigFile, optionsForCompile } from 'zigar-compiler';
-import { hideStatus, showResult, showStatus } from '../dist/status.js';
+import { hideStatus, showResult, showStatus } from '../dist/status.cjs';
 
 const possiblePlatforms = [
   'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
@@ -96,6 +97,14 @@ async function createConfig() {
   await writeFile(path, json);
 }
 
+async function copyBuildFile() {
+  const require = createRequire(import.meta.url);
+  const modPath = require.resolve('zigar-compiler');
+  const srcPath = resolve(modPath, '../../zig/build.zig');
+  const dstPath = join(process.cwd(), 'build.zig');
+  await copyFile(srcPath, dstPath);
+}
+
 function printHelp() {
   const lines = [
     'Usage: npx node-zigar [command]',
@@ -104,6 +113,8 @@ function printHelp() {
     '',
     '  init          Create basic config file',
     '  build         Build library files for Zig modules and Node.js addon',
+    '  build-custom  Create a copy of Zigar\'s build.zig in the current folder',
+    '',
     '  help          Show this message',
     '',
   ];
@@ -120,6 +131,9 @@ try {
       break;
     case 'init':
       await createConfig();
+      break;
+    case 'build-custom':
+      await copyBuildFile();
       break;
     case 'help':
     case undefined:
