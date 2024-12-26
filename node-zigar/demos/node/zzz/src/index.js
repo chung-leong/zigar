@@ -1,3 +1,6 @@
 import { startServer } from '../zig/server.zig';
 
-startServer('127.0.0.1', 8080);
+const host = '127.0.0.1';
+const port = 8080;
+startServer(host, port);
+console.log(`Listening at http://${host}:${port}`);

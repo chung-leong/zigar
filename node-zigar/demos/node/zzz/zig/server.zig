@@ -18,15 +18,17 @@ const Router = http.Router;
 const Context = http.Context;
 const Route = http.Route;
 
-fn root_handler(ctx: *Context, _: void) !void {
-    const body =
+fn page_handler(ctx: *Context, id: usize) !void {
+    const body_fmt =
         \\ <!DOCTYPE html>
         \\ <html>
         \\ <body>
         \\ <h1>Hello, World!</h1>
+        \\ <p>id: {d}</p>
         \\ </body>
         \\ </html>
     ;
+    const body = try std.fmt.allocPrint(ctx.allocator, body_fmt, .{id});
     return try ctx.respond(.{
         .status = .OK,
         .mime = http.Mime.HTML,
@@ -43,7 +45,7 @@ fn runServer(host: []const u8, port: u16) !void {
     });
     defer t.deinit();
     var router = try Router.init(allocator, &.{
-        Route.init("/").get({}, root_handler).layer(),
+        Route.init("/").get(@as(usize, 123), page_handler).layer(),
     }, .{});
     defer router.deinit(allocator);
     const ServerConfig = struct {
@@ -56,22 +58,18 @@ fn runServer(host: []const u8, port: u16) !void {
         .port = port,
         .router = &router,
     };
-    try t.entry(
-        &config,
-        struct {
-            fn entry(rt: *Runtime, cfg: *const ServerConfig) !void {
-                var server = Server.init(rt.allocator, .{});
-                try server.bind(.{ .ip = .{ .host = cfg.host, .port = cfg.port } });
-                try server.serve(cfg.router, rt);
-            }
-        }.entry,
-        {},
-        struct {
-            fn exit(rt: *Runtime, _: void) !void {
-                try Server.clean(rt);
-            }
-        }.exit,
-    );
+    const task = struct {
+        fn entry(rt: *Runtime, cfg: *const ServerConfig) !void {
+            var server = Server.init(rt.allocator, .{});
+            try server.bind(.{ .ip = .{ .host = cfg.host, .port = cfg.port } });
+            try server.serve(cfg.router, rt);
+        }
+
+        fn exit(rt: *Runtime, _: void) !void {
+            try Server.clean(rt);
+        }
+    };
+    try t.entry(&config, task.entry, void{}, task.exit);
 }
 
 pub fn startServer(host: []const u8, port: u16) !void {
