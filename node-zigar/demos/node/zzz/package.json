@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node --loader=node-zigar --no-warnings src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node --loader=node-zigar --no-warnings src/index.js"
   },
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
