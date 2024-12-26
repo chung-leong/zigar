@@ -18,22 +18,23 @@ const Router = http.Router;
 const Context = http.Context;
 const Route = http.Route;
 
+const Responder = *const fn (std.mem.Allocator, []const u8) error{Unexpected}![]u8;
+
+var responders: [4]?Responder = .{ null, null, null, null };
+
 fn page_handler(ctx: *Context, id: usize) !void {
-    const body_fmt =
-        \\ <!DOCTYPE html>
-        \\ <html>
-        \\ <body>
-        \\ <h1>Hello, World!</h1>
-        \\ <p>id: {d}</p>
-        \\ </body>
-        \\ </html>
-    ;
-    const body = try std.fmt.allocPrint(ctx.allocator, body_fmt, .{id});
-    return try ctx.respond(.{
-        .status = .OK,
-        .mime = http.Mime.HTML,
-        .body = body,
-    });
+    if (responders[id]) |f| {
+        if (f(ctx.allocator, ctx.request.uri orelse "")) |data| {
+            return try ctx.respond(.{
+                .status = .OK,
+                .mime = http.Mime.HTML,
+                .body = data,
+            });
+        } else |_| {
+            std.debug.print("Responder failed\n", .{});
+        }
+    }
+    try ctx.respond(.{ .status = .@"Service Unavailable" });
 }
 
 fn runServer(host: []const u8, port: u16) !void {
@@ -45,7 +46,7 @@ fn runServer(host: []const u8, port: u16) !void {
     });
     defer t.deinit();
     var router = try Router.init(allocator, &.{
-        Route.init("/").get(@as(usize, 123), page_handler).layer(),
+        Route.init("/").get(@as(usize, 0), page_handler).layer(),
     }, .{});
     defer router.deinit(allocator);
     const ServerConfig = struct {
@@ -77,4 +78,13 @@ pub fn startServer(host: []const u8, port: u16) !void {
     const host_copy = try allocator.dupe(u8, host);
     try zigar.thread.use(true);
     _ = try std.Thread.spawn(.{ .allocator = allocator, }, runServer, .{ host_copy, port });
+}
+
+pub fn setResponder(id: usize, f: ?Responder) void {
+    if (id < responders.len) {
+        if (responders[id]) |pf| {
+            zigar.function.release(pf);
+        }
+        responders[id] = f;
+    }
 }
