@@ -32,7 +32,7 @@ fn page_handler(ctx: *Context, id: usize) !void {
     return try ctx.respond(.{
         .status = .OK,
         .mime = http.Mime.HTML,
-        .body = try ctx.allocator.dupe(u8, body),
+        .body = body,
     });
 }
 
