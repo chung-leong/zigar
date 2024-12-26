@@ -6,7 +6,7 @@ import {
   compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
   getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile
 } from 'zigar-compiler';
-import { hideStatus, showStatus } from './status.js';
+import { hideStatus, showStatus } from './status.cjs';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;
