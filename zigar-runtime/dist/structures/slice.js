@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import { COPY, MEMORY, SHAPE, INITIALIZE, FINALIZE, ENTRIES, VIVIFICATE, VISIT, SENTINEL, LENGTH } from '../symbols.js';
-import { getProxy, defineValue, transformIterable } from '../utils.js';
+import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 var slice = mixin({
   defineSlice(structure, descriptors) {
@@ -37,7 +37,7 @@ var slice = mixin({
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
         } else {

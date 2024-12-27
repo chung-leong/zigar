@@ -2,14 +2,13 @@ import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } 
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
 import { getStructIterator, getStructEntries } from '../iterators.js';
-import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, FINALIZE } from '../symbols.js';
+import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, FINALIZE } from '../symbols.js';
 import { defineValue, defineProperties, defineProperty, ObjectCache } from '../utils.js';
 
 var all = mixin({
   defineStructure(structure) {
     const {
       type,
-      name,
       byteSize,
     } = structure;
     const handlerName = `define${structureNames[type]}`;
@@ -22,7 +21,6 @@ var all = mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
@@ -52,6 +50,7 @@ var all = mixin({
       align,
       byteSize,
       flags,
+      signature,
       static: { members, template },
     } = structure;
     const props = [];
@@ -59,6 +58,8 @@ var all = mixin({
       name: defineValue(name),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
+      [SIGNATURE]: defineValue(signature),
+      [ENVIRONMENT]: defineValue(this),
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
@@ -69,7 +70,9 @@ var all = mixin({
       [ENTRIES]: { get: getStructEntries },
       [PROPS]: defineValue(props),
     };
-    const descriptors = {};
+    const descriptors = {
+      [Symbol.toStringTag]: defineValue(name),
+    };
     for (const member of members) {
       const { name, slot } = member;
       if (member.structure.type === StructureType.Function) {

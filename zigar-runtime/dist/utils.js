@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { LENGTH, PROXY } from './symbols.js';
+import { SIGNATURE, ENVIRONMENT, LENGTH, PROXY } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -222,6 +222,15 @@ function findObjects(structures, SLOTS) {
   return list;
 }
 
+function isCompatibleType(TypeA, TypeB) {
+  return (TypeA === TypeB)
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+}
+
+function isCompatibleInstanceOf(object, Type) {
+  return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
+}
+
 function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
@@ -266,4 +275,4 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getLength, getPrimitiveName, getProxy, getSelf, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getLength, getPrimitiveName, getProxy, getSelf, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };

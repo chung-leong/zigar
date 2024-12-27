@@ -83,6 +83,7 @@ function addStructureDefinitions(lines, definition) {
     constructor: null,
     type: StructureType.Primitive,
     flags: 0,
+    signature: undefined,
     name: undefined,
     byteSize: 0,
     align: 0,
@@ -269,6 +270,9 @@ function addStructureDefinitions(lines, definition) {
             case 'constructor':
             case 'typedArray':
             case 'sentinel':
+              break;
+            case 'signature':
+              add(`${name}: 0x${value.toString(16).padStart(16, '0')}n,`);
               break;
             case 'instance':
             case 'static': {

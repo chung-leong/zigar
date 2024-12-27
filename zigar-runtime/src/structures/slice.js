@@ -5,7 +5,7 @@ import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import {
   COPY, ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SENTINEL, SHAPE, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { defineValue, getProxy, transformIterable } from '../utils.js';
+import { defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 export default mixin({
   defineSlice(structure, descriptors) {
@@ -48,7 +48,7 @@ export default mixin({
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
         } else {

@@ -254,6 +254,7 @@ pub const Structure = struct {
     name: ?[]const u8 = null,
     type: StructureType,
     flags: StructureFlags,
+    signature: u64,
     length: ?usize,
     byte_size: ?usize,
     alignment: ?u16,
@@ -747,7 +748,7 @@ pub const TypeData = struct {
     }
 
     pub fn getSignature(comptime self: @This()) u64 {
-        return TypeSignature.calc(self.type);
+        return comptime TypeSignature.calc(self.type);
     }
 
     test "getSignature" {
@@ -1095,11 +1096,11 @@ const TypeSignature = struct {
                 self.hash("}");
             },
             .Array => |ar| {
-                self.hash(std.fmt.comptimePrint("[{d}]", ar.len));
+                self.hash(std.fmt.comptimePrint("[{d}]", .{ar.len}));
                 self.update(ar.child);
             },
             .Vector => |ar| {
-                self.hash(std.fmt.comptimePrint("@Vector({d}, ", ar.len));
+                self.hash(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
                 self.update(ar.child);
                 self.hash(")");
             },
@@ -1121,7 +1122,7 @@ const TypeSignature = struct {
                 });
                 if (pt.sentinel) |ptr| {
                     const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
-                    self.hash(std.fmt.comptimePrint(":{d}", value));
+                    self.hash(std.fmt.comptimePrint(":{d}", .{value}));
                 }
                 self.hash(switch (pt.size) {
                     .One => "",

@@ -368,6 +368,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .name = comptime getStructureName(td),
                     .type = getStructureType(td),
                     .flags = getStructureFlags(td),
+                    .signature = td.getSignature(),
                     .length = getStructureLength(td),
                     .byte_size = td.getByteSize(),
                     .alignment = td.getAlignment(),

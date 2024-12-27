@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { LENGTH, PROXY } from './symbols.js';
+import { ENVIRONMENT, LENGTH, PROXY, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -256,6 +256,15 @@ export function findObjects(structures, SLOTS) {
     find(structure.static.template);
   }
   return list;
+}
+
+export function isCompatibleType(TypeA, TypeB) {
+  return (TypeA === TypeB)
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+}
+
+export function isCompatibleInstanceOf(object, Type) {
+  return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
 }
 
 export function markAsSpecial({ get, set }) {

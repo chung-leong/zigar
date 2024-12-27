@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import { INITIALIZE, FINALIZE, ENTRIES, VIVIFICATE, VISIT, SENTINEL, COPY } from '../symbols.js';
-import { getProxy, defineValue, transformIterable } from '../utils.js';
+import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 var array = mixin({
   defineArray(structure, descriptors) {
@@ -17,7 +17,7 @@ var array = mixin({
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);

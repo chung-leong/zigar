@@ -50,60 +50,17 @@ const MemberFlag = {
 
 const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
 
-function symbol(name) {
+function __symbol(name) {
   return dict[name] ??= Symbol(name);
+}
+
+function symbol(name) {
+  return /*@__PURE__*/ __symbol(name);
 }
 
 const MEMORY = symbol('memory');
 const SLOTS = symbol('slots');
-symbol('parent');
-symbol('zig');
-symbol('name');
-symbol('type');
-symbol('flags');
-symbol('class');
-symbol('tag');
-symbol('props');
-symbol('pointer');
-symbol('sentinel');
-symbol('array');
-symbol('items');
-symbol('target');
-symbol('entries');
-symbol('max length');
-symbol('keys');
-symbol('address');
-symbol('length');
-symbol('last address');
-symbol('lastl ength');
-symbol('proxy');
-symbol('cache');
-symbol('size');
-symbol('bit size');
-symbol('align');
 const CONST_TARGET = symbol('const target');
-symbol('const proxy');
-symbol('environment');
-symbol('attributes');
-symbol('primitive');
-symbol('getters');
-symbol('setters');
-symbol('typed array');
-symbol('throwing');
-symbol('promise');
-symbol('callback');
-symbol('fallback');
-
-symbol('update');
-symbol('restore');
-symbol('resetter');
-symbol('vivificate');
-symbol('visit');
-symbol('copy');
-symbol('shape');
-symbol('initialize');
-symbol('finalize');
-symbol('cast');
 
 (process.env.BITS === '64')
 ? function(address, align) {
@@ -267,6 +224,7 @@ function addStructureDefinitions(lines, definition) {
     constructor: null,
     type: StructureType.Primitive,
     flags: 0,
+    signature: undefined,
     name: undefined,
     byteSize: 0,
     align: 0,
@@ -453,6 +411,9 @@ function addStructureDefinitions(lines, definition) {
             case 'constructor':
             case 'typedArray':
             case 'sentinel':
+              break;
+            case 'signature':
+              add(`${name}: 0x${value.toString(16).padStart(16, '0')}n,`);
               break;
             case 'instance':
             case 'static': {

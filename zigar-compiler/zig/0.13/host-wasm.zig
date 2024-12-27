@@ -22,7 +22,8 @@ extern fn _getViewAddress(dv: Value) usize;
 extern fn _readSlot(container: ?Value, slot: usize) ?Value;
 extern fn _writeSlot(container: ?Value, slot: usize, object: ?Value) void;
 extern fn _beginDefinition() Value;
-extern fn _insertInteger(container: Value, key: Value, value: i32) void;
+extern fn _insertInteger(container: Value, key: Value, value: u32) void;
+extern fn _insertBigInteger(container: Value, key: Value, value: u64) void;
 extern fn _insertBoolean(container: Value, key: Value, value: bool) void;
 extern fn _insertString(container: Value, key: Value, value: Value) void;
 extern fn _insertObject(container: Value, key: Value, value: ?Value) void;
@@ -227,7 +228,10 @@ fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
                 @compileError("No support for value type: " ++ @typeName(T));
             }
         },
-        .Int => _insertInteger(container, key_str, @intCast(value)),
+        .Int => |int| switch (int.bits) {
+            64 => _insertBigInteger(container, key_str, @intCast(value)),
+            else => _insertInteger(container, key_str, @intCast(value)),
+        },
         .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value))),
         .Bool => _insertBoolean(container, key_str, value),
         .Struct, .Union => _insertInteger(container, key_str, @bitCast(value)),
@@ -240,6 +244,7 @@ pub fn beginStructure(structure: types.Structure) !Value {
     try insertProperty(def, "name", structure.name);
     try insertProperty(def, "type", structure.type);
     try insertProperty(def, "flags", structure.flags);
+    try insertProperty(def, "signature", structure.signature);
     try insertProperty(def, "length", structure.length);
     try insertProperty(def, "byteSize", structure.byte_size);
     try insertProperty(def, "align", structure.alignment);

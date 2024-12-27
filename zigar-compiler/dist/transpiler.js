@@ -157,8 +157,12 @@ const VisitorFlag = {
 
 const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
 
-function symbol(name) {
+function __symbol(name) {
   return dict[name] ??= Symbol(name);
+}
+
+function symbol(name) {
+  return /*@__PURE__*/ __symbol(name);
 }
 
 const MEMORY = symbol('memory');
@@ -174,7 +178,6 @@ const PROPS = symbol('props');
 const POINTER = symbol('pointer');
 const SENTINEL = symbol('sentinel');
 const ARRAY = symbol('array');
-symbol('items');
 const TARGET = symbol('target');
 const ENTRIES = symbol('entries');
 const MAX_LENGTH = symbol('max length');
@@ -182,7 +185,7 @@ const KEYS = symbol('keys');
 const ADDRESS = symbol('address');
 const LENGTH = symbol('length');
 const LAST_ADDRESS = symbol('last address');
-const LAST_LENGTH = symbol('lastl ength');
+const LAST_LENGTH = symbol('last length');
 const PROXY = symbol('proxy');
 const CACHE = symbol('cache');
 const SIZE = symbol('size');
@@ -199,7 +202,7 @@ const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const CALLBACK = symbol('callback');
-symbol('fallback');
+const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
@@ -425,6 +428,15 @@ function findObjects(structures, SLOTS) {
   return list;
 }
 
+function isCompatibleType(TypeA, TypeB) {
+  return (TypeA === TypeB)
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+}
+
+function isCompatibleInstanceOf(object, Type) {
+  return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
+}
+
 function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
@@ -538,6 +550,7 @@ function addStructureDefinitions(lines, definition) {
     constructor: null,
     type: StructureType.Primitive,
     flags: 0,
+    signature: undefined,
     name: undefined,
     byteSize: 0,
     align: 0,
@@ -724,6 +737,9 @@ function addStructureDefinitions(lines, definition) {
             case 'constructor':
             case 'typedArray':
             case 'sentinel':
+              break;
+            case 'signature':
+              add(`${name}: 0x${value.toString(16).padStart(16, '0')}n,`);
               break;
             case 'instance':
             case 'static': {
@@ -2630,8 +2646,7 @@ class InvalidPointerTarget extends TypeError {
     const { name } = structure;
     let target;
     if (arg != null) {
-      const type = typeof(arg);
-      const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+      const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
       const a = article(noun);
       target = `${a} ${noun}`;
     } else {
@@ -4427,6 +4442,7 @@ var structureAcquisition = mixin({
       type,
       name,
       length,
+      signature,
       byteSize,
       align,
       flags,
@@ -4435,6 +4451,7 @@ var structureAcquisition = mixin({
       constructor: null,
       type,
       flags,
+      signature,
       name,
       length,
       byteSize,
@@ -4727,6 +4744,7 @@ var structureAcquisition = mixin({
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
       insertInteger: { argType: 'vsi', alias: 'insertProperty' },
+      insertBigInteger: { argType: 'vsi', alias: 'insertProperty' },
       insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
       insertString: { argType: 'vss', alias: 'insertProperty' },
       insertObject: { argType: 'vsv', alias: 'insertProperty' },
@@ -4878,7 +4896,7 @@ var viewManagement = mixin({
       if (memory) {
         // arg a Zig data object
         const { constructor, instance: { members: [ member ] } } = structure;
-        if (arg instanceof constructor) {
+        if (isCompatibleInstanceOf(arg, constructor)) {
           // same type, no problem
           return memory;
         } else {
@@ -5870,7 +5888,6 @@ var all$1 = mixin({
   defineStructure(structure) {
     const {
       type,
-      name,
       byteSize,
     } = structure;
     const handlerName = `define${structureNames[type]}`;
@@ -5883,7 +5900,6 @@ var all$1 = mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
@@ -5913,6 +5929,7 @@ var all$1 = mixin({
       align,
       byteSize,
       flags,
+      signature,
       static: { members, template },
     } = structure;
     const props = [];
@@ -5920,6 +5937,8 @@ var all$1 = mixin({
       name: defineValue(name),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
+      [SIGNATURE]: defineValue(signature),
+      [ENVIRONMENT]: defineValue(this),
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
@@ -5930,7 +5949,9 @@ var all$1 = mixin({
       [ENTRIES]: { get: getStructEntries },
       [PROPS]: defineValue(props),
     };
-    const descriptors = {};
+    const descriptors = {
+      [Symbol.toStringTag]: defineValue(name),
+    };
     for (const member of members) {
       const { name, slot } = member;
       if (member.structure.type === StructureType.Function) {
@@ -6329,7 +6350,7 @@ var array = mixin({
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
@@ -6718,7 +6739,7 @@ var errorUnion = mixin({
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           if (!getErrorNumber.call(this)) {
@@ -6772,6 +6793,8 @@ var errorUnion = mixin({
     return constructor;
   },
 });
+
+globalThis[Symbol.for('ZIGAR')] ??= {};
 
 class Unsupported extends TypeError {
   constructor() {
@@ -6897,7 +6920,7 @@ var optional = mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
@@ -7143,6 +7166,9 @@ var pointer = mixin({
             throw new ReadOnlyTarget(structure);
           }
         }
+      } else if (isCompatibleInstanceOf(arg, Target)) {
+        // compatible object from a different module
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
@@ -7284,7 +7310,7 @@ var pointer = mixin({
 });
 
 function isPointerOf(arg, Target) {
-  return (arg?.constructor?.child === Target && arg['*']);
+  return isCompatibleType(arg?.constructor?.child, Target) && arg['*'];
 }
 
 function isCompatiblePointer(arg, Target, flags) {
@@ -7408,7 +7434,7 @@ var primitive = mixin({
     const propApplier = this.createApplier(structure);
     const { get, set } = this.defineMember(member);
     const initializer = function(arg) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
       } else {
         if (arg && typeof(arg) === 'object') {
@@ -7468,7 +7494,7 @@ var slice = mixin({
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
         } else {
@@ -7629,7 +7655,7 @@ var struct = mixin({
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);
@@ -7728,7 +7754,7 @@ var union = mixin({
       };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
@@ -7976,7 +8002,7 @@ var vector = mixin({
     } = structure;
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);

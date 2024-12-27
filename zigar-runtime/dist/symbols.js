@@ -1,7 +1,11 @@
 const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
 
-function symbol(name) {
+function __symbol(name) {
   return dict[name] ??= Symbol(name);
+}
+
+function symbol(name) {
+  return /*@__PURE__*/ __symbol(name);
 }
 
 const MEMORY = symbol('memory');
@@ -25,7 +29,7 @@ const KEYS = symbol('keys');
 const ADDRESS = symbol('address');
 const LENGTH = symbol('length');
 const LAST_ADDRESS = symbol('last address');
-const LAST_LENGTH = symbol('lastl ength');
+const LAST_LENGTH = symbol('last length');
 const PROXY = symbol('proxy');
 const CACHE = symbol('cache');
 const SIZE = symbol('size');
@@ -43,6 +47,7 @@ const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const CALLBACK = symbol('callback');
 const FALLBACK = symbol('fallback');
+const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
@@ -55,4 +60,4 @@ const INITIALIZE = symbol('initialize');
 const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 
-export { ADDRESS, ALIGN, ARRAY, ATTRIBUTES, BIT_SIZE, CACHE, CALLBACK, CAST, CLASS, CONST_PROXY, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FALLBACK, FINALIZE, FLAGS, GETTERS, INITIALIZE, ITEMS, KEYS, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, NAME, PARENT, POINTER, PRIMITIVE, PROMISE, PROPS, PROXY, RESET, RESTORE, SENTINEL, SETTERS, SHAPE, SIZE, SLOTS, TAG, TARGET, THROWING, TYPE, TYPED_ARRAY, UPDATE, VISIT, VIVIFICATE, ZIG };
+export { ADDRESS, ALIGN, ARRAY, ATTRIBUTES, BIT_SIZE, CACHE, CALLBACK, CAST, CLASS, CONST_PROXY, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FALLBACK, FINALIZE, FLAGS, GETTERS, INITIALIZE, ITEMS, KEYS, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, NAME, PARENT, POINTER, PRIMITIVE, PROMISE, PROPS, PROXY, RESET, RESTORE, SENTINEL, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TAG, TARGET, THROWING, TYPE, TYPED_ARRAY, UPDATE, VISIT, VIVIFICATE, ZIG };

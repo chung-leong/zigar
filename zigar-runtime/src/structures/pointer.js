@@ -12,7 +12,9 @@ import {
   LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
   SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG
 } from '../symbols.js';
-import { defineValue, findElements, getProxy, usizeInvalid } from '../utils.js';
+import {
+  defineValue, findElements, getProxy, isCompatibleInstanceOf, isCompatibleType, usizeInvalid,
+} from '../utils.js';
 
 export default mixin({
   definePointer(structure, descriptors) {
@@ -218,6 +220,9 @@ export default mixin({
             throw new ReadOnlyTarget(structure);
           }
         }
+      } else if (isCompatibleInstanceOf(arg, Target)) {
+        // compatible object from a different module
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
@@ -359,7 +364,7 @@ export default mixin({
 });
 
 function isPointerOf(arg, Target) {
-  return (arg?.constructor?.child === Target && arg['*']);
+  return isCompatibleType(arg?.constructor?.child, Target) && arg['*'];
 }
 
 function isCompatiblePointer(arg, Target, flags) {

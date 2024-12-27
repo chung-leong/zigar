@@ -5,8 +5,8 @@ import {
 } from '../errors.js';
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
-  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
-  PROPS, RESTORE, SETTERS, SHAPE, SIZE, SLOTS, TYPE, TYPED_ARRAY
+  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
+  PROPS, RESTORE, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TYPE, TYPED_ARRAY
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -14,7 +14,6 @@ export default mixin({
   defineStructure(structure) {
     const {
       type,
-      name,
       byteSize,
     } = structure;
     const handlerName = `define${structureNames[type]}`;
@@ -34,7 +33,6 @@ export default mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [Symbol.toStringTag]: defineValue(name),
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
@@ -64,6 +62,7 @@ export default mixin({
       align,
       byteSize,
       flags,
+      signature,
       static: { members, template },
     } = structure;
     const props = [];
@@ -71,6 +70,8 @@ export default mixin({
       name: defineValue(name),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
+      [SIGNATURE]: defineValue(signature),
+      [ENVIRONMENT]: defineValue(this),
       [ALIGN]: defineValue(align),
       [SIZE]: defineValue(byteSize),
       [TYPE]: defineValue(type),
@@ -81,7 +82,9 @@ export default mixin({
       [ENTRIES]: { get: getStructEntries },
       [PROPS]: defineValue(props),
     };
-    const descriptors = {};
+    const descriptors = {
+      [Symbol.toStringTag]: defineValue(name),
+    };
     for (const member of members) {
       const { name, slot } = member;
       if (member.structure.type === StructureType.Function) {

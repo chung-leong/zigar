@@ -1,7 +1,11 @@
 const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
 
-function symbol(name) {
+function __symbol(name) {
   return dict[name] ??= Symbol(name);
+}
+
+function symbol(name) {
+  return /*@__PURE__*/ __symbol(name);
 }
 
 export const MEMORY = symbol('memory');
@@ -25,7 +29,7 @@ export const KEYS = symbol('keys');
 export const ADDRESS = symbol('address');
 export const LENGTH = symbol('length');
 export const LAST_ADDRESS = symbol('last address');
-export const LAST_LENGTH = symbol('lastl ength');
+export const LAST_LENGTH = symbol('last length');
 export const PROXY = symbol('proxy');
 export const CACHE = symbol('cache');
 export const SIZE = symbol('size');
@@ -43,6 +47,7 @@ export const THROWING = symbol('throwing');
 export const PROMISE = symbol('promise');
 export const CALLBACK = symbol('callback');
 export const FALLBACK = symbol('fallback');
+export const SIGNATURE = symbol('signature');
 
 export const UPDATE = symbol('update');
 export const RESTORE = symbol('restore');

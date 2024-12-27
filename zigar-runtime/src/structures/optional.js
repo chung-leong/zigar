@@ -1,7 +1,7 @@
 import { MemberType, OptionalFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { COPY, INITIALIZE, RESET, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { defineValue, isCompatibleInstanceOf } from '../utils.js';
 
 export default mixin({
   defineOptional(structure, descriptors) {
@@ -22,7 +22,7 @@ export default mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty

@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { getVectorEntries, getZigIterator, getVectorIterator, getStructIterator, getStructEntries } from '../iterators.js';
 import { SETTERS, KEYS, INITIALIZE, VIVIFICATE, VISIT, ENTRIES, PROPS, COPY } from '../symbols.js';
-import { getSelf, defineValue } from '../utils.js';
+import { getSelf, defineValue, isCompatibleInstanceOf } from '../utils.js';
 
 var struct = mixin({
   defineStruct(structure, descriptors) {
@@ -16,7 +16,7 @@ var struct = mixin({
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);

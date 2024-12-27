@@ -75,6 +75,7 @@ typedef struct {
     const char* name;
     structure_type type;
     structure_flags flags;
+    uint64_t signature;
     size_t length;
     size_t byte_size;
     uint16_t align;

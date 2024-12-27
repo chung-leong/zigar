@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
 import { getZigIterator, getUnionIterator, getUnionEntries } from '../iterators.js';
 import { NAME, SETTERS, KEYS, FINALIZE, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
-import { empty, defineValue, defineProperties } from '../utils.js';
+import { empty, defineValue, defineProperties, isCompatibleInstanceOf } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {
@@ -36,7 +36,7 @@ var union = mixin({
       };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);

@@ -5,7 +5,7 @@ import {
   getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
 } from '../iterators.js';
 import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue, getSelf } from '../utils.js';
+import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
 export default mixin({
   defineStruct(structure, descriptors) {
@@ -18,7 +18,7 @@ export default mixin({
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);

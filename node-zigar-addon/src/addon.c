@@ -165,12 +165,14 @@ result begin_structure(module_data* md,
                        napi_value* dest) {
     napi_env env = md->env;
     napi_value args[1];
-    napi_value type, flags, length, byte_size, align, name;
+    napi_value type, flags, signature, length, byte_size, align, name;
     if (napi_create_object(env, &args[0]) == napi_ok
      && napi_create_uint32(env, s->type, &type) == napi_ok
      && napi_set_named_property(env, args[0], "type", type) == napi_ok
      && napi_create_uint32(env, s->flags, &flags) == napi_ok
      && napi_set_named_property(env, args[0], "flags", flags) == napi_ok
+     && napi_create_bigint_uint64(env, s->signature, &signature) == napi_ok
+     && napi_set_named_property(env, args[0], "signature", signature) == napi_ok
      && (s->length == MISSING(size_t) || napi_create_uint32(env, s->length, &length) == napi_ok)
      && (s->length == MISSING(size_t) || napi_set_named_property(env, args[0], "length", length) == napi_ok)
      && (s->byte_size == MISSING(size_t)  || napi_create_uint32(env, s->byte_size, &byte_size) == napi_ok)

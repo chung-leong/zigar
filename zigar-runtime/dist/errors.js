@@ -321,8 +321,7 @@ class InvalidPointerTarget extends TypeError {
     const { name } = structure;
     let target;
     if (arg != null) {
-      const type = typeof(arg);
-      const noun = (type === 'object' && arg.constructor !== Object) ? `${arg.constructor.name} object`: type;
+      const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
       const a = article(noun);
       target = `${a} ${noun}`;
     } else {

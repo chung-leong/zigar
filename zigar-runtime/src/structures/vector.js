@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { getVectorEntries, getVectorIterator } from '../iterators.js';
 import { COPY, ENTRIES, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue, getSelf } from '../utils.js';
+import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
 export default mixin({
   defineVector(structure, descriptors) {
@@ -24,7 +24,7 @@ export default mixin({
     }
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
-      if (arg instanceof constructor) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);

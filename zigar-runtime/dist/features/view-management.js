@@ -2,7 +2,7 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferSizeMismatch, BufferExpected } from '../errors.js';
 import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CACHE } from '../symbols.js';
-import { findElements, usizeInvalid } from '../utils.js';
+import { isCompatibleInstanceOf, findElements, usizeInvalid } from '../utils.js';
 
 var viewManagement = mixin({
   viewMap: new Map(),
@@ -27,7 +27,7 @@ var viewManagement = mixin({
       if (memory) {
         // arg a Zig data object
         const { constructor, instance: { members: [ member ] } } = structure;
-        if (arg instanceof constructor) {
+        if (isCompatibleInstanceOf(arg, constructor)) {
           // same type, no problem
           return memory;
         } else {

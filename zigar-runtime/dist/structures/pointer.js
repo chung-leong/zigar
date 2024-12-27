@@ -2,7 +2,7 @@ import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, Struc
 import { mixin } from '../environment.js';
 import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
 import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
-import { getProxy, defineValue, usizeInvalid, findElements } from '../utils.js';
+import { getProxy, defineValue, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
   definePointer(structure, descriptors) {
@@ -208,6 +208,9 @@ var pointer = mixin({
             throw new ReadOnlyTarget(structure);
           }
         }
+      } else if (isCompatibleInstanceOf(arg, Target)) {
+        // compatible object from a different module
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
         arg = Target(arg[MEMORY]);
@@ -349,7 +352,7 @@ var pointer = mixin({
 });
 
 function isPointerOf(arg, Target) {
-  return (arg?.constructor?.child === Target && arg['*']);
+  return isCompatibleType(arg?.constructor?.child, Target) && arg['*'];
 }
 
 function isCompatiblePointer(arg, Target, flags) {
