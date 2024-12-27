@@ -746,6 +746,37 @@ pub const TypeData = struct {
         try expectCT(getContentBitOffset(.{ .type = Union }) == 0);
     }
 
+    pub fn getSignature(comptime self: @This()) u64 {
+        return TypeSignature.calc(self.type);
+    }
+
+    test "getSignature" {
+        const sig1 = comptime getSignature(.{ .type = u32 });
+        const sig2 = comptime getSignature(.{ .type = u64 });
+        try expect(sig1 != sig2);
+        const sig3 = comptime getSignature(.{ .type = struct {
+            number: i32,
+        } });
+        const sig4 = comptime getSignature(.{ .type = struct {
+            numberA: i32,
+        } });
+        try expect(sig3 != sig4);
+        const sig5 = comptime getSignature(.{ .type = *u32 });
+        const sig6 = comptime getSignature(.{ .type = *const u32 });
+        try expect(sig5 != sig6);
+        const sig7 = comptime getSignature(.{ .type = fn () i32 });
+        const sig8 = comptime getSignature(.{ .type = fn () u32 });
+        try expect(sig7 != sig8);
+        const sig9 = comptime getSignature(.{ .type = fn () callconv(.C) u32 });
+        try expect(sig8 != sig9);
+        const sig10 = comptime getSignature(.{ .type = fn (u32) u32 });
+        try expect(sig8 != sig10);
+        const sig11 = comptime getSignature(.{ .type = struct {
+            numberA: i32 align(16),
+        } });
+        try expect(sig11 != sig4);
+    }
+
     pub fn isConst(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
             .Pointer => |pt| pt.is_const,
@@ -996,8 +1027,150 @@ pub const TypeData = struct {
     test "isInternal" {
         try expectCT(isInternal(.{ .type = AbortSignal }) == true);
         try expectCT(isInternal(.{ .type = struct {} }) == false);
-        try expectCT(isInternal(.{ .type = Promise(f64, undefined) }) == true);
-        try expectCT(isInternal(.{ .type = Promise(anyerror!u32, undefined) }) == true);
+        try expectCT(isInternal(.{ .type = Promise(f64) }) == true);
+        try expectCT(isInternal(.{ .type = Promise(anyerror!u32) }) == true);
+    }
+};
+
+const TypeSignature = struct {
+    md5: std.crypto.hash.Md5,
+    type: type,
+
+    pub fn calc(comptime T: type) u64 {
+        @setEvalBranchQuota(200000);
+        var self: @This() = .{ .md5 = std.crypto.hash.Md5.init(.{}), .type = T };
+        self.update(T);
+        var out: [16]u8 = undefined;
+        self.md5.final(&out);
+        return std.mem.bytesToValue(u64, out[0..8]);
+    }
+
+    fn update(comptime self: *@This(), comptime T: type) void {
+        switch (@typeInfo(T)) {
+            .Struct => |st| {
+                self.hash(switch (st.layout) {
+                    .@"extern" => "extern struct",
+                    .@"packed" => "packed struct",
+                    else => "struct",
+                });
+                if (st.backing_integer) |BIT| {
+                    self.hash("(");
+                    self.update(BIT);
+                    self.hash(")");
+                }
+                self.hash(" {");
+                for (st.fields) |field| {
+                    if (!field.is_comptime) {
+                        self.hash(field.name);
+                        self.hash(": ");
+                        self.update(field.type);
+                        if (field.alignment != @alignOf(field.type)) {
+                            self.hash(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
+                        }
+                        self.hash(", ");
+                    }
+                }
+                self.hash("}");
+            },
+            .Union => |un| {
+                self.hash(switch (un.layout) {
+                    .@"extern" => "extern union",
+                    else => "union",
+                });
+                if (un.tag_type) |TT| {
+                    self.hash("(");
+                    self.update(TT);
+                    self.hash(")");
+                }
+                self.hash(" {");
+                for (un.fields) |field| {
+                    self.hash(field.name);
+                    self.hash(": ");
+                    self.update(field.type);
+                    if (field.alignment != @alignOf(field.type)) {
+                        self.hash(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
+                    }
+                    self.hash(", ");
+                }
+                self.hash("}");
+            },
+            .Array => |ar| {
+                self.hash(std.fmt.comptimePrint("[{d}]", ar.len));
+                self.update(ar.child);
+            },
+            .Vector => |ar| {
+                self.hash(std.fmt.comptimePrint("@Vector({d}, ", ar.len));
+                self.update(ar.child);
+                self.hash(")");
+            },
+            .Optional => |op| {
+                self.hash("?");
+                self.update(op.child);
+            },
+            .ErrorUnion => |eu| {
+                self.update(eu.error_set);
+                self.hash("!");
+                self.update(eu.payload);
+            },
+            .Pointer => |pt| {
+                self.hash(switch (pt.size) {
+                    .One => "*",
+                    .Many => "[*",
+                    .Slice => "[",
+                    .C => "[*c",
+                });
+                if (pt.sentinel) |ptr| {
+                    const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
+                    self.hash(std.fmt.comptimePrint(":{d}", value));
+                }
+                self.hash(switch (pt.size) {
+                    .One => "",
+                    else => "]",
+                });
+                if (pt.is_const) {
+                    self.hash("const ");
+                }
+                if (pt.is_allowzero) {
+                    self.hash("allowzero ");
+                }
+                if (pt.child == self.type) {
+                    self.hash("@This()");
+                } else {
+                    self.update(pt.child);
+                }
+            },
+            .Fn => |f| {
+                self.hash("fn (");
+                if (f.is_var_args) {
+                    self.hash("...");
+                }
+                for (f.params) |param| {
+                    if (param.is_noalias) {
+                        self.hash("noalias ");
+                    }
+                    if (param.type) |PT| {
+                        self.update(PT);
+                    } else {
+                        self.hash("anytype");
+                    }
+                    self.hash(", ");
+                }
+                self.hash(") ");
+                if (f.calling_convention != .Unspecified) {
+                    self.hash("callconv(.");
+                    self.hash(@tagName(f.calling_convention));
+                    self.hash(") ");
+                }
+                if (f.return_type) |RT| {
+                    self.update(RT);
+                }
+            },
+            else => self.hash(@typeName(T)),
+        }
+    }
+
+    fn hash(comptime self: *@This(), comptime b: []const u8) void {
+        self.md5.update(b);
     }
 };
 
