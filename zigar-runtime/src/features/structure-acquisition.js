@@ -1,5 +1,5 @@
 import {
-  CONST_TARGET, ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
+  ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
 import {
   ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
@@ -166,7 +166,6 @@ export default mixin({
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
   prepareObjectsForExport() {

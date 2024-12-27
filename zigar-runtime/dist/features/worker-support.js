@@ -43,7 +43,7 @@ var workerSupport = mixin({
       };
       const evtName = 'message';
       /* c8 ignore start */
-      if (typeof(Worker) === 'function' || "" !== 'node') {
+      {
         // web worker
         const url = getWorkerURL();
         const worker = new Worker(url, { type: 'module', name: 'zig' });
@@ -90,7 +90,7 @@ function getWorkerURL() {
 function workerMain() {
   let postMessage;
 
-  if (typeof(self) === 'object' || "" !== 'node') {
+  {
     // web worker
     self.onmessage = evt => run(evt.data);
     postMessage = msg => self.postMessage(msg);

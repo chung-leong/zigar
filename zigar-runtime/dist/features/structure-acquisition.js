@@ -1,4 +1,4 @@
-import { SLOTS, MEMORY, ZIG, ENVIRONMENT, CONST_TARGET, SENTINEL } from '../symbols.js';
+import { SLOTS, MEMORY, ZIG, ENVIRONMENT, SENTINEL } from '../symbols.js';
 import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { findObjects, adjustAddress, decodeText } from '../utils.js';
@@ -159,7 +159,6 @@ var structureAcquisition = mixin({
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
   prepareObjectsForExport() {

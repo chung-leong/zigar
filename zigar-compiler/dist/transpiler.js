@@ -155,54 +155,62 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-const MEMORY = Symbol('memory');
-const SLOTS = Symbol('slots');
-const PARENT = Symbol('parent');
-const ZIG = Symbol('zig');
-const NAME = Symbol('name');
-const TYPE = Symbol('type');
-const FLAGS = Symbol('flags');
-const CLASS = Symbol('class');
-const TAG = Symbol('tag');
-const PROPS = Symbol('props');
-const POINTER = Symbol('pointer');
-const SENTINEL = Symbol('sentinel');
-const ARRAY = Symbol('array');
-const TARGET = Symbol('target');
-const ENTRIES = Symbol('entries');
-const MAX_LENGTH = Symbol('maxLength');
-const KEYS = Symbol('keys');
-const ADDRESS = Symbol('address');
-const LENGTH = Symbol('length');
-const LAST_ADDRESS = Symbol('lastAddress');
-const LAST_LENGTH = Symbol('lastLength');
-const PROXY = Symbol('proxy');
-const CACHE = Symbol('cache');
-const SIZE = Symbol('size');
-const BIT_SIZE = Symbol('bitSize');
-const ALIGN = Symbol('align');
-const CONST_TARGET = Symbol('constTarget');
-const CONST_PROXY = Symbol('constProxy');
-const ENVIRONMENT = Symbol('environment');
-const ATTRIBUTES = Symbol('attributes');
-const PRIMITIVE = Symbol('primitive');
-const GETTERS = Symbol('getters');
-const SETTERS = Symbol('setters');
-const TYPED_ARRAY = Symbol('typedArray');
-const THROWING = Symbol('throwing');
-const PROMISE = Symbol('promise');
-const CALLBACK = Symbol('callback');
+const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
 
-const UPDATE = Symbol('update');
-const RESTORE = Symbol('restore');
-const RESET = Symbol('resetter');
-const VIVIFICATE = Symbol('vivificate');
-const VISIT = Symbol('visit');
-const COPY = Symbol('copy');
-const SHAPE = Symbol('shape');
-const INITIALIZE = Symbol('initialize');
-const FINALIZE = Symbol('finalize');
-const CAST = Symbol('cast');
+function symbol(name) {
+  return dict[name] ??= Symbol(name);
+}
+
+const MEMORY = symbol('memory');
+const SLOTS = symbol('slots');
+const PARENT = symbol('parent');
+const ZIG = symbol('zig');
+const NAME = symbol('name');
+const TYPE = symbol('type');
+const FLAGS = symbol('flags');
+const CLASS = symbol('class');
+const TAG = symbol('tag');
+const PROPS = symbol('props');
+const POINTER = symbol('pointer');
+const SENTINEL = symbol('sentinel');
+const ARRAY = symbol('array');
+symbol('items');
+const TARGET = symbol('target');
+const ENTRIES = symbol('entries');
+const MAX_LENGTH = symbol('max length');
+const KEYS = symbol('keys');
+const ADDRESS = symbol('address');
+const LENGTH = symbol('length');
+const LAST_ADDRESS = symbol('last address');
+const LAST_LENGTH = symbol('lastl ength');
+const PROXY = symbol('proxy');
+const CACHE = symbol('cache');
+const SIZE = symbol('size');
+const BIT_SIZE = symbol('bit size');
+const ALIGN = symbol('align');
+const CONST_TARGET = symbol('const target');
+const CONST_PROXY = symbol('const proxy');
+const ENVIRONMENT = symbol('environment');
+const ATTRIBUTES = symbol('attributes');
+const PRIMITIVE = symbol('primitive');
+const GETTERS = symbol('getters');
+const SETTERS = symbol('setters');
+const TYPED_ARRAY = symbol('typed array');
+const THROWING = symbol('throwing');
+const PROMISE = symbol('promise');
+const CALLBACK = symbol('callback');
+symbol('fallback');
+
+const UPDATE = symbol('update');
+const RESTORE = symbol('restore');
+const RESET = symbol('resetter');
+const VIVIFICATE = symbol('vivificate');
+const VISIT = symbol('visit');
+const COPY = symbol('copy');
+const SHAPE = symbol('shape');
+const INITIALIZE = symbol('initialize');
+const FINALIZE = symbol('finalize');
+const CAST = symbol('cast');
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -524,8 +532,7 @@ function generateCode(definition, params) {
 }
 
 function addStructureDefinitions(lines, definition) {
-  const { structures, settings, keys } = definition;
-  const { MEMORY, SLOTS, CONST_TARGET } = keys;
+  const { structures, settings } = definition;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
@@ -4540,7 +4547,6 @@ var structureAcquisition = mixin({
     return {
       structures,
       settings: { runtimeSafety, littleEndian, libc },
-      keys: { MEMORY, SLOTS, CONST_TARGET },
     };
   },
   prepareObjectsForExport() {

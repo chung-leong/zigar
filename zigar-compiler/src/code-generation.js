@@ -1,4 +1,5 @@
 import { MemberFlag, MemberType, StructureType } from '../../zigar-runtime/src/constants.js';
+import { CONST_TARGET, MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
 import { findObjects } from '../../zigar-runtime/src/utils.js';
 
 export function generateCode(definition, params) {
@@ -76,8 +77,7 @@ export function generateCode(definition, params) {
 }
 
 function addStructureDefinitions(lines, definition) {
-  const { structures, settings, keys } = definition;
-  const { MEMORY, SLOTS, CONST_TARGET } = keys;
+  const { structures, settings } = definition;
   const add = manageIndentation(lines);
   const defaultStructure = {
     constructor: null,
