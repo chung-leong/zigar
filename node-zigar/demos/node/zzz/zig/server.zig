@@ -47,6 +47,7 @@ fn runServer(host: []const u8, port: u16) !void {
     defer t.deinit();
     var router = try Router.init(allocator, &.{
         Route.init("/").get(@as(usize, 0), page_handler).layer(),
+        Route.init("/cat").get(@as(usize, 1), page_handler).layer(),
     }, .{});
     defer router.deinit(allocator);
     const ServerConfig = struct {
@@ -82,8 +83,8 @@ pub fn startServer(host: []const u8, port: u16) !void {
 
 pub fn setResponder(id: usize, f: ?Responder) void {
     if (id < responders.len) {
-        if (responders[id]) |pf| {
-            zigar.function.release(pf);
+        if (responders[id]) |previous| {
+            zigar.function.release(previous);
         }
         responders[id] = f;
     }
