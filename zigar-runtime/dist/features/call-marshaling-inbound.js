@@ -1,6 +1,6 @@
 import { StructureType, StructFlag, MemberType, Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, ZIG, CALLBACK, VISIT, THROWING } from '../symbols.js';
+import { MEMORY, ZIG, ALLOCATOR, CALLBACK, VISIT, THROWING, RETURN } from '../symbols.js';
 
 var callMarshalingInbound = mixin({
   jsFunctionThunkMap: new Map(),
@@ -58,7 +58,7 @@ var callMarshalingInbound = mixin({
             if (cb) {
               cb(err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
-              argStruct.retval = err;
+              argStruct[RETURN](err);
             } else {
               throw err;
             }
@@ -73,7 +73,8 @@ var callMarshalingInbound = mixin({
             if (cb) {
               cb(value);
             } else {
-              argStruct.retval = value;
+              // call setter of retval with allocator (if there's one)
+              argStruct[RETURN](value, argStruct[ALLOCATOR]);
             }
           } catch (err) {
             result = CallResult.Failure;
@@ -135,7 +136,7 @@ var callMarshalingInbound = mixin({
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = arg;
+                opt = this[ALLOCATOR] = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {

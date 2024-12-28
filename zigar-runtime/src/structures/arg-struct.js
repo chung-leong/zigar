@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { COPY, FINALIZE, MEMORY, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
+import { COPY, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -54,7 +54,7 @@ export default mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    const { byteSize: retvalSize, bitOffset: retvalBitOffset } = members[0];
+    descriptors[RETURN] = defineValue(descriptors.retval.set);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.TARGET === 'wasm') {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);

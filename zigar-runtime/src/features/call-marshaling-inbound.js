@@ -1,6 +1,6 @@
 import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { CALLBACK, MEMORY, THROWING, VISIT, ZIG } from '../symbols.js';
+import { ALLOCATOR, CALLBACK, MEMORY, RETURN, THROWING, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -58,7 +58,7 @@ export default mixin({
             if (cb) {
               cb(err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
-              argStruct.retval = err;
+              argStruct[RETURN](err);
             } else {
               throw err;
             }
@@ -73,7 +73,8 @@ export default mixin({
             if (cb) {
               cb(value);
             } else {
-              argStruct.retval = value;
+              // call setter of retval with allocator (if there's one)
+              argStruct[RETURN](value, argStruct[ALLOCATOR]);
             }
           } catch (err) {
             result = CallResult.Failure;
@@ -135,7 +136,7 @@ export default mixin({
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = arg;
+                opt = this[ALLOCATOR] = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {

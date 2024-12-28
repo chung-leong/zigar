@@ -1,7 +1,7 @@
 import { StructureFlag, ArgStructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { VIVIFICATE, VISIT, COPY, THROWING, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
+import { VIVIFICATE, VISIT, RETURN, COPY, THROWING, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var argStruct = mixin({
@@ -54,7 +54,7 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    members[0];
+    descriptors[RETURN] = defineValue(descriptors.retval.set);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);

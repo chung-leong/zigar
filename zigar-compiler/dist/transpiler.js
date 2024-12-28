@@ -202,11 +202,12 @@ const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const CALLBACK = symbol('callback');
+const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
-const RESET = symbol('resetter');
+const RESET = symbol('reset');
 const VIVIFICATE = symbol('vivificate');
 const VISIT = symbol('visit');
 const COPY = symbol('copy');
@@ -214,6 +215,7 @@ const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
 const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
+const RETURN = symbol('return');
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -3061,7 +3063,7 @@ var callMarshalingInbound = mixin({
             if (cb) {
               cb(err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
-              argStruct.retval = err;
+              argStruct[RETURN](err);
             } else {
               throw err;
             }
@@ -3076,7 +3078,8 @@ var callMarshalingInbound = mixin({
             if (cb) {
               cb(value);
             } else {
-              argStruct.retval = value;
+              // call setter of retval with allocator (if there's one)
+              argStruct[RETURN](value, argStruct[ALLOCATOR]);
             }
           } catch (err) {
             result = CallResult.Failure;
@@ -3138,7 +3141,7 @@ var callMarshalingInbound = mixin({
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = arg;
+                opt = this[ALLOCATOR] = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
@@ -6231,7 +6234,7 @@ var argStruct = mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    members[0];
+    descriptors[RETURN] = defineValue(descriptors.retval.set);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
