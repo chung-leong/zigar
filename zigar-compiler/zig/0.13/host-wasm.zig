@@ -13,7 +13,9 @@ const ActionType = thunk_js.ActionType;
 const ActionResult = thunk_js.ActionResult;
 
 pub const Promise = types.Promise;
+pub const PromiseOf = types.PromiseOf;
 pub const AbortSignal = types.AbortSignal;
+pub const JobQueue = types.JobQueue;
 
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;

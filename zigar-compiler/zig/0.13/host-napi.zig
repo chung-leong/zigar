@@ -12,7 +12,9 @@ const Memory = types.Memory;
 const Error = types.Error;
 
 pub const Promise = types.Promise;
+pub const PromiseOf = types.PromiseOf;
 pub const AbortSignal = types.AbortSignal;
+pub const JobQueue = types.JobQueue;
 
 const ModuleData = opaque {};
 

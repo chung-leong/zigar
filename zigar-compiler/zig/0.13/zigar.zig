@@ -1,14 +1,13 @@
 const std = @import("std");
 const host = @import("root").host;
-const job_queue = @import("job-queue.zig");
 
 pub const function = struct {
     pub fn release(fn_ptr: anytype) void {
         host.releaseFunction(fn_ptr) catch {};
     }
-    pub fn Promise(comptime T: type) type {
-        return host.Promise(T);
-    }
+
+    pub const Promise = host.Promise;
+    pub const PromiseOf = host.PromiseOf;
     pub const AbortSignal = host.AbortSignal;
 };
 
@@ -17,7 +16,7 @@ pub const thread = struct {
         try host.setMultithread(state);
     }
 
-    pub const JobQueue = job_queue.JobQueue;
+    pub const JobQueue = host.JobQueue;
 };
 
 pub const mem = struct {
