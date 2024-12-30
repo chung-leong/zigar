@@ -84,12 +84,14 @@ pub const StructureFlags = extern union {
         is_extern: bool = false,
         is_packed: bool = false,
         is_iterator: bool = false,
-        is_tuple: bool = false,
+        is_async_iterator: bool = false,
 
+        is_tuple: bool = false,
         is_allocator: bool = false,
         is_promise: bool = false,
         is_abort_signal: bool = false,
-        _: u21 = 0,
+
+        _: u20 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
@@ -104,7 +106,8 @@ pub const StructureFlags = extern union {
 
         is_packed: bool = false,
         is_iterator: bool = false,
-        _: u22 = 0,
+        is_async_iterator: bool = false,
+        _: u21 = 0,
     },
     error_union: packed struct(u32) {
         has_value: bool = true,
@@ -131,7 +134,8 @@ pub const StructureFlags = extern union {
 
         is_open_ended: bool = false,
         is_iterator: bool = false,
-        _: u26 = 0,
+        is_async_iterator: bool = false,
+        _: u25 = 0,
     },
     optional: packed struct(u32) {
         has_value: bool = true,
@@ -187,7 +191,8 @@ pub const StructureFlags = extern union {
         has_slot: bool = false,
 
         is_iterator: bool = false,
-        _: u27 = 0,
+        is_async_iterator: bool = false,
+        _: u26 = 0,
     },
     arg_struct: packed struct(u32) {
         has_value: bool = false,
@@ -1807,6 +1812,15 @@ pub fn Promise(comptime T: type) type {
         pub inline fn resolve(self: @This(), value: T) void {
             self.callback(value);
         }
+    };
+}
+
+pub fn PromiseOf(comptime arg: anytype) type {
+    const AT = @TypeOf(arg);
+    const FT = if (@typeInfo(AT) == .Type) arg else AT;
+    return switch (@typeInfo(FT)) {
+        .Fn => |f| Promise(f.return_type.?),
+        else => @compileError("Function expected, received " ++ @typeName(FT)),
     };
 }
 

@@ -36,11 +36,12 @@ export const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
   IsIterator:       0x0040,
-  IsTuple:          0x0080,
+  IsAsyncIterator:  0x0080,
 
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsAbortSignal:    0x0400,
+  IsTuple:          0x0100,
+  IsAllocator:      0x0200,
+  IsPromise:        0x0400,
+  IsAbortSignal:    0x0800,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,
@@ -50,10 +51,12 @@ export const UnionFlag = {
 
   IsPacked:         0x0100,
   IsIterator:       0x0200,
+  IsAsyncIterator:  0x0400,
 };
 export const EnumFlag = {
   IsOpenEnded:      0x0010,
   IsIterator:       0x0020,
+  IsAsyncIterator:  0x0040,
 };
 export const OptionalFlag = {
   HasSelector:      0x0010,
@@ -79,6 +82,7 @@ export const ErrorSetFlag = {
 };
 export const OpaqueFlag = {
   IsIterator:       0x0010,
+  IsAsyncIterator:  0x0020,
 };
 export const VectorFlag = {
   IsTypedArray:     0x0010,

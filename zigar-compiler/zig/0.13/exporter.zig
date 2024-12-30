@@ -125,6 +125,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_packed = st.layout == .@"packed",
                             .is_tuple = st.is_tuple,
                             .is_iterator = td.isIterator(),
+                            .is_async_iterator = td.isAsyncIterator(),
                             .is_allocator = td.isAllocator(),
                             .is_promise = td.isPromise(),
                             .is_abort_signal = td.isAbortSignal(),
@@ -151,6 +152,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_extern = un.layout == .@"extern",
                             .is_packed = un.layout == .@"packed",
                             .is_iterator = td.isIterator(),
+                            .is_async_iterator = td.isAsyncIterator(),
                         },
                     };
                 },
@@ -179,6 +181,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .@"enum" = .{
                         .is_open_ended = !en.is_exhaustive,
                         .is_iterator = td.isIterator(),
+                        .is_async_iterator = td.isAsyncIterator(),
                     },
                 },
                 .ErrorSet => .{
@@ -223,6 +226,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .Opaque => .{
                     .@"opaque" = .{
                         .is_iterator = td.isIterator(),
+                        .is_async_iterator = td.isAsyncIterator(),
                     },
                 },
                 .Fn => .{ .function = .{} },
