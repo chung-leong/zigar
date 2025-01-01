@@ -2,9 +2,7 @@ const std = @import("std");
 const host = @import("root").host;
 
 pub const function = struct {
-    pub fn release(fn_ptr: anytype) void {
-        host.releaseFunction(fn_ptr) catch {};
-    }
+    pub const release = host.releaseFunction;
 
     pub const Promise = host.Promise;
     pub const PromiseOf = host.PromiseOf;
@@ -12,15 +10,13 @@ pub const function = struct {
 };
 
 pub const thread = struct {
-    pub fn use(state: bool) !void {
-        try host.setMultithread(state);
-    }
-
-    pub const JobQueue = host.JobQueue;
+    pub const use = host.startMultithread;
+    pub const end = host.stopMultithread;
+    
+    pub const WorkQueue = host.WorkQueue;
+    pub const Queue = host.Queue;
 };
 
 pub const mem = struct {
-    pub fn getDefaultAllocator() std.mem.Allocator {
-        return host.getDefaultAllocator();
-    }
+    pub const getDefaultAllocator = host.getDefaultAllocator;
 };

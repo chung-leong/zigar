@@ -15,7 +15,8 @@ const ActionResult = thunk_js.ActionResult;
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const AbortSignal = types.AbortSignal;
-pub const JobQueue = types.JobQueue;
+pub const WorkQueue = types.WorkQueue;
+pub const Queue = types.Queue;
 
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
@@ -332,15 +333,9 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
     }
 }
 
-pub fn setMultithread(state: bool) !void {
-    if (comptime builtin.single_threaded) {
-        return Error.MultithreadingNotEnabled;
-    }
-    if (!main_thread) {
-        return Error.NotInMainThread;
-    }
-    multithread = state;
-}
+pub fn startMultithread() !void {}
+
+pub fn stopMultithread() void {}
 
 const allocator: std.mem.Allocator = .{
     .ptr = undefined,

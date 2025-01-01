@@ -141,7 +141,11 @@ export default mixin({
                 optName = 'callback';
                 if (++callbackCount === 1) {
                   const callback = this[CALLBACK] = arg.callback['*'];
-                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
+                  const ptr = arg.ptr;
+                  opt = (...args) => {
+                    const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
+                    return callback(ptr, result);
+                  };
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';

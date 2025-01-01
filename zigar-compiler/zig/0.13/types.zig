@@ -1809,15 +1809,136 @@ const Internal = opaque {};
 
 pub fn Promise(comptime T: type) type {
     return struct {
-        callback: *const fn (T) void,
+        ptr: ?*anyopaque,
+        callback: *const fn (?*anyopaque, T) void,
 
         const Payload = T;
         const Opaque = Internal;
 
-        pub inline fn resolve(self: @This(), value: T) void {
-            self.callback(value);
+        pub fn init(ptr: ?*anyopaque, cb: anytype) @This() {
+            const CBT = @TypeOf(cb);
+            if (comptime !isValidCallback(CBT)) {
+                @compileError("Invalid callback function: " ++ @typeName(CBT));
+            }
+            const fn_ptr = switch (@typeInfo(CBT)) {
+                .Pointer => cb,
+                .Fn => &cb,
+                else => unreachable,
+            };
+            return .{
+                .ptr = ptr,
+                .callback = @ptrCast(fn_ptr),
+            };
+        }
+
+        pub fn resolve(self: @This(), value: T) void {
+            self.callback(self.ptr, value);
+        }
+
+        pub fn partition(self: @This(), allocator: std.mem.Allocator, count: usize) !@This() {
+            if (count == 1) {
+                return self;
+            }
+            const ThisPromise = @This();
+            const Context = struct {
+                allocator: std.mem.Allocator,
+                promise: ThisPromise,
+                count: usize,
+                fired: bool = false,
+
+                pub fn resolve(ctx: *@This(), value: T) void {                    
+                    var call = false;
+                    var free = false;
+                    if (@typeInfo(T) == .ErrorUnion) {
+                        if (value) |_| {
+                            free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                            call = free and @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
+                        } else |_| {
+                            call = @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
+                            free =  @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                        }
+                    } else {
+                        free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                    }
+                    if (call) {
+                        ctx.promise.resolve(value);
+                    }
+                    if (free) {
+                        const allocator_copy = ctx.allocator;
+                        allocator_copy.destroy(ctx);
+                    }
+                }
+            };
+            const ctx = try allocator.create(Context);
+            ctx.* = .{ .allocator = allocator, .promise = self, .count = count };
+            return @This().init(ctx, Context.resolve);
+        }
+
+        test "partition" {
+            if (T == anyerror!u32) {
+                const ns = struct {
+                    var test_value: T = 0;
+
+                    fn resolve(_: *anyopaque, value: T) void {
+                        test_value = value; 
+                    }
+                };
+                var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                const promise1: @This() = @This().init(null, ns.resolve);
+                const multipart_promise1 = try promise1.partition(gpa.allocator(), 3);
+                multipart_promise1.resolve(1);
+                multipart_promise1.resolve(2);
+                try expect(ns.test_value catch unreachable == 0);
+                multipart_promise1.resolve(3);
+                try expect(ns.test_value catch unreachable == 3);
+                const promise2: @This() = @This().init(null, ns.resolve);
+                const multipart_promise2 = try promise2.partition(gpa.allocator(), 3);
+                multipart_promise2.resolve(error.OutOfMemory);
+                try expect(ns.test_value catch 777 == 777);
+            }
+        }
+
+        fn isValidCallback(comptime FT: type) bool {
+            switch (@typeInfo(FT)) {
+                .Fn => |f| {
+                    if (f.params.len == 2 and f.return_type == void) {
+                        if (f.params[0].type != null and f.params[1].type == T) {
+                            switch (@typeInfo(f.params[0].type.?)) {
+                                .Pointer => |pt| {
+                                    if (pt.size == .One) {
+                                        return true;
+                                    }
+                                },
+                                else => {},
+                            }                            
+                        }
+                    }
+                },
+                .Pointer => |pt| {
+                    if (@typeInfo(pt.child) == .Fn and isValidCallback(pt.child)) {
+                        return true;
+                    }
+                },
+                else => {},
+            }
+            @compileLog(FT);
+            return false;
+        }
+
+        test "isValidCallback" {
+            // try expect(isValidCallback(void) == false);
+            // try expect(isValidCallback(*anyopaque) == false);
+            // try expect(isValidCallback(*fn (*anyopaque, T) void) == true);
+            // try expect(isValidCallback(*fn (*usize, T) void) == true);
+            // try expect(isValidCallback(*fn (*usize, T) i32) == false);
+            // try expect(isValidCallback(*fn ([*]usize, T) void) == false);
+            // try expect(isValidCallback(**fn (*usize, T) void) == false);
         }
     };
+}
+
+test {
+    _ = Promise(anyerror!u32);
 }
 
 pub fn PromiseOf(comptime arg: anytype) type {
@@ -1843,7 +1964,7 @@ pub const AbortSignal = struct {
     }
 };
 
-fn Queue(comptime T: type) type {
+pub fn Queue(comptime T: type) type {
     return struct {
         const Node = struct {
             next: *Node,
@@ -1954,15 +2075,15 @@ test "Queue" {
     queue.deinit();
 }
 
-pub fn JobQueue(comptime ns: type) type {
+pub fn WorkQueue(comptime ns: type) type {
     const st = switch (@typeInfo(ns)) {
         .Struct => |st| st,
         else => @compileError("Struct expected, received " ++ @typeName(ns)),
     };
     return struct {
-        queue: Queue(Job) = undefined,
+        queue: Queue(WorkItem) = undefined,
         threads: []std.Thread = undefined,
-        thread_count: std.atomic.Value(usize) = .{ .raw = 0 },
+        thread_count: usize = 0,
         status: Status = .uninitialized,
         deinit_promise: ?Promise(void) = null,
 
@@ -1975,70 +2096,7 @@ pub fn JobQueue(comptime ns: type) type {
             allocator: std.mem.Allocator,
             n_jobs: usize = 1,
         };
-
-        pub fn init(self: *@This(), options: Options) !void {
-            switch (self.status) {
-                .uninitialized => {},
-                .initialized => return error.AlreadyInitialized,
-                .deinitializing => return error.Denitializing,
-            }
-            const allocator = options.allocator;
-            self.queue = .{ .allocator = allocator };
-            self.threads = try allocator.alloc(std.Thread, options.n_jobs);
-            errdefer allocator.free(self.threads);
-            var thread_count: usize = 0;
-            errdefer for (0..thread_count) |i| self.threads[i].join();
-            errdefer self.queue.deinit();
-            for (0..options.n_jobs) |i| {
-                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleJobs, .{self});
-                thread_count += 1;
-            }
-            self.thread_count.store(thread_count, .release);
-            self.status = .initialized;
-        }
-
-        pub fn deinit(self: *@This()) void {
-            switch (self.status) {
-                .initialized => {},
-                else => return,
-            }
-            self.status = .deinitializing;
-            self.queue.deinit();
-            for (self.threads) |thread| thread.join();
-            self.queue.allocator.free(self.threads);
-            self.status = .uninitialized;
-        }
-
-        pub fn deinitAsync(self: *@This(), promise: Promise(void)) void {
-            switch (self.status) {
-                .initialized => {},
-                else => return promise.resolve({}),
-            }
-            self.initialized = false;
-            self.deinit_promise = promise;
-            self.status = .deinitializing;
-            self.queue.deinit();
-        }
-
-        pub fn push(self: *@This(), comptime f: anytype, args: anytype, promise: ?PromiseOf(f)) !void {
-            switch (self.status) {
-                .initialized => {},
-                else => return error.Unexpected,
-            }
-            const key = comptime EnumOf(f);
-            const job = @unionInit(Job, @tagName(key), .{ .args = args, .promise = promise });
-            try self.queue.push(job);
-        }
-
-        pub fn clear(self: *@This()) void {
-            switch (self.status) {
-                .initialized => {},
-                else => return,
-            }
-            while (self.queue.pull() != null) {}
-        }
-
-        const Job = init: {
+        pub const WorkItem = init: {
             var enum_fields: [st.decls.len]std.builtin.Type.EnumField = undefined;
             var union_fields: [st.decls.len]std.builtin.Type.UnionField = undefined;
             var count = 0;
@@ -2074,13 +2132,73 @@ pub fn JobQueue(comptime ns: type) type {
                 },
             });
         };
-        const JobEnum = @typeInfo(Job).Union.tag_type.?;
 
-        fn EnumOf(comptime f: anytype) JobEnum {
+        pub fn init(self: *@This(), options: Options) !void {
+            switch (self.status) {
+                .uninitialized => {},
+                .initialized => return error.AlreadyInitialized,
+                .deinitializing => return error.Denitializing,
+            }
+            const allocator = options.allocator;
+            self.queue = .{ .allocator = allocator };
+            self.threads = try allocator.alloc(std.Thread, options.n_jobs);
+            errdefer allocator.free(self.threads);
+            errdefer for (0..self.thread_count) |i| self.threads[i].join();
+            errdefer self.queue.deinit();
+            for (0..options.n_jobs) |i| {
+                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleWorkItems, .{self});
+                self.thread_count += 1;
+            }
+            self.status = .initialized;
+        }
+
+        pub fn deinit(self: *@This()) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return,
+            }
+            self.status = .deinitializing;
+            self.queue.deinit();
+            for (self.threads) |thread| thread.join();
+            self.queue.allocator.free(self.threads);
+            self.status = .uninitialized;
+        }
+
+        pub fn deinitAsync(self: *@This(), promise: Promise(void)) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return promise.resolve({}),
+            }
+            self.deinit_promise = promise;
+            self.status = .deinitializing;
+            self.queue.deinit();
+        }
+
+        pub fn push(self: *@This(), comptime f: anytype, args: anytype, promise: ?PromiseOf(f)) !void {
+            switch (self.status) {
+                .initialized => {},
+                else => return error.Unexpected,
+            }
+            const key = comptime EnumOf(f);
+            const item = @unionInit(WorkItem, @tagName(key), .{ .args = args, .promise = promise });
+            try self.queue.push(item);
+        }
+
+        pub fn clear(self: *@This()) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return,
+            }
+            while (self.queue.pull() != null) {}
+        }
+
+        const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
+
+        fn EnumOf(comptime f: anytype) WorkItemEnum {
             return for (st.decls) |decl| {
                 const dv = @field(ns, decl.name);
                 if (@TypeOf(dv) == @TypeOf(f)) {
-                    if (dv == f) break @field(JobEnum, decl.name);
+                    if (dv == f) break @field(WorkItemEnum, decl.name);
                 }
             } else @compileError("Function not found in " ++ @typeName(ns));
         }
@@ -2102,10 +2220,10 @@ pub fn JobQueue(comptime ns: type) type {
             });
         }
 
-        fn handleJobs(self: *@This()) void {
+        fn handleWorkItems(self: *@This()) void {
             while (true) {
-                if (self.queue.pull()) |job| {
-                    invokeFunction(job);
+                if (self.queue.pull()) |item| {
+                    invokeFunction(item);
                 } else {
                     if (self.queue.stopped) {
                         break;
@@ -2114,8 +2232,9 @@ pub fn JobQueue(comptime ns: type) type {
                     }
                 }
             }
-            if (self.deinit_promise) |promise| {
-                if (self.thread_count.fetchSub(1, .acq_rel) == 0) {
+            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
+                // perform actual deinit here if deinitAsync() was called
+                if (self.deinit_promise) |promise| {
                     for (self.threads) |thread| thread.join();
                     self.queue.allocator.free(self.threads);
                     self.status = .uninitialized;
@@ -2124,20 +2243,20 @@ pub fn JobQueue(comptime ns: type) type {
             }
         }
 
-        fn invokeFunction(job: Job) void {
-            const un = @typeInfo(Job).Union;
+        fn invokeFunction(item: WorkItem) void {
+            const un = @typeInfo(WorkItem).Union;
             inline for (un.fields) |field| {
-                const key = @field(JobEnum, field.name);
-                if (job == key) {
+                const key = @field(WorkItemEnum, field.name);
+                if (item == key) {
                     const func = @field(ns, field.name);
                     const ArgsTuple = std.meta.ArgsTuple(@TypeOf(func));
-                    const task = @field(job, field.name);
+                    const call = @field(item, field.name);
                     var args_tuple: ArgsTuple = undefined;
                     inline for (std.meta.fields(ArgsTuple)) |arg_field| {
-                        @field(args_tuple, arg_field.name) = @field(task.args, arg_field.name);
+                        @field(args_tuple, arg_field.name) = @field(call.args, arg_field.name);
                     }
                     const result = @call(.auto, func, args_tuple);
-                    if (task.promise) |promise| {
+                    if (call.promise) |promise| {
                         promise.resolve(result);
                     }
                 }
@@ -2146,7 +2265,7 @@ pub fn JobQueue(comptime ns: type) type {
     };
 }
 
-test "JobQueue" {
+test "WorkQueue" {
     const test_ns = struct {
         var total: i32 = 0;
 
@@ -2157,7 +2276,7 @@ test "JobQueue" {
         pub fn world() void {}
     };
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var queue: JobQueue(test_ns) = .{};
+    var queue: WorkQueue(test_ns) = .{};
     try queue.init(.{ .allocator = gpa.allocator(), .n_jobs = 1 });
     try queue.push(test_ns.hello, .{123}, null);
     try queue.push(test_ns.hello, .{456}, null);
