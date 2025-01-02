@@ -224,8 +224,8 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = thunk_js.createThunkController(@This(), FT);
-    const fn_id = try control(null, .get_id, thunk_address);
-    const ptr_address = try control(null, .get_ptr, thunk_address);
+    const fn_id = control(null, .get_id, thunk_address) catch return;
+    const ptr_address = control(null, .get_ptr, thunk_address) catch return;
     const md: *ModuleData = @ptrFromInt(ptr_address);
     var action: Action = .{ .type = .release, .fn_id = fn_id };
     if (module_data == md) {

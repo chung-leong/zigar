@@ -1809,7 +1809,7 @@ const Internal = opaque {};
 
 pub fn Promise(comptime T: type) type {
     return struct {
-        ptr: ?*anyopaque,
+        ptr: ?*anyopaque = null,
         callback: *const fn (?*anyopaque, T) void,
 
         const Payload = T;

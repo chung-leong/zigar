@@ -10,7 +10,7 @@ pub const Callback = *const fn (
 
 const allocator = zigar.mem.getDefaultAllocator();
 
-pub fn receive(arg: JSError![]const u8) void {
+pub fn receive(_: ?*anyopaque, arg: JSError![]const u8) void {
     if (arg) |string| {
         std.debug.print("value = {s}\n", .{string});
         allocator.free(string);

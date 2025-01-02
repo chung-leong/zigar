@@ -5,7 +5,7 @@ pub const JSError = error{Unexpected};
 
 pub const Callback = *const fn (promise: zigar.function.Promise(JSError!i32)) void;
 
-pub fn receive(arg: JSError!i32) void {
+pub fn receive(_: ?*anyopaque, arg: JSError!i32) void {
     if (arg) |value| {
         std.debug.print("value = {d}\n", .{value});
     } else |err| {

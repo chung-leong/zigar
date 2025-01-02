@@ -32,7 +32,7 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
 pub fn call4(cb: *const fn (i32) i32) !void {
-    try zigar.thread.use(true);
+    try zigar.thread.use();
     const ns = struct {
         fn run(f: *const fn (i32) i32) void {
             call4_result = f(1234);
@@ -44,5 +44,5 @@ pub fn call4(cb: *const fn (i32) i32) !void {
 }
 
 pub fn shutdown() !void {
-    try zigar.thread.use(false);
+    try zigar.thread.end();
 }

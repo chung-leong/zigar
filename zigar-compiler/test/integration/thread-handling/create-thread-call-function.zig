@@ -4,7 +4,7 @@ const zigar = @import("zigar");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
-    try zigar.thread.use(true);
+    try zigar.thread.use();
     const ns = struct {
         fn run(f: *const fn () error{Unexpected}!void) void {
             f() catch |err| {
@@ -18,5 +18,5 @@ pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
 }
 
 pub fn shutdown() !void {
-    try zigar.thread.use(false);
+    try zigar.thread.end();
 }
