@@ -24,7 +24,7 @@ export default mixin({
         };
         });
     }
-    const cb = args[CALLBACK] = (result) => {
+    const cb = args[CALLBACK] = (ptr, result) => {
       const isError = result instanceof Error;
       args[FINALIZE](!isError);
       const id = this.getFunctionId(cb);

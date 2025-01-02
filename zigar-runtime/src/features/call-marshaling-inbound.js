@@ -128,7 +128,7 @@ export default mixin({
           // error unions will throw on access, in which case we pass the error as the argument
           try {
             let arg = this[srcIndex];
-            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+            if (type === MemberType.Object && arg?.[MEMORY]?.[ZIG]) {
               // create copy in JS memory
               arg = new arg.constructor(arg);
             }
@@ -143,6 +143,7 @@ export default mixin({
                   const callback = this[CALLBACK] = arg.callback['*'];
                   const ptr = arg.ptr;
                   opt = (...args) => {
+                    console.log(args);
                     const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
                     return callback(ptr, result);
                   };
