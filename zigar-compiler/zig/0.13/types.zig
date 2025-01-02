@@ -1846,7 +1846,7 @@ pub fn Promise(comptime T: type) type {
                 count: usize,
                 fired: bool = false,
 
-                pub fn resolve(ctx: *@This(), value: T) void {                    
+                pub fn resolve(ctx: *@This(), value: T) void {
                     var call = false;
                     var free = false;
                     if (@typeInfo(T) == .ErrorUnion) {
@@ -1855,7 +1855,7 @@ pub fn Promise(comptime T: type) type {
                             call = free and @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
                         } else |_| {
                             call = @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
-                            free =  @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                            free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
                         }
                     } else {
                         free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
@@ -1880,7 +1880,7 @@ pub fn Promise(comptime T: type) type {
                     var test_value: T = 0;
 
                     fn resolve(_: *anyopaque, value: T) void {
-                        test_value = value; 
+                        test_value = value;
                     }
                 };
                 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -1910,7 +1910,7 @@ pub fn Promise(comptime T: type) type {
                                     }
                                 },
                                 else => {},
-                            }                            
+                            }
                         }
                     }
                 },
@@ -1926,13 +1926,13 @@ pub fn Promise(comptime T: type) type {
         }
 
         test "isValidCallback" {
-            // try expect(isValidCallback(void) == false);
-            // try expect(isValidCallback(*anyopaque) == false);
-            // try expect(isValidCallback(*fn (*anyopaque, T) void) == true);
-            // try expect(isValidCallback(*fn (*usize, T) void) == true);
-            // try expect(isValidCallback(*fn (*usize, T) i32) == false);
-            // try expect(isValidCallback(*fn ([*]usize, T) void) == false);
-            // try expect(isValidCallback(**fn (*usize, T) void) == false);
+            try expect(isValidCallback(void) == false);
+            try expect(isValidCallback(*anyopaque) == false);
+            try expect(isValidCallback(*fn (*anyopaque, T) void) == true);
+            try expect(isValidCallback(*fn (*usize, T) void) == true);
+            try expect(isValidCallback(*fn (*usize, T) i32) == false);
+            try expect(isValidCallback(*fn ([*]usize, T) void) == false);
+            try expect(isValidCallback(**fn (*usize, T) void) == false);
         }
     };
 }
@@ -1979,7 +1979,8 @@ pub fn Queue(comptime T: type) type {
 
         pub fn push(self: *@This(), value: T) !void {
             const new_node = try self.allocator.create(Node);
-            new_node.* = .{ .next = tail, .payload = value };
+            new_node.payload = value;
+            @atomicStore(*Node, &new_node.next, tail, .release);
             // link new node to the left of the tail
             self.attachOnLeft(new_node, tail);
             // increment count and wake up any awaking thread
@@ -2036,20 +2037,21 @@ pub fn Queue(comptime T: type) type {
                 if (@cmpxchgWeak(*Node, next_ptr, ref_node, node, .seq_cst, .monotonic) == null) {
                     break;
                 } else {
-                    // try again
+                    // deleted in the meantime or exchange failed--try again
+                    continue;
                 }
             }
         }
 
-        fn isMarkedReference(ptr: *Node) bool {
+        inline fn isMarkedReference(ptr: *Node) bool {
             return @intFromPtr(ptr) & 1 != 0;
         }
 
-        fn getUnmarkedReference(ptr: *Node) *Node {
+        inline fn getUnmarkedReference(ptr: *Node) *Node {
             return @ptrFromInt(@intFromPtr(ptr) & ~@as(usize, 1));
         }
 
-        fn getMarkedReference(ptr: *Node) *Node {
+        inline fn getMarkedReference(ptr: *Node) *Node {
             @setRuntimeSafety(false);
             return @ptrFromInt(@intFromPtr(ptr) | @as(usize, 1));
         }
