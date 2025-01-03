@@ -1921,7 +1921,6 @@ pub fn Promise(comptime T: type) type {
                 },
                 else => {},
             }
-            @compileLog(FT);
             return false;
         }
 
@@ -1978,14 +1977,45 @@ pub fn Queue(comptime T: type) type {
         stopped: bool = false,
 
         pub fn push(self: *@This(), value: T) !void {
-            const new_node = try self.allocator.create(Node);
-            new_node.payload = value;
-            @atomicStore(*Node, &new_node.next, tail, .release);
-            // link new node to the left of the tail
-            self.attachOnLeft(new_node, tail);
+            const new_node = try self.alloc();
+            new_node.* = .{ .next = tail, .payload = value };
+            self.insert(new_node);
             // increment count and wake up any awaking thread
             _ = self.count.fetchAdd(1, .release);
             std.Thread.Futex.wake(&self.count, 1);
+        }
+
+        fn alloc(self: *@This()) !*Node {
+            while (true) {
+                const current_head = self.head;
+                if (isMarkedReference(current_head)) {
+                    const next_node = getUnmarkedReference(current_head.next);
+                    if (cas(&self.head, current_head, next_node)) return current_head;
+                } else break;
+            }
+            return try self.allocator.create(Node);
+        }
+
+        fn insert(self: *@This(), node: *Node) void {
+            while (true) {
+                if (self.head == tail) {
+                    if (cas(&self.head, tail, node)) return;
+                } else {
+                    var current_node = self.head;
+                    while (true) {
+                        const next_node = getUnmarkedReference(current_node.next);
+                        if (next_node == tail) {
+                            const next = switch (isMarkedReference(current_node.next)) {
+                                false => node,
+                                true => getMarkedReference(node),
+                            };
+                            if (cas(&current_node.next, current_node.next, next)) return;
+                            break;
+                        }
+                        current_node = next_node;
+                    }
+                }
+            }
         }
 
         pub fn pull(self: *@This()) ?T {
@@ -1993,10 +2023,7 @@ pub fn Queue(comptime T: type) type {
             return while (current_node != tail) {
                 const next_node = getUnmarkedReference(current_node.next);
                 if (!isMarkedReference(current_node.next)) {
-                    if (@cmpxchgWeak(*Node, &current_node.next, next_node, getMarkedReference(next_node), .seq_cst, .monotonic) == null) {
-                        // remove current node from linked list by pointing the next pointer of the previous node to the next node
-                        self.attachOnLeft(next_node, current_node);
-                        defer self.allocator.destroy(current_node);
+                    if (cas(&current_node.next, next_node, getMarkedReference(next_node))) {
                         _ = self.count.fetchSub(1, .release);
                         break current_node.payload;
                     }
@@ -2009,38 +2036,21 @@ pub fn Queue(comptime T: type) type {
             std.Thread.Futex.wait(&self.count, 0);
         }
 
-        pub fn deinit(self: *@This()) void {
+        pub fn stop(self: *@This()) void {
             self.stopped = true;
+            while (self.pull()) |_| {}
             // wake up awaking threads and prevent them from sleep again
             self.count.store(std.math.maxInt(u32), .release);
             std.Thread.Futex.wake(&self.count, std.math.maxInt(u32));
         }
 
-        fn attachOnLeft(self: *@This(), node: *Node, ref_node: *Node) void {
-            while (true) {
-                var next_ptr: **Node = undefined;
-                var current_node = self.head;
-                if (current_node == ref_node) {
-                    next_ptr = &self.head;
-                } else {
-                    const left_node: *Node = while (current_node != tail) {
-                        const next_node = getUnmarkedReference(current_node.next);
-                        if (next_node == ref_node) break current_node;
-                        current_node = next_node;
-                    } else tail;
-                    if (left_node == tail or isMarkedReference(left_node.next)) {
-                        // try again
-                        continue;
-                    }
-                    next_ptr = &left_node.next;
-                }
-                if (@cmpxchgWeak(*Node, next_ptr, ref_node, node, .seq_cst, .monotonic) == null) {
-                    break;
-                } else {
-                    // deleted in the meantime or exchange failed--try again
-                    continue;
-                }
-            }
+        pub fn deinit(self: *@This()) void {
+            var current_node = self.head;
+            return while (current_node != tail) {
+                const next_node = getUnmarkedReference(current_node.next);
+                self.allocator.destroy(current_node);
+                current_node = next_node;
+            };
         }
 
         inline fn isMarkedReference(ptr: *Node) bool {
@@ -2054,6 +2064,10 @@ pub fn Queue(comptime T: type) type {
         inline fn getMarkedReference(ptr: *Node) *Node {
             @setRuntimeSafety(false);
             return @ptrFromInt(@intFromPtr(ptr) | @as(usize, 1));
+        }
+
+        inline fn cas(ptr: **Node, old: *Node, new: *Node) bool {
+            return @cmpxchgWeak(*Node, ptr, old, new, .seq_cst, .monotonic) == null;
         }
     };
 }
@@ -2074,6 +2088,8 @@ test "Queue" {
     const value3 = queue.pull();
     try expect(value3 == null);
     try queue.push(888);
+    const value4 = queue.pull();
+    try expect(value4 == 888);
     queue.deinit();
 }
 
@@ -2160,8 +2176,9 @@ pub fn WorkQueue(comptime ns: type) type {
                 else => return,
             }
             self.status = .deinitializing;
-            self.queue.deinit();
+            self.queue.stop();
             for (self.threads) |thread| thread.join();
+            self.queue.deinit();
             self.queue.allocator.free(self.threads);
             self.status = .uninitialized;
         }
