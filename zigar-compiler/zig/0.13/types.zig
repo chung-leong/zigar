@@ -892,8 +892,78 @@ pub const TypeData = struct {
         try expect(isIterator(.{ .type = std.fs.path }) == false);
     }
 
+    fn NextMethodAsyncReturnType(comptime FT: type, comptime T: type) ?type {
+        const f = @typeInfo(FT).Fn;
+        if (f.params.len == 2 or f.params.len == 3) {
+            var PromiseT: ?type = null;
+            var AllocatorT: ?type = null;
+            inline for (f.params) |param| {
+                if (param.type) |PT| {
+                    if (isPromise(.{ .type = PT })) {
+                        PromiseT = PT;
+                    } else if (PT == std.mem.Allocator) {
+                        AllocatorT = PT;
+                    }
+                }
+            }
+            const param_match = switch (f.params.len) {
+                2 => f.params[0].type == *T and PromiseT != null,
+                3 => f.params[0].type == *T and PromiseT != null and AllocatorT != null,
+                else => false,
+            };
+            if (param_match) {
+                if (PayloadType(PromiseT.?.Payload)) |PT| {
+                    return PT;
+                }
+            }
+        }
+        return null;
+    }
+
+    test "NextMethodAsyncReturnType" {
+        const S = struct {
+            pub fn next1(_: *@This(), _: Promise(?i32)) void {
+                return null;
+            }
+
+            pub fn next2(_: *@This(), _: std.mem.Allocator, _: Promise(anyerror!?i32)) void {
+                return null;
+            }
+
+            pub fn next3(_: *@This(), _: i32, _: Promise(anyerror!?i32)) void {
+                return null;
+            }
+
+            pub fn next4(_: i32) !?i32 {
+                return null;
+            }
+
+            pub fn next5(_: *@This()) i32 {
+                return 0;
+            }
+        };
+        const T1 = NextMethodAsyncReturnType(@TypeOf(S.next1), S) orelse unreachable;
+        try expect(T1 == i32);
+        const T2 = NextMethodAsyncReturnType(@TypeOf(S.next2), S) orelse unreachable;
+        try expect(T2 == i32);
+        const T3 = NextMethodAsyncReturnType(@TypeOf(S.next3), S);
+        try expect(T3 == null);
+        const T4 = NextMethodAsyncReturnType(@TypeOf(S.next4), S);
+        try expect(T4 == null);
+        const T5 = NextMethodAsyncReturnType(@TypeOf(S.next5), S);
+        try expect(T5 == null);
+    }
+
     pub fn isAsyncIterator(comptime self: @This()) bool {
-        _ = self;
+        switch (@typeInfo(self.type)) {
+            .Struct, .Union, .Opaque => if (@hasDecl(self.type, "next")) {
+                const next = @field(self.type, "next");
+                if (NextMethodAsyncReturnType(@TypeOf(next), self.type)) |_| {
+                    return true;
+                }
+            },
+            else => {},
+        }
         return false;
     }
 
