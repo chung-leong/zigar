@@ -21,6 +21,6 @@ pub fn spawn(
     }, ns.run, .{ allocator, promise });
 }
 
-pub fn shutdown() !void {
-    try zigar.thread.end();
+pub fn shutdown() void {
+    zigar.thread.end();
 }

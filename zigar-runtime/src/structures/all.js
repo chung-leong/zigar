@@ -133,7 +133,7 @@ export default mixin({
     staticDescriptors[SLOTS] = (props.length > 0) && defineValue(template[SLOTS]);
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    if (f?.call(this, structure, staticDescriptors) !== false) {
+    if (f?.call(this, structure, staticDescriptors, descriptors) !== false) {
       defineProperties(constructor.prototype, descriptors);
       defineProperties(constructor, staticDescriptors);
     }

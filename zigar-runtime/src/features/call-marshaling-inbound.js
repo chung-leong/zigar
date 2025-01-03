@@ -56,7 +56,7 @@ export default mixin({
             // if the error is not part of the error set returned by the function,
             // the following will throw
             if (cb) {
-              cb(err);
+              cb(null, err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct[RETURN](err);
             } else {
@@ -71,7 +71,7 @@ export default mixin({
           const cb = argStruct[CALLBACK];
           try {
             if (cb) {
-              cb(value);
+              cb(null, value);
             } else {
               // call setter of retval with allocator (if there's one)
               argStruct[RETURN](value, argStruct[ALLOCATOR]);
@@ -143,7 +143,6 @@ export default mixin({
                   const callback = this[CALLBACK] = arg.callback['*'];
                   const ptr = arg.ptr;
                   opt = (...args) => {
-                    console.log(args);
                     const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
                     return callback(ptr, result);
                   };

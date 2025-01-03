@@ -63,8 +63,6 @@ export default mixin({
     };
     // make function type a superclass of Function
     Object.setPrototypeOf(constructor.prototype, Function.prototype);
-    // don't change the tag of functions
-    descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     if (process.env.MIXIN === 'track') {
       if (jsThunkController) {
@@ -72,6 +70,10 @@ export default mixin({
       }
     }
     return constructor;
+  },
+  finalizeFunction(structure, staticDescriptors, descriptors) {
+    // don't change the tag of functions
+    descriptors[Symbol.toStringTag] = undefined;
   },
   /* c8 ignore start */
   ...(process.env.MIXIN === 'track' ? {

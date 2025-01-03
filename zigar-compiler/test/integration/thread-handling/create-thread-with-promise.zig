@@ -17,6 +17,6 @@ pub fn spawn(promise: zigar.function.Promise(i32)) !void {
     }, ns.run, .{promise});
 }
 
-pub fn shutdown() !void {
-    try zigar.thread.end();
+pub fn shutdown() void {
+    zigar.thread.end();
 }

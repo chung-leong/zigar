@@ -21,7 +21,7 @@ pub fn spawn(cb: *const fn () void) !void {
     try pool.spawn(ns.run, .{cb});
 }
 
-pub fn shutdown() !void {
+pub fn shutdown() void {
     pool.deinit();
-    try zigar.thread.end();
+    zigar.thread.end();
 }

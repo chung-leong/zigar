@@ -43,6 +43,6 @@ pub fn call4(cb: *const fn (i32) i32) !void {
     }, ns.run, .{cb});
 }
 
-pub fn shutdown() !void {
-    try zigar.thread.end();
+pub fn shutdown() void {
+    zigar.thread.end();
 }

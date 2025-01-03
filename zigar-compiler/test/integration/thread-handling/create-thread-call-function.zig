@@ -17,6 +17,6 @@ pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
     }, ns.run, .{cb});
 }
 
-pub fn shutdown() !void {
-    try zigar.thread.end();
+pub fn shutdown() void {
+    zigar.thread.end();
 }

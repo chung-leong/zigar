@@ -21,7 +21,7 @@ pub fn spawn(promise: zigar.function.Promise(i32)) !void {
     _ = try pool.spawn(ns.run, .{promise});
 }
 
-pub fn shutdown() !void {
+pub fn shutdown() void {
     pool.deinit();
-    try zigar.thread.end();
+    zigar.thread.end();
 }
