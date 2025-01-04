@@ -2187,9 +2187,29 @@ pub fn WorkQueue(comptime ns: type) type {
             initialized,
             deinitializing,
         };
-        pub const Options = struct {
-            allocator: std.mem.Allocator,
-            n_jobs: usize = 1,
+        pub const Options = init: {
+            const fields = std.meta.fields(struct {
+                allocator: std.mem.Allocator,
+                n_jobs: usize = 1,
+                thread_enter_params: ThreadEnterParams,
+                thread_exit_params: ThreadExitParams,
+            });
+            // if enter or exit params are void, a provide default value
+            var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+            for (fields, 0..) |field, i| {
+                new_fields[i] = field;
+                if (field.type == void) {
+                    new_fields[i].default_value = &{};
+                }
+            }
+            break :init @Type(.{
+                .Struct = .{
+                    .layout = .auto,
+                    .fields = &new_fields,
+                    .decls = &.{},
+                    .is_tuple = false,
+                },
+            });
         };
         pub const WorkItem = init: {
             var enum_fields: [st.decls.len]std.builtin.Type.EnumField = undefined;
@@ -2199,7 +2219,7 @@ pub fn WorkQueue(comptime ns: type) type {
                 const DT = @TypeOf(@field(ns, decl.name));
                 if (@typeInfo(DT) == .Fn) {
                     const Task = struct {
-                        args: ArgStruct(DT),
+                        args: std.meta.ArgsTuple(DT),
                         promise: ?PromiseOf(DT),
                     };
                     enum_fields[count] = .{ .name = decl.name, .value = count };
@@ -2241,7 +2261,11 @@ pub fn WorkQueue(comptime ns: type) type {
             errdefer for (0..self.thread_count) |i| self.threads[i].join();
             errdefer self.queue.deinit();
             for (0..options.n_jobs) |i| {
-                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleWorkItems, .{self});
+                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleWorkItems, .{
+                    self,
+                    options.thread_enter_params,
+                    options.thread_exit_params,
+                });
                 self.thread_count += 1;
             }
             self.status = .initialized;
@@ -2289,6 +2313,20 @@ pub fn WorkQueue(comptime ns: type) type {
         }
 
         const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
+        const ThreadEnterParams = switch (@hasDecl(ns, "onThreadEnter")) {
+            false => void,
+            else => switch (@typeInfo(@TypeOf(ns.onThreadEnter)).Fn.params.len) {
+                0 => void,
+                else => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnter)),
+            },
+        };
+        const ThreadExitParams = switch (@hasDecl(ns, "onThreadExit")) {
+            false => void,
+            else => switch (@typeInfo(@TypeOf(ns.onThreadExit)).Fn.params.len) {
+                0 => void,
+                else => std.meta.ArgsTuple(@TypeOf(ns.onThreadExit)),
+            },
+        };
 
         fn EnumOf(comptime f: anytype) WorkItemEnum {
             return for (st.decls) |decl| {
@@ -2301,22 +2339,13 @@ pub fn WorkQueue(comptime ns: type) type {
 
         fn ArgsOf(comptime f: anytype) type {
             if (@typeInfo(@TypeOf(f)) != .Fn) @compileError("Function expected");
-            return ArgStruct(@TypeOf(f));
+            return std.meta.ArgsTuple(@TypeOf(f));
         }
 
-        fn ArgStruct(comptime FT: type) type {
-            const ArgsTuple = std.meta.ArgsTuple(FT);
-            return @Type(.{
-                .Struct = .{
-                    .layout = .auto,
-                    .fields = std.meta.fields(ArgsTuple),
-                    .decls = &.{},
-                    .is_tuple = false,
-                },
-            });
-        }
-
-        fn handleWorkItems(self: *@This()) void {
+        fn handleWorkItems(self: *@This(), enter: ThreadEnterParams, exit: ThreadExitParams) void {
+            if (comptime @hasDecl(ns, "onThreadEnter")) {
+                @call(.Unspecified, ns.onThreadEnter, enter);
+            }
             while (true) {
                 if (self.queue.pull()) |item| {
                     invokeFunction(item);
@@ -2327,6 +2356,9 @@ pub fn WorkQueue(comptime ns: type) type {
                         self.queue.wait();
                     }
                 }
+            }
+            if (comptime @hasDecl(ns, "onThreadEnter")) {
+                @call(.Unspecified, ns.onThreadEnter, exit);
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
                 // perform actual deinit here if deinitAsync() was called
