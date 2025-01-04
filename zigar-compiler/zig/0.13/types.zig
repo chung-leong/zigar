@@ -2021,7 +2021,11 @@ pub fn PromiseOf(comptime arg: anytype) type {
     const AT = @TypeOf(arg);
     const FT = if (@typeInfo(AT) == .Type) arg else AT;
     return switch (@typeInfo(FT)) {
-        .Fn => |f| Promise(f.return_type.?),
+        .Fn => |f| inline for (f.params) |param| {
+            if (param.type) |T| {
+                if (TypeData.isPromise(.{ .type = T })) break T;
+            }
+        } else Promise(f.return_type.?),
         else => @compileError("Function expected, received " ++ @typeName(FT)),
     };
 }
@@ -2198,12 +2202,12 @@ pub fn WorkQueue(comptime ns: type) type {
                 thread_enter_params: ThreadEnterParams,
                 thread_exit_params: ThreadExitParams,
             });
-            // if enter or exit params are void, a provide default value
+            // there're no enter or exit params, provide a default value
             var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
             for (fields, 0..) |field, i| {
                 new_fields[i] = field;
-                if (field.type == void) {
-                    new_fields[i].default_value = &{};
+                if (@sizeOf(field.type) == 0) {
+                    new_fields[i].default_value = @ptrCast(&.{});
                 }
             }
             break :init @Type(.{
@@ -2336,18 +2340,12 @@ pub fn WorkQueue(comptime ns: type) type {
 
         const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
         const ThreadEnterParams = switch (@hasDecl(ns, "onThreadEnter")) {
-            false => void,
-            true => switch (@typeInfo(@TypeOf(ns.onThreadEnter)).Fn.params.len) {
-                0 => void,
-                else => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnter)),
-            },
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnter)),
         };
         const ThreadExitParams = switch (@hasDecl(ns, "onThreadExit")) {
-            false => void,
-            true => switch (@typeInfo(@TypeOf(ns.onThreadExit)).Fn.params.len) {
-                0 => void,
-                else => std.meta.ArgsTuple(@TypeOf(ns.onThreadExit)),
-            },
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadExit)),
         };
         const ThreadEnterError = switch (@hasDecl(ns, "onThreadEnter")) {
             false => error{},
@@ -2371,11 +2369,13 @@ pub fn WorkQueue(comptime ns: type) type {
             thread_enter_params: ThreadEnterParams,
             thread_exit_params: ThreadExitParams,
         ) void {
+            var error_encountered = false;
             if (comptime @hasDecl(ns, "onThreadEnter")) {
-                const result = @call(.Unspecified, ns.onThreadEnter, thread_enter_params);
+                const result = @call(.auto, ns.onThreadEnter, thread_enter_params);
                 if (comptime ThreadEnterError != error{}) {
                     if (result) |_| {} else |err| {
                         self.init_result = err;
+                        error_encountered = true;
                     }
                 }
             }
@@ -2384,19 +2384,21 @@ pub fn WorkQueue(comptime ns: type) type {
                 std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
                 if (self.init_promise) |promise| promise.resolve(self.init_result);
             }
-            while (true) {
-                if (self.queue.pull()) |item| {
-                    invokeFunction(item);
-                } else {
-                    if (self.queue.stopped) {
-                        break;
+            if (!error_encountered) {
+                while (true) {
+                    if (self.queue.pull()) |item| {
+                        invokeFunction(item);
                     } else {
-                        self.queue.wait();
+                        if (self.queue.stopped) {
+                            break;
+                        } else {
+                            self.queue.wait();
+                        }
                     }
                 }
-            }
-            if (comptime @hasDecl(ns, "onThreadEnter")) {
-                _ = @call(.Unspecified, ns.onThreadEnter, thread_exit_params);
+                if (comptime @hasDecl(ns, "onThreadExit")) {
+                    _ = @call(.auto, ns.onThreadExit, thread_exit_params);
+                }
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
                 // perform actual deinit here if deinitAsync() was called

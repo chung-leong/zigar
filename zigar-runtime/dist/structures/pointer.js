@@ -67,9 +67,10 @@ var pointer = mixin({
       writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
+    const sentinelCount = (targetFlags & SliceFlag.HasSentinel) ? 1 : 0;
     const setLength = (flags & PointerFlag.HasLength || targetFlags & SliceFlag.HasSentinel)
     ? function(length) {
-        writeLength?.call?.(this, length);
+        writeLength?.call?.(this, length - sentinelCount);
         this[LAST_LENGTH] = length;
       }
     : null;

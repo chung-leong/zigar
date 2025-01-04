@@ -35,7 +35,7 @@ var callMarshalingOutbound = mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg, callback, signal;
+      let arg, promise, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
@@ -48,10 +48,13 @@ var callMarshalingOutbound = mixin({
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          if (!callback) {
-            callback = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          if (!promise) {
+            promise = {
+              ptr: null, 
+              callback: this.createCallback(dest, structure, options?.['callback']),
+            };
           }
-          arg = callback;
+          arg = promise;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found

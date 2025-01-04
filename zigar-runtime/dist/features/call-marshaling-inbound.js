@@ -56,7 +56,7 @@ var callMarshalingInbound = mixin({
             // if the error is not part of the error set returned by the function,
             // the following will throw
             if (cb) {
-              cb(err);
+              cb(null, err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct[RETURN](err);
             } else {
@@ -71,7 +71,7 @@ var callMarshalingInbound = mixin({
           const cb = argStruct[CALLBACK];
           try {
             if (cb) {
-              cb(value);
+              cb(null, value);
             } else {
               // call setter of retval with allocator (if there's one)
               argStruct[RETURN](value, argStruct[ALLOCATOR]);
@@ -128,7 +128,7 @@ var callMarshalingInbound = mixin({
           // error unions will throw on access, in which case we pass the error as the argument
           try {
             let arg = this[srcIndex];
-            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+            if (type === MemberType.Object && arg?.[MEMORY]?.[ZIG]) {
               // create copy in JS memory
               arg = new arg.constructor(arg);
             }
@@ -141,7 +141,11 @@ var callMarshalingInbound = mixin({
                 optName = 'callback';
                 if (++callbackCount === 1) {
                   const callback = this[CALLBACK] = arg.callback['*'];
-                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
+                  const ptr = arg.ptr;
+                  opt = (...args) => {
+                    const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
+                    return callback(ptr, result);
+                  };
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';

@@ -44,11 +44,12 @@ const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
   IsIterator:       0x0040,
-  IsTuple:          0x0080,
+  IsAsyncIterator:  0x0080,
 
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsAbortSignal:    0x0400,
+  IsTuple:          0x0100,
+  IsAllocator:      0x0200,
+  IsPromise:        0x0400,
+  IsAbortSignal:    0x0800,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
@@ -58,10 +59,12 @@ const UnionFlag = {
 
   IsPacked:         0x0100,
   IsIterator:       0x0200,
+  IsAsyncIterator:  0x0400,
 };
 const EnumFlag = {
   IsOpenEnded:      0x0010,
   IsIterator:       0x0020,
+  IsAsyncIterator:  0x0040,
 };
 const OptionalFlag = {
   HasSelector:      0x0010,
@@ -87,6 +90,7 @@ const ErrorSetFlag = {
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,
+  IsAsyncIterator:  0x0020,
 };
 const VectorFlag = {
   IsTypedArray:     0x0010,
@@ -3061,7 +3065,7 @@ var callMarshalingInbound = mixin({
             // if the error is not part of the error set returned by the function,
             // the following will throw
             if (cb) {
-              cb(err);
+              cb(null, err);
             } else if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct[RETURN](err);
             } else {
@@ -3076,7 +3080,7 @@ var callMarshalingInbound = mixin({
           const cb = argStruct[CALLBACK];
           try {
             if (cb) {
-              cb(value);
+              cb(null, value);
             } else {
               // call setter of retval with allocator (if there's one)
               argStruct[RETURN](value, argStruct[ALLOCATOR]);
@@ -3133,7 +3137,7 @@ var callMarshalingInbound = mixin({
           // error unions will throw on access, in which case we pass the error as the argument
           try {
             let arg = this[srcIndex];
-            if (type === MemberType.Object && typeof(arg) === 'object' && arg[MEMORY]?.[ZIG]) {
+            if (type === MemberType.Object && arg?.[MEMORY]?.[ZIG]) {
               // create copy in JS memory
               arg = new arg.constructor(arg);
             }
@@ -3146,7 +3150,11 @@ var callMarshalingInbound = mixin({
                 optName = 'callback';
                 if (++callbackCount === 1) {
                   const callback = this[CALLBACK] = arg.callback['*'];
-                  opt = (...args) => callback((args.length === 2) ? args[0] ?? args[1] : args[0]);
+                  const ptr = arg.ptr;
+                  opt = (...args) => {
+                    const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
+                    return callback(ptr, result);
+                  };
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
@@ -3269,7 +3277,7 @@ var callMarshalingOutbound = mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg, callback, signal;
+      let arg, promise, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
@@ -3282,10 +3290,13 @@ var callMarshalingOutbound = mixin({
         } else if (structure.flags & StructFlag.IsPromise) {
           // invoke programmer-supplied callback if there's one, otherwise a function that
           // resolves/rejects a promise attached to the argument struct
-          if (!callback) {
-            callback = { callback: this.createCallback(dest, structure, options?.['callback']) };
+          if (!promise) {
+            promise = {
+              ptr: null, 
+              callback: this.createCallback(dest, structure, options?.['callback']),
+            };
           }
-          arg = callback;
+          arg = promise;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
@@ -4305,7 +4316,7 @@ var promiseCallback = mixin({
           }        };
         });
     }
-    const cb = args[CALLBACK] = (result) => {
+    const cb = args[CALLBACK] = (ptr, result) => {
       const isError = result instanceof Error;
       args[FINALIZE](!isError);
       const id = this.getFunctionId(cb);
@@ -6003,7 +6014,7 @@ var all$1 = mixin({
     staticDescriptors[SLOTS] = (props.length > 0) && defineValue(template[SLOTS]);
     const handlerName = `finalize${structureNames[type]}`;
     const f = this[handlerName];
-    if (f?.call(this, structure, staticDescriptors) !== false) {
+    if (f?.call(this, structure, staticDescriptors, descriptors) !== false) {
       defineProperties(constructor.prototype, descriptors);
       defineProperties(constructor, staticDescriptors);
     }
@@ -6863,8 +6874,6 @@ var _function = mixin({
     };
     // make function type a superclass of Function
     Object.setPrototypeOf(constructor.prototype, Function.prototype);
-    // don't change the tag of functions
-    descriptors[Symbol.toStringTag] = undefined;
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
     {
       if (jsThunkController) {
@@ -6872,6 +6881,10 @@ var _function = mixin({
       }
     }
     return constructor;
+  },
+  finalizeFunction(structure, staticDescriptors, descriptors) {
+    // don't change the tag of functions
+    descriptors[Symbol.toStringTag] = undefined;
   },
   /* c8 ignore start */
   ...({
@@ -7028,9 +7041,10 @@ var pointer = mixin({
       writeAddress.call(this, address);
       this[LAST_ADDRESS] = address;
     };
+    const sentinelCount = (targetFlags & SliceFlag.HasSentinel) ? 1 : 0;
     const setLength = (flags & PointerFlag.HasLength || targetFlags & SliceFlag.HasSentinel)
     ? function(length) {
-        writeLength?.call?.(this, length);
+        writeLength?.call?.(this, length - sentinelCount);
         this[LAST_LENGTH] = length;
       }
     : null;
