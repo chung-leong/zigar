@@ -1,0 +1,15 @@
+.{
+    .name = "mysql-test",
+    .version = "0.0.0",
+    .dependencies = .{
+        .myzql = .{
+            .url = "https://github.com/speed2exe/myzql/archive/refs/tags/0.13.2.tar.gz",
+            .hash = "1220fabc6675903f26431b0f9ca97f5d0f7ee69dea89586300d35a7ba370d4e0a356",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

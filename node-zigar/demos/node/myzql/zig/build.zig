@@ -23,8 +23,10 @@ pub fn build(b: *std.Build) void {
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = zig_path ++ "zigar.zig" },
     });
+    const myzql = b.dependency("myzql", .{}).module("myzql");
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
+        .{ .name = "myzql", .module = myzql },
     };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
