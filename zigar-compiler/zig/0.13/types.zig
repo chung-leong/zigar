@@ -2180,7 +2180,11 @@ pub fn WorkQueue(comptime ns: type) type {
         threads: []std.Thread = undefined,
         thread_count: usize = 0,
         status: Status = .uninitialized,
-        deinit_promise: ?Promise(void) = null,
+        init_remaining: usize = undefined,
+        init_futex: std.atomic.Value(u32) = undefined,
+        init_result: ThreadEnterError!void = undefined,
+        init_promise: ?Promise(ThreadEnterError!void) = undefined,
+        deinit_promise: ?Promise(void) = undefined,
 
         pub const Status = enum {
             uninitialized,
@@ -2257,6 +2261,11 @@ pub fn WorkQueue(comptime ns: type) type {
             const allocator = options.allocator;
             self.queue = .{ .allocator = allocator };
             self.threads = try allocator.alloc(std.Thread, options.n_jobs);
+            self.init_remaining = self.threads.len;
+            self.init_futex = std.atomic.Value(u32).init(0);
+            self.init_result = {};
+            self.init_promise = null;
+            self.deinit_promise = null;
             errdefer allocator.free(self.threads);
             errdefer for (0..self.thread_count) |i| self.threads[i].join();
             errdefer self.queue.deinit();
@@ -2269,6 +2278,19 @@ pub fn WorkQueue(comptime ns: type) type {
                 self.thread_count += 1;
             }
             self.status = .initialized;
+        }
+
+        pub fn wait(self: *@This()) ThreadEnterError!void {
+            std.Thread.Futex.wait(&self.init_futex, 0);
+            return self.init_result;
+        }
+
+        pub fn waitAsync(self: *@This(), promise: Promise(ThreadEnterError!void)) void {
+            if (self.init_futex.load(.acquire) == 1) {
+                promise.resolve(self.init_result);
+            } else {
+                self.init_promise = promise;
+            }
         }
 
         pub fn deinit(self: *@This()) void {
@@ -2315,36 +2337,52 @@ pub fn WorkQueue(comptime ns: type) type {
         const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
         const ThreadEnterParams = switch (@hasDecl(ns, "onThreadEnter")) {
             false => void,
-            else => switch (@typeInfo(@TypeOf(ns.onThreadEnter)).Fn.params.len) {
+            true => switch (@typeInfo(@TypeOf(ns.onThreadEnter)).Fn.params.len) {
                 0 => void,
                 else => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnter)),
             },
         };
         const ThreadExitParams = switch (@hasDecl(ns, "onThreadExit")) {
             false => void,
-            else => switch (@typeInfo(@TypeOf(ns.onThreadExit)).Fn.params.len) {
+            true => switch (@typeInfo(@TypeOf(ns.onThreadExit)).Fn.params.len) {
                 0 => void,
                 else => std.meta.ArgsTuple(@TypeOf(ns.onThreadExit)),
             },
         };
+        const ThreadEnterError = switch (@hasDecl(ns, "onThreadEnter")) {
+            false => error{},
+            true => if (@typeInfo(@TypeOf(ns.onThreadEnter)).Fn.return_type) |RT| switch (@typeInfo(RT)) {
+                .ErrorUnion => |eu| eu.error_set,
+                else => error{},
+            } else error{},
+        };
 
-        fn EnumOf(comptime f: anytype) WorkItemEnum {
+        fn EnumOf(comptime function: anytype) WorkItemEnum {
             return for (st.decls) |decl| {
                 const dv = @field(ns, decl.name);
-                if (@TypeOf(dv) == @TypeOf(f)) {
-                    if (dv == f) break @field(WorkItemEnum, decl.name);
+                if (@TypeOf(dv) == @TypeOf(function)) {
+                    if (dv == function) break @field(WorkItemEnum, decl.name);
                 }
             } else @compileError("Function not found in " ++ @typeName(ns));
         }
 
-        fn ArgsOf(comptime f: anytype) type {
-            if (@typeInfo(@TypeOf(f)) != .Fn) @compileError("Function expected");
-            return std.meta.ArgsTuple(@TypeOf(f));
-        }
-
-        fn handleWorkItems(self: *@This(), enter: ThreadEnterParams, exit: ThreadExitParams) void {
+        fn handleWorkItems(
+            self: *@This(),
+            thread_enter_params: ThreadEnterParams,
+            thread_exit_params: ThreadExitParams,
+        ) void {
             if (comptime @hasDecl(ns, "onThreadEnter")) {
-                @call(.Unspecified, ns.onThreadEnter, enter);
+                const result = @call(.Unspecified, ns.onThreadEnter, thread_enter_params);
+                if (comptime ThreadEnterError != error{}) {
+                    if (result) |_| {} else |err| {
+                        self.init_result = err;
+                    }
+                }
+            }
+            if (@atomicRmw(usize, &self.init_remaining, .Sub, 1, .monotonic) == 1) {
+                self.init_futex.store(1, .release);
+                std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
+                if (self.init_promise) |promise| promise.resolve(self.init_result);
             }
             while (true) {
                 if (self.queue.pull()) |item| {
@@ -2358,7 +2396,7 @@ pub fn WorkQueue(comptime ns: type) type {
                 }
             }
             if (comptime @hasDecl(ns, "onThreadEnter")) {
-                @call(.Unspecified, ns.onThreadEnter, exit);
+                _ = @call(.Unspecified, ns.onThreadEnter, thread_exit_params);
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
                 // perform actual deinit here if deinitAsync() was called
