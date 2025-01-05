@@ -7,5 +7,4 @@ openDatabase({
   database: 'testdb',
   threads: 4,
 });
-
 closeDatabase();

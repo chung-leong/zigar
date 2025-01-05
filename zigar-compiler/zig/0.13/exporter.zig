@@ -125,7 +125,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_packed = st.layout == .@"packed",
                             .is_tuple = st.is_tuple,
                             .is_iterator = td.isIterator(),
-                            .is_async_iterator = td.isAsyncIterator(),
+                            .is_generator = td.isGenerator(),
                             .is_allocator = td.isAllocator(),
                             .is_promise = td.isPromise(),
                             .is_abort_signal = td.isAbortSignal(),
@@ -152,7 +152,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_extern = un.layout == .@"extern",
                             .is_packed = un.layout == .@"packed",
                             .is_iterator = td.isIterator(),
-                            .is_async_iterator = td.isAsyncIterator(),
+                            .is_generator = td.isGenerator(),
                         },
                     };
                 },
@@ -181,7 +181,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .@"enum" = .{
                         .is_open_ended = !en.is_exhaustive,
                         .is_iterator = td.isIterator(),
-                        .is_async_iterator = td.isAsyncIterator(),
+                        .is_generator = td.isGenerator(),
                     },
                 },
                 .ErrorSet => .{
@@ -226,7 +226,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .Opaque => .{
                     .@"opaque" = .{
                         .is_iterator = td.isIterator(),
-                        .is_async_iterator = td.isAsyncIterator(),
+                        .is_generator = td.isGenerator(),
                     },
                 },
                 .Fn => .{ .function = .{} },
@@ -827,7 +827,7 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
             return switch (@typeInfo(@TypeOf(value))) {
-                .ComptimeInt => self.exportPointerTarget(&@as(types.IntType(value), value), true),
+                .ComptimeInt => self.exportPointerTarget(&@as(types.IntFor(value), value), true),
                 .ComptimeFloat => self.exportPointerTarget(&@as(f64, value), true),
                 .EnumLiteral => self.exportPointerTarget(types.removeSentinel(@tagName(value)), true),
                 .Type => self.getStructure(value),
