@@ -1,4 +1,4 @@
-import { closeDatabase, openDatabase } from '../zig/mysql.zig';
+import { closeDatabase, findPersons, openDatabase } from '../zig/mysql.zig';
 
 openDatabase({
   host: '172.17.0.2',
@@ -7,4 +7,10 @@ openDatabase({
   database: 'testdb',
   threads: 4,
 });
-closeDatabase();
+(async () => {
+  for await (const person of findPersons()) {
+    console.log(person.valueOf());
+  }
+  closeDatabase();
+})();
+

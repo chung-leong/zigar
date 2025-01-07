@@ -21,6 +21,7 @@ export { default as FeatureCallMarshalingInbound } from './features/call-marshal
 export { default as FeatureCallMarshalingOutbound } from './features/call-marshaling-outbound.js';
 export { default as FeatureDataCopying } from './features/data-copying.js';
 export { default as FeatureDefaultAllocator } from './features/default-allocator.js';
+export { default as FeatureGeneratorCallback } from './features/generator-callback.js';
 export { default as FeatureIntConversion } from './features/int-conversion.js';
 export { default as FeatureMemoryMapping } from './features/memory-mapping.js';
 export { default as FeatureModuleLoading } from './features/module-loading.js';

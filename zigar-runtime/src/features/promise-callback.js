@@ -22,7 +22,7 @@ export default mixin({
             resolve(result);
           };
         };
-        });
+      });
     }
     const cb = args[CALLBACK] = (ptr, result) => {
       if (func.length === 2) {

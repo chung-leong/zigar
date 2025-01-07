@@ -2,6 +2,7 @@ const std = @import("std");
 const zigar = @import("zigar");
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
+const PrepareResult = myzql.result.PrepareResult;
 const PreparedStatement = myzql.result.PreparedStatement;
 const QueryResultRows = myzql.result.QueryResultRows;
 const ResultRowIter = myzql.result.ResultRowIter;
@@ -19,6 +20,7 @@ const DatabaseParams = struct {
 var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
 
 pub fn openDatabase(params: DatabaseParams) !void {
+    try zigar.thread.use();
     try work_queue.init(.{
         .allocator = zigar.mem.getDefaultAllocator(),
         .n_jobs = params.threads,
@@ -30,6 +32,7 @@ pub fn openDatabase(params: DatabaseParams) !void {
 
 pub fn closeDatabase() void {
     work_queue.deinit();
+    zigar.thread.end();
 }
 
 pub const Person = struct {
@@ -78,9 +81,9 @@ const thread_ns = struct {
     }
 
     const queries = struct {
-        const person = struct {
-            threadlocal var select: Prepare(
-                \\\ SELECT * FROM person
+        pub const person = struct {
+            pub threadlocal var select: Prepare(
+                \\SELECT * FROM person
             ) = .{};
         };
     };
@@ -101,9 +104,10 @@ const thread_ns = struct {
         inline for (comptime std.meta.declarations(queries)) |qs_decl| {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
-                const query = @field(query_set, q_decl.name);
-                query.stmt = try client.prepare(allocator, query.sql);
-                errdefer query.stmt.deinit(allocator);
+                const query = &@field(query_set, q_decl.name);
+                const prep_res = try client.prepare(allocator, query.sql);
+                errdefer prep_res.deinit(allocator);
+                query.stmt = try prep_res.expect(.stmt);
             }
         }
     }
@@ -114,7 +118,10 @@ const thread_ns = struct {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
                 const query = @field(query_set, q_decl.name);
-                query.stmt.deinit(allocator);
+                // PreparedStatement.deinit() isn't public for some reason; we have to
+                // recreate a PrepareResult object in order to deinit the statement
+                const prep_res = @unionInit(PrepareResult, "stmt", query.stmt);
+                prep_res.deinit(allocator);
             }
         }
         client.deinit();
@@ -122,6 +129,6 @@ const thread_ns = struct {
 
     pub fn findPersons(allocator: std.mem.Allocator) !StructIterator(Person) {
         const query_res = try client.executeRows(&queries.person.select.stmt, .{});
-        return StructIterator(Person).init(allocator, query_res);
+        return try StructIterator(Person).init(allocator, query_res);
     }
 };

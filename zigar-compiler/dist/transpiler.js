@@ -44,11 +44,11 @@ const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
   IsIterator:       0x0040,
-  IsAsyncIterator:  0x0080,
+  IsTuple:          0x0080,
 
-  IsTuple:          0x0100,
-  IsAllocator:      0x0200,
-  IsPromise:        0x0400,
+  IsAllocator:      0x0100,
+  IsPromise:        0x0200,
+  IsGenerator:      0x0400,
   IsAbortSignal:    0x0800,
 };
 const UnionFlag = {
@@ -59,12 +59,10 @@ const UnionFlag = {
 
   IsPacked:         0x0100,
   IsIterator:       0x0200,
-  IsAsyncIterator:  0x0400,
 };
 const EnumFlag = {
   IsOpenEnded:      0x0010,
   IsIterator:       0x0020,
-  IsAsyncIterator:  0x0040,
 };
 const OptionalFlag = {
   HasSelector:      0x0010,
@@ -90,7 +88,6 @@ const ErrorSetFlag = {
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,
-  IsAsyncIterator:  0x0020,
 };
 const VectorFlag = {
   IsTypedArray:     0x0010,
@@ -205,6 +202,7 @@ const SETTERS = symbol('setters');
 const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
+const GENERATOR = symbol('generator');
 const CALLBACK = symbol('callback');
 const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
@@ -2330,7 +2328,7 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 var abortSignal = mixin({
-  createSignalArray(args, structure, signal) {
+  createSignalArray(structure, signal) {
     const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
     const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
     const int32 = Int32(ta);
@@ -3277,7 +3275,7 @@ var callMarshalingOutbound = mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg, promise, signal;
+      let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
@@ -3292,16 +3290,24 @@ var callMarshalingOutbound = mixin({
           // resolves/rejects a promise attached to the argument struct
           if (!promise) {
             promise = {
-              ptr: null, 
-              callback: this.createCallback(dest, structure, options?.['callback']),
+              ptr: null,
+              callback: this.createPromiseCallback(dest, options?.['callback']),
             };
           }
           arg = promise;
+        } else if (structure.flags & StructFlag.IsGenerator) {
+          if (!generator) {
+            generator = {
+              ptr: null,
+              callback: this.createGeneratorCallback(dest, options?.['callback']),
+            };
+          }
+          arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
           if (!signal) {
-            signal = { ptr: this.createSignalArray(dest, structure, options?.['signal']) };
+            signal = { ptr: this.createSignalArray(structure, options?.['signal']) };
           }
           arg = signal;
         }
@@ -3340,13 +3346,11 @@ var callMarshalingOutbound = mixin({
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
-    const finalize = (success) => {
-      if (success) {
-        this.updateShadowTargets(context);
-        // create objects that pointers point to
-        if (hasPointers) {
-          this.updatePointerTargets(context, args);
-        }
+    const finalize = () => {
+      this.updateShadowTargets(context);
+      // create objects that pointers point to
+      if (hasPointers) {
+        this.updatePointerTargets(context, args);
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -3355,7 +3359,7 @@ var callMarshalingOutbound = mixin({
       this.endContext();
     };
     if (!success) {
-      finalize(false);
+      finalize();
       throw new ZigError();
     }
     {
@@ -3365,9 +3369,10 @@ var callMarshalingOutbound = mixin({
     if (FINALIZE in args) {
       args[FINALIZE] = finalize;
     } else {
-      finalize(true);
+      finalize();
     }
     const promise = args[PROMISE];
+    const generator = args[GENERATOR];
     const callback = args[CALLBACK];
     if (callback) {
       try {
@@ -3381,7 +3386,7 @@ var callMarshalingOutbound = mixin({
         callback(err);
       }
       // this would be undefined if a callback function is used instead
-      return promise;
+      return promise ?? generator;
     } else {
       return args.retval;
     }
@@ -3618,6 +3623,88 @@ var defaultAllocator = mixin({
     }
   },
 });
+
+var generatorCallback = mixin({
+  createGeneratorCallback(args, func) {
+    if (func) {
+      if (typeof(func) !== 'function') {
+        throw new TypeMismatch('function', func);
+      }
+    } else {
+      const generator = args[GENERATOR] = new AsyncGenerator();
+      func = generator.push.bind(generator);
+    }
+    const cb = args[CALLBACK] = (ptr, result) => {
+      let cont;
+      if (func.length === 2) {
+        cont = func(result instanceof Error ? result : null, isError ? null : result);
+      } else {
+        cont = func(result);
+      }
+      if (!cont) {
+        args[FINALIZE]();
+        const id = this.getFunctionId(cb);
+        this.releaseFunction(id);
+      }
+      return cont;
+    };
+    return cb;
+  },
+});
+
+class AsyncGenerator {
+  objects = [];
+  promise = null;
+  resolve = null;
+  stopped = false;
+  finished = false;
+
+  async next() {
+    if (this.stopped) {
+      return { done: true };
+    }
+    while (true) {
+      if (this.objects.length > 0) {
+        return { value: this.objects.shift(), done: false };
+      } else if (this.error) {
+        throw this.error;
+      } else if (this.finished) {
+        return { done: true };
+      }
+      // wait for more content
+      await (this.promise ??= new Promise(f => this.resolve = f));
+      this.promise = this.resolve = null;
+    }
+  }
+
+  async return(retval) {
+    this.stopped = true;
+    return { value: retval, done: true };
+  }
+
+  async throw(err) {
+    this.stopped = true;
+    throw err;
+  }
+
+  async push(result) {
+    if (this.stopped) {
+      return false;
+    }
+    if (result instanceof Error) {
+      this.error = result;
+      this.finished = true;
+    } else if (result === null) {
+      this.finished = true;
+    } else {
+      this.objects.push(result);
+    }
+    this.resolve?.();
+    return !this.finished;
+  }
+
+  [Symbol.asyncIterator]() { return this }
+}
 
 var intConversion = mixin({
   addIntConversion(getAccessor) {
@@ -4296,7 +4383,7 @@ var pointerSynchronization = mixin({
 });
 
 var promiseCallback = mixin({
-  createCallback(args, structure, func) {
+  createPromiseCallback(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -4314,18 +4401,17 @@ var promiseCallback = mixin({
           } else {
             resolve(result);
           }        };
-        });
+      });
     }
     const cb = args[CALLBACK] = (ptr, result) => {
-      const isError = result instanceof Error;
-      args[FINALIZE](!isError);
+      if (func.length === 2) {
+        func(result instanceof Error ? result : null, isError ? null : result);
+      } else {
+        func(result);
+      }
+      args[FINALIZE]();
       const id = this.getFunctionId(cb);
       this.releaseFunction(id);
-      if (func.length === 2) {
-        return func(isError ? result : null, isError ? null : result);
-      } else {
-        return func(result);
-      }
     };
     return cb;
   },
@@ -8286,6 +8372,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
   FeatureDefaultAllocator: defaultAllocator,
+  FeatureGeneratorCallback: generatorCallback,
   FeatureIntConversion: intConversion,
   FeatureMemoryMapping: memoryMapping,
   FeatureModuleLoading: moduleLoading,

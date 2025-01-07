@@ -1,7 +1,9 @@
 import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
-import { ATTRIBUTES, CALLBACK, COPY, FINALIZE, MEMORY, PROMISE, VISIT } from '../symbols.js';
+import {
+  ATTRIBUTES, CALLBACK, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, VISIT,
+} from '../symbols.js';
 
 export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -134,6 +136,7 @@ export default mixin({
       finalize(true);
     }
     const promise = args[PROMISE];
+    const generator = args[GENERATOR];
     const callback = args[CALLBACK];
     if (callback) {
       try {
@@ -147,7 +150,7 @@ export default mixin({
         callback(err);
       }
       // this would be undefined if a callback function is used instead
-      return promise;
+      return promise ?? generator;
     } else {
       return args.retval;
     }

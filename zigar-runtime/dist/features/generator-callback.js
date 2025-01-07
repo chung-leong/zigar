@@ -1,8 +1,8 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { CALLBACK, FINALIZE, GENERATOR } from '../symbols.js';
+import { GENERATOR, CALLBACK, FINALIZE } from '../symbols.js';
 
-export default mixin({
+var generatorCallback = mixin({
   createGeneratorCallback(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
@@ -83,3 +83,5 @@ class AsyncGenerator {
 
   [Symbol.asyncIterator]() { return this }
 }
+
+export { generatorCallback as default };
