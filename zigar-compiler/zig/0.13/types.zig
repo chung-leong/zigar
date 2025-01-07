@@ -84,11 +84,11 @@ pub const StructureFlags = extern union {
         is_extern: bool = false,
         is_packed: bool = false,
         is_iterator: bool = false,
-        is_generator: bool = false,
-
         is_tuple: bool = false,
+
         is_allocator: bool = false,
         is_promise: bool = false,
+        is_generator: bool = false,
         is_abort_signal: bool = false,
 
         _: u20 = 0,
@@ -106,8 +106,7 @@ pub const StructureFlags = extern union {
 
         is_packed: bool = false,
         is_iterator: bool = false,
-        is_generator: bool = false,
-        _: u21 = 0,
+        _: u22 = 0,
     },
     error_union: packed struct(u32) {
         has_value: bool = true,
@@ -134,8 +133,7 @@ pub const StructureFlags = extern union {
 
         is_open_ended: bool = false,
         is_iterator: bool = false,
-        is_generator: bool = false,
-        _: u25 = 0,
+        _: u26 = 0,
     },
     optional: packed struct(u32) {
         has_value: bool = true,
@@ -191,8 +189,7 @@ pub const StructureFlags = extern union {
         has_slot: bool = false,
 
         is_iterator: bool = false,
-        is_generator: bool = false,
-        _: u26 = 0,
+        _: u27 = 0,
     },
     arg_struct: packed struct(u32) {
         has_value: bool = false,
@@ -806,7 +803,7 @@ pub const TypeData = struct {
     }
 
     pub fn isIterator(comptime self: @This()) bool {
-        return IteratorPayload(self.type) != null;
+        return IteratorReturnValue(self.type) != null;
     }
 
     test "isIterator" {
@@ -926,7 +923,7 @@ pub const TypeData = struct {
 
     pub fn isInternal(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Struct => @hasDecl(self.type, "type") and @TypeOf(self.type.type) == InternalType,
+            .Struct => @hasDecl(self.type, "internal_type") and @TypeOf(self.type.internal_type) == InternalType,
             else => false,
         };
     }
@@ -1734,11 +1731,10 @@ pub fn removeSentinel(comptime ptr: anytype) retval_type: {
     return @ptrCast(ptr);
 }
 
-fn ReturnValue(comptime FT: type) type {
-    return switch (@typeInfo(FT)) {
-        .Fn => |f| f.return_type orelse @TypeOf(undefined),
-        else => @compileError("Expecting function, received: " ++ @typeName(FT)),
-    };
+fn ReturnValue(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).Fn;
+    return f.return_type orelse @TypeOf(undefined);
 }
 
 test "ReturnValue" {
@@ -1763,25 +1759,23 @@ test "Payload" {
     try expect(T3 == null);
 }
 
-fn NextMethodPayload(comptime FT: type, comptime T: type) ?type {
+fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
     const f = @typeInfo(FT).Fn;
     if (f.params.len == 1 and f.params[0].type == *T) {
         if (f.return_type) |RT| {
-            if (Payload(RT)) |PT| {
-                return PT;
-            }
+            if (Payload(RT) != null) return RT;
         }
     }
     return null;
 }
 
-test "NextMethodPayload" {
+test "NextMethodReturnValue" {
     const S = struct {
         pub fn next1(_: *@This()) ?i32 {
             return null;
         }
 
-        pub fn next2(_: *@This()) !?i32 {
+        pub fn next2(_: *@This()) error{OutOfMemory}!?i32 {
             return null;
         }
 
@@ -1797,29 +1791,42 @@ test "NextMethodPayload" {
             return 0;
         }
     };
-    const T1 = NextMethodPayload(@TypeOf(S.next1), S) orelse unreachable;
-    try expect(T1 == i32);
-    const T2 = NextMethodPayload(@TypeOf(S.next2), S) orelse unreachable;
-    try expect(T2 == i32);
-    const T3 = NextMethodPayload(@TypeOf(S.next3), S);
+    const T1 = NextMethodReturnValue(@TypeOf(S.next1), S) orelse unreachable;
+    try expect(T1 == ?i32);
+    const T2 = NextMethodReturnValue(@TypeOf(S.next2), S) orelse unreachable;
+    try expect(T2 == error{OutOfMemory}!?i32);
+    const T3 = NextMethodReturnValue(@TypeOf(S.next3), S);
     try expect(T3 == null);
-    const T4 = NextMethodPayload(@TypeOf(S.next4), S);
+    const T4 = NextMethodReturnValue(@TypeOf(S.next4), S);
     try expect(T4 == null);
-    const T5 = NextMethodPayload(@TypeOf(S.next5), S);
+    const T5 = NextMethodReturnValue(@TypeOf(S.next5), S);
     try expect(T5 == null);
 }
 
-pub fn IteratorPayload(comptime T: type) ?type {
+pub fn IteratorReturnValue(comptime T: type) ?type {
     switch (@typeInfo(T)) {
         .Struct, .Union, .Opaque => if (@hasDecl(T, "next")) {
             const next = @field(T, "next");
-            if (NextMethodPayload(@TypeOf(next), T)) |RT| {
-                return Payload(RT);
-            }
+            return NextMethodReturnValue(@TypeOf(next), T);
+        },
+        .ErrorUnion => |eu| if (IteratorReturnValue(eu.payload)) |RT| {
+            return switch (@typeInfo(RT)) {
+                .ErrorUnion => |rt_eu| (eu.error_set || rt_eu.error_set)!rt_eu.payload,
+                else => eu.error_set!RT,
+            };
         },
         else => {},
     }
     return null;
+}
+
+test "IteratorReturnValue" {
+    const T1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
+    try expect(T1 != null and Payload(T1.?) == []const u8);
+    const T2 = IteratorReturnValue(error{Doh}!std.fs.path.ComponentIterator(.posix, u8));
+    try expect(T2 != null);
+    const T3 = IteratorReturnValue(std.fs.path);
+    try expect(T3 == null);
 }
 
 const InternalType = enum {
@@ -1837,6 +1844,12 @@ pub fn getInternalType(comptime OT: ?type) ?InternalType {
         }
     }
     return null;
+}
+
+test "getInternalType" {
+    try expect(getInternalType(Promise(i32)) == .promise);
+    try expect(getInternalType(Generator(?i32)) == .generator);
+    try expect(getInternalType(AbortSignal) == .abort_signal);
 }
 
 pub fn Promise(comptime T: type) type {
@@ -1927,20 +1940,26 @@ test {
     _ = Promise(anyerror!u32);
 }
 
-pub fn PromiseOf(comptime arg: anytype) type {
+pub fn Function(comptime arg: anytype) type {
     const AT = @TypeOf(arg);
     const FT = if (@typeInfo(AT) == .Type) arg else AT;
     return switch (@typeInfo(FT)) {
-        .Fn => |f| inline for (f.params) |param| {
-            if (getInternalType(param.type) == .promise) break param.type.?;
-        } else Promise(f.return_type.?),
+        .Fn => FT,
         else => @compileError("Function expected, received " ++ @typeName(FT)),
     };
 }
 
+pub fn PromiseOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).Fn;
+    return inline for (f.params) |param| {
+        if (getInternalType(param.type) == .promise) break param.type.?;
+    } else Promise(f.return_type.?);
+}
+
 pub fn Generator(comptime T: type) type {
     if (Payload(T) == null) {
-        @compileLog("Must be an optional type");
+        @compileError("Expecting optional type, received: " ++ @typeName(T));
     }
     return struct {
         ptr: ?*anyopaque = null,
@@ -1960,11 +1979,18 @@ pub fn Generator(comptime T: type) type {
             return self.callback(self.ptr, value);
         }
 
-        pub fn pipe(self: @This(), iter: anytype) void {
-            const IterT = @TypeOf(iter);
-            if (IteratorPayload(IterT) == null) {
-                @compileError("Expecting an iterator, received: " ++ @typeName(IterT));
+        pub fn pipe(self: @This(), arg: anytype) void {
+            const AT = @TypeOf(arg);
+            if (IteratorReturnValue(AT) == null) {
+                @compileError("Expecting an iterator, received: " ++ @typeName(AT));
             }
+            var iter = switch (@typeInfo(AT)) {
+                .ErrorUnion => arg catch |err| {
+                    _ = self.yield(err);
+                    return;
+                },
+                else => arg,
+            };
             while (true) {
                 const result = iter.next();
                 // break if callback returns false
@@ -1985,19 +2011,16 @@ pub fn Generator(comptime T: type) type {
 }
 
 pub fn GeneratorOf(comptime arg: anytype) type {
-    const AT = @TypeOf(arg);
-    const FT = if (@typeInfo(AT) == .Type) arg else AT;
-    return switch (@typeInfo(FT)) {
-        .Fn => |f| inline for (f.params) |param| {
-            if (getInternalType(param.type) == .generator) break param.type.?;
-        } else typedef: {
-            if (IteratorPayload(f.return_type.?)) |T| {
-                break :typedef Generator(T);
-            } else {
-                @compileError("Function does not return an iterator: " ++ @typeName(FT));
-            }
-        },
-        else => @compileError("Function expected, received " ++ @typeName(FT)),
+    const FT = Function(arg);
+    const f = @typeInfo(FT).Fn;
+    return inline for (f.params) |param| {
+        if (getInternalType(param.type) == .generator) break param.type.?;
+    } else typedef: {
+        if (IteratorReturnValue(f.return_type.?)) |T| {
+            break :typedef Generator(T);
+        } else {
+            @compileError("Function does not return an iterator: " ++ @typeName(FT));
+        }
     };
 }
 
@@ -2200,15 +2223,13 @@ pub fn WorkQueue(comptime ns: type) type {
                     .Fn => |f| {
                         if (f.return_type) |RT| {
                             // if the return value is an iterator, then a generator is expected
-                            const Task = switch (IteratorPayload(RT) != null) {
-                                true => struct {
-                                    args: std.meta.ArgsTuple(DT),
-                                    generator: ?GeneratorOf(DT),
-                                },
-                                false => struct {
-                                    args: std.meta.ArgsTuple(DT),
-                                    promise: ?PromiseOf(DT),
-                                },
+                            // otherwise an optional promise can be provided
+                            const Task = if (IteratorReturnValue(RT)) |IT| struct {
+                                args: std.meta.ArgsTuple(DT),
+                                generator: ?Generator(IT),
+                            } else struct {
+                                args: std.meta.ArgsTuple(DT),
+                                promise: ?Promise(RT),
                             };
                             enum_fields[count] = .{ .name = decl.name, .value = count };
                             union_fields[count] = .{
@@ -2303,16 +2324,20 @@ pub fn WorkQueue(comptime ns: type) type {
             self.queue.deinit();
         }
 
-        pub fn push(self: *@This(), comptime f: anytype, args: anytype, output: anytype) !void {
+        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), output: PromiseOrGenerator(func)) !void {
             switch (self.status) {
                 .initialized => {},
                 else => return error.Unexpected,
             }
-            const key = comptime EnumOf(f);
-            const RT = comptime ReturnValue(f);
-            const item = switch (IteratorPayload(RT) != null) {
-                true => @unionInit(WorkItem, @tagName(key), .{ .args = args, .generator = output }),
-                false => @unionInit(WorkItem, @tagName(key), .{ .args = args, .promise = output }),
+            const key = comptime EnumOf(func);
+            const fieldName = @tagName(key);
+            // @FieldType() not available in 0.13.0
+            const Call = inline for (@typeInfo(WorkItem).Union.fields) |field| {
+                if (comptime std.mem.eql(u8, field.name, fieldName)) break field.type;
+            } else unreachable;
+            const item = switch (@hasField(Call, "generator")) {
+                true => @unionInit(WorkItem, fieldName, .{ .args = args, .generator = output }),
+                false => @unionInit(WorkItem, fieldName, .{ .args = args, .promise = output }),
             };
             try self.queue.push(item);
         }
@@ -2342,13 +2367,22 @@ pub fn WorkQueue(comptime ns: type) type {
             },
         };
 
-        fn EnumOf(comptime function: anytype) WorkItemEnum {
+        fn EnumOf(comptime func: anytype) WorkItemEnum {
             return for (st.decls) |decl| {
                 const dv = @field(ns, decl.name);
-                if (@TypeOf(dv) == @TypeOf(function)) {
-                    if (dv == function) break @field(WorkItemEnum, decl.name);
+                if (@TypeOf(dv) == @TypeOf(func)) {
+                    if (dv == func) break @field(WorkItemEnum, decl.name);
                 }
             } else @compileError("Function not found in " ++ @typeName(ns));
+        }
+
+        fn ArgsOf(comptime func: anytype) type {
+            return std.meta.ArgsTuple(@TypeOf(func));
+        }
+
+        fn PromiseOrGenerator(comptime func: anytype) type {
+            const RT = ReturnValue(func);
+            return if (IteratorReturnValue(RT)) |IT| ?Generator(IT) else ?Promise(RT);
         }
 
         fn handleWorkItems(
@@ -2401,14 +2435,9 @@ pub fn WorkQueue(comptime ns: type) type {
                 const key = @field(WorkItemEnum, field.name);
                 if (item == key) {
                     const func = @field(ns, field.name);
-                    const ArgsTuple = std.meta.ArgsTuple(@TypeOf(func));
                     const call = @field(item, field.name);
-                    var args_tuple: ArgsTuple = undefined;
-                    inline for (std.meta.fields(ArgsTuple)) |arg_field| {
-                        @field(args_tuple, arg_field.name) = @field(call.args, arg_field.name);
-                    }
-                    const result = @call(.auto, func, args_tuple);
-                    switch (IteratorPayload(@TypeOf(result)) != null) {
+                    const result = @call(.auto, func, call.args);
+                    switch (@hasField(@TypeOf(call), "generator")) {
                         true => if (call.generator) |g| g.pipe(result),
                         false => if (call.promise) |p| p.resolve(result),
                     }
@@ -2458,7 +2487,7 @@ fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool
             }
         },
         .Pointer => |pt| {
-            if (@typeInfo(pt.child) == .Fn and isValidCallback(pt.child)) {
+            if (@typeInfo(pt.child) == .Fn and isValidCallback(pt.child, AT, RT)) {
                 return true;
             }
         },
@@ -2480,7 +2509,8 @@ test "isValidCallback" {
 
 fn getCallback(comptime FT: type, cb: anytype) *const FT {
     const CBT = @TypeOf(cb);
-    if (comptime !isValidCallback(CBT, AT, RT)) {
+    const f = @typeInfo(FT).Fn;
+    if (comptime !isValidCallback(CBT, f.params[1].type.?, f.return_type.?)) {
         @compileError("Expecting " ++ @typeName(FT) ++ ", received: " ++ @typeName(CBT));
     }
     const fn_ptr = switch (@typeInfo(CBT)) {
@@ -2495,8 +2525,8 @@ test "getCallback" {
     const ns = struct {
         fn hello(_: *const u32, _: i32) void {}
     };
-    const cb = getCallback(fn (?*anyopaque, T) void, ns.hello);
-    try expect(@intFromPtr(cb) == @intFromPtr(ns.hello));
+    const cb = getCallback(fn (?*anyopaque, i32) void, ns.hello);
+    try expect(@intFromPtr(cb) == @intFromPtr(&ns.hello));
 }
 
 test {

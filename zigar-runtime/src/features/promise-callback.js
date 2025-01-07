@@ -3,7 +3,7 @@ import { TypeMismatch } from '../errors.js';
 import { CALLBACK, FINALIZE, MEMORY, PROMISE, ZIG } from '../symbols.js';
 
 export default mixin({
-  createCallback(args, structure, func) {
+  createPromiseCallback(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -25,15 +25,14 @@ export default mixin({
         });
     }
     const cb = args[CALLBACK] = (ptr, result) => {
-      const isError = result instanceof Error;
-      args[FINALIZE](!isError);
+      if (func.length === 2) {
+        func(result instanceof Error ? result : null, isError ? null : result);
+      } else {
+        func(result);
+      }
+      args[FINALIZE]();
       const id = this.getFunctionId(cb);
       this.releaseFunction(id);
-      if (func.length === 2) {
-        return func(isError ? result : null, isError ? null : result);
-      } else {
-        return func(result);
-      }
     };
     return cb;
   },

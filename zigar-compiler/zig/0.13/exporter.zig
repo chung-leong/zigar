@@ -125,9 +125,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_packed = st.layout == .@"packed",
                             .is_tuple = st.is_tuple,
                             .is_iterator = td.isIterator(),
-                            .is_generator = td.isGenerator(),
                             .is_allocator = td.isAllocator(),
                             .is_promise = td.isPromise(),
+                            .is_generator = td.isGenerator(),
                             .is_abort_signal = td.isAbortSignal(),
                         },
                     };
@@ -152,7 +152,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_extern = un.layout == .@"extern",
                             .is_packed = un.layout == .@"packed",
                             .is_iterator = td.isIterator(),
-                            .is_generator = td.isGenerator(),
                         },
                     };
                 },
@@ -181,7 +180,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .@"enum" = .{
                         .is_open_ended = !en.is_exhaustive,
                         .is_iterator = td.isIterator(),
-                        .is_generator = td.isGenerator(),
                     },
                 },
                 .ErrorSet => .{
@@ -226,7 +224,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .Opaque => .{
                     .@"opaque" = .{
                         .is_iterator = td.isIterator(),
-                        .is_generator = td.isGenerator(),
                     },
                 },
                 .Fn => .{ .function = .{} },
@@ -385,10 +382,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try self.addMembers(structure, td);
                 // finalize the shape so that static members can be instances of the structure
                 _ = try host.defineStructure(structure);
-                // don't export decls of internal structs like promise and abort signal
-                if (comptime !td.isInternal()) {
-                    try self.addStaticMembers(structure, td);
-                }
+                // add static variables and functions
+                try self.addStaticMembers(structure, td);
                 try host.endStructure(structure);
                 break :result structure;
             };
@@ -690,7 +685,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .Fn => !self.options.omit_methods,
+                                .Fn => !self.options.omit_methods and !td.isInternal(),
                                 else => !self.options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {

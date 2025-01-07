@@ -3,12 +3,9 @@ const zigar = @import("zigar");
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
 const PreparedStatement = myzql.result.PreparedStatement;
-
-const ResultSetIter = myzql.result.ResultSetIter;
-const QueryResult = myzql.result.QueryResult;
+const QueryResultRows = myzql.result.QueryResultRows;
+const ResultRowIter = myzql.result.ResultRowIter;
 const BinaryResultRow = myzql.result.BinaryResultRow;
-const TableStructs = myzql.result.TableStructs;
-const ResultSet = myzql.result.ResultSet;
 
 const DatabaseParams = struct {
     host: []const u8,
@@ -35,6 +32,16 @@ pub fn closeDatabase() void {
     work_queue.deinit();
 }
 
+pub const Person = struct {
+    id: u32 = 0,
+    name: []const u8,
+    age: u8,
+};
+
+pub fn findPersons(allocator: std.mem.Allocator, generator: zigar.function.GeneratorOf(thread_ns.findPersons)) !void {
+    try work_queue.push(thread_ns.findPersons, .{allocator}, generator);
+}
+
 const thread_ns = struct {
     threadlocal var client: Conn = undefined;
 
@@ -45,18 +52,36 @@ const thread_ns = struct {
         };
     }
 
+    fn StructIterator(comptime T: type) type {
+        return struct {
+            allocator: std.mem.Allocator,
+            rows_iter: ResultRowIter(BinaryResultRow),
+            struct_ptr: ?*T = null,
+
+            pub fn init(allocator: std.mem.Allocator, query_res: QueryResultRows(BinaryResultRow)) !@This() {
+                const rows = try query_res.expect(.rows);
+                return .{ .allocator = allocator, .rows_iter = rows.iter() };
+            }
+
+            pub fn next(self: *@This()) !?T {
+                if (self.struct_ptr) |ptr| {
+                    BinaryResultRow.structDestroy(ptr, self.allocator);
+                }
+                if (try self.rows_iter.next()) |row| {
+                    self.struct_ptr = try row.structCreate(T, self.allocator);
+                    return self.struct_ptr.?.*;
+                } else {
+                    return null;
+                }
+            }
+        };
+    }
+
     const queries = struct {
         const person = struct {
             threadlocal var select: Prepare(
                 \\\ SELECT * FROM person
             ) = .{};
-        };
-    };
-    const structs = struct {
-        const Person = struct {
-            id: u32,
-            name: []const u8,
-            age: u8,
         };
     };
 
@@ -95,8 +120,8 @@ const thread_ns = struct {
         client.deinit();
     }
 
-    pub fn findPersons(allocator: std.mem.Allocator) !StructIterator(structs.Person) {
-        const result = try client.executeRows(&queries.person.select, .{});
-        return StructIterator(structs.Person).init(allocator, result);
+    pub fn findPersons(allocator: std.mem.Allocator) !StructIterator(Person) {
+        const query_res = try client.executeRows(&queries.person.select.stmt, .{});
+        return StructIterator(Person).init(allocator, query_res);
     }
 };

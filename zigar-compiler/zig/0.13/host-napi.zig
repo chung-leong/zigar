@@ -13,6 +13,8 @@ const Error = types.Error;
 
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
+pub const Generator = types.Generator;
+pub const GeneratorOf = types.GeneratorOf;
 pub const AbortSignal = types.AbortSignal;
 pub const WorkQueue = types.WorkQueue;
 pub const Queue = types.Queue;

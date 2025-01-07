@@ -45,6 +45,7 @@ export const SETTERS = symbol('setters');
 export const TYPED_ARRAY = symbol('typed array');
 export const THROWING = symbol('throwing');
 export const PROMISE = symbol('promise');
+export const GENERATOR = symbol('generator');
 export const CALLBACK = symbol('callback');
 export const ALLOCATOR = symbol('allocator');
 export const FALLBACK = symbol('fallback');

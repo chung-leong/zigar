@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import { MEMORY } from '../symbols.js';
 
 export default mixin({
-  createSignalArray(args, structure, signal) {
+  createSignalArray(structure, signal) {
     const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
     const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
     const int32 = Int32(ta);

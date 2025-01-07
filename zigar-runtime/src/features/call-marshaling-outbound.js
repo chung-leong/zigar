@@ -35,7 +35,7 @@ export default mixin({
     let srcIndex = 0;
     let allocatorCount = 0;
     for (const [ destIndex, { type, structure } ] of members.entries()) {
-      let arg, promise, signal;
+      let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
           // use programmer-supplied allocator if found in options object, handling rare scenarios
@@ -50,16 +50,24 @@ export default mixin({
           // resolves/rejects a promise attached to the argument struct
           if (!promise) {
             promise = {
-              ptr: null, 
-              callback: this.createCallback(dest, structure, options?.['callback']),
+              ptr: null,
+              callback: this.createPromiseCallback(dest, options?.['callback']),
             };
           }
           arg = promise;
+        } else if (structure.flags & StructFlag.IsGenerator) {
+          if (!generator) {
+            generator = {
+              ptr: null,
+              callback: this.createGeneratorCallback(dest, options?.['callback']),
+            };
+          }
+          arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
           if (!signal) {
-            signal = { ptr: this.createSignalArray(dest, structure, options?.['signal']) }
+            signal = { ptr: this.createSignalArray(structure, options?.['signal']) }
           }
           arg = signal;
         }
@@ -100,13 +108,11 @@ export default mixin({
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
-    const finalize = (success) => {
-      if (success) {
-        this.updateShadowTargets(context);
-        // create objects that pointers point to
-        if (hasPointers) {
-          this.updatePointerTargets(context, args);
-        }
+    const finalize = () => {
+      this.updateShadowTargets(context);
+      // create objects that pointers point to
+      if (hasPointers) {
+        this.updatePointerTargets(context, args);
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -115,7 +121,7 @@ export default mixin({
       this.endContext();
     };
     if (!success) {
-      finalize(false);
+      finalize();
       throw new ZigError();
     }
     if (process.env.TARGET === 'wasm') {
