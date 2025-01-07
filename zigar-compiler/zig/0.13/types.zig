@@ -1986,7 +1986,6 @@ pub fn Generator(comptime T: type) type {
             }
             var iter = switch (@typeInfo(AT)) {
                 .ErrorUnion => arg catch |err| {
-                    std.debug.print("Error {any}\n", .{err});
                     _ = self.yield(err);
                     return;
                 },
@@ -2000,10 +1999,7 @@ pub fn Generator(comptime T: type) type {
                 switch (@typeInfo(@TypeOf(result))) {
                     .ErrorUnion => if (result) |value| {
                         if (value == null) break;
-                    } else |err| {
-                        std.debug.print("Error {any}\n", .{err});
-                        break;
-                    },
+                    } else |_| break,
                     .Optional => if (result == null) break,
                     else => {},
                 }

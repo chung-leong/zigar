@@ -65,7 +65,7 @@ class AsyncGenerator {
     throw err;
   }
 
-  async push(result) {
+  push(result) {
     if (this.stopped) {
       return false;
     }
