@@ -1957,7 +1957,6 @@
 "          result = CallResult.Failure;\n"
 "        }\n"
 "        if (futexHandle && !awaiting) {\n"
-"          console.log('finalize');\n"
 "          this.finalizeAsyncCall(futexHandle, result);\n"
 "        }\n"
 "        return result;\n"

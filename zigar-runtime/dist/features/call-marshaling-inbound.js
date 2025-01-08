@@ -105,7 +105,6 @@ var callMarshalingInbound = mixin({
         result = CallResult.Failure;
       }
       if (futexHandle && !awaiting) {
-        console.log('finalize');
         this.finalizeAsyncCall(futexHandle, result);
       }
       return result;

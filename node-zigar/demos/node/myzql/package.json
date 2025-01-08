@@ -12,6 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fastify/formbody": "^8.0.1",
+    "fastify": "^5.2.1",
     "node-zigar": "^0.13.2"
   }
 }

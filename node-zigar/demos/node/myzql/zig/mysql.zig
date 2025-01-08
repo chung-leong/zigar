@@ -43,6 +43,10 @@ pub fn findPersons(generator: zigar.function.GeneratorOf(thread_ns.findPersons))
     try work_queue.push(thread_ns.findPersons, .{}, generator);
 }
 
+pub fn insertPerson(person: Person, promise: zigar.function.PromiseOf(thread_ns.insertPerson)) !void {
+    try work_queue.push(thread_ns.insertPerson, .{person}, promise);
+}
+
 const thread_ns = struct {
     threadlocal var client: Conn = undefined;
 
@@ -80,6 +84,9 @@ const thread_ns = struct {
         pub const person = struct {
             pub threadlocal var select: Prepare(
                 \\SELECT * FROM person
+            ) = .{};
+            pub threadlocal var insert: Prepare(
+                \\INSERT INTO person (name, age) VALUES(?, ?)
             ) = .{};
         };
     };
@@ -122,5 +129,12 @@ const thread_ns = struct {
 
     pub fn findPersons() !StructIterator(Person) {
         return try StructIterator(Person).init(queries.person.select.prep_res, .{});
+    }
+
+    pub fn insertPerson(person: Person) !u32 {
+        const stmt = try queries.person.insert.prep_res.expect(.stmt);
+        const exe_res = try client.execute(&stmt, .{ person.name, person.age });
+        const ok = try exe_res.expect(.ok);
+        return @intCast(ok.last_insert_id);
     }
 };
