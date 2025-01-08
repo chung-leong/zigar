@@ -1030,7 +1030,7 @@ napi_value load_module(napi_env env,
     }
     md->base_address = (uintptr_t) dl_info.dli_fbase;
 
-    redirect_io_functions(handle, path, mod->imports->override_write);
+    // redirect_io_functions(handle, path, mod->imports->override_write);
     free(path);
 
     // attach exports to module

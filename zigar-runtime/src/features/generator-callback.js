@@ -31,27 +31,28 @@ export default mixin({
 });
 
 class AsyncGenerator {
-  objects = [];
-  promise = null;
-  resolve = null;
+  result = null;
   stopped = false;
   finished = false;
+  promises = {};
 
   async next() {
     if (this.stopped) {
       return { done: true };
     }
     while (true) {
-      if (this.objects.length > 0) {
-        return { value: this.objects.shift(), done: false };
+      const value = this.result;
+      if (value !== null) {
+        this.result = null;
+        this.wake('space');
+        return { value, done: false };
       } else if (this.error) {
         throw this.error;
       } else if (this.finished) {
         return { done: true };
       }
       // wait for more content
-      await (this.promise ??= new Promise(f => this.resolve = f));
-      this.promise = this.resolve = null;
+      await this.sleep('content');
     }
   }
 
@@ -65,7 +66,7 @@ class AsyncGenerator {
     throw err;
   }
 
-  push(result) {
+  async push(result) {
     if (this.stopped) {
       return false;
     }
@@ -75,10 +76,28 @@ class AsyncGenerator {
     } else if (result === null) {
       this.finished = true;
     } else {
-      this.objects.push(result);
+      if (this.result !== null) {
+        await this.sleep('space');
+      }
+      this.result = result;
     }
-    this.resolve?.();
+    this.wake('content');
     return !this.finished;
+  }
+
+  sleep(name) {
+    let resolve;
+    const promise = this.promises[name] ??= new Promise(f => resolve = f);
+    if (resolve) promise.resolve = resolve;
+    return promise;
+  }
+
+  wake(name) {
+    const promise = this.promises[name];
+    if (promise) {
+      this.promises[name] = null;
+      promise.resolve();
+    }
   }
 
   [Symbol.asyncIterator]() { return this }

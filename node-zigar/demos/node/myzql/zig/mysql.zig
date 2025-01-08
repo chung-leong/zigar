@@ -3,8 +3,6 @@ const zigar = @import("zigar");
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
 const PrepareResult = myzql.result.PrepareResult;
-const PreparedStatement = myzql.result.PreparedStatement;
-const QueryResultRows = myzql.result.QueryResultRows;
 const ResultRowIter = myzql.result.ResultRowIter;
 const BinaryResultRow = myzql.result.BinaryResultRow;
 
@@ -51,7 +49,7 @@ const thread_ns = struct {
     fn Prepare(comptime sql: []const u8) type {
         return struct {
             comptime sql: []const u8 = sql,
-            stmt: PreparedStatement = undefined,
+            prep_res: PrepareResult = undefined,
         };
     }
 
@@ -59,7 +57,9 @@ const thread_ns = struct {
         return struct {
             rows_iter: ResultRowIter(BinaryResultRow),
 
-            pub fn init(query_res: QueryResultRows(BinaryResultRow)) !@This() {
+            pub fn init(prep_res: PrepareResult, params: anytype) !@This() {
+                const stmt = try prep_res.expect(.stmt);
+                const query_res = try client.executeRows(&stmt, params);
                 const rows = try query_res.expect(.rows);
                 return .{ .rows_iter = rows.iter() };
             }
@@ -101,9 +101,9 @@ const thread_ns = struct {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
                 const query = &@field(query_set, q_decl.name);
-                const prep_res = try client.prepare(allocator, query.sql);
-                errdefer prep_res.deinit(allocator);
-                query.stmt = try prep_res.expect(.stmt);
+                query.prep_res = try client.prepare(allocator, query.sql);
+                errdefer query.prep_res.deinit(allocator);
+                _ = try query.prep_res.expect(.stmt);
             }
         }
     }
@@ -114,17 +114,13 @@ const thread_ns = struct {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
                 const query = @field(query_set, q_decl.name);
-                // PreparedStatement.deinit() isn't public for some reason; we have to
-                // recreate a PrepareResult object in order to deinit the statement
-                const prep_res = @unionInit(PrepareResult, "stmt", query.stmt);
-                prep_res.deinit(allocator);
+                query.prep_res.deinit(allocator);
             }
         }
         client.deinit();
     }
 
     pub fn findPersons() !StructIterator(Person) {
-        const query_res = try client.executeRows(&queries.person.select.stmt, .{});
-        return try StructIterator(Person).init(query_res);
+        return try StructIterator(Person).init(queries.person.select.prep_res, .{});
     }
 };
