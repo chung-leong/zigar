@@ -41,8 +41,8 @@ pub const Person = struct {
     age: u8,
 };
 
-pub fn findPersons(allocator: std.mem.Allocator, generator: zigar.function.GeneratorOf(thread_ns.findPersons)) !void {
-    try work_queue.push(thread_ns.findPersons, .{allocator}, generator);
+pub fn findPersons(generator: zigar.function.GeneratorOf(thread_ns.findPersons)) !void {
+    try work_queue.push(thread_ns.findPersons, .{}, generator);
 }
 
 const thread_ns = struct {
@@ -57,22 +57,18 @@ const thread_ns = struct {
 
     fn StructIterator(comptime T: type) type {
         return struct {
-            allocator: std.mem.Allocator,
             rows_iter: ResultRowIter(BinaryResultRow),
-            struct_ptr: ?*T = null,
 
-            pub fn init(allocator: std.mem.Allocator, query_res: QueryResultRows(BinaryResultRow)) !@This() {
+            pub fn init(query_res: QueryResultRows(BinaryResultRow)) !@This() {
                 const rows = try query_res.expect(.rows);
-                return .{ .allocator = allocator, .rows_iter = rows.iter() };
+                return .{ .rows_iter = rows.iter() };
             }
 
             pub fn next(self: *@This()) !?T {
-                if (self.struct_ptr) |ptr| {
-                    BinaryResultRow.structDestroy(ptr, self.allocator);
-                }
                 if (try self.rows_iter.next()) |row| {
-                    self.struct_ptr = try row.structCreate(T, self.allocator);
-                    return self.struct_ptr.?.*;
+                    var result: T = undefined;
+                    try row.scan(&result);
+                    return result;
                 } else {
                     return null;
                 }
@@ -127,8 +123,8 @@ const thread_ns = struct {
         client.deinit();
     }
 
-    pub fn findPersons(allocator: std.mem.Allocator) !StructIterator(Person) {
+    pub fn findPersons() !StructIterator(Person) {
         const query_res = try client.executeRows(&queries.person.select.stmt, .{});
-        return try StructIterator(Person).init(allocator, query_res);
+        return try StructIterator(Person).init(query_res);
     }
 };

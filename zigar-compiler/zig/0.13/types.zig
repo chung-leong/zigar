@@ -2322,7 +2322,7 @@ pub fn WorkQueue(comptime ns: type) type {
             self.queue.deinit();
         }
 
-        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), output: PromiseOrGenerator(func)) !void {
+        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
             switch (self.status) {
                 .initialized => {},
                 else => return error.Unexpected,
@@ -2334,8 +2334,8 @@ pub fn WorkQueue(comptime ns: type) type {
                 if (comptime std.mem.eql(u8, field.name, fieldName)) break field.type;
             } else unreachable;
             const item = switch (@hasField(Call, "generator")) {
-                true => @unionInit(WorkItem, fieldName, .{ .args = args, .generator = output }),
-                false => @unionInit(WorkItem, fieldName, .{ .args = args, .promise = output }),
+                true => @unionInit(WorkItem, fieldName, .{ .args = args, .generator = dest }),
+                false => @unionInit(WorkItem, fieldName, .{ .args = args, .promise = dest }),
             };
             try self.queue.push(item);
         }
@@ -2380,7 +2380,7 @@ pub fn WorkQueue(comptime ns: type) type {
 
         fn PromiseOrGenerator(comptime func: anytype) type {
             const RT = ReturnValue(func);
-            return if (IteratorReturnValue(RT)) |IT| ?Generator(IT) else ?Promise(RT);
+            return if (IteratorReturnValue(RT)) |IT| Generator(IT) else Promise(RT);
         }
 
         fn handleWorkItems(
