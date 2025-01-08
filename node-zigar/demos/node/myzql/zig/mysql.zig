@@ -3,7 +3,7 @@ const zigar = @import("zigar");
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
 const PrepareResult = myzql.result.PrepareResult;
-const ResultRowIter = myzql.result.ResultRowIter;
+const ResultSet = myzql.result.ResultSet;
 const BinaryResultRow = myzql.result.BinaryResultRow;
 
 const DatabaseParams = struct {
@@ -59,17 +59,18 @@ const thread_ns = struct {
 
     fn StructIterator(comptime T: type) type {
         return struct {
-            rows_iter: ResultRowIter(BinaryResultRow),
+            rows: ResultSet(BinaryResultRow),
 
             pub fn init(prep_res: PrepareResult, params: anytype) !@This() {
                 const stmt = try prep_res.expect(.stmt);
                 const query_res = try client.executeRows(&stmt, params);
                 const rows = try query_res.expect(.rows);
-                return .{ .rows_iter = rows.iter() };
+                return .{ .rows = rows };
             }
 
             pub fn next(self: *@This()) !?T {
-                if (try self.rows_iter.next()) |row| {
+                const rows_iter = self.rows.iter();
+                if (try rows_iter.next()) |row| {
                     var result: T = undefined;
                     try row.scan(&result);
                     return result;
