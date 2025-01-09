@@ -2190,6 +2190,7 @@ pub fn WorkQueue(comptime ns: type) type {
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
+                stack_size: usize = 16 * 1024 * 1024,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
@@ -2275,8 +2276,12 @@ pub fn WorkQueue(comptime ns: type) type {
             errdefer allocator.free(self.threads);
             errdefer for (0..self.thread_count) |i| self.threads[i].join();
             errdefer self.queue.deinit();
+            const spawn_config: std.Thread.SpawnConfig = .{
+                .stack_size = options.stack_size,
+                .allocator = allocator,
+            };
             for (0..options.n_jobs) |i| {
-                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleWorkItems, .{
+                self.threads[i] = try std.Thread.spawn(spawn_config, handleWorkItems, .{
                     self,
                     options.thread_start_params,
                     options.thread_end_params,
