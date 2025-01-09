@@ -233,7 +233,8 @@ fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
             }
         },
         .Int => |int| switch (int.bits) {
-            64 => _insertBigInteger(container, key_str, @intCast(value), int.signedness == .unsigned),
+            64 => _insertBigInteger(container, key_str, @bitCast(value), int.signedness == .unsigned),
+            32 => _insertInteger(container, key_str, @bitCast(value), int.signedness == .unsigned),
             else => _insertInteger(container, key_str, @intCast(value), int.signedness == .unsigned),
         },
         .Enum => _insertInteger(container, key_str, @intCast(@intFromEnum(value)), true),
