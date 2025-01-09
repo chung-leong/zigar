@@ -1095,7 +1095,10 @@ async function findSourcePaths(buildPath) {
           if (m) {
             const srcPath = m[1];
             if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
-              involved[srcPath] = true;
+              try {
+                await stat(srcPath);
+                involved[srcPath] = true;
+              } catch {};
             }
           }
         }
