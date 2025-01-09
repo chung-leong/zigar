@@ -2889,7 +2889,7 @@
 "    },\n"
 "    unlinkVariables() {\n"
 "      const copy = this.getCopyFunction();\n"
-"      for (const { object, handle } of this.variables) {\n"
+"      for (const { object } of this.variables) {\n"
 "        const zigDV = object[MEMORY];\n"
 "        const zig = zigDV[ZIG];\n"
 "        if (zig) {\n"

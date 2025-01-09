@@ -3402,6 +3402,7 @@ var callMarshalingOutbound = mixin({
   } ),
   ...({
     usingPromise: false,
+    usingGenerator: false,
     usingAbortSignal: false,
     usingDefaultAllocator: false,
 
@@ -3411,6 +3412,8 @@ var callMarshalingOutbound = mixin({
           this.usingDefaultAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
+        } else if (flags & StructFlag.IsGenerator) {
+          this.usingGenerator = true;
         } else if (flags & StructFlag.IsAbortSignal) {
           this.usingAbortSignal = true;
         }
@@ -9907,6 +9910,7 @@ async function transpile(path, options) {
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
   usage.FeaturePromiseCallback = env.usingPromise;
+  usage.FeatureGeneratorCallback = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;

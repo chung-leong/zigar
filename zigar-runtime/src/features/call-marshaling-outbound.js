@@ -169,6 +169,7 @@ export default mixin({
   } : undefined),
   ...(process.env.MIXIN === 'track' ? {
     usingPromise: false,
+    usingGenerator: false,
     usingAbortSignal: false,
     usingDefaultAllocator: false,
 
@@ -178,6 +179,8 @@ export default mixin({
           this.usingDefaultAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
+        } else if (flags & StructFlag.IsGenerator) {
+          this.usingGenerator = true;
         } else if (flags & StructFlag.IsAbortSignal) {
           this.usingAbortSignal = true;
         }
