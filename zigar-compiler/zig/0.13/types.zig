@@ -2317,6 +2317,7 @@ pub fn WorkQueue(comptime ns: type) type {
                 .initialized => {},
                 else => return promise.resolve({}),
             }
+            self.queue.stop();
             self.deinit_promise = promise;
             self.status = .deinitializing;
             self.queue.deinit();
