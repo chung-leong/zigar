@@ -45,7 +45,6 @@ extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
 threadlocal var main_thread: bool = false;
-var multithread: bool = false;
 
 export fn initialize() void {
     main_thread = true;
@@ -299,9 +298,6 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
         if (comptime builtin.single_threaded) unreachable;
-        if (!multithread) {
-            return .failure_disabled;
-        }
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
         var futex_handle: usize = 0;
@@ -328,9 +324,6 @@ pub fn releaseFunction(fn_ptr: anytype) !void {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {
         if (comptime builtin.single_threaded) unreachable;
-        if (!multithread) {
-            return Error.MultithreadingNotEnabled;
-        }
         _ = _queueJsAction(.release, fn_id, null, 0, 0);
     }
 }
