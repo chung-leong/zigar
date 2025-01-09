@@ -40,7 +40,7 @@ export default mixin({
       [COPY]: this.defineCopier(byteSize),
       ...(process.env.TARGET === 'wasm' ? {
         // add method for recoverng from array detachment
-        [RESTORE]: this.defineRestorer?.(),
+        [RESTORE]: this.defineRestorer(),
       } : undefined),
     };
     const constructor = structure.constructor = f.call(this, structure, descriptors);

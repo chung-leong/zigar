@@ -4240,8 +4240,8 @@ var objectLinkage = mixin({
   },
   unlinkVariables() {
     const copy = this.getCopyFunction();
-    for (const { object, handle } of this.variables) {
-      const zigDV = object[MEMORY];
+    for (const { object } of this.variables) {
+      const zigDV = this.restoreView(object[MEMORY]) ;
       const zig = zigDV[ZIG];
       if (zig) {
         const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
@@ -6041,7 +6041,7 @@ var all$1 = mixin({
       [COPY]: this.defineCopier(byteSize),
       ...({
         // add method for recoverng from array detachment
-        [RESTORE]: this.defineRestorer?.(),
+        [RESTORE]: this.defineRestorer(),
       } ),
     };
     const constructor = structure.constructor = f.call(this, structure, descriptors);

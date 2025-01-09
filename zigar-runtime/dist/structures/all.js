@@ -28,7 +28,7 @@ var all = mixin({
       [COPY]: this.defineCopier(byteSize),
       ...({
         // add method for recoverng from array detachment
-        [RESTORE]: this.defineRestorer?.(),
+        [RESTORE]: this.defineRestorer(),
       } ),
     };
     const constructor = structure.constructor = f.call(this, structure, descriptors);

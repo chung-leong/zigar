@@ -46,8 +46,8 @@ var objectLinkage = mixin({
   },
   unlinkVariables() {
     const copy = this.getCopyFunction();
-    for (const { object, handle } of this.variables) {
-      const zigDV = object[MEMORY];
+    for (const { object } of this.variables) {
+      const zigDV = this.restoreView(object[MEMORY]) ;
       const zig = zigDV[ZIG];
       if (zig) {
         const jsDV = object[MEMORY] = this.allocateMemory(zig.len);

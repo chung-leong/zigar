@@ -46,8 +46,8 @@ export default mixin({
   },
   unlinkVariables() {
     const copy = this.getCopyFunction();
-    for (const { object, handle } of this.variables) {
-      const zigDV = object[MEMORY];
+    for (const { object } of this.variables) {
+      const zigDV = (process.env.TARGET === 'wasm') ? this.restoreView(object[MEMORY]) : object[MEMORY];
       const zig = zigDV[ZIG];
       if (zig) {
         const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
