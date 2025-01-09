@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutputAsync, startThreadPool, stopThreadPool } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool, stopThreadPoolAsync } from '../zig/sepia.zig';
 import './App.css';
 
 function App() {
@@ -71,11 +71,16 @@ function App() {
     })();
   }, [ bitmap, intensity ]);
   useEffect(() => {
-    startThreadPool(navigator.hardwareConcurrency);
-    return async () => {
-      await am.stop();
-      stopThreadPool();
-    };
+    try {
+      let failed = false;
+      startThreadPool(navigator.hardwareConcurrency)?.catch(() => failed = true);
+      return async () => {
+        if (!failed) {
+          await am.stop();
+          await stopThreadPoolAsync();
+        }
+      };
+    } catch {}
   }, []);
   return (
     <div className="App">

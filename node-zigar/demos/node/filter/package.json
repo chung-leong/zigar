@@ -13,7 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "fastify": "^5.2.0",
-    "node-zigar": "^0.13.3-alpha.3",
+    "node-zigar": "^0.13.3-alpha.4",
     "sharp": "^0.33.5"
   }
 }
