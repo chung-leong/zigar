@@ -3,11 +3,6 @@ const builtin = @import("builtin");
 const types = @import("types.zig");
 const expect = std.testing.expect;
 
-const is_wasm = switch (builtin.target.cpu.arch) {
-    .wasm32, .wasm64 => true,
-    else => false,
-};
-
 pub const Error = error{
     TooManyArguments,
     UnsupportedArgumentType,
@@ -27,7 +22,7 @@ pub fn call(
     const arg_struct: *Args = @ptrCast(@alignCast(arg_ptr));
     const arg_bytes: [*]u8 = @ptrCast(arg_ptr);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
-    if (comptime is_wasm) {
+    if (comptime builtin.target.isWasm()) {
         const param_count = f.params.len + 1;
         const params: [param_count]std.builtin.Type.Fn.Param = define: {
             comptime var list: [param_count]std.builtin.Type.Fn.Param = undefined;
