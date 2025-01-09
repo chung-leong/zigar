@@ -140,10 +140,10 @@ var callMarshalingOutbound = mixin({
         const { retval } = args;
         if (retval != null) {
           // if a function returns a value, then the promise is fulfilled immediately
-          callback(retval);
+          callback(null, retval);
         }
       } catch (err) {
-        callback(err);
+        callback(null, err);
       }
       // this would be undefined if a callback function is used instead
       return promise ?? generator;
