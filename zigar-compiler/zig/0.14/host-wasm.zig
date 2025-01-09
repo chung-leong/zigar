@@ -160,7 +160,7 @@ fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
 
 comptime {
     if (!builtin.single_threaded) {
-        @export(finalizeAsyncCall, .{ .name = "finalizeAsyncCall", .linkage = .weak });
+        @export(&finalizeAsyncCall, .{ .name = "finalizeAsyncCall", .linkage = .weak });
     }
 }
 
