@@ -360,7 +360,7 @@ const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaa_aaaa || address === -0x5555_5556;
+    return address === 0xaaaa_aaaa || address === -1431655766;
   }
   /* c8 ignore next */
 ;
@@ -4862,8 +4862,8 @@ var structureAcquisition = mixin({
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
-      insertInteger: { argType: 'vsi', alias: 'insertProperty' },
-      insertBigInteger: { argType: 'vsi', alias: 'insertProperty' },
+      insertInteger: { argType: 'vsib' },
+      insertBigInteger: { argType: 'vsib' },
       insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
       insertString: { argType: 'vss', alias: 'insertProperty' },
       insertObject: { argType: 'vsv', alias: 'insertProperty' },
@@ -4883,6 +4883,18 @@ var structureAcquisition = mixin({
       return {};
     },
     insertProperty(def, name, value) {
+      def[name] = value;
+    },
+    insertInteger(def, name, value, unsigned) {
+      if (unsigned && value < 0) {
+        value = 0x1_0000_0000 + value;
+      }
+      def[name] = value;
+    },
+    insertBigInteger(def, name, value, unsigned) {
+      if (unsigned && value < 0n) {
+        value = 0x1_0000_0000_0000_0000n + value;
+      }
       def[name] = value;
     },
     captureString(address, len) {
@@ -9210,7 +9222,7 @@ function createReader(dv) {
       shift += 7;
       if ((0x80 & byte) === 0) {
         if (shift < 32 && (byte & 0x40) !== 0) {
-          return value | (~0 << shift);
+          return value | (-1 << shift);
         }
         return value;
       }

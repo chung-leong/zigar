@@ -150,7 +150,7 @@ const usize = function(arg) {
 ;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaa_aaaa || address === -0x5555_5556;
+    return address === 0xaaaa_aaaa || address === -1431655766;
   }
   /* c8 ignore next */
 ;

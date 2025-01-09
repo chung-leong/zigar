@@ -347,8 +347,8 @@ export default mixin({
       readSlot: { argType: 'vi', returnType: 'v' },
       writeSlot: { argType: 'viv' },
       beginDefinition: { returnType: 'v' },
-      insertInteger: { argType: 'vsi', alias: 'insertProperty' },
-      insertBigInteger: { argType: 'vsi', alias: 'insertProperty' },
+      insertInteger: { argType: 'vsib' },
+      insertBigInteger: { argType: 'vsib' },
       insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
       insertString: { argType: 'vss', alias: 'insertProperty' },
       insertObject: { argType: 'vsv', alias: 'insertProperty' },
@@ -368,6 +368,18 @@ export default mixin({
       return {};
     },
     insertProperty(def, name, value) {
+      def[name] = value;
+    },
+    insertInteger(def, name, value, unsigned) {
+      if (unsigned && value < 0) {
+        value = 0x1_0000_0000 + value;
+      }
+      def[name] = value;
+    },
+    insertBigInteger(def, name, value, unsigned) {
+      if (unsigned && value < 0n) {
+        value = 0x1_0000_0000_0000_0000n + value;
+      }
       def[name] = value;
     },
     captureString(address, len) {
