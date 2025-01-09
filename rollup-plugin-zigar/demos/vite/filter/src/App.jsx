@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutputAsync, startThreadPool, stopThreadPoolAsync } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool } from '../zig/sepia.zig';
 import './App.css';
+
+startThreadPool(navigator.hardwareConcurrency);
 
 function App() {
   const srcCanvasRef = useRef();
@@ -70,18 +72,6 @@ function App() {
       }
     })();
   }, [ bitmap, intensity ]);
-  useEffect(() => {
-    try {
-      let failed = false;
-      startThreadPool(navigator.hardwareConcurrency)?.catch(() => failed = true);
-      return async () => {
-        if (!failed) {
-          await am.stop();
-          await stopThreadPoolAsync();
-        }
-      };
-    } catch {}
-  }, []);
   return (
     <div className="App">
       <div className="nav">
