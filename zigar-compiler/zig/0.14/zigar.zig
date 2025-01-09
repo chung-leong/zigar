@@ -2,23 +2,23 @@ const std = @import("std");
 const host = @import("root").host;
 
 pub const function = struct {
-    pub fn release(fn_ptr: anytype) void {
-        host.releaseFunction(fn_ptr) catch {};
-    }
-    pub fn Promise(comptime T: type) type {
-        return host.Promise(T);
-    }
+    pub const release = host.releaseFunction;
+
+    pub const Promise = host.Promise;
+    pub const PromiseOf = host.PromiseOf;
+    pub const Generator = host.Generator;
+    pub const GeneratorOf = host.GeneratorOf;
     pub const AbortSignal = host.AbortSignal;
 };
 
 pub const thread = struct {
-    pub fn use(state: bool) !void {
-        try host.setMultithread(state);
-    }
+    pub const use = host.startMultithread;
+    pub const end = host.stopMultithread;
+
+    pub const WorkQueue = host.WorkQueue;
+    pub const Queue = host.Queue;
 };
 
 pub const mem = struct {
-    pub fn getDefaultAllocator() std.mem.Allocator {
-        return host.getDefaultAllocator();
-    }
+    pub const getDefaultAllocator = host.getDefaultAllocator;
 };

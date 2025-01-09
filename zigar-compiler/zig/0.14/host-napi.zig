@@ -12,7 +12,12 @@ const Memory = types.Memory;
 const Error = types.Error;
 
 pub const Promise = types.Promise;
+pub const PromiseOf = types.PromiseOf;
+pub const Generator = types.Generator;
+pub const GeneratorOf = types.GeneratorOf;
 pub const AbortSignal = types.AbortSignal;
+pub const WorkQueue = types.WorkQueue;
+pub const Queue = types.Queue;
 
 const ModuleData = opaque {};
 
@@ -21,6 +26,7 @@ const StructureC = extern struct {
     name: ?[*:0]const u8,
     type: types.StructureType,
     flags: types.StructureFlags,
+    signature: u64,
     length: usize,
     byte_size: usize,
     alignment: u16,
@@ -118,6 +124,7 @@ pub fn beginStructure(def: types.Structure) !Value {
         .name = if (def.name) |p| @ptrCast(p) else null,
         .type = def.type,
         .flags = def.flags,
+        .signature = def.signature,
         .length = def.length orelse missing(usize),
         .byte_size = def.byte_size orelse missing(usize),
         .alignment = def.alignment orelse missing(u16),
@@ -215,36 +222,34 @@ pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_siz
     }
 }
 
-pub fn releaseFunction(fn_ptr: anytype) !void {
+pub fn releaseFunction(fn_ptr: anytype) void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = thunk_js.createThunkController(@This(), FT);
-    const fn_id = try control(null, .get_id, thunk_address);
-    const ptr_address = try control(null, .get_ptr, thunk_address);
+    const fn_id = control(null, .get_id, thunk_address) catch return;
+    const ptr_address = control(null, .get_ptr, thunk_address) catch return;
     const md: *ModuleData = @ptrFromInt(ptr_address);
     var action: Action = .{ .type = .release, .fn_id = fn_id };
     if (module_data == md) {
-        if (imports.perform_js_action(md, &action) != .ok) {
-            return Error.Unknown;
-        }
+        _ = imports.perform_js_action(md, &action);
     } else {
-        if (imports.queue_js_action(md, &action) != .ok) {
-            return Error.MultithreadingNotEnabled;
-        }
+        _ = imports.queue_js_action(md, &action);
     }
 }
 
-pub fn setMultithread(state: bool) !void {
-    const md = try getModuleData();
-    if (multithread != state) {
-        const result = switch (state) {
-            true => imports.enable_multithread(md),
-            false => imports.disable_multithread(md),
-        };
-        if (result != .ok) {
-            return Error.UnableToUseThread;
-        }
-        multithread = state;
+pub fn startMultithread() !void {
+    if (!multithread) {
+        const md = try getModuleData();
+        if (imports.enable_multithread(md) != .ok) return Error.UnableToUseThread;
+        multithread = true;
+    }
+}
+
+pub fn stopMultithread() void {
+    if (multithread) {
+        const md = getModuleData() catch return;
+        _ = imports.disable_multithread(md);
+        multithread = false;
     }
 }
 

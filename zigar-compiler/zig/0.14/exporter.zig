@@ -100,9 +100,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_throwing = @typeInfo(st.fields[0].type) == .error_union,
                             .is_async = inline for (st.fields) |field| {
                                 const field_td = tdb.get(field.type);
-                                if (field_td.isPromise()) {
-                                    break true;
-                                }
+                                if (field_td.isPromise() or field_td.isGenerator()) break true;
                             } else false,
                         },
                     } else if (comptime td.isSlice()) .{
@@ -127,6 +125,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_iterator = td.isIterator(),
                             .is_allocator = td.isAllocator(),
                             .is_promise = td.isPromise(),
+                            .is_generator = td.isGenerator(),
                             .is_abort_signal = td.isAbortSignal(),
                         },
                     };
@@ -368,6 +367,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .name = comptime getStructureName(td),
                     .type = getStructureType(td),
                     .flags = getStructureFlags(td),
+                    .signature = td.getSignature(),
                     .length = getStructureLength(td),
                     .byte_size = td.getByteSize(),
                     .alignment = td.getAlignment(),
@@ -380,7 +380,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try self.addMembers(structure, td);
                 // finalize the shape so that static members can be instances of the structure
                 _ = try host.defineStructure(structure);
-                // don't export decls of internal structs like promise and abort signal
+                // add static variables and functions, excluding internal types
                 if (comptime !td.isInternal()) {
                     try self.addStaticMembers(structure, td);
                 }
@@ -778,6 +778,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             }
                         }
                         if (has_abort_signal and !has_promise) {
+                            @compileLog(T);
                             @compileError("Function accepting AbortSignal as an argument must accept a Promise as well");
                         }
                     },
@@ -822,7 +823,7 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
             return switch (@typeInfo(@TypeOf(value))) {
-                .comptime_int => self.exportPointerTarget(&@as(types.IntType(value), value), true),
+                .comptime_int => self.exportPointerTarget(&@as(types.IntFor(value), value), true),
                 .comptime_float => self.exportPointerTarget(&@as(f64, value), true),
                 .enum_literal => self.exportPointerTarget(types.removeSentinel(@tagName(value)), true),
                 .type => self.getStructure(value),
@@ -1022,5 +1023,5 @@ fn uninline(comptime func: anytype) types.Uninlined(@TypeOf(func)) {
             return @call(.auto, func, args);
         }
     };
-    return fn_transform.spreadArgs(ns.call, .Unspecified);
+    return fn_transform.spreadArgs(ns.call, .auto);
 }

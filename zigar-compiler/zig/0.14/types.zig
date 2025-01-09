@@ -88,8 +88,10 @@ pub const StructureFlags = extern union {
 
         is_allocator: bool = false,
         is_promise: bool = false,
+        is_generator: bool = false,
         is_abort_signal: bool = false,
-        _: u21 = 0,
+
+        _: u20 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
@@ -254,6 +256,7 @@ pub const Structure = struct {
     name: ?[]const u8 = null,
     type: StructureType,
     flags: StructureFlags,
+    signature: u64,
     length: ?usize,
     byte_size: ?usize,
     alignment: ?u16,
@@ -412,7 +415,7 @@ pub const Memory = struct {
     }
 };
 
-pub fn IntType(comptime n: comptime_int) type {
+pub fn IntFor(comptime n: comptime_int) type {
     comptime var bits = 8;
     const signedness = if (n < 0) .signed else .unsigned;
     return inline while (true) : (bits *= 2) {
@@ -423,15 +426,15 @@ pub fn IntType(comptime n: comptime_int) type {
     };
 }
 
-test "IntType" {
-    try expectCT(IntType(0) == u8);
-    try expectCT(IntType(0xFFFFFFFF) == u32);
-    try expectCT(IntType(-0xFFFFFFFF) == i64);
-    try expectCT(IntType(123) == u8);
-    try expectCT(IntType(-123) == i8);
+test "IntFor" {
+    try expectCT(IntFor(0) == u8);
+    try expectCT(IntFor(0xFFFFFFFF) == u32);
+    try expectCT(IntFor(-0xFFFFFFFF) == i64);
+    try expectCT(IntFor(123) == u8);
+    try expectCT(IntFor(-123) == i8);
 }
 
-pub const ErrorIntType = @Type(.{
+pub const ErrorInt = @Type(.{
     .int = .{
         .signedness = .unsigned,
         .bits = @bitSizeOf(anyerror),
@@ -443,7 +446,7 @@ pub fn Uninlined(comptime FT: type) type {
         .@"fn" => |f| @Type(.{
             .@"fn" = .{
                 .calling_convention = switch (f.calling_convention) {
-                    .@"inline" => .Unspecified,
+                    .@"inline" => .auto,
                     else => |cc| cc,
                 },
                 .is_generic = f.is_generic,
@@ -525,6 +528,7 @@ pub const TypeData = struct {
     type: type,
     slot: ?usize = null,
     attrs: TypeAttributes = .{},
+    signature: u64 = 0,
 
     pub fn getSlot(comptime self: @This()) usize {
         return self.slot orelse @compileError("No assigned slot: " ++ @typeName(self.type));
@@ -654,12 +658,12 @@ pub const TypeData = struct {
     pub fn getSelectorType(comptime self: @This()) ?type {
         return switch (@typeInfo(self.type)) {
             .@"union" => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
-                true => IntType(un.fields.len),
+                true => IntFor(un.fields.len),
                 false => null,
             },
             .optional => |op| switch (@typeInfo(op.child)) {
                 .pointer => usize, // size of the pointer itself
-                .error_set => ErrorIntType,
+                .error_set => ErrorInt,
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -746,6 +750,10 @@ pub const TypeData = struct {
         try expectCT(getContentBitOffset(.{ .type = Union }) == 0);
     }
 
+    pub fn getSignature(comptime self: @This()) u64 {
+        return self.signature;
+    }
+
     pub fn isConst(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
             .pointer => |pt| pt.is_const,
@@ -794,85 +802,8 @@ pub const TypeData = struct {
         try expectCT(isBitVector(.{ .type = B }) == false);
     }
 
-    fn PayloadType(comptime T: type) ?type {
-        return switch (@typeInfo(T)) {
-            .optional => |op| op.child,
-            .error_union => |eu| PayloadType(eu.payload),
-            else => null,
-        };
-    }
-
-    test "PayloadType" {
-        const T1 = PayloadType(?i32) orelse unreachable;
-        try expect(T1 == i32);
-        const T2 = PayloadType(anyerror!?i32) orelse unreachable;
-        try expect(T2 == i32);
-        const T3 = PayloadType(i32);
-        try expect(T3 == null);
-    }
-
-    fn NextMethodReturnType(comptime FT: type, comptime T: type) ?type {
-        const f = @typeInfo(FT).@"fn";
-        if (f.return_type) |RT| {
-            const param_match = switch (f.params.len) {
-                1 => f.params[0].type == *T,
-                2 => f.params[0].type == *T and f.params[1].type == std.mem.Allocator,
-                else => false,
-            };
-            if (param_match) {
-                if (PayloadType(RT)) |PT| {
-                    return PT;
-                }
-            }
-        }
-        return null;
-    }
-
-    test "NextMethodReturnType" {
-        const S = struct {
-            pub fn next1(_: *@This()) ?i32 {
-                return null;
-            }
-
-            pub fn next2(_: *@This()) !?i32 {
-                return null;
-            }
-
-            pub fn next3(_: *@This(), _: i32) !?i32 {
-                return null;
-            }
-
-            pub fn next4(_: i32) !?i32 {
-                return null;
-            }
-
-            pub fn next5(_: *@This()) i32 {
-                return 0;
-            }
-        };
-        const T1 = NextMethodReturnType(@TypeOf(S.next1), S) orelse unreachable;
-        try expect(T1 == i32);
-        const T2 = NextMethodReturnType(@TypeOf(S.next2), S) orelse unreachable;
-        try expect(T2 == i32);
-        const T3 = NextMethodReturnType(@TypeOf(S.next3), S);
-        try expect(T3 == null);
-        const T4 = NextMethodReturnType(@TypeOf(S.next4), S);
-        try expect(T4 == null);
-        const T5 = NextMethodReturnType(@TypeOf(S.next5), S);
-        try expect(T5 == null);
-    }
-
     pub fn isIterator(comptime self: @This()) bool {
-        switch (@typeInfo(self.type)) {
-            .@"struct", .@"union", .@"opaque" => if (@hasDecl(self.type, "next")) {
-                const next = @field(self.type, "next");
-                if (NextMethodReturnType(@TypeOf(next), self.type)) |_| {
-                    return true;
-                }
-            },
-            else => {},
-        }
-        return false;
+        return IteratorReturnValue(self.type) != null;
     }
 
     test "isIterator" {
@@ -959,7 +890,7 @@ pub const TypeData = struct {
     }
 
     pub fn isOptional(comptime self: @This()) bool {
-        return self.isAllocator() or self.isPromise() or self.isAbortSignal();
+        return self.isAllocator() or getInternalType(self.type) != null;
     }
 
     pub fn isAllocator(comptime self: @This()) bool {
@@ -967,11 +898,15 @@ pub const TypeData = struct {
     }
 
     pub fn isPromise(comptime self: @This()) bool {
-        return comptime self.isInternal() and @hasDecl(self.type, "Payload");
+        return getInternalType(self.type) == .promise;
+    }
+
+    pub fn isGenerator(comptime self: @This()) bool {
+        return getInternalType(self.type) == .generator;
     }
 
     pub fn isAbortSignal(comptime self: @This()) bool {
-        return self.type == AbortSignal;
+        return getInternalType(self.type) == .abort_signal;
     }
 
     pub fn isSupported(comptime self: @This()) bool {
@@ -988,7 +923,7 @@ pub const TypeData = struct {
 
     pub fn isInternal(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .@"struct" => @hasDecl(self.type, "Opaque") and @field(self.type, "Opaque") == Internal,
+            .@"struct" => @hasDecl(self.type, "internal_type") and @TypeOf(self.type.internal_type) == InternalType,
             else => false,
         };
     }
@@ -996,8 +931,8 @@ pub const TypeData = struct {
     test "isInternal" {
         try expectCT(isInternal(.{ .type = AbortSignal }) == true);
         try expectCT(isInternal(.{ .type = struct {} }) == false);
-        try expectCT(isInternal(.{ .type = Promise(f64, undefined) }) == true);
-        try expectCT(isInternal(.{ .type = Promise(anyerror!u32, undefined) }) == true);
+        try expectCT(isInternal(.{ .type = Promise(f64) }) == true);
+        try expectCT(isInternal(.{ .type = Promise(anyerror!u32) }) == true);
     }
 };
 
@@ -1019,6 +954,8 @@ pub const TypeDataCollector = struct {
         inline for (self.types.slice()) |*td| {
             // set attributes like is_supported and has_pointer
             self.setAttributes(td);
+            // set signature of types
+            self.setSignature(td);
             if (td.isSupported()) {
                 // assign slots to supported types
                 self.setSlot(td);
@@ -1039,7 +976,7 @@ pub const TypeDataCollector = struct {
     }
 
     test "createDatabase" {
-        @setEvalBranchQuota(10000);
+        @setEvalBranchQuota(200000);
         const ns = struct {
             pub const StructA = struct {
                 number: i32,
@@ -1160,7 +1097,7 @@ pub const TypeDataCollector = struct {
                 }
                 self.add(usize);
             },
-            .error_set => self.add(ErrorIntType),
+            .error_set => self.add(ErrorInt),
             .@"struct" => |st| if (st.backing_integer) |IT| self.add(IT),
             .@"fn" => |f| if (!f.is_generic) {
                 const ArgT = ArgumentStruct(T);
@@ -1187,7 +1124,7 @@ pub const TypeDataCollector = struct {
         switch (@typeInfo(T)) {
             .type => self.add(value),
             .comptime_float => self.add(*const f64),
-            .comptime_int => self.add(*const IntType(value)),
+            .comptime_int => self.add(*const IntFor(value)),
             .enum_literal => self.add(@TypeOf(removeSentinel(@tagName(value)))),
             .optional => if (value) |v| self.addTypeOf(v),
             .error_union => if (value) |v| self.addTypeOf(v) else |_| {},
@@ -1335,8 +1272,138 @@ pub const TypeDataCollector = struct {
         }
     }
 
+    fn setSignature(comptime self: *@This(), comptime td: *TypeData) void {
+        if (td.isSupported()) {
+            td.signature = self.calcSignature(td);
+        }
+    }
+
+    fn calcSignature(comptime self: *@This(), comptime td: *TypeData) u64 {
+        var md5 = std.crypto.hash.Md5.init(.{});
+        switch (@typeInfo(td.type)) {
+            .@"struct" => |st| {
+                md5.update(switch (st.layout) {
+                    .@"extern" => "extern struct",
+                    .@"packed" => "packed struct",
+                    else => "struct",
+                });
+                if (st.backing_integer) |BIT| {
+                    md5.update("(");
+                    md5.update(std.mem.asBytes(&self.get(BIT).signature));
+                    md5.update(")");
+                }
+                md5.update(" {");
+                for (st.fields) |field| {
+                    if (!field.is_comptime) {
+                        md5.update(field.name);
+                        md5.update(": ");
+                        md5.update(std.mem.asBytes(&self.get(field.type).signature));
+                        if (field.alignment != @alignOf(field.type)) {
+                            md5.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
+                        }
+                        md5.update(", ");
+                    }
+                }
+                md5.update("}");
+            },
+            .@"union" => |un| {
+                md5.update(switch (un.layout) {
+                    .@"extern" => "extern union",
+                    else => "union",
+                });
+                if (un.tag_type) |TT| {
+                    md5.update("(");
+                    md5.update(std.mem.asBytes(&self.get(TT).signature));
+                    md5.update(")");
+                }
+                md5.update(" {");
+                for (un.fields) |field| {
+                    md5.update(field.name);
+                    md5.update(": ");
+                    md5.update(std.mem.asBytes(&self.get(field.type).signature));
+                    if (field.alignment != @alignOf(field.type)) {
+                        md5.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
+                    }
+                    md5.update(", ");
+                }
+                md5.update("}");
+            },
+            .array => |ar| {
+                md5.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
+                md5.update(std.mem.asBytes(&self.get(ar.child).signature));
+            },
+            .vector => |ar| {
+                md5.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
+                md5.update(std.mem.asBytes(&self.get(ar.child).signature));
+                md5.update(")");
+            },
+            .optional => |op| {
+                md5.update("?");
+                md5.update(std.mem.asBytes(&self.get(op.child).signature));
+            },
+            .error_union => |eu| {
+                md5.update(std.mem.asBytes(&self.get(eu.error_set).signature));
+                md5.update("!");
+                md5.update(std.mem.asBytes(&self.get(eu.payload).signature));
+            },
+            .pointer => |pt| {
+                md5.update(switch (pt.size) {
+                    .One => "*",
+                    .Many => "[*",
+                    .Slice => "[",
+                    .C => "[*c",
+                });
+                if (pt.sentinel) |ptr| {
+                    const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
+                    md5.update(std.fmt.comptimePrint(":{d}", .{value}));
+                }
+                md5.update(switch (pt.size) {
+                    .One => "",
+                    else => "]",
+                });
+                if (pt.is_const) {
+                    md5.update("const ");
+                }
+                if (pt.is_allowzero) {
+                    md5.update("allowzero ");
+                }
+                md5.update(std.mem.asBytes(&self.get(pt.child).signature));
+            },
+            .@"fn" => |f| {
+                md5.update("fn (");
+                if (f.is_var_args) {
+                    md5.update("...");
+                }
+                for (f.params) |param| {
+                    if (param.is_noalias) {
+                        md5.update("noalias ");
+                    }
+                    if (param.type) |PT| {
+                        md5.update(std.mem.asBytes(&self.get(PT).signature));
+                    } else {
+                        md5.update("anytype");
+                    }
+                    md5.update(", ");
+                }
+                md5.update(") ");
+                if (f.calling_convention != .auto) {
+                    md5.update("callconv(.");
+                    md5.update(@tagName(f.calling_convention));
+                    md5.update(") ");
+                }
+                if (f.return_type) |RT| {
+                    md5.update(std.mem.asBytes(&self.get(RT).signature));
+                }
+            },
+            else => md5.update(@typeName(td.type)),
+        }
+        var out: [16]u8 = undefined;
+        md5.final(&out);
+        return std.mem.bytesToValue(u64, out[0..8]);
+    }
+
     test "scan" {
-        @setEvalBranchQuota(10000);
+        @setEvalBranchQuota(200000);
         const ns = struct {
             pub const StructA = struct {
                 number: i32,
@@ -1349,7 +1416,7 @@ pub const TypeDataCollector = struct {
     }
 
     test "setAttributes" {
-        @setEvalBranchQuota(10000);
+        @setEvalBranchQuota(200000);
         const ns = struct {
             pub const StructA = struct {
                 number: i32,
@@ -1459,6 +1526,49 @@ pub const TypeDataCollector = struct {
         try expectCT(tdc.get(ns.D).attrs.has_pointer == true);
         // comptime fields should be ignored
         try expectCT(tdc.get(ns.E).attrs.has_pointer == false);
+    }
+
+    test "setSignature" {
+        @setEvalBranchQuota(200000);
+        const ns = struct {
+            pub const Uint32 = u32;
+            pub const Uint64 = u64;
+            pub const StructA = struct {
+                number: i32,
+            };
+            pub const StructB = struct {
+                numberA: i32,
+            };
+            pub const StructC = struct {
+                numberA: i32 align(16),
+            };
+            pub const PtrA = *u32;
+            pub const PtrB = *const u32;
+            pub const FnA = fn () i32;
+            pub const FnB = fn () u32;
+            pub const FnC = fn () callconv(.C) u32;
+            pub const FnD = fn (u32) u32;
+        };
+        comptime var tdc = init(0);
+        comptime tdc.scan(ns);
+        const sig1 = comptime tdc.get(ns.Uint32).signature;
+        const sig2 = comptime tdc.get(ns.Uint64).signature;
+        try expect(sig1 != sig2);
+        const sig3 = comptime tdc.get(ns.StructA).signature;
+        const sig4 = comptime tdc.get(ns.StructB).signature;
+        try expect(sig3 != sig4);
+        const sig5 = comptime tdc.get(ns.StructC).signature;
+        try expect(sig4 != sig5);
+        const sig6 = comptime tdc.get(ns.PtrA).signature;
+        const sig7 = comptime tdc.get(ns.PtrB).signature;
+        try expect(sig6 != sig7);
+        const sig8 = comptime tdc.get(ns.FnA).signature;
+        const sig9 = comptime tdc.get(ns.FnB).signature;
+        try expect(sig8 != sig9);
+        const sig10 = comptime tdc.get(ns.FnC).signature;
+        try expect(sig9 != sig10);
+        const sig11 = comptime tdc.get(ns.FnD).signature;
+        try expect(sig9 != sig11);
     }
 };
 
@@ -1621,17 +1731,293 @@ pub fn removeSentinel(comptime ptr: anytype) retval_type: {
     return @ptrCast(ptr);
 }
 
-const Internal = opaque {};
+fn ReturnValue(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
+    return f.return_type orelse @TypeOf(undefined);
+}
+
+test "ReturnValue" {
+    const T = ReturnValue(fn () void);
+    try expect(T == void);
+}
+
+fn Payload(comptime T: type) ?type {
+    return switch (@typeInfo(T)) {
+        .optional => |op| op.child,
+        .error_union => |eu| Payload(eu.payload),
+        else => null,
+    };
+}
+
+test "Payload" {
+    const T1 = Payload(?i32) orelse unreachable;
+    try expect(T1 == i32);
+    const T2 = Payload(anyerror!?i32) orelse unreachable;
+    try expect(T2 == i32);
+    const T3 = Payload(i32);
+    try expect(T3 == null);
+}
+
+fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
+    const f = @typeInfo(FT).@"fn";
+    if (f.params.len == 1 and f.params[0].type == *T) {
+        if (f.return_type) |RT| {
+            if (Payload(RT) != null) return RT;
+        }
+    }
+    return null;
+}
+
+test "NextMethodReturnValue" {
+    const S = struct {
+        pub fn next1(_: *@This()) ?i32 {
+            return null;
+        }
+
+        pub fn next2(_: *@This()) error{OutOfMemory}!?i32 {
+            return null;
+        }
+
+        pub fn next3(_: *@This(), _: i32) !?i32 {
+            return null;
+        }
+
+        pub fn next4(_: i32) !?i32 {
+            return null;
+        }
+
+        pub fn next5(_: *@This()) i32 {
+            return 0;
+        }
+    };
+    const T1 = NextMethodReturnValue(@TypeOf(S.next1), S) orelse unreachable;
+    try expect(T1 == ?i32);
+    const T2 = NextMethodReturnValue(@TypeOf(S.next2), S) orelse unreachable;
+    try expect(T2 == error{OutOfMemory}!?i32);
+    const T3 = NextMethodReturnValue(@TypeOf(S.next3), S);
+    try expect(T3 == null);
+    const T4 = NextMethodReturnValue(@TypeOf(S.next4), S);
+    try expect(T4 == null);
+    const T5 = NextMethodReturnValue(@TypeOf(S.next5), S);
+    try expect(T5 == null);
+}
+
+pub fn IteratorReturnValue(comptime T: type) ?type {
+    switch (@typeInfo(T)) {
+        .@"struct", .@"union", .@"opaque" => if (@hasDecl(T, "next")) {
+            const next = @field(T, "next");
+            return NextMethodReturnValue(@TypeOf(next), T);
+        },
+        .error_union => |eu| if (IteratorReturnValue(eu.payload)) |RT| {
+            return switch (@typeInfo(RT)) {
+                .error_union => |rt_eu| (eu.error_set || rt_eu.error_set)!rt_eu.payload,
+                else => eu.error_set!RT,
+            };
+        },
+        else => {},
+    }
+    return null;
+}
+
+test "IteratorReturnValue" {
+    const T1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
+    try expect(T1 != null and Payload(T1.?) == []const u8);
+    const T2 = IteratorReturnValue(error{Doh}!std.fs.path.ComponentIterator(.posix, u8));
+    try expect(T2 != null);
+    const T3 = IteratorReturnValue(std.fs.path);
+    try expect(T3 == null);
+}
+
+const InternalType = enum {
+    promise,
+    generator,
+    abort_signal,
+};
+
+pub fn getInternalType(comptime OT: ?type) ?InternalType {
+    if (OT) |T| {
+        if (@typeInfo(T) == .@"struct") {
+            if (@hasDecl(T, "internal_type") and @TypeOf(T.internal_type) == InternalType) {
+                return T.internal_type;
+            }
+        }
+    }
+    return null;
+}
+
+test "getInternalType" {
+    try expect(getInternalType(Promise(i32)) == .promise);
+    try expect(getInternalType(Generator(?i32)) == .generator);
+    try expect(getInternalType(AbortSignal) == .abort_signal);
+}
 
 pub fn Promise(comptime T: type) type {
     return struct {
-        callback: *const fn (T) void,
+        ptr: ?*anyopaque = null,
+        callback: *const fn (?*anyopaque, T) void,
 
-        const Payload = T;
-        const Opaque = Internal;
+        const internal_type: InternalType = .promise;
+        const payload = T;
 
-        pub inline fn resolve(self: @This(), value: T) void {
-            self.callback(value);
+        pub fn init(ptr: ?*anyopaque, cb: anytype) @This() {
+            return .{
+                .ptr = ptr,
+                .callback = getCallback(fn (?*anyopaque, T) void, cb),
+            };
+        }
+
+        pub fn resolve(self: @This(), value: T) void {
+            self.callback(self.ptr, value);
+        }
+
+        pub fn partition(self: @This(), allocator: std.mem.Allocator, count: usize) !@This() {
+            if (count == 1) {
+                return self;
+            }
+            const ThisPromise = @This();
+            const Context = struct {
+                allocator: std.mem.Allocator,
+                promise: ThisPromise,
+                count: usize,
+                fired: bool = false,
+
+                pub fn resolve(ctx: *@This(), value: T) void {
+                    var call = false;
+                    var free = false;
+                    if (@typeInfo(T) == .error_union) {
+                        if (value) |_| {
+                            free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                            call = free and @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
+                        } else |_| {
+                            call = @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
+                            free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                        }
+                    } else {
+                        free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                    }
+                    if (call) {
+                        ctx.promise.resolve(value);
+                    }
+                    if (free) {
+                        const allocator_copy = ctx.allocator;
+                        allocator_copy.destroy(ctx);
+                    }
+                }
+            };
+            const ctx = try allocator.create(Context);
+            ctx.* = .{ .allocator = allocator, .promise = self, .count = count };
+            return @This().init(ctx, Context.resolve);
+        }
+
+        test "partition" {
+            if (T == anyerror!u32) {
+                const ns = struct {
+                    var test_value: T = 0;
+
+                    fn resolve(_: *anyopaque, value: T) void {
+                        test_value = value;
+                    }
+                };
+                var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                const promise1: @This() = @This().init(null, ns.resolve);
+                const multipart_promise1 = try promise1.partition(gpa.allocator(), 3);
+                multipart_promise1.resolve(1);
+                multipart_promise1.resolve(2);
+                try expect(ns.test_value catch unreachable == 0);
+                multipart_promise1.resolve(3);
+                try expect(ns.test_value catch unreachable == 3);
+                const promise2: @This() = @This().init(null, ns.resolve);
+                const multipart_promise2 = try promise2.partition(gpa.allocator(), 3);
+                multipart_promise2.resolve(error.OutOfMemory);
+                try expect(ns.test_value catch 777 == 777);
+            }
+        }
+    };
+}
+
+test {
+    _ = Promise(anyerror!u32);
+}
+
+pub fn Function(comptime arg: anytype) type {
+    const AT = @TypeOf(arg);
+    const FT = if (@typeInfo(AT) == .type) arg else AT;
+    return switch (@typeInfo(FT)) {
+        .@"fn" => FT,
+        else => @compileError("Function expected, received " ++ @typeName(FT)),
+    };
+}
+
+pub fn PromiseOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
+    return inline for (f.params) |param| {
+        if (getInternalType(param.type) == .promise) break param.type.?;
+    } else Promise(f.return_type.?);
+}
+
+pub fn Generator(comptime T: type) type {
+    if (Payload(T) == null) {
+        @compileError("Expecting optional type, received: " ++ @typeName(T));
+    }
+    return struct {
+        ptr: ?*anyopaque = null,
+        callback: *const fn (?*anyopaque, T) bool,
+
+        const internal_type: InternalType = .generator;
+        const payload = T;
+
+        pub fn init(ptr: ?*anyopaque, cb: anytype) @This() {
+            return .{
+                .ptr = ptr,
+                .callback = getCallback(fn (?*anyopaque, T) bool, cb),
+            };
+        }
+
+        pub fn yield(self: @This(), value: T) bool {
+            return self.callback(self.ptr, value);
+        }
+
+        pub fn pipe(self: @This(), arg: anytype) void {
+            const AT = @TypeOf(arg);
+            if (IteratorReturnValue(AT) == null) {
+                @compileError("Expecting an iterator, received: " ++ @typeName(AT));
+            }
+            var iter = switch (@typeInfo(AT)) {
+                .error_union => arg catch |err| {
+                    _ = self.yield(err);
+                    return;
+                },
+                else => arg,
+            };
+            while (true) {
+                const result = iter.next();
+                // break if callback returns false
+                if (!self.yield(result)) break;
+                // break if result is an error or null
+                switch (@typeInfo(@TypeOf(result))) {
+                    .error_union => if (result) |value| {
+                        if (value == null) break;
+                    } else |_| break,
+                    .optional => if (result == null) break,
+                    else => {},
+                }
+            }
+        }
+    };
+}
+
+pub fn GeneratorOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
+    return inline for (f.params) |param| {
+        if (getInternalType(param.type) == .generator) break param.type.?;
+    } else typedef: {
+        if (IteratorReturnValue(f.return_type.?)) |T| {
+            break :typedef Generator(T);
+        } else {
+            @compileError("Function does not return an iterator: " ++ @typeName(FT));
         }
     };
 }
@@ -1639,7 +2025,7 @@ pub fn Promise(comptime T: type) type {
 pub const AbortSignal = struct {
     ptr: *const volatile i32,
 
-    const Opaque = Internal;
+    const internal_type: InternalType = .abort_signal;
 
     pub inline fn on(self: @This()) bool {
         return self.ptr.* != 0;
@@ -1650,8 +2036,495 @@ pub const AbortSignal = struct {
     }
 };
 
+pub fn Queue(comptime T: type) type {
+    return struct {
+        const Node = struct {
+            next: *Node,
+            payload: T,
+        };
+        const tail: *Node = @ptrFromInt(std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(Node)));
+
+        head: *Node = tail,
+        allocator: std.mem.Allocator,
+        count: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
+        stopped: bool = false,
+
+        pub fn push(self: *@This(), value: T) !void {
+            const new_node = try self.alloc();
+            new_node.* = .{ .next = tail, .payload = value };
+            self.insert(new_node);
+            // increment count and wake up any awaking thread
+            _ = self.count.fetchAdd(1, .release);
+            std.Thread.Futex.wake(&self.count, 1);
+        }
+
+        fn alloc(self: *@This()) !*Node {
+            while (true) {
+                const current_head = self.head;
+                if (isMarkedReference(current_head)) {
+                    const next_node = getUnmarkedReference(current_head.next);
+                    if (cas(&self.head, current_head, next_node)) return current_head;
+                } else break;
+            }
+            return try self.allocator.create(Node);
+        }
+
+        fn insert(self: *@This(), node: *Node) void {
+            while (true) {
+                if (self.head == tail) {
+                    if (cas(&self.head, tail, node)) return;
+                } else {
+                    var current_node = self.head;
+                    while (true) {
+                        const next_node = getUnmarkedReference(current_node.next);
+                        if (next_node == tail) {
+                            const next = switch (isMarkedReference(current_node.next)) {
+                                false => node,
+                                true => getMarkedReference(node),
+                            };
+                            if (cas(&current_node.next, current_node.next, next)) return;
+                            break;
+                        }
+                        current_node = next_node;
+                    }
+                }
+            }
+        }
+
+        pub fn pull(self: *@This()) ?T {
+            var current_node = self.head;
+            return while (current_node != tail) {
+                const next_node = getUnmarkedReference(current_node.next);
+                if (!isMarkedReference(current_node.next)) {
+                    if (cas(&current_node.next, next_node, getMarkedReference(next_node))) {
+                        _ = self.count.fetchSub(1, .release);
+                        break current_node.payload;
+                    }
+                }
+                current_node = next_node;
+            } else null;
+        }
+
+        pub fn wait(self: *@This()) void {
+            std.Thread.Futex.wait(&self.count, 0);
+        }
+
+        pub fn stop(self: *@This()) void {
+            self.stopped = true;
+            while (self.pull()) |_| {}
+            // wake up awaking threads and prevent them from sleep again
+            self.count.store(std.math.maxInt(u32), .release);
+            std.Thread.Futex.wake(&self.count, std.math.maxInt(u32));
+        }
+
+        pub fn deinit(self: *@This()) void {
+            var current_node = self.head;
+            return while (current_node != tail) {
+                const next_node = getUnmarkedReference(current_node.next);
+                self.allocator.destroy(current_node);
+                current_node = next_node;
+            };
+        }
+
+        inline fn isMarkedReference(ptr: *Node) bool {
+            return @intFromPtr(ptr) & 1 != 0;
+        }
+
+        inline fn getUnmarkedReference(ptr: *Node) *Node {
+            return @ptrFromInt(@intFromPtr(ptr) & ~@as(usize, 1));
+        }
+
+        inline fn getMarkedReference(ptr: *Node) *Node {
+            @setRuntimeSafety(false);
+            return @ptrFromInt(@intFromPtr(ptr) | @as(usize, 1));
+        }
+
+        inline fn cas(ptr: **Node, old: *Node, new: *Node) bool {
+            return @cmpxchgWeak(*Node, ptr, old, new, .seq_cst, .monotonic) == null;
+        }
+    };
+}
+
+test "Queue" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var queue: Queue(i32) = .{ .allocator = gpa.allocator() };
+    try queue.push(123);
+    try queue.push(456);
+    const value1 = queue.pull();
+    const count1 = queue.count.load(.acquire);
+    try expect(value1 == 123);
+    try expect(count1 == 1);
+    const value2 = queue.pull();
+    const count2 = queue.count.load(.acquire);
+    try expect(value2 == 456);
+    try expect(count2 == 0);
+    const value3 = queue.pull();
+    try expect(value3 == null);
+    try queue.push(888);
+    const value4 = queue.pull();
+    try expect(value4 == 888);
+    queue.deinit();
+}
+
+pub fn WorkQueue(comptime ns: type) type {
+    const st = switch (@typeInfo(ns)) {
+        .@"struct" => |st| st,
+        else => @compileError("Struct expected, received " ++ @typeName(ns)),
+    };
+    return struct {
+        queue: Queue(WorkItem) = undefined,
+        threads: []std.Thread = undefined,
+        thread_count: usize = 0,
+        status: Status = .uninitialized,
+        init_remaining: usize = undefined,
+        init_futex: std.atomic.Value(u32) = undefined,
+        init_result: ThreadStartError!void = undefined,
+        init_promise: ?Promise(ThreadStartError!void) = undefined,
+        deinit_promise: ?Promise(void) = undefined,
+
+        pub const Status = enum {
+            uninitialized,
+            initialized,
+            deinitializing,
+        };
+        pub const Options = init: {
+            const fields = std.meta.fields(struct {
+                allocator: std.mem.Allocator,
+                n_jobs: usize = 1,
+                thread_start_params: ThreadStartParams,
+                thread_end_params: ThreadEndParams,
+            });
+            // there're no start or end params, provide a default value
+            var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+            for (fields, 0..) |field, i| {
+                new_fields[i] = field;
+                if (@sizeOf(field.type) == 0) {
+                    new_fields[i].default_value = @ptrCast(&@as(field.type, .{}));
+                }
+            }
+            break :init @Type(.{
+                .@"struct" = .{
+                    .layout = .auto,
+                    .fields = &new_fields,
+                    .decls = &.{},
+                    .is_tuple = false,
+                },
+            });
+        };
+        pub const WorkItem = init: {
+            var enum_fields: [st.decls.len]std.builtin.Type.EnumField = undefined;
+            var union_fields: [st.decls.len]std.builtin.Type.UnionField = undefined;
+            var count = 0;
+            for (st.decls) |decl| {
+                const DT = @TypeOf(@field(ns, decl.name));
+                switch (@typeInfo(DT)) {
+                    .@"fn" => |f| {
+                        if (f.return_type) |RT| {
+                            // if the return value is an iterator, then a generator is expected
+                            // otherwise an optional promise can be provided
+                            const Task = if (IteratorReturnValue(RT)) |IT| struct {
+                                args: std.meta.ArgsTuple(DT),
+                                generator: ?Generator(IT),
+                            } else struct {
+                                args: std.meta.ArgsTuple(DT),
+                                promise: ?Promise(RT),
+                            };
+                            enum_fields[count] = .{ .name = decl.name, .value = count };
+                            union_fields[count] = .{
+                                .name = decl.name,
+                                .type = Task,
+                                .alignment = @alignOf(Task),
+                            };
+                            count += 1;
+                        }
+                    },
+                    else => {},
+                }
+            }
+            break :init @Type(.{
+                .@"union" = .{
+                    .layout = .auto,
+                    .tag_type = @Type(.{
+                        .@"enum" = .{
+                            .tag_type = if (count <= 256) u8 else u16,
+                            .fields = enum_fields[0..count],
+                            .decls = &.{},
+                            .is_exhaustive = true,
+                        },
+                    }),
+                    .fields = union_fields[0..count],
+                    .decls = &.{},
+                },
+            });
+        };
+
+        pub fn init(self: *@This(), options: Options) !void {
+            switch (self.status) {
+                .uninitialized => {},
+                .initialized => return error.AlreadyInitialized,
+                .deinitializing => return error.Denitializing,
+            }
+            const allocator = options.allocator;
+            self.queue = .{ .allocator = allocator };
+            self.threads = try allocator.alloc(std.Thread, options.n_jobs);
+            self.init_remaining = self.threads.len;
+            self.init_futex = std.atomic.Value(u32).init(0);
+            self.init_result = {};
+            self.init_promise = null;
+            self.deinit_promise = null;
+            errdefer allocator.free(self.threads);
+            errdefer for (0..self.thread_count) |i| self.threads[i].join();
+            errdefer self.queue.deinit();
+            for (0..options.n_jobs) |i| {
+                self.threads[i] = try std.Thread.spawn(.{ .allocator = allocator }, handleWorkItems, .{
+                    self,
+                    options.thread_start_params,
+                    options.thread_end_params,
+                });
+                self.thread_count += 1;
+            }
+            self.status = .initialized;
+        }
+
+        pub fn wait(self: *@This()) ThreadStartError!void {
+            std.Thread.Futex.wait(&self.init_futex, 0);
+            return self.init_result;
+        }
+
+        pub fn waitAsync(self: *@This(), promise: Promise(ThreadStartError!void)) void {
+            if (self.init_futex.load(.acquire) == 1) {
+                promise.resolve(self.init_result);
+            } else {
+                self.init_promise = promise;
+            }
+        }
+
+        pub fn deinit(self: *@This()) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return,
+            }
+            self.status = .deinitializing;
+            self.queue.stop();
+            for (self.threads) |thread| thread.join();
+            self.queue.deinit();
+            self.queue.allocator.free(self.threads);
+            self.status = .uninitialized;
+        }
+
+        pub fn deinitAsync(self: *@This(), promise: Promise(void)) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return promise.resolve({}),
+            }
+            self.deinit_promise = promise;
+            self.status = .deinitializing;
+            self.queue.deinit();
+        }
+
+        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
+            switch (self.status) {
+                .initialized => {},
+                else => return error.Unexpected,
+            }
+            const key = comptime EnumOf(func);
+            const fieldName = @tagName(key);
+            // @FieldType() not available in 0.13.0
+            const Call = inline for (@typeInfo(WorkItem).@"union".fields) |field| {
+                if (comptime std.mem.eql(u8, field.name, fieldName)) break field.type;
+            } else unreachable;
+            const item = switch (@hasField(Call, "generator")) {
+                true => @unionInit(WorkItem, fieldName, .{ .args = args, .generator = dest }),
+                false => @unionInit(WorkItem, fieldName, .{ .args = args, .promise = dest }),
+            };
+            try self.queue.push(item);
+        }
+
+        pub fn clear(self: *@This()) void {
+            switch (self.status) {
+                .initialized => {},
+                else => return,
+            }
+            while (self.queue.pull() != null) {}
+        }
+
+        const WorkItemEnum = @typeInfo(WorkItem).@"union".tag_type.?;
+        const ThreadStartParams = switch (@hasDecl(ns, "onThreadStart")) {
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadStart)),
+        };
+        const ThreadEndParams = switch (@hasDecl(ns, "onThreadEnd")) {
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnd)),
+        };
+        const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
+            false => error{},
+            true => switch (@typeInfo(ReturnValue(ns.onThreadStart))) {
+                .error_union => |eu| eu.error_set,
+                else => error{},
+            },
+        };
+
+        fn EnumOf(comptime func: anytype) WorkItemEnum {
+            return for (st.decls) |decl| {
+                const dv = @field(ns, decl.name);
+                if (@TypeOf(dv) == @TypeOf(func)) {
+                    if (dv == func) break @field(WorkItemEnum, decl.name);
+                }
+            } else @compileError("Function not found in " ++ @typeName(ns));
+        }
+
+        fn ArgsOf(comptime func: anytype) type {
+            return std.meta.ArgsTuple(@TypeOf(func));
+        }
+
+        fn PromiseOrGenerator(comptime func: anytype) type {
+            const RT = ReturnValue(func);
+            return if (IteratorReturnValue(RT)) |IT| Generator(IT) else Promise(RT);
+        }
+
+        fn handleWorkItems(
+            self: *@This(),
+            thread_start_params: ThreadStartParams,
+            thread_end_params: ThreadEndParams,
+        ) void {
+            var error_encountered = false;
+            if (comptime @hasDecl(ns, "onThreadStart")) {
+                const result = @call(.auto, ns.onThreadStart, thread_start_params);
+                if (comptime ThreadStartError != error{}) {
+                    if (result) |_| {} else |err| {
+                        self.init_result = err;
+                        error_encountered = true;
+                    }
+                }
+            }
+            if (@atomicRmw(usize, &self.init_remaining, .Sub, 1, .monotonic) == 1) {
+                self.init_futex.store(1, .release);
+                std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
+                if (self.init_promise) |promise| promise.resolve(self.init_result);
+            }
+            if (!error_encountered) {
+                while (true) {
+                    if (self.queue.pull()) |item| {
+                        invokeFunction(item);
+                    } else switch (self.queue.stopped) {
+                        false => self.queue.wait(),
+                        true => break,
+                    }
+                }
+                if (comptime @hasDecl(ns, "onThreadEnd")) {
+                    _ = @call(.auto, ns.onThreadEnd, thread_end_params);
+                }
+            }
+            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
+                // perform actual deinit here if deinitAsync() was called
+                if (self.deinit_promise) |promise| {
+                    for (self.threads) |thread| thread.join();
+                    self.queue.allocator.free(self.threads);
+                    self.status = .uninitialized;
+                    promise.resolve({});
+                }
+            }
+        }
+
+        fn invokeFunction(item: WorkItem) void {
+            const un = @typeInfo(WorkItem).@"union";
+            inline for (un.fields) |field| {
+                const key = @field(WorkItemEnum, field.name);
+                if (item == key) {
+                    const func = @field(ns, field.name);
+                    const call = @field(item, field.name);
+                    const result = @call(.auto, func, call.args);
+                    switch (@hasField(@TypeOf(call), "generator")) {
+                        true => if (call.generator) |g| g.pipe(result),
+                        false => if (call.promise) |p| p.resolve(result),
+                    }
+                }
+            }
+        }
+    };
+}
+
+test "WorkQueue" {
+    const test_ns = struct {
+        var total: i32 = 0;
+
+        pub fn hello(num: i32) void {
+            total += num;
+        }
+
+        pub fn world() void {}
+    };
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var queue: WorkQueue(test_ns) = .{};
+    try queue.init(.{ .allocator = gpa.allocator(), .n_jobs = 1 });
+    try queue.push(test_ns.hello, .{123}, null);
+    try queue.push(test_ns.hello, .{456}, null);
+    try queue.push(test_ns.world, .{}, null);
+    std.time.sleep(1e+8);
+    try expect(test_ns.total == 123 + 456);
+    queue.deinit();
+}
+
 fn expectCT(comptime value: bool) !void {
     try expect(value);
+}
+
+fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool {
+    switch (@typeInfo(FT)) {
+        .@"fn" => |f| {
+            if (f.params.len == 2 and f.return_type == RT) {
+                if (f.params[0].type != null and f.params[1].type == AT) {
+                    switch (@typeInfo(f.params[0].type.?)) {
+                        .pointer => |pt| if (pt.size == .One) {
+                            return true;
+                        },
+                        else => {},
+                    }
+                }
+            }
+        },
+        .pointer => |pt| {
+            if (@typeInfo(pt.child) == .@"fn" and isValidCallback(pt.child, AT, RT)) {
+                return true;
+            }
+        },
+        else => {},
+    }
+    return false;
+}
+
+test "isValidCallback" {
+    try expect(isValidCallback(void, u32, void) == false);
+    try expect(isValidCallback(*anyopaque, u32, void) == false);
+    try expect(isValidCallback(*fn (*anyopaque, u32) void, u32, void) == true);
+    try expect(isValidCallback(*fn (*anyopaque, u32) bool, u32, void) == false);
+    try expect(isValidCallback(*fn (*usize, u32) void, u32, void) == true);
+    try expect(isValidCallback(*fn (*usize, u32) i32, u32, void) == false);
+    try expect(isValidCallback(*fn ([*]usize, u32) void, u32, void) == false);
+    try expect(isValidCallback(**fn (*usize, u32) void, u32, void) == false);
+}
+
+fn getCallback(comptime FT: type, cb: anytype) *const FT {
+    const CBT = @TypeOf(cb);
+    const f = @typeInfo(FT).@"fn";
+    if (comptime !isValidCallback(CBT, f.params[1].type.?, f.return_type.?)) {
+        @compileError("Expecting " ++ @typeName(FT) ++ ", received: " ++ @typeName(CBT));
+    }
+    const fn_ptr = switch (@typeInfo(CBT)) {
+        .pointer => cb,
+        .@"fn" => &cb,
+        else => unreachable,
+    };
+    return @ptrCast(fn_ptr);
+}
+
+test "getCallback" {
+    const ns = struct {
+        fn hello(_: *const u32, _: i32) void {}
+    };
+    const cb = getCallback(fn (?*anyopaque, i32) void, ns.hello);
+    try expect(@intFromPtr(cb) == @intFromPtr(&ns.hello));
 }
 
 test {
