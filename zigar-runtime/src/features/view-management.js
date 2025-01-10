@@ -5,7 +5,7 @@ import { CACHE, COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbo
 import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
-  viewMap: new Map(),
+  viewMap: null,
 
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
@@ -86,7 +86,7 @@ export default mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = this.viewMap.get(buffer);
+    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {
@@ -213,30 +213,6 @@ export default mixin({
       return this.obtainView(buffer, Number(offset), len);
     },
     /* c8 ignore next */
-  } : undefined),
-  ...(process.env.DEV ? {
-    diagViewManagement() {
-      let bufferCount = 0, bufferBytes = 0, viewCount = 0;
-      for (const [ buffer, entry ] of this.viewMap) {
-        if (process.env.TARGET === 'wasm') {
-          if (buffer === this.memory.buffer) continue;
-        }
-        bufferCount++;
-        bufferBytes += buffer.byteLength;
-        if (entry instanceof DataView) {
-          viewCount++;
-        } else {
-          for (const [ key, view ] of entry) {
-            viewCount++;
-          }
-        }
-      }
-      this.showDiagnostics(`View management`, [
-        `Bytes: ${bufferBytes}`,
-        `Buffers: ${bufferCount}`,
-        `Views: ${viewCount}`,
-      ]);
-    }
   } : undefined),
 });
 

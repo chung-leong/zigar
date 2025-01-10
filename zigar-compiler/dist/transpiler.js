@@ -3010,6 +3010,7 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...(undefined),
 });
 
 var callMarshalingInbound = mixin({
@@ -5011,7 +5012,7 @@ var thunkAllocation = mixin({
 });
 
 var viewManagement = mixin({
-  viewMap: new Map(),
+  viewMap: null,
 
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
@@ -5090,7 +5091,7 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = this.viewMap.get(buffer);
+    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {

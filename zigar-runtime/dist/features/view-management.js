@@ -5,7 +5,7 @@ import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CACHE } from '../symbo
 import { isCompatibleInstanceOf, findElements, usizeInvalid } from '../utils.js';
 
 var viewManagement = mixin({
-  viewMap: new Map(),
+  viewMap: null,
 
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
@@ -84,7 +84,7 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = this.viewMap.get(buffer);
+    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {
@@ -179,7 +179,6 @@ var viewManagement = mixin({
       }
     },
   } ),
-  ...(undefined),
 });
 
 function checkDataViewSize(dv, structure) {
