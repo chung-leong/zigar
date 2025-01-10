@@ -91,4 +91,13 @@ export default mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...(process.env.DEV ? {
+    showDiagnostics(title, lines) {
+      console.log(
+        `%c${title}\n%c${lines.join('\n')}`,
+        'font-size: 140%; font-weight: bold; text-decoration: underline; line-height: 180%; text-decoration-thickness: 2px',
+        'font-family: monospace; font-size: 110%'
+      );
+    },
+  } : undefined),
 });

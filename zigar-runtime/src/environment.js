@@ -38,6 +38,19 @@ export function defineClass(name, mixins) {
     for (const [ name, object ] of Object.entries(props)) {
       this[name] = structuredClone(object);
     }
+    if (process.env.DEV) {
+      const diag = globalThis.ZIGAR = Object.create(null);
+      const descriptors = Object.getOwnPropertyDescriptors(prototype);
+      for (const [ name, desc ] of Object.entries(descriptors)) {
+        if (typeof(desc.value) === 'function') {
+          const m = /^diag(.*)/.exec(name);
+          if (m) {
+            const value = desc.value.bind(this);
+            defineProperty(diag, m[1], { value, enumerable: true });
+          }
+        }
+      }
+    }
   };
   if (process.env.DEV) {
     const map = new Map();

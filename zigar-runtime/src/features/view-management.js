@@ -214,6 +214,30 @@ export default mixin({
     },
     /* c8 ignore next */
   } : undefined),
+  ...(process.env.DEV ? {
+    diagViewManagement() {
+      let bufferCount = 0, bufferBytes = 0, viewCount = 0;
+      for (const [ buffer, entry ] of this.viewMap) {
+        if (process.env.TARGET === 'wasm') {
+          if (buffer === this.memory.buffer) continue;
+        }
+        bufferCount++;
+        bufferBytes += buffer.byteLength;
+        if (entry instanceof DataView) {
+          viewCount++;
+        } else {
+          for (const [ key, view ] of entry) {
+            viewCount++;
+          }
+        }
+      }
+      this.showDiagnostics(`View management`, [
+        `Bytes: ${bufferBytes}`,
+        `Buffers: ${bufferCount}`,
+        `Views: ${viewCount}`,
+      ]);
+    }
+  } : undefined),
 });
 
 export function checkDataViewSize(dv, structure) {

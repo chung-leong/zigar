@@ -179,6 +179,7 @@ var viewManagement = mixin({
       }
     },
   } ),
+  ...(undefined),
 });
 
 function checkDataViewSize(dv, structure) {

@@ -91,6 +91,7 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...(undefined),
 });
 
 export { baseline as default };
