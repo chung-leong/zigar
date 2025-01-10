@@ -3,13 +3,15 @@ const { resolve } = require('path');
 const { pathToFileURL } = require('url');
 const { availableParallelism } = require('os');
 require('node-zigar/cjs');
-const { createOutputAsync, startThreadPool } = require('./zig/sepia.zig');
+const { createOutputAsync, startThreadPool, __zigar } = require('./zig/sepia.zig');
 
 const isMac = process.platform === 'darwin'
 
 startThreadPool(availableParallelism());
 
 nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (browser) => {
+  __zigar.connect(browser.window.console);
+
   // handle menu click
   const onOpenClick = () => {
     const { window: { document } } = browser;

@@ -63,4 +63,13 @@ export default mixin({
       }
     }
   },
+  ...(process.env.DEV ? {
+    diagDefaultAllocator() {
+      this.showDiagnostics('Default allocator', [
+        `Present: ${!!this.defaultAllocator}`,
+        `Vtable fn ids: ${this.vtableFnIds?.join(', ')}`,
+      ]);
+    }
+  } : undefined),
+
 });

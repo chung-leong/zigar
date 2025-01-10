@@ -37,6 +37,9 @@ export default mixin({
   },
   createInboundCaller(fn, ArgStruct) {
     const handler = (dv, futexHandle) => {
+      if (process.env.DEV) {
+        this.inboundCallCount++;
+      }
       let result = CallResult.OK;
       let awaiting = false;
       try {
@@ -253,6 +256,17 @@ export default mixin({
       finalizeAsyncCall: null,
     },
   /* c8 ignore next */
+  } : undefined),
+  ...(process.env.DEV ? {
+    inboundCallCount: 0,
+
+    diagCallMarshallingInbound() {
+      this.showDiagnostics('Inbound call marshalling', [
+        `Call count: ${this.inboundCallCount}`,
+        `Active thunk count: ${this.jsFunctionThunkMap.size}`,
+        `Next function id: ${this.jsFunctionNextId}`,
+      ]);
+    }
   } : undefined),
 });
 

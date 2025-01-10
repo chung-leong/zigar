@@ -234,6 +234,7 @@ var callMarshalingInbound = mixin({
       this.performJsAction(action, id, argAddress, argSize, futexHandle);
     },
   } ),
+  ...(undefined),
 });
 
 export { callMarshalingInbound as default };

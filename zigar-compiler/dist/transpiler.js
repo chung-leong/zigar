@@ -3245,6 +3245,7 @@ var callMarshalingInbound = mixin({
       this.performJsAction(action, id, argAddress, argSize, futexHandle);
     },
   } ),
+  ...(undefined),
 });
 
 var callMarshalingOutbound = mixin({
@@ -3422,6 +3423,7 @@ var callMarshalingOutbound = mixin({
     }
   /* c8 ignore next */
   } ),
+  ...(undefined),
 });
 
 var dataCopying = mixin({
@@ -3629,6 +3631,8 @@ var defaultAllocator = mixin({
       }
     }
   },
+  ...(undefined),
+
 });
 
 var generatorCallback = mixin({
@@ -4005,6 +4009,7 @@ var memoryMapping = mixin({
       copy(dst, src);
     },
   } ),
+  ...(undefined),
 });
 
 function findMemoryIndex(array, address) {

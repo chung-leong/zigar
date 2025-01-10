@@ -10,7 +10,7 @@ export default [
       Replace({
         preventAssignment: true,
         values: {
-          'process.env.DEV': 'false',
+          'process.env.DEV': 'true',
           'process.env.BITS': '"64"',
           'process.env.TARGET': '"node"',
           'process.env.MIXIN': '""',

@@ -328,6 +328,14 @@ export default mixin({
     },
     /* c8 ignore next */
   } : undefined),
+  ...(process.env.DEV ? {
+    diagMemoryMapping() {
+      this.showDiagnostics('Memory mapping', [
+        `Memory list length: ${this.memoryList.length}`,
+        `Context count: ${this.contextCount}`,
+      ]);
+    }
+  } : undefined),
 });
 
 function findMemoryIndex(array, address) {

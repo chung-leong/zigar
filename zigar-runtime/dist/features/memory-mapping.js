@@ -243,6 +243,7 @@ var memoryMapping = mixin({
       copy(dst, src);
     },
   } ),
+  ...(undefined),
 });
 
 function findMemoryIndex(array, address) {

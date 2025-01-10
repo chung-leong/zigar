@@ -9,6 +9,9 @@ export default mixin({
   createOutboundCaller(thunk, ArgStruct) {
     const thisEnv = this;
     const self = function (...args) {
+      if (process.env.DEV) {
+        thisEnv.outboundCallCount++;
+      }
       if (process.env.TARGET === 'wasm') {
         if (!thisEnv.runThunk) {
           return thisEnv.initPromise.then(() => {
@@ -187,5 +190,14 @@ export default mixin({
       }
     }
   /* c8 ignore next */
+  } : undefined),
+  ...(process.env.DEV ? {
+    outboundCallCount: 0,
+
+    diagCallMarshallingOutbound() {
+      this.showDiagnostics('Outbound call marshalling', [
+        `Call count: ${this.outboundCallCount}`,
+      ]);
+    }
   } : undefined),
 });

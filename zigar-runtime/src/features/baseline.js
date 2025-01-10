@@ -93,11 +93,18 @@ export default mixin({
   },
   ...(process.env.DEV ? {
     showDiagnostics(title, lines) {
-      console.log(
+      const c = this.consoleObject ?? globalThis.console;
+      c?.log?.(
         `%c${title}\n%c${lines.join('\n')}`,
         'font-size: 140%; font-weight: bold; text-decoration: underline; line-height: 180%; text-decoration-thickness: 2px',
         'font-family: monospace; font-size: 110%'
       );
     },
+
+    diagBaseline() {
+      this.showDiagnostics('Baseline', [
+        `Linked variable count: ${this.variables.length}`,
+      ]);
+    }
   } : undefined),
 });
