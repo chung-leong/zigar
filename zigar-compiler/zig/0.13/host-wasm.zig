@@ -316,11 +316,11 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
     }
 }
 
-pub fn releaseFunction(fn_ptr: anytype) !void {
+pub fn releaseFunction(fn_ptr: anytype) void {
     const thunk_address = @intFromPtr(fn_ptr);
     const fn_id = for (js_thunk_list.items) |item| {
         if (item.address == thunk_address) break item.fn_id;
-    } else return thunk_js.Error.UnableToFindThunk;
+    } else return;
     if (main_thread) {
         _ = _performJsAction(.release, fn_id, null, 0);
     } else {
