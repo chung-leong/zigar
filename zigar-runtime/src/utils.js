@@ -260,7 +260,7 @@ export function findObjects(structures, SLOTS) {
 
 export function isCompatibleType(TypeA, TypeB) {
   return (TypeA === TypeB)
-      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA?.[ENVIRONMENT] !== TypeB?.[ENVIRONMENT]));
 }
 
 export function isCompatibleInstanceOf(object, Type) {
