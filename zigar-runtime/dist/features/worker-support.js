@@ -1,71 +1,71 @@
 import { mixin } from '../environment.js';
 
 var workerSupport = mixin({
-    nextThreadId: 1,
-    workers: [],
+  nextThreadId: 1,
+  workers: [],
 
-    getThreadHandler(name) {
-      switch (name) {
-        case 'thread-spawn':
-          if (typeof(window) === 'object' && !window.crossOriginIsolated) {
-            console.warn(
-              '%cHTML document is not cross-origin isolated %c\n\nWebAssembly multithreading in the browser is only possibly when %cwindow.crossOriginIsolated%c = true. Visit https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated for information on how to enable it.',
-              'color: red;font-size: 200%;font-weight:bold', '', 'background-color: lightgrey;font-weight:bold', ''
-            );
-          }
-          return this.spawnThread.bind(this);
-        case 'wait-async':
-          return this.waitAsync.bind(this);
-      }
-    },
-    spawnThread(arg) {
-      const tid = this.nextThreadId;
-      this.nextThreadId++;
-      const { executable, memory, options } = this;
-      const workerData = { executable, memory, options, tid, arg };
-      const handler = (worker, msg) => {
-        if (msg.type === 'call') {
-          const { module, name, args, array } = msg;
-          const fn = this.exportedModules[module]?.[name];
-          const result = fn?.(...args);
-          if (array) {
-            array[1] = result|0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
-          }
-        } else if (msg.type === 'exit') {
-          const index = this.workers.indexOf(worker);
-          if (index !== -1) {
-            worker.detach();
-            this.workers.splice(index, 1);
-          }
+  getThreadHandler(name) {
+    switch (name) {
+      case 'thread-spawn':
+        if (typeof(window) === 'object' && !window.crossOriginIsolated) {
+          console.warn(
+            '%cHTML document is not cross-origin isolated %c\n\nWebAssembly multithreading in the browser is only possibly when %cwindow.crossOriginIsolated%c = true. Visit https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated for information on how to enable it.',
+            'color: red;font-size: 200%;font-weight:bold', '', 'background-color: lightgrey;font-weight:bold', ''
+          );
         }
-      };
-      const evtName = 'message';
-      {
-        // web worker
-        const url = getWorkerURL();
-        const worker = new Worker(url, { type: 'module', name: 'zig' });
-        const listener = evt => handler(worker, evt.data);
-        worker.addEventListener(evtName, listener);
-        worker.detach = () => worker.removeEventListener(evtName, listener);
-        worker.postMessage(workerData);
-        this.workers.push(worker);
+        return this.spawnThread.bind(this);
+      case 'wait-async':
+        return this.waitAsync.bind(this);
+    }
+  },
+  spawnThread(arg) {
+    const tid = this.nextThreadId;
+    this.nextThreadId++;
+    const { executable, memory, options } = this;
+    const workerData = { executable, memory, options, tid, arg };
+    const handler = (worker, msg) => {
+      if (msg.type === 'call') {
+        const { module, name, args, array } = msg;
+        const fn = this.exportedModules[module]?.[name];
+        const result = fn?.(...args);
+        if (array) {
+          array[1] = result|0;
+          array[0] = 1;
+          Atomics.notify(array, 0, 1);
+        }
+      } else if (msg.type === 'exit') {
+        const index = this.workers.indexOf(worker);
+        if (index !== -1) {
+          worker.detach();
+          this.workers.splice(index, 1);
+        }
       }
-      return tid;
-    },
-    waitAsync(tidAddress, cbIndex, arg) {
-      const ta = new Int32Array(this.memory.buffer, tidAddress, 1);
-      const tid = Atomics.load(ta, 0);
-      const cb = this.table.get(cbIndex);
-      const call = () => cb(arg);
-      const result = (tid !== 0) ? Atomics.waitAsync(ta, 0, tid) : { async: false };
-      if (result.async) {
-        result.value.then(call);
-      } else {
-        call();
-      }
-    },
+    };
+    const evtName = 'message';
+    {
+      // web worker
+      const url = getWorkerURL();
+      const worker = new Worker(url, { type: 'module', name: 'zig' });
+      const listener = evt => handler(worker, evt.data);
+      worker.addEventListener(evtName, listener);
+      worker.detach = () => worker.removeEventListener(evtName, listener);
+      worker.postMessage(workerData);
+      this.workers.push(worker);
+    }
+    return tid;
+  },
+  waitAsync(tidAddress, cbIndex, arg) {
+    const ta = new Int32Array(this.memory.buffer, tidAddress, 1);
+    const tid = Atomics.load(ta, 0);
+    const cb = this.table.get(cbIndex);
+    const call = () => cb(arg);
+    const result = (tid !== 0) ? Atomics.waitAsync(ta, 0, tid) : { async: false };
+    if (result.async) {
+      result.value.then(call);
+    } else {
+      call();
+    }
+  },
 });
 
 function getWorkerCode() {

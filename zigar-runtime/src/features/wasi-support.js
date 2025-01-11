@@ -58,4 +58,12 @@ export default mixin({
       }
     },
   } : undefined),
+  ...(process.env.DEV ? {
+    diagCallWasiSupport() {
+      this.showDiagnostics('WASI support', [
+        `Custom handlers: ${!!this.customWASI}`,
+      ]);
+    }
+  } : undefined),
+
 });

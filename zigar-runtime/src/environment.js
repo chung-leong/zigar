@@ -50,7 +50,6 @@ export function defineClass(name, mixins) {
           }
         }
       }
-      console.log(this);
     }
   };
   if (process.env.DEV) {

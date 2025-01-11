@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { decodeText, empty } from '../utils.js';
+import { decodeText, defineProperty, empty } from '../utils.js';
 
 export default mixin({
   released: false,
@@ -40,13 +40,6 @@ export default mixin({
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
       await this.initPromise;
-    },
-    clearExchangeTable() {
-      if (this.nextValueIndex !== 1) {
-        this.nextValueIndex = 1;
-        this.valueMap = new Map();
-        this.valueIndices = new Map();
-      }
     },
     getObjectIndex(object) {
       if (object != null) {
@@ -109,7 +102,7 @@ export default mixin({
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          this[name] = this.importFunction(fn, argType, returnType);
+          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
         }
       }
     },
@@ -205,5 +198,26 @@ export default mixin({
       }
     },
   /* c8 ignore next */
-  } : undefined)
+  } : undefined),
+  ...(process.env.DEV ? {
+    released: false,
+    abandoned: false,
+
+    diagModuleLoading() {
+      if (process.env.TARGET === 'wasm') {
+        this.showDiagnostics('Module loading', [
+          `Abandoned: ${this.abandoned}`,
+          `Released: ${this.released}`,
+          `Value count: ${this.valueMap.size}`,
+          `WASM memory: ${this.memory?.buffer?.byteLength}`,
+          `WASM table: ${this.table?.length}`,
+        ]);
+      } else {
+        this.showDiagnostics('Module loading', [
+          `Abandoned: ${this.abandoned}`,
+          `Released: ${this.released}`,
+        ]);
+      }
+    }
+  } : undefined),
 });

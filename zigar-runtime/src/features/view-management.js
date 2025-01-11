@@ -110,6 +110,12 @@ export default mixin({
         existing = null;
       }
     }
+    if (process.env.DEV) {
+      if (!entry) {
+        const ref = new WeakRef(buffer);
+        this.bufferRefs.push(ref);
+      }
+    }
     return { existing, entry };
   },
   obtainView(buffer, offset, len) {
@@ -213,6 +219,26 @@ export default mixin({
       return this.obtainView(buffer, Number(offset), len);
     },
     /* c8 ignore next */
+  } : undefined),
+  ...(process.env.DEV ? {
+    bufferRefs: [],
+
+    diagViewManagement() {
+      let total = 0, active = 0, collected = 0;
+      for (const ref of this.bufferRefs) {
+        total++;
+        if (ref.deref()) {
+          active++;
+        } else {
+          collected++;
+        }
+      }
+      this.showDiagnostics('View management', [
+        `Total buffer count: ${total}`,
+        `Active: ${active}`,
+        `Garbage-collected: ${collected}`,
+      ]);
+    }
   } : undefined),
 });
 

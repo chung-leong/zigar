@@ -36,6 +36,10 @@ export default mixin({
     }
   },
   allocateHostMemory(len, align) {
+    if (process.env.DEV) {
+      this.allocationCount++;
+      this.allocationBytes += len;
+    }
     const targetDV = this.allocateJSMemory(len, align);
     if (process.env.TARGET === 'wasm') {
       try {
@@ -56,6 +60,9 @@ export default mixin({
     }
   },
   freeHostMemory(address, len, align) {
+    if (process.env.DEV) {
+      this.freedBytes += len;
+    }
     const entry = this.unregisterMemory(address, len);
     if (process.env.TARGET === 'wasm') {
       if (entry) {
@@ -64,10 +71,17 @@ export default mixin({
     }
   },
   ...(process.env.DEV ? {
+    allocationCount: 0,
+    allocationBytes: 0,
+    freedBytes: 0,
+
     diagDefaultAllocator() {
       this.showDiagnostics('Default allocator', [
         `Present: ${!!this.defaultAllocator}`,
         `Vtable fn ids: ${this.vtableFnIds?.join(', ')}`,
+        `Allcoation count ${this.allocationCount}`,
+        `Allocated bytes ${this.allocationBytes}`,
+        `Freed bytes ${this.freedBytes}`,
       ]);
     }
   } : undefined),

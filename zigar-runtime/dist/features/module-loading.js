@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { empty, decodeText } from '../utils.js';
+import { defineProperty, empty, decodeText } from '../utils.js';
 
 var moduleLoading = mixin({
   released: false,
@@ -40,13 +40,6 @@ var moduleLoading = mixin({
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
       await this.initPromise;
-    },
-    clearExchangeTable() {
-      if (this.nextValueIndex !== 1) {
-        this.nextValueIndex = 1;
-        this.valueMap = new Map();
-        this.valueIndices = new Map();
-      }
     },
     getObjectIndex(object) {
       if (object != null) {
@@ -109,7 +102,7 @@ var moduleLoading = mixin({
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          this[name] = this.importFunction(fn, argType, returnType);
+          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
         }
       }
     },
@@ -181,7 +174,7 @@ var moduleLoading = mixin({
       const ref = new WeakRef(instance);
       Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
-  } )
+  } ),
 });
 
 export { moduleLoading as default };

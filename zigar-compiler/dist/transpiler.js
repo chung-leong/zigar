@@ -4050,13 +4050,6 @@ var moduleLoading = mixin({
       this.setCustomWASI?.(wasi);
       await this.initPromise;
     },
-    clearExchangeTable() {
-      if (this.nextValueIndex !== 1) {
-        this.nextValueIndex = 1;
-        this.valueMap = new Map();
-        this.valueIndices = new Map();
-      }
-    },
     getObjectIndex(object) {
       if (object != null) {
         let index = this.valueIndices.get(object);
@@ -4118,7 +4111,7 @@ var moduleLoading = mixin({
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          this[name] = this.importFunction(fn, argType, returnType);
+          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
         }
       }
     },
@@ -4190,7 +4183,7 @@ var moduleLoading = mixin({
       const ref = new WeakRef(instance);
       Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
-  } )
+  } ),
 });
 
 var objectLinkage = mixin({
@@ -5121,6 +5114,7 @@ var viewManagement = mixin({
     } else {
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {

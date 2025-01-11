@@ -207,9 +207,15 @@ export default mixin({
     usizeMaxBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
+      if (process.env.DEV) {
+        this.shadowMemoryBytes += len;
+      }
       return this.allocateZigMemory(len, align, MemoryType.Scratch);
     },
     freeShadowMemory(dv) {
+      if (process.env.DEV) {
+        this.shadowMemoryBytes -= dv.byteLength;
+      }
       return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
@@ -329,10 +335,13 @@ export default mixin({
     /* c8 ignore next */
   } : undefined),
   ...(process.env.DEV ? {
+    shadowMemoryBytes: 0,
+
     diagMemoryMapping() {
       this.showDiagnostics('Memory mapping', [
         `Memory list length: ${this.memoryList.length}`,
         `Context count: ${this.contextCount}`,
+        `Shadow memory: ${this.shadowMemoryBytes}`,
       ]);
     }
   } : undefined),
