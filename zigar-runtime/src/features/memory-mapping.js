@@ -186,9 +186,9 @@ export default mixin({
     if (address && address !== usizeInvalid) {
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
-    }
-    if (process.env.TARGET === 'node') {
-      this.unregisterBuffer(adjustAddress(address, -dv.byteOffset));
+      if (process.env.TARGET === 'node') {
+        this.unregisterBuffer(adjustAddress(address, -dv.byteOffset));
+      }
     }
   },
   getViewAddress(dv) {
@@ -304,7 +304,7 @@ export default mixin({
       const index = findMemoryIndex(this.externBufferList, address);
       const entry = this.externBufferList[index - 1];
       if (entry?.address === address) {
-        this.externBufferList.splice(index, 1);
+        this.externBufferList.splice(index - 1, 1);
       }
     },
     getTargetAddress(context, target, cluster, writable) {
