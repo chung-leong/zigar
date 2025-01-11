@@ -2046,16 +2046,15 @@ pub fn Queue(comptime T: type) type {
 
         head: *Node = tail,
         allocator: std.mem.Allocator,
-        count: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
         stopped: bool = false,
+        item_futex: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
 
         pub fn push(self: *@This(), value: T) !void {
             const new_node = try self.alloc();
             new_node.* = .{ .next = tail, .payload = value };
             self.insert(new_node);
-            // increment count and wake up any awaking thread
-            _ = self.count.fetchAdd(1, .release);
-            std.Thread.Futex.wake(&self.count, 1);
+            self.item_futex.store(1, .release);
+            std.Thread.Futex.wake(&self.item_futex, 1);
         }
 
         fn alloc(self: *@This()) !*Node {
@@ -2093,28 +2092,29 @@ pub fn Queue(comptime T: type) type {
 
         pub fn pull(self: *@This()) ?T {
             var current_node = self.head;
-            return while (current_node != tail) {
+            while (current_node != tail) {
                 const next_node = getUnmarkedReference(current_node.next);
                 if (!isMarkedReference(current_node.next)) {
                     if (cas(&current_node.next, next_node, getMarkedReference(next_node))) {
-                        _ = self.count.fetchSub(1, .release);
-                        break current_node.payload;
+                        return current_node.payload;
                     }
                 }
                 current_node = next_node;
-            } else null;
+            }
+            self.item_futex.store(0, .release);
+            return null;
         }
 
         pub fn wait(self: *@This()) void {
-            std.Thread.Futex.wait(&self.count, 0);
+            std.Thread.Futex.wait(&self.item_futex, 0);
         }
 
         pub fn stop(self: *@This()) void {
             self.stopped = true;
             while (self.pull()) |_| {}
             // wake up awaking threads and prevent them from sleep again
-            self.count.store(std.math.maxInt(u32), .release);
-            std.Thread.Futex.wake(&self.count, std.math.maxInt(u32));
+            self.item_futex.store(1, .release);
+            std.Thread.Futex.wake(&self.item_futex, std.math.maxInt(u32));
         }
 
         pub fn deinit(self: *@This()) void {
