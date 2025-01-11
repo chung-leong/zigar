@@ -125,7 +125,7 @@ export default mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -178,6 +178,7 @@ export default mixin({
     if (len) {
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
+    this.releaseZigView(dv);
   },
   releaseZigView(dv) {
     const zig = dv[ZIG];
@@ -185,6 +186,9 @@ export default mixin({
     if (address && address !== usizeInvalid) {
       // set address to invalid to avoid double free
       zig.address = usizeInvalid;
+    }
+    if (process.env.TARGET === 'node') {
+      this.unregisterBuffer(adjustAddress(address, -dv.byteOffset));
     }
   },
   getViewAddress(dv) {
@@ -286,7 +290,7 @@ export default mixin({
       const index = findMemoryIndex(this.externBufferList, address);
       const entry = this.externBufferList[index - 1];
       let buffer;
-      if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+      if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
         buffer = entry.buffer;
       } else {
         // cannot obtain zero-length buffer
@@ -295,6 +299,13 @@ export default mixin({
         this.externBufferList.splice(index, 0, { address, len, buffer })
       }
       return this.obtainView(buffer, 0, len);
+    },
+    unregisterBuffer(address) {
+      const index = findMemoryIndex(this.externBufferList, address);
+      const entry = this.externBufferList[index - 1];
+      if (entry?.address === address) {
+        this.externBufferList.splice(index, 1);
+      }
     },
     getTargetAddress(context, target, cluster, writable) {
       const targetDV = target[MEMORY];
@@ -338,10 +349,14 @@ export default mixin({
     shadowMemoryBytes: 0,
 
     diagMemoryMapping() {
+      const targetSpecific = (process.env.TARGET === 'node') ? [
+        `Extern buffer count: ${this.externBufferList.length}`,
+      ] : [];
       this.showDiagnostics('Memory mapping', [
         `Memory list length: ${this.memoryList.length}`,
         `Context count: ${this.contextCount}`,
         `Shadow memory: ${this.shadowMemoryBytes}`,
+        ...targetSpecific,
       ]);
     }
   } : undefined),

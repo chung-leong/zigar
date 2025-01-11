@@ -191,19 +191,21 @@ export default mixin({
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
+      let result;
       if(process.env.TARGET === 'node') {
         if (id) {
-          return this.runFunction(id, dv, futexHandle);
+          result = this.runFunction(id, dv, futexHandle);
         } else {
-          const result = this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
+          result = this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
           if (futexHandle) {
             this.finalizeAsyncCall(futexHandle, result);
           }
-          return result;
         }
       } else {
-        return this.runFunction(id, dv, futexHandle);
+        result = this.runFunction(id, dv, futexHandle);
       }
+      this.releaseZigView(dv);
+      return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
     }

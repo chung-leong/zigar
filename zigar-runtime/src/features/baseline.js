@@ -92,9 +92,12 @@ export default mixin({
     }
   },
   ...(process.env.DEV ? {
-    showDiagnostics(title, lines) {
+    log(...args) {
       const c = this.consoleObject ?? globalThis.console;
-      c?.log?.(
+      c?.log?.(...args);
+    },
+    showDiagnostics(title, lines) {
+      this.log(
         `%c${title}\n%c${lines.join('\n')}`,
         'font-size: 140%; font-weight: bold; text-decoration: underline; line-height: 180%; text-decoration-thickness: 2px',
         'font-family: monospace; font-size: 110%'

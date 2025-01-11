@@ -204,20 +204,16 @@ export default mixin({
     abandoned: false,
 
     diagModuleLoading() {
-      if (process.env.TARGET === 'wasm') {
-        this.showDiagnostics('Module loading', [
-          `Abandoned: ${this.abandoned}`,
-          `Released: ${this.released}`,
-          `Value count: ${this.valueMap.size}`,
-          `WASM memory: ${this.memory?.buffer?.byteLength}`,
-          `WASM table: ${this.table?.length}`,
-        ]);
-      } else {
-        this.showDiagnostics('Module loading', [
-          `Abandoned: ${this.abandoned}`,
-          `Released: ${this.released}`,
-        ]);
-      }
+      const targetSpecific = (process.env.TARGET === 'wasm') ? [
+        `Value count: ${this.valueMap.size}`,
+        `WASM memory: ${this.memory?.buffer?.byteLength}`,
+        `WASM table: ${this.table?.length}`,
+      ] : [];
+      this.showDiagnostics('Module loading', [
+        `Abandoned: ${this.abandoned}`,
+        `Released: ${this.released}`,
+        ...targetSpecific,
+      ]);
     }
   } : undefined),
 });
