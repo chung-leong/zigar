@@ -15,7 +15,8 @@ export default mixin({
     const cb = args[CALLBACK] = (ptr, result) => {
       let cont;
       if (func.length === 2) {
-        cont = func(result instanceof Error ? result : null, isError ? null : result);
+        const isError = result instanceof Error;
+        cont = func(isError ? result : null, isError ? null : result);
       } else {
         cont = func(result);
       }

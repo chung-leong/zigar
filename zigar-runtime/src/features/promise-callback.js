@@ -26,7 +26,8 @@ export default mixin({
     }
     const cb = args[CALLBACK] = (ptr, result) => {
       if (func.length === 2) {
-        func(result instanceof Error ? result : null, isError ? null : result);
+        const isError = result instanceof Error;
+        func(isError ? result : null, isError ? null : result);
       } else {
         func(result);
       }
