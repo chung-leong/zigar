@@ -47,6 +47,11 @@ async function buildModules() {
     }
   }
   const parentDirs = [];
+  const currentIndex = config.targets.findIndex(({ platform, arch }) => platform === os.platform() && arch === os.arch());
+  if (currentIndex !== -1) {
+    const [ current ] = config.targets.splice(currentIndex, 1);
+    config.targets.push(current);
+  }
   for (const [ modPath, srcPath ] of Object.entries(config.sourceFiles)) {
     const modName = parse(modPath).name;
     for (const { platform, arch } of config.targets) {
