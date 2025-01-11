@@ -42,7 +42,6 @@ var workerSupport = mixin({
         }
       };
       const evtName = 'message';
-      /* c8 ignore start */
       {
         // web worker
         const url = getWorkerURL();
@@ -86,7 +85,6 @@ function getWorkerURL() {
   return workerURL;
 }
 
-/* c8 ignore start */
 function workerMain() {
   let postMessage;
 
@@ -141,6 +139,5 @@ function workerMain() {
     }
   }
 }
-/* c8 ignore end */
 
 export { workerSupport as default };

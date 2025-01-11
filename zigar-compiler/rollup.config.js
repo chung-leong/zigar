@@ -1,6 +1,19 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 
+const replacements1 = {
+  'process.env.DEV': 'false',
+  'process.env.TARGET': '"wasm"',
+  'process.env.BITS': '"32"',
+  'process.env.MIXIN': '"track"',
+  'process.env.COMPAT': '""',
+};
+const replacements2 = {
+  '...(undefined),': '',
+  '/* c8 ignore start */': '',
+  '/* c8 ignore end */': '',
+};
+
 export default [
   {
     input: './src/index.js',
@@ -30,14 +43,13 @@ export default [
       NodeResolve({}),
       Replace({
         preventAssignment: true,
-        values: {
-          'process.env.DEV': 'false',
-          // env vars used in the code of zigar-runtime
-          'process.env.TARGET': '"wasm"',
-          'process.env.BITS': '"32"',
-          'process.env.MIXIN': '"track"',
-        },
-      })
+        values: replacements1,
+      }),
+      Replace({
+        preventAssignment: false,
+        values: replacements2,
+        delimiters: [ ' *', '\\n*' ],
+      }),
     ],
     output: {
       file: './dist/transpiler.js',

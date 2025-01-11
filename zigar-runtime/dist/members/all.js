@@ -9,7 +9,6 @@ var all = mixin({
     const { type, structure } = member;
     const handleName = `defineMember${memberNames[type]}`;
     const f = this[handleName];
-    /* c8 ignore end */
     const descriptor = f.call(this, member);
     if (applyTransform) {
       if (structure) {

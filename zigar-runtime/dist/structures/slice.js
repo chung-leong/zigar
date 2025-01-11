@@ -16,7 +16,6 @@ var slice = mixin({
         members: [ member ],
       },
     } = structure;
-    /* c8 ignore end */
     const { byteSize: elementSize, structure: elementStructure } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {

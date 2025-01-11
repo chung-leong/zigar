@@ -3,12 +3,17 @@ import Replace from '@rollup/plugin-replace';
 import { readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join, sep } from 'path';
 
-const replacements = {
+const replacements1 = {
   'process.env.DEV': 'false',
   'process.env.TARGET': '"wasm"',
   'process.env.BITS': '"32"',
   'process.env.MIXIN': '""',
   'process.env.COMPAT': '""',
+};
+const replacements2 = {
+  '...(undefined),': '',
+  '/* c8 ignore start */': '',
+  '/* c8 ignore end */': '',
 };
 
 const config = [];
@@ -34,7 +39,12 @@ for (const subpath of readdirSync('./src', { recursive: true })) {
       plugins: [
         Replace({
           preventAssignment: true,
-          values: replacements,
+          values: replacements1,
+        }),
+        Replace({
+          preventAssignment: false,
+          values: replacements2,
+          delimiters: [ ' *', '\\n*' ],
         }),
       ],
       external: path => true,
@@ -50,11 +60,16 @@ for (const subpath of readdirSync('./src', { recursive: true })) {
           Replace({
             preventAssignment: true,
             values: {
-              ...replacements,
+              ...replacements1,
               'process.env.COMPAT': '"node"',
             },
           }),
-        ],
+          Replace({
+            preventAssignment: false,
+            values: replacements2,
+            delimiters: [ ' *', '\\n*' ],
+          }),
+          ],
         external: path => true,
       });
     }

@@ -45,16 +45,13 @@ var all = mixin({
       }
       names.pop();
     }
-    /* c8 ignore start */
     if (!accessor) {
       throw new Error(`No accessor available: ${accessorName}`);
     }
-    /* c8 ignore end */
     defineProperty(accessor, 'name', defineValue(accessorName));
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
-  ...(undefined),
 });
 
 export { all as default };

@@ -902,7 +902,6 @@ async function checkPidFile(pidPath, staleTime) {
   try {
     const pid = await loadFile(pidPath);
     if (pid) {
-      /* c8 ignore start */
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
@@ -910,7 +909,6 @@ async function checkPidFile(pidPath, staleTime) {
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
-      /* c8 ignore end */
     }
     const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
@@ -1761,16 +1759,13 @@ var all$3 = mixin({
       }
       names.pop();
     }
-    /* c8 ignore start */
     if (!accessor) {
       throw new Error(`No accessor available: ${accessorName}`);
     }
-    /* c8 ignore end */
     defineProperty(accessor, 'name', defineValue(accessorName));
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
-  ...(undefined),
 });
 
 var bigInt = mixin({
@@ -3010,7 +3005,6 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
-  ...(undefined),
 });
 
 var callMarshalingInbound = mixin({
@@ -3245,7 +3239,6 @@ var callMarshalingInbound = mixin({
       this.performJsAction(action, id, argAddress, argSize, futexHandle);
     },
   } ),
-  ...(undefined),
 });
 
 var callMarshalingOutbound = mixin({
@@ -3423,7 +3416,6 @@ var callMarshalingOutbound = mixin({
     }
   /* c8 ignore next */
   } ),
-  ...(undefined),
 });
 
 var dataCopying = mixin({
@@ -3631,8 +3623,6 @@ var defaultAllocator = mixin({
       }
     }
   },
-  ...(undefined),
-
 });
 
 var generatorCallback = mixin({
@@ -4009,7 +3999,6 @@ var memoryMapping = mixin({
       copy(dst, src);
     },
   } ),
-  ...(undefined),
 });
 
 function findMemoryIndex(array, address) {
@@ -4268,7 +4257,6 @@ var objectLinkage = mixin({
       // empty function used for mixin tracking
     },
   } ),
-    /* c8 ignore end */
   });
 
 var pointerSynchronization = mixin({
@@ -5326,7 +5314,6 @@ var all$2 = mixin({
     const { type, structure } = member;
     const handleName = `defineMember${memberNames[type]}`;
     const f = this[handleName];
-    /* c8 ignore end */
     const descriptor = f.call(this, member);
     if (applyTransform) {
       if (structure) {
@@ -5426,7 +5413,6 @@ var dataView = mixin({
       },
     });
   },
-  ...(undefined)
 });
 
 var float = mixin({
@@ -5501,7 +5487,6 @@ var primitive$1 = mixin({
       const { bitOffset, byteSize } = member;
       const getter = getAccessor.call(this, 'get', member);
       const setter = getAccessor.call(this, 'set', member);
-      /* c8 ignore end */
       if (bitOffset !== undefined) {
         const offset = bitOffset >> 3;
         return {
@@ -5564,7 +5549,6 @@ var sentinel = mixin({
       byteSize,
       instance: { members: [ member, sentinel ], template },
     } = structure;
-    /* c8 ignore end */
     const { get: getSentinelValue } = this.defineMember(sentinel);
     const { get } = this.defineMember(member);
     const value = getSentinelValue.call(template, 0);
@@ -7015,12 +6999,10 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
-  /* c8 ignore start */
   ...({
     usingFunction: false,
     usingFunctionPointer: false,
   } ),
-  /* c8 ignore end */
 });
 
 var opaque = mixin({
@@ -7619,7 +7601,6 @@ var slice = mixin({
         members: [ member ],
       },
     } = structure;
-    /* c8 ignore end */
     const { byteSize: elementSize, structure: elementStructure } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {

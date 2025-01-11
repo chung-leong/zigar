@@ -2,6 +2,18 @@ import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 // import Terser from '@rollup/plugin-terser';
 
+const replacements1 = {
+  'process.env.DEV': 'false',
+  'process.env.BITS': '"64"',
+  'process.env.TARGET': '"node"',
+  'process.env.MIXIN': '""',
+};
+const replacements2 = {
+  '...(undefined),': '',
+  '/* c8 ignore start */': '',
+  '/* c8 ignore end */': '',
+};
+
 export default [
   {
     input: 'src/addon.js',
@@ -9,13 +21,13 @@ export default [
       NodeResolve(),
       Replace({
         preventAssignment: true,
-        values: {
-          'process.env.DEV': 'true',
-          'process.env.BITS': '"64"',
-          'process.env.TARGET': '"node"',
-          'process.env.MIXIN': '""',
-        },
-      })
+        values: replacements1,
+      }),
+      Replace({
+        preventAssignment: false,
+        values: replacements2,
+        delimiters: [ ' *', '\\n*' ],
+      }),
     ],
     output: {
       file: 'src/addon.64b.js.txt',
@@ -34,12 +46,15 @@ export default [
       Replace({
         preventAssignment: true,
         values: {
-          'process.env.DEV': 'false',
+          ...replacements1,
           'process.env.BITS': '"32"',
-          'process.env.TARGET': '"node"',
-          'process.env.MIXIN': '""',
         },
-      })
+      }),
+      Replace({
+        preventAssignment: false,
+        values: replacements2,
+        delimiters: [ ' *', '\\n*' ],
+      }),
     ],
     output: {
       file: 'src/addon.32b.js.txt',

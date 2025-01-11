@@ -60,8 +60,6 @@ var objectLinkage = mixin({
       recreateAddress: { argType: 'i', returnType: 'i' },
     },
   } ),
-    ...(undefined),
-    /* c8 ignore end */
   });
 
 export { objectLinkage as default };

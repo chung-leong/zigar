@@ -22,7 +22,6 @@ var dataView = mixin({
       },
     });
   },
-  ...(undefined)
 });
 
 export { dataView as default };

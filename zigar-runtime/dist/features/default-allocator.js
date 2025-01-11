@@ -56,8 +56,6 @@ var defaultAllocator = mixin({
       }
     }
   },
-  ...(undefined),
-
 });
 
 export { defaultAllocator as default };

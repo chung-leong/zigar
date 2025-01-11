@@ -9,7 +9,6 @@ var primitive = mixin({
       const { bitOffset, byteSize } = member;
       const getter = getAccessor.call(this, 'get', member);
       const setter = getAccessor.call(this, 'set', member);
-      /* c8 ignore end */
       if (bitOffset !== undefined) {
         const offset = bitOffset >> 3;
         return {

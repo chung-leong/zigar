@@ -157,8 +157,6 @@ var callMarshalingOutbound = mixin({
       runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
   } ),
-  ...(undefined),
-  ...(undefined),
 });
 
 export { callMarshalingOutbound as default };

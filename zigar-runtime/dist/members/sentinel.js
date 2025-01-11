@@ -10,7 +10,6 @@ var sentinel = mixin({
       byteSize,
       instance: { members: [ member, sentinel ], template },
     } = structure;
-    /* c8 ignore end */
     const { get: getSentinelValue } = this.defineMember(sentinel);
     const { get } = this.defineMember(member);
     const value = getSentinelValue.call(template, 0);

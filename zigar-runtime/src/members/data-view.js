@@ -32,5 +32,5 @@ export default mixin({
     imports: {
       syncExternalBuffer: null,
     },
-  } : undefined)
+  } : undefined),
 });

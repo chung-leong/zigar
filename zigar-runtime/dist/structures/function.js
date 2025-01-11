@@ -65,9 +65,6 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
-  /* c8 ignore start */
-  ...(undefined),
-  /* c8 ignore end */
 });
 
 export { _function as default };
