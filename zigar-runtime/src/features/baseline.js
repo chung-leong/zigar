@@ -91,6 +91,7 @@ export default mixin({
       this.finalizeStructure(structure);
     }
   },
+  /* c8 ignore start */
   ...(process.env.DEV ? {
     log(...args) {
       const c = this.consoleObject ?? globalThis.console;
@@ -110,4 +111,5 @@ export default mixin({
       ]);
     }
   } : undefined),
+  /* c8 ignore end */
 });

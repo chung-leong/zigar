@@ -58,6 +58,7 @@ export default mixin({
       }
     },
   } : undefined),
+  /* c8 ignore start */
   ...(process.env.DEV ? {
     diagCallWasiSupport() {
       this.showDiagnostics('WASI support', [
@@ -65,5 +66,5 @@ export default mixin({
       ]);
     }
   } : undefined),
-
+  /* c8 ignore end */
 });

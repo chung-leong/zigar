@@ -7,12 +7,14 @@ export default mixin({
   getThreadHandler(name) {
     switch (name) {
       case 'thread-spawn':
+        /* c8 ignore start */
         if (typeof(window) === 'object' && !window.crossOriginIsolated) {
           console.warn(
             '%cHTML document is not cross-origin isolated %c\n\nWebAssembly multithreading in the browser is only possibly when %cwindow.crossOriginIsolated%c = true. Visit https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated for information on how to enable it.',
             'color: red;font-size: 200%;font-weight:bold', '', 'background-color: lightgrey;font-weight:bold', ''
           );
         }
+        /* c8 ignore end */
         return this.spawnThread.bind(this);
       case 'wait-async':
         return this.waitAsync.bind(this);
@@ -79,6 +81,7 @@ export default mixin({
       call();
     }
   },
+  /* c8 ignore start */
   ...(process.env.DEV ? {
     diagWorkerSupport() {
       this.showDiagnostics('Worker support', [
@@ -87,6 +90,7 @@ export default mixin({
       ]);
     }
   } : undefined),
+  /* c8 ignore end */
 });
 
 function getWorkerCode() {

@@ -199,6 +199,7 @@ export default mixin({
     },
   /* c8 ignore next */
   } : undefined),
+  /* c8 ignore start */
   ...(process.env.DEV ? {
     released: false,
     abandoned: false,
@@ -216,4 +217,5 @@ export default mixin({
       ]);
     }
   } : undefined),
+  /* c8 ignore end */
 });

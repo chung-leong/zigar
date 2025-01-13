@@ -220,6 +220,7 @@ export default mixin({
     },
     /* c8 ignore next */
   } : undefined),
+  /* c8 ignore start */
   ...(process.env.DEV ? {
     bufferRefs: [],
 
@@ -240,6 +241,7 @@ export default mixin({
       ]);
     }
   } : undefined),
+  /* c8 ignore end */
 });
 
 export function checkDataViewSize(dv, structure) {
