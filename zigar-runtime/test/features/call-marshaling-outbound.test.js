@@ -22,7 +22,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -120,7 +119,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -303,7 +301,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -344,7 +341,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -384,7 +380,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -440,7 +435,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -497,7 +491,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -555,7 +548,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -611,11 +603,10 @@ describe('Feature: call-marshaling-outbound', function() {
       env.copyArguments(dest, src, members, options);
       expect(dest).to.eql({ [0]: allocator, [1]: 2 });
     })
-    it('should place callback into the right position', function() {
+    it('should promise place callback into the right position', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -669,7 +660,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolveArgStructure);
       const resolveStructure = env.beginStructure({
         type: StructureType.Function,
-        name: 'fn(i32) void',
         byteSize: 0,
       });
       env.attachMember(resolveStructure, {
@@ -684,7 +674,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolveStructure);
       const resolvePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*const fn(i32) void',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
       });
@@ -700,7 +689,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolvePtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Promise',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
       });
@@ -741,11 +729,136 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('callback').that.is.a('function');
     })
+    it('should generator place callback into the right position', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const voidStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'void',
+        byteSize: 0,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(voidStructure, {
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.defineStructure(voidStructure);
+      env.endStructure(voidStructure);
+      const yieldArgStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        name: 'Resolve',
+        byteSize: 4,
+        length: 1,
+      });
+      env.attachMember(yieldArgStructure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.attachMember(yieldArgStructure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(yieldArgStructure);
+      env.endStructure(yieldArgStructure);
+      const yieldStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(yieldStructure, {
+        type: MemberType.Object,
+        structure: yieldArgStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(yieldStructure, thunk, false);
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(yieldStructure, jsThunkController, true);
+      env.defineStructure(yieldStructure);
+      env.endStructure(yieldStructure);
+      const yieldPtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
+      });
+      env.attachMember(yieldPtrStructure, {
+        type: MemberType.Object,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: yieldStructure,
+        slot: 0,
+      });
+      env.defineStructure(yieldPtrStructure);
+      env.endStructure(yieldPtrStructure);
+      const generatorStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsGenerator,
+      });
+      env.attachMember(generatorStructure, {
+        name: 'callback',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: yieldPtrStructure,
+        slot: 0,
+      });
+      env.defineStructure(generatorStructure);
+      env.endStructure(generatorStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: 32,
+          bitOffset: 32,
+          byteSize: 4,
+          structure: intStructure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: 64,
+          bitOffset: 64,
+          byteSize: 8,
+          structure: generatorStructure,
+        },
+      ];
+      const src = [ 1 ];
+      const dest = {};
+      const callback = () => {};
+      const options = { callback };
+      env.copyArguments(dest, src, members, options);
+      expect(dest[0]).to.equal(1);
+      expect(dest[1]).to.have.property('callback').that.is.a('function');
+    })
     it('should place abort signal into the right position', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -760,7 +873,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*const i32',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
       });
@@ -776,7 +888,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'AbortSignal',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
       });
@@ -997,17 +1108,6 @@ describe('Feature: call-marshaling-outbound', function() {
     })
     it('should return a promise when arg struct has an attached callback', function() {
       const env = new Env();
-      const Arg = function() {
-        this[MEMORY] = new DataView(new ArrayBuffer(16));
-        this[MEMORY][ALIGN] = 4;
-        this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = resolve;
-        });
-        this.retval = 1234;
-      };
-      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
-      const args = new Arg();
       env.runThunk = () => true;
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
@@ -1025,16 +1125,44 @@ describe('Feature: call-marshaling-outbound', function() {
           return usize(address);
         };
       }
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[PROMISE] = new Promise((resolve) => {
+          this[CALLBACK] = (ptr, arg) => resolve(arg);
+        });
+        this.retval = 1234;
+      };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
+      const args = new Arg();
       const result = env.invokeThunk(thunk, fn, args);
       expect(result).to.be.a('promise');
     })
     it('should reject a promise when retrieval of retval throws', function() {
       const env = new Env();
+      env.runThunk = () => true;
+      let nextAddress = 0x1000;
+      if (process.env.TARGET === 'wasm') {
+        env.allocateExternMemory = function(type, len, align) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return address;
+        };
+        env.freeExternMemory = function() {};
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.getBufferAddress = function(buffer) {
+          const address = nextAddress;
+          nextAddress += 0x1000;
+          return usize(address);
+        };
+      }
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
         this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = resolve;
+          this[CALLBACK] = (ptr, arg) => resolve(arg);
         });
         defineProperty(this, 'retval', {
           get() {
@@ -1045,38 +1173,11 @@ describe('Feature: call-marshaling-outbound', function() {
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       const args = new Arg();
-      env.runThunk = () => true;
-      let nextAddress = 0x1000;
-      if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
-          const address = nextAddress;
-          nextAddress += 0x1000;
-          return address;
-        };
-        env.freeExternMemory = function() {};
-        env.memory = new WebAssembly.Memory({ initial: 1 });
-      } else {
-        env.getBufferAddress = function(buffer) {
-          const address = nextAddress;
-          nextAddress += 0x1000;
-          return usize(address);
-        };
-      }
       const result = env.invokeThunk(thunk, fn, args);
       expect(result).to.eventually.be.rejected;
     })
     it('should invoke callback function', function() {
       const env = new Env();
-      let retval;
-      const Arg = function() {
-        this[MEMORY] = new DataView(new ArrayBuffer(16));
-        this[MEMORY][ALIGN] = 4;
-        this[CALLBACK] = (arg) => retval = arg;
-        this.retval = 1234;
-      };
-      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
-      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
-      const args = new Arg();
       env.runThunk = () => true;
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
@@ -1094,6 +1195,16 @@ describe('Feature: call-marshaling-outbound', function() {
           return usize(address);
         };
       }
+      let retval;
+      const Arg = function() {
+        this[MEMORY] = new DataView(new ArrayBuffer(16));
+        this[MEMORY][ALIGN] = 4;
+        this[CALLBACK] = (ptr, arg) => retval = arg;
+        this.retval = 1234;
+      };
+      const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
+      const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
+      const args = new Arg();
       const result = env.invokeThunk(thunk, fn, args);
       expect(result).to.be.undefined;
       expect(retval).to.equal(1234);
@@ -1105,7 +1216,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -1158,7 +1268,6 @@ describe('Feature: call-marshaling-outbound', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -1212,7 +1321,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolveArgStructure);
       const resolveStructure = env.beginStructure({
         type: StructureType.Function,
-        name: 'fn(i32) void',
         byteSize: 0,
       });
       env.attachMember(resolveStructure, {
@@ -1227,7 +1335,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolveStructure);
       const resolvePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*const fn(i32) void',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
       });
@@ -1243,7 +1350,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolvePtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Promise',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
       });
@@ -1279,11 +1385,130 @@ describe('Feature: call-marshaling-outbound', function() {
       env.detectArgumentFeatures(members);
       expect(env.usingPromise).to.be.true;
     })
+    it('should set usingGenerator when a function argument is a generator', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const voidStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        name: 'void',
+        byteSize: 0,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(voidStructure, {
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.defineStructure(voidStructure);
+      env.endStructure(voidStructure);
+      const yieldArgStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        byteSize: 4,
+        length: 1,
+      });
+      env.attachMember(yieldArgStructure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: voidStructure,
+      });
+      env.attachMember(yieldArgStructure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(yieldArgStructure);
+      env.endStructure(yieldArgStructure);
+      const yieldStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(yieldStructure, {
+        type: MemberType.Object,
+        structure: yieldArgStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(yieldStructure, thunk, false);
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(yieldStructure, jsThunkController, true);
+      env.defineStructure(yieldStructure);
+      env.endStructure(yieldStructure);
+      const yieldPtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
+      });
+      env.attachMember(yieldPtrStructure, {
+        type: MemberType.Object,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: yieldStructure,
+        slot: 0,
+      });
+      env.defineStructure(yieldPtrStructure);
+      env.endStructure(yieldPtrStructure);
+      const generatorStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsGenerator,
+      });
+      env.attachMember(generatorStructure, {
+        name: 'callback',
+        type: MemberType.Object,
+        bitSize: 64,
+        bitOffset: 0,
+        byteSize: 8,
+        structure: yieldPtrStructure,
+        slot: 0,
+      });
+      env.defineStructure(generatorStructure);
+      env.endStructure(generatorStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: 32,
+          bitOffset: 32,
+          byteSize: 4,
+          structure: intStructure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: 64,
+          bitOffset: 64,
+          byteSize: 8,
+          structure: generatorStructure,
+        },
+      ];
+      env.detectArgumentFeatures(members);
+      expect(env.usingGenerator).to.be.true;
+    })
     it('should set usingAbortSignal when a function argument is an abort signal', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
-        name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
       });
@@ -1298,7 +1523,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*const i32',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
       });
@@ -1314,7 +1538,6 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'AbortSignal',
         byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
       });
