@@ -11,7 +11,7 @@ describe('Feature: promise-callback', function() {
     it('should return a function that fulfills a promise attached to the argument struct', async function() {
       const env = new Env();
       const args = {};
-      const callback = env.createPromiseCallback(args, null, undefined);
+      const callback = env.createPromiseCallback(args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
       callback(null, 123);
@@ -21,7 +21,7 @@ describe('Feature: promise-callback', function() {
     it('should create copy of the result when it uses Zig memory', async function() {
       const env = new Env();
       const args = {};
-      const callback = env.createPromiseCallback(args, null, undefined);
+      const callback = env.createPromiseCallback(args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
       const copy = env.getCopyFunction();
@@ -42,7 +42,7 @@ describe('Feature: promise-callback', function() {
     it('should reject a promise when the callback function is given an error', async function() {
       const env = new Env();
       const args = {};
-      const callback = env.createPromiseCallback(args, null, undefined);
+      const callback = env.createPromiseCallback(args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       let error;
       args[FINALIZE] = () => {};
@@ -80,6 +80,11 @@ describe('Feature: promise-callback', function() {
       callback(null, new Error('Doh!'));
       expect(result).to.be.null;
       expect(error).to.be.an('error');
+    })
+    it('should throw when given a non-function', function() {
+      const env = new Env();
+      const args = {};
+      expect(() => env.createPromiseCallback(args, 'Dingo')).to.throw(TypeError);
     })
   })
 })
