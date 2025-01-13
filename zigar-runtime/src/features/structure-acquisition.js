@@ -6,7 +6,7 @@ import {
   StructureFlag, structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
-import { adjustAddress, decodeText, findObjects, usizeInvalid } from '../utils.js';
+import { adjustAddress, decodeText, findObjects } from '../utils.js';
 
 export default mixin({
   comptime: false,
@@ -44,7 +44,7 @@ export default mixin({
       type,
       name,
       length,
-      signature = usizeInvalid,
+      signature = -1n,
       byteSize,
       align,
       flags,

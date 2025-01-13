@@ -321,6 +321,167 @@ describe('Structure: pointer', function() {
       const ptrArray = new Int32PtrArray(undefined);
       expect(() => ptrArray[0]['*']).to.throw('Null pointer');
     })
+    it('should accept a target from a different module', function() {
+      const envA = new Env();
+      const envB = new Env();
+      const intStructureA = envA.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        signature: 0xaaaan,
+        byteSize: 4,
+      });
+      const intStructureB = envB.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        signature: 0xaaaan,
+        byteSize: 4,
+      });
+      envA.attachMember(intStructureA, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructureA,
+      });
+      envB.attachMember(intStructureB, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructureB,
+      });
+      const Int32A = envA.defineStructure(intStructureA);
+      const Int32B = envB.defineStructure(intStructureB);
+      envA.endStructure(intStructureA);
+      envB.endStructure(intStructureB);
+      const structureA = envA.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      const structureB = envB.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      envA.attachMember(structureA, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: intStructureA,
+      });
+      envB.attachMember(structureB, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: intStructureB,
+      });
+      const Int32PtrA = envA.defineStructure(structureA);
+      const Int32PtrB = envB.defineStructure(structureB);
+      envA.endStructure(structureA);
+      envB.endStructure(structureB);
+      const int32A = new Int32A(123);
+      const int32B = new Int32B(456);
+      const int32PtrA = new Int32PtrA(int32A);
+      const int32PtrB = new Int32PtrA(int32B);
+      const ptr1 = new Int32PtrA(int32B);
+      expect(ptr1['*']).to.equal(456);
+      const ptr2 = new Int32PtrB(int32PtrA);
+      expect(ptr2['*']).to.equal(123);
+    })
+    it('should define a pointer for pointing to functions', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        byteSize: 4 * 3,
+        length: 2,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const fnStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(fnStructure, {
+        type: MemberType.Object,
+        structure: argStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(fnStructure, thunk, false);
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(fnStructure, jsThunkController, true);
+      const Fn = env.defineStructure(fnStructure);
+      env.endStructure(fnStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: fnStructure,
+      });
+      const FnPtr = env.defineStructure(structure);
+      env.endStructure(structure);
+      env.createJsThunk = function(...args) {
+        return usize(0x100);
+      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      expect(FnPtr.child).to.equal(Fn);
+      let argsReceived;
+      const fn = (...args) => { argsReceived = args };
+      const ptr = new FnPtr(fn);
+      expect(() => ptr(123, 456)).to.not.throw();
+      expect(argsReceived).to.eql([ 123, 456 ]);
+    })
     it('should define a pointer for pointing to a structure', function() {
       const env = new Env();
       const structStructure = env.beginStructure({
@@ -3854,3 +4015,8 @@ describe('Structure: pointer', function() {
   })
 })
 
+function zig(address, len = 0) {
+  const dv = new DataView(new ArrayBuffer(len));
+  dv[ZIG] = { address: usize(address), len };
+  return dv;
+}

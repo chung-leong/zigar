@@ -59,7 +59,6 @@ describe('Structure: function', function() {
       env.endStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
-        name: 'fn(i32, i32) i32',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -244,11 +243,11 @@ describe('Structure: function', function() {
         byteSize: 4,
         structure: intStructure,
       });
-      const ArgStruct = env.defineStructure(argStructure);
+      env.defineStructure(argStructure);
       env.endStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
-        byteSize: 8,
+        byteSize: 0,
       });
       env.attachMember(structure, {
         type: MemberType.Object,
