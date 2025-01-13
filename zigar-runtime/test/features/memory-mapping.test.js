@@ -272,6 +272,13 @@ describe('Feature: memory-mapping', function() {
       expect(dv2.byteLength).to.equal(0);
       expect(dv1[ZIG]).to.be.an('object')
     })
+    it('should throw when request for memory yields null ', function() {
+      const env = new Env();
+      env.allocateExternMemory = function(type, len, align) {
+        return usize(0);
+      };
+      expect(() => env.allocateZigMemory(400, 4)).to.throw();
+    })
   })
   describe('freeZigMemory', function() {
     it('should try to free Zig memory through Zig', function() {
@@ -327,6 +334,9 @@ describe('Feature: memory-mapping', function() {
   describe('obtainZigView', function() {
     it('should return a data view covering Zig memory at given address', function() {
       const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
@@ -338,6 +348,9 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return empty data view when len is 0', function() {
       const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
@@ -351,10 +364,31 @@ describe('Feature: memory-mapping', function() {
       expect(dv1[ZIG]).to.be.an('object')
       expect(dv2[ZIG]).to.be.an('object')
     })
-    it('should return a view to the empty buffer when len is zero and address is 0', function() {
+    it('should return a view when len is zero and address is 0', function() {
       const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       const dv = env.obtainZigView(usize(0), 0);
-      expect(dv.buffer).to.equal(env.emptyBuffer);
+      expect(dv).to.be.a('DataView');;
+    })
+    it('should return view for null when address is invalid and len is 0', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      const address = (process.env.BITS === '32') ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
+      const dv = env.obtainZigView(address, 0);
+      expect(dv).to.be.a('DataView');
+    })
+    it('should return null when address is invalid and len is not 0', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      const address = (process.env.BITS === '32') ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
+      const dv = env.obtainZigView(address, 5);
+      expect(dv).to.be.null;
     })
   })
   describe('releaseZigView', function() {
@@ -367,6 +401,9 @@ describe('Feature: memory-mapping', function() {
     })
     it('should remove view from empty buffer map', function() {
       const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       const dv1 = env.obtainZigView(0x1000, 0);
       const dv2 = env.obtainZigView(0x1000, 0);
       expect(dv2).to.equal(dv1);
@@ -517,7 +554,7 @@ describe('Feature: memory-mapping', function() {
       const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
       expect(dv.byteLength).to.equal(0);
     })
-    it('should add entry to list of shadows', function() {
+    it('should copy content from shadow when memory is not on list of shadows', function() {
       const env = new Env();
       const address = usize(0x1000);
       const len = 32;
@@ -525,9 +562,10 @@ describe('Feature: memory-mapping', function() {
       const shadowDV = new DataView(new ArrayBuffer(len));
       const context = env.startContext();
       const entry = env.registerMemory(address, len, 4, true, dv1, shadowDV);
+      shadowDV.setUint32(1, 1234, true);
       const dv2 = env.findMemory(context, adjustAddress(address, 1), 1, 16);
       expect(dv2.buffer).to.equal(dv1.buffer);
-      expect(context.shadowList).to.contain(entry);
+      expect(dv2.getUint32(0, true)).to.equal(1234);
     })
   })
   describe('getViewAddress', function() {

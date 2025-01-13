@@ -93,6 +93,7 @@ export default mixin({
         // only one view created thus far--see if that's the matching one
         if (entry.byteOffset === offset && entry.byteLength === len) {
           existing = entry;
+          entry = null;
         } else {
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
