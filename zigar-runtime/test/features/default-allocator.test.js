@@ -101,6 +101,17 @@ describe('Feature: default-allocator', function() {
       const dv = env.allocateHostMemory(40, 4);
       expect(dv).to.be.a('DataView');
     })
+    if (process.env.TARGET === 'wasm') {
+      it('should return null when shadow memory cannot be allocated', function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.allocateExternMemory = function(type, len, align) {
+          throw new Error('Out of memory');
+        };
+        const dv = env.allocateHostMemory(40, 4);
+        expect(dv).to.be.null;
+      })
+    }
   })
   describe('freeHostMemory', function() {
     it('should release JS memory', function() {

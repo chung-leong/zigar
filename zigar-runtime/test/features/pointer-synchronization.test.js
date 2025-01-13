@@ -397,6 +397,77 @@ describe('Feature: pointer-synchronization', function() {
       env.updatePointerAddresses(context, object);
       expect(getUsize.call(object[MEMORY], 0, true)).to.equal(usize(0));
     })
+    it('should ignore pointers pointing to Zig memory', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 4,
+        align: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      const Int32 = env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        name: '*i32',
+        byteSize: addressByteSize,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const structure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        name: 'ArgStruct',
+        byteSize: addressByteSize,
+        length: 1,
+      });
+      env.attachMember(structure, {
+        name: 'retval',
+        type: MemberType.Void,
+        bitOffset: 0,
+        bitSize: 0,
+        byteSize: 0,
+        structure: {},
+      });
+      env.attachMember(structure, {
+        name: '0',
+        type: MemberType.Object,
+        bitOffset: addressSize * 0,
+        bitSize: addressSize,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      const ArgStruct = env.defineStructure(structure);
+      env.endStructure(structure);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      env.getTargetAddress = function() {
+        throw new Error('Doh');
+      }
+      const dv = env.obtainZigView(usize(0x100), 4);
+      const object = Int32(dv);
+      const args = new ArgStruct([ object ]);
+      const context = env.startContext();
+      expect(() => env.updatePointerAddresses(context, args)).to.not.throw();
+    })
     it('should ignore pointers in a bare union', function() {
       const env = new Env();
       const intStructure = env.beginStructure({

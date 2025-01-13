@@ -1,12 +1,14 @@
 import { expect } from 'chai';
 import {
-  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, StructFlag,
+  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag, StructFlag,
   StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CALLBACK, ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
-import { addressByteSize, capture, captureError, delay, usize } from '../test-utils.js';
+import {
+  addressByteSize, addressSize, capture, captureError, delay, usize
+} from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -660,6 +662,70 @@ describe('Feature: call-marshaling-inbound', function() {
     })
     it('should return descriptor for iterator that places promise into options object', function() {
       const env = new Env();
+      const byteStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 1,
+      });
+      env.attachMember(byteStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+        structure: {},
+      });
+      env.defineStructure(byteStructure);
+      env.endStructure(byteStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsOpaque,
+        byteSize: 1,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: byteStructure,
+      });
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const optionalPtrStructure = env.beginStructure({
+        type: StructureType.Optional,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(optionalPtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(optionalPtrStructure, {
+        type: MemberType.Bool,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: {},
+      });
+      env.defineStructure(optionalPtrStructure);
+      env.endStructure(optionalPtrStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         byteSize: 4,
@@ -690,8 +756,9 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(voidStructure);
       const cbArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        byteSize: 4,
-        length: 1,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
+        byteSize: addressByteSize + 4,
+        length: 2,
       })
       env.attachMember(cbArgStructure, {
         name: 'retval',
@@ -703,9 +770,18 @@ describe('Feature: call-marshaling-inbound', function() {
       });
       env.attachMember(cbArgStructure, {
         name: '0',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: optionalPtrStructure,
+        slot: 0,
+      });
+      env.attachMember(cbArgStructure, {
+        name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 0,
+        bitOffset: addressSize,
         byteSize: 4,
         structure: intStructure,
       });
@@ -748,23 +824,32 @@ describe('Feature: call-marshaling-inbound', function() {
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsPromise,
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(promiseStructure, {
+        name: 'ptr',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
         byteSize: addressByteSize,
+        structure: optionalPtrStructure,
+        slot: 0,
       });
       env.attachMember(promiseStructure, {
         name: 'callback',
         type: MemberType.Object,
-        bitSize: addressByteSize * 8,
-        bitOffset: 0,
+        bitSize: addressSize,
+        bitOffset: addressSize,
         byteSize: addressByteSize,
         structure: cbPtrStructure,
-        slot: 0,
+        slot: 1,
       });
       env.defineStructure(promiseStructure);
       env.endStructure(promiseStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions,
-        byteSize: 4 + addressByteSize + 4,
+        byteSize: 4 + addressByteSize * 2 + 4,
         length: 1,
       });
       env.attachMember(argStructure, {
@@ -778,22 +863,22 @@ describe('Feature: call-marshaling-inbound', function() {
       env.attachMember(argStructure, {
         name: '0',
         type: MemberType.Object,
-        bitSize: addressByteSize * 8,
-        bitOffset: (4) * 8,
-        byteSize: addressByteSize,
+        bitSize: addressSize * 2,
+        bitOffset: 32,
+        byteSize: addressByteSize * 2,
         structure: promiseStructure,
+        slot: 0,
       });
       env.attachMember(argStructure, {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: (4 + addressByteSize) * 8,
+        bitOffset: (4 + addressByteSize * 2) * 8,
         byteSize: 4,
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(argStructure);
       env.endStructure(argStructure);
-
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 4 });
       } else {
@@ -809,11 +894,13 @@ describe('Feature: call-marshaling-inbound', function() {
       }
       const dv = env.obtainZigView(usize(0x1000), argStructure.byteSize);
       if (addressByteSize === 4) {
-        dv.setInt32(4, 0x2000, true);
-        dv.setInt32(8, 1234, true);
-      } else {
-        dv.setBigInt64(4, 0x2000n, true);
+        dv.setInt32(4, 0x3000, true);
+        dv.setInt32(8, 0x2000, true);
         dv.setInt32(12, 1234, true);
+      } else {
+        dv.setBigInt64(4, 0x3000n, true);
+        dv.setBigInt64(12, 0x2000n, true);
+        dv.setInt32(20, 1234, true);
       }
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
@@ -821,7 +908,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const { callback } = args[1];
       let arg;
       env.invokeThunk = function(thunk, fn, argStruct) {
-        arg = argStruct['0'];
+        arg = argStruct['1'];
       };
       env.runThunk = function() {};
       expect(() => callback(44)).to.not.throw();

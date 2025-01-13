@@ -31,8 +31,6 @@ export default mixin({
         const { address } = zig;
         if (address === usizeInvalid) {
           throw new PreviouslyFreed(arg);
-        } else if (!address) {
-          return;
         }
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
