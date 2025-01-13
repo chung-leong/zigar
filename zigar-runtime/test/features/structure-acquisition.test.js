@@ -203,10 +203,19 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
       env.obtainZigView = (address, len) => {
-        return { address, len };
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[ZIG] = { address, len };
+        return dv;
       };
-      const result = env.captureView(1234, 32, false);
-      expect(result).to.eql({ address: 1234, len: 32 });
+      if (process.env.TARGET === 'wasm') {
+        const dv = env.captureView(1234, 32, false);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234, len: 32, handle: 1234 });
+      } else {
+        const dv = env.captureView(1234n, 32, false, 0x8888n);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234n, len: 32, handle: 0x8888n });
+      }
     })
   })
   describe('castView', function() {
@@ -245,7 +254,7 @@ describe('Feature: structure-acquisition', function() {
     it('should invoke the factory thunk', function() {
       const env = new Env();
       env.getFactoryThunk = function() {
-        return 0x1234;
+        return usize(0x1234);
       };
       let thunkAddress, optionsDV;
       env.invokeThunk = function(...args) {
@@ -255,8 +264,11 @@ describe('Feature: structure-acquisition', function() {
       env.getModuleAttributes = function() {
         return ModuleAttribute.LittleEndian;
       };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       env.acquireStructures({ omitFunctions: true, omitVariables: true });
-      expect(thunkAddress).to.equal(0x1234);
+      expect(thunkAddress).to.equal(usize(0x1234));
       expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitMethods)).to.be.true;
       expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.true;
     })
@@ -283,7 +295,7 @@ describe('Feature: structure-acquisition', function() {
     })
   })
   describe('exportStructures', function() {
-    it('should return list of structures and keys for accessing them', function() {
+    it('should return list of structures', function() {
       const env = new Env();
       const s1 = {
         type: StructureType.Struct,
@@ -302,8 +314,6 @@ describe('Feature: structure-acquisition', function() {
       const { structures, keys } = env.exportStructures();
       expect(structures[0]).to.equal(s1);
       expect(structures[1]).to.equal(s2);
-      expect(Object.values(keys)).to.include(MEMORY);
-      expect(Object.values(keys)).to.include(SLOTS);
     })
   })
   describe('prepareObjectsForExport', function() {
@@ -318,13 +328,13 @@ describe('Feature: structure-acquisition', function() {
         return dv;
       };
       const templ1 = {
-        [MEMORY]: zig(1002n, 8),
+        [MEMORY]: zig(usize(1002), 8),
       };
       const object = {
-        [MEMORY]: zig(1016n, 8),
+        [MEMORY]: zig(usize(1016), 8),
       };
       const templ2 = {
-        [MEMORY]: zig(1000n, 32),
+        [MEMORY]: zig(usize(1000), 32),
         [SLOTS]: {
           0: object,
         },
@@ -1108,22 +1118,35 @@ describe('Feature: structure-acquisition', function() {
         expect(def1).to.have.property('hello', 1234);
         const {
           _beginDefinition,
-          _insertInteger,
           _insertBoolean,
           _insertString,
           _insertObject,
         } = env.exportFunctions();
         const object = {};
         const defIndex = _beginDefinition();
-        _insertInteger(defIndex, env.toWebAssembly('s', 'number'), 4567);
         _insertBoolean(defIndex, env.toWebAssembly('s', 'boolean'), 1);
         _insertString(defIndex, env.toWebAssembly('s', 'string'), env.toWebAssembly('s', 'holy cow'));
         _insertObject(defIndex, env.toWebAssembly('s', 'object'), env.toWebAssembly('v', object));
         const def2 = env.fromWebAssembly('v', defIndex);
-        expect(def2).to.have.property('number', 4567);
         expect(def2).to.have.property('boolean', true);
         expect(def2).to.have.property('string', 'holy cow');
         expect(def2).to.have.property('object', object);
+      })
+    })
+    describe('insertInteger', function() {
+      it('should convert negative value for unsigned integers', function() {
+        const env = new Env();
+        const def = env.beginDefinition();
+        env.insertInteger(def, 'hello', -2, true);
+        expect(def).to.have.property('hello', 0xffff_fffe);
+      })
+    })
+    describe('insertBigInteger', function() {
+      it('should convert negative value for unsigned integers', function() {
+        const env = new Env();
+        const def = env.beginDefinition();
+        env.insertBigInteger(def, 'hello', -2n, true);
+        expect(def).to.have.property('hello', 0xffff_ffff_ffff_fffen);
       })
     })
     describe('captureString', function() {
@@ -1137,13 +1160,6 @@ describe('Feature: structure-acquisition', function() {
         }
         const string = env.captureString(128, 5);
         expect(string).to.equal('Hello');
-      })
-    })
-    describe('getMemoryOffset', function() {
-      it('should return the same address', function() {
-        const env = new Env();
-        const offset = env.getMemoryOffset(128);
-        expect(offset).to.equal(128);
       })
     })
   }
