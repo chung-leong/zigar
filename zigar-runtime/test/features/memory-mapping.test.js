@@ -246,7 +246,7 @@ describe('Feature: memory-mapping', function() {
       env.allocateExternMemory = function(type, len, align) {
         return usize(0x1000);
       };
-      env.obtainExternView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
         return dv;
@@ -261,7 +261,7 @@ describe('Feature: memory-mapping', function() {
       env.allocateExternMemory = function(type, len, align) {
         return usize(0x1000);
       };
-      env.obtainExternView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
         return dv;
@@ -327,7 +327,7 @@ describe('Feature: memory-mapping', function() {
   describe('obtainZigView', function() {
     it('should return a data view covering Zig memory at given address', function() {
       const env = new Env();
-      env.obtainExternView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
         return dv;
@@ -338,7 +338,7 @@ describe('Feature: memory-mapping', function() {
     })
     it('should return empty data view when len is 0', function() {
       const env = new Env();
-      env.obtainExternView = function(address, len) {
+      env.obtainZigView = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len };
         return dv;
@@ -540,11 +540,11 @@ describe('Feature: memory-mapping', function() {
     })
   })
   if (process.env.TARGET === 'wasm') {
-    describe('obtainExternView', function() {
+    describe('obtainZigView', function() {
       it('should return a view to WASM memory', function() {
         const env = new Env();
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const dv = env.obtainExternView(128, 16);
+        const dv = env.obtainZigView(128, 16);
         expect(dv.buffer).to.equal(memory.buffer);
         expect(dv.byteLength).to.equal(16);
         expect(dv.byteOffset).to.equal(128);
@@ -552,7 +552,7 @@ describe('Feature: memory-mapping', function() {
       it('should handle reference to zero-length slice', function() {
         const env = new Env();
         const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const dv = env.obtainExternView(0, 0);
+        const dv = env.obtainZigView(0, 0);
         expect(dv.buffer).to.equal(memory.buffer);
         expect(dv.byteLength).to.equal(0);
         expect(dv.byteOffset).to.equal(0);

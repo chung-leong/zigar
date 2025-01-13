@@ -31,10 +31,10 @@ describe('Feature: call-marshaling-inbound', function() {
       const jsThunkConstructor = {
         [MEMORY]: new DataView(new ArrayBuffer(0))
       };
-      jsThunkConstructor[MEMORY][ZIG] = { address: usize(0x8888) };
+      jsThunkConstructor[MEMORY][ZIG] = { address: usize(0x100) };
       const env = new Env();
       let constructorAddr, fnIds = [];
-      let nextThunkAddr = usize(0x10000);
+      let nextThunkAddr = usize(0x200);
       env.createJsThunk = function(...args) {
         constructorAddr = args[0];
         fnIds.push(args[1]);
@@ -42,10 +42,13 @@ describe('Feature: call-marshaling-inbound', function() {
         nextThunkAddr += usize(0x100);
         return thunkAddr;
       };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       const thunk1 = env.getFunctionThunk(f1, jsThunkConstructor);
       const thunk2 = env.getFunctionThunk(f2, jsThunkConstructor);
       const thunk3 = env.getFunctionThunk(f1, jsThunkConstructor);
-      expect(constructorAddr).to.equal(usize(0x8888));
+      expect(constructorAddr).to.equal(usize(0x100));
       expect(fnIds).to.eql([ 1, 2 ]);
       expect(thunk1).to.be.an.instanceOf(DataView);
       expect(thunk2).to.not.equal(thunk1);
@@ -494,7 +497,7 @@ describe('Feature: call-marshaling-inbound', function() {
           return new ArrayBuffer(len);
         };
       }
-      const dv = env.obtainExternView(usize(0x1000), 12);
+      const dv = env.obtainZigView(usize(0x1000), 12);
       dv.setInt32(4, 1234, true);
       dv.setInt32(8, 5678, true);
       const args = [ ...ArgStruct(dv) ];
@@ -804,7 +807,7 @@ describe('Feature: call-marshaling-inbound', function() {
           return buffer;
         };
       }
-      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      const dv = env.obtainZigView(usize(0x1000), argStructure.byteSize);
       if (addressByteSize === 4) {
         dv.setInt32(4, 0x2000, true);
         dv.setInt32(8, 1234, true);
@@ -929,7 +932,7 @@ describe('Feature: call-marshaling-inbound', function() {
           return buffer;
         };
       }
-      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      const dv = env.obtainZigView(usize(0x1000), argStructure.byteSize);
       if (addressByteSize === 4) {
         dv.setInt32(4, 0x2000, true);
         dv.setInt32(8, 1234, true);
@@ -945,7 +948,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const { signal } = args[1];
       expect(signal.aborted).to.be.false;
       setTimeout(() => {
-        const int = env.obtainExternView(usize(0x2000), 4);
+        const int = env.obtainZigView(usize(0x2000), 4);
         int.setInt32(0, 1, true);
       }, 10);
       await delay(100);
@@ -1054,7 +1057,7 @@ describe('Feature: call-marshaling-inbound', function() {
           return buffer;
         };
       }
-      const dv = env.obtainExternView(usize(0x1000), argStructure.byteSize);
+      const dv = env.obtainZigView(usize(0x1000), argStructure.byteSize);
       if (addressByteSize === 4) {
         dv.setInt32(4, 0x2000, true);
         dv.setInt32(8, 1234, true);
@@ -1064,7 +1067,7 @@ describe('Feature: call-marshaling-inbound', function() {
         dv.setBigInt64(12, 1234n, true);
         dv.setBigInt64(16, 0x3000n, true);
       }
-      const int = env.obtainExternView(usize(0x2000), 4);
+      const int = env.obtainZigView(usize(0x2000), 4);
       int.setInt32(0, 1, true);
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);

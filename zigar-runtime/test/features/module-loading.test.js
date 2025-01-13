@@ -104,15 +104,6 @@ describe('Feature: module-loading', function() {
         expect(line).to.equal('Zig panic: Doh!');
       })
     })
-    describe('clearExchangeTable', function() {
-      it('should release objects stored in value table', function() {
-        const env = new Env();
-        const index = env.getObjectIndex({});
-        expect(env.valueMap.get(index)).to.be.an('object');
-        env.clearExchangeTable();
-        expect(env.valueMap.get(index)).to.be.undefined;
-      })
-    })
     describe('getObjectIndex', function() {
       it('should create index from new object', function() {
         const env = new Env();
@@ -368,7 +359,6 @@ describe('Feature: module-loading', function() {
           garbage: () => {},
           createJsThunk: () => {},
           destroyJsThunk: () => {},
-          recreateAddress: () => {},
           findSentinel: () => {},
           obtainExternBuffer: () => {},
           loadModule: () => {},

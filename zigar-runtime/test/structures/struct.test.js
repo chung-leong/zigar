@@ -1354,7 +1354,7 @@ describe('Structure: struct', function() {
         free(dv) {
         },
       };
-      env.obtainExternView = (address, len) => {
+      env.obtainZigView = (address, len) => {
         let dv = viewMap.get(address);
         if (dv.byteLength !== len) {
           dv = new DataView(dv.buffer, dv.byteOffset, len);

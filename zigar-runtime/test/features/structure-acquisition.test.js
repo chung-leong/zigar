@@ -7,7 +7,7 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
-import { addressByteSize, addressSize, setUsize, usize } from '../test-utils.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -1087,94 +1087,6 @@ describe('Feature: structure-acquisition', function() {
         },
       });
       expect(name).to.equal('fn (u32, u32) i32');
-    })
-  })
-  describe('acquireDefaultPointers', function() {
-    it('should acquire targets of pointers in structure template slots', function() {
-      const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        flags: StructureFlag.HasValue,
-        name: 'Int32',
-        byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
-      env.finalizeStructure(intStructure);
-      const ptrStructure = env.beginStructure({
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-        name: '*Int32',
-        byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(ptrStructure);
-      env.finalizeStructure(ptrStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        name: 'dog',
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: 'cat',
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: addressSize,
-        byteSize: addressByteSize,
-        slot: 1,
-        structure: ptrStructure,
-      })
-      const dv = new DataView(new ArrayBuffer(8 * 2));
-      setUsize.call(dv, 0, usize(0x1000), true);
-      setUsize.call(dv, addressByteSize, usize(0x2000), true);
-      const template = env.createTemplate(dv);
-      env.attachTemplate(structure, template);
-      env.defineStructure(structure);
-      env.endStructure(structure);
-      // function mocks
-      const requests = [];
-      env.obtainExternView = function(address, len) {
-        requests.push({ address, len });
-        const buffer = new ArrayBuffer(len);
-        buffer[ZIG] = { address, len };
-        const dv = this.obtainView(buffer, 0, len);
-        dv.setUint32(0, Number(address), true);
-        return dv;
-      };
-      env.acquireDefaultPointers(structure);
-      expect(requests).to.eql([
-        { address: usize(0x1000), len: 4 },
-        { address: usize(0x2000), len: 4 }
-      ]);
-      expect(template[SLOTS][0]).to.be.instanceOf(Int32Ptr);
-      expect(template[SLOTS][0][SLOTS][0]).to.be.instanceOf(Int32);
-      expect(template[SLOTS][0]['*']).to.equal(0x1000);
-      expect(template[SLOTS][1]).to.be.instanceOf(Int32Ptr);
-      expect(template[SLOTS][1][SLOTS][0]).to.be.instanceOf(Int32);
-      expect(template[SLOTS][1][SLOTS][0]).to.not.equal(template[SLOTS][0][SLOTS][0]);
-      expect(template[SLOTS][1]['*']).to.equal(0x2000);
     })
   })
   if (process.env.TARGET === 'wasm') {

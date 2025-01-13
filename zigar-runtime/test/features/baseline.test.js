@@ -14,6 +14,7 @@ describe('Feature: baseline', function() {
       const s1 = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
+        signature: 0x1n,
         byteSize: 4,
         align: 4,
         instance: {
@@ -37,6 +38,7 @@ describe('Feature: baseline', function() {
       const s2 = {
         type: StructureType.ArgStruct,
         name: 'hello',
+        signature: 0x2n,
         byteSize: 0,
         align: 0,
         length: 0,
@@ -62,6 +64,7 @@ describe('Feature: baseline', function() {
       const s3 = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        signature: 0x3n,
         name: '*i32',
         byteSize: 8,
         instance: {
@@ -86,6 +89,7 @@ describe('Feature: baseline', function() {
       const s4 = {
         type: StructureType.Function,
         flags: 0,
+        signature: 0x4n,
         name: 'fn () void',
         byteSize: 0,
         length: 0,
@@ -103,7 +107,7 @@ describe('Feature: baseline', function() {
               const array = new Uint8Array(0);
               return { array };
             })(),
-            reloc: usize(0x8888),
+            handle: 0x10,
           },
         },
         static: {
@@ -113,6 +117,7 @@ describe('Feature: baseline', function() {
       const s5 = {
         type: StructureType.Struct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        signature: 0x5n,
         name: 'Hello',
         byteSize: 8,
         align: 4,
@@ -167,7 +172,7 @@ describe('Feature: baseline', function() {
                 2: {
                   memory: { array },
                   structure: s1,
-                  reloc: usize(0x1000),
+                  handle: 0x20,
                 },
                 3: {
                   structure: s1,
@@ -223,7 +228,7 @@ describe('Feature: baseline', function() {
                       return { array };
                     })(),
                     structure: s1,
-                    reloc: usize(0x2000),
+                    handle: 0x30,
                     const: true,
                   },
                 },
@@ -234,7 +239,7 @@ describe('Feature: baseline', function() {
                   const array = new Uint8Array(0);
                   return { array };
                 })(),
-                reloc: usize(0x2_8888),
+                handle: 0x40,
                 structure: s4,
               },
               3: undefined,
@@ -273,9 +278,6 @@ describe('Feature: baseline', function() {
           }
           return buffer;
         };
-        env.recreateAddress = function(address) {
-          return address;
-        };
         env.getBufferAddress = function(buffer) {
           return addressMap.get(buffer) ?? usize(0x1234);
         };
@@ -285,8 +287,8 @@ describe('Feature: baseline', function() {
       constructor.hello();
       expect(() => constructor.hello()).to.not.throw();
       expect(() => constructor.world()).to.not.throw();
-      expect(thunkAddress).to.equal(usize(0x8888));
-      expect(fnAddress).to.equal(usize(0x2_8888));
+      expect(thunkAddress).to.equal(usize(0x10));
+      expect(fnAddress).to.equal(usize(0x40));
       if (process.env.TARGET === 'wasm') {
         expect(argAddress).to.equal(usize(0));
       } else {
