@@ -3,12 +3,10 @@ const builtin = @import("builtin");
 const cfg = @import("build-cfg.zig");
 
 const host_type = if (cfg.is_wasm) "wasm" else "napi";
-const zig_path = std.fmt.comptimePrint("{s}{d}.{d}{c}", .{
-    cfg.zigar_src_path,
-    builtin.zig_version.major,
-    builtin.zig_version.minor,
-    std.fs.path.sep,
-});
+const zig_path = switch (builtin.zig_version.major * 10 + builtin.zig_version.minor) {
+    13, 14 => |v| std.fmt.comptimePrint("{s}0.{d}{c}", .{ cfg.zigar_src_path, v, std.fs.path.sep }),
+    else => @compileError("Unsupported Zig version"),
+};
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
