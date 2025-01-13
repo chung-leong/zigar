@@ -248,7 +248,6 @@ describe('Structure: function', function() {
       env.endStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
-        name: 'fn(i32, i32) i32',
         byteSize: 8,
       });
       env.attachMember(structure, {
@@ -260,8 +259,73 @@ describe('Structure: function', function() {
       const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
+      env.endStructure(structure);
       expect(() => new constructor()).to.throw(TypeError);
       expect(() => new constructor(123)).to.throw(TypeError);
+    })
+    it('should throw when a JavaScript function is given and the function takes variadic arguments', function() {
+      const env = new Env();
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const argStructure = env.beginStructure({
+        type: StructureType.VariadicStruct,
+        byteSize: 4 * 3,
+        length: 2,
+      });
+      env.attachMember(argStructure, {
+        name: 'retval',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '0',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.attachMember(argStructure, {
+        name: '1',
+        type: MemberType.Int,
+        bitSize: 32,
+        bitOffset: 64,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(argStructure);
+      env.endStructure(argStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 8,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        structure: argStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(structure, thunk, false);
+      const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
+      env.attachTemplate(structure, jsThunkConstructor, true);
+      const constructor = env.defineStructure(structure);
+      env.endStructure(structure);
+      expect(() => new constructor(() => {})).to.throw(TypeError)
+        .with.property('message').that.equal('Unsupported');
     })
     it('should throw on attempts to cast to a function', function() {
       const env = new Env();

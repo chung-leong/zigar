@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, MemberType, PointerFlag, StructFlag, StructureFlag, StructureType,
+  ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructFlag, StructureFlag, StructureType,
   VisitorFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { MEMORY, VISIT, ZIG } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { addressByteSize, addressSize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -462,7 +462,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(intStructure);
       const resolveArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
-        name: 'Resolve',
         byteSize: 4,
         length: 1,
       });
@@ -486,7 +485,6 @@ describe('Structure: arg-struct', function() {
       env.endStructure(resolveArgStructure);
       const resolveStructure = env.beginStructure({
         type: StructureType.Function,
-        name: 'fn(i32) void',
         byteSize: 0,
       });
       env.attachMember(resolveStructure, {
@@ -501,41 +499,113 @@ describe('Structure: arg-struct', function() {
       env.endStructure(resolveStructure);
       const resolvePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
-        name: '*const fn(i32) void',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
       });
       env.attachMember(resolvePtrStructure, {
         type: MemberType.Object,
-        bitSize: 0,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 0,
+        byteSize: addressByteSize,
         structure: resolveStructure,
         slot: 0,
       });
       env.defineStructure(resolvePtrStructure);
       env.endStructure(resolvePtrStructure);
+      const byteStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 1,
+      });
+      env.attachMember(byteStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+        structure: {},
+      });
+      env.defineStructure(byteStructure);
+      env.endStructure(byteStructure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsOpaque,
+        byteSize: 1,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: byteStructure,
+      });
+      env.defineStructure(sliceStructure);
+      env.endStructure(sliceStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const optionalPtrStructure = env.beginStructure({
+        type: StructureType.Optional,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(optionalPtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.attachMember(optionalPtrStructure, {
+        type: MemberType.Bool,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: {},
+      });
+      env.defineStructure(optionalPtrStructure);
+      env.endStructure(optionalPtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
-        name: 'Promise',
-        byteSize: 8,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        name: 'Promise',
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(promiseStructure, {
+        name: 'ptr',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: optionalPtrStructure,
+        slot: 0,
       });
       env.attachMember(promiseStructure, {
         name: 'callback',
         type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
         structure: resolvePtrStructure,
-        slot: 0,
+        slot: 1,
       });
       env.defineStructure(promiseStructure);
       env.endStructure(promiseStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions | ArgStructFlag.IsAsync,
-        byteSize: 8 + 4,
+        byteSize: (addressByteSize * 2) + 4,
         length: 1,
       });
       env.attachMember(structure, {
@@ -549,9 +619,9 @@ describe('Structure: arg-struct', function() {
       env.attachMember(structure, {
         name: '0',
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize * 2,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize * 2,
         structure: promiseStructure,
         slot: 0,
       });
@@ -559,7 +629,7 @@ describe('Structure: arg-struct', function() {
         name: '1',
         type: MemberType.Int,
         bitSize: 32,
-        bitOffset: 64,
+        bitOffset: addressSize * 2,
         byteSize: 4,
         structure: intStructure,
       });
@@ -569,6 +639,10 @@ describe('Structure: arg-struct', function() {
       env.createJsThunk = function(controllerAddress, fnId) {
         return usize(0xf000);
       };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      new ArgStruct([ 123 ]);
       expect(() => new ArgStruct([ 123 ])).to.not.throw();
       expect(() => new ArgStruct([ 123, {} ])).to.not.throw();
       expect(() => new ArgStruct([ 123, { callback: () => {} } ])).to.not.throw();
