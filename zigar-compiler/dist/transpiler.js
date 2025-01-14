@@ -434,7 +434,7 @@ function findObjects(structures, SLOTS) {
 
 function isCompatibleType(TypeA, TypeB) {
   return (TypeA === TypeB)
-      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA?.[ENVIRONMENT] !== TypeB?.[ENVIRONMENT]));
 }
 
 function isCompatibleInstanceOf(object, Type) {
@@ -2355,11 +2355,11 @@ class InvalidIntConversion extends SyntaxError {
   }
 }
 
-let Unsupported$1 = class Unsupported extends TypeError {
+class Unsupported extends TypeError {
   constructor() {
     super(`Unsupported`);
   }
-};
+}
 
 class NoInitializer extends TypeError {
   constructor(structure) {
@@ -2659,7 +2659,7 @@ class InvalidPointerTarget extends TypeError {
 }
 
 class ZigMemoryTargetRequired extends TypeError {
-  constructor(structure, arg) {
+  constructor() {
     super(`Pointers in Zig memory cannot point to garbage-collected object`);
   }
 }
@@ -2858,8 +2858,6 @@ var allocatorMethods = mixin({
         const { address } = zig;
         if (address === usizeInvalid) {
           throw new PreviouslyFreed(arg);
-        } else if (!address) {
-          return;
         }
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
@@ -3090,9 +3088,9 @@ var callMarshalingInbound = mixin({
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
             if (futexHandle || argStruct[CALLBACK]) {
-              retval.then(onReturn, onError);
+              const promise = retval.then(onReturn, onError);
               if (futexHandle) {
-                retval.then(() => this.finalizeAsyncCall(futexHandle, result));
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
               }
               awaiting = true;
               result = CallResult.OK;
@@ -3193,9 +3191,12 @@ var callMarshalingInbound = mixin({
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
+      let result;
       {
-        return this.runFunction(id, dv, futexHandle);
+        result = this.runFunction(id, dv, futexHandle);
       }
+      this.releaseZigView(dv);
+      return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
     }
@@ -3638,7 +3639,8 @@ var generatorCallback = mixin({
     const cb = args[CALLBACK] = (ptr, result) => {
       let cont;
       if (func.length === 2) {
-        cont = func(result instanceof Error ? result : null, isError ? null : result);
+        const isError = result instanceof Error;
+        cont = func(isError ? result : null, isError ? null : result);
       } else {
         cont = func(result);
       }
@@ -3878,7 +3880,7 @@ var memoryMapping = mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -3931,6 +3933,7 @@ var memoryMapping = mixin({
     if (len) {
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
+    this.releaseZigView(dv);
   },
   releaseZigView(dv) {
     const zig = dv[ZIG];
@@ -4417,7 +4420,8 @@ var promiseCallback = mixin({
     }
     const cb = args[CALLBACK] = (ptr, result) => {
       if (func.length === 2) {
-        func(result instanceof Error ? result : null, isError ? null : result);
+        const isError = result instanceof Error;
+        func(isError ? result : null, isError ? null : result);
       } else {
         func(result);
       }
@@ -4554,7 +4558,7 @@ var structureAcquisition = mixin({
       type,
       name,
       length,
-      signature,
+      signature = -1n,
       byteSize,
       align,
       flags,
@@ -5084,6 +5088,7 @@ var viewManagement = mixin({
         // only one view created thus far--see if that's the matching one
         if (entry.byteOffset === offset && entry.byteLength === len) {
           existing = entry;
+          entry = null;
         } else {
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
@@ -5114,7 +5119,6 @@ var viewManagement = mixin({
     } else {
       // just one view of this buffer for now
       this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
-
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -5794,7 +5798,7 @@ var _undefined = mixin({
 var unsupported = mixin({
   defineMemberUnsupported(member) {
     const throwUnsupported = function() {
-      throw new Unsupported$1();
+      throw new Unsupported();
     };
     return { get: throwUnsupported, set: throwUnsupported };
   },
@@ -6915,14 +6919,6 @@ var errorUnion = mixin({
   },
 });
 
-globalThis[Symbol.for('ZIGAR')] ??= {};
-
-class Unsupported extends TypeError {
-  constructor() {
-    super(`Unsupported`);
-  }
-}
-
 var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
@@ -7183,7 +7179,7 @@ var pointer = mixin({
           }
         } else {
           if (pointer[MEMORY][ZIG]) {
-            throw new ZigMemoryTargetRequired(structure, arg);
+            throw new ZigMemoryTargetRequired();
           }
         }
       } else if (pointer[MEMORY][ZIG]) {
@@ -7370,7 +7366,7 @@ var pointer = mixin({
         let self;
         if (targetType === StructureType.Function) {
           // use an empty function as object so the proxy's apply() method is triggered
-          self = function() {};
+          self = /* c8 ignore next */ function() {};
           self[MEMORY] = this[MEMORY];
           self[SLOTS] = this[SLOTS];
           Object.setPrototypeOf(self, constructor.prototype);
@@ -7874,7 +7870,16 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
+    const { comptime } = this;
     const initializer = function(arg, allocator) {
+      if (flags & UnionFlag.HasInaccessible && !comptime) {
+        if (this[VISIT] !== empty) {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+          // no need to visit them again
+          this[VISIT] = empty;
+        }
+      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -7957,18 +7962,6 @@ var union = mixin({
           default:
             return getSelectorNumber.call(this);
         }
-      }
-    };
-    const { comptime } = this;
-    descriptors[FINALIZE] = (flags & UnionFlag.HasInaccessible) && {
-      value() {
-        if (!comptime) {
-          // pointers in non-tagged union are not accessible--we need to disable them
-          this[VISIT](disablePointer);
-        }
-        // no need to visit them again
-        this[VISIT] = empty;
-        return this;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -8219,7 +8212,13 @@ function visitChild(slot, cb, flags, src) {
 
 const builtinVisitors = {
   copy(flags, src) {
-    this[SLOTS][0] = src[SLOTS][0];
+    const target = src[SLOTS][0];
+    if (this[MEMORY][ZIG]) {
+      if (target && !target[MEMORY][ZIG]) {
+        throw new ZigMemoryTargetRequired();
+      }
+    }
+    this[SLOTS][0] = target;
   },
   clear(flags) {
     if (flags & VisitorFlag.IsInactive) {

@@ -395,7 +395,7 @@ describe('Feature: memory-mapping', function() {
     it('should invoke set address to invalid value', function() {
       const env = new Env();
       const dv = new DataView(new ArrayBuffer(8));
-      dv[ZIG] = { address: 0x1000, len: 8 };
+      dv[ZIG] = { address: usize(0x1000), len: 8 };
       env.releaseZigView(dv);
       expect(dv[ZIG].address).to.equal(usize(-1));
     })
@@ -404,11 +404,12 @@ describe('Feature: memory-mapping', function() {
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }
-      const dv1 = env.obtainZigView(0x1000, 0);
-      const dv2 = env.obtainZigView(0x1000, 0);
+      const address = usize(0x1000);
+      const dv1 = env.obtainZigView(address, 0);
+      const dv2 = env.obtainZigView(address, 0);
       expect(dv2).to.equal(dv1);
       env.releaseZigView(dv1);
-      const dv3 = env.obtainZigView(0x1000, 0);
+      const dv3 = env.obtainZigView(address, 0);
       expect(dv3).to.not.equal(dv1);
     })
   })

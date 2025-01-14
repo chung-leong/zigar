@@ -148,13 +148,13 @@ describe('Feature: call-marshaling-inbound', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });

@@ -116,7 +116,7 @@ export default mixin({
           }
         } else {
           if (pointer[MEMORY][ZIG]) {
-            throw new ZigMemoryTargetRequired(structure, arg);
+            throw new ZigMemoryTargetRequired();
           }
         }
       } else if (pointer[MEMORY][ZIG]) {

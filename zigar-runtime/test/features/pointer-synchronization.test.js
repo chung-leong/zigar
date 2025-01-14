@@ -458,6 +458,10 @@ describe('Feature: pointer-synchronization', function() {
       env.endStructure(structure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
       }
       env.getTargetAddress = function() {
         throw new Error('Doh');

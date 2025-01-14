@@ -8,7 +8,7 @@ import {
   ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, encodeBase64 } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { addressByteSize, addressSize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -1194,14 +1194,14 @@ describe('Structure: struct', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -1209,45 +1209,53 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        byteSize: 8 * 2,
+        byteSize: addressByteSize * 2,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
       });
       env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
         slot: 1,
         structure: ptrStructure,
       })
-      const int1 = new Int32(1234);
-      const int2 = new Int32(4567);
-      const intPtr1 = new Int32Ptr(int1);
-      const intPtr2 = new Int32Ptr(int2);
-      env.attachTemplate(structure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8 * 2));
-          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-          return dv;
-        })(),
-        [SLOTS]: {
-          0: intPtr1,
-          1: intPtr2,
-        }
-      });
+      const dv = new DataView(new ArrayBuffer(addressByteSize * 2));
+      if (addressSize == 32) {
+        dv.setUint32(0, 0x2000, true);
+        dv.setUint32(4, 0x3000, true);
+      } else {
+        dv.setBigUint64(0, 0x2000n, true);
+        dv.setBigUint64(8, 0x3000n, true);
+      }
+      env.attachTemplate(structure, { [MEMORY]: dv, [SLOTS]: {} });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      env.obtainZigView(usize(0x2000), 4).setUint32(0, 1234, true);
+      env.obtainZigView(usize(0x3000), 4).setUint32(0, 4567, true);
       const object = new Hello({});
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
@@ -1275,14 +1283,14 @@ describe('Structure: struct', function() {
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*i32',
-        byteSize: 8,
+        byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       });
       env.attachMember(ptrStructure, {
         type: MemberType.Object,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: intStructure,
       });
@@ -1290,45 +1298,57 @@ describe('Structure: struct', function() {
       env.endStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        byteSize: 8 * 2,
+        byteSize: addressByteSize * 2,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
       });
       env.attachMember(structure, {
         name: 'dog',
         type: MemberType.Object,
         flags: MemberFlag.IsRequired,
-        bitSize: 64,
+        bitSize: addressSize,
         bitOffset: 0,
-        byteSize: 8,
+        byteSize: addressByteSize,
         slot: 0,
         structure: ptrStructure,
       });
       env.attachMember(structure, {
         name: 'cat',
         type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
         slot: 1,
         structure: ptrStructure,
       })
-      const int1 = new Int32(1234);
-      const int2 = new Int32(4567);
-      const intPtr2 = new Int32Ptr(int2);
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(8 * 2)),
-        [SLOTS]: {
-          1: intPtr2,
-        }
-      });
+      const dv = new DataView(new ArrayBuffer(addressByteSize * 2));
+      if (addressSize == 32) {
+        dv.setUint32(4, 0x3000, true);
+      } else {
+        dv.setBigUint64(8, 0x3000n, true);
+      }
+      env.attachTemplate(structure, { [MEMORY]: dv, [SLOTS]: {} });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      env.obtainZigView(usize(0x3000), 4).setUint32(0, 4567, true);
       expect(() => new Hello({})).to.throw(TypeError);
-      const object = new Hello({ dog: int1 });
+      const object = new Hello({ dog: new Int32(1234) });
       expect(object.dog['*']).to.equal(1234);
       expect(object.cat['*']).to.equal(4567);
     })
-    it('should throw when copying a struct with pointer in reloc memory to one in Zig memory', function() {
+    it('should throw when copying a struct with pointer in JS memory to one in Zig memory', function() {
       const env = new Env();
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);

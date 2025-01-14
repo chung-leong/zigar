@@ -281,7 +281,10 @@ describe('Feature: baseline', function() {
         env.getBufferAddress = function(buffer) {
           return addressMap.get(buffer) ?? usize(0x1234);
         };
-      }
+        env.recreateAddress = function(handle) {
+          return usize(handle);
+        };
+    }
       env.linkVariables(false);
       await env.initPromise;
       constructor.hello();

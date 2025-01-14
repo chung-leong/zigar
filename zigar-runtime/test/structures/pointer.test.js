@@ -2573,7 +2573,7 @@ describe('Structure: pointer', function() {
         return (address) ? 4 : -1;
       };
       if (process.env.TARGET === 'wasm') {
-
+        env.memory = new WebAssembly.Memory({ initial: 1 });
       } else if (process.env.TARGET === 'node') {
         env.obtainExternBuffer = function(address, len) {
           return new ArrayBuffer(len);
