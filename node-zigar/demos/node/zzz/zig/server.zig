@@ -77,8 +77,8 @@ fn runServer(host: []const u8, port: u16) !void {
 pub fn startServer(host: []const u8, port: u16) !void {
     const allocator = zigar.mem.getDefaultAllocator();
     const host_copy = try allocator.dupe(u8, host);
-    try zigar.thread.use(true);
-    _ = try std.Thread.spawn(.{ .allocator = allocator, }, runServer, .{ host_copy, port });
+    try zigar.thread.use();
+    _ = try std.Thread.spawn(.{ .allocator = allocator }, runServer, .{ host_copy, port });
 }
 
 pub fn setResponder(id: usize, f: ?Responder) void {
