@@ -481,6 +481,7 @@ function getExports(structures) {
         // make sure that getter wouldn't throw (possible with error union)
         constructor[name];
         exportables.push(name);
+        /* c8 ignore next 2 */
       } catch (err) {
       }
     }
@@ -1101,6 +1102,7 @@ async function findSourcePaths(buildPath) {
               try {
                 await promises.stat(srcPath);
                 involved[srcPath] = true;
+                /* c8 ignore next */
               } catch {};
             }
           }

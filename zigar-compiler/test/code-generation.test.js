@@ -15,7 +15,7 @@ describe('Code generation', function() {
       declareFeatures: true,
       binarySource: '"/somewhere.wasm"',
     };
-    it('should generate code for defining a standard int type', function() {
+    it('should generate code for defining types', function() {
       const structure = {
         constructor: null,
         type: StructureType.Primitive,
@@ -166,6 +166,39 @@ describe('Code generation', function() {
       const def = { structures: [ structure ], settings };
       const { code } = generateCode(def, { ...params, moduleOptions });
       expect(code).to.contain('addonPath');
+      expect(code).to.contain('/tmp/somewhere');
+    })
+    it('should include environment variables', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: "f32",
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const def = { structures: [ structure ], settings };
+      const envVariables = { ADDON_PATH: '/tmp/somewhere' };
+      const { code } = generateCode(def, { ...params, envVariables });
+      expect(code).to.contain('process.env.');
+      expect(code).to.contain('ADDON_PATH');
       expect(code).to.contain('/tmp/somewhere');
     })
   })

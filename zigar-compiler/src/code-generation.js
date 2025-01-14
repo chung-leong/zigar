@@ -11,6 +11,7 @@ export function generateCode(definition, params) {
     omitExports = false,
     mixinPaths = [],
     moduleOptions,
+    envVariables = {},
   } = params;
   const exports = getExports(structures);
   const lines = [];
@@ -21,6 +22,12 @@ export function generateCode(definition, params) {
   }
   // write out the structures as object literals
   addStructureDefinitions(lines, definition);
+  if (Object.keys(envVariables).length > 0) {
+    add(`\n// set environment variables`);
+    for (const [ name, value ] of Object.entries(envVariables)) {
+      add(`process.env.${name} = ${JSON.stringify(value)};`);
+    }
+  }
   add(`\n// create runtime environment`);
   add(`const env = createEnvironment();`);
   add(`\n// recreate structures`);
