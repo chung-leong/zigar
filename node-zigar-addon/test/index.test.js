@@ -3,13 +3,13 @@ import { execSync } from 'child_process';
 import os from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
-import { createConfig } from '../../zigar-compiler/src/compiler.js';
+import { createConfig } from '../../zigar-compiler/src/compilation.js';
 
 import {
-    buildAddon,
-    getGCStatistics,
-    getLibraryPath,
-    importModule,
+  buildAddon,
+  getGCStatistics,
+  getLibraryPath,
+  importModule,
 } from '../dist/index.cjs';
 
 describe('Addon functionalities', function() {
@@ -63,10 +63,9 @@ describe('Addon functionalities', function() {
   describe('Module loading', function() {
     const sampleDir = fileURLToPath(new URL('./sample-modules', import.meta.url));
     const addonDir = join(sampleDir, 'node-zigar-addon');
-    let addonPath;
     before(async () => {
       const { outputPath } = await buildAddon(addonDir, {});
-      addonPath = outputPath;
+      process.env.ADDON_PATH = outputPath;
     })
     after(() => execSync(`rm -rf '${addonDir}'`))
     const options = {
@@ -82,7 +81,7 @@ describe('Addon functionalities', function() {
       it('should load module', function() {
         this.timeout(0);
         const path = getModulePath('integers');
-        const module = importModule(path, { addonPath, recompile: true });
+        const module = importModule(path, { recompile: true });
         expect(module.int32).to.equal(1234);
       })
       it('should throw when module is missing', function() {
@@ -99,7 +98,7 @@ describe('Addon functionalities', function() {
     })
     describe('getGCStatistics', function() {
       it('should get gc statistics', function() {
-        const stats = getGCStatistics({ addonPath, recompile: true });
+        const stats = getGCStatistics({ recompile: true });
         expect(stats).to.be.an('object');
       })
     })
