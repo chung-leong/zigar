@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
+import { arch, platform } from 'os';
 import { capture, delay } from '../test-utils.js';
 
 export function addTests(importModule, options) {

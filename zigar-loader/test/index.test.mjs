@@ -1,10 +1,10 @@
-import { join, parse } from 'path';
 import { expect } from 'chai';
-import { tmpdir } from 'os';
 import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import webpack from 'webpack'
 import 'mocha-skip-if';
+import { tmpdir } from 'os';
+import { join, parse } from 'path';
+import { fileURLToPath } from 'url';
+import webpack from 'webpack';
 
 const loader = absolute('../dist/index.js');
 
@@ -18,12 +18,12 @@ describe('Loader', function() {
     })
     it('should generate code that uses fetch when embedWASM is false', async function() {
       this.timeout(60000);
-      const code = await transpile(path, { embedWASM: false, useReadFile: false });
+      const code = await transpile(path, { embedWASM: false, nodeCompat: false });
       expect(code).to.contain('fetch');
     })
-    it('should generate code that uses readFile when embedWASM is false and useReadFile is true', async function() {
+    it('should generate code that uses readFile when embedWASM is false and nodeCompat is true', async function() {
       this.timeout(60000);
-      const code = await transpile(path, { embedWASM: false, useReadFile: true });
+      const code = await transpile(path, { embedWASM: false, nodeCompat: true });
       expect(code).to.contain('readFile');
     })
     it('should default to ReleaseSmall where NODE_ENV is production', async function() {
