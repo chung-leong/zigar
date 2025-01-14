@@ -184,6 +184,9 @@ describe('Structure: function', function() {
         nextThunkAddr += usize(0x100);
         return thunkAddr;
       };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       const fn = (arg1, arg2) => {
         return arg1 + arg2;
       };

@@ -656,22 +656,6 @@ describe('Structure: optional', function() {
         slot: 1,
         structure: ptrStructure,
       })
-      const int1 = new Int32(1234);
-      const int2 = new Int32(4567);
-      const intPtr1 = new Int32Ptr(int1);
-      const intPtr2 = new Int32Ptr(int2);
-      env.attachTemplate(structStructure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8 * 2));
-          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-          return dv;
-        })(),
-        [SLOTS]: {
-          0: intPtr1,
-          1: intPtr2,
-        }
-      });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
       const structure = env.beginStructure({
@@ -697,7 +681,7 @@ describe('Structure: optional', function() {
       });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const object = new Hello({});
+      const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
       object.$ = null;
@@ -764,22 +748,6 @@ describe('Structure: optional', function() {
         slot: 1,
         structure: ptrStructure,
       })
-      const int1 = new Int32(1234);
-      const int2 = new Int32(4567);
-      const intPtr1 = new Int32Ptr(int1);
-      const intPtr2 = new Int32Ptr(int2);
-      env.attachTemplate(structStructure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(8 * 2));
-          dv.setBigUint64(0, 0xaaaaaaaaaaaaaaaan, true);
-          dv.setBigUint64(8, 0xaaaaaaaaaaaaaaaan, true);
-          return dv;
-        })(),
-        [SLOTS]: {
-          0: intPtr1,
-          1: intPtr2,
-        }
-      });
       env.defineStructure(structStructure);
       env.endStructure(structStructure);
       const structure = env.beginStructure({
@@ -805,7 +773,7 @@ describe('Structure: optional', function() {
       });
       const Hello = env.defineStructure(structure);
       env.endStructure(structure);
-      const object = new Hello({});
+      const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
       object[MEMORY].setUint8(structStructure.byteSize, 0);
