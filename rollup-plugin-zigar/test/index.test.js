@@ -27,6 +27,16 @@ describe('Loader', function() {
       const code = await transpile(path, { embedWASM: false, nodeCompat: true });
       expect(code).to.contain('readFile');
     })
+    it('should fail when useReadFile is specified', async function() {
+      this.timeout(0);
+      let error;
+      try {
+        await transpile(path, { embedWASM: false, useReadFile: true });
+      } catch (err) {
+        error = err;
+      }
+      expect(error).to.be.an('Error');
+    })
     it('should default to ReleaseSmall where NODE_ENV is production', async function() {
       this.timeout(0);
       const code1 = await transpile(path, { embedWASM: true });
