@@ -399,7 +399,7 @@ export function parseBinary(binary) {
               const mut = readU8();
               return { module, name, type, valtype, mut };
             }
-            /* c8 ignore next 2 */
+            /* c8 ignore next 3 */
             default: {
               throw new Error(`Unknown object type: ${type}`);
             }
@@ -503,25 +503,27 @@ export function extractLimits(binary) {
     readLimits,
   } = createReader(binary);
   const magic = readU32();
+  /* c8 ignore next 3 */
   if (magic !== MagicNumber) {
     throw new Error(`Incorrect magic number: ${magic.toString(16)}`);
   }
   const version = readU32();
+  /* c8 ignore next 3 */
   if (version !== Version) {
     throw new Error(`Incorrect version: ${version}`);
   }
-  let memoryInitial, memoryMax, tableInitial;
-  loop:
-  while(!eof()) {
+  let memoryInitial, memoryMax, tableInitial, done = false;
+  while(!eof() && !done) {
     const type = readU8();
     const len = readU32Leb128();
     if (type === SectionType.Import) {
       const count = readU32Leb128();
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < count && !done; i++) {
         const module = readString();
         const name = readString();
         const type = readU8();
         switch (type) {
+          /* c8 ignore next 3 */
           case ObjectType.Function: {
             readU32Leb128();
           } break;
@@ -530,7 +532,6 @@ export function extractLimits(binary) {
             const { min } = readLimits();
             if (module === 'env' && name === '__indirect_function_table') {
               tableInitial = min;
-              if (memoryInitial !== undefined) break loop;
             }
           } break;
           case ObjectType.Memory: {
@@ -538,19 +539,20 @@ export function extractLimits(binary) {
             if (module === 'env' && name === 'memory') {
               memoryInitial = min;
               memoryMax = max;
-              if (tableInitial !== undefined) break loop;
             }
           } break;
+          /* c8 ignore next 4 */
           case ObjectType.Global: {
             readU8();
             readU8();
           } break;
-          /* c8 ignore next 2 */
+          /* c8 ignore next 3 */
           default: {
             throw new Error(`Unknown object type: ${type}`);
           }
         }
       }
+      done = tableInitial !== undefined && memoryInitial !== undefined;
     } else {
       skip(len);
     }
@@ -1138,6 +1140,7 @@ function createDecoder(reader) {
     0xFE: () => {
       const op1 = readOne();
       switch (op1) {
+        /* c8 ignore next 2 */
         case 3:
           return [ op1, readU8() ];
         default:

@@ -311,6 +311,7 @@ async function findSourcePaths(buildPath) {
               try {
                 await stat(srcPath);
                 involved[srcPath] = true;
+                /* c8 ignore next */
               } catch {};
             }
           }

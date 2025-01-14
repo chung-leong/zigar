@@ -107,7 +107,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('fn-pointer');
       const options = {
         optimize: 'ReleaseSmall',
-        stripWASM: false, // getFactoryThunk() is needed by thunk-allocation test cases
+        stripWASM: true,
         embedWASM: false,
         wasmLoader: saveWASM,
       };
@@ -119,7 +119,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('thread');
       const options = {
         optimize: 'ReleaseSmall',
-        stripWASM: false, // getFactoryThunk() is needed by worker-support test cases
+        stripWASM: true,
         embedWASM: false,
         wasmLoader: saveWASM,
         multithreaded: true,
@@ -127,5 +127,20 @@ describe('Transpilation', function() {
       const { code } = await transpile(path, options);
       expect(code).to.contain('"spawn"');
     })
+    it('should create JS code compatible with Node.js', async function() {
+      this.timeout(0);
+      const path = getSamplePath('thread');
+      const options = {
+        optimize: 'ReleaseSmall',
+        stripWASM: true,
+        embedWASM: false,
+        wasmLoader: saveWASM,
+        multithreaded: true,
+        nodeCompat: true,
+      };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"spawn"');
+    })
+
   })
 })
