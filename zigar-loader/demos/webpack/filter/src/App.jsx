@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutputAsync, startThreadPool, stopThreadPool } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool } from '../zig/sepia.zig';
 import './App.css';
+
+startThreadPool(navigator.hardwareConcurrency);
 
 function App() {
   const srcCanvasRef = useRef();
@@ -61,7 +63,7 @@ function App() {
           dstCanvas.width = width;
           dstCanvas.height = height;
           const dstCTX = dstCanvas.getContext('2d');
-          dstCTX.putImageData(srcImageData, 0, 0);
+          dstCTX.putImageData(dstImageData, 0, 0);
         }
       } catch (err) {
         if (err.message != 'Aborted') {
@@ -70,13 +72,6 @@ function App() {
       }
     })();
   }, [ bitmap, intensity ]);
-  useEffect(() => {
-    startThreadPool(navigator.hardwareConcurrency);
-    return async () => {
-      await am.stop();
-      stopThreadPool();
-    };
-  }, []);
   return (
     <div className="App">
       <div className="nav">
