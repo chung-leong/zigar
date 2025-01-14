@@ -8,10 +8,10 @@ import { fileURLToPath } from 'url';
 use(chaiAsPromised);
 
 import {
-    compile,
-    createConfig,
-    getModuleCachePath,
-    runCompiler
+  compile,
+  createConfig,
+  getModuleCachePath,
+  runCompiler
 } from '../src/compilation.js';
 import { delay } from '../src/utility-functions.js';
 
@@ -114,7 +114,7 @@ describe('Compilation', function() {
     it('should compile code for WASM32', async function() {
       this.timeout(0);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
+      const options = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi', isWASM: true };
       const modPath = getModuleCachePath(srcPath, options);
       const { outputPath } = await compile(srcPath, modPath, options);
       const { size } = await stat(outputPath);
@@ -168,8 +168,8 @@ describe('Compilation', function() {
     it('should compile optimized code', async function() {
       this.timeout(0);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'wasi' };
-      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi' };
+      const options1 = { optimize: 'Debug', arch: 'wasm32', platform: 'wasi', isWASM: true };
+      const options2 = { optimize: 'ReleaseSmall', arch: 'wasm32', platform: 'wasi', isWASM: true };
       const modPath1 = getModuleCachePath(srcPath, options1);
       const modPath2 = getModuleCachePath(srcPath, options2);
       const result1 = await compile(srcPath, modPath1, options1);
