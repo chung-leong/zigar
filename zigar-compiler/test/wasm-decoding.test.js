@@ -3,15 +3,15 @@ import { readFile, readdir } from 'fs/promises';
 import { fileURLToPath } from 'url';
 
 import {
-    MagicNumber,
-    SectionType,
-    parseBinary,
-    parseFunction,
-    parseNames,
-    repackBinary,
-    repackFunction,
-    repackNames,
-    stripUnused,
+  MagicNumber,
+  SectionType,
+  parseBinary,
+  parseFunction,
+  parseNames,
+  repackBinary,
+  repackFunction,
+  repackNames,
+  stripUnused,
 } from '../src/wasm-decoding.js';
 
 const littleEndian = true;
@@ -168,7 +168,7 @@ describe('WASM decoding', function() {
   })
   describe('stripUnused', function() {
     it('should remove unused functions', async function() {
-      const path = absolute(`./wasm-samples/simple.wasm`);
+      const path = absolute(`./wasm-samples/simple-original.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
       const newBinary = stripUnused(binary);
