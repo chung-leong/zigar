@@ -88,9 +88,9 @@ export default mixin({
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
             if (futexHandle || argStruct[CALLBACK]) {
-              retval.then(onReturn, onError);
+              const promise = retval.then(onReturn, onError);
               if (futexHandle) {
-                retval.then(() => this.finalizeAsyncCall(futexHandle, result));
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
               }
               awaiting = true;
               result = CallResult.OK;

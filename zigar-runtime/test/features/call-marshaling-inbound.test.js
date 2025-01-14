@@ -5,7 +5,7 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CALLBACK, ENVIRONMENT, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
+import { CALLBACK, ENVIRONMENT, MEMORY, RETURN, SLOTS, ZIG } from '../../src/symbols.js';
 import {
   addressByteSize, addressSize, capture, captureError, delay, usize
 } from '../test-utils.js';
@@ -187,8 +187,22 @@ describe('Feature: call-marshaling-inbound', function() {
       const ArgStruct = env.defineStructure(structure);
       env.endStructure(structure);
       const fn = arg => arg;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
       const self = env.createInboundCaller(fn, ArgStruct)
-      const int32 = new Int32(123);
+      const dv = env.obtainZigView(usize(0x1000), 4);
+      const int32 = Int32(dv);
       const argStruct = new ArgStruct([ int32 ]);
       const binary = env.jsFunctionCallerMap.get(1);
       expect(() => binary(argStruct[MEMORY])).to.not.throw();
@@ -347,6 +361,7 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
+        self[RETURN] = function() {};
         return self;
       };
       const self = env.createInboundCaller(fn, ArgStruct)
@@ -369,13 +384,15 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[CALLBACK] = function(arg) {
+        self[RETURN] = function() {};
+        self[CALLBACK] = function(ptr, arg) {
           result = arg;
         };
         return self;
       };
       const self = env.createInboundCaller(fn, ArgStruct)
       const binary = env.jsFunctionCallerMap.get(1);
+      debugger;
       binary(null, usize(0x1234));
       await delay(0);
       expect(result).to.equal(777);
@@ -391,7 +408,8 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[CALLBACK] = function(arg) {
+        self[RETURN] = function() {};
+        self[CALLBACK] = function(ptr, arg) {
           result = arg;
         };
         return self;
@@ -413,7 +431,8 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[CALLBACK] = function(arg) {
+        self[RETURN] = function() {};
+        self[CALLBACK] = function(ptr, arg) {
           throw new Error('Doh!');
         };
         return self;
@@ -457,7 +476,7 @@ describe('Feature: call-marshaling-inbound', function() {
         byteSize: 4,
         structure: {},
       });
-      env.defineStructure(structStructure);
+      const Struct = env.defineStructure(structStructure);
       env.endStructure(structStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
@@ -504,7 +523,7 @@ describe('Feature: call-marshaling-inbound', function() {
       dv.setInt32(8, 5678, true);
       const args = [ ...ArgStruct(dv) ];
       expect(args).to.have.lengthOf(2);
-      expect(args[0]).to.be.an('object');
+      expect(args[0]).to.be.an.instanceOf(Struct);
       expect(args[1]).to.be.a('number');
       expect(args[0].index).to.equal(1234);
       expect(args[0][MEMORY]).to.not.have.property(ZIG);
@@ -1798,6 +1817,9 @@ describe('Feature: call-marshaling-inbound', function() {
         called = true;
         return 1;
       };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
       const thunk = env.getFunctionThunk(fn, controller);
       expect(env.jsFunctionThunkMap.size).to.equal(1);
       expect(env.jsFunctionCallerMap.size).to.equal(1);
