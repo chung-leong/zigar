@@ -1,21 +1,34 @@
 const std = @import("std");
-const cfg = @import("./build-cfg.zig");
+const builtin = @import("builtin");
+const cfg = @import("build-cfg.zig");
+
+const host_type = if (cfg.is_wasm) "wasm" else "napi";
+const zig_path = for (.{ .{ 0, 13 }, .{ 0, 14 } }) |v| {
+    if (builtin.zig_version.major == v[0] and builtin.zig_version.minor == v[1]) {
+        break std.fmt.comptimePrint("{s}{d}.{d}{c}", .{ cfg.zigar_src_path, v[0], v[1], std.fs.path.sep });
+    }
+} else @compileError("Unsupported Zig version");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = cfg.stub_path },
+        .root_source_file = .{ .cwd_relative = zig_path ++ "stub-" ++ host_type ++ ".zig" },
         .target = target,
         .optimize = optimize,
+        .single_threaded = !cfg.multithreaded,
+    });
+    const zigar = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = zig_path ++ "zigar.zig" },
     });
     const sqlite = b.dependency("sqlite", .{
         .target = target,
         .optimize = optimize,
-    });
-    const imports = .{
-        .{ .name = "sqlite", .module = sqlite.module("sqlite") },
+    }).module("sqlite");
+    const imports = [_]std.Build.Module.Import{
+        .{ .name = "zigar", .module = zigar },
+        .{ .name = "sqlite", .module = sqlite },
     };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
@@ -25,6 +38,17 @@ pub fn build(b: *std.Build) void {
     lib.root_module.addImport("module", mod);
     if (cfg.use_libc) {
         lib.linkLibC();
+    }
+    if (cfg.is_wasm) {
+        // WASM needs to be compiled as exe
+        lib.kind = .exe;
+        lib.linkage = .static;
+        lib.entry = .disabled;
+        lib.rdynamic = true;
+        lib.wasi_exec_model = .reactor;
+        lib.import_memory = true;
+        lib.import_table = true;
+        lib.max_memory = cfg.max_memory;
     }
     const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
         true => b.addUpdateSourceFiles(),
