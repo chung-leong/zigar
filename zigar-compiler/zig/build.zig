@@ -4,7 +4,7 @@ const cfg = @import("build-cfg.zig");
 
 const host_type = if (cfg.is_wasm) "wasm" else "napi";
 const zig_path = for (.{ .{ 0, 13 }, .{ 0, 14 } }) |v| {
-    if (std.meta.eql(v, .{ builtin.zig_version.major, builtin.zig_version.minor })) {
+    if (builtin.zig_version.major == v[0] and builtin.zig_version.minor == v[1]) {
         break std.fmt.comptimePrint("{s}{d}.{d}{c}", .{ cfg.zigar_src_path, v[0], v[1], std.fs.path.sep });
     }
 } else @compileError("Unsupported Zig version");
