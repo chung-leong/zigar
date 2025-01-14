@@ -7,7 +7,7 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { addressByteSize, addressSize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -272,6 +272,79 @@ describe('Feature: structure-acquisition', function() {
       expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitMethods)).to.be.true;
       expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.true;
     })
+    it('should acquire default pointers', function() {
+      const env = new Env();
+      env.getFactoryThunk = function() {
+        return usize(0x1234);
+      };
+      env.getModuleAttributes = function() {
+        return ModuleAttribute.LittleEndian;
+      };
+      env.invokeThunk = function(...args) {};
+      const intStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        flags: StructureFlag.HasValue,
+        byteSize: 4,
+      });
+      env.attachMember(intStructure, {
+        type: MemberType.Uint,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: intStructure,
+      });
+      env.defineStructure(intStructure);
+      env.endStructure(intStructure);
+      const ptrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(ptrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: intStructure,
+      });
+      env.defineStructure(ptrStructure);
+      env.endStructure(ptrStructure);
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: addressByteSize,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+      });
+      env.attachMember(structStructure, {
+        name: 'ptr',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: ptrStructure,
+      });
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const dv = new DataView(new ArrayBuffer(addressByteSize));
+      if (addressSize === 32) {
+        dv.setUint32(0, 0x1000, true);
+      } else {
+        dv.setBigUint64(0, 0x1000n, true);
+      }
+      const templ = { [MEMORY]: dv, [SLOTS]: {} };
+      env.attachTemplate(structStructure, templ, false);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+      }
+      env.acquireStructures({});
+      expect(templ[SLOTS][0]).to.not.be.undefined;
+      expect(templ[SLOTS][0]['*']).to.equal(0);
+    })
   })
   describe('getRootModule', function() {
     it('should return constructor of the last structure added', function() {
@@ -354,6 +427,34 @@ describe('Feature: structure-acquisition', function() {
       expect(templ1[MEMORY].byteOffset).to.equal(2);
       expect(object[MEMORY].buffer).to.equal(templ2[MEMORY].buffer);
       expect(object[MEMORY].byteOffset).to.equal(16);
+    })
+    it('should attach export handle to object', function() {
+      const env = new Env();
+      env.getViewAddress = (dv) => dv[ZIG].address;
+      env.getMemoryOffset = (address) => Number(address);
+      env.copyExternBytes = (dv, address, len) => {};
+      const zig = function(address, len, handle) {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[ZIG] = { address, len, handle }
+        return dv;
+      };
+      const object = {
+        [MEMORY]: zig(usize(1016), 8, 1016),
+      };
+      const templ = {
+        [MEMORY]: zig(usize(2000), 32),
+        [SLOTS]: {
+          0: object,
+        },
+      };
+      env.structures = [
+        {
+          instance: {},
+          static: { template: templ },
+        },
+      ];
+      env.prepareObjectsForExport();
+      expect(object[MEMORY].handle).to.equal(1016);
     })
   })
   describe('useStructures', function() {

@@ -4,7 +4,7 @@ import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
 import { ALIGN, COPY, MEMORY, ZIG } from '../../src/symbols.js';
 import { adjustAddress, defineProperty } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { addressSize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -377,7 +377,7 @@ describe('Feature: memory-mapping', function() {
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }
-      const address = (process.env.BITS === '32') ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
+      const address = (addressSize === 32) ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
       const dv = env.obtainZigView(address, 0);
       expect(dv).to.be.a('DataView');
     })
@@ -386,7 +386,7 @@ describe('Feature: memory-mapping', function() {
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }
-      const address = (process.env.BITS === '32') ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
+      const address = (addressSize === 32) ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
       const dv = env.obtainZigView(address, 5);
       expect(dv).to.be.null;
     })

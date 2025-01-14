@@ -2,8 +2,10 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import {
+  CACHE,
   COPY,
   MEMORY, RESTORE, SLOTS,
+  VISIT,
   ZIG
 } from '../../src/symbols.js';
 import { defineProperties, ObjectCache } from '../../src/utils.js';
@@ -42,7 +44,7 @@ describe('Feature: object-linkage', function() {
       expect(object[MEMORY]).to.not.equal(dv);
       expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
     });
-    it('should replace relocatable memory with Zig memory', function() {
+    it('should replace JS memory with Zig memory', function() {
       const env = new Env();
       if (process.env.TARGET === 'node') {
         env.recreateAddress = function(handle) {
@@ -112,19 +114,31 @@ describe('Feature: object-linkage', function() {
         dv.address = address;
         return dv;
       };
+      const Child = function(dv) {
+        this[MEMORY] = dv;
+      }
+      defineProperties(Child.prototype, {
+        [COPY]: env.defineCopier(4),
+      });
+      defineProperties(Child, {
+        [CACHE]: { value: new ObjectCache() },
+      });
       const Test = function(dv) {
         this[MEMORY] = dv;
         this[SLOTS] = {
-          0: {
-            [MEMORY]: new DataView(dv.buffer, 0, 8),
-          }
+          0: new Child(new DataView(dv.buffer, 0, 8)),
         }
       };
+      let visited = false;
       defineProperties(Test.prototype, {
         [COPY]: env.defineCopier(4),
+        [VISIT]: { value: function() { visited = true } },
       });
-      const object = new Test(new DataView(new ArrayBuffer(32)));
-      const dv = object[MEMORY];
+      defineProperties(Test, {
+        [CACHE]: { value: new ObjectCache() },
+      });
+      const dv = new DataView(new ArrayBuffer(32));
+      const object = new Test(dv);
       env.variables.push({ object, handle: 0x1000 })
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
@@ -132,6 +146,7 @@ describe('Feature: object-linkage', function() {
       env.linkVariables(true);
       expect(object[MEMORY]).to.not.equal(dv);
       expect(object[SLOTS][0][MEMORY].buffer).to.equal(object[MEMORY].buffer);
+      expect(visited).to.be.true;
     })
     if (process.env.TARGET === 'wasm') {
       it('should link variables after initialization promise is fulfilled', async function() {
@@ -158,7 +173,7 @@ describe('Feature: object-linkage', function() {
     }
   })
   describe('unlinkVariables', function() {
-    it('should replace buffer in Zig memory with ones in relocatable memory', function() {
+    it('should replace buffer in Zig memory with ones in JS memory', function() {
       const env = new Env();
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
