@@ -106,12 +106,11 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const is_main = builtin.single_threaded and main_thread;
-    const thunk_address = controller(null, .create, fn_id) catch switch (is_main) {
+    const thunk_address = controller(null, .create, fn_id) catch switch (builtin.single_threaded) {
         true => _allocateJsThunk(controller_address, fn_id),
         false => 0,
     };
-    if (is_main and thunk_address > 0) {
+    if (main_thread and thunk_address > 0) {
         js_thunk_list.append(.{ .fn_id = fn_id, .address = thunk_address }) catch {};
     }
     return thunk_address;
@@ -119,12 +118,11 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const is_main = builtin.single_threaded and main_thread;
-    const fn_id = controller(null, .destroy, thunk_address) catch switch (is_main) {
+    const fn_id = controller(null, .destroy, thunk_address) catch switch (builtin.single_threaded) {
         true => _freeJsThunk(controller_address, thunk_address),
         false => 0,
     };
-    if (is_main and fn_id > 0) {
+    if (main_thread and fn_id > 0) {
         for (js_thunk_list.items, 0..) |item, i| {
             if (item.address == thunk_address) {
                 _ = js_thunk_list.swapRemove(i);
