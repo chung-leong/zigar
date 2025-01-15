@@ -21,6 +21,7 @@ export default mixin({
     };
   },
   defineFree() {
+    const thisEnv = this;
     return {
       value(arg) {
         const { dv, align } = getMemory(arg)
@@ -35,7 +36,7 @@ export default mixin({
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
         free(ptr, dv, ptrAlign, 0);
-        zig.address = usizeInvalid;
+        thisEnv.releaseZigView(dv);
       }
     };
   },

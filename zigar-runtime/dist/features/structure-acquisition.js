@@ -39,7 +39,7 @@ var structureAcquisition = mixin({
       type,
       name,
       length,
-      signature,
+      signature = -1n,
       byteSize,
       align,
       flags,

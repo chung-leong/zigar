@@ -2850,6 +2850,7 @@ var allocatorMethods = mixin({
     };
   },
   defineFree() {
+    const thisEnv = this;
     return {
       value(arg) {
         const { dv, align } = getMemory(arg);
@@ -2864,7 +2865,7 @@ var allocatorMethods = mixin({
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
         free(ptr, dv, ptrAlign, 0);
-        zig.address = usizeInvalid;
+        thisEnv.releaseZigView(dv);
       }
     };
   },
@@ -3197,7 +3198,10 @@ var callMarshalingInbound = mixin({
       {
         result = this.runFunction(id, dv, futexHandle);
       }
-      this.releaseZigView(dv);
+      if (id) {
+        // for function calls the argAddress will be point to the stack
+        this.releaseZigView(dv);
+      }
       return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);

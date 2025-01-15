@@ -1,7 +1,6 @@
-import { Unsupported } from '../../dist/errors.js';
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { NoInitializer, TypeMismatch, NoCastingToFunction } from '../errors.js';
+import { NoInitializer, TypeMismatch, Unsupported, NoCastingToFunction } from '../errors.js';
 import { TYPE, ENVIRONMENT, MEMORY } from '../symbols.js';
 import { ObjectCache, defineValue, getSelf, defineProperties } from '../utils.js';
 

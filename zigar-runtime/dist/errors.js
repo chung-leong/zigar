@@ -332,7 +332,7 @@ class InvalidPointerTarget extends TypeError {
 }
 
 class ZigMemoryTargetRequired extends TypeError {
-  constructor(structure, arg) {
+  constructor() {
     super(`Pointers in Zig memory cannot point to garbage-collected object`);
   }
 }

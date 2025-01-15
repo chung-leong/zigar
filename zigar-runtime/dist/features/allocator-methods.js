@@ -21,6 +21,7 @@ var allocatorMethods = mixin({
     };
   },
   defineFree() {
+    const thisEnv = this;
     return {
       value(arg) {
         const { dv, align } = getMemory(arg);
@@ -31,13 +32,11 @@ var allocatorMethods = mixin({
         const { address } = zig;
         if (address === usizeInvalid) {
           throw new PreviouslyFreed(arg);
-        } else if (!address) {
-          return;
         }
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
         free(ptr, dv, ptrAlign, 0);
-        zig.address = usizeInvalid;
+        thisEnv.releaseZigView(dv);
       }
     };
   },

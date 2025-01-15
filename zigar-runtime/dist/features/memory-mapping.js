@@ -122,7 +122,7 @@ var memoryMapping = mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -175,6 +175,7 @@ var memoryMapping = mixin({
     if (len) {
       this.freeExternMemory(type, unalignedAddress ?? address, len, align);
     }
+    this.releaseZigView(dv);
   },
   releaseZigView(dv) {
     const zig = dv[ZIG];

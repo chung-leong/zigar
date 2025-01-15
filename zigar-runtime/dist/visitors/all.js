@@ -1,6 +1,7 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SLOTS, LAST_ADDRESS, VIVIFICATE, VISIT } from '../symbols.js';
+import { ZigMemoryTargetRequired } from '../errors.js';
+import { SLOTS, MEMORY, ZIG, LAST_ADDRESS, VIVIFICATE, VISIT } from '../symbols.js';
 
 var all = mixin({
   defineVisitor() {
@@ -39,7 +40,13 @@ function visitChild(slot, cb, flags, src) {
 
 const builtinVisitors = {
   copy(flags, src) {
-    this[SLOTS][0] = src[SLOTS][0];
+    const target = src[SLOTS][0];
+    if (this[MEMORY][ZIG]) {
+      if (target && !target[MEMORY][ZIG]) {
+        throw new ZigMemoryTargetRequired();
+      }
+    }
+    this[SLOTS][0] = target;
   },
   clear(flags) {
     if (flags & VisitorFlag.IsInactive) {

@@ -85,9 +85,9 @@ var callMarshalingInbound = mixin({
           const retval = fn(...argStruct);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
             if (futexHandle || argStruct[CALLBACK]) {
-              retval.then(onReturn, onError);
+              const promise = retval.then(onReturn, onError);
               if (futexHandle) {
-                retval.then(() => this.finalizeAsyncCall(futexHandle, result));
+                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
               }
               awaiting = true;
               result = CallResult.OK;
@@ -188,9 +188,15 @@ var callMarshalingInbound = mixin({
   performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
     if (action === Action.Call) {
       const dv = this.obtainZigView(argAddress, argSize);
+      let result;
       {
-        return this.runFunction(id, dv, futexHandle);
+        result = this.runFunction(id, dv, futexHandle);
       }
+      if (id) {
+        // for function calls the argAddress will be point to the stack
+        this.releaseZigView(dv);
+      }
+      return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
     }
