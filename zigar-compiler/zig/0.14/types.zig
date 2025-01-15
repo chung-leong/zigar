@@ -2113,7 +2113,7 @@ pub fn Queue(comptime T: type) type {
             while (self.pull()) |_| {}
             // wake up awaking threads and prevent them from sleep again
             self.item_futex.store(1, .release);
-            std.Thread.Futex.wake(&self.count, std.math.maxInt(u32));
+            std.Thread.Futex.wake(&self.item_futex, std.math.maxInt(u32));
         }
 
         pub fn deinit(self: *@This()) void {
@@ -2189,6 +2189,7 @@ pub fn WorkQueue(comptime ns: type) type {
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
+                stack_size: usize = 16 * 1024 * 1024,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
@@ -2324,6 +2325,7 @@ pub fn WorkQueue(comptime ns: type) type {
                 .initialized => {},
                 else => return promise.resolve({}),
             }
+            self.queue.stop();
             self.deinit_promise = promise;
             self.status = .deinitializing;
             self.queue.deinit();
