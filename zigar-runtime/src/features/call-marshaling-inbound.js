@@ -204,7 +204,10 @@ export default mixin({
       } else {
         result = this.runFunction(id, dv, futexHandle);
       }
-      this.releaseZigView(dv);
+      if (id) {
+        // for function calls the argAddress will be point to the stack
+        this.releaseZigView(dv);
+      }
       return result;
     } else if (action === Action.Release) {
       return this.releaseFunction(id);
