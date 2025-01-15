@@ -1257,16 +1257,15 @@ pub const TypeDataCollector = struct {
                 }
             },
             .@"fn" => |f| {
-                if (!f.is_generic) {
-                    td.attrs.is_supported = comptime for (f.params) |param| {
-                        if (param.is_generic) break false;
-                        if (param.type == null) break false;
-                    } else for (.{1}) |_| {
-                        const RT = f.return_type orelse break false;
-                        const retval_attrs = self.getAttributes(RT);
-                        if (retval_attrs.is_comptime_only) break false;
-                    } else true;
-                }
+                td.attrs.is_supported = inline for (f.params) |param| {
+                    if (param.is_generic) break false;
+                    if (param.type == null) break false;
+                } else inline for (.{1}) |_| {
+                    if (f.is_generic) break false;
+                    const RT = f.return_type orelse break false;
+                    const retval_attrs = self.getAttributes(RT);
+                    if (retval_attrs.is_comptime_only) break false;
+                } else true;
             },
             else => {},
         }
