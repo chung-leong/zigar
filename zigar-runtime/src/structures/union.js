@@ -6,9 +6,7 @@ import {
 } from '../errors.js';
 import { getUnionEntries, getUnionIterator, getZigIterator } from '../iterators.js';
 import {
-  COPY, ENTRIES,
-  GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, SETTERS,
-  TAG, TARGET,
+  COPY, ENTRIES, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, RESTRICT, SETTERS, TAG, TARGET,
   VISIT, VIVIFICATE
 } from '../symbols.js';
 import { defineProperties, defineValue, empty, isCompatibleInstanceOf } from '../utils.js';
@@ -43,16 +41,7 @@ export default mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const { comptime } = this;
     const initializer = function(arg, allocator) {
-      if (flags & UnionFlag.HasInaccessible && !comptime) {
-        if (this[VISIT] !== empty) {
-          // pointers in non-tagged union are not accessible--we need to disable them
-          this[VISIT](disablePointer);
-          // no need to visit them again
-          this[VISIT] = empty;
-        }
-      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -135,6 +124,18 @@ export default mixin({
           default:
             return getSelectorNumber.call(this);
         }
+      }
+    };
+    const { comptime } = this;
+    descriptors[RESTRICT] = (flags & UnionFlag.HasInaccessible) && {
+      value() {
+        if (!comptime) {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+        }
+        // no need to visit them again
+        this[VISIT] = empty;
+        return this;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);

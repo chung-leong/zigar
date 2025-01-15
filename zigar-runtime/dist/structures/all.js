@@ -2,7 +2,7 @@ import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } 
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
 import { getStructIterator, getStructEntries } from '../iterators.js';
-import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, FINALIZE } from '../symbols.js';
+import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE } from '../symbols.js';
 import { defineValue, defineProperties, defineProperty, ObjectCache } from '../utils.js';
 
 var all = mixin({
@@ -198,6 +198,7 @@ var all = mixin({
           self[SLOTS][slot] = template[SLOTS][slot];
         }
       }
+      self[RESTRICT]?.();
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {

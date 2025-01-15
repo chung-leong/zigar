@@ -1,12 +1,10 @@
 import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import {
-  MissingInitializers, NoInitializer, NoProperty
-} from '../errors.js';
+import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import { getStructEntries, getStructIterator } from '../iterators.js';
 import {
-  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY,
-  PROPS, RESTORE, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TYPE, TYPED_ARRAY
+  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
+  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TYPE, TYPED_ARRAY
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -210,6 +208,7 @@ export default mixin({
           self[SLOTS][slot] = template[SLOTS][slot];
         }
       }
+      self[RESTRICT]?.();
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {

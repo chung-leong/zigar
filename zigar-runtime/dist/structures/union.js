@@ -2,8 +2,8 @@ import { UnionFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
 import { getZigIterator, getUnionIterator, getUnionEntries } from '../iterators.js';
-import { NAME, SETTERS, KEYS, INITIALIZE, TAG, VIVIFICATE, VISIT, ENTRIES, PROPS, GETTERS, COPY, POINTER, TARGET } from '../symbols.js';
-import { defineValue, empty, isCompatibleInstanceOf, defineProperties } from '../utils.js';
+import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
+import { empty, defineValue, defineProperties, isCompatibleInstanceOf } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {
@@ -35,16 +35,7 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const { comptime } = this;
     const initializer = function(arg, allocator) {
-      if (flags & UnionFlag.HasInaccessible && !comptime) {
-        if (this[VISIT] !== empty) {
-          // pointers in non-tagged union are not accessible--we need to disable them
-          this[VISIT](disablePointer);
-          // no need to visit them again
-          this[VISIT] = empty;
-        }
-      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -127,6 +118,18 @@ var union = mixin({
           default:
             return getSelectorNumber.call(this);
         }
+      }
+    };
+    const { comptime } = this;
+    descriptors[RESTRICT] = (flags & UnionFlag.HasInaccessible) && {
+      value() {
+        if (!comptime) {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+        }
+        // no need to visit them again
+        this[VISIT] = empty;
+        return this;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);

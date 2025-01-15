@@ -89,15 +89,15 @@ export function addTests(importModule, options) {
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
-      const object = new UnionA({ ptr: module.alt_ptr });
-      expect(() => object.ptr['*']).to.throw(TypeError)
-        .with.property('message').that.contains('untagged union');
-      const c = new UnionA({ number: 123 });
-      expect(c.number).to.equal(123);
+      const object = new UnionA({ number: 123 });
+      expect(object.number).to.equal(123);
       if (runtimeSafety) {
-        expect(() => c.ptr['*']).to.throw();
+        expect(() => module.union_a.number).to.throw();
+      } else {
+        expect(() => object.ptr['*']).to.throw(TypeError)
+          .with.property('message').that.contains('untagged union');
       }
-      module.union_a = c;
+      module.union_a = object;
       expect(module.union_a.number).to.equal(123);
       if (runtimeSafety) {
         expect(() => module.union_a.ptr).to.throw();

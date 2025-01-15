@@ -59,6 +59,7 @@ export const VISIT = symbol('visit');
 export const COPY = symbol('copy');
 export const SHAPE = symbol('shape');
 export const INITIALIZE = symbol('initialize');
+export const RESTRICT = symbol('restrict');
 export const FINALIZE = symbol('finalize');
 export const CAST = symbol('cast');
 export const RETURN = symbol('return');

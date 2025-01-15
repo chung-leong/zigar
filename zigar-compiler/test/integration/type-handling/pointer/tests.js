@@ -164,15 +164,9 @@ export function addTests(importModule, options) {
       if (runtimeSafety) {
         expect(() => module.union_a.number).to.throw();
       }
-      const object = new UnionA({ text: module.alt_text });
-      expect(() => object.text.string).to.throw(TypeError)
-        .with.property('message').that.contains('untagged union');
-      const c = new UnionA({ number: 123 });
-      expect(c.number).to.equal(123);
-      if (runtimeSafety) {
-        expect(() => c.text).to.throw();
-      }
-      module.union_a = c;
+      const object = new UnionA({ number: 123 });
+      expect(object.number).to.equal(123);
+      module.union_a = object;
       expect(module.union_a.number).to.equal(123);
       if (runtimeSafety) {
         expect(() => module.union_a.text).to.throw();

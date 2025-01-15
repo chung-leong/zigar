@@ -215,6 +215,7 @@ const VISIT = symbol('visit');
 const COPY = symbol('copy');
 const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
+const RESTRICT = symbol('restrict');
 const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
@@ -6208,6 +6209,7 @@ var all$1 = mixin({
           self[SLOTS][slot] = template[SLOTS][slot];
         }
       }
+      self[RESTRICT]?.();
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {
@@ -7876,16 +7878,7 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const { comptime } = this;
     const initializer = function(arg, allocator) {
-      if (flags & UnionFlag.HasInaccessible && !comptime) {
-        if (this[VISIT] !== empty) {
-          // pointers in non-tagged union are not accessible--we need to disable them
-          this[VISIT](disablePointer);
-          // no need to visit them again
-          this[VISIT] = empty;
-        }
-      }
       if (isCompatibleInstanceOf(arg, constructor)) {
         this[COPY](arg);
         if (flags & StructureFlag.HasPointer) {
@@ -7968,6 +7961,18 @@ var union = mixin({
           default:
             return getSelectorNumber.call(this);
         }
+      }
+    };
+    const { comptime } = this;
+    descriptors[RESTRICT] = (flags & UnionFlag.HasInaccessible) && {
+      value() {
+        if (!comptime) {
+          // pointers in non-tagged union are not accessible--we need to disable them
+          this[VISIT](disablePointer);
+        }
+        // no need to visit them again
+        this[VISIT] = empty;
+        return this;
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
