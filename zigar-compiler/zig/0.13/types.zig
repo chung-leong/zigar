@@ -2275,8 +2275,12 @@ pub fn WorkQueue(comptime ns: type) type {
             errdefer allocator.free(self.threads);
             errdefer for (0..self.thread_count) |i| self.threads[i].join();
             errdefer self.queue.deinit();
+            const min_stack_size: usize = if (std.Thread.use_pthreads) switch (@bitSizeOf(usize)) {
+                32 => 4096,
+                else => 1048576,
+            } else if (!builtin.target.isWasm()) std.mem.page_size else 0;
             const spawn_config: std.Thread.SpawnConfig = .{
-                .stack_size = options.stack_size,
+                .stack_size = @max(min_stack_size, options.stack_size),
                 .allocator = allocator,
             };
             for (0..options.n_jobs) |i| {
