@@ -4236,7 +4236,7 @@ var objectLinkage = mixin({
       };
       linkChildren(object);
       // update pointer targets
-      object[VISIT]?.(function() { this[UPDATE](); });
+      object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
     }
   },
   unlinkVariables() {

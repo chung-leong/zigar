@@ -2900,7 +2900,7 @@
 "        };\n"
 "        linkChildren(object);\n"
 "        // update pointer targets\n"
-"        object[VISIT]?.(function() { this[UPDATE](); });\n"
+"        object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);\n"
 "      }\n"
 "    },\n"
 "    unlinkVariables() {\n"

@@ -1,3 +1,4 @@
+import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, CACHE, VISIT, UPDATE, ZIG, SLOTS } from '../symbols.js';
 
@@ -41,7 +42,7 @@ var objectLinkage = mixin({
       };
       linkChildren(object);
       // update pointer targets
-      object[VISIT]?.(function() { this[UPDATE](); });
+      object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
     }
   },
   unlinkVariables() {
