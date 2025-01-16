@@ -34,16 +34,12 @@ var dataCopying = mixin({
     };
   },
   getCopyFunction(size, multiple = false) {
-    if (!this.copiers) {
-      this.copiers = this.defineCopiers();
-    }
+    this.copiers ??= this.defineCopiers();
     const f = !multiple ? this.copiers[size] : undefined;
     return f ?? this.copiers.any;
   },
   getResetFunction(size) {
-    if (!this.resetters) {
-      this.resetters = this.defineResetters();
-    }
+    this.resetters ??= this.defineResetters();
     return this.resetters[size] ?? this.resetters.any;
   },
   defineCopiers() {

@@ -69,6 +69,7 @@ export async function transpile(path, options) {
   } else {
     usage.FeatureWorkerSupport = multithreaded;
   }
+  usage.AccessorAll = usage.AccessorInt = usage.FeatureDataCopying;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
