@@ -91,7 +91,7 @@ describe('Structure: struct', function() {
       expect(descriptors.boolean?.set).to.be.a('function');
       expect(descriptors[Symbol.iterator]?.value).to.be.a('function');
       expect(descriptors[INITIALIZE]?.value).to.be.a('function');
-      expect(descriptors[ENTRIES]?.get).to.be.a('function');
+      expect(descriptors[ENTRIES]?.value).to.be.a('function');
       expect(keys).to.eql([ 'number', 'boolean' ]);
       expect(setters.number).to.be.a('function');
       expect(setters.boolean).to.be.a('function');

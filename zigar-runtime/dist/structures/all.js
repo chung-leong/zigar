@@ -1,7 +1,6 @@
 import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { getStructIterator, getStructEntries } from '../iterators.js';
 import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE } from '../symbols.js';
 import { defineValue, defineProperties, defineProperty, ObjectCache } from '../utils.js';
 
@@ -66,8 +65,8 @@ var all = mixin({
       [FLAGS]: defineValue(flags),
       [PROPS]: defineValue(props),
       [TYPED_ARRAY]: defineValue(this.getTypedArray(structure)),
-      [Symbol.iterator]: defineValue(getStructIterator),
-      [ENTRIES]: { get: getStructEntries },
+      [Symbol.iterator]: this.defineStructIterator(),
+      [ENTRIES]: this.defineStructEntries(),
       [PROPS]: defineValue(props),
     };
     const descriptors = {

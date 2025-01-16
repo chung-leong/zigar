@@ -1,7 +1,6 @@
 import { UnionFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
-import { getZigIterator, getUnionIterator, getUnionEntries } from '../iterators.js';
 import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
 import { empty, defineValue, defineProperties, isCompatibleInstanceOf } from '../utils.js';
 
@@ -106,9 +105,9 @@ var union = mixin({
       props.push(name);
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
-    descriptors[Symbol.iterator] = {
-      value: (flags & UnionFlag.IsIterator) ? getZigIterator : getUnionIterator,
-    };
+    descriptors[Symbol.iterator] = (flags & UnionFlag.IsIterator)
+    ? this.defineZigIterator()
+    : this.defineUnionIterator();
     descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {
       value(hint) {
         switch (hint) {
@@ -136,7 +135,7 @@ var union = mixin({
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, (flags & UnionFlag.HasTag) ? getSelectorNumber : null);
-    descriptors[ENTRIES] = { get: getUnionEntries };
+    descriptors[ENTRIES] = this.defineUnionEntries();
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
         return [ getActiveField.call(this) ];

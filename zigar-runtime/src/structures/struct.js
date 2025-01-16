@@ -1,9 +1,6 @@
 import { MemberFlag, StructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import {
-  getStructEntries, getStructIterator, getVectorEntries, getVectorIterator, getZigIterator
-} from '../iterators.js';
 import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
@@ -51,9 +48,7 @@ export default mixin({
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = defineValue(length);
-    descriptors.entries = (flags & StructFlag.IsTuple) && {
-      value: getVectorEntries,
-    };
+    descriptors.entries = (flags & StructFlag.IsTuple) && this.defineVectorEntries();
     // allow conversion of packed struct to number when there's a backing int
     descriptors[Symbol.toPrimitive] = backingInt && {
       value(hint) {
@@ -63,19 +58,17 @@ export default mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = defineValue(
-      (flags & StructFlag.IsIterator)
-      ? getZigIterator
-      : (flags & StructFlag.IsTuple)
-        ? getVectorIterator
-        : getStructIterator
-    );
+    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    ? this.defineZigIterator()
+    : (flags & StructFlag.IsTuple)
+      ? this.defineVectorIterator()
+      : this.defineStructIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     // for creating complex fields on access
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
-    descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
     if (flags & StructFlag.IsAllocator) {
       descriptors.alloc = this.defineAlloc();

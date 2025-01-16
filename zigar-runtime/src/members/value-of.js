@@ -44,17 +44,17 @@ export function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Union:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = {};
           break;
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = [];
           break;
         case StructureType.Pointer:

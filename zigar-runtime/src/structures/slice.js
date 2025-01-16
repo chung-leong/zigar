@@ -1,7 +1,6 @@
 import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getArrayEntries, getArrayIterator } from '../iterators.js';
 import {
   COPY, ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SENTINEL, SHAPE, VISIT, VIVIFICATE
 } from '../symbols.js';
@@ -107,7 +106,7 @@ export default mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {
         const dv = getSubArrayView.call(this, begin, end);
@@ -126,12 +125,11 @@ export default mixin({
         return slice;
       },
     };
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;

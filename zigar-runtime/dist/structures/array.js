@@ -1,8 +1,7 @@
 import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getArrayEntries, getArrayIterator } from '../iterators.js';
-import { INITIALIZE, FINALIZE, ENTRIES, VIVIFICATE, VISIT, SENTINEL, COPY } from '../symbols.js';
+import { ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, SENTINEL, COPY } from '../symbols.js';
 import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 var array = mixin({
@@ -46,7 +45,7 @@ var array = mixin({
     };
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
       if (flags & ArrayFlag.IsString) {
@@ -56,10 +55,9 @@ var array = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;

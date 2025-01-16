@@ -4145,6 +4145,9 @@ var moduleLoading = mixin({
           if (module === 'env') {
             env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
+            if (process.env.mixins === 'track') {
+              this.usingStream = true;
+            }
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;
@@ -4255,7 +4258,7 @@ var objectLinkage = mixin({
       recreateAddress: { argType: 'i', returnType: 'i' },
     },
   } ),
-    ...({
+  ...({
     useObjectLinkage() {
       // empty function used for mixin tracking
     },
@@ -4526,6 +4529,9 @@ var streamRedirection = mixin({
     imports: {
       flushStdout: { argType: '', returnType: '' },
     },
+  } ),
+  ...({
+    usingStream: false,
   } ),
 });
 
@@ -9906,6 +9912,8 @@ async function transpile(path, options) {
   usage.FeaturePromiseCallback = env.usingPromise;
   usage.FeatureGeneratorCallback = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
+  usage.FeatureStreamRedirection = env.usingStream;
+  usage.FeatureModuleLoading = env.hasMethods();
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
   } else {
@@ -9914,6 +9922,7 @@ async function transpile(path, options) {
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
+      console.log(name);
       // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
       const dir = parts.shift() + 's';

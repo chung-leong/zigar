@@ -126,6 +126,9 @@ var moduleLoading = mixin({
           if (module === 'env') {
             env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
+            if (process.env.mixins === 'track') {
+              this.usingStream = true;
+            }
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;

@@ -58,7 +58,7 @@ describe('Structure: slice', function() {
       expect(descriptors[Symbol.iterator]?.value).to.be.a('function');
       expect(descriptors[INITIALIZE]?.value).to.be.a('function');
       expect(descriptors[FINALIZE]?.value).to.be.a('function');
-      expect(descriptors[ENTRIES]?.get).to.be.a('function');
+      expect(descriptors[ENTRIES]?.value).to.be.a('function');
     })
   })
   describe('finalizeSlice', function() {

@@ -34,6 +34,18 @@ function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
 }
 
+function getErrorHandler(options) {
+  return (options?.error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
+}
+
 function getPrimitiveName({ type, bitSize }) {
   switch (type) {
     case MemberType.Bool: return 'boolean';
@@ -275,4 +287,4 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getLength, getPrimitiveName, getProxy, getSelf, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };

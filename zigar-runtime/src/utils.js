@@ -34,6 +34,18 @@ export function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
 }
 
+export function getErrorHandler(options) {
+  return (options?.error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
+}
+
 export function getPrimitiveName({ type, bitSize }) {
   switch (type) {
     case MemberType.Bool: return 'boolean';

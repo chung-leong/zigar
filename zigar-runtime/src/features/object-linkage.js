@@ -66,7 +66,7 @@ export default mixin({
     },
     /* c8 ignore start */
   } : undefined),
-    ...(process.env.MIXIN === 'track' ? {
+  ...(process.env.MIXIN === 'track' ? {
     useObjectLinkage() {
       // empty function used for mixin tracking
     },

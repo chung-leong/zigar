@@ -36,6 +36,11 @@ export { default as FeatureThunkAllocation } from './features/thunk-allocation.j
 export { default as FeatureViewManagement } from './features/view-management.js';
 export { default as FeatureWasiSupport } from './features/wasi-support.js';
 export { default as FeatureWriteProtection } from './features/write-protection.js';
+export { default as IteratorForArray } from './iterators/for-array.js';
+export { default as IteratorForStruct } from './iterators/for-struct.js';
+export { default as IteratorForUnion } from './iterators/for-union.js';
+export { default as IteratorForVector } from './iterators/for-vector.js';
+export { default as IteratorForZig } from './iterators/for-zig.js';
 export { default as MemberAll } from './members/all.js';
 export { default as MemberBase64 } from './members/base64.js';
 export { default as MemberBool } from './members/bool.js';

@@ -1,33 +1,15 @@
 import { expect } from 'chai';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
+import { MEMORY } from '../../src/symbols.js';
+import { defineProperties } from '../../src/utils.js';
 
-import {
-  getArrayEntries,
-  getArrayEntriesIterator,
-  getArrayIterator,
-  getZigIterator,
-} from '../src/iterators.js';
-import { MEMORY } from '../src/symbols.js';
-import { defineProperties } from '../src/utils.js';
+const Env = defineEnvironment();
 
-describe('Iterator functions', function() {
-  describe('getZigIterator', function() {
-    it('should return an iterator for a Zig iterator', function() {
-      const object = {
-        index: 0,
-        next() {
-          if (this.index < 4) {
-            return this.index++;
-          } else {
-            return null;
-          }
-        },
-        [Symbol.iterator]: getZigIterator
-      };
-      expect([ ...object ]).to.eql([ 0, 1, 2, 3 ]);
-    })
-  })
-  describe('getArrayIterator', function() {
+describe('Iterator: for-array', function() {
+  describe('defineArrayIterator', function() {
     it('should return an iterator', function() {
+      const env = new Env();
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
@@ -42,14 +24,14 @@ describe('Iterator functions', function() {
           get() {
             return this[MEMORY].byteLength / 4;
           }
-        }
+        },
+        [Symbol.iterator]: env.defineArrayIterator(),
       });
-      const it = getArrayIterator.call(object);
+      const it = object[Symbol.iterator]();
       expect(it.next()).to.eql({ value: 1234, done: false });
       expect(it.next()).to.eql({ value: -2, done: false });
       expect(it.next()).to.eql({ value: -1, done: false });
       expect(it.next()).to.eql({ value: undefined, done: true });
-      object[Symbol.iterator] = getArrayIterator;
       const list = [];
       for (const value of object) {
         list.push(value);
@@ -57,8 +39,9 @@ describe('Iterator functions', function() {
       expect(list).to.eql([ 1234, -2, -1]);
     })
   })
-  describe('getArrayEntriesIterator', function() {
+  describe('defineArrayEntries', function() {
     it('should return an iterator', function() {
+      const env = new Env();
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
@@ -73,16 +56,14 @@ describe('Iterator functions', function() {
           get() {
             return this[MEMORY].byteLength / 4;
           }
-        }
+        },
+        entries: env.defineArrayEntries(),
       });
-      const it = getArrayEntriesIterator.call(object);
+      const it = object.entries()[Symbol.iterator]();
       expect(it.next()).to.eql({ value: [ 0, 1234 ], done: false });
       expect(it.next()).to.eql({ value: [ 1, -2 ], done: false });
       expect(it.next()).to.eql({ value: [ 2, -1 ], done: false });
       expect(it.next()).to.eql({ value: undefined, done: true });
-      object.entries = function() {
-        return { [Symbol.iterator]: getArrayEntriesIterator.bind(this) };
-      };
       const indexList = [];
       const valueList = [];
       for (const [ index, value ] of object.entries()) {
@@ -92,9 +73,8 @@ describe('Iterator functions', function() {
       expect(indexList).to.eql([ 0, 1, 2 ]);
       expect(valueList).to.eql([ 1234, -2, -1]);
     })
-  })
-  describe('getArrayEntries', function() {
     it('should create an entries object from an array', function() {
+      const env = new Env();
       const dv = new DataView(new ArrayBuffer(12));
       dv.setInt32(0, 1234, true);
       dv.setInt32(4, -2, true);
@@ -109,12 +89,12 @@ describe('Iterator functions', function() {
           get() {
             return this[MEMORY].byteLength / 4;
           }
-        }
+        },
+        entries: env.defineArrayEntries(),
       });
-      const entries = getArrayEntries.call(object);
       const indexList = [];
       const valueList = [];
-      for (const [ index, value ] of entries) {
+      for (const [ index, value ] of object.entries()) {
         indexList.push(index);
         valueList.push(value);
       }
@@ -122,17 +102,22 @@ describe('Iterator functions', function() {
       expect(valueList).to.eql([ 1234, -2, -1]);
     })
     it('should trap and return errors when specified', function() {
-      const object = {
-        get(index) {
-          throw new Error(`Doh: ${index}`);
+      const env = new Env();
+      const object = defineProperties({}, {
+        get: {
+          value(index) {
+            throw new Error(`Doh: ${index}`);
+          }
         },
-        get length() {
-          return 4;
+        length: {
+          get() {
+            return 4;
+          }
         },
-      };
-      const entries = getArrayEntries.call(object, { error: 'return' });
+        entries: env.defineArrayEntries(),
+      });
       const indexList = [];
-      for (const [ index, value ] of entries) {
+      for (const [ index, value ] of object.entries({ error: 'return' })) {
         indexList.push(index);
         expect(value).to.be.an('error');
       }

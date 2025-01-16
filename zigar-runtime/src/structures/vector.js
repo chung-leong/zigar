@@ -1,7 +1,6 @@
 import { StructureFlag, VectorFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getVectorEntries, getVectorIterator } from '../iterators.js';
 import { COPY, ENTRIES, INITIALIZE, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
@@ -67,10 +66,9 @@ export default mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors.entries = defineValue(getVectorEntries);
-    descriptors[Symbol.iterator] = defineValue(getVectorIterator);
+    descriptors.entries = descriptors[ENTRIES] = this.defineVectorEntries();
+    descriptors[Symbol.iterator] = this.defineVectorIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[ENTRIES] = { get: getVectorEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
