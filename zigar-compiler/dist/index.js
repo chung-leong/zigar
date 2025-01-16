@@ -1032,8 +1032,8 @@ function createConfig(srcPath, modPath, options = {}) {
   }
   if (isWASM && !zigArgs.find(s => /^\-Dcpu=/.test(s))) {
     if (multithreaded) {
-      // we need support for atomic operations
-      zigArgs.push(`-Dcpu=bleeding_edge`);
+      // we need support for atomic operations, among other things
+      zigArgs.push(`-Dcpu=generic+atomics+bulk_memory`);
     }
   }
   const zigarSrcPath = fileURLToPath(new URL('../zig/', import.meta.url));
