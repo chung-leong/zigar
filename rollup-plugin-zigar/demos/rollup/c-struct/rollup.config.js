@@ -17,7 +17,7 @@ export default [
       exports: 'named',
       name: 'Def',
       plugins: [
-        false && terser(),
+        terser(),
       ]
     },
   },

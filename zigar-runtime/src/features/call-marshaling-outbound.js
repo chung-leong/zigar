@@ -110,9 +110,20 @@ export default mixin({
     ? (attrs) ? this.getShadowAddress(context, attrs) : 0
     : (attrs) ? this.getViewAddress(attrs[MEMORY]) : 0;
     this.updateShadows(context);
+    /* c8 ignore start */
+    if (process.env.MIXIN === 'track') {
+      this.mixinUsageCapturing = new Map();
+    }
+    /* c8 ignore end */
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
+    /* c8 ignore start */
+    if (process.env.MIXIN === 'track') {
+      this.mixinUsage = this.mixinUsageCapturing;
+      this.mixinUsageCapturing = null;
+    }
+    /* c8 ignore end */
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -168,13 +179,16 @@ export default mixin({
       runThunk: null,
       runVariadicThunk: null,
     },
-  /* c8 ignore next */
+  /* c8 ignore start */
   } : undefined),
   ...(process.env.MIXIN === 'track' ? {
+    mixinUsage: null,
+    mixinUsageCapturing: null,
     usingPromise: false,
     usingGenerator: false,
     usingAbortSignal: false,
     usingDefaultAllocator: false,
+    usingVariables: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
@@ -189,8 +203,8 @@ export default mixin({
         }
       }
     }
-  /* c8 ignore next */
   } : undefined),
+  /* c8 ignore end */
   /* c8 ignore start */
   ...(process.env.DEV ? {
     outboundCallCount: 0,

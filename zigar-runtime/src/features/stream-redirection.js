@@ -32,11 +32,12 @@ export default mixin({
         }, 250);
       }
       return true;
-      /* c8 ignore next 4 */
+    /* c8 ignore start */
     } catch (err) {
       console.error(err);
       return false;
     }
+    /* c8 ignore end */
   },
   writeToConsoleNow(array) {
     const c = this.consoleObject ?? globalThis.console;

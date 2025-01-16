@@ -134,6 +134,7 @@ var structureAcquisition = mixin({
     };
     const args = new FactoryArg(options);
     this.comptime = true;
+    this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
     // acquire default pointers now that we have all constructors

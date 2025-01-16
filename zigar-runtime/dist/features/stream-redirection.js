@@ -32,7 +32,6 @@ var streamRedirection = mixin({
         }, 250);
       }
       return true;
-      /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       return false;

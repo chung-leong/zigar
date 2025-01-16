@@ -253,6 +253,18 @@ function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
 }
 
+function getErrorHandler(options) {
+  return (options?.error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
+}
+
 function getPrimitiveName({ type, bitSize }) {
   switch (type) {
     case MemberType.Bool: return 'boolean';
@@ -349,13 +361,11 @@ function findSortedIndex(array, value, cb) {
 const isMisaligned = function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
-  /* c8 ignore next */
 ;
 
 const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-  /* c8 ignore next */
 ;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
@@ -363,13 +373,11 @@ const usizeInvalid = -1;
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-  /* c8 ignore next */
 ;
 
 const adjustAddress = function(address, addend) {
     return address + addend;
   }
-  /* c8 ignore next */
 ;
 
 function transformIterable(arg) {
@@ -1209,7 +1217,6 @@ async function runCompiler(path, args, options) {
     return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
-    /* c8 ignore next */
   } finally {
     onEnd?.();
   }
@@ -1428,7 +1435,6 @@ async function findSourcePaths(buildPath) {
               try {
                 await stat(srcPath);
                 involved[srcPath] = true;
-                /* c8 ignore next */
               } catch {};
             }
           }
@@ -1697,9 +1703,8 @@ function defineClass(name, mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
       if (typeof(object) === 'function') {
         {
-          props.mixinUsage = new Map();
           const f = function(...args) {
-            this.mixinUsage.set(mixin, true);
+            this.mixinUsageCapturing?.set(mixin, true);
             return object.call(this, ...args);
           };
           defineProperty(prototype, name, defineValue(f));
@@ -2796,7 +2801,6 @@ function deanimalizeErrorName(name) {
         }
       }
     }).trimStart();
-    /* c8 ignore next 2 */
   } catch (err) {
   }
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
@@ -3349,9 +3353,16 @@ var callMarshalingOutbound = mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
+    {
+      this.mixinUsageCapturing = new Map();
+    }
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
+    {
+      this.mixinUsage = this.mixinUsageCapturing;
+      this.mixinUsageCapturing = null;
+    }
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -3404,10 +3415,13 @@ var callMarshalingOutbound = mixin({
     },
   } ),
   ...({
+    mixinUsage: null,
+    mixinUsageCapturing: null,
     usingPromise: false,
     usingGenerator: false,
     usingAbortSignal: false,
     usingDefaultAllocator: false,
+    usingVariables: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
@@ -3422,7 +3436,6 @@ var callMarshalingOutbound = mixin({
         }
       }
     }
-  /* c8 ignore next */
   } ),
 });
 
@@ -3573,7 +3586,13 @@ var dataCopying = mixin({
           }
         };
       }
-    }
+    },
+    copyExternBytes(dst, address, len) {
+      const { memory } = this;
+      const src = new DataView(memory.buffer, address, len);
+      const copy = this.getCopyFunction(len);
+      copy(dst, src);
+    },
   } )
 });
 
@@ -3769,6 +3788,7 @@ var intConversion = mixin({
 });
 
 var memoryMapping = mixin({
+  isMemoryMapping: true,
   memoryList: [],
   contextCount: 0,
 
@@ -4002,12 +4022,6 @@ var memoryMapping = mixin({
     getBufferAddress(buffer) {
       return 0;
     },
-    copyExternBytes(dst, address, len) {
-      const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
-      const copy = this.getCopyFunction(len);
-      copy(dst, src);
-    },
   } ),
 });
 
@@ -4133,7 +4147,7 @@ var moduleLoading = mixin({
         multithreaded,
       } = this.options = options;
       const res = await source;
-      const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
       const executable = this.executable = await f(res);
@@ -4143,14 +4157,14 @@ var moduleLoading = mixin({
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
-            env[name] = functions[name] ?? /* c8 ignore next */ empty;
+            env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
-            if (process.env.mixins === 'track') {
+            {
               this.usingStream = true;
             }
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
-            wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;
+            wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
         }
       }
@@ -4178,7 +4192,7 @@ var moduleLoading = mixin({
           const exportsPlusMemory = { ...exports, memory: this.memory };
           const instanceProxy = new Proxy(instance, {
             get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
+              return (name === 'exports') ? exportsPlusMemory : inst[name];
             }
           });
           this.customWASI.initialize?.(instanceProxy);
@@ -4256,11 +4270,6 @@ var objectLinkage = mixin({
   ...({
     imports: {
       recreateAddress: { argType: 'i', returnType: 'i' },
-    },
-  } ),
-  ...({
-    useObjectLinkage() {
-      // empty function used for mixin tracking
     },
   } ),
   });
@@ -4508,7 +4517,6 @@ var streamRedirection = mixin({
         }, 250);
       }
       return true;
-      /* c8 ignore next 4 */
     } catch (err) {
       console.error(err);
       return false;
@@ -4666,6 +4674,7 @@ var structureAcquisition = mixin({
     };
     const args = new FactoryArg(options);
     this.comptime = true;
+    this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
     // acquire default pointers now that we have all constructors
@@ -4729,7 +4738,7 @@ var structureAcquisition = mixin({
     {
       if (list.length > 0) {
         // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-        this.useObjectLinkage();
+        this.usingVariables = true;
       }
     }
   },
@@ -5317,6 +5326,216 @@ function protectElements(array) {
   df(array, 'get', { value: getReadOnly });
 }
 
+var forArray = mixin({
+  defineArrayEntries() {
+    return defineValue(getArrayEntries);
+  },
+  defineArrayIterator() {
+    return defineValue(getArrayIterator);
+  }
+});
+
+function getArrayIterator() {
+  const self = this[ARRAY] ?? this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = self.get(current);
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getArrayEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
+  const self = this[ARRAY] ?? this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = [ current, handleError(() => self.get(current)) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getArrayEntries(options) {
+  return {
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
+    length: this.length,
+  };
+}
+
+var forStruct = mixin({
+  defineStructEntries() {
+    return defineValue(getStructEntries);
+  },
+  defineStructIterator() {
+    return defineValue(getStructIterator);
+  }
+});
+
+function getStructEntries(options) {
+  return {
+    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+function getStructIterator(options) {
+  const entries = getStructEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+function getStructEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
+  const self = this;
+  const props = this[PROPS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < props.length) {
+        const current = props[index++];
+        value = [ current, handleError(() => self[current]) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+var forUnion = mixin({
+  defineUnionEntries() {
+    return defineValue(getUnionEntries);
+  },
+  defineUnionIterator() {
+    return defineValue(getUnionIterator);
+  }
+});
+
+function getUnionEntries(options) {
+  return {
+    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+function getUnionIterator(options) {
+  const entries = getUnionEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+function getUnionEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
+  const self = this;
+  const props = this[PROPS];
+  const getters = this[GETTERS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < props.length) {
+        const current = props[index++];
+        // get value of prop with no check
+        value = [ current, handleError(() => getters[current].call(self)) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+var forVector = mixin({
+  defineVectorEntries() {
+    return defineValue(getVectorEntries);
+  },
+  defineVectorIterator() {
+    return defineValue(getVectorIterator);
+  },
+});
+
+function getVectorIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = self[current];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getVectorEntriesIterator() {
+  const self = this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = [ current, self[current] ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getVectorEntries() {
+  return {
+    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
+    length: this.length,
+  };
+}
+
+var forZig = mixin({
+  defineZigIterator() {
+    return defineValue(getZigIterator);
+  },
+});
+
+function getZigIterator() {
+  const self = this;
+  return {
+    next() {
+      const value = self.next();
+      const done = value === null;
+      return { value, done };
+    },
+  };
+}
+
 var all$2 = mixin({
   defineMember(member, applyTransform = true) {
     if (!member) {
@@ -5699,17 +5918,17 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Union:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = {};
           break;
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = [];
           break;
         case StructureType.Pointer:
@@ -5842,186 +6061,6 @@ var _void = mixin({
   }
 });
 
-function getZigIterator() {
-  const self = this;
-  return {
-    next() {
-      const value = self.next();
-      const done = value === null;
-      return { value, done };
-    },
-  };
-}
-
-function getStructEntries(options) {
-  return {
-    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
-function getStructIterator(options) {
-  const entries = getStructEntries.call(this, options);
-  return entries[Symbol.iterator]();
-}
-
-function getStructEntriesIterator(options) {
-  const handleError = getErrorHandler(options);
-  const self = this;
-  const props = this[PROPS];
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        value = [ current, handleError(() => self[current]) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self.get(current);
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayEntriesIterator(options) {
-  const handleError = getErrorHandler(options);
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, handleError(() => self.get(current)) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayEntries(options) {
-  return {
-    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
-    length: this.length,
-  };
-}
-
-function getVectorIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self[current];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntriesIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, self[current] ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntries() {
-  return {
-    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
-    length: this.length,
-  };
-}
-
-function getUnionEntries(options) {
-  return {
-    [Symbol.iterator]: getUnionEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
-function getUnionIterator(options) {
-  const entries = getUnionEntries.call(this, options);
-  return entries[Symbol.iterator]();
-}
-
-function getUnionEntriesIterator(options) {
-  const handleError = getErrorHandler(options);
-  const self = this;
-  const props = this[PROPS];
-  const getters = this[GETTERS];
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        // get value of prop with no check
-        value = [ current, handleError(() => getters[current].call(self)) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getErrorHandler(options) {
-  return (options?.error === 'return')
-  ? (cb) => {
-      try {
-        return cb();
-      } catch (err) {
-        return err;
-      }
-    }
-  : (cb) => cb();
-}
-
 var all$1 = mixin({
   defineStructure(structure) {
     const {
@@ -6083,8 +6122,8 @@ var all$1 = mixin({
       [FLAGS]: defineValue(flags),
       [PROPS]: defineValue(props),
       [TYPED_ARRAY]: defineValue(this.getTypedArray(structure)),
-      [Symbol.iterator]: defineValue(getStructIterator),
-      [ENTRIES]: { get: getStructEntries },
+      [Symbol.iterator]: this.defineStructIterator(),
+      [ENTRIES]: this.defineStructEntries(),
       [PROPS]: defineValue(props),
     };
     const descriptors = {
@@ -6518,7 +6557,7 @@ var array = mixin({
     };
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
       if (flags & ArrayFlag.IsString) {
@@ -6528,10 +6567,9 @@ var array = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
@@ -7018,9 +7056,7 @@ var opaque = mixin({
     const valueAccessor = () => { throw new AccessingOpaque(structure) };
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: valueAccessor, set: valueAccessor };
-    descriptors[Symbol.iterator] = (flags & OpaqueFlag.IsIterator) && {
-      value: getZigIterator
-    };
+    descriptors[Symbol.iterator] = (flags & OpaqueFlag.IsIterator) && this.defineZigIterator();
     descriptors[Symbol.toPrimitive] = {
       value(hint) {
         const { name } = structure;
@@ -7380,7 +7416,7 @@ var pointer = mixin({
         let self;
         if (targetType === StructureType.Function) {
           // use an empty function as object so the proxy's apply() method is triggered
-          self = /* c8 ignore next */ function() {};
+          self = function() {};
           self[MEMORY] = this[MEMORY];
           self[SLOTS] = this[SLOTS];
           Object.setPrototypeOf(self, constructor.prototype);
@@ -7684,7 +7720,7 @@ var slice = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {
         const dv = getSubArrayView.call(this, begin, end);
@@ -7703,12 +7739,11 @@ var slice = mixin({
         return slice;
       },
     };
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
@@ -7819,9 +7854,7 @@ var struct = mixin({
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = defineValue(length);
-    descriptors.entries = (flags & StructFlag.IsTuple) && {
-      value: getVectorEntries,
-    };
+    descriptors.entries = (flags & StructFlag.IsTuple) && this.defineVectorEntries();
     // allow conversion of packed struct to number when there's a backing int
     descriptors[Symbol.toPrimitive] = backingInt && {
       value(hint) {
@@ -7831,19 +7864,17 @@ var struct = mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = defineValue(
-      (flags & StructFlag.IsIterator)
-      ? getZigIterator
-      : (flags & StructFlag.IsTuple)
-        ? getVectorIterator
-        : getStructIterator
-    );
+    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    ? this.defineZigIterator()
+    : (flags & StructFlag.IsTuple)
+      ? this.defineVectorIterator()
+      : this.defineStructIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     // for creating complex fields on access
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
-    descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
     if (flags & StructFlag.IsAllocator) {
       descriptors.alloc = this.defineAlloc();
@@ -7955,9 +7986,9 @@ var union = mixin({
       props.push(name);
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
-    descriptors[Symbol.iterator] = {
-      value: (flags & UnionFlag.IsIterator) ? getZigIterator : getUnionIterator,
-    };
+    descriptors[Symbol.iterator] = (flags & UnionFlag.IsIterator)
+    ? this.defineZigIterator()
+    : this.defineUnionIterator();
     descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {
       value(hint) {
         switch (hint) {
@@ -7985,7 +8016,7 @@ var union = mixin({
     descriptors[TAG] = (flags & UnionFlag.HasTag) && { get: getSelector, set : setSelector };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] =  (flags & StructureFlag.HasPointer) && this.defineVisitorUnion(valueMembers, (flags & UnionFlag.HasTag) ? getSelectorNumber : null);
-    descriptors[ENTRIES] = { get: getUnionEntries };
+    descriptors[ENTRIES] = this.defineUnionEntries();
     descriptors[PROPS] = (flags & UnionFlag.HasTag) ? {
       get() {
         return [ getActiveField.call(this) ];
@@ -8176,10 +8207,9 @@ var vector = mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors.entries = defineValue(getVectorEntries);
-    descriptors[Symbol.iterator] = defineValue(getVectorIterator);
+    descriptors.entries = descriptors[ENTRIES] = this.defineVectorEntries();
+    descriptors[Symbol.iterator] = this.defineVectorIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[ENTRIES] = { get: getVectorEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
@@ -8420,6 +8450,11 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,
+  IteratorForArray: forArray,
+  IteratorForStruct: forStruct,
+  IteratorForUnion: forUnion,
+  IteratorForVector: forVector,
+  IteratorForZig: forZig,
   MemberAll: all$2,
   MemberBase64: base64,
   MemberBool: bool,
@@ -9912,7 +9947,8 @@ async function transpile(path, options) {
   usage.FeaturePromiseCallback = env.usingPromise;
   usage.FeatureGeneratorCallback = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
-  usage.FeatureStreamRedirection = env.usingStream;
+  usage.FeatureObjectLinkage = env.usingVariables;
+  usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
@@ -9922,7 +9958,6 @@ async function transpile(path, options) {
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
-      console.log(name);
       // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
       const dir = parts.shift() + 's';

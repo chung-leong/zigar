@@ -466,9 +466,10 @@ export function deanimalizeErrorName(name) {
         }
       }
     }).trimStart();
-    /* c8 ignore next 2 */
+  /* c8 ignore start */
   } catch (err) {
   }
+  /* c8 ignore end */
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 

@@ -141,6 +141,7 @@ export default mixin({
     };
     const args = new FactoryArg(options);
     this.comptime = true;
+    this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, args);
     this.comptime = false;
     // acquire default pointers now that we have all constructors
@@ -201,12 +202,14 @@ export default mixin({
         }
       }
     }
+    /* c8 ignore start */
     if (process.env.MIXIN === 'track') {
       if (list.length > 0) {
         // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-        this.useObjectLinkage();
+        this.usingVariables = true;
       }
     }
+    /* c8 ignore end */
   },
   useStructures() {
     const module = this.getRootModule();

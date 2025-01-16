@@ -150,6 +150,16 @@ export default mixin({
           }
         };
       }
-    }
+    },
+    copyExternBytes(dst, address, len) {
+      const { memory } = this;
+      const src = new DataView(memory.buffer, address, len);
+      const copy = this.getCopyFunction(len);
+      copy(dst, src);
+    },
+  } : process.env.TARGET === 'node' ? {
+    imports: {
+      copyExternBytes: null,
+    },
   } : undefined)
 });

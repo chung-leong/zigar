@@ -150,7 +150,13 @@ var dataCopying = mixin({
           }
         };
       }
-    }
+    },
+    copyExternBytes(dst, address, len) {
+      const { memory } = this;
+      const src = new DataView(memory.buffer, address, len);
+      const copy = this.getCopyFunction(len);
+      copy(dst, src);
+    },
   } )
 });
 

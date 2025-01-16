@@ -1,7 +1,6 @@
 import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
-import { getArrayIterator } from '../iterators.js';
 import { ENTRIES, COPY, MEMORY, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, SENTINEL, LENGTH } from '../symbols.js';
 import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
@@ -114,7 +113,7 @@ var slice = mixin({
         return slice;
       },
     };
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);

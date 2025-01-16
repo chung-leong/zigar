@@ -142,13 +142,11 @@ function findSortedIndex(array, value, cb) {
 const isMisaligned = function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
-  /* c8 ignore next */
 ;
 
 const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-  /* c8 ignore next */
 ;
 
 const usizeMin = 0;
@@ -158,19 +156,16 @@ const usizeInvalid = -1;
 const usize = function(arg) {
     return Number(arg);
   }
-  /* c8 ignore next */
 ;
 
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-  /* c8 ignore next */
 ;
 
 const adjustAddress = function(address, addend) {
     return address + addend;
   }
-  /* c8 ignore next */
 ;
 
 function transformIterable(arg) {

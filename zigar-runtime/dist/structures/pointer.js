@@ -291,7 +291,7 @@ var pointer = mixin({
         let self;
         if (targetType === StructureType.Function) {
           // use an empty function as object so the proxy's apply() method is triggered
-          self = /* c8 ignore next */ function() {};
+          self = function() {};
           self[MEMORY] = this[MEMORY];
           self[SLOTS] = this[SLOTS];
           Object.setPrototypeOf(self, constructor.prototype);

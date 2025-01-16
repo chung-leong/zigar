@@ -61,7 +61,8 @@ export async function transpile(path, options) {
   usage.FeaturePromiseCallback = env.usingPromise;
   usage.FeatureGeneratorCallback = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
-  usage.FeatureStreamRedirection = env.usingStream;
+  usage.FeatureObjectLinkage = env.usingVariables;
+  usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
@@ -71,7 +72,6 @@ export async function transpile(path, options) {
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {
-      console.log(name);
       // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
       const dir = parts.shift() + 's';

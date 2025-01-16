@@ -4,7 +4,7 @@ import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { MEMORY, TYPE, ZIG } from '../../src/symbols.js';
-import { defineProperties } from '../../src/utils.js';
+import { defineProperties, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -44,7 +44,7 @@ describe('Feature: allocator-methods', function() {
         vtable: {
           alloc(ptr, len, ptrAlign) {
             const dv = new DataView(new ArrayBuffer(len));
-            dv[ZIG] = { address: 0x1000, len, align: 1 << ptrAlign };
+            dv[ZIG] = { address: usize(0x1000), len, align: 1 << ptrAlign };
             return {
               ['*']: {
                 [MEMORY]: dv,
@@ -76,7 +76,7 @@ describe('Feature: allocator-methods', function() {
         vtable: {
           alloc(ptr, len, ptrAlign) {
             const dv = new DataView(new ArrayBuffer(len));
-            dv[ZIG] = { address: 0x1000, len, align: 1 << ptrAlign };
+            dv[ZIG] = { address: usize(0x1000), len, align: 1 << ptrAlign };
             return {
               ['*']: {
                 [MEMORY]: dv,

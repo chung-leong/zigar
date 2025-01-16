@@ -114,7 +114,7 @@ var moduleLoading = mixin({
         multithreaded,
       } = this.options = options;
       const res = await source;
-      const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
       const executable = this.executable = await f(res);
@@ -124,14 +124,11 @@ var moduleLoading = mixin({
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
-            env[name] = functions[name] ?? /* c8 ignore next */ empty;
+            env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
-            if (process.env.mixins === 'track') {
-              this.usingStream = true;
-            }
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
-            wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;
+            wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
         }
       }
@@ -159,7 +156,7 @@ var moduleLoading = mixin({
           const exportsPlusMemory = { ...exports, memory: this.memory };
           const instanceProxy = new Proxy(instance, {
             get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
+              return (name === 'exports') ? exportsPlusMemory : inst[name];
             }
           });
           this.customWASI.initialize?.(instanceProxy);

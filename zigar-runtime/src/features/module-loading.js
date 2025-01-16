@@ -127,7 +127,7 @@ export default mixin({
             env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
             /* c8 ignore start */
-            if (process.env.mixins === 'track') {
+            if (process.env.MIXIN === 'track') {
               this.usingStream = true;
             }
             /* c8 ignore end */

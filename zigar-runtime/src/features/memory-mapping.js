@@ -7,6 +7,7 @@ import {
 } from '../utils.js';
 
 export default mixin({
+  isMemoryMapping: true,
   memoryList: [],
   contextCount: 0,
 
@@ -254,18 +255,11 @@ export default mixin({
       }
       return 0;
     },
-    copyExternBytes(dst, address, len) {
-      const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
-      const copy = this.getCopyFunction(len);
-      copy(dst, src);
-    },
   } : process.env.TARGET === 'node' ? {
     imports: {
       allocateExternMemory: null,
       freeExternMemory: null,
       getBufferAddress: null,
-      copyExternBytes: null,
       obtainExternBuffer: null,
     },
     exports: {
