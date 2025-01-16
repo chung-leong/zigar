@@ -12,6 +12,7 @@ const replacements2 = {
   '...(undefined),': '',
   '/* c8 ignore start */': '',
   '/* c8 ignore end */': '',
+  '/* c8 ignore next */': '',
 };
 
 export default [
