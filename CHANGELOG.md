@@ -1,3 +1,14 @@
+## 0.13.3
+
+* Added support for function pointer
+* Added support for thread in WebAssembly
+* Added support for allocator
+* Added support for async function and generator
+* Added clampedArray property
+* Implemented WorkQueue
+* Improved dead-code removal
+* Enabled variables in Electron
+
 ## 0.13.2
 
 * Removed 64K of zeros from generated WASM files
