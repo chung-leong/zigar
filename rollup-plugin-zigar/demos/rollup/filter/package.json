@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "rollup -c rollup.config.js",
-    "preview": "http-server ./dist -H 'Cross-Origin-Opener-Policy: same-origin' -H 'Cross-Origin-Embedder-Policy: credentialless'"
+    "preview": "http-server ./dist -H 'Cross-Origin-Opener-Policy: same-origin' -H 'Cross-Origin-Embedder-Policy: require-corp'"
   },
   "keywords": [],
   "author": "",
