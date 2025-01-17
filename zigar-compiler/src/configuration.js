@@ -75,6 +75,10 @@ export const optionsForTranspile = {
     type: 'boolean',
     title: 'Remove unnecessary code from WASM file',
   },
+  stackSize: {
+    type: 'number',
+    title: 'Size of the call stack in bytes',
+  },
   maxMemory: {
     type: 'number',
     title: 'Maximum amount of shared memory in bytes',

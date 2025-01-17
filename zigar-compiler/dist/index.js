@@ -915,7 +915,7 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
-    'multithreaded', 'maxMemory',
+    'multithreaded', 'stackSize', 'maxMemory',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -971,7 +971,8 @@ function createConfig(srcPath, modPath, options = {}) {
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
     multithreaded = (isWASM) ? false : true,
-    maxMemory = (isWASM && multithreaded) ? 10240 * 65536 : undefined,
+    stackSize = 65536,
+    maxMemory = (isWASM && multithreaded) ? 4194304 : undefined,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -1058,6 +1059,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     isWASM,
     multithreaded,
+    stackSize,
     maxMemory,
   };
 }
@@ -1222,6 +1224,10 @@ const optionsForTranspile = {
   stripWASM: {
     type: 'boolean',
     title: 'Remove unnecessary code from WASM file',
+  },
+  stackSize: {
+    type: 'number',
+    title: 'Size of the call stack in bytes',
   },
   maxMemory: {
     type: 'number',
