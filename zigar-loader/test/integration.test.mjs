@@ -29,6 +29,7 @@ async function importModule(url, options) {
     multithreaded = false,
     omitFunctions = false,
     omitVariables = false,
+    maxMemory,
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -76,6 +77,7 @@ async function importModule(url, options) {
             multithreaded,
             omitFunctions,
             omitVariables,
+            maxMemory,
           },
         },
       ]
