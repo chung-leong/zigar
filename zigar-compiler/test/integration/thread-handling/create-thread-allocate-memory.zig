@@ -18,6 +18,7 @@ pub fn spawn(
     };
     _ = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
+        .stack_size = 65536,
     }, ns.run, .{ allocator, promise });
 }
 

@@ -31,6 +31,7 @@ async function importModule(url, options) {
     multithreaded = false,
     omitFunctions = false,
     omitVariables = false,
+    maxMemory = undefined,
   } = options;
   if (currentModule) {
     await currentModule.__zigar?.abandon();
@@ -59,6 +60,7 @@ async function importModule(url, options) {
         embedWASM,
         omitFunctions,
         omitVariables,
+        maxMemory,
       }),
       NodeResolve({
         modulePaths: [ resolve(`../node_modules`) ],

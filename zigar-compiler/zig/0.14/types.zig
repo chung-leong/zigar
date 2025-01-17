@@ -2189,7 +2189,7 @@ pub fn WorkQueue(comptime ns: type) type {
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
-                stack_size: usize = 16 * 1024 * 1024,
+                stack_size: usize = if (builtin.target.isWasm()) 262144 else 1048576,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
@@ -2278,7 +2278,7 @@ pub fn WorkQueue(comptime ns: type) type {
             const min_stack_size: usize = if (std.Thread.use_pthreads) switch (@bitSizeOf(usize)) {
                 32 => 4096,
                 else => 1048576,
-            } else if (!builtin.target.isWasm()) std.mem.page_size else 0;
+            } else std.mem.page_size;
             const spawn_config: std.Thread.SpawnConfig = .{
                 .stack_size = @max(min_stack_size, options.stack_size),
                 .allocator = allocator,

@@ -14,6 +14,7 @@ pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
     };
     _ = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
+        .stack_size = 65536,
     }, ns.run, .{cb});
 }
 

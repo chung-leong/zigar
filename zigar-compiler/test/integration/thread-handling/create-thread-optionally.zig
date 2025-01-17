@@ -15,6 +15,7 @@ pub fn spawn(promise: zigar.function.Promise(i32), create: bool) !?i32 {
     if (create) {
         _ = try std.Thread.spawn(.{
             .allocator = gpa.allocator(),
+            .stack_size = 65536,
         }, ns.run, .{promise});
         return null;
     } else {

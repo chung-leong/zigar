@@ -45,7 +45,7 @@ export function addTests(importModule, options) {
         start,
         spawn,
         shutdown,
-      } = await importTest('create-thread-pool', { multithreaded: true });
+      } = await importTest('create-thread-pool', { multithreaded: true, maxMemory: 1024 * 1024 * 512 });
       start(4);
       try {
         let count = 0;
@@ -197,7 +197,7 @@ export function addTests(importModule, options) {
         start,
         spawn,
         shutdown,
-      } = await importTest('create-thread-pool-return-promise', { multithreaded: true });
+      } = await importTest('create-thread-pool-return-promise', { multithreaded: true, maxMemory: 1024 * 1024 * 512 });
       start(4);
       try {
         const result = await spawn();
