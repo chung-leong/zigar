@@ -45,7 +45,7 @@ var workerSupport = mixin({
     {
       // web worker
       const url = getWorkerURL();
-      const worker = new Worker(url, { type: 'module', name: 'zig' });
+      const worker = new Worker(url, { name: 'zig' });
       const listener = evt => handler(worker, evt.data);
       worker.addEventListener(evtName, listener);
       worker.detach = () => worker.removeEventListener(evtName, listener);

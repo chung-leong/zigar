@@ -45,7 +45,7 @@ var workerSupport = mixin({
     if (typeof(Worker) === 'function' || "node" !== 'node') {
       // web worker
       const url = getWorkerURL();
-      const worker = new Worker(url, { type: 'module', name: 'zig' });
+      const worker = new Worker(url, { name: 'zig' });
       const listener = evt => handler(worker, evt.data);
       worker.addEventListener(evtName, listener);
       worker.detach = () => worker.removeEventListener(evtName, listener);
@@ -105,7 +105,7 @@ function workerMain() {
     postMessage = msg => self.postMessage(msg);
   } else {
     // Node.js worker-thread
-    import('worker_threads').then(({ parentPort, workerData }) => {
+    import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {
       postMessage = msg => parentPort.postMessage(msg);
       run(workerData);
     });
