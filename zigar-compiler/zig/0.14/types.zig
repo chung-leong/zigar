@@ -301,7 +301,7 @@ pub const Memory = struct {
         const PtrT = @TypeOf(ptr);
         const pt = @typeInfo(PtrT).pointer;
         const address = switch (pt.size) {
-            .Slice => @intFromPtr(ptr.ptr),
+            .slice => @intFromPtr(ptr.ptr),
             else => @intFromPtr(ptr),
         };
         const invalid_address = create: {
@@ -322,11 +322,11 @@ pub const Memory = struct {
             else => @sizeOf(pt.child),
         };
         const len: usize = switch (pt.size) {
-            .One => child_size,
-            .Slice => child_size * ptr.len,
-            .Many, .C => get: {
+            .one => child_size,
+            .slice => child_size * ptr.len,
+            .many, .c => get: {
                 if (address != 0) {
-                    if (pt.sentinel) |opaque_ptr| {
+                    if (pt.sentinel_ptr) |opaque_ptr| {
                         const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
                         var len: usize = 0;
                         while (ptr[len] != sentinel_ptr.*) {
@@ -379,8 +379,8 @@ pub const Memory = struct {
     pub fn to(self: Memory, comptime PtrT: type) PtrT {
         const pt = @typeInfo(PtrT).pointer;
         return switch (pt.size) {
-            .One => @ptrCast(@alignCast(self.bytes)),
-            .Slice => slice: {
+            .one => @ptrCast(@alignCast(self.bytes)),
+            .slice => slice: {
                 if (self.bytes == null) {
                     break :slice &.{};
                 }
@@ -388,8 +388,8 @@ pub const Memory = struct {
                 const many_ptr: [*]pt.child = @ptrCast(@alignCast(self.bytes));
                 break :slice many_ptr[0..count];
             },
-            .Many => @ptrCast(@alignCast(self.bytes)),
-            .C => @ptrCast(@alignCast(self.bytes)),
+            .many => @ptrCast(@alignCast(self.bytes)),
+            .c => @ptrCast(@alignCast(self.bytes)),
         };
     }
 
@@ -401,17 +401,17 @@ pub const Memory = struct {
         };
         const p1 = memory.to(*u8);
         try expect(p1.* == 'H');
-        try expect(@typeInfo(@TypeOf(p1)).pointer.size == .One);
+        try expect(@typeInfo(@TypeOf(p1)).pointer.size == .one);
         const p2 = memory.to([]u8);
         try expect(p2[0] == 'H');
         try expect(p2.len == 5);
-        try expect(@typeInfo(@TypeOf(p2)).pointer.size == .Slice);
+        try expect(@typeInfo(@TypeOf(p2)).pointer.size == .slice);
         const p3 = memory.to([*]u8);
         try expect(p3[0] == 'H');
-        try expect(@typeInfo(@TypeOf(p3)).pointer.size == .Many);
+        try expect(@typeInfo(@TypeOf(p3)).pointer.size == .many);
         const p4 = memory.to([*c]u8);
         try expect(p4[0] == 'H');
-        try expect(@typeInfo(@TypeOf(p4)).pointer.size == .C);
+        try expect(@typeInfo(@TypeOf(p4)).pointer.size == .c);
     }
 };
 
@@ -550,12 +550,12 @@ pub const TypeData = struct {
     pub fn getTargetType(comptime self: @This()) type {
         return switch (@typeInfo(self.type)) {
             .pointer => |pt| switch (pt.size) {
-                .One => if (pt.child == anyopaque) Slice(anyopaque, null) else pt.child,
+                .one => if (pt.child == anyopaque) Slice(anyopaque, null) else pt.child,
                 else => define: {
-                    if (pt.sentinel) |ptr| {
+                    if (pt.sentinel_ptr) |ptr| {
                         const sentinel_ptr: *const pt.child = @alignCast(@ptrCast(ptr));
                         break :define Slice(pt.child, .{ .value = sentinel_ptr.* });
-                    } else if (pt.size == .C and (pt.child == u8 or pt.child == u16)) {
+                    } else if (pt.size == .c and (pt.child == u8 or pt.child == u16)) {
                         break :define Slice(pt.child, .{ .value = 0, .is_required = false });
                     } else {
                         break :define Slice(pt.child, null);
@@ -629,7 +629,7 @@ pub const TypeData = struct {
         return if (self.attrs.is_slice)
             self.type.sentinel
         else switch (@typeInfo(self.type)) {
-            inline .array => |ar| if (ar.sentinel) |opaque_ptr| sentinel: {
+            inline .array => |ar| if (ar.sentinel_ptr) |opaque_ptr| sentinel: {
                 const ptr: *const self.getElementType() = @ptrCast(opaque_ptr);
                 break :sentinel .{ .value = ptr.*, .is_required = true };
             } else null,
@@ -1063,7 +1063,7 @@ pub const TypeDataCollector = struct {
                     self.add(field.type);
                     if (Tag == .@"struct" and field.is_comptime) {
                         // deal with comptime fields
-                        const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value.?));
+                        const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value_ptr.?));
                         self.addTypeOf(def_value_ptr.*);
                     }
                 }
@@ -1347,17 +1347,17 @@ pub const TypeDataCollector = struct {
             },
             .pointer => |pt| {
                 md5.update(switch (pt.size) {
-                    .One => "*",
-                    .Many => "[*",
-                    .Slice => "[",
-                    .C => "[*c",
+                    .one => "*",
+                    .many => "[*",
+                    .slice => "[",
+                    .c => "[*c",
                 });
-                if (pt.sentinel) |ptr| {
+                if (pt.sentinel_ptr) |ptr| {
                     const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
                     md5.update(std.fmt.comptimePrint(":{d}", .{value}));
                 }
                 md5.update(switch (pt.size) {
-                    .One => "",
+                    .one => "",
                     else => "]",
                 });
                 if (pt.is_const) {
@@ -1545,7 +1545,7 @@ pub const TypeDataCollector = struct {
             pub const PtrB = *const u32;
             pub const FnA = fn () i32;
             pub const FnB = fn () u32;
-            pub const FnC = fn () callconv(.C) u32;
+            pub const FnC = fn () callconv(.c) u32;
             pub const FnD = fn (u32) u32;
         };
         comptime var tdc = init(0);
@@ -1647,7 +1647,7 @@ pub fn ArgumentStruct(comptime T: type) type {
         .type = RT,
         .is_comptime = false,
         .alignment = @alignOf(RT),
-        .default_value = null,
+        .default_value_ptr = null,
     };
     var arg_index = 0;
     for (f.params) |param| {
@@ -1658,7 +1658,7 @@ pub fn ArgumentStruct(comptime T: type) type {
                 .type = param.type.?,
                 .is_comptime = false,
                 .alignment = @alignOf(param.type.?),
-                .default_value = null,
+                .default_value_ptr = null,
             };
             arg_index += 1;
         }
@@ -1723,7 +1723,7 @@ pub fn removeSentinel(comptime ptr: anytype) retval_type: {
     const PT = @TypeOf(ptr);
     var pt = @typeInfo(PT).pointer;
     var ar = @typeInfo(pt.child).array;
-    ar.sentinel = null;
+    ar.sentinel_ptr = null;
     pt.child = @Type(.{ .array = ar });
     break :retval_type @Type(.{ .pointer = pt });
 } {
@@ -2199,7 +2199,7 @@ pub fn WorkQueue(comptime ns: type) type {
             for (fields, 0..) |field, i| {
                 new_fields[i] = field;
                 if (@sizeOf(field.type) == 0) {
-                    new_fields[i].default_value = @ptrCast(&@as(field.type, .{}));
+                    new_fields[i].default_value_ptr = @ptrCast(&@as(field.type, .{}));
                 }
             }
             break :init @Type(.{
@@ -2485,7 +2485,7 @@ fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool
             if (f.params.len == 2 and f.return_type == RT) {
                 if (f.params[0].type != null and f.params[1].type == AT) {
                     switch (@typeInfo(f.params[0].type.?)) {
-                        .pointer => |pt| if (pt.size == .One) {
+                        .pointer => |pt| if (pt.size == .one) {
                             return true;
                         },
                         else => {},

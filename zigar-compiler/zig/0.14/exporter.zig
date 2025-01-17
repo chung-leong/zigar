@@ -212,10 +212,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .pointer => |pt| .{
                     .pointer = .{
-                        .has_length = pt.size == .Slice,
+                        .has_length = pt.size == .slice,
                         .is_const = pt.is_const,
-                        .is_single = pt.size == .One or pt.size == .C,
-                        .is_multiple = pt.size != .One,
+                        .is_single = pt.size == .one or pt.size == .c,
+                        .is_multiple = pt.size != .one,
                         .is_nullable = pt.is_allowzero or pt.child == anyopaque,
                     },
                 },
@@ -504,7 +504,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .type = getMemberType(field_td, field.is_comptime),
                     .flags = .{
                         .is_read_only = !is_actual,
-                        .is_required = is_actual and field.default_value == null,
+                        .is_required = is_actual and field.default_value_ptr == null,
                     },
                     .bit_offset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
                     .bit_size = if (is_actual) field_td.getBitSize() else null,
@@ -533,7 +533,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         var values: td.type = undefined;
                         for (st.fields) |field| {
                             if (!field.is_comptime) {
-                                if (field.default_value) |opaque_ptr| {
+                                if (field.default_value_ptr) |opaque_ptr| {
                                     const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                                     @field(values, field.name) = default_value_ptr.*;
                                 }
@@ -545,7 +545,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     template_maybe = try host.createTemplate(dv);
                 }
                 inline for (st.fields, 0..) |field, index| {
-                    if (field.default_value) |opaque_ptr| {
+                    if (field.default_value_ptr) |opaque_ptr| {
                         const field_td = tdb.get(field.type);
                         const comptime_only = field.is_comptime or field_td.isComptimeOnly();
                         if (comptime_only and comptime field_td.isSupported()) {
@@ -934,7 +934,7 @@ fn ComptimeFree(comptime T: type) type {
                 new_fields[index] = .{
                     .name = field.name,
                     .type = FT,
-                    .default_value = null,
+                    .default_value_ptr = null,
                     .is_comptime = false,
                     .alignment = if (st.layout != .@"packed") @alignOf(FT) else 0,
                 };
