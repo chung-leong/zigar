@@ -97,16 +97,18 @@ function getWorkerURL() {
 }
 
 function workerMain() {
-  let postMessage;
+  let postMessage, exit;
 
   if (typeof(self) === 'object' || "node" !== 'node') {
     // web worker
     self.onmessage = evt => run(evt.data);
     postMessage = msg => self.postMessage(msg);
+    exit = () => self.close();
   } else {
     // Node.js worker-thread
     import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {
       postMessage = msg => parentPort.postMessage(msg);
+      exit = () => process.exit();
       run(workerData);
     });
   }
@@ -136,6 +138,7 @@ function workerMain() {
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);
     postMessage({ type: 'exit' });
+    exit();
   }
 
   function createRouter(module, name) {

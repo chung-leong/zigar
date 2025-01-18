@@ -86,12 +86,13 @@ function getWorkerURL() {
 }
 
 function workerMain() {
-  let postMessage;
+  let postMessage, exit;
 
   {
     // web worker
     self.onmessage = evt => run(evt.data);
     postMessage = msg => self.postMessage(msg);
+    exit = () => self.close();
   }
 
   function run({ executable, memory, options, tid, arg }) {
@@ -119,6 +120,7 @@ function workerMain() {
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);
     postMessage({ type: 'exit' });
+    exit();
   }
 
   function createRouter(module, name) {

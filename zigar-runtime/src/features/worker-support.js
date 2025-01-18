@@ -112,16 +112,18 @@ function getWorkerURL() {
 
 /* c8 ignore start */
 function workerMain() {
-  let postMessage;
+  let postMessage, exit;
 
   if (typeof(self) === 'object' || process.env.COMPAT !== 'node') {
     // web worker
     self.onmessage = evt => run(evt.data);
     postMessage = msg => self.postMessage(msg);
+    exit = () => self.close();
   } else if (process.env.COMPAT === 'node') {
     // Node.js worker-thread
     import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {
       postMessage = msg => parentPort.postMessage(msg);
+      exit = () => process.exit();
       run(workerData);
     });
   }
@@ -151,6 +153,7 @@ function workerMain() {
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);
     postMessage({ type: 'exit' });
+    exit();
   }
 
   function createRouter(module, name) {
