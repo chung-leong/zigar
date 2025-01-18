@@ -14,6 +14,6 @@
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^0.4.4",
     "rollup": "^4.29.1",
-    "rollup-plugin-zigar": "^0.13.3-alpha.5"
+    "rollup-plugin-zigar": "^0.14.0-beta.0"
   }
 }

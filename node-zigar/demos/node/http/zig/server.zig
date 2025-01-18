@@ -110,11 +110,12 @@ const Server = struct {
         const address = try std.net.Address.resolveIp(options.ip, options.port);
         const threads = try allocator.alloc(ServerThread, options.thread_count);
         errdefer allocator.free(threads);
-        const listen_options = .{ .reuse_address = true };
         const storage = try allocator.create(ServerStorage);
         storage.* = ServerStorage.init(allocator);
         for (threads) |*thread| {
-            thread.* = ServerThread.init(address, listen_options, storage);
+            thread.* = ServerThread.init(address, .{
+                .reuse_address = true,
+            }, storage);
         }
         return .{ .threads = threads, .storage = storage, .allocator = allocator };
     }
