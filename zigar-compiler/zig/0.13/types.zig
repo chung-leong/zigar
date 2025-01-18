@@ -2325,10 +2325,10 @@ pub fn WorkQueue(comptime ns: type) type {
                 .initialized => {},
                 else => return promise.resolve({}),
             }
-            self.queue.stop();
-            self.deinit_promise = promise;
             self.status = .deinitializing;
-            self.queue.deinit();
+            self.deinit_promise = promise;
+            self.queue.stop();
+            for (self.threads) |thread| thread.detach();
         }
 
         pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
@@ -2428,8 +2428,8 @@ pub fn WorkQueue(comptime ns: type) type {
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
                 // perform actual deinit here if deinitAsync() was called
                 if (self.deinit_promise) |promise| {
-                    for (self.threads) |thread| thread.join();
                     self.queue.allocator.free(self.threads);
+                    self.queue.deinit();
                     self.status = .uninitialized;
                     promise.resolve({});
                 }
