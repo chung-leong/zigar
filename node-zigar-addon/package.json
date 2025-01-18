@@ -1,6 +1,6 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.13.3-beta.0",
+  "version": "0.14.0-beta.0",
   "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.cjs",
   "type": "module",
@@ -34,7 +34,7 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
-    "node-api-headers": "^1.4.0"
+    "node-api-headers": "^1.5.0"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.0",

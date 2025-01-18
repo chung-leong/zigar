@@ -1,4 +1,4 @@
-## 0.13.3
+## 0.14.0
 
 * Added support for function pointer
 * Added support for thread in WebAssembly
