@@ -1,7 +1,8 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const types = @import("types.zig");
 const expect = std.testing.expect;
+const builtin = @import("builtin");
+
+const types = @import("types.zig");
 
 pub const Error = error{
     TooManyArguments,
@@ -1478,7 +1479,7 @@ fn callWithArgs(
             f.* = .{
                 .name = std.fmt.comptimePrint("{d}", .{index}),
                 .type = T,
-                .default_value = null,
+                .default_value_ptr = null,
                 .is_comptime = false,
                 .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
             };
