@@ -1,6 +1,6 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
-// import Terser from '@rollup/plugin-terser';
+import Terser from '@rollup/plugin-terser';
 
 const replacements1 = {
   'process.env.DEV': 'false',
@@ -35,7 +35,7 @@ export default [
       format: 'iife',
       name: 'variable',
       plugins: [
-        // Terser(),
+        Terser(),
         CPPString(),
       ]
     },
@@ -62,7 +62,7 @@ export default [
       format: 'iife',
       name: 'variable',
       plugins: [
-        // Terser(),
+        Terser(),
         CPPString(),
       ]
     },
