@@ -32,7 +32,7 @@ function App() {
       const bitmap = await createImageBitmap(img);
       setBitmap(bitmap);
     })();
-  }, []);
+  }, [ SampleImage ]);
   useEffect(() => {
     // update bitmap after user has selected a different one
     if (bitmap) {
@@ -68,11 +68,11 @@ function App() {
         }
       }
     })();
-  }, [ bitmap, intensity ]);
+  }, [ bitmap, intensity, createOutputAsync ]);
   useEffect(() => {
     atm.call(() => startThreadPool(navigator.hardwareConcurrency));
     return () => atm.call(() => stopThreadPoolAsync());
-  }, [ startThreadPool ]);
+  }, [ startThreadPool, stopThreadPoolAsync ]);
   return (
     <div className="App">
       <div className="nav">
