@@ -2262,7 +2262,7 @@ pub fn WorkQueue(comptime ns: type) type {
             switch (self.status) {
                 .uninitialized => {},
                 .initialized => return error.AlreadyInitialized,
-                .deinitializing => return error.Denitializing,
+                .deinitializing => return error.Deinitializing,
             }
             const allocator = options.allocator;
             self.queue = .{ .allocator = allocator };
