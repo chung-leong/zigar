@@ -161,12 +161,16 @@ export default mixin({
           callback(null, retval);
         }
       } catch (err) {
-        callback(null, err);
+        callback(null, new ZigError(err, 1));
       }
       // this would be undefined if a callback function is used instead
       return promise ?? generator;
     } else {
-      return args.retval;
+      try {
+        return args.retval;
+      } catch (err) {
+        throw new ZigError(err, 1);
+      }
     }
   },
   ...(process.env.TARGET === 'wasm' ? {

@@ -401,8 +401,19 @@ export class InvalidVariadicArgument extends TypeError {
 }
 
 export class ZigError extends Error {
-  constructor(message) {
-    super(message ?? 'Error encountered in Zig code');
+  constructor(error, remove = 0) {
+    if (error) {
+      super(error.message);
+      const { stack } = this;
+      if (typeof(stack) === 'string') {
+        const lines = stack.split('\n');
+        lines.splice(1, remove);
+        error.stack = lines.join('\n');
+      }
+      return error;
+    } else {
+      super('Error encountered in Zig code');
+    }
   }
 }
 
