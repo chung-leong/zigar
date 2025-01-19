@@ -1,0 +1,17 @@
+{
+  "name": "raylib",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader=node-zigar --no-warnings src/index.js",
+    "build": "node-zigar build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-zigar": "^0.14.0-beta.0"
+  }
+}
