@@ -2059,7 +2059,7 @@ pub fn Queue(comptime T: type) type {
         fn alloc(self: *@This()) !*Node {
             while (true) {
                 const current_head = self.head;
-                if (isMarkedReference(current_head)) {
+                if (current_head != tail and isMarkedReference(current_head.next)) {
                     const next_node = getUnmarkedReference(current_head.next);
                     if (cas(&self.head, current_head, next_node)) return current_head;
                 } else break;
