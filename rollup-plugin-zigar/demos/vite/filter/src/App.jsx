@@ -76,7 +76,7 @@ function App() {
   return (
     <div className="App">
       <div className="nav">
-        <span className="button" onClick={onOpenClick}>Openkkk</span>
+        <span className="button" onClick={onOpenClick}>Open</span>
         <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={onFileChange}/>
       </div>
       <div className="contents">
