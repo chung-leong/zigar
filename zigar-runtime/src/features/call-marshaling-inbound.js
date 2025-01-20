@@ -148,12 +148,12 @@ export default mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  opt = thisEnv.createPromiseCallback(args, arg);
+                  opt = thisEnv.createPromiseCallback(this, arg);
                 }
               } else if (structure.flags & StructFlag.IsGenerator) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  opt = thisEnv.createGeneratorCallback(args, arg);
+                  opt = thisEnv.createGeneratorCallback(this, arg);
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
