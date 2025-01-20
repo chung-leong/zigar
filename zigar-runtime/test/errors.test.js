@@ -47,6 +47,7 @@ import {
   formatList,
   getDescription,
   replaceRangeError,
+  UnexpectedGenerator,
 } from '../src/errors.js';
 
 describe('Error functions', function() {
@@ -619,6 +620,12 @@ describe('Error functions', function() {
       };
       const err = new NotOnByteBoundary(member);
       expect(err.message).to.contain('hello');
+    })
+  })
+  describe('UnexpectedGenerator', function() {
+    it('should have expected message', function() {
+      const err = new UnexpectedGenerator();
+      expect(err.message).to.contain('generator');
     })
   })
   describe('CreatingOpaque', function() {

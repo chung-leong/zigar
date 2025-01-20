@@ -400,9 +400,15 @@ class InvalidVariadicArgument extends TypeError {
   }
 }
 
+class UnexpectedAsyncIterator extends TypeError {
+  constructor() {
+    super(`Unexpected async iterator`);
+  }
+}
+
 class ZigError extends Error {
   constructor(error, remove = 0) {
-    if (error) {
+    if (error instanceof Error) {
       super(error.message);
       const { stack } = this;
       if (typeof(stack) === 'string') {
@@ -412,7 +418,7 @@ class ZigError extends Error {
       }
       return error;
     } else {
-      super('Error encountered in Zig code');
+      super(error ?? 'Error encountered in Zig code');
     }
   }
 }
@@ -514,4 +520,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, EnumExpected, ErrorExpected, Exit, InaccessiblePointer, InactiveUnionProperty, InvalidArrayInitializer, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly, warnImplicitArrayCreation };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, EnumExpected, ErrorExpected, Exit, InaccessiblePointer, InactiveUnionProperty, InvalidArrayInitializer, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedAsyncIterator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly, warnImplicitArrayCreation };

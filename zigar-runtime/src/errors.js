@@ -400,6 +400,12 @@ export class InvalidVariadicArgument extends TypeError {
   }
 }
 
+export class UnexpectedGenerator extends TypeError {
+  constructor() {
+    super(`Unexpected async generator`);
+  }
+}
+
 export class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {

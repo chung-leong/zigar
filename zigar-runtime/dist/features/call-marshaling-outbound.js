@@ -1,7 +1,7 @@
 import { StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UndefinedArgument, adjustArgumentError, ZigError, Exit } from '../errors.js';
-import { ATTRIBUTES, MEMORY, COPY, FINALIZE, PROMISE, GENERATOR, CALLBACK, VISIT } from '../symbols.js';
+import { ATTRIBUTES, MEMORY, COPY, FINALIZE, RETURN, PROMISE, GENERATOR, VISIT } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -46,30 +46,13 @@ var callMarshalingOutbound = mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(dest, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          // invoke programmer-supplied callback if there's one, otherwise a function that
-          // resolves/rejects a promise attached to the argument struct
-          if (!promise) {
-            promise = {
-              ptr: null,
-              callback: this.createPromiseCallback(dest, options?.['callback']),
-            };
-          }
-          arg = promise;
+          arg = promise ??= this.createPromise(dest, options?.['callback']);
         } else if (structure.flags & StructFlag.IsGenerator) {
-          if (!generator) {
-            generator = {
-              ptr: null,
-              callback: this.createGeneratorCallback(dest, options?.['callback']),
-            };
-          }
-          arg = generator;
+          arg = generator ??= this.createGenerator(dest, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          if (!signal) {
-            signal = { ptr: this.createSignalArray(structure, options?.['signal']) };
-          }
-          arg = signal;
+          arg = signal ??= this.createSignal(structure, options?.['signal']);
         }
       }
       if (arg === undefined) {
@@ -131,22 +114,19 @@ var callMarshalingOutbound = mixin({
     } else {
       finalize();
     }
-    const promise = args[PROMISE];
-    const generator = args[GENERATOR];
-    const callback = args[CALLBACK];
-    if (callback) {
+    if (args.hasOwnProperty(RETURN)) {
+      let retval = null;
+      // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
-        // ensure the function hasn't return an error
-        const { retval } = args;
-        if (retval != null) {
-          // if a function returns a value, then the promise is fulfilled immediately
-          callback(null, retval);
-        }
+        retval = args.retval;
       } catch (err) {
-        callback(null, new ZigError(err, 1));
+        retval = new ZigError(err, 1);
+      }
+      if (retval != null) {
+        args[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
-      return promise ?? generator;
+      return args[PROMISE] ?? args[GENERATOR];
     } else {
       try {
         return args.retval;

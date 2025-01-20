@@ -58,8 +58,8 @@ export async function transpile(path, options) {
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
-  usage.FeaturePromiseCallback = env.usingPromise;
-  usage.FeatureGeneratorCallback = env.usingGenerator;
+  usage.FeaturePromise = env.usingPromise;
+  usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
   usage.FeatureObjectLinkage = env.usingVariables;
   usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;

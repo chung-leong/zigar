@@ -3,7 +3,8 @@ import { TypeMismatch } from '../errors.js';
 import { FINALIZE, MEMORY, PROMISE, RETURN, ZIG } from '../symbols.js';
 
 export default mixin({
-  createPromiseCallback(args, func) {
+  // create promise struct for outbound call
+  createPromise(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -24,7 +25,7 @@ export default mixin({
         };
       });
     }
-    const cb = (ptr, result) => {
+    const callback = (ptr, result) => {
       if (func.length === 2) {
         const isError = result instanceof Error;
         func(isError ? result : null, isError ? null : result);
@@ -32,10 +33,19 @@ export default mixin({
         func(result);
       }
       args[FINALIZE]();
-      const id = this.getFunctionId(cb);
+      const id = this.getFunctionId(callback);
       this.releaseFunction(id);
     };
-    args[RETURN] = result => cb(null, result);
-    return cb;
+    args[RETURN] = result => callback(null, result);
+    return { ptr: null, callback };
+  },
+  // create callback for inbound call
+  createPromiseCallback(args, promise) {
+    const { ptr, callback } = promise;
+    args[RETURN] = result => callback.call(this, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return callback(ptr, result);
+    };
   },
 });

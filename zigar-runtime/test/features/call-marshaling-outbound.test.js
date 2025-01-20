@@ -603,7 +603,7 @@ describe('Feature: call-marshaling-outbound', function() {
       env.copyArguments(dest, src, members, options);
       expect(dest).to.eql({ [0]: allocator, [1]: 2 });
     })
-    it('should promise place callback into the right position', function() {
+    it('should place promise callback into the right position', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -729,7 +729,7 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('callback').that.is.a('function');
     })
-    it('should generator place callback into the right position', function() {
+    it('should place generator callback into the right position', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,

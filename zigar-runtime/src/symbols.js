@@ -62,4 +62,4 @@ export const RESTRICT = symbol('restrict');
 export const FINALIZE = symbol('finalize');
 export const CAST = symbol('cast');
 export const RETURN = symbol('return');
-
+export const YIELD = symbol('yield');

@@ -11,7 +11,7 @@ import { usize } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: abort-signal', function() {
-  describe('createSignalArray', function() {
+  describe('createSignal', function() {
     it('should create an Int32 object', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -61,7 +61,7 @@ describe('Feature: abort-signal', function() {
       });
       env.defineStructure(signalStructure);
       env.endStructure(signalStructure);
-      const int32 = env.createSignalArray(signalStructure, null);
+      const { ptr: int32 } = env.createSignal(signalStructure, null);
       expect(int32.$).to.equal(0);
     })
     it('should create an Int32 object hooked to an abort signal', async function() {
@@ -115,7 +115,7 @@ describe('Feature: abort-signal', function() {
       env.endStructure(signalStructure);
       const controller = new AbortController();
       const { signal } = controller;
-      const int32 = env.createSignalArray(signalStructure, signal);
+      const { ptr: int32 } = env.createSignal(signalStructure, signal);
       expect(int32.$).to.equal(0);
       const context = env.startContext();
       if (process.env.TARGET === 'wasm') {
@@ -189,7 +189,7 @@ describe('Feature: abort-signal', function() {
       const controller = new AbortController();
       const { signal } = controller;
       controller.abort();
-      const int32 = env.createSignalArray(signalStructure, signal);
+      const { ptr: int32 } = env.createSignal(signalStructure, signal);
       expect(int32.$).to.equal(1);
     })
   })

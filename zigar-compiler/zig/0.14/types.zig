@@ -891,7 +891,8 @@ pub const TypeData = struct {
                 // retval
                 if (@typeInfo(field.type) == .error_union) break true;
             } else {
-                if (comptime getInternalType(field.type) == .promise) {
+                const internal_type = comptime getInternalType(field.type);
+                if (internal_type == .promise or internal_type == .generator) {
                     if (@typeInfo(field.type.payload) == .error_union) break true;
                 }
             }

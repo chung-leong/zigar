@@ -1,9 +1,9 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FINALIZE, GENERATOR, RETURN } from '../symbols.js';
+import { GENERATOR, RETURN, YIELD, FINALIZE } from '../symbols.js';
 
-export default mixin({
-  createGeneratorCallback(args, func) {
+var generator = mixin({
+  createGenerator(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -12,7 +12,7 @@ export default mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const cb = (ptr, result) => {
+    const callback = (ptr, result) => {
       let cont;
       if (func.length === 2) {
         const isError = result instanceof Error;
@@ -27,8 +27,30 @@ export default mixin({
       }
       return cont;
     };
-    args[RETURN] = result => cb(null, result);
-    return cb;
+    args[RETURN] = result => callback(null, result);
+    return { ptr: null, callback };
+  },
+  createGeneratorCallback(args, generator) {
+    const { ptr, callback } = generator;
+    args[YIELD] = result => callback.call(this, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return callback(ptr, result);
+    };
+  },
+  async pipeContents(generator, args) {
+    try {
+      const iter = generator[Symbol.asyncIterator]();
+      for await (const elem of iter) {
+        args[YIELD](elem);
+      }
+    } catch (err) {
+      try {
+        args[YIELD](err);
+      } catch (err) {
+        console.error(err);
+      }
+    }
   },
 });
 
@@ -104,3 +126,5 @@ class AsyncGenerator {
 
   [Symbol.asyncIterator]() { return this }
 }
+
+export { generator as default };

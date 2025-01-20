@@ -2,7 +2,7 @@ import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, VISIT,
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, VISIT,
 } from '../symbols.js';
 
 export default mixin({
@@ -20,7 +20,9 @@ export default mixin({
         }
       }
       try {
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args));
+        // this is present when running promise and generator callbacks received during inbound calls
+        const allocator = this?.[ALLOCATOR];
+        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, { allocator }));
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -51,30 +53,13 @@ export default mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(dest, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          // invoke programmer-supplied callback if there's one, otherwise a function that
-          // resolves/rejects a promise attached to the argument struct
-          if (!promise) {
-            promise = {
-              ptr: null,
-              callback: this.createPromiseCallback(dest, options?.['callback']),
-            };
-          }
-          arg = promise;
+          arg = promise ??= this.createPromise(dest, options?.['callback']);
         } else if (structure.flags & StructFlag.IsGenerator) {
-          if (!generator) {
-            generator = {
-              ptr: null,
-              callback: this.createGeneratorCallback(dest, options?.['callback']),
-            };
-          }
-          arg = generator;
+          arg = generator ??= this.createGenerator(dest, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          if (!signal) {
-            signal = { ptr: this.createSignalArray(structure, options?.['signal']) }
-          }
-          arg = signal;
+          arg = signal ??= this.createSignal(structure, options?.['signal']);
         }
       }
       if (arg === undefined) {

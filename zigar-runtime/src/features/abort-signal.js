@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 import { MEMORY } from '../symbols.js';
 
 export default mixin({
-  createSignalArray(structure, signal) {
+  createSignal(structure, signal) {
     const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
     const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
     const int32 = Int32(ta);
@@ -24,6 +24,20 @@ export default mixin({
         }
       }, { once: true });
     }
-    return int32;
+    return { ptr: int32 };
+  },
+  createInboundSignal(signal) {
+    const controller = new AbortController();
+    if (signal.ptr['*']) {
+      controller.abort();
+    } else {
+      const interval = setInterval(() => {
+        if (signal.ptr['*']) {
+          controller.abort();
+          clearInterval(interval);
+        }
+      }, 50);
+    }
+    return controller.signal;
   },
 });

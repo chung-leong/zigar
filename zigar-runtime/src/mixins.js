@@ -22,13 +22,13 @@ export { default as FeatureCallMarshalingInbound } from './features/call-marshal
 export { default as FeatureCallMarshalingOutbound } from './features/call-marshaling-outbound.js';
 export { default as FeatureDataCopying } from './features/data-copying.js';
 export { default as FeatureDefaultAllocator } from './features/default-allocator.js';
-export { default as FeatureGeneratorCallback } from './features/generator-callback.js';
+export { default as FeatureGenerator } from './features/generator.js';
 export { default as FeatureIntConversion } from './features/int-conversion.js';
 export { default as FeatureMemoryMapping } from './features/memory-mapping.js';
 export { default as FeatureModuleLoading } from './features/module-loading.js';
 export { default as FeatureObjectLinkage } from './features/object-linkage.js';
 export { default as FeaturePointerSynchronization } from './features/pointer-synchronization.js';
-export { default as FeaturePromiseCallback } from './features/promise-callback.js';
+export { default as FeaturePromise } from './features/promise.js';
 export { default as FeatureRuntimeSafety } from './features/runtime-safety.js';
 export { default as FeatureStreamRedirection } from './features/stream-redirection.js';
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';

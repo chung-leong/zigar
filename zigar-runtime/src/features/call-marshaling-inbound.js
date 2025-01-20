@@ -1,6 +1,7 @@
 import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, ZIG } from '../symbols.js';
+import { UnexpectedGenerator } from '../errors.js';
+import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -93,6 +94,13 @@ export default mixin({
             } else {
               result = CallResult.Deadlock;
             }
+          } else if (retval?.[Symbol.asyncIterator]) {
+            if (argStruct.hasOwnProperty(YIELD)) {
+              this.pipeContents(retval, argStruct);
+              result = CallResult.OK;
+            } else {
+              throw new UnexpectedGenerator();
+            }
           } else if (retval != undefined || !hasCallback) {
             onReturn(retval);
           }
@@ -115,6 +123,7 @@ export default mixin({
     };
   },
   defineArgIterator(members) {
+    const thisEnv = this;
     const allocatorTotal = members.filter(({ structure: s }) => {
       return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
     }).length;
@@ -139,28 +148,17 @@ export default mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  const { ptr, callback } = arg;
-                  this[RETURN] = result => callback(ptr, result);
-                  opt = (...args) => {
-                    const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
-                    return callback(ptr, result);
-                  };
+                  opt = thisEnv.createPromiseCallback(args, arg);
+                }
+              } else if (structure.flags & StructFlag.IsGenerator) {
+                optName = 'callback';
+                if (++callbackCount === 1) {
+                  opt = thisEnv.createGeneratorCallback(args, arg);
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
                 if (++signalCount === 1) {
-                  const controller = new AbortController();
-                  if (arg.ptr['*']) {
-                    controller.abort();
-                  } else {
-                    const interval = setInterval(() => {
-                      if (arg.ptr['*']) {
-                        controller.abort();
-                        clearInterval(interval);
-                      }
-                    }, 50);
-                  }
-                  opt = controller.signal;
+                  opt = thisEnv.createInboundSignal(arg);
                 }
               }
             }

@@ -157,5 +157,6 @@ export default mixin({
     imports: {
       copyExternBytes: null,
     },
+  /* c8 ignore next */
   } : undefined)
 });
