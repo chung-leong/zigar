@@ -195,7 +195,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, wait: bool) thunk_js.ActionResult {
+pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.ActionResult {
     var action: Action = .{
         .type = .call,
         .fn_id = fn_id,
@@ -208,13 +208,11 @@ pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_siz
     } else {
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
-        if (wait) {
-            futex.value = std.atomic.Value(u32).init(initial_value);
-            futex.handle = @intFromPtr(&futex);
-            action.futex_handle = futex.handle;
-        }
+        futex.value = std.atomic.Value(u32).init(initial_value);
+        futex.handle = @intFromPtr(&futex);
+        action.futex_handle = futex.handle;
         var result = imports.queue_js_action(md, &action);
-        if (result == .ok and wait) {
+        if (result == .ok) {
             std.Thread.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }
@@ -334,7 +332,7 @@ fn freeExternMemory(_: MemoryType, memory: *const Memory) callconv(.C) Result {
 
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     const md = getModuleData() catch getMainThreadModuleData() catch return .failure;
-    const result = handleJsCall(md, 0, @constCast(bytes), len, true);
+    const result = handleJsCall(md, 0, @constCast(bytes), len);
     return if (result == .ok) .ok else .failure;
 }
 

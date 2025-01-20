@@ -294,21 +294,17 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, is_waiting: bool) ActionResult {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
     if (main_thread) {
         return _performJsAction(.call, fn_id, arg_ptr, arg_size);
     } else {
         if (comptime builtin.single_threaded) unreachable;
         const initial_value = 0xffff_ffff;
-        var futex: Futex = undefined;
-        var futex_handle: usize = 0;
-        if (is_waiting) {
-            futex.value = std.atomic.Value(u32).init(initial_value);
-            futex.handle = @intFromPtr(&futex);
-            futex_handle = futex.handle;
-        }
-        var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex_handle);
-        if (result == .ok and is_waiting) {
+        const futex: Futex = undefined;
+        futex.value = std.atomic.Value(u32).init(initial_value);
+        futex.handle = @intFromPtr(&futex);
+        var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex.handle);
+        if (result == .ok) {
             std.Thread.Futex.wait(&futex.value, initial_value);
             result = @enumFromInt(futex.value.load(.acquire));
         }

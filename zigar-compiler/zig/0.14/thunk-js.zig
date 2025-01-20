@@ -232,7 +232,7 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             // the last two arguments are the context pointer and the function id
             const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
-            switch (host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct), !isNoWait(RT))) {
+            switch (host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct))) {
                 .failure_deadlock => {
                     if (comptime findError(RT, .{ error.Deadlock, error.Unexpected })) |err| {
                         return err;
@@ -324,23 +324,4 @@ test "hasError" {
     try expect(findError(error{ Hello, World }!i32, .{error.Hello}) != null);
     try expect(findError(anyerror!i32, .{error.Cow}) != null);
     try expect(findError(error{ Hello, World }!i32, .{error.Cow}) == null);
-}
-
-fn isNoWait(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .@"enum" => |en| check: {
-            if (en.fields.len == 1 and en.is_exhaustive) {
-                break :check std.mem.eql(u8, en.fields[0].name, "no_wait");
-            } else {
-                break :check false;
-            }
-        },
-        else => false,
-    };
-}
-
-test "isNoWait" {
-    try expect(isNoWait(enum { no_wait }));
-    try expect(!isNoWait(enum {}));
-    try expect(!isNoWait(enum { no_wait, hello }));
 }
