@@ -402,7 +402,7 @@ export class InvalidVariadicArgument extends TypeError {
 
 export class ZigError extends Error {
   constructor(error, remove = 0) {
-    if (error) {
+    if (error instanceof Error) {
       super(error.message);
       const { stack } = this;
       if (typeof(stack) === 'string') {
@@ -412,7 +412,7 @@ export class ZigError extends Error {
       }
       return error;
     } else {
-      super('Error encountered in Zig code');
+      super(error ?? 'Error encountered in Zig code');
     }
   }
 }
