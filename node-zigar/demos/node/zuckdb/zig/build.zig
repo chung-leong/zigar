@@ -25,8 +25,8 @@ pub fn build(b: *std.Build) void {
     const zuckdb = b.dependency("zuckdb", .{
         .target = target,
         .optimize = optimize,
-        .system_libduckdb = false,
     }).module("zuckdb");
+    lib.addLibraryPath(.{ .cwd_relative = cfg.module_dir ++ "/../lib" });
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
         .{ .name = "zuckdb", .module = zuckdb },

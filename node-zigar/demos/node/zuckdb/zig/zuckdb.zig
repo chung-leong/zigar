@@ -1,7 +1,9 @@
 const std = @import("std");
 const zuckdb = @import("zuckdb");
+const zigar = @import("zigar");
 
 pub fn run() !void {
+    const allocator = zigar.mem.getDefaultAllocator();
     const db = try zuckdb.DB.init(allocator, "/tmp/db.duck", .{});
     defer db.deinit();
 
