@@ -97,7 +97,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     break true;
                                 }
                             } else false,
-                            .is_throwing = @typeInfo(st.fields[0].type) == .error_union,
+                            .is_throwing = td.isThrowing(),
                             .is_async = inline for (st.fields) |field| {
                                 const field_td = tdb.get(field.type);
                                 if (field_td.isPromise() or field_td.isGenerator()) break true;

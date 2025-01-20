@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { COPY, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
+import { ALLOCATOR, COPY, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -54,7 +54,7 @@ export default mixin({
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    descriptors[RETURN] = defineValue(descriptors.retval.set);
+    descriptors[RETURN] = this.defineReturn(descriptors.retval.set);
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.TARGET === 'wasm') {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
@@ -67,5 +67,13 @@ export default mixin({
   finalizeArgStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
+  },
+  defineReturn(setter) {
+    return {
+      value(result) {
+        // pass allocator associated with argument to setter
+        setter.call(this, result, this[ALLOCATOR]);
+      }
+    };
   },
 });

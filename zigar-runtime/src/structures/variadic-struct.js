@@ -2,7 +2,8 @@ import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, ArgumentCountMismatch, InvalidVariadicArgument } from '../errors.js';
 import {
-  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, SLOTS, THROWING, VISIT, VIVIFICATE
+  ALIGN, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RETURN, SLOTS, THROWING, VISIT,
+  VIVIFICATE,
 } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
@@ -101,6 +102,7 @@ export default mixin({
     });
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
+    descriptors[RETURN] = this.defineReturn(descriptors.retval.set);
     if (process.env.TARGET === 'wasm') {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }

@@ -885,6 +885,19 @@ pub const TypeData = struct {
         return self.attrs.is_arguments;
     }
 
+    pub fn isThrowing(comptime self: @This()) bool {
+        return inline for (@typeInfo(self.type).Struct.fields, 0..) |field, i| {
+            if (i == 0) {
+                // retval
+                if (@typeInfo(field.type) == .error_union) break true;
+            } else {
+                if (comptime getInternalType(field.type) == .promise) {
+                    if (@typeInfo(field.type.payload) == .error_union) break true;
+                }
+            }
+        } else false;
+    }
+
     pub fn isSlice(comptime self: @This()) bool {
         return self.attrs.is_slice;
     }

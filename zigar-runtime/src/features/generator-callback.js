@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { CALLBACK, FINALIZE, GENERATOR } from '../symbols.js';
+import { FINALIZE, GENERATOR, RETURN } from '../symbols.js';
 
 export default mixin({
   createGeneratorCallback(args, func) {
@@ -12,7 +12,7 @@ export default mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const cb = args[CALLBACK] = (ptr, result) => {
+    const cb = (ptr, result) => {
       let cont;
       if (func.length === 2) {
         const isError = result instanceof Error;
@@ -27,6 +27,7 @@ export default mixin({
       }
       return cont;
     };
+    args[RETURN] = result => cb(null, result);
     return cb;
   },
 });

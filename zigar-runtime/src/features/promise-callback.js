@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { CALLBACK, FINALIZE, MEMORY, PROMISE, ZIG } from '../symbols.js';
+import { FINALIZE, MEMORY, PROMISE, RETURN, ZIG } from '../symbols.js';
 
 export default mixin({
   createPromiseCallback(args, func) {
@@ -24,7 +24,7 @@ export default mixin({
         };
       });
     }
-    const cb = args[CALLBACK] = (ptr, result) => {
+    const cb = (ptr, result) => {
       if (func.length === 2) {
         const isError = result instanceof Error;
         func(isError ? result : null, isError ? null : result);
@@ -35,6 +35,7 @@ export default mixin({
       const id = this.getFunctionId(cb);
       this.releaseFunction(id);
     };
+    args[RETURN] = result => cb(null, result);
     return cb;
   },
 });

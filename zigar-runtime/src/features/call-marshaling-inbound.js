@@ -1,6 +1,6 @@
 import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ALLOCATOR, CALLBACK, MEMORY, RETURN, THROWING, VISIT, ZIG } from '../symbols.js';
+import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, ZIG } from '../symbols.js';
 
 export default mixin({
   jsFunctionThunkMap: new Map(),
@@ -55,12 +55,9 @@ export default mixin({
         }
         const onError = function(err) {
           try {
-            const cb = argStruct[CALLBACK];
             // if the error is not part of the error set returned by the function,
             // the following will throw
-            if (cb) {
-              cb(null, err);
-            } else if (ArgStruct[THROWING] && err instanceof Error) {
+            if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct[RETURN](err);
             } else {
               throw err;
@@ -71,14 +68,10 @@ export default mixin({
           }
         };
         const onReturn = function(value) {
-          const cb = argStruct[CALLBACK];
           try {
-            if (cb) {
-              cb(null, value);
-            } else {
-              // call setter of retval with allocator (if there's one)
-              argStruct[RETURN](value, argStruct[ALLOCATOR]);
-            }
+            // [RETURN] defaults to the setter of retval; if the function accepts a promise,
+            // it'd invoke the callback
+            argStruct[RETURN](value);
           } catch (err) {
             result = CallResult.Failure;
             console.error(err);
@@ -86,8 +79,11 @@ export default mixin({
         };
         try {
           const retval = fn(...argStruct);
+          const hasCallback = argStruct.hasOwnProperty(RETURN);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle || argStruct[CALLBACK]) {
+            // we can handle a promise when the Zig caller is able to wait or
+            // it's receiving the result through a callback
+            if (futexHandle || hasCallback) {
               const promise = retval.then(onReturn, onError);
               if (futexHandle) {
                 promise.then(() => this.finalizeAsyncCall(futexHandle, result));
@@ -97,7 +93,7 @@ export default mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else if (retval != undefined || !argStruct[CALLBACK]) {
+          } else if (retval != undefined || !hasCallback) {
             onReturn(retval);
           }
         } catch (err) {
@@ -143,8 +139,8 @@ export default mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  const callback = this[CALLBACK] = arg.callback['*'];
-                  const ptr = arg.ptr;
+                  const { ptr, callback } = arg;
+                  this[RETURN] = result => callback(ptr, result);
                   opt = (...args) => {
                     const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
                     return callback(ptr, result);

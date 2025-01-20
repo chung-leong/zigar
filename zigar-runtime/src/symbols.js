@@ -46,7 +46,6 @@ export const TYPED_ARRAY = symbol('typed array');
 export const THROWING = symbol('throwing');
 export const PROMISE = symbol('promise');
 export const GENERATOR = symbol('generator');
-export const CALLBACK = symbol('callback');
 export const ALLOCATOR = symbol('allocator');
 export const FALLBACK = symbol('fallback');
 export const SIGNATURE = symbol('signature');
@@ -63,3 +62,4 @@ export const RESTRICT = symbol('restrict');
 export const FINALIZE = symbol('finalize');
 export const CAST = symbol('cast');
 export const RETURN = symbol('return');
+

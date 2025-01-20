@@ -5,7 +5,7 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CALLBACK, ENVIRONMENT, MEMORY, RETURN, SLOTS, ZIG } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, RETURN, SLOTS, THROWING, ZIG } from '../../src/symbols.js';
 import {
   addressByteSize, addressSize, capture, captureError, delay, usize
 } from '../test-utils.js';
@@ -384,8 +384,7 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[RETURN] = function() {};
-        self[CALLBACK] = function(ptr, arg) {
+        self[RETURN] = function(arg) {
           result = arg;
         };
         return self;
@@ -408,12 +407,12 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[RETURN] = function() {};
-        self[CALLBACK] = function(ptr, arg) {
+        self[RETURN] = function(arg) {
           result = arg;
         };
         return self;
       };
+      ArgStruct[THROWING] = true;
       const self = env.createInboundCaller(fn, ArgStruct)
       const binary = env.jsFunctionCallerMap.get(1);
       binary(null, usize(0x1234));
@@ -431,8 +430,7 @@ describe('Feature: call-marshaling-inbound', function() {
           const array = [];
           return array[Symbol.iterator]();
         };
-        self[RETURN] = function() {};
-        self[CALLBACK] = function(ptr, arg) {
+        self[RETURN] = function(arg) {
           throw new Error('Doh!');
         };
         return self;

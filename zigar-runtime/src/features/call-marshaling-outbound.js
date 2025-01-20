@@ -2,7 +2,7 @@ import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ATTRIBUTES, CALLBACK, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, VISIT,
+  ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, VISIT,
 } from '../symbols.js';
 
 export default mixin({
@@ -149,22 +149,19 @@ export default mixin({
     } else {
       finalize(true);
     }
-    const promise = args[PROMISE];
-    const generator = args[GENERATOR];
-    const callback = args[CALLBACK];
-    if (callback) {
+    if (args.hasOwnProperty(RETURN)) {
+      let retval = null;
+      // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
-        // ensure the function hasn't return an error
-        const { retval } = args;
-        if (retval != null) {
-          // if a function returns a value, then the promise is fulfilled immediately
-          callback(null, retval);
-        }
+        retval = args.retval;
       } catch (err) {
-        callback(null, new ZigError(err, 1));
+        retval = new ZigError(err, 1);
+      }
+      if (retval != null) {
+        args[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
-      return promise ?? generator;
+      return args[PROMISE] ?? args[GENERATOR];
     } else {
       try {
         return args.retval;

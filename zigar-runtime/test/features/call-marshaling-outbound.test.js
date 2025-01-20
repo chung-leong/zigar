@@ -7,7 +7,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, CALLBACK, COPY, FINALIZE, MEMORY, PROMISE, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
@@ -1128,9 +1128,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
-        this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = (ptr, arg) => resolve(arg);
-        });
+        this[PROMISE] = new Promise(resolve => this[RETURN] = resolve);
         this.retval = 1234;
       };
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
@@ -1161,9 +1159,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
-        this[PROMISE] = new Promise((resolve) => {
-          this[CALLBACK] = (ptr, arg) => resolve(arg);
-        });
+        this[PROMISE] = new Promise(resolve => this[RETURN] = resolve);
         defineProperty(this, 'retval', {
           get() {
             throw new Error('Doh!');
@@ -1199,7 +1195,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
-        this[CALLBACK] = (ptr, arg) => retval = arg;
+        this[RETURN] = (arg) => retval = arg;
         this.retval = 1234;
       };
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
@@ -1209,7 +1205,6 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(result).to.be.undefined;
       expect(retval).to.equal(1234);
     })
-
   })
   describe('detectArgumentFeatures', function() {
     it('should set usingDefaultAllocator when a function argument is an allocator', function() {
