@@ -4,13 +4,13 @@ import { fileURLToPath } from 'url';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
-  const { target, optimize } = options;
+  const { target, compilerVersion } = options;
   const importTest = async (name) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url);
   };
   describe('Package manager', function() {
-    skip.if(target === 'wasm32').
+    skip.if(target === 'wasm32').or(compilerVersion !== '0.13.0').
     it('should link in ziglua', async function() {
       this.timeout(0);
       const { run } = await importTest('use-ziglua/ziglua');
@@ -26,7 +26,7 @@ export function addTests(importModule, options) {
         }
       }
     })
-    skip. // if(target === 'wasm32').
+    skip.if(target === 'wasm32').or(compilerVersion < '0.14.0').
     it('should link in zig-sqlite', async function() {
       this.timeout(0);
       const { Db } = await importTest('use-zig-sqlite/zig-sqlite');
