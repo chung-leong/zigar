@@ -75,7 +75,7 @@ export default mixin({
         const set = setters[destIndex++];
         set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, argList.length);
+        throw adjustArgumentError.call(err, destIndex - 1, argList.length);
       }
     }
   },

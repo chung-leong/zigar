@@ -881,7 +881,7 @@ result queue_js_action(module_data* md,
     } else {
         // if caller doesn't wait, then action will get overwritten when the caller returns
         // we need to therefore create a copy of it on the heap
-        if (action->futex_handle) {
+        if (!action->futex_handle) {
             js_action* copy = malloc(sizeof(js_action));
             memcpy(copy, action, sizeof(js_action));
             action = copy;

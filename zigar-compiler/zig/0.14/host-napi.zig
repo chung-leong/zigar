@@ -210,6 +210,7 @@ pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_siz
         var futex: Futex = undefined;
         futex.value = std.atomic.Value(u32).init(initial_value);
         futex.handle = @intFromPtr(&futex);
+        action.futex_handle = futex.handle;
         var result = imports.queue_js_action(md, &action);
         if (result == .ok) {
             std.Thread.Futex.wait(&futex.value, initial_value);
