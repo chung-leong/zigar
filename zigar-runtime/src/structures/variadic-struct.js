@@ -80,6 +80,7 @@ export default mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
+    const retvalSetter = descriptors.retval.set;
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -102,7 +103,9 @@ export default mixin({
     });
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
-    descriptors[RETURN] = this.defineReturn(descriptors.retval.set);
+    descriptors[RETURN] = defineValue(function(value) {
+      retvalSetter.call(this, value, this[ALLOCATOR]);
+    });
     if (process.env.TARGET === 'wasm') {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }

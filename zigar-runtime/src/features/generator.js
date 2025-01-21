@@ -32,10 +32,10 @@ export default mixin({
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
-    args[YIELD] = result => callback.call(this, ptr, result);
+    args[YIELD] = result => callback.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
-      return callback(ptr, result);
+      return args[YIELD](result);
     };
   },
   async pipeContents(generator, args) {
@@ -44,7 +44,9 @@ export default mixin({
         const iter = generator[Symbol.asyncIterator]();
         for await (const elem of iter) {
           if (elem !== null) {
-            args[YIELD](elem);
+            if (!args[YIELD](elem)) {
+              break;
+            }
           }
         }
         args[YIELD](null);

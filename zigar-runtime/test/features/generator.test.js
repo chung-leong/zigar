@@ -195,7 +195,10 @@ describe('Feature: generator', function() {
       const generator = fn();
       const list = [];
       function Args() {
-        this[YIELD] = value => list.push(value);
+        this[YIELD] = (value) => {
+          list.push(value);
+          return true;
+        };
       }
       const args = new Args;
       await env.pipeContents(generator, args);
@@ -211,7 +214,10 @@ describe('Feature: generator', function() {
       const generator = fn();
       const list = [];
       function Args() {
-        this[YIELD] = value => list.push(value);
+        this[YIELD] = (value) => {
+          list.push(value);
+          return true;
+        };
       }
       const args = new Args;
       await env.pipeContents(generator, args);
@@ -227,7 +233,10 @@ describe('Feature: generator', function() {
       const generator = fn();
       const list = [];
       function Args() {
-        this[YIELD] = value => list.push(value);
+        this[YIELD] = (value) => {
+          list.push(value);
+          return true;
+        };
       }
       const args = new Args;
       await env.pipeContents(generator, args);
@@ -244,7 +253,10 @@ describe('Feature: generator', function() {
       const generator = fn();
       const list = [];
       function Args() {
-        this[YIELD] = value => list.push(value);
+        this[YIELD] = (value) => {
+          list.push(value);
+          return true;
+        };
       }
       const args = new Args;
       const [ line ] = await captureError(async () => {
@@ -268,8 +280,10 @@ describe('Feature: generator', function() {
         this[YIELD] = (value) => {
           if (value instanceof Error) {
             error = value;
+            return false;
           } else {
             list.push(value);
+            return true;
           }
         };
       }
@@ -298,6 +312,7 @@ describe('Feature: generator', function() {
             throw new Error('Donut!');
           } else {
             list.push(value);
+            return true;
           }
         };
       }

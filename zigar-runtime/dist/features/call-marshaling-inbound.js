@@ -1,5 +1,6 @@
 import { StructureType, StructFlag, MemberType, Action, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
+import { UnexpectedGenerator } from '../errors.js';
 import { MEMORY, ZIG, ALLOCATOR, VISIT, THROWING, RETURN, YIELD } from '../symbols.js';
 
 var callMarshalingInbound = mixin({
@@ -95,7 +96,7 @@ var callMarshalingInbound = mixin({
               this.pipeContents(retval, argStruct);
               result = CallResult.OK;
             } else {
-              throw new UnexpectedAsyncIterator();
+              throw new UnexpectedGenerator();
             }
           } else if (retval != undefined || !hasCallback) {
             onReturn(retval);
@@ -119,6 +120,7 @@ var callMarshalingInbound = mixin({
     };
   },
   defineArgIterator(members) {
+    const thisEnv = this;
     const allocatorTotal = members.filter(({ structure: s }) => {
       return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
     }).length;
@@ -143,17 +145,17 @@ var callMarshalingInbound = mixin({
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  opt = this.createPromiseCallback(args, arg);
+                  opt = thisEnv.createPromiseCallback(this, arg);
                 }
               } else if (structure.flags & StructFlag.IsGenerator) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  opt = this.createGeneratorCallback(args, arg);
+                  opt = thisEnv.createGeneratorCallback(this, arg);
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
                 if (++signalCount === 1) {
-                  opt = this.createInboundSignal(arg);
+                  opt = thisEnv.createInboundSignal(arg);
                 }
               }
             }

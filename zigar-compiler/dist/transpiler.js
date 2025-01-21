@@ -203,8 +203,7 @@ const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const GENERATOR = symbol('generator');
-const CALLBACK = symbol('callback');
-const ALLOCATOR = symbol('allocator');
+const ALLOCATOR$1 = symbol('allocator');
 const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
@@ -219,6 +218,7 @@ const RESTRICT = symbol('restrict');
 const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
+const YIELD = symbol('yield');
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -2340,7 +2340,7 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
 }
 
 var abortSignal = mixin({
-  createSignalArray(structure, signal) {
+  createSignal(structure, signal) {
     const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
     const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
     const int32 = Int32(ta);
@@ -2359,7 +2359,21 @@ var abortSignal = mixin({
         }
       }, { once: true });
     }
-    return int32;
+    return { ptr: int32 };
+  },
+  createInboundSignal(signal) {
+    const controller = new AbortController();
+    if (signal.ptr['*']) {
+      controller.abort();
+    } else {
+      const interval = setInterval(() => {
+        if (signal.ptr['*']) {
+          controller.abort();
+          clearInterval(interval);
+        }
+      }, 50);
+    }
+    return controller.signal;
   },
 });
 
@@ -2741,9 +2755,15 @@ class InvalidVariadicArgument extends TypeError {
   }
 }
 
+class UnexpectedGenerator extends TypeError {
+  constructor() {
+    super(`Unexpected async generator`);
+  }
+}
+
 class ZigError extends Error {
   constructor(error, remove = 0) {
-    if (error) {
+    if (error instanceof Error) {
       super(error.message);
       const { stack } = this;
       if (typeof(stack) === 'string') {
@@ -2753,7 +2773,7 @@ class ZigError extends Error {
       }
       return error;
     } else {
-      super('Error encountered in Zig code');
+      super(error ?? 'Error encountered in Zig code');
     }
   }
 }
@@ -3080,12 +3100,9 @@ var callMarshalingInbound = mixin({
         }
         const onError = function(err) {
           try {
-            const cb = argStruct[CALLBACK];
             // if the error is not part of the error set returned by the function,
             // the following will throw
-            if (cb) {
-              cb(null, err);
-            } else if (ArgStruct[THROWING] && err instanceof Error) {
+            if (ArgStruct[THROWING] && err instanceof Error) {
               argStruct[RETURN](err);
             } else {
               throw err;
@@ -3096,14 +3113,10 @@ var callMarshalingInbound = mixin({
           }
         };
         const onReturn = function(value) {
-          const cb = argStruct[CALLBACK];
           try {
-            if (cb) {
-              cb(null, value);
-            } else {
-              // call setter of retval with allocator (if there's one)
-              argStruct[RETURN](value, argStruct[ALLOCATOR]);
-            }
+            // [RETURN] defaults to the setter of retval; if the function accepts a promise,
+            // it'd invoke the callback
+            argStruct[RETURN](value);
           } catch (err) {
             result = CallResult.Failure;
             console.error(err);
@@ -3111,8 +3124,11 @@ var callMarshalingInbound = mixin({
         };
         try {
           const retval = fn(...argStruct);
+          const hasCallback = argStruct.hasOwnProperty(RETURN);
           if (retval?.[Symbol.toStringTag] === 'Promise') {
-            if (futexHandle || argStruct[CALLBACK]) {
+            // we can handle a promise when the Zig caller is able to wait or
+            // it's receiving the result through a callback
+            if (futexHandle || hasCallback) {
               const promise = retval.then(onReturn, onError);
               if (futexHandle) {
                 promise.then(() => this.finalizeAsyncCall(futexHandle, result));
@@ -3122,7 +3138,14 @@ var callMarshalingInbound = mixin({
             } else {
               result = CallResult.Deadlock;
             }
-          } else if (retval != undefined || !argStruct[CALLBACK]) {
+          } else if (retval?.[Symbol.asyncIterator]) {
+            if (argStruct.hasOwnProperty(YIELD)) {
+              this.pipeContents(retval, argStruct);
+              result = CallResult.OK;
+            } else {
+              throw new UnexpectedGenerator();
+            }
+          } else if (retval != undefined || !hasCallback) {
             onReturn(retval);
           }
         } catch (err) {
@@ -3144,6 +3167,7 @@ var callMarshalingInbound = mixin({
     };
   },
   defineArgIterator(members) {
+    const thisEnv = this;
     const allocatorTotal = members.filter(({ structure: s }) => {
       return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
     }).length;
@@ -3164,32 +3188,21 @@ var callMarshalingInbound = mixin({
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = this[ALLOCATOR] = arg;
+                opt = this[ALLOCATOR$1] = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
-                  const callback = this[CALLBACK] = arg.callback['*'];
-                  const ptr = arg.ptr;
-                  opt = (...args) => {
-                    const result = (args.length === 2) ? args[0] ?? args[1] : args[0];
-                    return callback(ptr, result);
-                  };
+                  opt = thisEnv.createPromiseCallback(this, arg);
+                }
+              } else if (structure.flags & StructFlag.IsGenerator) {
+                optName = 'callback';
+                if (++callbackCount === 1) {
+                  opt = thisEnv.createGeneratorCallback(this, arg);
                 }
               } else if (structure.flags & StructFlag.IsAbortSignal) {
                 optName = 'signal';
                 if (++signalCount === 1) {
-                  const controller = new AbortController();
-                  if (arg.ptr['*']) {
-                    controller.abort();
-                  } else {
-                    const interval = setInterval(() => {
-                      if (arg.ptr['*']) {
-                        controller.abort();
-                        clearInterval(interval);
-                      }
-                    }, 50);
-                  }
-                  opt = controller.signal;
+                  opt = thisEnv.createInboundSignal(arg);
                 }
               }
             }
@@ -3282,7 +3295,9 @@ var callMarshalingOutbound = mixin({
         }
       }
       try {
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args));
+        // `this` is present when running a promise and generator callback received from a inbound call
+        // it's going to be the argument struct of that call
+        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, this?.[ALLOCATOR$1]));
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -3298,10 +3313,11 @@ var callMarshalingOutbound = mixin({
     };
     return self;
   },
-  copyArguments(dest, src, members, options) {
-    let srcIndex = 0;
+  copyArguments(argStruct, argList, members, options, argAlloc) {
+    let destIndex = 0, srcIndex = 0;
     let allocatorCount = 0;
-    for (const [ destIndex, { type, structure } ] of members.entries()) {
+    const setters = argStruct[SETTERS];
+    for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
@@ -3311,60 +3327,44 @@ var callMarshalingOutbound = mixin({
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(dest, structure);
+          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          // invoke programmer-supplied callback if there's one, otherwise a function that
-          // resolves/rejects a promise attached to the argument struct
-          if (!promise) {
-            promise = {
-              ptr: null,
-              callback: this.createPromiseCallback(dest, options?.['callback']),
-            };
-          }
-          arg = promise;
+          arg = promise ??= this.createPromise(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsGenerator) {
-          if (!generator) {
-            generator = {
-              ptr: null,
-              callback: this.createGeneratorCallback(dest, options?.['callback']),
-            };
-          }
-          arg = generator;
+          arg = generator ??= this.createGenerator(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          if (!signal) {
-            signal = { ptr: this.createSignalArray(structure, options?.['signal']) };
-          }
-          arg = signal;
+          arg = signal ??= this.createSignal(structure, options?.['signal']);
         }
       }
       if (arg === undefined) {
         // just a regular argument
-        arg = src[srcIndex++];
+        arg = argList[srcIndex++];
         // only void has the value of undefined
         if (arg === undefined && type !== MemberType.Void) {
           throw new UndefinedArgument();
         }
       }
       try {
-        dest[destIndex] = arg;
+        const set = setters[destIndex++];
+        set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, src.length);
+        throw adjustArgumentError.call(err, destIndex, argList.length);
       }
     }
   },
-  invokeThunk(thunk, fn, args) {
+  invokeThunk(thunk, fn, argStruct) {
     const context = this.startContext();
-    const attrs = args[ATTRIBUTES];
+    const attrs = argStruct[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
-    const hasPointers = VISIT in args;
+    const hasPointers = VISIT in argStruct;
     if (hasPointers) {
-      this.updatePointerAddresses(context, args);
+      this.updatePointerAddresses(context, argStruct);
     }
     // return address of shadow for argumnet struct
-    const argAddress = this.getShadowAddress(context, args, null, false)
+    const argAddress = this.getShadowAddress(context, argStruct, null, false)
     ;
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
@@ -3384,7 +3384,7 @@ var callMarshalingOutbound = mixin({
       this.updateShadowTargets(context);
       // create objects that pointers point to
       if (hasPointers) {
-        this.updatePointerTargets(context, args);
+        this.updatePointerTargets(context, argStruct);
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -3398,32 +3398,29 @@ var callMarshalingOutbound = mixin({
     }
     {
       // copy retval from shadow view
-      args[COPY]?.(this.findShadowView(args[MEMORY]));
+      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
     }
-    if (FINALIZE in args) {
-      args[FINALIZE] = finalize;
+    if (FINALIZE in argStruct) {
+      argStruct[FINALIZE] = finalize;
     } else {
       finalize();
     }
-    const promise = args[PROMISE];
-    const generator = args[GENERATOR];
-    const callback = args[CALLBACK];
-    if (callback) {
+    if (argStruct.hasOwnProperty(RETURN)) {
+      let retval = null;
+      // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
-        // ensure the function hasn't return an error
-        const { retval } = args;
-        if (retval != null) {
-          // if a function returns a value, then the promise is fulfilled immediately
-          callback(null, retval);
-        }
+        retval = argStruct.retval;
       } catch (err) {
-        callback(null, new ZigError(err, 1));
+        retval = new ZigError(err, 1);
+      }
+      if (retval != null) {
+        argStruct[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
-      return promise ?? generator;
+      return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
       try {
-        return args.retval;
+        return argStruct.retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }
@@ -3669,8 +3666,8 @@ var defaultAllocator = mixin({
   },
 });
 
-var generatorCallback = mixin({
-  createGeneratorCallback(args, func) {
+var generator = mixin({
+  createGenerator(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -3679,7 +3676,7 @@ var generatorCallback = mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const cb = args[CALLBACK] = (ptr, result) => {
+    const callback = (ptr, result) => {
       let cont;
       if (func.length === 2) {
         const isError = result instanceof Error;
@@ -3689,12 +3686,44 @@ var generatorCallback = mixin({
       }
       if (!cont) {
         args[FINALIZE]();
-        const id = this.getFunctionId(cb);
+        const id = this.getFunctionId(callback);
         this.releaseFunction(id);
       }
       return cont;
     };
-    return cb;
+    args[RETURN] = result => callback(null, result);
+    return { ptr: null, callback };
+  },
+  createGeneratorCallback(args, generator) {
+    const { ptr, callback } = generator;
+    args[YIELD] = result => callback.call(args, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return args[YIELD](result);
+    };
+  },
+  async pipeContents(generator, args) {
+    try {
+      try {
+        const iter = generator[Symbol.asyncIterator]();
+        for await (const elem of iter) {
+          if (elem !== null) {
+            if (!args[YIELD](elem)) {
+              break;
+            }
+          }
+        }
+        args[YIELD](null);
+      } catch (err) {
+        if (args.constructor[THROWING]) {
+          args[YIELD](err);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
   },
 });
 
@@ -4433,8 +4462,9 @@ var pointerSynchronization = mixin({
   },
 });
 
-var promiseCallback = mixin({
-  createPromiseCallback(args, func) {
+var promise = mixin({
+  // create promise struct for outbound call
+  createPromise(args, func) {
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -4454,7 +4484,7 @@ var promiseCallback = mixin({
           }        };
       });
     }
-    const cb = args[CALLBACK] = (ptr, result) => {
+    const callback = (ptr, result) => {
       if (func.length === 2) {
         const isError = result instanceof Error;
         func(isError ? result : null, isError ? null : result);
@@ -4462,10 +4492,20 @@ var promiseCallback = mixin({
         func(result);
       }
       args[FINALIZE]();
-      const id = this.getFunctionId(cb);
+      const id = this.getFunctionId(callback);
       this.releaseFunction(id);
     };
-    return cb;
+    args[RETURN] = result => callback(null, result);
+    return { ptr: null, callback };
+  },
+  // create callback for inbound call
+  createPromiseCallback(args, promise) {
+    const { ptr, callback } = promise;
+    args[RETURN] = result => callback.call(args, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return args[RETURN](result);
+    };
   },
 });
 
@@ -6387,7 +6427,7 @@ var argStruct = mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
-    const constructor = function(args) {
+    const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
@@ -6415,7 +6455,7 @@ var argStruct = mixin({
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }
-        thisEnv.copyArguments(self, args, argMembers, options);
+        thisEnv.copyArguments(self, args, argMembers, options, argAlloc);
       } else {
         return self;
       }
@@ -6423,10 +6463,14 @@ var argStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
+    const retvalSetter = descriptors.retval.set;
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    descriptors[RETURN] = defineValue(descriptors.retval.set);
+    descriptors[RETURN] = defineValue(function(value) {
+      // pass allocator associated with argument to setter
+      retvalSetter.call(this, value, this[ALLOCATOR$1]);
+    });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
@@ -8136,6 +8180,7 @@ var variadicStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
+    const retvalSetter = descriptors.retval.set;
     const ArgAttributes = function(length) {
       this[MEMORY] = thisEnv.allocateMemory(length * 8, 4);
       this.length = length;
@@ -8158,6 +8203,9 @@ var variadicStruct = mixin({
     });
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = this.defineVisitorVariadicStruct(members);
+    descriptors[RETURN] = defineValue(function(value) {
+      retvalSetter.call(this, value, this[ALLOCATOR]);
+    });
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }
@@ -8453,13 +8501,13 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
   FeatureDefaultAllocator: defaultAllocator,
-  FeatureGeneratorCallback: generatorCallback,
+  FeatureGenerator: generator,
   FeatureIntConversion: intConversion,
   FeatureMemoryMapping: memoryMapping,
   FeatureModuleLoading: moduleLoading,
   FeatureObjectLinkage: objectLinkage,
   FeaturePointerSynchronization: pointerSynchronization,
-  FeaturePromiseCallback: promiseCallback,
+  FeaturePromise: promise,
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
@@ -9961,8 +10009,8 @@ async function transpile(path, options) {
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
   usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
-  usage.FeaturePromiseCallback = env.usingPromise;
-  usage.FeatureGeneratorCallback = env.usingGenerator;
+  usage.FeaturePromise = env.usingPromise;
+  usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
   usage.FeatureObjectLinkage = env.usingVariables;
   usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;

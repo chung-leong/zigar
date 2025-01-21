@@ -1,7 +1,7 @@
 import { StructureFlag, ArgStructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { VIVIFICATE, VISIT, RETURN, COPY, THROWING, ALLOCATOR, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
+import { VIVIFICATE, VISIT, RETURN, ALLOCATOR, COPY, THROWING, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var argStruct = mixin({
@@ -15,7 +15,7 @@ var argStruct = mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
-    const constructor = function(args) {
+    const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
@@ -43,7 +43,7 @@ var argStruct = mixin({
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }
-        thisEnv.copyArguments(self, args, argMembers, options);
+        thisEnv.copyArguments(self, args, argMembers, options, argAlloc);
       } else {
         return self;
       }
@@ -51,10 +51,14 @@ var argStruct = mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
+    const retvalSetter = descriptors.retval.set;
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    descriptors[RETURN] = this.defineReturn(descriptors.retval.set);
+    descriptors[RETURN] = defineValue(function(value) {
+      // pass allocator associated with argument to setter
+      retvalSetter.call(this, value, this[ALLOCATOR]);
+    });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
@@ -64,14 +68,6 @@ var argStruct = mixin({
   finalizeArgStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
-  },
-  defineReturn(setter) {
-    return {
-      value(result) {
-        // pass allocator associated with argument to setter
-        setter.call(this, result, this[ALLOCATOR]);
-      }
-    };
   },
 });
 

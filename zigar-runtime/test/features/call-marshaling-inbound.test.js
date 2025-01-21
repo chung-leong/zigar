@@ -459,6 +459,7 @@ describe('Feature: call-marshaling-inbound', function() {
         };
         self[YIELD] = function(arg) {
           result.push(arg);
+          return true;
         };
         return self;
       };

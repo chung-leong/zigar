@@ -2,7 +2,7 @@ import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, VISIT,
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, VISIT,
 } from '../symbols.js';
 
 export default mixin({
@@ -20,9 +20,9 @@ export default mixin({
         }
       }
       try {
-        // this is present when running promise and generator callbacks received during inbound calls
-        const allocator = this?.[ALLOCATOR];
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, { allocator }));
+        // `this` is present when running a promise and generator callback received from a inbound call
+        // it's going to be the argument struct of that call
+        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, this?.[ALLOCATOR]));
       } catch (err) {
         if ('fnName' in err) {
           err.fnName = self.name;
@@ -38,10 +38,11 @@ export default mixin({
     };
     return self;
   },
-  copyArguments(dest, src, members, options) {
-    let srcIndex = 0;
+  copyArguments(argStruct, argList, members, options, argAlloc) {
+    let destIndex = 0, srcIndex = 0;
     let allocatorCount = 0;
-    for (const [ destIndex, { type, structure } ] of members.entries()) {
+    const setters = argStruct[SETTERS];
+    for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
@@ -51,11 +52,11 @@ export default mixin({
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(dest, structure);
+          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          arg = promise ??= this.createPromise(dest, options?.['callback']);
+          arg = promise ??= this.createPromise(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsGenerator) {
-          arg = generator ??= this.createGenerator(dest, options?.['callback']);
+          arg = generator ??= this.createGenerator(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
@@ -64,32 +65,33 @@ export default mixin({
       }
       if (arg === undefined) {
         // just a regular argument
-        arg = src[srcIndex++];
+        arg = argList[srcIndex++];
         // only void has the value of undefined
         if (arg === undefined && type !== MemberType.Void) {
           throw new UndefinedArgument();
         }
       }
       try {
-        dest[destIndex] = arg;
+        const set = setters[destIndex++];
+        set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, src.length);
+        throw adjustArgumentError.call(err, destIndex, argList.length);
       }
     }
   },
-  invokeThunk(thunk, fn, args) {
+  invokeThunk(thunk, fn, argStruct) {
     const context = this.startContext();
-    const attrs = args[ATTRIBUTES];
+    const attrs = argStruct[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
-    const hasPointers = VISIT in args;
+    const hasPointers = VISIT in argStruct;
     if (hasPointers) {
-      this.updatePointerAddresses(context, args);
+      this.updatePointerAddresses(context, argStruct);
     }
     // return address of shadow for argumnet struct
     const argAddress = (process.env.TARGET === 'wasm')
-    ? this.getShadowAddress(context, args, null, false)
-    : this.getViewAddress(args[MEMORY]);
+    ? this.getShadowAddress(context, argStruct, null, false)
+    : this.getViewAddress(argStruct[MEMORY]);
     // get address of attributes if function variadic
     const attrAddress = (process.env.TARGET === 'wasm')
     ? (attrs) ? this.getShadowAddress(context, attrs) : 0
@@ -113,7 +115,7 @@ export default mixin({
       this.updateShadowTargets(context);
       // create objects that pointers point to
       if (hasPointers) {
-        this.updatePointerTargets(context, args);
+        this.updatePointerTargets(context, argStruct);
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -127,29 +129,29 @@ export default mixin({
     }
     if (process.env.TARGET === 'wasm') {
       // copy retval from shadow view
-      args[COPY]?.(this.findShadowView(args[MEMORY]));
+      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
     }
-    if (FINALIZE in args) {
-      args[FINALIZE] = finalize;
+    if (FINALIZE in argStruct) {
+      argStruct[FINALIZE] = finalize;
     } else {
       finalize(true);
     }
-    if (args.hasOwnProperty(RETURN)) {
+    if (argStruct.hasOwnProperty(RETURN)) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
-        retval = args.retval;
+        retval = argStruct.retval;
       } catch (err) {
         retval = new ZigError(err, 1);
       }
       if (retval != null) {
-        args[RETURN](retval);
+        argStruct[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
-      return args[PROMISE] ?? args[GENERATOR];
+      return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
       try {
-        return args.retval;
+        return argStruct.retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

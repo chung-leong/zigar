@@ -140,7 +140,7 @@ export function addTests(importModule, options) {
       const [ line7 ] = await capture(() => call(f7));
       expect(line7).to.equal('number = 1234, error = Unexpected');
     })
-    it('should correctly pass allocator and promise as argument', async function() {
+    it('should correctly pass allocator and promise as arguments', async function() {
       this.timeout(0);
       const { call } = await importTest('promise-with-allocator');
       const f1 = async () => 'Hello world';
@@ -153,6 +153,94 @@ export function addTests(importModule, options) {
       const [ line3 ] = await capture(() => call(f3));
       expect(line3).to.equal('value = Hello world');
     })
+    it('should correctly pass generator as argument', async function() {
+      this.timeout(0);
+      const { call, JSError } = await importTest('generator');
+      const f1 = async function*() {
+        for (let i = 0; i < 5; i++) yield i;
+      };
+      const lines1 = await capture(async () => {
+        call(f1);
+        await delay(10);
+      });
+      expect(lines1).to.eql([
+        'number = 1234, value = 0',
+        'number = 1234, value = 1',
+        'number = 1234, value = 2',
+        'number = 1234, value = 3',
+        'number = 1234, value = 4',
+        'number = 1234, value = null',
+      ]);
+      const f2 = async function*() {
+        for (let i = 6; i < 20; i++) yield i;
+      };
+      const lines2 = await capture(async () => {
+        call(f2);
+        await delay(10);
+      });
+      expect(lines2).to.eql([
+        'number = 1234, value = 6',
+        'number = 1234, value = 7',
+        'number = 1234, value = 8',
+        'number = 1234, value = 9',
+        'number = 1234, value = 10',
+        'number = 1234, value = null',
+      ]);
+      const f3 = function({ callback }) {
+        for (let i = 6; i < 20; i++) {
+          if (!callback(i)) {
+            callback(null);
+            break;
+          }
+        }
+      };
+      const lines3 = await capture(async () => {
+        call(f3);
+        await delay(10);
+      });
+      expect(lines3).to.eql([
+        'number = 1234, value = 6',
+        'number = 1234, value = 7',
+        'number = 1234, value = 8',
+        'number = 1234, value = 9',
+        'number = 1234, value = 10',
+        'number = 1234, value = null',
+      ]);
+    })
+    it('should correctly pass allocator and generator as arguments', async function() {
+      this.timeout(0);
+      const { call } = await importTest('generator-with-allocator');
+      const f1 = async function*() {
+        const avengers = [
+          { real_name: 'Tony Stark', superhero_name: 'Ironman', age: 53 },
+          { real_name: 'Peter Park', superhero_name: 'Spiderman', age: 17 },
+          { real_name: 'Natasha Romanoff', superhero_name: 'Black Widow', age: 39 },
+        ];
+        for (const avenger of avengers) yield avenger;
+      };
+      const lines1 = await capture(async () => {
+        call(f1)
+        await delay(10);
+      });
+      expect(lines1).to.eql([
+        'real_name = Tony Stark, superhero_name = Ironman, age = 53',
+        'real_name = Peter Park, superhero_name = Spiderman, age = 17',
+        'real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39'
+      ]);
+      const f2 = async function*() {
+        yield { real_name: 'Tony Stark', superhero_name: 'Ironman', age: 53 };
+        throw new Error('Unexpected');
+      };
+      const lines2 = await capture(async () => {
+        call(f2)
+        await delay(10);
+      });
+      expect(lines2).to.eql([
+        'real_name = Tony Stark, superhero_name = Ironman, age = 53',
+        'error = Unexpected'
+      ]);
+    })
+
     skip.if(platform() === 'win32' && arch() === 'x64').
     or(platform() === 'linux' && arch() === 'aarch64').
     it('should throw when JavaScript is used as target of pointer to variadic function', async function() {

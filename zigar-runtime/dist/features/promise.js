@@ -32,7 +32,7 @@ var promise = mixin({
         func(result);
       }
       args[FINALIZE]();
-      const id = this.getFunctionId(cb);
+      const id = this.getFunctionId(callback);
       this.releaseFunction(id);
     };
     args[RETURN] = result => callback(null, result);
@@ -41,10 +41,10 @@ var promise = mixin({
   // create callback for inbound call
   createPromiseCallback(args, promise) {
     const { ptr, callback } = promise;
-    args[RETURN] = result => callback.call(this, ptr, result);
+    args[RETURN] = result => callback.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
-      return callback(ptr, result);
+      return args[RETURN](result);
     };
   },
 });
