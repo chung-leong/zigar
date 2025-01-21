@@ -287,16 +287,10 @@ void js_queue_callback(napi_env env,
             napi_get_value_uint32(env, result, &status);
         }
     }
-    if (action->futex_handle) {
-        if (status != OK) {
-            module_data* md = (module_data*) context;
-            // need to wake caller since JS code won't do it
-            md->mod->imports->wake_caller(action->futex_handle, status);
-        }
-    } else {
-        // if the caller isn't waiting, then action is on the heap and not
-        // in the caller's stack frame
-        free(action);
+    if (status != OK) {
+        module_data* md = (module_data*) context;
+        // need to wake caller since JS code won't do it
+        md->mod->imports->wake_caller(action->futex_handle, status);
     }
 }
 
@@ -874,19 +868,14 @@ result queue_js_action(module_data* md,
     if (!md->ts_fn) {
         return FAILURE_DISABLED;
     }
-    napi_status status;
-    if (action->type == RELEASE && !action->futex_handle) {
-        // use compact form that doesn't required memory allocation
-        status = napi_call_threadsafe_function(md->ts_release_fn, action, napi_tsfn_nonblocking);
-    } else {
-        // if caller doesn't wait, then action will get overwritten when the caller returns
-        // we need to therefore create a copy of it on the heap
-        if (!action->futex_handle) {
-            js_action* copy = malloc(sizeof(js_action));
-            memcpy(copy, action, sizeof(js_action));
-            action = copy;
-        }
+    napi_status status = napi_invalid_arg;
+    if (action->futex_handle) {
+        // action points to a struct on the stack; if the caller is waiting, then we can assume
+        // the struct will remain valid during the JS call
         status = napi_call_threadsafe_function(md->ts_fn, action, napi_tsfn_nonblocking);
+    } else if (action->type == RELEASE) {
+        // we can store the id in the pointer itself since that's we all we need; js_queue_release_callback() expects this
+        status = napi_call_threadsafe_function(md->ts_release_fn, (void*) action->fn_id, napi_tsfn_nonblocking);
     }
     return (status == napi_ok) ? OK : FAILURE;
 }
