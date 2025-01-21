@@ -461,12 +461,6 @@ export function throwReadOnly() {
   throw new ReadOnly();
 }
 
-export function warnImplicitArrayCreation(structure, arg) {
-  const created = addArticle(structure.constructor[TYPED_ARRAY].name);
-  const source = addArticle(arg.constructor.name);
-  console.warn(`Implicitly creating ${created} from ${source}`);
-}
-
 export function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');

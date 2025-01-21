@@ -1157,7 +1157,7 @@ describe('Structure: pointer', function() {
       const { buffer } = pointer['*'][MEMORY];
       expect(buffer).to.equal(ta.buffer);
     })
-    it('should show a warning when given a typed array is of the incorrect type', function() {
+    it('should throw when given a typed array is of the incorrect type', function() {
       const env = new Env();
       env.runtimeSafety = true;
       const intStructure = env.beginStructure({
@@ -1203,134 +1203,8 @@ describe('Structure: pointer', function() {
       env.defineStructure(structure);
       env.endStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
-      const origFn = console.warn;
-      let message;
-      try {
-        console.warn = (msg) => message = msg;
-        const ta = new Uint32Array([ 1, 2, 3, 4 ]);
-        expect(() => new Int32SlicePtr(ta)).to.not.throw(TypeError);
-      } finally {
-        console.warn = origFn;
-      }
-      expect(message).to.be.a('string');
-    })
-    it('should not show warning when runtime safety is off', function() {
-      const env = new Env();
-      env.runtimeSafety = false;
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        flags: StructureFlag.HasValue,
-        byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const sliceStructure = env.beginStructure({
-        type: StructureType.Slice,
-        name: '[_]i32',
-        byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
-        name: '[]i32',
-        byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      try {
-        env.defineStructure(structure);
-        env.endStructure(structure);
-        const { constructor: Int32SlicePtr } = structure;
-        const origFn = console.warn;
-        let message;
-        try {
-          console.warn = (msg) => message = msg;
-          const ta = new Uint32Array([ 1, 2, 3, 4 ]);
-          expect(() => new Int32SlicePtr(ta)).to.not.throw(TypeError);
-        } finally {
-          console.warn = origFn;
-        }
-        expect(message).to.be.undefined;
-      } finally {
-        process.env.NODE_ENV = before;
-      }
-    })
-    it('should show no warning when target slice is not compatiable with any typed array', function() {
-      const env = new Env();
-      const boolStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        flags: StructureFlag.HasValue,
-        name: 'Bool',
-        byteSize: 1,
-      });
-      env.attachMember(boolStructure, {
-        type: MemberType.Bool,
-        bitSize: 1,
-        byteSize: 8,
-        structure: boolStructure,
-      });
-      env.defineStructure(boolStructure);
-      env.endStructure(boolStructure);
-      const sliceStructure = env.beginStructure({
-        type: StructureType.Slice,
-        name: '[_]bool',
-        byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Bool,
-        bitSize: 1,
-        byteSize: 1,
-        structure: boolStructure,
-      });
-      env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
-      const structure = env.beginStructure({
-        type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
-        name: '[]bool',
-        byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
-      env.endStructure(structure);
-      const { constructor: BoolSlicePtr } = structure;
-      const origFn = console.warn;
-      let message;
-      try {
-        console.warn = (msg) => message = msg;
-        const ta = new Uint32Array([ 1, 2, 3, 4 ]);
-        expect(() => new BoolSlicePtr(ta)).to.not.throw(TypeError);
-      } finally {
-        console.warn = origFn;
-      }
-      expect(message).to.be.undefined;
+      const ta = new Uint32Array([ 1, 2, 3, 4 ]);
+      expect(() => new Int32SlicePtr(ta)).to.throw(TypeError);
     })
     it('should automatically cast to slice from an array', function() {
       const env = new Env();

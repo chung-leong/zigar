@@ -2816,12 +2816,6 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function warnImplicitArrayCreation(structure, arg) {
-  const created = addArticle(structure.constructor[TYPED_ARRAY].name);
-  const source = addArticle(arg.constructor.name);
-  console.warn(`Implicitly creating ${created} from ${source}`);
-}
-
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -3350,7 +3344,7 @@ var callMarshalingOutbound = mixin({
         const set = setters[destIndex++];
         set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, argList.length);
+        throw adjustArgumentError.call(err, destIndex - 1, argList.length);
       }
     }
   },
@@ -7424,19 +7418,11 @@ var pointer = mixin({
             }
           }
         }
+        if (TYPED_ARRAY in Target && arg?.buffer && arg[Symbol.iterator]) {
+          throw new InvalidPointerTarget(structure, arg);
+        }
         // autovivificate target object
         const autoObj = new Target(arg, { allocator });
-        if (thisEnv.runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (TYPED_ARRAY in Target) {
-            const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer') {
-              warnImplicitArrayCreation(targetStructure, arg);
-            }
-          }
-        }
         arg = autoObj;
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {

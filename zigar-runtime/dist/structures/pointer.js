@@ -1,6 +1,6 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, warnImplicitArrayCreation, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
+import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
 import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
 import { getProxy, defineValue, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
 
@@ -238,19 +238,11 @@ var pointer = mixin({
             }
           }
         }
+        if (TYPED_ARRAY in Target && arg?.buffer && arg[Symbol.iterator]) {
+          throw new InvalidPointerTarget(structure, arg);
+        }
         // autovivificate target object
         const autoObj = new Target(arg, { allocator });
-        if (thisEnv.runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (TYPED_ARRAY in Target) {
-            const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer') {
-              warnImplicitArrayCreation(targetStructure, arg);
-            }
-          }
-        }
         arg = autoObj;
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {

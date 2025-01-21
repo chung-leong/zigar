@@ -4,8 +4,7 @@ import {
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
-  PreviouslyFreed, ReadOnlyTarget, throwReadOnly, warnImplicitArrayCreation,
-  ZigMemoryTargetRequired
+  PreviouslyFreed, ReadOnlyTarget, throwReadOnly, ZigMemoryTargetRequired
 } from '../errors.js';
 import {
   ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS,
@@ -250,19 +249,11 @@ export default mixin({
             }
           }
         }
+        if (TYPED_ARRAY in Target && arg?.buffer && arg[Symbol.iterator]) {
+          throw new InvalidPointerTarget(structure, arg);
+        }
         // autovivificate target object
         const autoObj = new Target(arg, { allocator });
-        if (thisEnv.runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (TYPED_ARRAY in Target) {
-            const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer') {
-              warnImplicitArrayCreation(targetStructure, arg);
-            }
-          }
-        }
         arg = autoObj;
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
