@@ -7,7 +7,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
@@ -332,7 +332,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 1, 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const options = undefined;
       env.copyArguments(dest, src, members, options);
       expect(dest).to.eql({ [0]: 1, [1]: 2 });
@@ -372,7 +377,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ undefined, 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const options = undefined;
       expect(() => env.copyArguments(dest, src, members, options)).to.throw();
     })
@@ -427,7 +437,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ undefined, 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const options = undefined;
       expect(() => env.copyArguments(dest, src, members, options)).to.not.throw();
     })
@@ -481,7 +496,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const allocator = new Allocator({ index: 1234 });
       const options = { allocator };
       env.copyArguments(dest, src, members, options);
@@ -537,7 +557,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const allocator1 = new Allocator({ index: 1234 });
       const allocator2 = new Allocator({ index: 1234 });
       const options = { allocator1, allocator2 };
@@ -594,7 +619,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 2 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const options = undefined;
       const allocator = new Allocator({ index: 1234 });
       env.createDefaultAllocator = function() {
@@ -722,7 +752,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 1 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const callback = () => {};
       const options = { callback };
       env.copyArguments(dest, src, members, options);
@@ -848,7 +883,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 1 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const callback = () => {};
       const options = { callback };
       env.copyArguments(dest, src, members, options);
@@ -921,7 +961,12 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       const src = [ 1 ];
-      const dest = {};
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
       const { signal }  = new AbortController();
       const options = { signal };
       env.copyArguments(dest, src, members, options);
