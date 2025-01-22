@@ -91,7 +91,8 @@ pub const StructureFlags = extern union {
         is_generator: bool = false,
         is_abort_signal: bool = false,
 
-        _: u20 = 0,
+        is_optional: bool = false,
+        _: u19 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
@@ -921,6 +922,15 @@ pub const TypeData = struct {
 
     pub fn isAbortSignal(comptime self: @This()) bool {
         return getInternalType(self.type) == .abort_signal;
+    }
+
+    pub fn isOptionalStruct(comptime self: @This()) bool {
+        return switch (@typeInfo(self.type)) {
+            .Struct => |st| inline for (st.fields) |field| {
+                if (field.default_value == null) break false;
+            } else true,
+            else => false,
+        };
     }
 
     pub fn isSupported(comptime self: @This()) bool {

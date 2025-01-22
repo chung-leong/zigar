@@ -42,6 +42,8 @@ export const StructFlag = {
   IsPromise:        0x0200,
   IsGenerator:      0x0400,
   IsAbortSignal:    0x0800,
+
+  IsOptional:       0x1000,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,

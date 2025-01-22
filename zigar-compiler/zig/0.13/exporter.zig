@@ -127,6 +127,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_promise = td.isPromise(),
                             .is_generator = td.isGenerator(),
                             .is_abort_signal = td.isAbortSignal(),
+                            .is_optional = td.isOptionalStruct(),
                         },
                     };
                 },
