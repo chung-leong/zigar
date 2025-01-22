@@ -34,12 +34,12 @@ export default mixin({
     };
   },
   getCopyFunction(size, multiple = false) {
-    this.copiers ??= this.defineCopiers();
+    this.copiers ||= this.defineCopiers();
     const f = !multiple ? this.copiers[size] : undefined;
     return f ?? this.copiers.any;
   },
   getResetFunction(size) {
-    this.resetters ??= this.defineResetters();
+    this.resetters ||= this.defineResetters();
     return this.resetters[size] ?? this.resetters.any;
   },
   defineCopiers() {

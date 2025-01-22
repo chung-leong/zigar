@@ -59,7 +59,7 @@ function getPrimitiveName({ type, bitSize }) {
 }
 
 function decodeText(arrays, encoding = 'utf-8') {
-  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
+  const decoder = decoders[encoding] ||= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -97,7 +97,7 @@ function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      const encoder = encoders[encoding] ??= new TextEncoder();
+      const encoder = encoders[encoding] ||= new TextEncoder();
       return encoder.encode(text);
     }
   }
@@ -159,7 +159,7 @@ const usize = function(arg) {
 ;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaa_aaaa || address === -1431655766;
+    return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
 ;
 

@@ -84,7 +84,7 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
+    let entry = (this.viewMap ||= new WeakMap()).get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {

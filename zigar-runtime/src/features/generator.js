@@ -120,7 +120,7 @@ class AsyncGenerator {
 
   sleep(name) {
     let resolve;
-    const promise = this.promises[name] ??= new Promise(f => resolve = f);
+    const promise = this.promises[name] ||= new Promise(f => resolve = f);
     if (resolve) promise.resolve = resolve;
     return promise;
   }

@@ -48,10 +48,10 @@ const MemberFlag = {
   IsBackingInt:     0x0040,
 };
 
-const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
+const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {
-  return dict[name] ??= Symbol(name);
+  return dict[name] ||= Symbol(name);
 }
 
 function symbol(name) {
@@ -105,7 +105,7 @@ const CONST_TARGET = symbol('const target');
   }
 : (process.env.BITS === '32')
 ? function(address) {
-    return address === 0xaaaa_aaaa || address === -1431655766;
+    return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
   /* c8 ignore next */
 : undefined;

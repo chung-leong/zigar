@@ -54,13 +54,13 @@ export default mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          arg = promise ??= this.createPromise(argStruct, options?.['callback']);
+          arg = (promise ||= this.createPromise(argStruct, options?.['callback']));
         } else if (structure.flags & StructFlag.IsGenerator) {
-          arg = generator ??= this.createGenerator(argStruct, options?.['callback']);
+          arg = generator ||= this.createGenerator(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = signal ??= this.createSignal(structure, options?.['signal']);
+          arg = signal ||= this.createSignal(structure, options?.['signal']);
         }
       }
       if (arg === undefined) {

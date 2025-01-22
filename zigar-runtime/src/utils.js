@@ -59,7 +59,7 @@ export function getPrimitiveName({ type, bitSize }) {
 }
 
 export function decodeText(arrays, encoding = 'utf-8') {
-  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
+  const decoder = decoders[encoding] ||= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -97,7 +97,7 @@ export function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      const encoder = encoders[encoding] ??= new TextEncoder();
+      const encoder = encoders[encoding] ||= new TextEncoder();
       return encoder.encode(text);
     }
   }

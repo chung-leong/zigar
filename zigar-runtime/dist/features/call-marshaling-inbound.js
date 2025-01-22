@@ -161,7 +161,7 @@ var callMarshalingInbound = mixin({
             }
             if (optName !== undefined) {
               if (opt !== undefined) {
-                options ??= {};
+                options ||= {};
                 options[optName] = opt;
               }
             } else {

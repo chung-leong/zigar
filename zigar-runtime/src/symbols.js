@@ -1,7 +1,7 @@
-const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
+const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {
-  return dict[name] ??= Symbol(name);
+  return dict[name] ||= Symbol(name);
 }
 
 function symbol(name) {

@@ -156,10 +156,10 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
+const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {
-  return dict[name] ??= Symbol(name);
+  return dict[name] ||= Symbol(name);
 }
 
 function symbol(name) {
@@ -278,7 +278,7 @@ function getPrimitiveName({ type, bitSize }) {
 }
 
 function decodeText(arrays, encoding = 'utf-8') {
-  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
+  const decoder = decoders[encoding] ||= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -316,7 +316,7 @@ function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      const encoder = encoders[encoding] ??= new TextEncoder();
+      const encoder = encoders[encoding] ||= new TextEncoder();
       return encoder.encode(text);
     }
   }
@@ -371,7 +371,7 @@ const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaa_aaaa || address === -1431655766;
+    return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
 ;
 
@@ -3202,7 +3202,7 @@ var callMarshalingInbound = mixin({
             }
             if (optName !== undefined) {
               if (opt !== undefined) {
-                options ??= {};
+                options ||= {};
                 options[optName] = opt;
               }
             } else {
@@ -3323,13 +3323,13 @@ var callMarshalingOutbound = mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          arg = promise ??= this.createPromise(argStruct, options?.['callback']);
+          arg = (promise ||= this.createPromise(argStruct, options?.['callback']));
         } else if (structure.flags & StructFlag.IsGenerator) {
-          arg = generator ??= this.createGenerator(argStruct, options?.['callback']);
+          arg = generator ||= this.createGenerator(argStruct, options?.['callback']);
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = signal ??= this.createSignal(structure, options?.['signal']);
+          arg = signal ||= this.createSignal(structure, options?.['signal']);
         }
       }
       if (arg === undefined) {
@@ -3482,12 +3482,12 @@ var dataCopying = mixin({
     };
   },
   getCopyFunction(size, multiple = false) {
-    this.copiers ??= this.defineCopiers();
+    this.copiers ||= this.defineCopiers();
     const f = !multiple ? this.copiers[size] : undefined;
     return f ?? this.copiers.any;
   },
   getResetFunction(size) {
-    this.resetters ??= this.defineResetters();
+    this.resetters ||= this.defineResetters();
     return this.resetters[size] ?? this.resetters.any;
   },
   defineCopiers() {
@@ -3778,7 +3778,7 @@ class AsyncGenerator {
 
   sleep(name) {
     let resolve;
-    const promise = this.promises[name] ??= new Promise(f => resolve = f);
+    const promise = this.promises[name] ||= new Promise(f => resolve = f);
     if (resolve) promise.resolve = resolve;
     return promise;
   }
@@ -5154,7 +5154,7 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
+    let entry = (this.viewMap ||= new WeakMap()).get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {
@@ -6193,7 +6193,7 @@ var all$1 = mixin({
         const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
         const argRequired = (accessorType === 'get') ? 0 : 1;
         if (accessorType && fn.length  === argRequired) {
-          const descriptor = staticDescriptors[propName] ??= {};
+          const descriptor = staticDescriptors[propName] ||= {};
           descriptor[accessorType] = fn;
         }
         // see if it's a method
@@ -6215,7 +6215,7 @@ var all$1 = mixin({
           });
           descriptors[name] = defineValue(method);
           if (accessorType && method.length === argRequired) {
-            const descriptor = descriptors[propName] ??= {};
+            const descriptor = descriptors[propName] ||= {};
             descriptor[accessorType] = method;
           }
         }
@@ -7332,7 +7332,7 @@ var pointer = mixin({
       let max;
       if (!zig) {
         if (flags & PointerFlag.HasLength) {
-          max = this[MAX_LENGTH] ??= target.length;
+          max = this[MAX_LENGTH] ||= target.length;
         } else {
           max = (bytesAvailable / targetSize) | 0;
         }
@@ -9313,7 +9313,7 @@ function createReader(dv) {
       shift += 7;
       if ((0x80 & byte) === 0) {
         if (shift < 32 && (byte & 0x40) !== 0) {
-          return value | (-1 << shift);
+          return value | (~0 << shift);
         }
         return value;
       }
