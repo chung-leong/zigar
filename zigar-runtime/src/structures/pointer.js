@@ -163,7 +163,8 @@ export default mixin({
       let max;
       if (!zig) {
         if (flags & PointerFlag.HasLength) {
-          max = this[MAX_LENGTH] ||= target.length;
+          this[MAX_LENGTH] ||= target.length;
+          max = this[MAX_LENGTH];
         } else {
           max = (bytesAvailable / targetSize) | 0;
         }

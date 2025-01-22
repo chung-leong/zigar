@@ -85,7 +85,8 @@ var all = mixin({
         const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
         const argRequired = (accessorType === 'get') ? 0 : 1;
         if (accessorType && fn.length  === argRequired) {
-          const descriptor = staticDescriptors[propName] ||= {};
+          staticDescriptors[propName] ||= {};
+          const descriptor = staticDescriptors[propName];
           descriptor[accessorType] = fn;
         }
         // see if it's a method
