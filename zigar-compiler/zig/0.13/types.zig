@@ -889,11 +889,11 @@ pub const TypeData = struct {
         return inline for (@typeInfo(self.type).Struct.fields, 0..) |field, i| {
             if (i == 0) {
                 // retval
-                if (@typeInfo(field.type) == .error_union) break true;
+                if (@typeInfo(field.type) == .ErrorUnion) break true;
             } else {
                 const internal_type = comptime getInternalType(field.type);
                 if (internal_type == .promise or internal_type == .generator) {
-                    if (@typeInfo(field.type.payload) == .error_union) break true;
+                    if (@typeInfo(field.type.payload) == .ErrorUnion) break true;
                 }
             }
         } else false;

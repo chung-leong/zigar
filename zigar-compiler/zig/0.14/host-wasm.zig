@@ -300,7 +300,7 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
     } else {
         if (comptime builtin.single_threaded) unreachable;
         const initial_value = 0xffff_ffff;
-        const futex: Futex = undefined;
+        var futex: Futex = undefined;
         futex.value = std.atomic.Value(u32).init(initial_value);
         futex.handle = @intFromPtr(&futex);
         var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex.handle);
