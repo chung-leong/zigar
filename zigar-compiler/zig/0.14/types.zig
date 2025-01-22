@@ -1806,10 +1806,24 @@ test "hasDefaultFields" {
 
 fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
     const f = @typeInfo(FT).@"fn";
-    const arg_match = switch (f.params.len) {
-        1 => f.params[0].type == *T,
-        2 => f.params[0].type == *T and hasDefaultFields(f.params[1].type orelse void),
-        else => false,
+    const arg_match = comptime check: {
+        var self_count = 0;
+        var alloc_count = 0;
+        var struct_count = 0;
+        var other_count = 0;
+        for (f.params, 0..) |param, i| {
+            const PT = param.type orelse break :check false;
+            if (i == 0 and PT == *T) {
+                self_count += 1;
+            } else if (PT == std.mem.Allocator) {
+                alloc_count += 1;
+            } else if (hasDefaultFields(PT)) {
+                struct_count += 1;
+            } else {
+                other_count += 1;
+            }
+        }
+        break :check self_count == 1 and other_count == 0 and alloc_count <= 1 and struct_count <= 1;
     };
     if (arg_match) {
         if (f.return_type) |RT| {
