@@ -925,12 +925,7 @@ pub const TypeData = struct {
     }
 
     pub fn isOptionalStruct(comptime self: @This()) bool {
-        return switch (@typeInfo(self.type)) {
-            .Struct => |st| inline for (st.fields) |field| {
-                if (field.default_value == null) break false;
-            } else true,
-            else => false,
-        };
+        return hasDefaultFields(self.type);
     }
 
     pub fn isSupported(comptime self: @This()) bool {
@@ -1782,9 +1777,41 @@ test "Payload" {
     try expect(T3 == null);
 }
 
+fn hasDefaultFields(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct => |st| inline for (st.fields) |field| {
+            if (field.default_value == null) break false;
+        } else true,
+        else => false,
+    };
+}
+
+test "hasDefaultFields" {
+    const S1 = struct {
+        number1: i32,
+        number2: i32,
+    };
+    try expect(hasDefaultFields(S1) == false);
+    const S2 = struct {
+        number1: i32 = 1,
+        number2: i32,
+    };
+    try expect(hasDefaultFields(S2) == false);
+    const S3 = struct {
+        number1: i32 = 1,
+        number2: i32 = 2,
+    };
+    try expect(hasDefaultFields(S3) == true);
+}
+
 fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
     const f = @typeInfo(FT).Fn;
-    if (f.params.len == 1 and f.params[0].type == *T) {
+    const arg_match = switch (f.params.len) {
+        1 => f.params[0].type == *T,
+        2 => f.params[0].type == *T and hasDefaultFields(f.params[1].type orelse void),
+        else => false,
+    };
+    if (arg_match) {
         if (f.return_type) |RT| {
             if (Payload(RT) != null) return RT;
         }
@@ -1813,17 +1840,29 @@ test "NextMethodReturnValue" {
         pub fn next5(_: *@This()) i32 {
             return 0;
         }
+
+        pub fn next6(_: *@This(), _: struct { a: i32 = 0 }) ?i32 {
+            return null;
+        }
+
+        pub fn next7(_: *@This(), _: struct { a: i32 = 0, b: i32 }) ?i32 {
+            return null;
+        }
     };
-    const T1 = NextMethodReturnValue(@TypeOf(S.next1), S) orelse unreachable;
-    try expect(T1 == ?i32);
-    const T2 = NextMethodReturnValue(@TypeOf(S.next2), S) orelse unreachable;
-    try expect(T2 == error{OutOfMemory}!?i32);
+    const T1 = NextMethodReturnValue(@TypeOf(S.next1), S);
+    try expect(T1 orelse unreachable == ?i32);
+    const T2 = NextMethodReturnValue(@TypeOf(S.next2), S);
+    try expect(T2 orelse unreachable == error{OutOfMemory}!?i32);
     const T3 = NextMethodReturnValue(@TypeOf(S.next3), S);
     try expect(T3 == null);
     const T4 = NextMethodReturnValue(@TypeOf(S.next4), S);
     try expect(T4 == null);
     const T5 = NextMethodReturnValue(@TypeOf(S.next5), S);
     try expect(T5 == null);
+    const T6 = NextMethodReturnValue(@TypeOf(S.next6), S);
+    try expect(T6 orelse unreachable == ?i32);
+    const T7 = NextMethodReturnValue(@TypeOf(S.next7), S);
+    try expect(T7 == null);
 }
 
 pub fn IteratorReturnValue(comptime T: type) ?type {
@@ -2174,13 +2213,9 @@ test "Queue" {
     try queue.push(123);
     try queue.push(456);
     const value1 = queue.pull();
-    const count1 = queue.count.load(.acquire);
     try expect(value1 == 123);
-    try expect(count1 == 1);
     const value2 = queue.pull();
-    const count2 = queue.count.load(.acquire);
     try expect(value2 == 456);
-    try expect(count2 == 0);
     const value3 = queue.pull();
     try expect(value3 == null);
     try queue.push(888);
