@@ -1,7 +1,7 @@
 const Struct = struct {
     index: i32,
 
-    pub fn next(self: *@This()) ?[]const u8 {
+    pub fn next(self: *@This(), _: struct {}) ?[]const u8 {
         defer self.index += 1;
         return switch (self.index) {
             0 => "apple",

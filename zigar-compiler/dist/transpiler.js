@@ -50,6 +50,8 @@ const StructFlag = {
   IsPromise:        0x0200,
   IsGenerator:      0x0400,
   IsAbortSignal:    0x0800,
+
+  IsOptional:       0x1000,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
@@ -5576,11 +5578,12 @@ var forZig = mixin({
   },
 });
 
-function getZigIterator() {
+function getZigIterator(arg = {}) {
   const self = this;
+  const args = (self.next.length === 1) ? [arg] : [];
   return {
     next() {
-      const value = self.next();
+      const value = self.next(...args);
       const done = value === null;
       return { value, done };
     },
