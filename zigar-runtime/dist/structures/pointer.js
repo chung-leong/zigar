@@ -364,6 +364,7 @@ function isCompatiblePointer(arg, Target, flags) {
 const constProxies = new WeakMap();
 
 function getConstProxy(target) {
+  if (!target) return null;
   let proxy = constProxies.get(target);
   if (!proxy) {
     const pointer = target[POINTER];
@@ -431,7 +432,8 @@ const constTargetProxyHandlers = {
     if (name === CONST_TARGET) {
       return target;
     } else {
-      return getConstProxy(target[name]);
+      const value = target[name];
+      return (typeof(value) === 'object') ? getConstProxy(value) : value;
     }
   },
   set(target, name, value) {
