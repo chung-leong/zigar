@@ -11,7 +11,7 @@ pub const BindingError = error{
 };
 
 pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
-    return std.heap.GeneralPurposeAllocator(.{}){
+    return .{
         .backing_allocator = .{
             .ptr = undefined,
             .vtable = &ExecutablePageAllocator.vtable,
@@ -22,9 +22,9 @@ pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
 test "executable" {
     var gpa = executable();
     var allocator = gpa.allocator();
-    try expect(@TypeOf(gpa) == std.heap.GeneralPurposeAllocator(.{}));
     const memory = try allocator.alloc(u8, 256);
     allocator.free(memory);
+    try expect(gpa.detectLeaks() == false);
 }
 
 pub fn Binding(comptime T: type, comptime TT: type) type {
