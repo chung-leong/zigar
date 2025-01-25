@@ -1,7 +1,7 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
-import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY } from '../symbols.js';
+import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, RESTORE, TYPE, CONST_TARGET, SETTERS, TYPED_ARRAY } from '../symbols.js';
 import { getProxy, defineValue, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
@@ -145,6 +145,9 @@ var pointer = mixin({
         }
         return;
       }
+      {
+        target[RESTORE]?.();
+      }
       const dv = target[MEMORY];
       const zig = dv[ZIG];
       const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
@@ -162,11 +165,9 @@ var pointer = mixin({
         throw new InvalidSliceLength(len, max);
       }
       const byteLength = len * targetSize;
-      const newDV = (byteLength <= bytesAvailable)
-      // can use the same buffer
-      ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
-      // need to ask V8 for a larger external buffer
-      : thisEnv.obtainZigView(zig.address, byteLength);
+      const newDV = (zig)
+      ? thisEnv.obtainZigView(zig.address, byteLength)
+      : thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength);
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);
@@ -423,8 +424,18 @@ const proxyHandlers = {
 
 const constProxyHandlers = {
   ...proxyHandlers,
-  set: throwReadOnly,
-  deleteProperty: throwReadOnly,
+  set(pointer, name, value) {
+    if (name in pointer) {
+      console.log(`pointer: ${name}`);
+      pointer[name] = value;
+    } else {
+      throwReadOnly();
+    }
+    return true;
+  },
+  deleteProperty(pointer, name) {
+    throwReadOnly();
+  }
 };
 
 const constTargetProxyHandlers = {
@@ -433,12 +444,16 @@ const constTargetProxyHandlers = {
       return target;
     } else {
       const value = target[name];
-      return (typeof(value) === 'object') ? getConstProxy(value) : value;
+      if (typeof(name) === 'string' && typeof(value) === 'object') {
+        return getConstProxy(value);
+      } else {
+        return value;
+      }
     }
   },
   set(target, name, value) {
     throwReadOnly();
-  },
+  }
 };
 
 function isCompatibleBuffer(arg, constructor) {

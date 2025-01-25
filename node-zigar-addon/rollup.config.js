@@ -62,7 +62,7 @@ export default [
       format: 'iife',
       name: 'variable',
       plugins: [
-        Terser(),
+        Terser({ keep_classnames: true }),
         CPPString(),
       ]
     },

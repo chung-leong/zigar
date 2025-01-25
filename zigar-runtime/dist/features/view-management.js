@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferSizeMismatch, BufferExpected } from '../errors.js';
-import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CACHE, PROXY } from '../symbols.js';
+import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CONST_TARGET, CACHE, PROXY } from '../symbols.js';
 import { isCompatibleInstanceOf, findElements, usizeInvalid } from '../utils.js';
 
 var viewManagement = mixin({
@@ -117,12 +117,13 @@ var viewManagement = mixin({
     let dv;
     if (existing) {
       return existing;
-    } else if (entry) {
-      dv = new DataView(buffer, offset, len);
+    }
+    dv = new DataView(buffer, offset, len);
+    if (entry) {
       entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
-      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+      this.viewMap.set(buffer, dv);
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -156,7 +157,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (zig?.len > 0 && dv.byteLength === 0) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -171,9 +172,10 @@ var viewManagement = mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            this[MEMORY] = newDV;
+            const target = this[CONST_TARGET] ?? this;
+            target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
-            this.constructor[CACHE]?.save?.(newDV, this[PROXY] ?? this);
+            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
             return true;
           } else {
             return false;

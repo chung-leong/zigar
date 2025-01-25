@@ -5195,12 +5195,13 @@ var viewManagement = mixin({
     let dv;
     if (existing) {
       return existing;
-    } else if (entry) {
-      dv = new DataView(buffer, offset, len);
+    }
+    dv = new DataView(buffer, offset, len);
+    if (entry) {
       entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
-      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+      this.viewMap.set(buffer, dv);
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -5234,7 +5235,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (zig?.len > 0 && dv.byteLength === 0) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -5249,9 +5250,10 @@ var viewManagement = mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            this[MEMORY] = newDV;
+            const target = this[CONST_TARGET] ?? this;
+            target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
-            this.constructor[CACHE]?.save?.(newDV, this[PROXY] ?? this);
+            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
             return true;
           } else {
             return false;
@@ -7337,6 +7339,9 @@ var pointer = mixin({
         }
         return;
       }
+      {
+        target[RESTORE]?.();
+      }
       const dv = target[MEMORY];
       const zig = dv[ZIG];
       const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
@@ -7354,11 +7359,9 @@ var pointer = mixin({
         throw new InvalidSliceLength(len, max);
       }
       const byteLength = len * targetSize;
-      const newDV = (byteLength <= bytesAvailable)
-      // can use the same buffer
-      ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
-      // need to ask V8 for a larger external buffer
-      : thisEnv.obtainZigView(zig.address, byteLength);
+      const newDV = (zig)
+      ? thisEnv.obtainZigView(zig.address, byteLength)
+      : thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength);
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);
@@ -7615,8 +7618,18 @@ const proxyHandlers = {
 
 const constProxyHandlers = {
   ...proxyHandlers,
-  set: throwReadOnly,
-  deleteProperty: throwReadOnly,
+  set(pointer, name, value) {
+    if (name in pointer) {
+      console.log(`pointer: ${name}`);
+      pointer[name] = value;
+    } else {
+      throwReadOnly();
+    }
+    return true;
+  },
+  deleteProperty(pointer, name) {
+    throwReadOnly();
+  }
 };
 
 const constTargetProxyHandlers = {
@@ -7625,12 +7638,16 @@ const constTargetProxyHandlers = {
       return target;
     } else {
       const value = target[name];
-      return (typeof(value) === 'object') ? getConstProxy(value) : value;
+      if (typeof(name) === 'string' && typeof(value) === 'object') {
+        return getConstProxy(value);
+      } else {
+        return value;
+      }
     }
   },
   set(target, name, value) {
     throwReadOnly();
-  },
+  }
 };
 
 function isCompatibleBuffer(arg, constructor) {

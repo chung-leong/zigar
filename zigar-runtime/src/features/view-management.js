@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, COPY, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { CACHE, CONST_TARGET, COPY, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
@@ -125,12 +125,13 @@ export default mixin({
     let dv;
     if (existing) {
       return existing;
-    } else if (entry) {
-      dv = new DataView(buffer, offset, len);
+    }
+    dv = new DataView(buffer, offset, len);
+    if (entry) {
       entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
-      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+      this.viewMap.set(buffer, dv);
     }
     if (process.env.TARGET === 'wasm') {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -171,7 +172,7 @@ export default mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (zig?.len > 0 && dv.byteLength === 0) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -186,9 +187,10 @@ export default mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            this[MEMORY] = newDV;
+            const target = this[CONST_TARGET] ?? this;
+            target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
-            this.constructor[CACHE]?.save?.(newDV, this[PROXY] ?? this);
+            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
             return true;
           } else {
             return false;
