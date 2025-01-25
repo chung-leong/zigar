@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, COPY, MEMORY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { CACHE, COPY, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
@@ -187,7 +187,8 @@ export default mixin({
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
             this[MEMORY] = newDV;
-            this.constructor[CACHE]?.save?.(newDV, this);
+            // pointers are referenced by their proxies in the cache
+            this.constructor[CACHE]?.save?.(newDV, this[PROXY] ?? this);
             return true;
           } else {
             return false;

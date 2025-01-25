@@ -377,7 +377,12 @@ const constProxies = new WeakMap();
 function getConstProxy(target) {
   let proxy = constProxies.get(target);
   if (!proxy) {
-    proxy = new Proxy(target, constTargetHandlers);
+    const pointer = target[POINTER];
+    if (pointer) {
+      proxy = new Proxy(pointer, constProxyHandlers);
+    } else {
+      proxy = new Proxy(target, constTargetProxyHandlers);
+    }
     constProxies.set(target, proxy);
   }
   return proxy;
@@ -426,26 +431,22 @@ const proxyHandlers = {
   },
 };
 
-const constTargetHandlers = {
+const constProxyHandlers = {
+  ...proxyHandlers,
+  set: throwReadOnly,
+  deleteProperty: throwReadOnly,
+};
+
+const constTargetProxyHandlers = {
   get(target, name) {
     if (name === CONST_TARGET) {
       return target;
     } else {
-      const value = target[name];
-      if (value?.[CONST_TARGET] === null) {
-        return getConstProxy(value);
-      }
-      return value;
+      return getConstProxy(target[name]);
     }
   },
   set(target, name, value) {
-    const ptr = target[POINTER];
-    if (ptr && !(name in ptr)) {
-      target[name] = value;
-    } else {
-      throwReadOnly();
-    }
-    return true;
+    throwReadOnly();
   },
 };
 

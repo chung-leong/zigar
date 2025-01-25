@@ -195,7 +195,6 @@ const SIZE = symbol('size');
 const BIT_SIZE = symbol('bit size');
 const ALIGN = symbol('align');
 const CONST_TARGET = symbol('const target');
-const CONST_PROXY = symbol('const proxy');
 const ENVIRONMENT = symbol('environment');
 const ATTRIBUTES = symbol('attributes');
 const PRIMITIVE = symbol('primitive');
@@ -5251,7 +5250,8 @@ var viewManagement = mixin({
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
             this[MEMORY] = newDV;
-            this.constructor[CACHE]?.save?.(newDV, this);
+            // pointers are referenced by their proxies in the cache
+            this.constructor[CACHE]?.save?.(newDV, this[PROXY] ?? this);
             return true;
           } else {
             return false;
@@ -7553,12 +7553,18 @@ function isCompatiblePointer(arg, Target, flags) {
   return false;
 }
 
+const constProxies = new WeakMap();
+
 function getConstProxy(target) {
-  let proxy = target[CONST_PROXY];
+  let proxy = constProxies.get(target);
   if (!proxy) {
-    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true });
-    proxy = new Proxy(target, constTargetHandlers);
-    Object.defineProperty(target, CONST_PROXY, { value: proxy });
+    const pointer = target[POINTER];
+    if (pointer) {
+      proxy = new Proxy(pointer, constProxyHandlers);
+    } else {
+      proxy = new Proxy(target, constTargetProxyHandlers);
+    }
+    constProxies.set(target, proxy);
   }
   return proxy;
 }
@@ -7606,26 +7612,22 @@ const proxyHandlers = {
   },
 };
 
-const constTargetHandlers = {
+const constProxyHandlers = {
+  ...proxyHandlers,
+  set: throwReadOnly,
+  deleteProperty: throwReadOnly,
+};
+
+const constTargetProxyHandlers = {
   get(target, name) {
     if (name === CONST_TARGET) {
       return target;
     } else {
-      const value = target[name];
-      if (value?.[CONST_TARGET] === null) {
-        return getConstProxy(value);
-      }
-      return value;
+      return getConstProxy(target[name]);
     }
   },
   set(target, name, value) {
-    const ptr = target[POINTER];
-    if (ptr && !(name in ptr)) {
-      target[name] = value;
-    } else {
-      throwReadOnly();
-    }
-    return true;
+    throwReadOnly();
   },
 };
 
