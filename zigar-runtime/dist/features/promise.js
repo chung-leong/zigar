@@ -41,7 +41,8 @@ var promise = mixin({
   // create callback for inbound call
   createPromiseCallback(args, promise) {
     const { ptr, callback } = promise;
-    args[RETURN] = result => callback.call(args, ptr, result);
+    const f = callback['*'];
+    args[RETURN] = result => f.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[RETURN](result);
