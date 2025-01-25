@@ -7,9 +7,9 @@ import {
   PreviouslyFreed, ReadOnlyTarget, throwReadOnly, ZigMemoryTargetRequired
 } from '../errors.js';
 import {
-  ADDRESS, CAST, CONST_PROXY, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS,
-  LAST_LENGTH, LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS,
-  SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG
+  ADDRESS, CAST, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH,
+  LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
+  TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG
 } from '../symbols.js';
 import {
   defineValue, findElements, getProxy, isCompatibleInstanceOf, isCompatibleType, usizeInvalid,
@@ -372,12 +372,13 @@ function isCompatiblePointer(arg, Target, flags) {
   return false;
 }
 
+const constProxies = new WeakMap();
+
 function getConstProxy(target) {
-  let proxy = target[CONST_PROXY];
+  let proxy = constProxies.get(target);
   if (!proxy) {
-    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true })
     proxy = new Proxy(target, constTargetHandlers);
-    Object.defineProperty(target, CONST_PROXY, { value: proxy })
+    constProxies.set(target, proxy);
   }
   return proxy;
 }

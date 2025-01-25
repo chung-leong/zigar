@@ -36,7 +36,6 @@ export const SIZE = symbol('size');
 export const BIT_SIZE = symbol('bit size');
 export const ALIGN = symbol('align');
 export const CONST_TARGET = symbol('const target');
-export const CONST_PROXY = symbol('const proxy');
 export const ENVIRONMENT = symbol('environment');
 export const ATTRIBUTES = symbol('attributes');
 export const PRIMITIVE = symbol('primitive');

@@ -1,7 +1,7 @@
 import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
-import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, CONST_PROXY } from '../symbols.js';
+import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY } from '../symbols.js';
 import { getProxy, defineValue, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
@@ -361,12 +361,13 @@ function isCompatiblePointer(arg, Target, flags) {
   return false;
 }
 
+const constProxies = new WeakMap();
+
 function getConstProxy(target) {
-  let proxy = target[CONST_PROXY];
+  let proxy = constProxies.get(target);
   if (!proxy) {
-    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true });
     proxy = new Proxy(target, constTargetHandlers);
-    Object.defineProperty(target, CONST_PROXY, { value: proxy });
+    constProxies.set(target, proxy);
   }
   return proxy;
 }
