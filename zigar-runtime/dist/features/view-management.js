@@ -157,7 +157,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.byteLength === 0) {
+      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
