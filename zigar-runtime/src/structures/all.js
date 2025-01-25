@@ -43,7 +43,7 @@ export default mixin({
     const constructor = structure.constructor = f.call(this, structure, descriptors);
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
       const s = descriptor?.set;
-      if (s && !setters[name]) {
+      if (s && !setters[name] && name !== '$') {
         setters[name] = s;
         keys.push(name);
       }

@@ -13,26 +13,26 @@ export default mixin({
       func = generator.push.bind(generator);
     }
     const callback = (ptr, result) => {
-      let cont;
-      if (func.length === 2) {
-        const isError = result instanceof Error;
-        cont = func(isError ? result : null, isError ? null : result);
-      } else {
-        cont = func(result);
-      }
-      if (!cont) {
+      const isError = result instanceof Error;
+      const retval = (func.length === 2)
+      ? func(isError ? result : null, isError ? null : result)
+      : func(result);
+      if (retval === false || isError || result === null) {
         args[FINALIZE]();
         const id = this.getFunctionId(callback);
         this.releaseFunction(id);
+        return false;
+      } else {
+        return true;
       }
-      return cont;
     };
     args[RETURN] = result => callback(null, result);
     return { ptr: null, callback };
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
-    args[YIELD] = result => callback.call(args, ptr, result);
+    const f = callback['*'];
+    args[YIELD] = result => f.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[YIELD](result);

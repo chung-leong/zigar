@@ -11,6 +11,9 @@ export default mixin({
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { alloc }, ptr } = this;
         const slicePtr = alloc(ptr, len, ptrAlign, 0);
+        if (!slicePtr) {
+          throw new Error('Out of memory');
+        }
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];

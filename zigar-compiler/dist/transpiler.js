@@ -373,7 +373,7 @@ const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
-    return address === 0xaaaa_aaaa || address === -0x5555_5556;
+    return address === 0xaaaa_aaaa || address === -1431655766;
   }
 ;
 
@@ -2878,6 +2878,9 @@ var allocatorMethods = mixin({
         const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { alloc }, ptr } = this;
         const slicePtr = alloc(ptr, len, ptrAlign, 0);
+        if (!slicePtr) {
+          throw new Error('Out of memory');
+        }
         // alloc returns a [*]u8, which has a initial length of 1
         slicePtr.length = len;
         const dv = slicePtr['*'][MEMORY];
@@ -3325,13 +3328,16 @@ var callMarshalingOutbound = mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          arg = (promise ||= this.createPromise(argStruct, options?.['callback']));
+          promise ||= this.createPromise(argStruct, options?.['callback']);
+          arg = promise;
         } else if (structure.flags & StructFlag.IsGenerator) {
-          arg = generator ||= this.createGenerator(argStruct, options?.['callback']);
+          generator ||= this.createGenerator(argStruct, options?.['callback']);
+          arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          arg = signal ||= this.createSignal(structure, options?.['signal']);
+          signal ||= this.createSignal(structure, options?.['signal']);
+          arg = signal;
         }
       }
       if (arg === undefined) {
@@ -3673,26 +3679,26 @@ var generator = mixin({
       func = generator.push.bind(generator);
     }
     const callback = (ptr, result) => {
-      let cont;
-      if (func.length === 2) {
-        const isError = result instanceof Error;
-        cont = func(isError ? result : null, isError ? null : result);
-      } else {
-        cont = func(result);
-      }
-      if (!cont) {
+      const isError = result instanceof Error;
+      const retval = (func.length === 2)
+      ? func(isError ? result : null, isError ? null : result)
+      : func(result);
+      if (retval === false || isError || result === null) {
         args[FINALIZE]();
         const id = this.getFunctionId(callback);
         this.releaseFunction(id);
+        return false;
+      } else {
+        return true;
       }
-      return cont;
     };
     args[RETURN] = result => callback(null, result);
     return { ptr: null, callback };
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
-    args[YIELD] = result => callback.call(args, ptr, result);
+    const f = callback['*'];
+    args[YIELD] = result => f.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[YIELD](result);
@@ -4497,7 +4503,8 @@ var promise = mixin({
   // create callback for inbound call
   createPromiseCallback(args, promise) {
     const { ptr, callback } = promise;
-    args[RETURN] = result => callback.call(args, ptr, result);
+    const f = callback['*'];
+    args[RETURN] = result => f.call(args, ptr, result);
     return (...argList) => {
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[RETURN](result);
@@ -5156,7 +5163,8 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = (this.viewMap ||= new WeakMap()).get(buffer);
+    this.viewMap ||= new WeakMap();
+    let entry = this.viewMap.get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {
@@ -6144,7 +6152,7 @@ var all$1 = mixin({
     const constructor = structure.constructor = f.call(this, structure, descriptors);
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
       const s = descriptor?.set;
-      if (s && !setters[name]) {
+      if (s && !setters[name] && name !== '$') {
         setters[name] = s;
         keys.push(name);
       }
@@ -6196,7 +6204,8 @@ var all$1 = mixin({
         const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
         const argRequired = (accessorType === 'get') ? 0 : 1;
         if (accessorType && fn.length  === argRequired) {
-          const descriptor = staticDescriptors[propName] ||= {};
+          staticDescriptors[propName] ||= {};
+          const descriptor = staticDescriptors[propName];
           descriptor[accessorType] = fn;
         }
         // see if it's a method
@@ -7335,7 +7344,8 @@ var pointer = mixin({
       let max;
       if (!zig) {
         if (flags & PointerFlag.HasLength) {
-          max = this[MAX_LENGTH] ||= target.length;
+          this[MAX_LENGTH] ||= target.length;
+          max = this[MAX_LENGTH];
         } else {
           max = (bytesAvailable / targetSize) | 0;
         }
@@ -9316,7 +9326,7 @@ function createReader(dv) {
       shift += 7;
       if ((0x80 & byte) === 0) {
         if (shift < 32 && (byte & 0x40) !== 0) {
-          return value | (~0 << shift);
+          return value | (-1 << shift);
         }
         return value;
       }
