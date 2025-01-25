@@ -265,25 +265,13 @@ export function addTests(importModule, options) {
       expect([ ...u8Array ]).to.eql([ 101, 101, 101, 101 ]);
       module.setU8(new DataView(u8Array.buffer), 102);
       expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
-      if (runtimeSafety) {
-        // should issue a warning
-        const [ i8Warning ] = await captureWarning(() => {
-          module.setI8(u8Array, 19);
-        });
-        expect(i8Warning).to.equal('Implicitly creating an Int8Array from an Uint8Array');
-      }
+      expect(() => module.setI8(u8Array, 19)).to.throw(TypeError);
       module.setI8(i8Array, 8);
       expect([ ...u8Array ]).to.eql([ 102, 102, 102, 102 ]);
       expect([ ...i8Array ]).to.eql([ 8, 8, 8, 8 ]);
       module.setI8(i8Array.buffer, 9);
       expect([ ...i8Array ]).to.eql([ 9, 9, 9, 9 ]);
-      if (runtimeSafety) {
-          // should issue a warning
-        const [ u16Warning ] = await captureWarning(() => {
-          module.setU16(i8Array, 19);
-        });
-        expect(u16Warning).to.equal('Implicitly creating an Uint16Array from an Int8Array');
-      }
+      expect(() => module.setU16(i8Array, 19)).to.throw(TypeError);
       module.setU16(u16Array, 127);
       expect([ ...u16Array ]).to.eql([ 127, 127, 127, 127 ]);
       expect(() => module.setU16(u16Array.buffer, 127)).to.throw(TypeError);
@@ -301,12 +289,7 @@ export function addTests(importModule, options) {
       expect([ ...i64Array ]).to.eql([ 18n, 18n, 1234567890n, 1234567890n ]);
       module.setF32(f32Array, 0.25);
       expect([ ...f32Array ]).to.eql([ 0.25, 0.25, 0.25, 0.25 ]);
-      if (runtimeSafety) {
-          const [ f64Warning ] = await captureWarning(() => {
-          module.setF64(f32Array, 1.25);
-        });
-        expect(f64Warning).to.equal('Implicitly creating a Float64Array from a Float32Array');
-      }
+      expect(() => module.setF64(f32Array, 1.25)).to.throw(TypeError);
       module.setF64(f64Array, Math.PI);
       expect([ ...f64Array ]).to.eql([ Math.PI, Math.PI, Math.PI, Math.PI ]);
     })
