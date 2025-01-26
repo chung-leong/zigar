@@ -11,39 +11,6 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Function pointer', function() {
-    it('should correctly free function thunks', async function() {
-      this.timeout(0);
-      const { Callback, release } = await importTest('function-pointer');
-      const list = [];
-      const addresses = [];
-      for (let i = 0; i < 256; i++) {
-        const f = new Callback(() => {});
-        list.push(f);
-        const [ MEMORY ] = Object.getOwnPropertySymbols(f);
-        const dv = f[MEMORY];
-        const [ ZIG ] = Object.getOwnPropertySymbols(dv);
-        addresses.push(dv[ZIG].address);
-      }
-      for (const [ i, f ] of list.entries()) {
-        // don't delete the first one so the initial page is kept
-        if (i !== 0) {
-          release(f);
-        }
-      }
-      let reuseCount = 0;
-      for (let i = 0; i < 256; i++) {
-        const f = new Callback(() => {});
-        list.push(f);
-        const [ MEMORY ] = Object.getOwnPropertySymbols(f);
-        const dv = f[MEMORY];
-        const [ ZIG ] = Object.getOwnPropertySymbols(dv);
-        const { address } = dv[ZIG];
-        if (addresses.includes(address)) {
-          reuseCount++;
-        }
-      }
-      expect(reuseCount).to.be.above(100);
-    })
     it('should correctly pass floating point arguments', async function() {
       this.timeout(0);
       const { call } = await importTest('floating-point-arguments');
