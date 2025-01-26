@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
-import { WASI } from 'wasi';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { captureError } from '../test-utils.js';
@@ -51,6 +50,7 @@ describe('Feature: module-loading', function() {
           tableInitial: 320,
           multithreaded: false,
         });
+        const { WASI } = await import('wasi');
         const wasi = new WASI({
           version: 'preview1',
           args: [],

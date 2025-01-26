@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
-import { WASI } from 'wasi';
 import { capture, captureWarning } from '../test-utils.js';
 
 export function addTests(importModule, options) {
@@ -640,6 +639,7 @@ export function addTests(importModule, options) {
     })
     it('should write to a file using fwrite', async function() {
       this.timeout(0);
+      const { WASI } = await import('wasi');
       const { __zigar, fwrite, fopen, fclose } = await importTest('call-fwrite', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
         const wasi = new WASI({
@@ -667,6 +667,7 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, fread, fopen, fclose } = await importTest('call-fread', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
+        const { WASI } = await import('wasi');
         const wasi = new WASI({
           version: 'preview1',
           args: [],
@@ -803,6 +804,7 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
+        const { WASI } = await import('wasi');
         const wasi = new WASI({
           version: 'preview1',
           args: [],
