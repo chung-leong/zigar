@@ -17,7 +17,6 @@
   },
   "scripts": {
     "test": "mocha --loader=./dist/index.js --no-warnings -- test/*.test.js",
-    "test:n14": "mocha --loader=./dist/index-n14.js --no-warnings -- test/*.test.js",
     "debug": "mocha --loader=./dist/index.js --no-warnings --reporter spec --inspect-brk -- test/*.test.js",
     "coverage": "c8 mocha --loader=./dist/index.js --no-warnings  -- test/*.test.js"
   },
