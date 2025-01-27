@@ -88,7 +88,7 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: bool) ActionResult {
+            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
                 if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -174,7 +174,7 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize, _: bool) ActionResult {
+            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -260,7 +260,7 @@ test "getJsCallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize, _: bool) ActionResult {
+        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .ok;
@@ -280,7 +280,7 @@ test "getJsCallHandler (error handling)" {
             return .{};
         }
 
-        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize, _: bool) ActionResult {
+        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) ActionResult {
             return .failure;
         }
     };
