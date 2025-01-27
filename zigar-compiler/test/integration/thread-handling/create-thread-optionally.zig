@@ -16,7 +16,6 @@ pub fn spawn(promise: zigar.function.Promise(i32), create: bool) !?i32 {
     if (create) {
         const thread = try std.Thread.spawn(.{
             .allocator = gpa.allocator(),
-            .stack_size = 256 * 1024,
         }, ns.run, .{promise});
         try thread_list.append(thread);
         return null;

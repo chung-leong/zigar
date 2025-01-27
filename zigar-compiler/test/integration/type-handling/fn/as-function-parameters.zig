@@ -40,7 +40,6 @@ pub fn call4(cb: *const fn (i32) i32) !void {
     };
     _ = try std.Thread.spawn(.{
         .allocator = allocator,
-        .stack_size = 64 * 1024,
     }, ns.run, .{cb});
 }
 

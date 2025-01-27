@@ -20,7 +20,6 @@ pub fn spawn(
     };
     const thread = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
-        .stack_size = 256 * 1024,
     }, ns.run, .{ fail, promise, signal });
     try thread_list.append(thread);
 }
