@@ -3,8 +3,9 @@ import { Exit } from '../errors.js';
 
 var wasiSupport = mixin({
   ...({
-    customWASI: null,
-
+    init() {
+      this.customWASI = null;
+    },
     setCustomWASI(wasi) {
       if (wasi && this.executable) {
         throw new Error('Cannot set WASI interface after compilation has already begun');

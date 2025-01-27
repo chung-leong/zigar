@@ -156,8 +156,10 @@ describe('Feature: generator', function() {
       let retval;
       const generator = {
         ptr: null,
-        callback(ptr, arg) {
-          retval = arg;
+        callback: {
+          '*': function(ptr, arg) {
+            retval = arg;
+          },
         },
       };
       const args = {};
@@ -174,8 +176,10 @@ describe('Feature: generator', function() {
       let retval;
       const generator = {
         ptr: null,
-        callback(ptr, arg) {
-          retval = arg;
+        callback: {
+          '*': function(ptr, arg) {
+            retval = arg;
+          },
         },
       };
       const args = {};

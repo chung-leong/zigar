@@ -637,6 +637,7 @@ export function addTests(importModule, options) {
         expect(lines5).to.eql([ '18446744073709551615', '18446744073709551614', '18446744073709551613' ]);
       }
     })
+    skip.if(process.version <= 'v18').
     it('should write to a file using fwrite', async function() {
       this.timeout(0);
       const { WASI } = await import('wasi');
@@ -663,6 +664,7 @@ export function addTests(importModule, options) {
       expect(`${count1}`).to.equal(`${buffer.byteLength}`);
       expect(`${count2}`).to.equal(`${buffer.byteLength}`);
     })
+    skip.if(process.version <= 'v18').
     it('should read from a file using fread', async function() {
       this.timeout(0);
       const { __zigar, fread, fopen, fclose } = await importTest('call-fread', { useLibc: true, topLevelAwait: false });
@@ -800,6 +802,7 @@ export function addTests(importModule, options) {
         'Hello world, 1 2.000000 3 4.000000 5 6.000000 7 8.000000 9 10.000000 11 12.000000 13 14.000000 15 16.000000 17 18.000000 19 20.000000 21 22.000000 23 24.000000 25 26.000000 27 28.000000 29 30.000000 31 32.000000 33 34.000000 35 36.000000 37 38.000000 39 40.000000!!'
       ]);
     })
+    skip.if(process.version <= 'v18').
     it('should write to a file using fprintf', async function() {
       this.timeout(0);
       const { __zigar, fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true, topLevelAwait: false });

@@ -1698,34 +1698,38 @@ function defineEnvironment() {
 }
 
 function defineClass(name, mixins) {
-  const props = {};
+  const initFunctions = [];
   const constructor = function() {
-    for (const [ name, object ] of Object.entries(props)) {
-      this[name] = structuredClone(object);
+    for (const init of initFunctions) {
+      init.call(this);
     }
   };
   const { prototype } = constructor;
   defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
-      if (typeof(object) === 'function') {
-        {
-          const f = function(...args) {
-            this.mixinUsageCapturing?.set(mixin, true);
-            return object.call(this, ...args);
-          };
-          defineProperty(prototype, name, defineValue(f));
-        }
+      if (name === 'init') {
+        initFunctions.push(object);
       } else {
-        let current = props[name];
-        if (current !== undefined) {
-          if (current?.constructor === Object) {
-            object = Object.assign({ ...current }, object);
-          } else if (current !== object) {
-            throw new Error(`Duplicate property: ${name}`);
+        if (typeof(object) === 'function') {
+          {
+            const func = object;
+            object = function(...args) {
+              this.mixinUsageCapturing?.set(mixin, true);
+              return func.call(this, ...args);
+            };
+          }
+        } else {
+          let current = prototype[name];
+          if (current !== undefined) {
+            if (current?.constructor === Object) {
+              object = Object.assign({ ...current }, object);
+            } else if (current !== object) {
+              throw new Error(`Duplicate property: ${name}`);
+            }
           }
         }
-        props[name] = object;
+        defineProperty(prototype, name, defineValue(object));
       }
     }
   }
@@ -1735,8 +1739,9 @@ function defineClass(name, mixins) {
 // handle retrieval of accessors
 
 var all$3 = mixin({
-  accessorCache: new Map(),
-
+  init() {
+    this.accessorCache = new Map();
+  },
   getAccessor(access, member) {
     const { type, bitSize, bitOffset, byteSize } = member;
     const names = [];
@@ -2958,8 +2963,9 @@ function getMemory(arg) {
 }
 
 var baseline = mixin({
-  variables: [],
-
+  init() {
+    this.variables = [];
+  },
   getSpecialExports() {
     const check = (v) => {
       if (v === undefined) throw new Error('Not a Zig type');
@@ -3049,16 +3055,14 @@ var baseline = mixin({
 });
 
 var callMarshalingInbound = mixin({
-  jsFunctionThunkMap: new Map(),
-  jsFunctionCallerMap: new Map(),
-  jsFunctionControllerMap: new Map(),
-  jsFunctionIdMap: null,
-  jsFunctionNextId: 1,
-
+  init() {
+    this.jsFunctionThunkMap = new Map();
+    this.jsFunctionCallerMap = new Map();
+    this.jsFunctionControllerMap = new Map();
+    this.jsFunctionIdMap = new WeakMap();
+    this.jsFunctionNextId = 1;
+  },
   getFunctionId(fn) {
-    if (!this.jsFunctionIdMap) {
-      this.jsFunctionIdMap = new WeakMap();
-    }
     let id = this.jsFunctionIdMap.get(fn);
     if (id === undefined) {
       id = this.jsFunctionNextId++;
@@ -3459,45 +3463,7 @@ var callMarshalingOutbound = mixin({
 });
 
 var dataCopying = mixin({
-  copiers: null,
-  resetters: null,
-
-  defineCopier(size, multiple) {
-    const copy = this.getCopyFunction(size, multiple);
-    return {
-      value(target) {
-        {
-          this[RESTORE]?.();
-          target[RESTORE]?.();
-        }
-        const src = target[MEMORY];
-        const dest = this[MEMORY];
-        copy(dest, src);
-      },
-    };
-  },
-  defineResetter(offset, size) {
-    const reset = this.getResetFunction(size);
-    return {
-      value() {
-        {
-          this[RESTORE]?.();
-        }
-        const dest = this[MEMORY];
-        reset(dest, offset, size);
-      }
-    };
-  },
-  getCopyFunction(size, multiple = false) {
-    this.copiers ||= this.defineCopiers();
-    const f = !multiple ? this.copiers[size] : undefined;
-    return f ?? this.copiers.any;
-  },
-  getResetFunction(size) {
-    this.resetters ||= this.defineResetters();
-    return this.resetters[size] ?? this.resetters.any;
-  },
-  defineCopiers() {
+  init() {
     const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
     const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
     const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
@@ -3507,8 +3473,7 @@ var dataCopying = mixin({
     const setInt16 = this.getAccessor('set', int16);
     const getInt32 = this.getAccessor('get', int32);
     const setInt32 = this.getAccessor('set', int32);
-
-    return {
+    this.copiers = {
       0: empty,
       1: function(dest, src) {
         setInt8.call(dest, 0, getInt8.call(src, 0));
@@ -3541,16 +3506,8 @@ var dataCopying = mixin({
           i++;
         }
       },
-    }
-  },
-  defineResetters() {
-    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
-    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
-    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
-    const setInt8 = this.getAccessor('set', int8);
-    const setInt16 = this.getAccessor('set', int16);
-    const setInt32 = this.getAccessor('set', int32);
-    return {
+    };
+    this.resetters = {
       0: empty,
       1: function(dest, offset) {
         setInt8.call(dest, offset, 0);
@@ -3585,6 +3542,39 @@ var dataCopying = mixin({
       },
     };
   },
+  defineCopier(size, multiple) {
+    const copy = this.getCopyFunction(size, multiple);
+    return {
+      value(target) {
+        {
+          this[RESTORE]?.();
+          target[RESTORE]?.();
+        }
+        const src = target[MEMORY];
+        const dest = this[MEMORY];
+        copy(dest, src);
+      },
+    };
+  },
+  defineResetter(offset, size) {
+    const reset = this.getResetFunction(size);
+    return {
+      value() {
+        {
+          this[RESTORE]?.();
+        }
+        const dest = this[MEMORY];
+        reset(dest, offset, size);
+      }
+    };
+  },
+  getCopyFunction(size, multiple = false) {
+    const f = !multiple ? this.copiers[size] : undefined;
+    return f ?? this.copiers.any;
+  },
+  getResetFunction(size) {
+    return this.resetters[size] ?? this.resetters.any;
+  },
   ...({
     defineRetvalCopier({ byteSize, bitOffset }) {
       if (byteSize > 0) {
@@ -3612,9 +3602,10 @@ var dataCopying = mixin({
 });
 
 var defaultAllocator = mixin({
-  defaultAllocator: null,
-  vtableFnIds: null,
-
+  init() {
+    this.defaultAllocator = null;
+    this.vtableFnIds = null;
+  },
   createDefaultAllocator(args, structure) {
     let allocator = this.defaultAllocator;
     if (!allocator) {
@@ -3677,11 +3668,11 @@ var generator = mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const callback = (ptr, result) => {
+    const callback = async (ptr, result) => {
       const isError = result instanceof Error;
-      const retval = (func.length === 2)
+      const retval = await ((func.length === 2)
       ? func(isError ? result : null, isError ? null : result)
-      : func(result);
+      : func(result));
       if (retval === false || isError || result === null) {
         args[FINALIZE]();
         const id = this.getFunctionId(callback);
@@ -3835,10 +3826,11 @@ var intConversion = mixin({
 });
 
 var memoryMapping = mixin({
-  isMemoryMapping: true,
-  memoryList: [],
-  contextCount: 0,
-
+  init() {
+    this.isMemoryMapping = true;
+    this.memoryList = [];
+    this.contextCount = 0;
+  },
   startContext() {
     ++this.contextCount;
     return { shadowList: [] };
@@ -4082,9 +4074,21 @@ const MemoryType = {
 };
 
 var moduleLoading = mixin({
-  released: false,
-  abandoned: false,
-
+  init() {
+    this.released = false;
+    this.abandoned = false;
+    {
+      this.nextValueIndex = 1;
+      this.valueMap = new Map();
+      this.valueIndices = new Map();
+      this.options = null;
+      this.executable = null;
+      this.memory = null;
+      this.table = null;
+      this.initialTableLength = 0;
+      this.exportedFunctions = null;
+    }
+  },
   releaseFunctions() {
     const throwError = () => { throw new Error(`Module was abandoned`) };
     for (const name of Object.keys(this.imports)) {
@@ -4107,15 +4111,6 @@ var moduleLoading = mixin({
     exports: {
       displayPanic: { argType: 'ii' },
     },
-    nextValueIndex: 1,
-    valueMap: new Map(),
-    valueIndices: new Map(),
-    options: null,
-    executable: null,
-    memory: null,
-    table: null,
-    initialTableLength: 0,
-    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -4546,10 +4541,11 @@ function getIntRange(member) {
 }
 
 var streamRedirection = mixin({
-  consoleObject: null,
-  consolePending: [],
-  consoleTimeout: 0,
-
+  init() {
+    this.consoleObject = null;
+    this.consolePending = [];
+    this.consoleTimeout = 0;
+  },
   writeToConsole(dv) {
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory
@@ -4603,20 +4599,21 @@ var streamRedirection = mixin({
 });
 
 var structureAcquisition = mixin({
-  comptime: false,
-  slots: {},
-  structures: [],
-  structureCounters: {
-    struct: 0,
-    union: 0,
-    errorSet: 0,
-    enum: 0,
-    opaque: 0,
+  init() {
+    this.comptime = false;
+    this.slots = {};
+    this.structures = [];
+    this.structureCounters = {
+      struct: 0,
+      union: 0,
+      errorSet: 0,
+      enum: 0,
+      opaque: 0,
+    };
+    this.littleEndian = true;
+    this.runtimeSafety = false;
+    this.libc = false;
   },
-  littleEndian: true,
-  runtimeSafety: false,
-  libc: false,
-
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -4956,7 +4953,6 @@ var structureAcquisition = mixin({
       getFactoryThunk: { argType: '', returnType: 'i' },
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
-
     beginDefinition() {
       return {};
     },
@@ -4989,8 +4985,10 @@ var thunkAllocation = mixin({
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
       freeJsThunk: { argType: 'ii', returnType: 'i' },
     },
-    thunkSources: [],
-    thunkMap: new Map(),
+    init() {
+      this.thunkSources = [];
+      this.thunkMap = new Map();
+    },
     addJsThunkSource() {
       const {
         memoryInitial,
@@ -5083,8 +5081,9 @@ var thunkAllocation = mixin({
 });
 
 var viewManagement = mixin({
-  viewMap: null,
-
+  init() {
+    this.viewMap = new WeakMap();
+  },
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
     let dv;
@@ -5162,7 +5161,6 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    this.viewMap ||= new WeakMap();
     let entry = this.viewMap.get(buffer);
     let existing;
     if (entry) {
@@ -5235,7 +5233,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.byteLength === 0) {
+      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -5284,8 +5282,9 @@ function throwError(structure) {
 
 var wasiSupport = mixin({
   ...({
-    customWASI: null,
-
+    init() {
+      this.customWASI = null;
+    },
     setCustomWASI(wasi) {
       if (wasi && this.executable) {
         throw new Error('Cannot set WASI interface after compilation has already begun');
@@ -7620,7 +7619,6 @@ const constProxyHandlers = {
   ...proxyHandlers,
   set(pointer, name, value) {
     if (name in pointer) {
-      console.log(`pointer: ${name}`);
       pointer[name] = value;
     } else {
       throwReadOnly();

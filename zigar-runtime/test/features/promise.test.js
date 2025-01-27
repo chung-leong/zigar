@@ -98,8 +98,10 @@ describe('Feature: promise', function() {
       let retval;
       const promise = {
         ptr: null,
-        callback(ptr, arg) {
-          retval = arg;
+        callback: {
+          '*': function(ptr, arg) {
+            retval = arg;
+          },
         },
       };
       const args = {};
@@ -116,8 +118,10 @@ describe('Feature: promise', function() {
       let retval;
       const promise = {
         ptr: null,
-        callback(ptr, arg) {
-          retval = arg;
+        callback: {
+          '*': function(ptr, arg) {
+            retval = arg;
+          },
         },
       };
       const args = {};

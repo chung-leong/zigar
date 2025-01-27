@@ -5,8 +5,9 @@ import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CONST_TARGET, CACHE, P
 import { isCompatibleInstanceOf, findElements, usizeInvalid } from '../utils.js';
 
 var viewManagement = mixin({
-  viewMap: null,
-
+  init() {
+    this.viewMap = new WeakMap();
+  },
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
     let dv;
@@ -84,7 +85,6 @@ var viewManagement = mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    this.viewMap ||= new WeakMap();
     let entry = this.viewMap.get(buffer);
     let existing;
     if (entry) {

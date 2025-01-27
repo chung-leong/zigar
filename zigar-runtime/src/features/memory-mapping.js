@@ -7,10 +7,17 @@ import {
 } from '../utils.js';
 
 export default mixin({
-  isMemoryMapping: true,
-  memoryList: [],
-  contextCount: 0,
-
+  init() {
+    this.isMemoryMapping = true;
+    this.memoryList = [];
+    this.contextCount = 0;
+    if (process.env.TARGET === 'node') {
+      this.externBufferList = [];
+    }
+    if (process.env.DEV) {
+      this.shadowMemoryBytes = 0;
+    }
+  },
   startContext() {
     ++this.contextCount;
     return { shadowList: [] };
@@ -265,7 +272,6 @@ export default mixin({
     exports: {
       getViewAddress: null,
     },
-    externBufferList: [],
 
     allocateShadowMemory(len, align) {
       // Node can read into JavaScript memory space so we can keep shadows there
@@ -343,8 +349,6 @@ export default mixin({
   } : undefined),
   /* c8 ignore start */
   ...(process.env.DEV ? {
-    shadowMemoryBytes: 0,
-
     diagMemoryMapping() {
       const targetSpecific = (process.env.TARGET === 'node') ? [
         `Extern buffer count: ${this.externBufferList.length}`,

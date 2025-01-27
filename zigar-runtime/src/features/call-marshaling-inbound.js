@@ -4,16 +4,14 @@ import { UnexpectedGenerator } from '../errors.js';
 import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';
 
 export default mixin({
-  jsFunctionThunkMap: new Map(),
-  jsFunctionCallerMap: new Map(),
-  jsFunctionControllerMap: new Map(),
-  jsFunctionIdMap: null,
-  jsFunctionNextId: 1,
-
+  init() {
+    this.jsFunctionThunkMap = new Map();
+    this.jsFunctionCallerMap = new Map();
+    this.jsFunctionControllerMap = new Map();
+    this.jsFunctionIdMap = new WeakMap();
+    this.jsFunctionNextId = 1;
+  },
   getFunctionId(fn) {
-    if (!this.jsFunctionIdMap) {
-      this.jsFunctionIdMap = new WeakMap();
-    }
     let id = this.jsFunctionIdMap.get(fn);
     if (id === undefined) {
       id = this.jsFunctionNextId++;

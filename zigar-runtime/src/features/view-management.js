@@ -5,8 +5,15 @@ import { CACHE, CONST_TARGET, COPY, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY,
 import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
-  viewMap: null,
-
+  init() {
+    this.viewMap = new WeakMap();
+    if (process.env.TARGET === 'node') {
+      this.needFallback = undefined;
+    }
+    if (process.env.DEV) {
+      this.bufferRefs = [];
+    }
+  },
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
     let dv;
@@ -86,7 +93,6 @@ export default mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    this.viewMap ||= new WeakMap();
     let entry = this.viewMap.get(buffer);
     let existing;
     if (entry) {
@@ -203,8 +209,6 @@ export default mixin({
       requireBufferFallback: null,
       syncExternalBuffer: null,
     },
-    needFallback: undefined,
-
     usingBufferFallback() {
       if (this.needFallback === undefined) {
         this.needFallback = this.requireBufferFallback?.();
@@ -227,8 +231,6 @@ export default mixin({
   } : undefined),
   /* c8 ignore start */
   ...(process.env.DEV ? {
-    bufferRefs: [],
-
     diagViewManagement() {
       let total = 0, active = 0, collected = 0;
       for (const ref of this.bufferRefs) {

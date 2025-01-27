@@ -40,6 +40,7 @@ describe('Feature: module-loading', function() {
   })
   if (process.env.TARGET === 'wasm') {
     describe('initialize', function() {
+      skip.if(process.version <= 'v18').
       it('should accept a WASI object', async function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
@@ -61,6 +62,7 @@ describe('Feature: module-loading', function() {
         });
         await env.initialize(wasi);
       })
+      skip.if(process.version <= 'v18').
       it('should throw when WASM source has already been obtained', async function() {
         const env = new Env();
         const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
@@ -71,6 +73,7 @@ describe('Feature: module-loading', function() {
           tableInitial: 320,
           multithreaded: false,
         });
+        const { WASI } = await import('wasi');
         const wasi = new WASI({
           version: 'preview1',
           args: [],

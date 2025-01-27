@@ -4,10 +4,11 @@ import { MEMORY, ALIGN, ZIG } from '../symbols.js';
 import { alignForward, adjustAddress, isMisaligned, usizeInvalid, isInvalidAddress, usizeMax, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
-  isMemoryMapping: true,
-  memoryList: [],
-  contextCount: 0,
-
+  init() {
+    this.isMemoryMapping = true;
+    this.memoryList = [];
+    this.contextCount = 0;
+  },
   startContext() {
     ++this.contextCount;
     return { shadowList: [] };

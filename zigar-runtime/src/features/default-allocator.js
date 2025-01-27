@@ -3,9 +3,15 @@ import { MEMORY, ZIG } from '../symbols.js';
 import { usizeMax } from '../utils.js';
 
 export default mixin({
-  defaultAllocator: null,
-  vtableFnIds: null,
-
+  init() {
+    this.defaultAllocator = null;
+    this.vtableFnIds = null;
+    if (process.env.DEV) {
+      this.allocationCount = 0;
+      this.allocationBytes = 0;
+      this.freedBytes = 0;
+    }
+  },
   createDefaultAllocator(args, structure) {
     let allocator = this.defaultAllocator;
     if (!allocator) {
@@ -72,10 +78,6 @@ export default mixin({
   },
   /* c8 ignore start */
   ...(process.env.DEV ? {
-    allocationCount: 0,
-    allocationBytes: 0,
-    freedBytes: 0,
-
     diagDefaultAllocator() {
       this.showDiagnostics('Default allocator', [
         `Present: ${!!this.defaultAllocator}`,

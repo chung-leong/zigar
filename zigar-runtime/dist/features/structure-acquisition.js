@@ -4,20 +4,21 @@ import { mixin } from '../environment.js';
 import { findObjects, adjustAddress, decodeText } from '../utils.js';
 
 var structureAcquisition = mixin({
-  comptime: false,
-  slots: {},
-  structures: [],
-  structureCounters: {
-    struct: 0,
-    union: 0,
-    errorSet: 0,
-    enum: 0,
-    opaque: 0,
+  init() {
+    this.comptime = false;
+    this.slots = {};
+    this.structures = [];
+    this.structureCounters = {
+      struct: 0,
+      union: 0,
+      errorSet: 0,
+      enum: 0,
+      opaque: 0,
+    };
+    this.littleEndian = true;
+    this.runtimeSafety = false;
+    this.libc = false;
   },
-  littleEndian: true,
-  runtimeSafety: false,
-  libc: false,
-
   readSlot(target, slot) {
     const slots = target ? target[SLOTS] : this.slots;
     return slots?.[slot];
@@ -351,7 +352,6 @@ var structureAcquisition = mixin({
       getFactoryThunk: { argType: '', returnType: 'i' },
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
-
     beginDefinition() {
       return {};
     },

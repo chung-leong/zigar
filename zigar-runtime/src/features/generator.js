@@ -12,11 +12,11 @@ export default mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const callback = (ptr, result) => {
+    const callback = async (ptr, result) => {
       const isError = result instanceof Error;
-      const retval = (func.length === 2)
+      const retval = await ((func.length === 2)
       ? func(isError ? result : null, isError ? null : result)
-      : func(result);
+      : func(result));
       if (retval === false || isError || result === null) {
         args[FINALIZE]();
         const id = this.getFunctionId(callback);

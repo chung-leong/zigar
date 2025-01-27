@@ -2,9 +2,21 @@ import { mixin } from '../environment.js';
 import { decodeText, defineProperty, empty } from '../utils.js';
 
 export default mixin({
-  released: false,
-  abandoned: false,
-
+  init() {
+    this.released = false;
+    this.abandoned = false;
+    if (process.env.TARGET === 'wasm') {
+      this.nextValueIndex = 1;
+      this.valueMap = new Map();
+      this.valueIndices = new Map();
+      this.options = null;
+      this.executable = null;
+      this.memory = null;
+      this.table = null;
+      this.initialTableLength = 0;
+      this.exportedFunctions = null;
+    }
+  },
   releaseFunctions() {
     const throwError = () => { throw new Error(`Module was abandoned`) };
     for (const name of Object.keys(this.imports)) {
@@ -27,15 +39,6 @@ export default mixin({
     exports: {
       displayPanic: { argType: 'ii' },
     },
-    nextValueIndex: 1,
-    valueMap: new Map(),
-    valueIndices: new Map(),
-    options: null,
-    executable: null,
-    memory: null,
-    table: null,
-    initialTableLength: 0,
-    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -206,9 +209,6 @@ export default mixin({
   } : undefined),
   /* c8 ignore start */
   ...(process.env.DEV ? {
-    released: false,
-    abandoned: false,
-
     diagModuleLoading() {
       const targetSpecific = (process.env.TARGET === 'wasm') ? [
         `Value count: ${this.valueMap.size}`,

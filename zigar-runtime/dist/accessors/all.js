@@ -6,8 +6,9 @@ import { defineProperty, defineValue } from '../utils.js';
 // handle retrieval of accessors
 
 var all = mixin({
-  accessorCache: new Map(),
-
+  init() {
+    this.accessorCache = new Map();
+  },
   getAccessor(access, member) {
     const { type, bitSize, bitOffset, byteSize } = member;
     const names = [];

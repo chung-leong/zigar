@@ -3,8 +3,9 @@ import { mixin } from '../environment.js';
 import { SIZE, ALIGN, TYPE, MEMORY, SLOTS, ENVIRONMENT } from '../symbols.js';
 
 var baseline = mixin({
-  variables: [],
-
+  init() {
+    this.variables = [];
+  },
   getSpecialExports() {
     const check = (v) => {
       if (v === undefined) throw new Error('Not a Zig type');

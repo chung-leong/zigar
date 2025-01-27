@@ -4,45 +4,7 @@ import { MEMORY, RESTORE, ZIG } from '../symbols.js';
 import { empty } from '../utils.js';
 
 export default mixin({
-  copiers: null,
-  resetters: null,
-
-  defineCopier(size, multiple) {
-    const copy = this.getCopyFunction(size, multiple);
-    return {
-      value(target) {
-        if (process.env.TARGET === 'wasm') {
-          this[RESTORE]?.();
-          target[RESTORE]?.();
-        }
-        const src = target[MEMORY];
-        const dest = this[MEMORY];
-        copy(dest, src);
-      },
-    };
-  },
-  defineResetter(offset, size) {
-    const reset = this.getResetFunction(size);
-    return {
-      value() {
-        if (process.env.TARGET === 'wasm') {
-          this[RESTORE]?.();
-        }
-        const dest = this[MEMORY];
-        reset(dest, offset, size);
-      }
-    };
-  },
-  getCopyFunction(size, multiple = false) {
-    this.copiers ||= this.defineCopiers();
-    const f = !multiple ? this.copiers[size] : undefined;
-    return f ?? this.copiers.any;
-  },
-  getResetFunction(size) {
-    this.resetters ||= this.defineResetters();
-    return this.resetters[size] ?? this.resetters.any;
-  },
-  defineCopiers() {
+  init() {
     const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
     const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
     const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
@@ -52,8 +14,7 @@ export default mixin({
     const setInt16 = this.getAccessor('set', int16);
     const getInt32 = this.getAccessor('get', int32);
     const setInt32 = this.getAccessor('set', int32);
-
-    return {
+    this.copiers = {
       0: empty,
       1: function(dest, src) {
         setInt8.call(dest, 0, getInt8.call(src, 0));
@@ -86,16 +47,8 @@ export default mixin({
           i++;
         }
       },
-    }
-  },
-  defineResetters() {
-    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
-    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
-    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
-    const setInt8 = this.getAccessor('set', int8);
-    const setInt16 = this.getAccessor('set', int16);
-    const setInt32 = this.getAccessor('set', int32);
-    return {
+    };
+    this.resetters = {
       0: empty,
       1: function(dest, offset) {
         setInt8.call(dest, offset, 0);
@@ -129,6 +82,39 @@ export default mixin({
         }
       },
     };
+  },
+  defineCopier(size, multiple) {
+    const copy = this.getCopyFunction(size, multiple);
+    return {
+      value(target) {
+        if (process.env.TARGET === 'wasm') {
+          this[RESTORE]?.();
+          target[RESTORE]?.();
+        }
+        const src = target[MEMORY];
+        const dest = this[MEMORY];
+        copy(dest, src);
+      },
+    };
+  },
+  defineResetter(offset, size) {
+    const reset = this.getResetFunction(size);
+    return {
+      value() {
+        if (process.env.TARGET === 'wasm') {
+          this[RESTORE]?.();
+        }
+        const dest = this[MEMORY];
+        reset(dest, offset, size);
+      }
+    };
+  },
+  getCopyFunction(size, multiple = false) {
+    const f = !multiple ? this.copiers[size] : undefined;
+    return f ?? this.copiers.any;
+  },
+  getResetFunction(size) {
+    return this.resetters[size] ?? this.resetters.any;
   },
   ...(process.env.TARGET === 'wasm' ? {
     defineRetvalCopier({ byteSize, bitOffset }) {

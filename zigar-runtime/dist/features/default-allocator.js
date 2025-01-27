@@ -3,9 +3,10 @@ import { MEMORY } from '../symbols.js';
 import { usizeMax } from '../utils.js';
 
 var defaultAllocator = mixin({
-  defaultAllocator: null,
-  vtableFnIds: null,
-
+  init() {
+    this.defaultAllocator = null;
+    this.vtableFnIds = null;
+  },
   createDefaultAllocator(args, structure) {
     let allocator = this.defaultAllocator;
     if (!allocator) {

@@ -1,9 +1,10 @@
 import { mixin } from '../environment.js';
 
 var workerSupport = mixin({
-  nextThreadId: 1,
-  workers: [],
-
+  init() {
+    this.nextThreadId = 1;
+    this.workers = [];
+  },
   getThreadHandler(name) {
     switch (name) {
       case 'thread-spawn':

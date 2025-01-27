@@ -7,8 +7,10 @@ export default mixin({
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
       freeJsThunk: { argType: 'ii', returnType: 'i' },
     },
-    thunkSources: [],
-    thunkMap: new Map(),
+    init() {
+      this.thunkSources = [];
+      this.thunkMap = new Map();
+    },
     addJsThunkSource() {
       const {
         memoryInitial,

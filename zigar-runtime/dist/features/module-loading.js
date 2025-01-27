@@ -2,9 +2,21 @@ import { mixin } from '../environment.js';
 import { defineProperty, empty, decodeText } from '../utils.js';
 
 var moduleLoading = mixin({
-  released: false,
-  abandoned: false,
-
+  init() {
+    this.released = false;
+    this.abandoned = false;
+    {
+      this.nextValueIndex = 1;
+      this.valueMap = new Map();
+      this.valueIndices = new Map();
+      this.options = null;
+      this.executable = null;
+      this.memory = null;
+      this.table = null;
+      this.initialTableLength = 0;
+      this.exportedFunctions = null;
+    }
+  },
   releaseFunctions() {
     const throwError = () => { throw new Error(`Module was abandoned`) };
     for (const name of Object.keys(this.imports)) {
@@ -27,15 +39,6 @@ var moduleLoading = mixin({
     exports: {
       displayPanic: { argType: 'ii' },
     },
-    nextValueIndex: 1,
-    valueMap: new Map(),
-    valueIndices: new Map(),
-    options: null,
-    executable: null,
-    memory: null,
-    table: null,
-    initialTableLength: 0,
-    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);

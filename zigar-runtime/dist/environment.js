@@ -33,30 +33,30 @@ function defineEnvironment() {
 }
 
 function defineClass(name, mixins) {
-  const props = {};
+  const initFunctions = [];
   const constructor = function() {
-    for (const [ name, object ] of Object.entries(props)) {
-      this[name] = structuredClone(object);
+    for (const init of initFunctions) {
+      init.call(this);
     }
   };
   const { prototype } = constructor;
   defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
-      if (typeof(object) === 'function') {
-        {
-          defineProperty(prototype, name, defineValue(object));
-        }
+      if (name === 'init') {
+        initFunctions.push(object);
       } else {
-        let current = props[name];
-        if (current !== undefined) {
-          if (current?.constructor === Object) {
-            object = Object.assign({ ...current }, object);
-          } else if (current !== object) {
-            throw new Error(`Duplicate property: ${name}`);
+        if (typeof(object) === 'function') ; else {
+          let current = prototype[name];
+          if (current !== undefined) {
+            if (current?.constructor === Object) {
+              object = Object.assign({ ...current }, object);
+            } else if (current !== object) {
+              throw new Error(`Duplicate property: ${name}`);
+            }
           }
         }
-        props[name] = object;
+        defineProperty(prototype, name, defineValue(object));
       }
     }
   }

@@ -33,10 +33,10 @@ export function defineEnvironment() {
 }
 
 export function defineClass(name, mixins) {
-  const props = {};
+  const initFunctions = [];
   const constructor = function() {
-    for (const [ name, object ] of Object.entries(props)) {
-      this[name] = structuredClone(object);
+    for (const init of initFunctions) {
+      init.call(this);
     }
     if (process.env.DEV) {
       const diag = globalThis.ZIGAR = Object.create(null);
@@ -65,26 +65,28 @@ export function defineClass(name, mixins) {
   defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
-      if (typeof(object) === 'function') {
-        if (process.env.MIXIN === 'track') {
-          const f = function(...args) {
-            this.mixinUsageCapturing?.set(mixin, true);
-            return object.call(this, ...args);
-          }
-          defineProperty(prototype, name, defineValue(f));
-        } else {
-          defineProperty(prototype, name, defineValue(object));
-        }
+      if (name === 'init') {
+        initFunctions.push(object);
       } else {
-        let current = props[name];
-        if (current !== undefined) {
-          if (current?.constructor === Object) {
-            object = Object.assign({ ...current }, object);
-          } else if (current !== object) {
-            throw new Error(`Duplicate property: ${name}`);
+        if (typeof(object) === 'function') {
+          if (process.env.MIXIN === 'track') {
+            const func = object;
+            object = function(...args) {
+              this.mixinUsageCapturing?.set(mixin, true);
+              return func.call(this, ...args);
+            }
+          }
+        } else {
+          let current = prototype[name];
+          if (current !== undefined) {
+            if (current?.constructor === Object) {
+              object = Object.assign({ ...current }, object);
+            } else if (current !== object) {
+              throw new Error(`Duplicate property: ${name}`);
+            }
           }
         }
-        props[name] = object;
+        defineProperty(prototype, name, defineValue(object));
       }
     }
   }

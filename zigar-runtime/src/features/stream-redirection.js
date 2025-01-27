@@ -2,10 +2,11 @@ import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
-  consoleObject: null,
-  consolePending: [],
-  consoleTimeout: 0,
-
+  init() {
+    this.consoleObject = null;
+    this.consolePending = [];
+    this.consoleTimeout = 0;
+  },
   writeToConsole(dv) {
     try {
       // make copy of array, in case incoming buffer is pointing to stack memory

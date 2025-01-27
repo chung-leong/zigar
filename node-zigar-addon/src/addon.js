@@ -3,6 +3,11 @@ import '../../zigar-runtime/src/mixins.js';
 
 export function createEnvironment() {
   // define Environment class, incorporating methods and properties in all mixins
-  const Env = defineEnvironment();
-  return new Env();
+  try {
+    const Env = defineEnvironment();
+    return new Env();
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
 }

@@ -426,7 +426,6 @@ const constProxyHandlers = {
   ...proxyHandlers,
   set(pointer, name, value) {
     if (name in pointer) {
-      console.log(`pointer: ${name}`);
       pointer[name] = value;
     } else {
       throwReadOnly();
