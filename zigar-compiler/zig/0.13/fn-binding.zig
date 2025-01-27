@@ -1205,4 +1205,14 @@ pub const ExecutablePageAllocator = struct {
         _ = @cmpxchgStrong(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, hint, new_hint, .monotonic, .monotonic);
         return slice.ptr;
     }
+
+    test "alloc" {
+        const ptr: *anyopaque = @ptrFromInt(0x1_0000);
+        const result = alloc(ptr, 4096, 0, 0);
+        try expect(result != null);
+    }
 };
+
+test "ExecutablePageAllocator" {
+    _ = ExecutablePageAllocator;
+}
