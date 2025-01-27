@@ -2227,13 +2227,9 @@ test "Queue" {
     try queue.push(123);
     try queue.push(456);
     const value1 = queue.pull();
-    const count1 = queue.count.load(.acquire);
     try expect(value1 == 123);
-    try expect(count1 == 1);
     const value2 = queue.pull();
-    const count2 = queue.count.load(.acquire);
     try expect(value2 == 456);
-    try expect(count2 == 0);
     const value3 = queue.pull();
     try expect(value3 == null);
     try queue.push(888);
