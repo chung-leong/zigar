@@ -161,7 +161,6 @@ export default mixin({
       }
       const dv = target[MEMORY];
       const zig = dv[ZIG];
-      const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
       // determine the maximum length
       let max;
       if (!zig) {
@@ -169,6 +168,7 @@ export default mixin({
           this[MAX_LENGTH] ||= target.length;
           max = this[MAX_LENGTH];
         } else {
+          const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
           max = (bytesAvailable / targetSize) | 0;
         }
       }
@@ -452,7 +452,7 @@ const constTargetProxyHandlers = {
       return target;
     } else {
       const value = target[name];
-      if (typeof(name) === 'string' && typeof(value) === 'object') {
+      if (value?.[MEMORY]) {
         return getConstProxy(value);
       } else {
         return value;
