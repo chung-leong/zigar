@@ -381,7 +381,7 @@ function getConstProxy(target) {
   if (!proxy) {
     const pointer = target[POINTER];
     if (pointer) {
-      proxy = new Proxy(pointer, constProxyHandlers);
+      proxy = new Proxy(pointer, readOnlyProxyHandlers);
     } else {
       proxy = new Proxy(target, constTargetProxyHandlers);
     }
@@ -433,19 +433,17 @@ const proxyHandlers = {
   },
 };
 
-const constProxyHandlers = {
+const readOnlyProxyHandlers = {
   ...proxyHandlers,
   set(pointer, name, value) {
     if (name in pointer) {
-      pointer[name] = value;
-    } else {
       throwReadOnly();
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
     }
     return true;
   },
-  deleteProperty(pointer, name) {
-    throwReadOnly();
-  }
 };
 
 const constTargetProxyHandlers = {

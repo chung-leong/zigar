@@ -1784,7 +1784,7 @@ describe('Structure: pointer', function() {
       const ptrRO = constPointer['*'];
       // pointer is read-only so we can't set a new target
       expect(ptrRO).to.be.instanceOf(TargetPtr);
-      // expect(() => ptrRO.$ = new TargetPtr({ cow: 4567 })).to.throw(TypeError);
+      expect(() => ptrRO.$ = new TargetPtr({ cow: 4567 })).to.throw(TypeError);
       // pointer is not const, however, so we can modify its target
       expect(() => ptrRO.cow = 123).to.not.throw();
       expect(ptrRO.cow).to.equal(123);
