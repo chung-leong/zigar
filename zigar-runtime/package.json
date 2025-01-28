@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.14.0-beta.2",
+  "version": "0.14.0-beta.3",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "exports": {
@@ -43,8 +43,8 @@
     "chai": "^5.1.2",
     "chai-as-promised": "^8.0.1",
     "mersenne-twister": "^1.1.0",
-    "mocha": "^11.0.1",
+    "mocha": "^11.1.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.31.0"
+    "rollup": "^4.32.1"
   }
 }
