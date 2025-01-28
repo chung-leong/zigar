@@ -435,7 +435,10 @@ export function addTests(importModule, options) {
       const { getRoot } = await importTest('handle-recursive-structure');
       const root = getRoot();
       const parent = root.valueOf();
-      const [ child1, child2 ]= parent.children;
+      // for some reason the following line would cause sigfault on the M1 Mac
+      // const [ child1, child2 ]= parent.children;
+      const child1 = parent.children[0];
+      const child2 = parent.children[1];
       expect(child1.parent).to.equal(parent);
       expect(child2.parent).to.equal(parent);
     })
