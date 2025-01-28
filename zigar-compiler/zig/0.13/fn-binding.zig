@@ -1192,11 +1192,18 @@ pub const ExecutablePageAllocator = struct {
 
         const aligned_len = mem.alignForward(usize, n, mem.page_size);
         const hint = @atomicLoad(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, .unordered);
+        var map_flags: std.posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
+        if (builtin.target.isDarwin()) {
+            // set MAP_JIT
+            var map_flags_u32: u32 = @bitCast(map_flags);
+            map_flags_u32 |= 0x0800;
+            map_flags = @bitCast(map_flags_u32);
+        }
         const slice = posix.mmap(
             hint,
             aligned_len,
             posix.PROT.READ | posix.PROT.WRITE | std.posix.PROT.EXEC,
-            .{ .TYPE = .PRIVATE, .ANONYMOUS = true },
+            map_flags,
             -1,
             0,
         ) catch return null;
