@@ -20,11 +20,13 @@ pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
 }
 
 test "executable" {
+    protect(false);
     var gpa = executable();
     var allocator = gpa.allocator();
     const memory = try allocator.alloc(u8, 256);
     allocator.free(memory);
     try expect(gpa.detectLeaks() == false);
+    protect(true);
 }
 
 pub fn Binding(comptime T: type, comptime TT: type) type {
@@ -58,13 +60,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
+            protect(false);
+            defer protect(true);
             var instrs = getInstructions(0, 0);
             // determine the code len by doing a dry-run of the encoding process
             var encoder: InstructionEncoder = .{};
             const code_len = encoder.encode(&instrs, null);
             const instance_size = @offsetOf(@This(), "code") + code_len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
-            // std.debug.print("allocated: {x} ({d})\n", .{ @intFromPtr(new_bytes.ptr), new_bytes.len });
             const self: *@This() = @ptrCast(new_bytes);
             var ctx: CT = undefined;
             const fields = @typeInfo(CT).@"struct".fields;
@@ -88,17 +91,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             // encode the instructions (for real this time)
             const output_ptr = @as([*]u8, @ptrCast(&self.code));
             _ = encoder.encode(&instrs, output_ptr[0..code_len]);
+            invalidate(new_bytes);
             return self;
         }
 
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+            protect(false);
+            defer protect(true);
             self.signature = 0;
             // free memory using correct alignment to avoid warning
             const alignment = @alignOf(@This());
             const ST = []align(alignment) u8;
             const MT = [*]align(alignment) u8;
             const slice: ST = @as(MT, @ptrCast(self))[0..self.size];
-            // std.debug.print("freeing {x} ({d})\n", .{ @intFromPtr(slice.ptr), slice.len });
             allocator.free(slice);
         }
 
@@ -1215,11 +1220,31 @@ pub const ExecutablePageAllocator = struct {
 
     test "alloc" {
         const ptr: *anyopaque = @ptrFromInt(0x1_0000);
-        const result = alloc(ptr, 4096, 0, 0);
+        const len = 16384;
+        const ptr_align = 14;
+        const result = alloc(ptr, len, ptr_align, 0);
         try expect(result != null);
     }
 };
 
 test "ExecutablePageAllocator" {
     _ = ExecutablePageAllocator;
+}
+
+fn protect(state: bool) void {
+    if (builtin.target.isDarwin()) {
+        const c = @cImport({
+            @cInclude("pthread.h");
+        });
+        c.pthread_jit_write_protect_np(if (state) 1 else 0);
+    }
+}
+
+fn invalidate(slice: []u8) void {
+    if (builtin.target.isDarwin()) {
+        const c = @cImport({
+            @cInclude("libkern/OSCacheControl.h");
+        });
+        c.sys_icache_invalidate(slice.ptr, slice.len);
+    }
 }
