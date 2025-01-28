@@ -1,6 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import { capture, captureError } from '../../test-utils.js';
+import { capture, captureError, delay } from '../../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -49,8 +49,9 @@ export function addTests(importModule, options) {
         console.log('hello');
         console.log('world');
       };
-      const lines2 = await capture(() => {
+      const lines2 = await capture(async () => {
         call1(jsFn1);
+        await delay(50);
       });
       expect(lines2).to.eql([ 'hello', 'world' ]);
       let dingo = false;
@@ -71,8 +72,9 @@ export function addTests(importModule, options) {
         return number * 2;
       };
       let result;
-      const lines3 = await capture(() => {
+      const lines3 = await capture(async () => {
         result = call3(jsFn2);
+        await delay(50);
       });
       expect(lines3).to.eql([ 'number = 1234' ]);
       call3(() => 0);
@@ -84,7 +86,7 @@ export function addTests(importModule, options) {
         };
         const lines4 = await capture(async () => {
           call4(jsFn3);
-          await new Promise(r => setTimeout(r, 200));
+          await delay(200);
         });
         expect(lines4).to.eql([ 'number = 1234' ]);
         expect(module.call4_result).to.equal(1234 * 3);
@@ -95,7 +97,7 @@ export function addTests(importModule, options) {
         };
         const lines5 = await capture(async () => {
           call4(jsFn4);
-          await new Promise(r => setTimeout(r, 200));
+          await delay(200);
         });
         expect(lines5).to.eql([ 'number = 1234' ]);
         expect(module.call4_result).to.equal(1234 * 4);
