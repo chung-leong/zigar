@@ -331,12 +331,18 @@ result disable_multithread(module_data* md) {
     return OK;
 }
 
+napi_value get_undefined(napi_env env) {
+    napi_value undefined;
+    napi_get_undefined(env, &undefined);
+    return undefined;
+}
+
 napi_value throw_error(napi_env env,
                        const char *err_message) {
     napi_value last;
     napi_get_and_clear_last_exception(env, &last);
     napi_throw_error((env), NULL, err_message ? err_message : "Unknown error");
-    return NULL;
+    return get_undefined(env);
 }
 
 napi_value throw_last_error(napi_env env) {
@@ -423,7 +429,7 @@ napi_value free_external_memory(napi_env env,
     }
     memory mem = { (void*) address, len, { align, false, false } };
     md->mod->imports->free_extern_memory(bin, &mem);
-    return NULL;
+    return get_undefined(env);
 }
 
 bool can_create_external_buffer(napi_env env) {
@@ -505,7 +511,7 @@ napi_value copy_external_bytes(napi_env env,
     }
     void* src = (void*) address;
     memcpy(dest, src, dest_len);
-    return NULL;
+    return get_undefined(env);
 }
 
 napi_value find_sentinel(napi_env env,
@@ -690,7 +696,7 @@ napi_value finalize_async_call(napi_env env,
     if (md->mod->imports->wake_caller(futex_handle, result) != OK) {
         return throw_error(env, "Unable to wake caller");
     }
-    return NULL;
+    return get_undefined(env);
 }
 
 #define MEMBER_TYPE_INT     2
@@ -823,7 +829,7 @@ napi_value require_buffer_fallback(napi_env env,
     if (napi_get_boolean(env, !can_create, &result) == napi_ok) {
         return result;
     }
-    return NULL;
+    return get_undefined(env);
 }
 
 napi_value sync_external_buffer(napi_env env,
@@ -842,7 +848,7 @@ napi_value sync_external_buffer(napi_env env,
         return throw_error(env, "Address must be a number");
     }
     memcpy(bytes, (void*) address, len);
-    return NULL;
+    return get_undefined(env);
 }
 
 result perform_js_action(module_data* md,
@@ -1044,7 +1050,7 @@ napi_value load_module(napi_env env,
     if (mod->imports->initialize(md) != OK) {
         return throw_error(env, "Initialization failed");
     }
-    return NULL;
+    return get_undefined(env);
 }
 
 bool compile_javascript(napi_env env,

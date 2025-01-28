@@ -150,6 +150,7 @@ const Futex = struct {
 };
 
 fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
+    std.debug.print("finalizeAsyncCall!!\n", .{});
     // make sure futex address is valid
     const ptr: *Futex = @ptrFromInt(futex_handle);
     if (ptr.handle == futex_handle) {
