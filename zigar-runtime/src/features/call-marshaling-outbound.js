@@ -87,6 +87,7 @@ export default mixin({
     const attrs = argStruct[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
+    const isAsync = FINALIZE in argStruct;
     const hasPointers = VISIT in argStruct;
     if (hasPointers) {
       this.updatePointerAddresses(context, argStruct);
@@ -104,16 +105,6 @@ export default mixin({
     if (process.env.MIXIN === 'track') {
       this.mixinUsageCapturing = new Map();
     }
-    /* c8 ignore end */
-    const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-    : this.runThunk(thunkAddress, fnAddress, argAddress);
-    /* c8 ignore start */
-    if (process.env.MIXIN === 'track') {
-      this.mixinUsage = this.mixinUsageCapturing;
-      this.mixinUsageCapturing = null;
-    }
-    /* c8 ignore end */
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -126,6 +117,19 @@ export default mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    if (isAsync) {
+      argStruct[FINALIZE] = finalize;
+    }
+    /* c8 ignore end */
+    const success = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    : this.runThunk(thunkAddress, fnAddress, argAddress);
+    /* c8 ignore start */
+    if (process.env.MIXIN === 'track') {
+      this.mixinUsage = this.mixinUsageCapturing;
+      this.mixinUsageCapturing = null;
+    }
+    /* c8 ignore end */
     if (!success) {
       finalize();
       throw new ZigError();
@@ -134,12 +138,7 @@ export default mixin({
       // copy retval from shadow view
       argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
     }
-    if (FINALIZE in argStruct) {
-      argStruct[FINALIZE] = finalize;
-    } else {
-      finalize(true);
-    }
-    if (argStruct.hasOwnProperty(RETURN)) {
+    if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
@@ -153,6 +152,7 @@ export default mixin({
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
+      finalize();
       try {
         return argStruct.retval;
       } catch (err) {

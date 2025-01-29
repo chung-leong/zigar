@@ -1,7 +1,7 @@
 import { StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UndefinedArgument, adjustArgumentError, ZigError, Exit } from '../errors.js';
-import { SETTERS, ATTRIBUTES, MEMORY, COPY, FINALIZE, RETURN, PROMISE, GENERATOR, ALLOCATOR, VISIT } from '../symbols.js';
+import { SETTERS, ATTRIBUTES, MEMORY, FINALIZE, COPY, RETURN, PROMISE, GENERATOR, ALLOCATOR, VISIT } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -82,6 +82,7 @@ var callMarshalingOutbound = mixin({
     const attrs = argStruct[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
+    const isAsync = FINALIZE in argStruct;
     const hasPointers = VISIT in argStruct;
     if (hasPointers) {
       this.updatePointerAddresses(context, argStruct);
@@ -93,9 +94,6 @@ var callMarshalingOutbound = mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
-    const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-    : this.runThunk(thunkAddress, fnAddress, argAddress);
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -108,6 +106,12 @@ var callMarshalingOutbound = mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    if (isAsync) {
+      argStruct[FINALIZE] = finalize;
+    }
+    const success = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
       finalize();
       throw new ZigError();
@@ -116,12 +120,7 @@ var callMarshalingOutbound = mixin({
       // copy retval from shadow view
       argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
     }
-    if (FINALIZE in argStruct) {
-      argStruct[FINALIZE] = finalize;
-    } else {
-      finalize();
-    }
-    if (argStruct.hasOwnProperty(RETURN)) {
+    if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
@@ -135,6 +134,7 @@ var callMarshalingOutbound = mixin({
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
+      finalize();
       try {
         return argStruct.retval;
       } catch (err) {
