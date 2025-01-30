@@ -1933,12 +1933,13 @@ pub fn Promise(comptime T: type) type {
         ptr: ?*anyopaque = null,
         callback: *const fn (?*anyopaque, T) void,
 
-        const internal_type: InternalType = .promise;
-        const payload = T;
+        pub const payload = T;
 
-        pub fn init(ptr: ?*anyopaque, cb: anytype) @This() {
+        const internal_type: InternalType = .promise;
+
+        pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
             return .{
-                .ptr = ptr,
+                .ptr = @constCast(ptr),
                 .callback = getCallback(fn (?*anyopaque, T) void, cb),
             };
         }
@@ -2041,12 +2042,13 @@ pub fn Generator(comptime T: type) type {
         ptr: ?*anyopaque = null,
         callback: *const fn (?*anyopaque, T) bool,
 
-        const internal_type: InternalType = .generator;
-        const payload = T;
+        pub const payload = T;
 
-        pub fn init(ptr: ?*anyopaque, cb: anytype) @This() {
+        const internal_type: InternalType = .generator;
+
+        pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
             return .{
-                .ptr = ptr,
+                .ptr = @constCast(ptr),
                 .callback = getCallback(fn (?*anyopaque, T) bool, cb),
             };
         }
