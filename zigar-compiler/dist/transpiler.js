@@ -2589,16 +2589,12 @@ class NoProperty extends TypeError {
 
 class ArgumentCountMismatch extends Error {
   constructor(expected, received, variadic = false) {
-    super();
     const s = (expected !== 1) ? 's' : '';
     if (variadic) {
       expected = `at least ${expected}`;
     }
-    const set = (name) => {
-      this.message = `${name}(): Expecting ${expected} argument${s}, received ${received}`;
-      this.stack = adjustStack(this.stack, 2);
-    };
-    defineProperty(this, 'fnName', { set });
+    super(`Expecting ${expected} argument${s}, received ${received}`);
+    this.stack = adjustStack(this.stack, 'new Arg(');
   }
 }
 
@@ -2782,32 +2778,22 @@ class Exit extends ZigError {
   }
 }
 
-function adjustArgumentError(argIndex, argCount) {
-  const { message } = this;
-  defineProperties(this, {
-    fnName: defineValue('fn'),
-    argIndex: defineValue(argIndex),
-    argCount: defineValue(argCount),
-    message: {
-      get() {
-        const { fnName, argIndex, argCount } = this;
-        const argName = `args[${argIndex}]`;
-        const prefix = (argIndex !== 0) ? '..., ' : '';
-        const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-        const argLabel = prefix + argName + suffix;
-        return `${fnName}(${argLabel}): ${message}`;
-      },
-    }
-  });
-  return this;
+function adjustArgumentError(err, argIndex) {
+  err.message = `args[${argIndex}]: ${err.message}`;
+  err.stack = adjustStack(err.stack, 'new Arg(');
+  return err;
 }
 
-function adjustStack(stack, remove) {
+function adjustStack(stack, search) {
   if (typeof(stack) === 'string') {
     const lines = stack.split('\n');
-    lines.splice(1, remove);
-    return lines.join('\n');
+    const index = lines.findIndex(s => s.includes(search));
+    if (index !== -1) {
+      lines.splice(1, index);
+      stack = lines.join('\n');
+    }
   }
+  return stack;
 }
 
 function replaceRangeError(member, index, err) {
@@ -3295,21 +3281,19 @@ var callMarshalingOutbound = mixin({
           });
         }
       }
-      try {
-        // `this` is present when running a promise and generator callback received from a inbound call
-        // it's going to be the argument struct of that call
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, this?.[ALLOCATOR$1]));
-      } catch (err) {
-        if ('fnName' in err) {
-          err.fnName = self.name;
-        }
-        {
+      // `this` is present when running a promise and generator callback received from a inbound call
+      // it's going to be the argument struct of that call
+      const argStruct = new ArgStruct(args, this?.[ALLOCATOR$1]);
+      {
+        try {
+          return thisEnv.invokeThunk(thunk, self, argStruct);
+        } catch (err) {
           // do nothing when exit code is 0
           if (err instanceof Exit && err.code === 0) {
             return;
           }
+          throw err;
         }
-        throw err;
       }
     };
     return self;
@@ -3354,7 +3338,7 @@ var callMarshalingOutbound = mixin({
         const set = setters[destIndex++];
         set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex - 1, argList.length);
+        throw adjustArgumentError(err, destIndex - 1);
       }
     }
   },
@@ -8151,7 +8135,7 @@ var variadicStruct = mixin({
         ;
         if (!dv || !argAlign) {
           const err = new InvalidVariadicArgument();
-          throw adjustArgumentError.call(err, length + index, args.length);
+          throw adjustArgumentError(err, length + index);
         }
         if (argAlign > maxAlign) {
           maxAlign = argAlign;

@@ -14,21 +14,19 @@ var callMarshalingOutbound = mixin({
           });
         }
       }
-      try {
-        // `this` is present when running a promise and generator callback received from a inbound call
-        // it's going to be the argument struct of that call
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args, this?.[ALLOCATOR]));
-      } catch (err) {
-        if ('fnName' in err) {
-          err.fnName = self.name;
-        }
-        {
+      // `this` is present when running a promise and generator callback received from a inbound call
+      // it's going to be the argument struct of that call
+      const argStruct = new ArgStruct(args, this?.[ALLOCATOR]);
+      {
+        try {
+          return thisEnv.invokeThunk(thunk, self, argStruct);
+        } catch (err) {
           // do nothing when exit code is 0
           if (err instanceof Exit && err.code === 0) {
             return;
           }
+          throw err;
         }
-        throw err;
       }
     };
     return self;
@@ -73,7 +71,7 @@ var callMarshalingOutbound = mixin({
         const set = setters[destIndex++];
         set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex - 1, argList.length);
+        throw adjustArgumentError(err, destIndex - 1);
       }
     }
   },

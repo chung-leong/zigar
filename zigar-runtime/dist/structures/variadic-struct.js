@@ -30,7 +30,7 @@ var variadicStruct = mixin({
         ;
         if (!dv || !argAlign) {
           const err = new InvalidVariadicArgument();
-          throw adjustArgumentError.call(err, length + index, args.length);
+          throw adjustArgumentError(err, length + index);
         }
         if (argAlign > maxAlign) {
           maxAlign = argAlign;

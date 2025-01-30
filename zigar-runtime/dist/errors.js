@@ -1,6 +1,6 @@
 import { StructureType, memberNames } from './constants.js';
 import { TYPED_ARRAY } from './symbols.js';
-import { getPrimitiveName, defineProperty, defineProperties, defineValue } from './utils.js';
+import { getPrimitiveName } from './utils.js';
 
 class MustBeOverridden extends Error {
   constructor() {
@@ -221,16 +221,12 @@ class NoProperty extends TypeError {
 
 class ArgumentCountMismatch extends Error {
   constructor(expected, received, variadic = false) {
-    super();
     const s = (expected !== 1) ? 's' : '';
     if (variadic) {
       expected = `at least ${expected}`;
     }
-    const set = (name) => {
-      this.message = `${name}(): Expecting ${expected} argument${s}, received ${received}`;
-      this.stack = adjustStack(this.stack, 2);
-    };
-    defineProperty(this, 'fnName', { set });
+    super(`Expecting ${expected} argument${s}, received ${received}`);
+    this.stack = adjustStack(this.stack, 'new Arg(');
   }
 }
 
@@ -421,32 +417,22 @@ class Exit extends ZigError {
   }
 }
 
-function adjustArgumentError(argIndex, argCount) {
-  const { message } = this;
-  defineProperties(this, {
-    fnName: defineValue('fn'),
-    argIndex: defineValue(argIndex),
-    argCount: defineValue(argCount),
-    message: {
-      get() {
-        const { fnName, argIndex, argCount } = this;
-        const argName = `args[${argIndex}]`;
-        const prefix = (argIndex !== 0) ? '..., ' : '';
-        const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-        const argLabel = prefix + argName + suffix;
-        return `${fnName}(${argLabel}): ${message}`;
-      },
-    }
-  });
-  return this;
+function adjustArgumentError(err, argIndex) {
+  err.message = `args[${argIndex}]: ${err.message}`;
+  err.stack = adjustStack(err.stack, 'new Arg(');
+  return err;
 }
 
-function adjustStack(stack, remove) {
+function adjustStack(stack, search) {
   if (typeof(stack) === 'string') {
     const lines = stack.split('\n');
-    lines.splice(1, remove);
-    return lines.join('\n');
+    const index = lines.findIndex(s => s.includes(search));
+    if (index !== -1) {
+      lines.splice(1, index);
+      stack = lines.join('\n');
+    }
   }
+  return stack;
 }
 
 function replaceRangeError(member, index, err) {
