@@ -1,6 +1,6 @@
 import { StructureType, memberNames } from './constants.js';
 import { TYPED_ARRAY } from './symbols.js';
-import { getPrimitiveName, defineProperties, defineValue } from './utils.js';
+import { getPrimitiveName, defineProperty, defineProperties, defineValue } from './utils.js';
 
 class MustBeOverridden extends Error {
   constructor() {
@@ -220,21 +220,17 @@ class NoProperty extends TypeError {
 }
 
 class ArgumentCountMismatch extends Error {
-  constructor(expected, actual, variadic = false) {
+  constructor(expected, received, variadic = false) {
     super();
-    this.fnName = 'fn';
-    this.argIndex = expected;
-    this.argCount = actual;
-    this.variadic = variadic;
-  }
-
-  get message() {
-    const s = (this.argIndex !== 1) ? 's' : '';
-    let count = this.argIndex;
-    if (this.variadic) {
-      count = `at least ${count}`;
+    const s = (expected !== 1) ? 's' : '';
+    if (variadic) {
+      expected = `at least ${expected}`;
     }
-    return `${this.fnName}(): Expecting ${count} argument${s}, received ${this.argCount}`;
+    const set = (name) => {
+      this.message = `${name}(): Expecting ${expected} argument${s}, received ${received}`;
+      this.stack = adjustStack(this.stack, 2);
+    };
+    defineProperty(this, 'fnName', { set });
   }
 }
 
@@ -410,12 +406,7 @@ class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {
       super(error.message);
-      const { stack } = this;
-      if (typeof(stack) === 'string') {
-        const lines = stack.split('\n');
-        lines.splice(1, remove);
-        error.stack = lines.join('\n');
-      }
+      error.stack = adjustStack(this.stack, remove);
       return error;
     } else {
       super(error ?? 'Error encountered in Zig code');
@@ -448,6 +439,14 @@ function adjustArgumentError(argIndex, argCount) {
     }
   });
   return this;
+}
+
+function adjustStack(stack, remove) {
+  if (typeof(stack) === 'string') {
+    const lines = stack.split('\n');
+    lines.splice(1, remove);
+    return lines.join('\n');
+  }
 }
 
 function replaceRangeError(member, index, err) {
