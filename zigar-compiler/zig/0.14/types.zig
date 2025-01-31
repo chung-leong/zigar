@@ -1760,21 +1760,28 @@ test "ReturnValue" {
     try expect(T == void);
 }
 
-fn Payload(comptime T: type) ?type {
+fn IteratorPayload(comptime T: type) ?type {
     return switch (@typeInfo(T)) {
-        .optional => |op| op.child,
-        .error_union => |eu| Payload(eu.payload),
+        .optional => |op| switch (@typeInfo(op.child)) {
+            .error_union => |eu| eu.payload,
+            else => op.child,
+        },
+        .error_union => |eu| IteratorPayload(eu.payload),
         else => null,
     };
 }
 
-test "Payload" {
-    const T1 = Payload(?i32) orelse unreachable;
+test "IteratorPayload" {
+    const T1 = IteratorPayload(?i32);
     try expect(T1 == i32);
-    const T2 = Payload(anyerror!?i32) orelse unreachable;
+    const T2 = IteratorPayload(anyerror!?i32);
     try expect(T2 == i32);
-    const T3 = Payload(i32);
+    const T3 = IteratorPayload(i32);
     try expect(T3 == null);
+    const T4 = IteratorPayload(anyerror!i32);
+    try expect(T4 == null);
+    const T5 = IteratorPayload(?anyerror!i32);
+    try expect(T5 == i32);
 }
 
 fn hasDefaultFields(comptime T: type) bool {
@@ -1827,7 +1834,7 @@ fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
     };
     if (arg_match) {
         if (f.return_type) |RT| {
-            if (Payload(RT) != null) return RT;
+            if (IteratorPayload(RT) != null) return RT;
         }
     }
     return null;
@@ -1898,7 +1905,7 @@ pub fn IteratorReturnValue(comptime T: type) ?type {
 
 test "IteratorReturnValue" {
     const T1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
-    try expect(T1 != null and Payload(T1.?) == []const u8);
+    try expect(T1 != null and IteratorPayload(T1.?) == []const u8);
     const T2 = IteratorReturnValue(error{Doh}!std.fs.path.ComponentIterator(.posix, u8));
     try expect(T2 != null);
     const T3 = IteratorReturnValue(std.fs.path);
@@ -2035,7 +2042,7 @@ pub fn PromiseOf(comptime arg: anytype) type {
 }
 
 pub fn Generator(comptime T: type) type {
-    if (Payload(T) == null) {
+    if (IteratorPayload(T) == null) {
         @compileError("Expecting optional type, received: " ++ @typeName(T));
     }
     return struct {
@@ -2055,6 +2062,10 @@ pub fn Generator(comptime T: type) type {
 
         pub fn yield(self: @This(), value: T) bool {
             return self.callback(self.ptr, value);
+        }
+
+        pub fn end(self: @This()) void {
+            _ = self.yield(null);
         }
 
         pub fn pipe(self: @This(), arg: anytype) void {
