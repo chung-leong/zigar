@@ -3729,17 +3729,26 @@ class AsyncGenerator {
   }
 
   async return(retval) {
-    this.stopped = true;
+    await this.break();
     return { value: retval, done: true };
   }
 
-  async throw(err) {
-    this.stopped = true;
-    throw err;
+  async throw(error) {
+    await this.break();
+    throw error;
+  }
+
+  async break() {
+    if (!this.finished) {
+      this.stopped = true;
+      // wait for a push() to ensure that the Zig side has stopped generating
+      await this.sleep('break');
+    }
   }
 
   async push(result) {
     if (this.stopped) {
+      this.wake('break');
       return false;
     }
     if (result instanceof Error) {
