@@ -138,7 +138,11 @@ class AsyncGenerator {
     const promise = this.promises[name];
     if (promise) {
       this.promises[name] = null;
-      promise.resolve();
+      {
+        // on the WebAssembly side we the main thread can't wait for worker threads
+        // so we don't have this problem
+        promise.resolve();
+      }
     }
   }
 

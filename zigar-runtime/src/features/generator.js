@@ -138,7 +138,19 @@ class AsyncGenerator {
     const promise = this.promises[name];
     if (promise) {
       this.promises[name] = null;
-      promise.resolve();
+      if (process.env.TARGET === 'node') {
+        if (this.finished || this.stopped) {
+          // wake up await JS code after a tick to ensure the Zig thread get awaken
+          // first, in the event that a shutdown of the work queue happens immediately
+          setImmediate(promise.resolve);
+        } else {
+          promise.resolve();
+        }
+      } else {
+        // on the WebAssembly side we the main thread can't wait for worker threads
+        // so we don't have this problem
+        promise.resolve();
+      }
     }
   }
 
