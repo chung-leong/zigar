@@ -1986,6 +1986,7 @@ pub fn Promise(comptime T: type) type {
                         }
                     } else {
                         free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
+                        call = free;
                     }
                     if (call) {
                         ctx.promise.resolve(value);
