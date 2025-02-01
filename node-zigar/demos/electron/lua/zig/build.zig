@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
         lib.wasi_exec_model = .reactor;
         lib.import_memory = true;
         lib.import_table = true;
+        lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     }
     const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {

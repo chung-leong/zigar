@@ -7,7 +7,7 @@ const LuaOpaque = opaque {};
 const LuaOpaquePtr = *align(@alignOf(ziglua.Lua)) LuaOpaque;
 
 pub fn createLua() !LuaOpaquePtr {
-    const lua = try ziglua.Lua.init(&allocator);
+    const lua = try ziglua.Lua.init(allocator);
     lua.openLibs();
     return @ptrCast(lua);
 }
@@ -15,7 +15,7 @@ pub fn createLua() !LuaOpaquePtr {
 pub fn runLuaCode(opaque_ptr: LuaOpaquePtr, code: [:0]const u8) !void {
     const lua: *ziglua.Lua = @ptrCast(opaque_ptr);
     try lua.loadString(code);
-    try lua.protectedCall(0, 0, 0);
+    try lua.protectedCall(.{});
 }
 
 pub fn freeLua(opaque_ptr: LuaOpaquePtr) void {
