@@ -10,7 +10,7 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Package manager', function() {
-    skip.if(target === 'wasm32').or(compilerVersion !== '0.13.0').
+    skip.if(target === 'wasm32').or(compilerVersion < '0.14.0').
     it('should link in ziglua', async function() {
       this.timeout(0);
       const { run } = await importTest('use-ziglua/ziglua');

@@ -26,10 +26,10 @@ pub fn build(b: *std.Build) void {
     const ziglua = b.dependency("ziglua", .{
         .target = target,
         .optimize = optimize,
-    });
+    }).module("ziglua");
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
-        .{ .name = "ziglua", .module = ziglua.module("ziglua") },
+        .{ .name = "ziglua", .module = ziglua },
     };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },

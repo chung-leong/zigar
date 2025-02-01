@@ -6,10 +6,10 @@ pub fn run(code: [:0]const u8) !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var lua = try ziglua.Lua.init(&allocator);
+    var lua = try ziglua.Lua.init(allocator);
     defer lua.deinit();
 
     lua.openLibs();
     try lua.loadString(code);
-    try lua.protectedCall(0, 0, 0);
+    try lua.protectedCall(.{});
 }
