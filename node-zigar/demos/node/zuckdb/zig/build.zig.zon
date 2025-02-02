@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .zuckdb = .{
-            .url = "git+https://github.com/karlseguin/zuckdb.zig?ref=master#50695dd885f8f71a6b6bbb88830078fd8822e010",
-            .hash = "12207963e044eff4abfbe06f66dcc65896c7e89c5a29b8d7ab6a752e55ebbbd9ba63",
+            .url = "git+https://github.com/karlseguin/zuckdb.zig?ref=master#7a4cc11dae8aac02658d74096b2615a394d3ad8e",
+            .hash = "12201c8e79c15b5ea47fe0d79e4f8c7149ae1fa56cb242d4ca4b7d016c47ad0ea509",
         },
     },
     .paths = .{
