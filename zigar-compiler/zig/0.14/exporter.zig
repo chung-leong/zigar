@@ -777,8 +777,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             }
                         }
                         if (has_abort_signal and !has_promise) {
-                            @compileLog(T);
-                            @compileError("Function accepting AbortSignal as an argument must accept a Promise as well");
+                            @compileError("Function accepting AbortSignal as an argument must accept a Promise as well: " ++ @typeName(T));
                         }
                     },
                     else => {},
