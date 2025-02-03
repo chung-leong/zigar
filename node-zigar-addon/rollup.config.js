@@ -14,6 +14,10 @@ const replacements2 = {
   '/* c8 ignore end */': '',
   '/* c8 ignore next */': '',
 };
+const terserOptions = {
+  keep_classnames: true,
+  output: { beautify: true }
+};
 
 export default [
   {
@@ -35,7 +39,7 @@ export default [
       format: 'iife',
       name: 'variable',
       plugins: [
-        Terser({ keep_classnames: true }),
+        Terser(terserOptions),
         CPPString(),
       ]
     },
@@ -62,7 +66,7 @@ export default [
       format: 'iife',
       name: 'variable',
       plugins: [
-        Terser({ keep_classnames: true }),
+        Terser(terserOptions),
         CPPString(),
       ]
     },
