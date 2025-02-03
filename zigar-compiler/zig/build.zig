@@ -46,6 +46,11 @@ pub fn build(b: *std.Build) void {
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     }
+    const options = b.addOptions();
+    options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);
+    options.addOption(bool, "omit_functions", cfg.omit_functions);
+    options.addOption(bool, "omit_variables", cfg.omit_variables);
+    lib.root_module.addOptions("export-options.zig", options);
     const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
         true => b.addUpdateSourceFiles(),
         false => b.addWriteFiles(),

@@ -125,11 +125,6 @@ const MemberFlag = {
   IsBackingInt:     0x0040,
 };
 
-const ExportFlag = {
-  OmitMethods:      0x0001,
-  OmitVariables:    0x0002,
-};
-
 const CallResult = {
   OK: 0,
   Failure: 1,
@@ -1252,7 +1247,7 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
-    'multithreaded', 'stackSize', 'maxMemory',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1310,6 +1305,9 @@ function createConfig(srcPath, modPath, options = {}) {
     multithreaded = (isWASM) ? false : true,
     stackSize = 256 * 1024,
     maxMemory = (isWASM && multithreaded) ? 16 * 1024 * 1024 : undefined,
+    evalBranchQuota = 2000000,
+    omitFunctions = false,
+    omitVariables = false,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -1398,6 +1396,9 @@ function createConfig(srcPath, modPath, options = {}) {
     multithreaded,
     stackSize,
     maxMemory,
+    evalBranchQuota,
+    omitFunctions,
+    omitVariables,
   };
 }
 
@@ -1505,6 +1506,10 @@ const optionsForCompile = {
   omitExports: {
     type: 'boolean',
     title: 'Omit export statements',
+  },
+  evalBranchQuota: {
+    type: 'number',
+    title: 'Value provided to @setEvalBranchQuota() during export',
   },
   useLibc: {
     type: 'boolean',
@@ -4700,34 +4705,16 @@ var structureAcquisition = mixin({
     }
     return object;
   },
-  acquireStructures(options) {
+  acquireStructures() {
     const attrs = this.getModuleAttributes();
     this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
     this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
     this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
-    const { littleEndian } = this;
-    const FactoryArg = function(options) {
-      const {
-        omitFunctions = false,
-        omitVariables = false,
-      } = options;
-      const dv = new DataView(new ArrayBuffer(4));
-      let flags = 0;
-      if (omitFunctions) {
-        flags |= ExportFlag.OmitMethods;
-      }
-      if (omitVariables) {
-        flags |= ExportFlag.OmitVariables;
-      }
-      dv.setUint32(0, flags, littleEndian);
-      this[MEMORY] = dv;
-    };
-    const args = new FactoryArg(options);
     this.comptime = true;
     this.mixinUsage = new Map();
-    this.invokeThunk(thunk, thunk, args);
+    this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
     // acquire default pointers now that we have all constructors
     for (const structure of this.structures) {
@@ -10006,7 +9993,7 @@ async function transpile(path, options) {
   const env = new Env();
   env.loadModule(content, moduleOptions);
   await env.initPromise;
-  env.acquireStructures(compileOptions);
+  env.acquireStructures();
   const definition = env.exportStructures();
   const usage = {};
   for (const [ name, mixin ] of Object.entries(mixins)) {

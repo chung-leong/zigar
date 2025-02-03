@@ -127,7 +127,7 @@ export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
-    'multithreaded', 'stackSize', 'maxMemory',
+    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -185,6 +185,9 @@ export function createConfig(srcPath, modPath, options = {}) {
     multithreaded = (isWASM) ? false : true,
     stackSize = 256 * 1024,
     maxMemory = (isWASM && multithreaded) ? 16 * 1024 * 1024 : undefined,
+    evalBranchQuota = 2000000,
+    omitFunctions = false,
+    omitVariables = false,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -273,6 +276,9 @@ export function createConfig(srcPath, modPath, options = {}) {
     multithreaded,
     stackSize,
     maxMemory,
+    evalBranchQuota,
+    omitFunctions,
+    omitVariables,
   };
 }
 

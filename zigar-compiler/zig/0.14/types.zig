@@ -28,12 +28,6 @@ pub const Error = error{
     TooManyArguments,
 };
 
-pub const ExportOptions = packed struct(u32) {
-    omit_methods: bool = false,
-    omit_variables: bool = false,
-    _: u30 = 0,
-};
-
 pub const StructureType = enum(u32) {
     primitive = 0,
     array,

@@ -20,6 +20,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Omit export statements',
   },
+  evalBranchQuota: {
+    type: 'number',
+    title: 'Value provided to @setEvalBranchQuota() during export',
+  },
   useLibc: {
     type: 'boolean',
     title: 'Link in C standard library',

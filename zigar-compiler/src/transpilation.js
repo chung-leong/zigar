@@ -43,7 +43,7 @@ export async function transpile(path, options) {
   const env = new Env();
   env.loadModule(content, moduleOptions);
   await env.initPromise;
-  env.acquireStructures(compileOptions);
+  env.acquireStructures();
   const definition = env.exportStructures();
   const usage = {};
   for (const [ name, mixin ] of Object.entries(mixins)) {

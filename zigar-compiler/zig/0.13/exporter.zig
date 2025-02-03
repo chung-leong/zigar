@@ -4,6 +4,7 @@ const types = @import("types.zig");
 const fn_transform = @import("fn-transform.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
+const export_options = @import("export-options.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
@@ -11,7 +12,6 @@ const Memory = types.Memory;
 const TypeData = types.TypeData;
 
 fn Factory(comptime host: type, comptime module: type) type {
-    @setEvalBranchQuota(2000000);
     const tdb = comptime result: {
         var tdc = types.TypeDataCollector.init(256);
         tdc.add(*const fn (*const anyopaque, *anyopaque) anyerror!void);
@@ -22,8 +22,6 @@ fn Factory(comptime host: type, comptime module: type) type {
         break :result tdc.createDatabase();
     };
     return struct {
-        options: types.ExportOptions,
-
         pub fn getStructureType(comptime td: TypeData) types.StructureType {
             return if (td.attrs.is_arguments)
                 switch (td.attrs.is_variadic) {
@@ -686,8 +684,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .Fn => !self.options.omit_methods,
-                                else => !self.options.omit_variables or decl_ptr_td.isConst(),
+                                .Fn => !export_options.omit_functions,
+                                else => !export_options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {
                                 checkStaticMember(DT);
@@ -896,10 +894,9 @@ fn Factory(comptime host: type, comptime module: type) type {
 
 pub fn getFactoryThunk(comptime host: type, comptime module: type) thunk_zig.Thunk {
     const ns = struct {
-        fn exportStructures(_: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
-            @setEvalBranchQuota(2000000);
-            const options_ptr: *const types.ExportOptions = @ptrCast(@alignCast(arg_ptr));
-            const factory: Factory(host, module) = .{ .options = options_ptr.* };
+        fn exportStructures(_: *const anyopaque, _: *anyopaque) anyerror!void {
+            @setEvalBranchQuota(export_options.eval_branch_quota);
+            const factory: Factory(host, module) = .{};
             _ = try factory.getStructure(module);
             return;
         }

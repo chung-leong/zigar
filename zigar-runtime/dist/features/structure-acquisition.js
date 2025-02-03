@@ -1,5 +1,5 @@
 import { SLOTS, MEMORY, ZIG, ENVIRONMENT, SENTINEL } from '../symbols.js';
-import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag, ExportFlag } from '../constants.js';
+import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { findObjects, adjustAddress, decodeText } from '../utils.js';
 
@@ -109,34 +109,16 @@ var structureAcquisition = mixin({
     }
     return object;
   },
-  acquireStructures(options) {
+  acquireStructures() {
     const attrs = this.getModuleAttributes();
     this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
     this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
     this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
-    const { littleEndian } = this;
-    const FactoryArg = function(options) {
-      const {
-        omitFunctions = false,
-        omitVariables = false,
-      } = options;
-      const dv = new DataView(new ArrayBuffer(4));
-      let flags = 0;
-      if (omitFunctions) {
-        flags |= ExportFlag.OmitMethods;
-      }
-      if (omitVariables) {
-        flags |= ExportFlag.OmitVariables;
-      }
-      dv.setUint32(0, flags, littleEndian);
-      this[MEMORY] = dv;
-    };
-    const args = new FactoryArg(options);
     this.comptime = true;
     this.mixinUsage = new Map();
-    this.invokeThunk(thunk, thunk, args);
+    this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
     // acquire default pointers now that we have all constructors
     for (const structure of this.structures) {
