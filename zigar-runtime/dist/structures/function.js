@@ -24,7 +24,7 @@ var _function = mixin({
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
         }
-        if (ArgStruct[TYPE] === StructureType.VariadicStruct) {
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
@@ -47,7 +47,7 @@ var _function = mixin({
       : thisEnv.createOutboundCaller(thunk, ArgStruct);
       defineProperties(self, {
         length: defineValue(argCount),
-        name: defineValue(''),
+        name: defineValue(creating ? arg.name : ''),
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
