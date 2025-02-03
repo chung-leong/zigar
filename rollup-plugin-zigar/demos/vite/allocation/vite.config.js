@@ -23,6 +23,6 @@ export default defineConfig({
   base: '/demos/rollup-plugin-zigar/allocation',
   build: {
     emptyOutDir: true,
-    outDir: '../../../../../zigar.wiki/demos/rollup-plugin-zigar/allocation',
+    outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/allocation',
   },
 })

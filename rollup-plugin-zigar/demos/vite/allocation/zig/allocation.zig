@@ -2,6 +2,8 @@ const std = @import("std");
 const zigar = @import("zigar");
 
 const Reporter = fn (usize, usize) void;
+const Promise = zigar.function.Promise(void);
+const Signal = zigar.function.AbortSignal;
 const allocator = zigar.mem.getDefaultAllocator();
 
 pub fn runTest(count: usize, iterations: usize) !usize {
@@ -16,13 +18,7 @@ pub fn runTest(count: usize, iterations: usize) !usize {
     return count + i;
 }
 
-pub fn startThreads(
-    count: usize,
-    iterations: usize,
-    reporter: *const Reporter,
-    signal: zigar.function.AbortSignal,
-    promise: zigar.function.Promise(void),
-) !void {
+pub fn startThreads(count: usize, iterations: usize, reporter: *const Reporter, signal: Signal, promise: Promise) !void {
     const multipart_promise = try promise.partition(allocator, count);
     for (0..count) |i| {
         const thread = try std.Thread.spawn(.{
@@ -39,13 +35,7 @@ pub fn startThreads(
     }
 }
 
-fn threadFn(
-    id: usize,
-    iterations: usize,
-    reporter: *const Reporter,
-    signal: zigar.function.AbortSignal,
-    promise: zigar.function.Promise(void),
-) void {
+fn threadFn(id: usize, iterations: usize, reporter: *const Reporter, signal: Signal, promise: Promise) void {
     var count: usize = 0;
     while (signal.off()) {
         if (runTest(count, iterations)) |new_count| {
