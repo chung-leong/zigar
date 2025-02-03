@@ -1,6 +1,6 @@
 # Zigar
 
-![Logo](./docs/images/logo.png)
+![Logo](./logo.png)
 
 A software tool set that lets you utilize [Zig](https://ziglang.org/) code in your JavaScript
 projects.
