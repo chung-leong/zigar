@@ -2,9 +2,9 @@
     .name = "raylib-test",
     .version = "0.0.0",
     .dependencies = .{
-        .@"raylib-zig" = .{
-            .url = "git+https://github.com/Not-Nik/raylib-zig?ref=devel#1ef4995f82686fda7c2eff1c76f26d1200d74760",
-            .hash = "12206cf18aea41dc1e61b697c36ef627752e84fe9a9362b800240fce7dea3665094d",
+        .raylib = .{
+            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
+            .hash = "1220fc14fc3e523cf617d4760c7c329946afb1e181b107204753f260610ab61aa90e",
         },
     },
     .paths = .{

@@ -23,34 +23,30 @@ pub fn build(b: *std.Build) void {
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = zig_path ++ "zigar.zig" },
     });
-    const raylib = b.dependency("raylib-zig", .{
+    const raylib = b.dependency("raylib", .{
         .target = target,
         .optimize = optimize,
-    }).module("raylib");
+        .linux_display_backend = .Wayland,
+    });
+    lib.linkLibrary(raylib.artifact("raylib"));
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
-        .{ .name = "raylib", .module = raylib },
     };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
         .imports = &imports,
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
+    mod.addIncludePath(raylib.path("src"));
     lib.root_module.addImport("module", mod);
     if (cfg.use_libc) {
         lib.linkLibC();
     }
-    if (cfg.is_wasm) {
-        // WASM needs to be compiled as exe
-        lib.kind = .exe;
-        lib.linkage = .static;
-        lib.entry = .disabled;
-        lib.rdynamic = true;
-        lib.wasi_exec_model = .reactor;
-        lib.import_memory = true;
-        lib.import_table = true;
-        lib.max_memory = cfg.max_memory;
-    }
+    const options = b.addOptions();
+    options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);
+    options.addOption(bool, "omit_functions", cfg.omit_functions);
+    options.addOption(bool, "omit_variables", cfg.omit_variables);
+    lib.root_module.addOptions("export-options.zig", options);
     const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
         true => b.addUpdateSourceFiles(),
         false => b.addWriteFiles(),
