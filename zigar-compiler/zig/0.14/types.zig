@@ -517,6 +517,7 @@ pub const TypeAttributes = packed struct {
     has_pointer: bool = false,
     has_unsupported: bool = false,
     known: bool = false,
+    signature_known: bool = false,
 };
 
 pub const TypeData = struct {
@@ -974,9 +975,9 @@ pub const TypeDataCollector = struct {
         inline for (self.types.slice()) |*td| {
             // set attributes like is_supported and has_pointer
             self.setAttributes(td);
-            // set signature of types
-            self.setSignature(td);
             if (td.isSupported()) {
+                // set signature of supported types
+                self.setSignature(td);
                 // assign slots to supported types
                 self.setSlot(td);
             }
@@ -1291,13 +1292,17 @@ pub const TypeDataCollector = struct {
         }
     }
 
-    fn setSignature(comptime self: *@This(), comptime td: *TypeData) void {
-        if (td.isSupported()) {
-            td.signature = self.calcSignature(td);
-        }
+    fn getSignature(comptime self: *@This(), comptime T: type) u64 {
+        const td = self.get(T);
+        self.setSignature(td);
+        return td.signature;
     }
 
-    fn calcSignature(comptime self: *@This(), comptime td: *TypeData) u64 {
+    fn setSignature(comptime self: *@This(), comptime td: *TypeData) void {
+        if (td.attrs.signature_known) {
+            return;
+        }
+        td.attrs.signature_known = true;
         var md5 = std.crypto.hash.Md5.init(.{});
         switch (@typeInfo(td.type)) {
             .@"struct" => |st| {
@@ -1308,7 +1313,7 @@ pub const TypeDataCollector = struct {
                 });
                 if (st.backing_integer) |BIT| {
                     md5.update("(");
-                    md5.update(std.mem.asBytes(&self.get(BIT).signature));
+                    md5.update(std.mem.asBytes(&self.getSignature(BIT)));
                     md5.update(")");
                 }
                 md5.update(" {");
@@ -1316,7 +1321,7 @@ pub const TypeDataCollector = struct {
                     if (!field.is_comptime) {
                         md5.update(field.name);
                         md5.update(": ");
-                        md5.update(std.mem.asBytes(&self.get(field.type).signature));
+                        md5.update(std.mem.asBytes(&self.getSignature(field.type)));
                         if (field.alignment != @alignOf(field.type)) {
                             md5.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
                         }
@@ -1332,14 +1337,14 @@ pub const TypeDataCollector = struct {
                 });
                 if (un.tag_type) |TT| {
                     md5.update("(");
-                    md5.update(std.mem.asBytes(&self.get(TT).signature));
+                    md5.update(std.mem.asBytes(&self.getSignature(TT)));
                     md5.update(")");
                 }
                 md5.update(" {");
                 for (un.fields) |field| {
                     md5.update(field.name);
                     md5.update(": ");
-                    md5.update(std.mem.asBytes(&self.get(field.type).signature));
+                    md5.update(std.mem.asBytes(&self.getSignature(field.type)));
                     if (field.alignment != @alignOf(field.type)) {
                         md5.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
                     }
@@ -1349,21 +1354,35 @@ pub const TypeDataCollector = struct {
             },
             .array => |ar| {
                 md5.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.get(ar.child).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
             },
             .vector => |ar| {
                 md5.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.get(ar.child).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
                 md5.update(")");
             },
             .optional => |op| {
                 md5.update("?");
-                md5.update(std.mem.asBytes(&self.get(op.child).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(op.child)));
             },
             .error_union => |eu| {
-                md5.update(std.mem.asBytes(&self.get(eu.error_set).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(eu.error_set)));
                 md5.update("!");
-                md5.update(std.mem.asBytes(&self.get(eu.payload).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(eu.payload)));
+            },
+            .error_set => |es| {
+                if (td.type == anyerror) {
+                    md5.update("anyerror");
+                } else {
+                    md5.update("error{");
+                    if (es) |errors| {
+                        inline for (errors) |err| {
+                            md5.update(err.name);
+                            md5.update(",");
+                        }
+                    }
+                    md5.update("}");
+                }
             },
             .pointer => |pt| {
                 md5.update(switch (pt.size) {
@@ -1386,7 +1405,7 @@ pub const TypeDataCollector = struct {
                 if (pt.is_allowzero) {
                     md5.update("allowzero ");
                 }
-                md5.update(std.mem.asBytes(&self.get(pt.child).signature));
+                md5.update(std.mem.asBytes(&self.getSignature(pt.child)));
             },
             .@"fn" => |f| {
                 md5.update("fn (");
@@ -1398,7 +1417,7 @@ pub const TypeDataCollector = struct {
                         md5.update("noalias ");
                     }
                     if (param.type) |PT| {
-                        md5.update(std.mem.asBytes(&self.get(PT).signature));
+                        md5.update(std.mem.asBytes(&self.getSignature(PT)));
                     } else {
                         md5.update("anytype");
                     }
@@ -1411,14 +1430,14 @@ pub const TypeDataCollector = struct {
                     md5.update(") ");
                 }
                 if (f.return_type) |RT| {
-                    md5.update(std.mem.asBytes(&self.get(RT).signature));
+                    md5.update(std.mem.asBytes(&self.getSignature(RT)));
                 }
             },
             else => md5.update(@typeName(td.type)),
         }
         var out: [16]u8 = undefined;
         md5.final(&out);
-        return std.mem.bytesToValue(u64, out[0..8]);
+        td.signature = std.mem.bytesToValue(u64, out[0..8]);
     }
 
     test "scan" {
