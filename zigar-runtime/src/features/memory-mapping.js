@@ -168,26 +168,6 @@ export default mixin({
       }
     }
   },
-  allocateZigMemory(len, align, type = MemoryType.Normal) {
-    const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
-    if (!address && len) {
-      throw new Error('Out of memory');
-    }
-    const dv = this.obtainZigView(address, len);
-    const zig = dv?.[ZIG];
-    if (zig) {
-      zig.align = align;
-      zig.type = type;
-    }
-    return dv;
-  },
-  freeZigMemory(dv) {
-    const { address, unalignedAddress, len, align, type } = dv[ZIG];
-    if (len) {
-      this.freeExternMemory(type, unalignedAddress ?? address, len, align);
-    }
-    this.releaseZigView(dv);
-  },
   releaseZigView(dv) {
     const zig = dv[ZIG];
     const address = zig?.address;
@@ -210,8 +190,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
-      allocateExternMemory: { argType: 'iii', returnType: 'i' },
-      freeExternMemory: { argType: 'iiii' },
+      allocateScratchMemory: { argType: 'ii', returnType: 'i' },
+      freeScratchMemory: { argType: 'iii' },
     },
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
@@ -219,16 +199,29 @@ export default mixin({
     usizeMaxBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
-      if (process.env.DEV) {
-        this.shadowMemoryBytes += len;
+      const address = (len) ? this.allocateScratchMemory(len, align) : 0;
+      if (!address && len) {
+        throw new Error('Out of memory');
       }
-      return this.allocateZigMemory(len, align, MemoryType.Scratch);
+      const dv = this.obtainZigView(address, len);
+      const zig = dv?.[ZIG];
+      if (zig) {
+        zig.align = align;
+        if (process.env.DEV) {
+          this.shadowMemoryBytes += len;
+        }
+      }
+      return dv;
     },
     freeShadowMemory(dv) {
+      const { address, unalignedAddress, len, align } = dv[ZIG];
+      if (len) {
+        this.freeScratchMemory(unalignedAddress ?? address, len, align);
+      }
+      this.releaseZigView(dv);
       if (process.env.DEV) {
         this.shadowMemoryBytes -= dv.byteLength;
       }
-      return this.freeZigMemory(dv);
     },
     obtainZigView(address, len) {
       if (isInvalidAddress(address)) {
@@ -264,8 +257,6 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
-      allocateExternMemory: null,
-      freeExternMemory: null,
       getBufferAddress: null,
       obtainExternBuffer: null,
     },

@@ -272,62 +272,13 @@ fn getMainThreadModuleData() !*ModuleData {
     return module_data_list.getLastOrNull() orelse Error.NotInMainThread;
 }
 
-// allocator for extern memory
+// allocator for memory used for house keeping
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 var module_data_list = std.ArrayList(*ModuleData).init(allocator);
 
 pub fn getDefaultAllocator() std.mem.Allocator {
     return allocator;
-}
-
-fn clearBytes(bytes: [*]u8, len: usize) void {
-    var start: usize = 0;
-    inline for (.{ usize, u8 }) |T| {
-        const mask = ~(@as(usize, @sizeOf(T)) - 1);
-        const remaining = len - start;
-        const count = remaining & mask;
-        if (count > 0) {
-            const end = start + count;
-            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
-            start += count;
-            if (start == len) break;
-        }
-    }
-}
-
-test "clearBytes" {
-    const lengths = [_]usize{ 18, 19, 20, 21, 23, 333 };
-    for (lengths) |len| {
-        const ptr_align = 0;
-        const bytes = allocator.rawAlloc(len, ptr_align, 0) orelse @panic("No memory");
-        clearBytes(bytes, len);
-        for (bytes[0..len]) |byte| {
-            try expect(byte == 0);
-        }
-        allocator.rawFree(bytes[0..len], ptr_align, 0);
-    }
-}
-
-fn allocateExternMemory(_: MemoryType, len: usize, alignment: u8, memory: *Memory) callconv(.C) Result {
-    const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
-    const bytes = allocator.rawAlloc(len, ptr_align, 0) orelse return .failure;
-    clearBytes(bytes, len);
-    memory.bytes = bytes;
-    memory.len = len;
-    memory.attributes.alignment = alignment;
-    memory.attributes.is_const = false;
-    memory.attributes.is_comptime = false;
-    return .ok;
-}
-
-fn freeExternMemory(_: MemoryType, memory: *const Memory) callconv(.C) Result {
-    const bytes = memory.bytes orelse return .failure;
-    const alignment = memory.attributes.alignment;
-    const len = memory.len;
-    const ptr_align = if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
-    allocator.rawFree(bytes[0..len], ptr_align, 0);
-    return .ok;
 }
 
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
@@ -430,8 +381,6 @@ const Imports = extern struct {
 const Exports = extern struct {
     initialize: *const fn (*ModuleData) callconv(.C) Result,
     deinitialize: *const fn (*ModuleData) callconv(.C) Result,
-    allocate_extern_memory: *const fn (MemoryType, usize, u8, *Memory) callconv(.C) Result,
-    free_extern_memory: *const fn (MemoryType, *const Memory) callconv(.C) Result,
     get_export_address: *const fn (usize, *usize) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
@@ -464,8 +413,6 @@ pub fn createModule(comptime module: type) Module {
         .exports = &.{
             .initialize = initialize,
             .deinitialize = deinitialize,
-            .allocate_extern_memory = allocateExternMemory,
-            .free_extern_memory = freeExternMemory,
             .get_export_address = getExportAddress,
             .get_factory_thunk = ns.getFactoryThunk,
             .run_thunk = runThunk,

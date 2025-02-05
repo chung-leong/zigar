@@ -159,26 +159,6 @@ var memoryMapping = mixin({
       }
     }
   },
-  allocateZigMemory(len, align, type = MemoryType.Normal) {
-    const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
-    if (!address && len) {
-      throw new Error('Out of memory');
-    }
-    const dv = this.obtainZigView(address, len);
-    const zig = dv?.[ZIG];
-    if (zig) {
-      zig.align = align;
-      zig.type = type;
-    }
-    return dv;
-  },
-  freeZigMemory(dv) {
-    const { address, unalignedAddress, len, align, type } = dv[ZIG];
-    if (len) {
-      this.freeExternMemory(type, unalignedAddress ?? address, len, align);
-    }
-    this.releaseZigView(dv);
-  },
   releaseZigView(dv) {
     const zig = dv[ZIG];
     const address = zig?.address;
@@ -198,8 +178,8 @@ var memoryMapping = mixin({
   },
   ...({
     imports: {
-      allocateExternMemory: { argType: 'iii', returnType: 'i' },
-      freeExternMemory: { argType: 'iiii' },
+      allocateScratchMemory: { argType: 'ii', returnType: 'i' },
+      freeScratchMemory: { argType: 'iii' },
     },
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
@@ -207,10 +187,23 @@ var memoryMapping = mixin({
     usizeMaxBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
-      return this.allocateZigMemory(len, align, MemoryType.Scratch);
+      const address = (len) ? this.allocateScratchMemory(len, align) : 0;
+      if (!address && len) {
+        throw new Error('Out of memory');
+      }
+      const dv = this.obtainZigView(address, len);
+      const zig = dv?.[ZIG];
+      if (zig) {
+        zig.align = align;
+      }
+      return dv;
     },
     freeShadowMemory(dv) {
-      return this.freeZigMemory(dv);
+      const { address, unalignedAddress, len, align } = dv[ZIG];
+      if (len) {
+        this.freeScratchMemory(unalignedAddress ?? address, len, align);
+      }
+      this.releaseZigView(dv);
     },
     obtainZigView(address, len) {
       if (isInvalidAddress(address)) {

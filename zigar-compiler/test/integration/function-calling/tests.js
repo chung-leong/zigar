@@ -24,24 +24,24 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { accept1, accept2, accept3, accept4, Struct } = await importTest('accept-u8');
       expect(() => accept1(1, 123)).to.throw()
-        .with.property('message').that.contains('accept1(');
+        .with.property('message').that.contains('Expecting 1');
       expect(() => accept3(1)).to.throw()
-        .with.property('message').that.contains('accept3(');
+        .with.property('message').that.contains('Expecting 3');
       const s = new Struct({});
       expect(() => s.accept(1)).to.throw()
-        .with.property('message').that.contains('2 arguments');
+        .with.property('message').that.contains('Expecting 2');
       if (runtimeSafety) {
-        expect(() => accept1(-1)).to.throw()
-          .with.property('message').that.contains('accept1(');
-        expect(() => accept2(-1)).to.throw()
-          .with.property('message').that.contains('accept2(');
-        expect(() => accept3(-1, 3)).to.throw()
-          .with.property('message').that.contains('accept3(');
-        expect(() => accept4(1, -1)).to.throw()
-          .with.property('message').that.contains('accept4(');
-        expect(() => s.accept(-1, 1)).to.throw()
+        expect(() => accept1(-1)).to.throw(TypeError)
           .with.property('message').that.contains('args[0]');
-        expect(() => s.accept(1, -1)).to.throw()
+        expect(() => accept2(1, -1)).to.throw()
+          .with.property('message').that.contains('args[1');
+        expect(() => accept3(-1, 3)).to.throw()
+          .with.property('message').that.contains('Expecting 3');
+        expect(() => accept4(1, -1)).to.throw()
+          .with.property('message').that.contains('Expecting 4');
+        expect(() => s.accept(-1, 1)).to.throw(TypeError)
+          .with.property('message').that.contains('args[0]');
+        expect(() => s.accept(1, -1)).to.throw(TypeError)
           .with.property('message').that.contains('args[1]');
       }
     })

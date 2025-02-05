@@ -6,7 +6,6 @@ const thunk_js = @import("thunk-js.zig");
 const types = @import("types.zig");
 
 const Value = types.Value;
-const MemoryType = types.MemoryType;
 const Memory = types.Memory;
 const Error = types.Error;
 const ActionType = thunk_js.ActionType;
@@ -50,21 +49,18 @@ export fn initialize() void {
     main_thread = true;
 }
 
-export fn allocateExternMemory(bin: MemoryType, len: usize, alignment: u16) ?[*]u8 {
-    const a = getAllocator(bin);
+export fn allocateScratchMemory(len: usize, alignment: u16) ?[*]u8 {
+    const a = getScratchAllocator();
     const ptr_align = getPtrAlign(alignment);
     if (a.rawAlloc(len, ptr_align, 0)) |bytes| {
-        if (bin == .normal) {
-            clearBytes(bytes, len);
-        }
         return bytes;
     } else {
         return null;
     }
 }
 
-export fn freeExternMemory(bin: MemoryType, bytes: [*]u8, len: usize, alignment: u16) void {
-    const a = getAllocator(bin);
+export fn freeScratchMemory(bytes: [*]u8, len: usize, alignment: u16) void {
+    const a = getScratchAllocator();
     const ptr_align = getPtrAlign(alignment);
     a.rawFree(bytes[0..len], ptr_align, 0);
 }
@@ -396,32 +392,12 @@ const ScratchAllocator = struct {
 var sfa: ?ScratchAllocator = null;
 var scratch_allocator: ?std.mem.Allocator = null;
 
-fn getAllocator(bin: MemoryType) std.mem.Allocator {
-    return switch (bin) {
-        .scratch => get: {
-            if (scratch_allocator == null) {
-                sfa = ScratchAllocator.init(allocator, 64 * 1024);
-                scratch_allocator = sfa.?.allocator();
-            }
-            break :get scratch_allocator.?;
-        },
-        else => allocator,
-    };
-}
-
-fn clearBytes(bytes: [*]u8, len: usize) void {
-    var start: usize = 0;
-    inline for (.{ usize, u8 }) |T| {
-        const mask = ~(@as(usize, @sizeOf(T)) - 1);
-        const remaining = len - start;
-        const count = remaining & mask;
-        if (count > 0) {
-            const end = start + count;
-            for (std.mem.bytesAsSlice(T, bytes[start..end])) |*ptr| ptr.* = 0;
-            start += count;
-            if (start == len) break;
-        }
+fn getScratchAllocator() std.mem.Allocator {
+    if (scratch_allocator == null) {
+        sfa = ScratchAllocator.init(allocator, 64 * 1024);
+        scratch_allocator = sfa.?.allocator();
     }
+    return scratch_allocator.?;
 }
 
 fn getPtrAlign(alignment: u16) u8 {

@@ -381,57 +381,6 @@ napi_value get_buffer_address(napi_env env,
     return address;
 }
 
-napi_value allocate_external_memory(napi_env env,
-                                    napi_callback_info info) {
-    module_data* md;
-    size_t argc = 3;
-    napi_value args[3];
-    double len;
-    uint32_t bin;
-    uint32_t align;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uint32(env, args[0], &align) != napi_ok) {
-        return throw_error(env, "Type must be number");
-    } else if(napi_get_value_double(env, args[1], &len) != napi_ok) {
-        return throw_error(env, "Length must be number");
-    } else if (napi_get_value_uint32(env, args[2], &align) != napi_ok) {
-        return throw_error(env, "Align must be number");
-    }
-    memory mem;
-    if (md->mod->imports->allocate_extern_memory(bin, len, align, &mem) != OK) {
-        return throw_error(env, "Unable to allocate extern memory");
-    }
-    napi_value address;
-    if (napi_create_uintptr(env, (uintptr_t) mem.bytes, &address) != napi_ok) {
-        return throw_error(env, "Unable to create memory address");
-    }
-    return address;
-}
-
-napi_value free_external_memory(napi_env env,
-                                napi_callback_info info) {
-    module_data* md;
-    size_t argc = 4;
-    napi_value args[4];
-    uintptr_t address;
-    double len;
-    uint32_t bin;
-    uint32_t align;
-    if (napi_get_cb_info(env, info, &argc, args, NULL, (void*) &md) != napi_ok
-     || napi_get_value_uint32(env, args[0], &bin) != napi_ok) {
-        return throw_error(env, "Type must be number");
-    } else if (napi_get_value_uintptr(env, args[1], &address) != napi_ok) {
-        return throw_error(env, "Address must be "UINTPTR_JS_TYPE);
-    } else if (napi_get_value_double(env, args[2], &len) != napi_ok) {
-        return throw_error(env, "Length must be number");
-    } else if (napi_get_value_uint32(env, args[3], &align) != napi_ok) {
-        return throw_error(env, "Align must be number");
-    }
-    memory mem = { (void*) address, len, { align, false, false } };
-    md->mod->imports->free_extern_memory(bin, &mem);
-    return get_undefined(env);
-}
-
 bool can_create_external_buffer(napi_env env) {
     static bool checked = false;
     static bool can_create = false;
@@ -906,8 +855,6 @@ struct {
     { "loadModule", load_module },
     { "getModuleAttributes", get_module_attributes, },
     { "getBufferAddress", get_buffer_address },
-    { "allocateExternMemory", allocate_external_memory },
-    { "freeExternMemory", free_external_memory },
     { "obtainExternBuffer", obtain_external_buffer },
     { "copyExternBytes", copy_external_bytes },
     { "findSentinel", find_sentinel },

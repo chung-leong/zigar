@@ -282,11 +282,6 @@ pub const MemoryAttributes = packed struct {
     _: u14 = 0,
 };
 
-pub const MemoryType = enum(u32) {
-    normal,
-    scratch,
-};
-
 pub const Memory = struct {
     bytes: ?[*]u8 = null,
     len: usize = 0,
