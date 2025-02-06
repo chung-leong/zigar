@@ -1,6 +1,6 @@
 import { memberNames, StructureType } from './constants.js';
-import { PROPS, TYPED_ARRAY } from './symbols.js';
-import { defineProperties, defineProperty, defineValue, getPrimitiveName } from './utils.js';
+import { TYPED_ARRAY, UPDATE } from './symbols.js';
+import { defineProperty,  getPrimitiveName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -221,12 +221,17 @@ export class NoProperty extends TypeError {
 
 export class ArgumentCountMismatch extends Error {
   constructor(expected, received, variadic = false) {
-    const s = (expected !== 1) ? 's' : '';
-    if (variadic) {
-      expected = `at least ${expected}`;
-    }
-    super(`Expecting ${expected} argument${s}, received ${received}`);
-    this.stack = adjustStack(this.stack, 'new Arg(');
+    super();
+    const updateText = (argOffset) => {
+      expected -= argOffset;
+      received -= argOffset;
+      const s = (expected !== 1) ? 's' : '';
+      const p = (variadic) ? 'at least ' : '';
+      this.message = `Expecting ${p}${expected} argument${s}, received ${received}`;
+      this.stack = adjustStack(this.stack, 'new Arg(');
+    };
+    updateText(0);
+    defineProperty(this, UPDATE, { value: updateText, enumerable: false });
   }
 }
 
@@ -418,8 +423,13 @@ export class Exit extends ZigError {
 }
 
 export function adjustArgumentError(err, argIndex) {
-  err.message = `args[${argIndex}]: ${err.message}`;
-  err.stack = adjustStack(err.stack, 'new Arg(');
+  const updateText = (argOffset) => {
+    argIndex -= argOffset;
+    err.message = `args[${argIndex}]: ${err.message}`
+    err.stack = adjustStack(err.stack, 'new Arg(');
+  };
+  updateText(0);
+  defineProperty(err, UPDATE, { value: updateText, enumerable: false });
   return err;
 }
 

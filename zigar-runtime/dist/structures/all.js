@@ -1,7 +1,7 @@
 import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE } from '../symbols.js';
+import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, UPDATE, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE } from '../symbols.js';
 import { defineValue, defineProperties, defineProperty, ObjectCache } from '../utils.js';
 
 var all = mixin({
@@ -95,10 +95,8 @@ var all = mixin({
             try {
               return fn(this, ...args);
             } catch (err) {
-              if ('argCount' in err) {
-                err.argIndex--;
-                err.argCount--;
-              }
+              // adjust argument index/count
+              err[UPDATE]?.(1);
               throw err;
             }
           };
