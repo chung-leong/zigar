@@ -38,10 +38,11 @@ pub fn call4(cb: *const fn (i32) i32) !void {
             call4_result = f(1234);
         }
     };
-    _ = try std.Thread.spawn(.{
+    const thread = try std.Thread.spawn(.{
         .allocator = allocator,
         .stack_size = 1024 * 1024,
     }, ns.run, .{cb});
+    thread.detach();
 }
 
 pub fn shutdown() void {

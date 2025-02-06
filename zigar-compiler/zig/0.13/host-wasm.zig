@@ -149,7 +149,9 @@ fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
     // make sure futex address is valid
     const ptr: *Futex = @ptrFromInt(futex_handle);
     if (ptr.handle == futex_handle) {
-        ptr.value.store(value, .release);
+        // not sure why the following line causes stack corruption in 0.14
+        // ptr.value.store(value, .release);
+        @atomicStore(u32, &ptr.value.raw, value, .release);
         std.Thread.Futex.wake(&ptr.value, 1);
     }
 }
@@ -297,12 +299,12 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         if (comptime builtin.single_threaded) unreachable;
         const initial_value = 0xffff_ffff;
         var futex: Futex = undefined;
-        futex.value = std.atomic.Value(u32).init(initial_value);
+        futex.value = .{ .raw = initial_value };
         futex.handle = @intFromPtr(&futex);
         var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex.handle);
         if (result == .ok) {
             std.Thread.Futex.wait(&futex.value, initial_value);
-            result = @enumFromInt(futex.value.load(.acquire));
+            result = @enumFromInt(@atomicLoad(u32, &futex.value.raw, .acquire));
         }
         return result;
     }

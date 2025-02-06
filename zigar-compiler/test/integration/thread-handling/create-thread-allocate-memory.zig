@@ -2,7 +2,6 @@ const std = @import("std");
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var thread_list = std.ArrayList(std.Thread).init(gpa.allocator());
 
 pub fn spawn(
     allocator: std.mem.Allocator,
@@ -19,13 +18,11 @@ pub fn spawn(
     };
     const thread = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
-        .stack_size = 1024 * 1024,
+        .stack_size = 1024 * 512,
     }, ns.run, .{ allocator, promise });
-    try thread_list.append(thread);
+    thread.detach();
 }
 
 pub fn shutdown() void {
-    for (thread_list.items) |t| t.join();
-    thread_list.clearAndFree();
     zigar.thread.end();
 }
