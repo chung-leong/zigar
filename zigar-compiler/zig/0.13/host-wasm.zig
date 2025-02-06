@@ -102,7 +102,8 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const thunk_address = controller(null, .create, fn_id) catch switch (builtin.single_threaded) {
+    const can_allocate = builtin.single_threaded and main_thread;
+    const thunk_address = controller(null, .create, fn_id) catch switch (can_allocate) {
         true => _allocateJsThunk(controller_address, fn_id),
         false => 0,
     };
@@ -114,7 +115,8 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const fn_id = controller(null, .destroy, thunk_address) catch switch (builtin.single_threaded) {
+    const can_allocate = builtin.single_threaded and main_thread;
+    const fn_id = controller(null, .destroy, thunk_address) catch switch (can_allocate) {
         true => _freeJsThunk(controller_address, thunk_address),
         false => 0,
     };

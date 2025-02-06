@@ -17,5 +17,6 @@ pub fn call(f: Callback) !void {
     };
     _ = try std.Thread.spawn(.{
         .allocator = zigar.mem.getDefaultAllocator(),
+        .stack_size = 1024 * 1024,
     }, ns.run, .{&int});
 }
