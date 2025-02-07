@@ -2268,10 +2268,7 @@ test "Queue" {
 }
 
 pub fn WorkQueue(comptime ns: type) type {
-    const st = switch (@typeInfo(ns)) {
-        .Struct => |st| st,
-        else => @compileError("Struct expected, received " ++ @typeName(ns)),
-    };
+    const decls = std.meta.declarations(ns);
     return struct {
         queue: Queue(WorkItem) = undefined,
         threads: []std.Thread = undefined,
@@ -2314,10 +2311,10 @@ pub fn WorkQueue(comptime ns: type) type {
             });
         };
         pub const WorkItem = init: {
-            var enum_fields: [st.decls.len]std.builtin.Type.EnumField = undefined;
-            var union_fields: [st.decls.len]std.builtin.Type.UnionField = undefined;
+            var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
+            var union_fields: [decls.len]std.builtin.Type.UnionField = undefined;
             var count = 0;
-            for (st.decls) |decl| {
+            for (decls) |decl| {
                 const DT = @TypeOf(@field(ns, decl.name));
                 switch (@typeInfo(DT)) {
                     .Fn => |f| {
@@ -2438,7 +2435,7 @@ pub fn WorkQueue(comptime ns: type) type {
                 .initialized => {},
                 else => return error.Unexpected,
             }
-            const key = comptime EnumOf(func);
+            const key = comptime enumOf(func);
             const fieldName = @tagName(key);
             // @FieldType() not available in 0.13.0
             const Call = inline for (@typeInfo(WorkItem).Union.fields) |field| {
@@ -2476,8 +2473,8 @@ pub fn WorkQueue(comptime ns: type) type {
             },
         };
 
-        fn EnumOf(comptime func: anytype) WorkItemEnum {
-            return for (st.decls) |decl| {
+        fn enumOf(comptime func: anytype) WorkItemEnum {
+            return for (decls) |decl| {
                 const dv = @field(ns, decl.name);
                 if (@TypeOf(dv) == @TypeOf(func)) {
                     if (dv == func) break @field(WorkItemEnum, decl.name);
