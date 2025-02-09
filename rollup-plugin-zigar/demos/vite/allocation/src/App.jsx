@@ -32,7 +32,7 @@ function App() {
       const start = performance.now();
       mainCount = runTest(mainCount, 100);
       const end = performance.now();
-      setDuration(Math.ceil(end - start));
+      setDuration(Math.ceil((end - start) * 1000));
       report(0n, mainCount);
     }, 250);
     signal.addEventListener('abort', () => clearInterval(interval));
@@ -43,7 +43,7 @@ function App() {
         {
           counts.map((count, id) => {
             const name = (id === 0) ? `Main thread` : `Thread #${id}`;
-            const text = (id === 0) ? `${count} (${duration} ms)` : `${count}`;
+            const text = (id === 0) ? `${count} (${duration} μs)` : `${count}`;
             return (
               <li key={id}>{name}: {text}</li>
             )
