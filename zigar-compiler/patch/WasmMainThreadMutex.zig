@@ -12,9 +12,12 @@ pub fn lock(self: *@This()) void {
     if (builtin.single_threaded) return;
     if (inMainThread()) {
         // announce that the lock will be taken by the main thread
-        if (self.value.swap(.seized, .acquire) == .owned) {
+        switch (self.value.swap(.seized, .acquire)) {
+            // seizing a free lock
+            .free => {},
             // keep spinning until the current owner surrenders it
-            while (self.value.load(.monotonic) != .forfeited) {}
+            .owned => while (self.value.load(.monotonic) != .forfeited) {},
+            else => unreachable,
         }
     } else {
         while (true) {
@@ -34,10 +37,13 @@ pub fn unlock(self: *@This()) void {
         self.value.store(.free, .release);
         self.wakeWorker();
     } else {
-        // release the lock, then check if it hasn't been seized
-        if (self.value.swap(.free, .release) == .seized) {
-            // let the spinning main thread take the lock
-            self.value.store(.forfeited, .monotonic);
+        // release the lock if it's still owned by this worker
+        if (self.value.cmpxchgStrong(.owned, .free, .release, .monotonic)) |state| {
+            switch (state) {
+                // let the spinning main thread take the lock
+                .seized => self.value.store(.forfeited, .release),
+                else => unreachable,
+            }
         } else {
             // wake any waiting worker
             self.wakeWorker();
@@ -48,12 +54,17 @@ pub fn unlock(self: *@This()) void {
 pub fn tryLock(self: *@This()) bool {
     if (builtin.single_threaded) return true;
     const new_state: State = if (inMainThread()) .seized else .owned;
-    while (true) {
-        // try to get the lock
-        if (self.value.cmpxchgWeak(.free, new_state, .acquire, .monotonic)) |state| {
-            if (state != .free) return false;
-        } else return true;
-    }
+    return self.value.cmpxchgStrong(.free, new_state, .acquire, .monotonic) == null;
+}
+
+pub fn setMainThreadId(id: std.Thread.Id) void {
+    main_thread_id = id;
+}
+
+var main_thread_id: std.Thread.Id = 0;
+
+fn inMainThread() bool {
+    return std.Thread.getCurrentId() == main_thread_id;
 }
 
 fn wakeWorker(self: *@This()) void {
@@ -69,22 +80,6 @@ fn pauseWorker(self: *@This(), current_state: State) void {
     _ = self.wait_count.fetchAdd(1, .monotonic);
     std.Thread.Futex.wait(u32_ptr, @intFromEnum(current_state));
     _ = self.wait_count.fetchSub(1, .monotonic);
-}
-
-var process_id: ?u32 = null;
-
-fn getMainThreadId() u32 {
-    return switch (builtin.target.os.tag) {
-        .linux => process_id orelse get: {
-            process_id = @intCast(std.os.linux.getpid());
-            break :get process_id.?;
-        },
-        else => 0,
-    };
-}
-
-fn inMainThread() bool {
-    return std.Thread.getCurrentId() == getMainThreadId();
 }
 
 value: switch (builtin.single_threaded) {
@@ -106,6 +101,7 @@ test {
     const expect = std.testing.expect;
     const Mutex = @This();
     var mutex: Mutex = .{};
+    setMainThreadId(std.Thread.getCurrentId());
     // acquire the lock
     try expect(mutex.tryLock() == true);
     // spawn a bunch of threads
@@ -113,9 +109,9 @@ test {
     var threads: [8]std.Thread = undefined;
     var array = [1]u8{' '} ** 16;
     var index: usize = 0;
-    for (&threads) |*thread_ptr| {
+    for (&threads, 0..) |*thread_ptr, thread_index| {
         const ns = struct {
-            fn run(
+            fn run1(
                 mutex_ptr: *Mutex,
                 array_ptr: []u8,
                 index_ptr: *usize,
@@ -123,20 +119,47 @@ test {
             ) !void {
                 _ = thread_count_ptr.fetchAdd(1, .monotonic);
                 std.Thread.Futex.wake(thread_count_ptr, 1);
-                try expect(mutex_ptr.tryLock() == false);
                 mutex_ptr.lock();
                 std.Thread.sleep(20 * 1000);
                 array_ptr[index_ptr.*] = 'T';
                 index_ptr.* += 1;
                 mutex_ptr.unlock();
             }
+
+            fn run2(
+                mutex_ptr: *Mutex,
+                array_ptr: []u8,
+                index_ptr: *usize,
+                thread_count_ptr: *std.atomic.Value(u32),
+            ) !void {
+                _ = thread_count_ptr.fetchAdd(1, .monotonic);
+                std.Thread.Futex.wake(thread_count_ptr, 1);
+                // use tryLock() here
+                while (true) {
+                    if (mutex_ptr.tryLock()) {
+                        std.Thread.sleep(20 * 1000);
+                        array_ptr[index_ptr.*] = 'T';
+                        index_ptr.* += 1;
+                        mutex_ptr.unlock();
+                        break;
+                    } else {
+                        std.Thread.sleep(1000);
+                    }
+                }
+            }
         };
-        thread_ptr.* = try std.Thread.spawn(.{}, ns.run, .{
+        const options: std.Thread.SpawnConfig = .{ .stack_size = 1024 * 1024 };
+        const args = .{
             &mutex,
             &array,
             &index,
             &thread_count,
-        });
+        };
+        if (thread_index & 1 == 0) {
+            thread_ptr.* = try std.Thread.spawn(options, ns.run1, args);
+        } else {
+            thread_ptr.* = try std.Thread.spawn(options, ns.run2, args);
+        }
     }
     while (true) {
         const count = thread_count.load(.monotonic);
@@ -158,7 +181,9 @@ test {
     mutex.unlock();
     std.Thread.sleep(50 * 1000);
     // acquire the lock once more
-    mutex.lock();
+    if (!mutex.tryLock()) {
+        mutex.lock();
+    }
     array[index] = 'C';
     index += 1;
     mutex.unlock();
@@ -182,4 +207,35 @@ test {
         1, 2, 3 => true,
         else => false,
     });
+    try expect(mutex.tryLock() == true);
+    mutex.unlock();
+
+    // acquiring and releaseing the lock continuously for a while
+    var running = true;
+    for (&threads) |*thread_ptr| {
+        const ns = struct {
+            fn run3(
+                mutex_ptr: *Mutex,
+                running_ptr: *bool,
+            ) !void {
+                while (running_ptr.*) {
+                    mutex_ptr.lock();
+                    defer mutex_ptr.unlock();
+                }
+            }
+        };
+        const options: std.Thread.SpawnConfig = .{ .stack_size = 1024 * 1024 };
+        const args = .{ &mutex, &running };
+        thread_ptr.* = try std.Thread.spawn(options, ns.run3, args);
+    }
+    var count: usize = 0;
+    while (count < 250000) {
+        mutex.lock();
+        defer mutex.unlock();
+        count += 1;
+    }
+    running = false;
+    for (threads) |thread| {
+        thread.join();
+    }
 }
