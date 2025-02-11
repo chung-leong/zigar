@@ -3,7 +3,7 @@ const zigar = @import("zigar");
 
 const Promise = zigar.function.Promise(void);
 const Signal = zigar.function.AbortSignal;
-const allocator = zigar.mem.getDefaultAllocator();
+const allocator = std.heap.wasm_allocator;
 
 var mainCount = std.atomic.Value(usize).init(0);
 var workerCount = std.atomic.Value(usize).init(0);

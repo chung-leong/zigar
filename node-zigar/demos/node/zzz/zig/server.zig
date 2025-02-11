@@ -21,6 +21,8 @@ const Route = http.Route;
 const Responder = *const fn (std.mem.Allocator, []const u8) error{Unexpected}![]u8;
 
 var responders: [4]?Responder = .{ null, null, null, null };
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 fn page_handler(ctx: *Context, id: usize) !void {
     if (responders[id]) |f| {
@@ -38,7 +40,6 @@ fn page_handler(ctx: *Context, id: usize) !void {
 }
 
 fn runServer(host: []const u8, port: u16) !void {
-    const allocator = zigar.mem.getDefaultAllocator();
     defer allocator.free(host);
     var t = try Tardy.init(.{
         .allocator = allocator,
@@ -75,7 +76,6 @@ fn runServer(host: []const u8, port: u16) !void {
 }
 
 pub fn startServer(host: []const u8, port: u16) !void {
-    const allocator = zigar.mem.getDefaultAllocator();
     const host_copy = try allocator.dupe(u8, host);
     try zigar.thread.use();
     _ = try std.Thread.spawn(.{ .allocator = allocator }, runServer, .{ host_copy, port });

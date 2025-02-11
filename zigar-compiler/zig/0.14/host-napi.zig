@@ -273,13 +273,9 @@ fn getMainThreadModuleData() !*ModuleData {
 }
 
 // allocator for memory used for house keeping
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}){};
 const allocator = gpa.allocator();
 var module_data_list = std.ArrayList(*ModuleData).init(allocator);
-
-pub fn getDefaultAllocator() std.mem.Allocator {
-    return allocator;
-}
 
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     const md = getModuleData() catch getMainThreadModuleData() catch return .failure;

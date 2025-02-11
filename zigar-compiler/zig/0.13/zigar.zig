@@ -18,7 +18,3 @@ pub const thread = struct {
     pub const WorkQueue = host.WorkQueue;
     pub const Queue = host.Queue;
 };
-
-pub const mem = struct {
-    pub const getDefaultAllocator = host.getDefaultAllocator;
-};

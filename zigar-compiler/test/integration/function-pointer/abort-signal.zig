@@ -4,6 +4,8 @@ const zigar = @import("zigar");
 pub const Callback = *const fn (signal: zigar.function.AbortSignal) void;
 
 var int: i32 = 0;
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 pub fn call(f: Callback) !void {
     const signal: zigar.function.AbortSignal = .{ .ptr = &int };
@@ -16,7 +18,7 @@ pub fn call(f: Callback) !void {
         }
     };
     _ = try std.Thread.spawn(.{
-        .allocator = zigar.mem.getDefaultAllocator(),
+        .allocator = allocator,
         .stack_size = 1024 * 1024,
     }, ns.run, .{&int});
 }

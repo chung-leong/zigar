@@ -325,14 +325,7 @@ pub fn startMultithread() !void {}
 
 pub fn stopMultithread() void {}
 
-const allocator: std.mem.Allocator = .{
-    .ptr = undefined,
-    .vtable = &std.heap.WasmAllocator.vtable,
-};
-
-pub fn getDefaultAllocator() std.mem.Allocator {
-    return allocator;
-}
+const allocator = std.heap.wasm_allocator;
 
 const ScratchAllocator = struct {
     const Self = @This();

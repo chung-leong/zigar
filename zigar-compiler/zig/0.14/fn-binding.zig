@@ -1167,35 +1167,75 @@ const mem = std.mem;
 const native_os = builtin.os.tag;
 const windows = std.os.windows;
 const posix = std.posix;
+const page_size_min = std.heap.page_size_min;
 
 pub const ExecutablePageAllocator = struct {
     const vtable: std.mem.Allocator.VTable = .{
         .alloc = alloc,
+        .remap = std.heap.PageAllocator.vtable.remap,
         .resize = std.heap.PageAllocator.vtable.resize,
         .free = std.heap.PageAllocator.vtable.free,
     };
 
-    fn alloc(_: *anyopaque, n: usize, log2_align: u8, ra: usize) ?[*]u8 {
-        _ = ra;
-        _ = log2_align;
-        assert(n > 0);
-        if (n > maxInt(usize) - (mem.page_size - 1)) return null;
+    pub fn map(n: usize, alignment: mem.Alignment) ?[*]u8 {
+        const page_size = std.heap.pageSize();
+        if (n >= maxInt(usize) - page_size) return null;
+        const alignment_bytes = alignment.toByteUnits();
 
         if (native_os == .windows) {
+            // According to official documentation, VirtualAlloc aligns to page
+            // boundary, however, empirically it reserves pages on a 64K boundary.
+            // Since it is very likely the requested alignment will be honored,
+            // this logic first tries a call with exactly the size requested,
+            // before falling back to the loop below.
+            // https://devblogs.microsoft.com/oldnewthing/?p=42223
             const addr = windows.VirtualAlloc(
                 null,
-
                 // VirtualAlloc will round the length to a multiple of page size.
-                // VirtualAlloc docs: If the lpAddress parameter is NULL, this value is rounded up to the next page boundary
+                // "If the lpAddress parameter is NULL, this value is rounded up to
+                // the next page boundary".
                 n,
-
                 windows.MEM_COMMIT | windows.MEM_RESERVE,
                 windows.PAGE_EXECUTE_READWRITE,
             ) catch return null;
-            return @ptrCast(addr);
+
+            if (mem.isAligned(@intFromPtr(addr), alignment_bytes))
+                return @ptrCast(addr);
+
+            // Fallback: reserve a range of memory large enough to find a
+            // sufficiently aligned address, then free the entire range and
+            // immediately allocate the desired subset. Another thread may have won
+            // the race to map the target range, in which case a retry is needed.
+            windows.VirtualFree(addr, 0, windows.MEM_RELEASE);
+
+            const overalloc_len = n + alignment_bytes - page_size;
+            const aligned_len = mem.alignForward(usize, n, page_size);
+
+            while (true) {
+                const reserved_addr = windows.VirtualAlloc(
+                    null,
+                    overalloc_len,
+                    windows.MEM_RESERVE,
+                    windows.PAGE_NOACCESS,
+                ) catch return null;
+                const aligned_addr = mem.alignForward(usize, @intFromPtr(reserved_addr), alignment_bytes);
+                windows.VirtualFree(reserved_addr, 0, windows.MEM_RELEASE);
+                const ptr = windows.VirtualAlloc(
+                    @ptrFromInt(aligned_addr),
+                    aligned_len,
+                    windows.MEM_COMMIT | windows.MEM_RESERVE,
+                    windows.PAGE_READWRITE,
+                ) catch continue;
+                return @ptrCast(ptr);
+            }
         }
 
-        const aligned_len = mem.alignForward(usize, n, mem.page_size);
+        const aligned_len = mem.alignForward(usize, n, page_size);
+        const max_drop_len = alignment_bytes - @min(alignment_bytes, page_size);
+        const overalloc_len = if (max_drop_len <= aligned_len - n)
+            aligned_len
+        else
+            mem.alignForward(usize, aligned_len + max_drop_len, page_size);
         const hint = @atomicLoad(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, .unordered);
         var map_flags: std.posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
         if (builtin.target.isDarwin()) {
@@ -1206,23 +1246,37 @@ pub const ExecutablePageAllocator = struct {
         }
         const slice = posix.mmap(
             hint,
-            aligned_len,
+            overalloc_len,
             posix.PROT.READ | posix.PROT.WRITE | std.posix.PROT.EXEC,
             map_flags,
             -1,
             0,
         ) catch return null;
-        assert(mem.isAligned(@intFromPtr(slice.ptr), mem.page_size));
-        const new_hint: [*]align(mem.page_size) u8 = @alignCast(slice.ptr + aligned_len);
+        const result_ptr = mem.alignPointer(slice.ptr, alignment_bytes) orelse return null;
+        // Unmap the extra bytes that were only requested in order to guarantee
+        // that the range of memory we were provided had a proper alignment in it
+        // somewhere. The extra bytes could be at the beginning, or end, or both.
+        const drop_len = result_ptr - slice.ptr;
+        if (drop_len != 0) posix.munmap(slice[0..drop_len]);
+        const remaining_len = overalloc_len - drop_len;
+        if (remaining_len > aligned_len) posix.munmap(@alignCast(result_ptr[aligned_len..remaining_len]));
+        const new_hint: [*]align(page_size_min) u8 = @alignCast(result_ptr + aligned_len);
         _ = @cmpxchgStrong(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, hint, new_hint, .monotonic, .monotonic);
-        return slice.ptr;
+        return result_ptr;
+    }
+
+    fn alloc(context: *anyopaque, n: usize, alignment: mem.Alignment, ra: usize) ?[*]u8 {
+        _ = context;
+        _ = ra;
+        assert(n > 0);
+        return map(n, alignment);
     }
 
     test "alloc" {
         const ptr: *anyopaque = @ptrFromInt(0x1_0000);
         const len = 16384;
-        const ptr_align = 14;
-        const result = alloc(ptr, len, ptr_align, 0);
+        const alignment: mem.Alignment = .@"64";
+        const result = alloc(ptr, len, alignment, 0);
         try expect(result != null);
     }
 };

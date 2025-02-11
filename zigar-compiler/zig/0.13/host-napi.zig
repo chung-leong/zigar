@@ -276,10 +276,6 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 var module_data_list = std.ArrayList(*ModuleData).init(allocator);
 
-pub fn getDefaultAllocator() std.mem.Allocator {
-    return allocator;
-}
-
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
     const md = getModuleData() catch getMainThreadModuleData() catch return .failure;
     const result = handleJsCall(md, 0, @constCast(bytes), len);

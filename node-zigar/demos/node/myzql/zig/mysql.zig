@@ -16,11 +16,13 @@ const DatabaseParams = struct {
 };
 
 var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 pub fn openDatabase(params: DatabaseParams) !void {
     try zigar.thread.use();
     try work_queue.init(.{
-        .allocator = zigar.mem.getDefaultAllocator(),
+        .allocator = allocator,
         .n_jobs = params.threads,
         .thread_start_params = .{params},
     });
@@ -93,7 +95,6 @@ const thread_ns = struct {
     };
 
     pub fn onThreadStart(params: DatabaseParams) !void {
-        const allocator = zigar.mem.getDefaultAllocator();
         const address = try std.net.Address.parseIp(params.host, params.port);
         client = try Conn.init(
             allocator,
@@ -117,7 +118,6 @@ const thread_ns = struct {
     }
 
     pub fn onThreadEnd() void {
-        const allocator = zigar.mem.getDefaultAllocator();
         inline for (comptime std.meta.declarations(queries)) |qs_decl| {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {

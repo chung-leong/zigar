@@ -4,7 +4,7 @@ const Mutex = @import("./WasmMainThreadMutex.zig");
 
 const Promise = zigar.function.Promise(void);
 const Signal = zigar.function.AbortSignal;
-const allocator = zigar.mem.getDefaultAllocator();
+const allocator = std.heap.wasm_allocator;
 
 var mutex = Mutex{};
 var mainCount = std.atomic.Value(usize).init(0);

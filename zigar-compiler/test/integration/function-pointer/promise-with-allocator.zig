@@ -8,7 +8,8 @@ pub const Callback = *const fn (
     promise: zigar.function.Promise(JSError![]const u8),
 ) void;
 
-const allocator = zigar.mem.getDefaultAllocator();
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 pub fn receive(_: ?*anyopaque, arg: JSError![]const u8) void {
     if (arg) |string| {
