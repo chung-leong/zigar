@@ -2,7 +2,6 @@ const std = @import("std");
 const zigar = @import("zigar");
 const Mutex = @import("./WasmMainThreadMutex.zig");
 
-const Reporter = fn (usize, usize) void;
 const Promise = zigar.function.Promise(void);
 const Signal = zigar.function.AbortSignal;
 const allocator = zigar.mem.getDefaultAllocator();
@@ -29,11 +28,8 @@ pub fn startThreads(threads: usize, signal: Signal, promise: Promise) !void {
     for (0..threads) |_| {
         const thread = try std.Thread.spawn(.{
             .allocator = allocator,
-            .stack_size = 512 * 1024,
-        }, threadFn, .{
-            signal,
-            multipart_promise,
-        });
+            .stack_size = 64 * 1024,
+        }, threadFn, .{ signal, multipart_promise });
         thread.detach();
     }
 }
