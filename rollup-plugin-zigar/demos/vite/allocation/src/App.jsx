@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { runTest, startThreads } from '../zig/allocation.zig'
 
-const threadCount = 16;
+const threadCount = navigator.hardwareConcurrency - 1;
 
 function App() {
   const [ counts, setCounts ] = useState(() => {
@@ -30,7 +30,7 @@ function App() {
     var mainCount = 0n;
     const interval = setInterval(() => {
       const start = performance.now();
-      mainCount = runTest(mainCount, 100);
+      mainCount = runTest(mainCount, 200);
       const end = performance.now();
       setDuration(Math.ceil((end - start) * 1000));
       report(0n, mainCount);

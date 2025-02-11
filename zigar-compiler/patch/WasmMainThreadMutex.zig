@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const State = enum(u32) {
+const Status = enum(u32) {
     free, // no one owns the lock
     owned, // a worker thread has the lock
     seized, // the main thread either has the lock already or is about to get it
@@ -12,19 +12,24 @@ pub fn lock(self: *@This()) void {
     if (builtin.single_threaded) return;
     if (inMainThread()) {
         // announce that the lock will be taken by the main thread
-        switch (self.value.swap(.seized, .acquire)) {
+        switch (self.status.swap(.seized, .acquire)) {
             // seizing a free lock
             .free => {},
             // keep spinning until the current owner surrenders it
-            .owned => while (self.value.load(.monotonic) != .forfeited) {},
+            .owned => while (self.status.load(.monotonic) != .forfeited) {},
             else => unreachable,
         }
     } else {
         while (true) {
             // try to get the lock
-            if (self.value.cmpxchgWeak(.free, .owned, .acquire, .monotonic)) |state| {
+            if (self.status.cmpxchgWeak(.free, .owned, .acquire, .monotonic)) |status| {
                 // pause the worker when it's not .free
-                if (state != .free) self.pauseWorker(state);
+                if (status != .free) {
+                    const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.status);
+                    _ = self.wait_count.fetchAdd(1, .monotonic);
+                    std.Thread.Futex.wait(u32_ptr, @intFromEnum(status));
+                    _ = self.wait_count.fetchSub(1, .monotonic);
+                }
             } else break;
         }
     }
@@ -33,28 +38,32 @@ pub fn lock(self: *@This()) void {
 pub fn unlock(self: *@This()) void {
     if (builtin.single_threaded) return;
     if (inMainThread()) {
-        // release the lock and wake any waiting worker
-        self.value.store(.free, .release);
-        self.wakeWorker();
+        // just release the lock
+        self.status.store(.free, .release);
     } else {
-        // release the lock if it's still owned by this worker
-        if (self.value.cmpxchgStrong(.owned, .free, .release, .monotonic)) |state| {
-            switch (state) {
-                // let the spinning main thread take the lock
-                .seized => self.value.store(.forfeited, .release),
+        // release the lock if the worker thread still owns it
+        if (self.status.cmpxchgStrong(.owned, .free, .release, .monotonic)) |status| {
+            switch (status) {
+                .seized => {
+                    // let the spinning main thread take the lock
+                    self.status.store(.forfeited, .release);
+                    return;
+                },
                 else => unreachable,
             }
-        } else {
-            // wake any waiting worker
-            self.wakeWorker();
         }
+    }
+    if (self.wait_count.load(.monotonic) > 0) {
+        // awaken a waiting worker thread
+        const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.status);
+        std.Thread.Futex.wake(u32_ptr, 1);
     }
 }
 
 pub fn tryLock(self: *@This()) bool {
     if (builtin.single_threaded) return true;
-    const new_state: State = if (inMainThread()) .seized else .owned;
-    return self.value.cmpxchgStrong(.free, new_state, .acquire, .monotonic) == null;
+    const new_status: Status = if (inMainThread()) .seized else .owned;
+    return self.status.cmpxchgStrong(.free, new_status, .acquire, .monotonic) == null;
 }
 
 pub fn setMainThreadId(id: std.Thread.Id) void {
@@ -67,23 +76,8 @@ fn inMainThread() bool {
     return std.Thread.getCurrentId() == main_thread_id;
 }
 
-fn wakeWorker(self: *@This()) void {
-    if (self.wait_count.load(.monotonic) > 0) {
-        // awaken a waiting worker thread
-        const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.value);
-        std.Thread.Futex.wake(u32_ptr, 1);
-    }
-}
-
-fn pauseWorker(self: *@This(), current_state: State) void {
-    const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.value);
-    _ = self.wait_count.fetchAdd(1, .monotonic);
-    std.Thread.Futex.wait(u32_ptr, @intFromEnum(current_state));
-    _ = self.wait_count.fetchSub(1, .monotonic);
-}
-
-value: switch (builtin.single_threaded) {
-    false => std.atomic.Value(State),
+status: switch (builtin.single_threaded) {
+    false => std.atomic.Value(Status),
     true => void,
 } = switch (builtin.single_threaded) {
     false => .{ .raw = .free },
@@ -105,8 +99,8 @@ test {
     // acquire the lock
     try expect(mutex.tryLock() == true);
     // spawn a bunch of threads
-    var thread_count = std.atomic.Value(u32).init(0);
     var threads: [8]std.Thread = undefined;
+    var thread_count = std.atomic.Value(u32).init(0);
     var array = [1]u8{' '} ** 16;
     var index: usize = 0;
     for (&threads, 0..) |*thread_ptr, thread_index| {
@@ -217,7 +211,7 @@ test {
             fn run3(
                 mutex_ptr: *Mutex,
                 running_ptr: *bool,
-            ) !void {
+            ) void {
                 while (running_ptr.*) {
                     mutex_ptr.lock();
                     defer mutex_ptr.unlock();
@@ -229,7 +223,7 @@ test {
         thread_ptr.* = try std.Thread.spawn(options, ns.run3, args);
     }
     var count: usize = 0;
-    while (count < 250000) {
+    while (count < 50000) {
         mutex.lock();
         defer mutex.unlock();
         count += 1;

@@ -23,7 +23,7 @@ pub fn startThreads(count: usize, iterations: usize, reporter: *const Reporter, 
     for (0..count) |i| {
         const thread = try std.Thread.spawn(.{
             .allocator = allocator,
-            .stack_size = 64 * 1024,
+            .stack_size = 512 * 1024,
         }, threadFn, .{
             i + 1,
             iterations,
