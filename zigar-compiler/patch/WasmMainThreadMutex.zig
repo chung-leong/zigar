@@ -27,7 +27,6 @@ const Status = enum(u32) {
 /// It is undefined behavior if the mutex is already held by the caller's thread.
 /// Once acquired, call `unlock()` on the mutex to release it.
 pub fn lock(self: *WasmMainThreadMutex) void {
-    if (builtin.single_threaded) return;
     if (inMainThread()) {
         // announce that the lock will be taken by the main thread
         switch (self.status.swap(.seized, .acquire)) {
@@ -56,7 +55,6 @@ pub fn lock(self: *WasmMainThreadMutex) void {
 /// Releases the mutex which was previously acquired with `lock()` or `tryLock()`.
 /// It is undefined behavior if the mutex is unlocked from a different thread that it was locked from.
 pub fn unlock(self: *WasmMainThreadMutex) void {
-    if (builtin.single_threaded) return;
     if (inMainThread()) {
         // just release the lock
         self.status.store(.free, .release);
@@ -84,7 +82,6 @@ pub fn unlock(self: *WasmMainThreadMutex) void {
 /// Returns `false` if the calling thread would have to block to acquire it.
 /// Otherwise, returns `true` and the caller should `unlock()` the mutex to release it.
 pub fn tryLock(self: *WasmMainThreadMutex) bool {
-    if (builtin.single_threaded) return true;
     const new_status: Status = if (inMainThread()) .seized else .owned;
     return self.status.cmpxchgStrong(.free, new_status, .acquire, .monotonic) == null;
 }
@@ -101,20 +98,8 @@ fn inMainThread() bool {
     return Thread.getCurrentId() == main_thread_id;
 }
 
-status: switch (builtin.single_threaded) {
-    false => std.atomic.Value(Status),
-    true => void,
-} = switch (builtin.single_threaded) {
-    false => .{ .raw = .free },
-    true => {},
-},
-wait_count: switch (builtin.single_threaded) {
-    false => std.atomic.Value(u32),
-    true => void,
-} = switch (builtin.single_threaded) {
-    false => .{ .raw = 0 },
-    true => {},
-},
+status: std.atomic.Value(Status) = .{ .raw = .free },
+wait_count: std.atomic.Value(u32) = .{ .raw = 0 },
 
 test "smoke test (main thread)" {
     setMainThreadId(Thread.getCurrentId());
