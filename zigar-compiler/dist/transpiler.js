@@ -3608,7 +3608,7 @@ var defaultAllocator = mixin({
     let allocator = this.defaultAllocator;
     if (!allocator) {
       const { constructor: Allocator } = structure;
-      const { noResize } = Allocator;
+      const { noResize, noRemap } = Allocator;
       const vtable = {
         alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
         free: (ptr, buf, ptrAlign) => {
@@ -3618,6 +3618,9 @@ var defaultAllocator = mixin({
         },
         resize: noResize,
       };
+      if (noRemap) {
+        vtable.remap = noRemap;
+      }
       const ptr = this.obtainZigView(usizeMax, 0);
       allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
       this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
