@@ -1,5 +1,13 @@
+//! WasmMainThreadMutex is mutex designed to work in the browser environment, where the main thread
+//! is not allowed to wait synchronously.
+//!
+//! Upon encountering a locked mutex, the main thread would spin in-place until it is unlocked by
+//! the current owner. Requests by the main thread preempt those made by other waiting threads so
+//! that the amount of spinning is minimized.
+
 const std = @import("std");
 const builtin = @import("builtin");
+const WasmMainThreadMutex = @This();
 
 const Status = enum(u32) {
     free, // no one owns the lock
@@ -8,7 +16,10 @@ const Status = enum(u32) {
     forfeited, // the main thread has received the lock from the previous owner
 };
 
-pub fn lock(self: *@This()) void {
+/// Acquires the mutex, blocking the caller's thread until it can.
+/// It is undefined behavior if the mutex is already held by the caller's thread.
+/// Once acquired, call `unlock()` on the mutex to release it.
+pub fn lock(self: *WasmMainThreadMutex) void {
     if (builtin.single_threaded) return;
     if (inMainThread()) {
         // announce that the lock will be taken by the main thread
@@ -23,7 +34,7 @@ pub fn lock(self: *@This()) void {
         while (true) {
             // try to get the lock
             if (self.status.cmpxchgWeak(.free, .owned, .acquire, .monotonic)) |status| {
-                // pause the worker when it's not .free
+                // pause the worker when the lock is not free
                 if (status != .free) {
                     const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.status);
                     _ = self.wait_count.fetchAdd(1, .monotonic);
@@ -35,7 +46,9 @@ pub fn lock(self: *@This()) void {
     }
 }
 
-pub fn unlock(self: *@This()) void {
+/// Releases the mutex which was previously acquired with `lock()` or `tryLock()`.
+/// It is undefined behavior if the mutex is unlocked from a different thread that it was locked from.
+pub fn unlock(self: *WasmMainThreadMutex) void {
     if (builtin.single_threaded) return;
     if (inMainThread()) {
         // just release the lock
@@ -60,12 +73,17 @@ pub fn unlock(self: *@This()) void {
     }
 }
 
-pub fn tryLock(self: *@This()) bool {
+/// Tries to acquire the mutex without blocking the caller's thread.
+/// Returns `false` if the calling thread would have to block to acquire it.
+/// Otherwise, returns `true` and the caller should `unlock()` the mutex to release it.
+pub fn tryLock(self: *WasmMainThreadMutex) bool {
     if (builtin.single_threaded) return true;
     const new_status: Status = if (inMainThread()) .seized else .owned;
     return self.status.cmpxchgStrong(.free, new_status, .acquire, .monotonic) == null;
 }
 
+/// Sets the id of the main thread. A call to this function is only necessary when
+/// WasmMainThreadMutex is used in platforms other than Wasm.
 pub fn setMainThreadId(id: std.Thread.Id) void {
     main_thread_id = id;
 }
@@ -93,8 +111,7 @@ wait_count: switch (builtin.single_threaded) {
 
 test {
     const expect = std.testing.expect;
-    const Mutex = @This();
-    var mutex: Mutex = .{};
+    var mutex: WasmMainThreadMutex = .{};
     setMainThreadId(std.Thread.getCurrentId());
     // acquire the lock
     try expect(mutex.tryLock() == true);
@@ -106,7 +123,7 @@ test {
     for (&threads, 0..) |*thread_ptr, thread_index| {
         const ns = struct {
             fn run1(
-                mutex_ptr: *Mutex,
+                mutex_ptr: *WasmMainThreadMutex,
                 array_ptr: []u8,
                 index_ptr: *usize,
                 thread_count_ptr: *std.atomic.Value(u32),
@@ -121,7 +138,7 @@ test {
             }
 
             fn run2(
-                mutex_ptr: *Mutex,
+                mutex_ptr: *WasmMainThreadMutex,
                 array_ptr: []u8,
                 index_ptr: *usize,
                 thread_count_ptr: *std.atomic.Value(u32),
@@ -209,7 +226,7 @@ test {
     for (&threads) |*thread_ptr| {
         const ns = struct {
             fn run3(
-                mutex_ptr: *Mutex,
+                mutex_ptr: *WasmMainThreadMutex,
                 running_ptr: *bool,
             ) void {
                 while (running_ptr.*) {
