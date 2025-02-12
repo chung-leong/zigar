@@ -9,11 +9,18 @@ const std = @import("std");
 const builtin = @import("builtin");
 const WasmMainThreadMutex = @This();
 
+const testing = std.testing;
+const Thread = std.Thread;
+
 const Status = enum(u32) {
-    free, // no one owns the lock
-    owned, // a worker thread has the lock
-    seized, // the main thread either has the lock already or is about to get it
-    forfeited, // the main thread has received the lock from the previous owner
+    // no one owns the lock
+    free,
+    // a worker thread has the lock
+    owned,
+    // the main thread either has the lock already or is about to get it
+    seized,
+    // the main thread has received the lock from the previous owner
+    forfeited,
 };
 
 /// Acquires the mutex, blocking the caller's thread until it can.
@@ -38,7 +45,7 @@ pub fn lock(self: *WasmMainThreadMutex) void {
                 if (status != .free) {
                     const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.status);
                     _ = self.wait_count.fetchAdd(1, .monotonic);
-                    std.Thread.Futex.wait(u32_ptr, @intFromEnum(status));
+                    Thread.Futex.wait(u32_ptr, @intFromEnum(status));
                     _ = self.wait_count.fetchSub(1, .monotonic);
                 }
             } else break;
@@ -69,7 +76,7 @@ pub fn unlock(self: *WasmMainThreadMutex) void {
     if (self.wait_count.load(.monotonic) > 0) {
         // awaken a waiting worker thread
         const u32_ptr: *const std.atomic.Value(u32) = @ptrCast(&self.status);
-        std.Thread.Futex.wake(u32_ptr, 1);
+        Thread.Futex.wake(u32_ptr, 1);
     }
 }
 
@@ -84,14 +91,14 @@ pub fn tryLock(self: *WasmMainThreadMutex) bool {
 
 /// Sets the id of the main thread. A call to this function is only necessary when
 /// WasmMainThreadMutex is used in platforms other than Wasm.
-pub fn setMainThreadId(id: std.Thread.Id) void {
+pub fn setMainThreadId(id: Thread.Id) void {
     main_thread_id = id;
 }
 
-var main_thread_id: std.Thread.Id = 0;
+var main_thread_id: Thread.Id = 0;
 
 fn inMainThread() bool {
-    return std.Thread.getCurrentId() == main_thread_id;
+    return Thread.getCurrentId() == main_thread_id;
 }
 
 status: switch (builtin.single_threaded) {
@@ -109,144 +116,178 @@ wait_count: switch (builtin.single_threaded) {
     true => {},
 },
 
-test {
-    const expect = std.testing.expect;
-    var mutex: WasmMainThreadMutex = .{};
-    setMainThreadId(std.Thread.getCurrentId());
-    // acquire the lock
-    try expect(mutex.tryLock() == true);
-    // spawn a bunch of threads
-    var threads: [8]std.Thread = undefined;
-    var thread_count = std.atomic.Value(u32).init(0);
-    var array = [1]u8{' '} ** 16;
-    var index: usize = 0;
-    for (&threads, 0..) |*thread_ptr, thread_index| {
-        const ns = struct {
-            fn run1(
-                mutex_ptr: *WasmMainThreadMutex,
-                array_ptr: []u8,
-                index_ptr: *usize,
-                thread_count_ptr: *std.atomic.Value(u32),
-            ) !void {
-                _ = thread_count_ptr.fetchAdd(1, .monotonic);
-                std.Thread.Futex.wake(thread_count_ptr, 1);
-                mutex_ptr.lock();
-                std.Thread.sleep(20 * 1000);
-                array_ptr[index_ptr.*] = 'T';
-                index_ptr.* += 1;
-                mutex_ptr.unlock();
-            }
+test "smoke test (main thread)" {
+    setMainThreadId(Thread.getCurrentId());
+    var mutex = WasmMainThreadMutex{};
 
-            fn run2(
-                mutex_ptr: *WasmMainThreadMutex,
-                array_ptr: []u8,
-                index_ptr: *usize,
-                thread_count_ptr: *std.atomic.Value(u32),
-            ) !void {
-                _ = thread_count_ptr.fetchAdd(1, .monotonic);
-                std.Thread.Futex.wake(thread_count_ptr, 1);
-                // use tryLock() here
-                while (true) {
-                    if (mutex_ptr.tryLock()) {
-                        std.Thread.sleep(20 * 1000);
-                        array_ptr[index_ptr.*] = 'T';
-                        index_ptr.* += 1;
-                        mutex_ptr.unlock();
-                        break;
-                    } else {
-                        std.Thread.sleep(1000);
-                    }
-                }
-            }
-        };
-        const options: std.Thread.SpawnConfig = .{ .stack_size = 1024 * 1024 };
-        const args = .{
-            &mutex,
-            &array,
-            &index,
-            &thread_count,
-        };
-        if (thread_index & 1 == 0) {
-            thread_ptr.* = try std.Thread.spawn(options, ns.run1, args);
-        } else {
-            thread_ptr.* = try std.Thread.spawn(options, ns.run2, args);
+    try testing.expect(mutex.tryLock());
+    try testing.expect(!mutex.tryLock());
+    mutex.unlock();
+
+    mutex.lock();
+    try testing.expect(!mutex.tryLock());
+    mutex.unlock();
+}
+
+test "smoke test (worker thread)" {
+    setMainThreadId(~Thread.getCurrentId());
+    var mutex = WasmMainThreadMutex{};
+
+    try testing.expect(mutex.tryLock());
+    try testing.expect(!mutex.tryLock());
+    mutex.unlock();
+
+    mutex.lock();
+    try testing.expect(!mutex.tryLock());
+    mutex.unlock();
+}
+
+// A counter which is incremented without atomic instructions
+const NonAtomicCounter = struct {
+    // direct u128 could maybe use xmm ops on x86 which are atomic
+    value: [2]u64 = [_]u64{ 0, 0 },
+
+    fn get(self: NonAtomicCounter) u128 {
+        return @as(u128, @bitCast(self.value));
+    }
+
+    fn inc(self: *NonAtomicCounter) void {
+        for (@as([2]u64, @bitCast(self.get() + 1)), 0..) |v, i| {
+            @as(*volatile u64, @ptrCast(&self.value[i])).* = v;
         }
     }
-    while (true) {
-        const count = thread_count.load(.monotonic);
-        if (count == threads.len) break;
-        std.Thread.Futex.wait(&thread_count, count);
-    }
-    // wait for threads to queue up for the lock
-    std.Thread.sleep(50 * 1000);
-    // release the lock and wait 10ms, allowing one thread to get the lock
-    array[index] = 'A';
-    index += 1;
-    mutex.unlock();
-    std.Thread.sleep(10 * 1000);
-    // demand the lock
-    mutex.lock();
-    array[index] = 'B';
-    index += 1;
-    // release the lock again and wait 50ms this time, allowing two threads to get the lock
-    mutex.unlock();
-    std.Thread.sleep(50 * 1000);
-    // acquire the lock once more
-    if (!mutex.tryLock()) {
-        mutex.lock();
-    }
-    array[index] = 'C';
-    index += 1;
-    mutex.unlock();
-    // wait for threads to terminate
-    for (threads) |thread| {
-        thread.join();
-    }
-    try expect(index == threads.len + 3);
-    const a_index = std.mem.indexOfScalar(u8, &array, 'A').?;
-    const b_index = std.mem.indexOfScalar(u8, &array, 'B').?;
-    const c_index = std.mem.indexOfScalar(u8, &array, 'C').?;
-    try expect(a_index == 0);
-    // sleep() is not precise, so the second attempt by the main thread to get the lock could
-    // happen after 1 or 2 worker threads have gotten it first
-    try expect(switch (b_index - a_index) {
-        1, 2, 3 => true,
-        else => false,
-    });
-    // C should be set after two threads have gotten the lock, but it could be less or more
-    try expect(switch (c_index - b_index) {
-        1, 2, 3 => true,
-        else => false,
-    });
-    try expect(mutex.tryLock() == true);
-    mutex.unlock();
+};
 
-    // acquiring and releaseing the lock continuously for a while
-    var running = true;
-    for (&threads) |*thread_ptr| {
-        const ns = struct {
-            fn run3(
-                mutex_ptr: *WasmMainThreadMutex,
-                running_ptr: *bool,
-            ) void {
-                while (running_ptr.*) {
-                    mutex_ptr.lock();
-                    defer mutex_ptr.unlock();
-                }
+test "many uncontended" {
+    // This test requires spawning threads.
+    if (builtin.single_threaded) {
+        return error.SkipZigTest;
+    }
+    setMainThreadId(Thread.getCurrentId());
+
+    const num_threads = 4;
+    const num_increments = 5000;
+
+    const Runner = struct {
+        mutex: WasmMainThreadMutex = .{},
+        thread: Thread = undefined,
+        counter: NonAtomicCounter = .{},
+
+        fn run(self: *@This()) void {
+            var i: usize = num_increments;
+            while (i > 0) : (i -= 1) {
+                self.mutex.lock();
+                defer self.mutex.unlock();
+
+                self.counter.inc();
             }
-        };
-        const options: std.Thread.SpawnConfig = .{ .stack_size = 1024 * 1024 };
-        const args = .{ &mutex, &running };
-        thread_ptr.* = try std.Thread.spawn(options, ns.run3, args);
+        }
+    };
+
+    var runners = [_]Runner{.{}} ** num_threads;
+    for (&runners) |*r| r.thread = try Thread.spawn(.{}, Runner.run, .{r});
+    var mt_runner = Runner{};
+    mt_runner.run();
+    for (runners) |r| r.thread.join();
+    for (runners) |r| try testing.expectEqual(r.counter.get(), num_increments);
+    try testing.expectEqual(mt_runner.counter.get(), num_increments);
+}
+
+test "many contended" {
+    // This test requires spawning threads.
+    if (builtin.single_threaded) {
+        return error.SkipZigTest;
     }
-    var count: usize = 0;
-    while (count < 50000) {
-        mutex.lock();
-        defer mutex.unlock();
-        count += 1;
+    setMainThreadId(~Thread.getCurrentId());
+
+    const num_threads = 4;
+    const num_increments = 5000;
+
+    const Runner = struct {
+        mutex: WasmMainThreadMutex = .{},
+        counter: NonAtomicCounter = .{},
+
+        fn run(self: *@This()) void {
+            var i: usize = num_increments;
+            while (i > 0) : (i -= 1) {
+                // Occasionally hint to let another thread run.
+                defer if (i % 100 == 0) Thread.yield() catch {};
+
+                self.mutex.lock();
+                defer self.mutex.unlock();
+
+                self.counter.inc();
+            }
+        }
+    };
+
+    var runner = Runner{};
+
+    var threads: [num_threads]Thread = undefined;
+    for (&threads) |*t| t.* = try Thread.spawn(.{}, Runner.run, .{&runner});
+    runner.run();
+    for (threads) |t| t.join();
+
+    try testing.expectEqual(runner.counter.get(), num_increments * (num_threads + 1));
+}
+
+test "lock seizure by main thread" {
+    // This test requires spawning threads.
+    if (builtin.single_threaded) {
+        return error.SkipZigTest;
     }
-    running = false;
-    for (threads) |thread| {
-        thread.join();
-    }
+    setMainThreadId(Thread.getCurrentId());
+
+    const num_threads = 10;
+
+    const Runner = struct {
+        var mutex: WasmMainThreadMutex = .{};
+        var thread_count = std.atomic.Value(u32).init(0);
+        var status = std.atomic.Value(u32).init(0);
+        var array = [1]u8{' '} ** (num_threads * 2 + 3);
+        var index: usize = 0;
+
+        fn run() void {
+            if (thread_count.fetchAdd(1, .monotonic) == num_threads - 1) {
+                status.store(1, .monotonic);
+                Thread.Futex.wake(&status, 1);
+            }
+            mutex.lock();
+            Thread.sleep(2_000_000);
+            array[index] = 'T';
+            index += 1;
+            mutex.unlock();
+        }
+
+        fn main() !void {
+            mutex.lock();
+            var threads: [num_threads]Thread = undefined;
+            for (&threads) |*t| t.* = try Thread.spawn(.{}, run, .{});
+            Thread.Futex.wait(&status, 0);
+
+            // release the lock and wait 1ms, allowing one thread to get the lock
+            array[index] = 'A';
+            index += 1;
+            mutex.unlock();
+            Thread.sleep(1_000_000);
+            // demand the lock
+            mutex.lock();
+            array[index] = 'B';
+            index += 1;
+            // release the lock again and wait 3ms this time, allowing two threads to get the lock
+            mutex.unlock();
+            Thread.sleep(3_000_000);
+            // acquire the lock once more
+            mutex.lock();
+            array[index] = 'C';
+            index += 1;
+            mutex.unlock();
+
+            for (threads) |t| t.join();
+        }
+    };
+
+    try Runner.main();
+    try testing.expect(Runner.index == num_threads + 3);
+    try testing.expectEqualStrings(Runner.array[0..6], "ATBTTC");
 }
