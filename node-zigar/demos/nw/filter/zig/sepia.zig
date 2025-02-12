@@ -386,6 +386,7 @@ pub usingnamespace switch (@import("builtin").single_threaded) {
 };
 
 const async_support = struct {
+    const builtin = @import("builtin");
     const zigar = @import("zigar");
     const Allocator = std.mem.Allocator;
     const Promise = zigar.function.PromiseOf(thread_ns.processSlice);
@@ -393,11 +394,18 @@ const async_support = struct {
     const WorkQueue = zigar.thread.WorkQueue;
 
     var work_queue: WorkQueue(thread_ns) = .{};
+    var gpa = switch (builtin.target.isWasm()) {
+        true => {},
+        false => std.heap.DebugAllocator(.{}){},
+    };
+    const internal_allocator = switch (builtin.target.isWasm()) {
+        true => std.heap.wasm_allocator,
+        false => gpa.allocator(),
+    };
 
     pub fn startThreadPool(count: u32) !void {
-        const allocator = zigar.mem.getDefaultAllocator();
         try work_queue.init(.{
-            .allocator = allocator,
+            .allocator = internal_allocator,
             .stack_size = 65536,
             .n_jobs = count,
         });
@@ -437,7 +445,7 @@ const async_support = struct {
         const workers: u32 = @intCast(@max(1, work_queue.thread_count));
         const scanlines: u32 = height / workers;
         const slices: u32 = if (scanlines > 0) workers else 1;
-        const multipart_promise = try promise.partition(zigar.mem.getDefaultAllocator(), slices);
+        const multipart_promise = try promise.partition(internal_allocator, slices);
         var slice_num: u32 = 0;
         while (slice_num < slices) : (slice_num += 1) {
             const start = scanlines * slice_num;
