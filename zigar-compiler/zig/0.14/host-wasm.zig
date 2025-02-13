@@ -49,20 +49,20 @@ export fn initialize() void {
     main_thread = true;
 }
 
-export fn allocateScratchMemory(len: usize, alignment: u16) ?[*]u8 {
+export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
     const a = getScratchAllocator();
-    const ptr_align = getPtrAlign(alignment);
-    if (a.rawAlloc(len, ptr_align, 0)) |bytes| {
+    const alignment = std.mem.Alignment.fromByteUnits(byte_align);
+    if (a.rawAlloc(len, alignment, 0)) |bytes| {
         return bytes;
     } else {
         return null;
     }
 }
 
-export fn freeScratchMemory(bytes: [*]u8, len: usize, alignment: u16) void {
+export fn freeScratchMemory(bytes: [*]u8, len: usize, byte_align: u16) void {
     const a = getScratchAllocator();
-    const ptr_align = getPtrAlign(alignment);
-    a.rawFree(bytes[0..len], ptr_align, 0);
+    const alignment = std.mem.Alignment.fromByteUnits(byte_align);
+    a.rawFree(bytes[0..len], alignment, 0);
 }
 
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
@@ -347,38 +347,49 @@ const ScratchAllocator = struct {
             .vtable = &.{
                 .alloc = alloc,
                 .resize = resize,
+                .remap = remap,
                 .free = free,
             },
         };
     }
 
-    fn alloc(ctx: *anyopaque, len: usize, log2_ptr_align: u8, ra: usize) ?[*]u8 {
+    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
         const self: *Self = @ptrCast(@alignCast(ctx));
         const fixed = self.fba.allocator();
-        if (fixed.rawAlloc(len, log2_ptr_align, ra)) |buf| {
+        if (fixed.rawAlloc(len, alignment, ra)) |buf| {
             return buf;
         } else {
-            return self.fallback.rawAlloc(len, log2_ptr_align, ra);
+            return self.fallback.rawAlloc(len, alignment, ra);
         }
     }
 
-    fn resize(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, new_len: usize, ra: usize) bool {
+    fn resize(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ra: usize) bool {
         const self: *Self = @ptrCast(@alignCast(ctx));
         if (self.fba.ownsPtr(buf.ptr)) {
             const fixed = self.fba.allocator();
-            return fixed.rawResize(buf, log2_buf_align, new_len, ra);
+            return fixed.rawResize(buf, alignment, new_len, ra);
         } else {
-            return self.fallback.rawResize(buf, log2_buf_align, new_len, ra);
+            return self.fallback.rawResize(buf, alignment, new_len, ra);
         }
     }
 
-    fn free(ctx: *anyopaque, buf: []u8, log2_buf_align: u8, ra: usize) void {
+    fn free(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, ra: usize) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
         if (self.fba.ownsPtr(buf.ptr)) {
             const fixed = self.fba.allocator();
-            return fixed.rawFree(buf, log2_buf_align, ra);
+            return fixed.rawFree(buf, alignment, ra);
         } else {
-            return self.fallback.rawFree(buf, log2_buf_align, ra);
+            return self.fallback.rawFree(buf, alignment, ra);
+        }
+    }
+
+    fn remap(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, new_len: usize, ra: usize) ?[*]u8 {
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        if (self.fba.ownsPtr(buf.ptr)) {
+            const fixed = self.fba.allocator();
+            return fixed.rawRemap(buf, alignment, new_len, ra);
+        } else {
+            return self.fallback.rawRemap(buf, alignment, new_len, ra);
         }
     }
 };
@@ -391,8 +402,4 @@ fn getScratchAllocator() std.mem.Allocator {
         scratch_allocator = sfa.?.allocator();
     }
     return scratch_allocator.?;
-}
-
-fn getPtrAlign(alignment: u16) u8 {
-    return if (alignment != 0) std.math.log2_int(u16, alignment) else 0;
 }
