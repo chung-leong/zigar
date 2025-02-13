@@ -2280,10 +2280,20 @@ pub fn WorkQueue(comptime ns: type) type {
         init_promise: ?Promise(ThreadStartError!void) = undefined,
         deinit_promise: ?Promise(void) = undefined,
 
-        pub const Status = enum {
-            uninitialized,
-            initialized,
-            deinitializing,
+        const ThreadStartParams = switch (@hasDecl(ns, "onThreadStart")) {
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadStart)),
+        };
+        const ThreadEndParams = switch (@hasDecl(ns, "onThreadEnd")) {
+            false => struct {},
+            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnd)),
+        };
+        const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
+            false => error{},
+            true => switch (@typeInfo(ReturnValue(ns.onThreadStart))) {
+                .ErrorUnion => |eu| eu.error_set,
+                else => error{},
+            },
         };
         pub const Options = init: {
             const fields = std.meta.fields(struct {
@@ -2307,52 +2317,6 @@ pub fn WorkQueue(comptime ns: type) type {
                     .fields = &new_fields,
                     .decls = &.{},
                     .is_tuple = false,
-                },
-            });
-        };
-        pub const WorkItem = init: {
-            var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
-            var union_fields: [decls.len]std.builtin.Type.UnionField = undefined;
-            var count = 0;
-            for (decls) |decl| {
-                const DT = @TypeOf(@field(ns, decl.name));
-                switch (@typeInfo(DT)) {
-                    .Fn => |f| {
-                        if (f.return_type) |RT| {
-                            // if the return value is an iterator, then a generator is expected
-                            // otherwise an optional promise can be provided
-                            const Task = if (IteratorReturnValue(RT)) |IT| struct {
-                                args: std.meta.ArgsTuple(DT),
-                                generator: ?Generator(IT),
-                            } else struct {
-                                args: std.meta.ArgsTuple(DT),
-                                promise: ?Promise(RT),
-                            };
-                            enum_fields[count] = .{ .name = decl.name, .value = count };
-                            union_fields[count] = .{
-                                .name = decl.name,
-                                .type = Task,
-                                .alignment = @alignOf(Task),
-                            };
-                            count += 1;
-                        }
-                    },
-                    else => {},
-                }
-            }
-            break :init @Type(.{
-                .Union = .{
-                    .layout = .auto,
-                    .tag_type = @Type(.{
-                        .Enum = .{
-                            .tag_type = if (count <= 256) u8 else u16,
-                            .fields = enum_fields[0..count],
-                            .decls = &.{},
-                            .is_exhaustive = true,
-                        },
-                    }),
-                    .fields = union_fields[0..count],
-                    .decls = &.{},
                 },
             });
         };
@@ -2456,22 +2420,58 @@ pub fn WorkQueue(comptime ns: type) type {
             while (self.queue.pull() != null) {}
         }
 
+        const Status = enum {
+            uninitialized,
+            initialized,
+            deinitializing,
+        };
+        const WorkItem = init: {
+            var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
+            var union_fields: [decls.len]std.builtin.Type.UnionField = undefined;
+            var count = 0;
+            for (decls) |decl| {
+                const DT = @TypeOf(@field(ns, decl.name));
+                switch (@typeInfo(DT)) {
+                    .Fn => |f| {
+                        if (f.return_type) |RT| {
+                            // if the return value is an iterator, then a generator is expected
+                            // otherwise an optional promise can be provided
+                            const Task = if (IteratorReturnValue(RT)) |IT| struct {
+                                args: std.meta.ArgsTuple(DT),
+                                generator: ?Generator(IT),
+                            } else struct {
+                                args: std.meta.ArgsTuple(DT),
+                                promise: ?Promise(RT),
+                            };
+                            enum_fields[count] = .{ .name = decl.name, .value = count };
+                            union_fields[count] = .{
+                                .name = decl.name,
+                                .type = Task,
+                                .alignment = @alignOf(Task),
+                            };
+                            count += 1;
+                        }
+                    },
+                    else => {},
+                }
+            }
+            break :init @Type(.{
+                .Union = .{
+                    .layout = .auto,
+                    .tag_type = @Type(.{
+                        .Enum = .{
+                            .tag_type = if (count <= 256) u8 else u16,
+                            .fields = enum_fields[0..count],
+                            .decls = &.{},
+                            .is_exhaustive = true,
+                        },
+                    }),
+                    .fields = union_fields[0..count],
+                    .decls = &.{},
+                },
+            });
+        };
         const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
-        const ThreadStartParams = switch (@hasDecl(ns, "onThreadStart")) {
-            false => struct {},
-            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadStart)),
-        };
-        const ThreadEndParams = switch (@hasDecl(ns, "onThreadEnd")) {
-            false => struct {},
-            true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnd)),
-        };
-        const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
-            false => error{},
-            true => switch (@typeInfo(ReturnValue(ns.onThreadStart))) {
-                .ErrorUnion => |eu| eu.error_set,
-                else => error{},
-            },
-        };
 
         fn enumOf(comptime func: anytype) WorkItemEnum {
             return for (decls) |decl| {
