@@ -6,7 +6,6 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 pub var count: u64 = 0;
 
 pub fn spawn(promise: zigar.function.Promise(i32), create: bool) !?i32 {
-    try zigar.thread.use();
     const ns = struct {
         fn run(p: zigar.function.Promise(i32)) void {
             p.resolve(1234);
@@ -22,6 +21,10 @@ pub fn spawn(promise: zigar.function.Promise(i32), create: bool) !?i32 {
     } else {
         return 777;
     }
+}
+
+pub fn startup() !void {
+    try zigar.thread.use();
 }
 
 pub fn shutdown() void {

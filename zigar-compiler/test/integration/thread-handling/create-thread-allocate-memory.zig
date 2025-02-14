@@ -7,7 +7,6 @@ pub fn spawn(
     allocator: std.mem.Allocator,
     promise: zigar.function.Promise(std.mem.Allocator.Error![]const u8),
 ) !void {
-    try zigar.thread.use();
     const ns = struct {
         fn run(
             a: std.mem.Allocator,
@@ -21,6 +20,10 @@ pub fn spawn(
         .stack_size = 1024 * 512,
     }, ns.run, .{ allocator, promise });
     thread.detach();
+}
+
+pub fn startup() !void {
+    try zigar.thread.use();
 }
 
 pub fn shutdown() void {

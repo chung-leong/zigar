@@ -21,7 +21,7 @@
 #define MISSING(T)                      ((T) -1)
 
 #define EXPORT_COUNT    17
-#define IMPORT_COUNT    11
+#define IMPORT_COUNT    13
 
 #if UINTPTR_MAX == UINT64_MAX
     #define UINTPTR_JS_TYPE             "bigint"
@@ -58,12 +58,6 @@ enum {
     FAILURE,
     FAILURE_DEADLOCK,
     FAILURE_DISABLED,
-};
-
-typedef uint32_t action;
-enum {
-    CALL,
-    RELEASE,
 };
 
 typedef uint32_t structure_type;
@@ -134,8 +128,10 @@ typedef struct {
     napi_env env;
     napi_ref js_env;
     napi_ref js_fns[IMPORT_COUNT];
-    napi_threadsafe_function ts_fn;
-    napi_threadsafe_function ts_release_fn;
+    napi_threadsafe_function ts_disable_multithread;
+    napi_threadsafe_function ts_handle_js_call;
+    napi_threadsafe_function ts_release_function;
+    napi_threadsafe_function ts_write_bytes;
 } module_data;
 
 typedef struct {
@@ -143,12 +139,11 @@ typedef struct {
 } addon_data;
 
 typedef struct {
-    action type;
     size_t fn_id;
     size_t arg_address;
     size_t arg_size;
     size_t futex_handle;
-} js_action;
+} js_call;
 
 struct export_table {
     result (__cdecl *capture_string)(module_data*, const memory*, napi_value*);
@@ -162,15 +157,16 @@ struct export_table {
     result (__cdecl *define_structure)(module_data*, napi_value, napi_value*);
     result (__cdecl *end_structure)(module_data*, napi_value);
     result (__cdecl *create_template)(module_data*, napi_value, napi_value*);
-    result (__cdecl *enable_multithread)(module_data*);
-    result (__cdecl *disable_multithread)(module_data*);
-    result (__cdecl *perform_js_action)(module_data*, js_action*);
-    result (__cdecl *queue_js_action)(module_data*, js_action*);
+    result (__cdecl *enable_multithread)(module_data*, bool);
+    result (__cdecl *disable_multithread)(module_data*, bool);
+    result (__cdecl *handle_js_call)(module_data*, const js_call*, bool);
+    result (__cdecl *release_function)(module_data*, size_t, bool);
+    result (__cdecl *write_bytes)(module_data*, const memory*, bool);
 };
 
 struct import_table {
     result (__cdecl *initialize)(module_data*);
-    result (__cdecl *deinitialize)(module_data*);
+    result (__cdecl *deinitialize)(void);
     result (__cdecl *get_export_address)(size_t, size_t*);
     result (__cdecl *get_factory_thunk)(size_t*);
     result (__cdecl *run_thunk)(size_t, size_t, size_t);

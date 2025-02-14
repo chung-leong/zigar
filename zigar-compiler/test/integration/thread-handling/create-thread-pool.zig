@@ -4,7 +4,7 @@ const zigar = @import("zigar");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var pool: std.Thread.Pool = undefined;
 
-pub fn start(n_jobs: u32) !void {
+pub fn startup(n_jobs: u32) !void {
     try zigar.thread.use();
     try pool.init(.{
         .n_jobs = n_jobs,

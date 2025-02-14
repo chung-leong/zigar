@@ -1,3 +1,4 @@
+import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
@@ -56,9 +57,19 @@ export default mixin({
       flushStdout: { argType: '', returnType: '' },
     },
   } : process.env.TARGET === 'node' ? {
+    exports: {
+      writeBytes: null,
+    },
     imports: {
       flushStdout: null,
     },
+
+    writeBytes(address, len) {
+      const dv = this.obtainZigView(address, len);
+      const success = this.writeToConsole(dv);
+      this.releaseZigView(dv);
+      return (success) ? CallResult.OK : CallResult.Failure;
+    },      
     /* c8 ignore start */
   } : undefined),
   ...(process.env.MIXIN === 'track' ? {

@@ -10,7 +10,6 @@ pub fn spawn(
     promise: zigar.function.Promise(Error!i32),
     signal: zigar.function.AbortSignal,
 ) !void {
-    try zigar.thread.use();
     const ns = struct {
         fn run(f: bool, p: zigar.function.Promise(Error!i32), s: zigar.function.AbortSignal) void {
             while (s.off()) {}
@@ -22,6 +21,10 @@ pub fn spawn(
         .stack_size = 1024 * 1024,
     }, ns.run, .{ fail, promise, signal });
     thread.detach();
+}
+
+pub fn startup() !void {
+    try zigar.thread.use();
 }
 
 pub fn shutdown() void {

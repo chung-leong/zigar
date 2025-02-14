@@ -7,7 +7,7 @@ const thunk_js = @import("thunk-js.zig");
 const expect = std.testing.expect;
 
 const Value = types.Value;
-const MemoryType = types.MemoryType;
+const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
 
@@ -41,29 +41,54 @@ const MemberC = extern struct {
     slot: usize,
     structure: ?Value,
 };
-const Action = extern struct {
-    type: thunk_js.ActionType,
-    fn_id: usize,
-    arg_address: usize = 0,
-    arg_size: usize = 0,
-    futex_handle: usize = 0,
-};
 
 fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-const Result = enum(u32) {
-    ok,
-    failure,
+const Futex = struct {
+    value: std.atomic.Value(u32),
+    handle: usize = undefined,
 };
 
-threadlocal var module_data: ?*ModuleData = null;
-threadlocal var multithread: bool = false;
+const JSCall = struct {
+    fn_id: usize,
+    arg_address: usize,
+    arg_size: usize,
+    futex_handle: usize,
+};
+
+const MainThread = struct {
+    thread_id: std.Thread.Id,
+    module_data: *ModuleData,
+    multithread_count: std.atomic.Value(usize),
+};
+
+var gpa = std.heap.DebugAllocator(.{}).init;
+const allocator = gpa.allocator();
+var main_thread_list = std.ArrayList(*MainThread).init(allocator);
 var imports: Imports = undefined;
 
+threadlocal var main_thread: ?MainThread = null;
+threadlocal var parent_thread_id: ?std.Thread.Id = null;
+
 fn getModuleData() !*ModuleData {
-    return module_data orelse Error.NotInMainThread;
+    return if (main_thread) |mt| mt.module_data else Error.NotInMainThread;
+}
+
+fn getMainThread() !std.meta.Tuple(&.{ *MainThread, bool }) {
+    if (main_thread) |*mt| {
+        return .{ mt, true };
+    } else if (parent_thread_id) |tid| {
+        for (main_thread_list.items) |mt| {
+            if (mt.thread_id == tid) return .{ mt, false };
+        }
+    } else {
+        if (main_thread_list.getLastOrNull()) |mt| {
+            return .{ mt, false };
+        }
+    }
+    return Error.MainThreadNotFound;
 }
 
 pub fn captureString(memory: Memory) !Value {
@@ -195,29 +220,30 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) thunk_js.ActionResult {
-    var action: Action = .{
-        .type = .call,
+pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+    const md: *ModuleData = @ptrCast(ptr);
+    const in_main_thread = main_thread != null;
+    const initial_value = 0xffff_ffff;
+    var futex: Futex = undefined;
+    const call: JSCall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
+        .futex_handle = switch (in_main_thread) {
+            true => 0,
+            false => init: {
+                futex.value = std.atomic.Value(u32).init(initial_value);
+                futex.handle = @intFromPtr(&futex);
+                break :init futex.handle;
+            },
+        },
     };
-    const md: *ModuleData = @ptrCast(ptr);
-    if (module_data == md) {
-        return imports.perform_js_action(md, &action);
-    } else {
-        const initial_value = 0xffff_ffff;
-        var futex: Futex = undefined;
-        futex.value = std.atomic.Value(u32).init(initial_value);
-        futex.handle = @intFromPtr(&futex);
-        action.futex_handle = futex.handle;
-        var result = imports.queue_js_action(md, &action);
-        if (result == .ok) {
-            std.Thread.Futex.wait(&futex.value, initial_value);
-            result = @enumFromInt(futex.value.load(.acquire));
-        }
-        return result;
+    var result = imports.handle_js_call(md, &call, in_main_thread);
+    if (!in_main_thread and result == .ok) {
+        std.Thread.Futex.wait(&futex.value, initial_value);
+        result = @enumFromInt(futex.value.load(.acquire));
     }
+    return result;
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
@@ -227,60 +253,55 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const fn_id = control(null, .get_id, thunk_address) catch return;
     const ptr_address = control(null, .get_ptr, thunk_address) catch return;
     const md: *ModuleData = @ptrFromInt(ptr_address);
-    var action: Action = .{ .type = .release, .fn_id = fn_id };
-    if (module_data == md) {
-        _ = imports.perform_js_action(md, &action);
-    } else {
-        _ = imports.queue_js_action(md, &action);
-    }
+    const in_main_thread = main_thread != null;
+    _ = imports.release_function(md, fn_id, in_main_thread);
 }
 
 pub fn startMultithread() !void {
-    if (!multithread) {
-        const md = try getModuleData();
-        if (imports.enable_multithread(md) != .ok) return Error.UnableToUseThread;
-        multithread = true;
+    const mt, const in_main_thread = try getMainThread();
+    const prev_count = mt.multithread_count.fetchAdd(1, .monotonic);
+    errdefer _ = mt.multithread_count.fetchSub(1, .monotonic);
+    if (prev_count == 0) {
+        if (imports.enable_multithread(mt.module_data, in_main_thread) != .ok) {
+            return Error.UnableToUseThread;
+        }
     }
 }
 
 pub fn stopMultithread() void {
-    if (multithread) {
-        const md = getModuleData() catch return;
-        _ = imports.disable_multithread(md);
-        multithread = false;
+    const mt, const in_main_thread = getMainThread() catch return;
+    const prev_count = mt.multithread_count.fetchSub(1, .monotonic);
+    if (prev_count == 1) {
+        _ = imports.disable_multithread(mt.module_data, in_main_thread);
     }
 }
 
 fn initialize(md: *ModuleData) callconv(.C) Result {
-    module_data = md;
-    module_data_list.append(md) catch return .failure;
+    main_thread = .{
+        .thread_id = std.Thread.getCurrentId(),
+        .module_data = md,
+        .multithread_count = std.atomic.Value(usize).init(0),
+    };
+    main_thread_list.append(&main_thread.?) catch return .failure;
     return .ok;
 }
 
-fn deinitialize(md: *ModuleData) callconv(.C) Result {
-    module_data = null;
-    for (module_data_list.items, 0..) |item, index| {
-        if (item == md) {
-            _ = module_data_list.swapRemove(index);
+fn deinitialize() callconv(.C) Result {
+    for (main_thread_list.items, 0..) |mt, index| {
+        if (mt == &main_thread.?) {
+            _ = main_thread_list.swapRemove(index);
             return .ok;
         }
     }
+    main_thread = null;
     return .failure;
 }
 
-fn getMainThreadModuleData() !*ModuleData {
-    return module_data_list.getLastOrNull() orelse Error.NotInMainThread;
-}
-
-// allocator for memory used for house keeping
-var gpa = std.heap.DebugAllocator(.{}).init;
-const allocator = gpa.allocator();
-var module_data_list = std.ArrayList(*ModuleData).init(allocator);
-
 fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
-    const md = getModuleData() catch getMainThreadModuleData() catch return .failure;
-    const result = handleJsCall(md, 0, @constCast(bytes), len);
-    return if (result == .ok) .ok else .failure;
+    const mt, const in_main_thread = getMainThread() catch return .failure;
+    const md = mt.module_data;
+    const memory: Memory = .{ .bytes = @constCast(bytes), .len = len };
+    return imports.write_bytes(md, &memory, in_main_thread);
 }
 
 pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) Result {
@@ -340,11 +361,6 @@ fn destroyJsThunk(
     return .ok;
 }
 
-const Futex = struct {
-    value: std.atomic.Value(u32),
-    handle: usize = undefined,
-};
-
 fn wakeCaller(futex_handle: usize, value: u32) callconv(.C) Result {
     // make sure futex address is valid
     const ptr: *Futex = @ptrFromInt(futex_handle);
@@ -367,16 +383,17 @@ const Imports = extern struct {
     define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) Result,
     end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
-    enable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
-    disable_multithread: *const fn (*ModuleData) callconv(.C) thunk_js.ActionResult,
-    perform_js_action: *const fn (*ModuleData, *Action) callconv(.C) thunk_js.ActionResult,
-    queue_js_action: *const fn (*ModuleData, *Action) callconv(.C) thunk_js.ActionResult,
+    enable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
+    disable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
+    handle_js_call: *const fn (*ModuleData, *const JSCall, bool) callconv(.C) Result,
+    release_function: *const fn (*ModuleData, usize, bool) callconv(.C) Result,
+    write_bytes: *const fn (*ModuleData, *const Memory, bool) callconv(.C) Result,
 };
 
 // pointer table that's used on the C side
 const Exports = extern struct {
     initialize: *const fn (*ModuleData) callconv(.C) Result,
-    deinitialize: *const fn (*ModuleData) callconv(.C) Result,
+    deinitialize: *const fn () callconv(.C) Result,
     get_export_address: *const fn (usize, *usize) callconv(.C) Result,
     get_factory_thunk: *const fn (*usize) callconv(.C) Result,
     run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,

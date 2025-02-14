@@ -38,7 +38,7 @@ export function addTests(importModule, options) {
         Callback1,
         call1, call2, call3, call4,
         hello, world,
-        shutdown,
+        startup, shutdown,
       } = await importTest('as-function-parameters', { multithreaded: true });
       const lines1 = await capture(() => {
         call1(hello);
@@ -79,6 +79,7 @@ export function addTests(importModule, options) {
       expect(lines3).to.eql([ 'number = 1234' ]);
       call3(() => 0);
       expect(result).to.equal(1234 * 2);
+      startup();
       try {
         const jsFn3 = (number) => {
           console.log(`number = ${number}`);

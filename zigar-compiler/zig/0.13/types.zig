@@ -2,6 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const expect = std.testing.expect;
 
+pub const Result = enum(u32) {
+    ok,
+    failure,
+    failure_deadlock,
+    failure_disabled,
+};
+
 pub const Error = error{
     Unknown,
     UnableToAllocateMemory,
@@ -24,6 +31,7 @@ pub const Error = error{
     UnableToCreateFunction,
     UnableToUseThread,
     NotInMainThread,
+    MainThreadNotFound,
     MultithreadingNotEnabled,
     TooManyArguments,
 };

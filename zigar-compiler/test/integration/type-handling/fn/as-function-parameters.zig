@@ -31,8 +31,11 @@ pub var call4_result: i32 = 0;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-pub fn call4(cb: *const fn (i32) i32) !void {
+pub fn startup() !void {
     try zigar.thread.use();
+}
+
+pub fn call4(cb: *const fn (i32) i32) !void {
     const ns = struct {
         fn run(f: *const fn (i32) i32) void {
             call4_result = f(1234);

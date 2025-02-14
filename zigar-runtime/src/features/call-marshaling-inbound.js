@@ -73,6 +73,7 @@ export default mixin({
             argStruct[RETURN](value);
           } catch (err) {
             result = CallResult.Failure;
+            console.log('onReturn failed');
             console.error(err);
           }
         };
@@ -180,37 +181,12 @@ export default mixin({
       }
     };
   },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainZigView(argAddress, argSize);
-      let result;
-      if(process.env.TARGET === 'node') {
-        if (id) {
-          result = this.runFunction(id, dv, futexHandle);
-        } else {
-          result = this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
-          if (futexHandle) {
-            this.finalizeAsyncCall(futexHandle, result);
-          }
-        }
-      } else {
-        result = this.runFunction(id, dv, futexHandle);
-      }
-      if (id) {
-        // for function calls the argAddress will be point to the stack
-        this.releaseZigView(dv);
-      }
-      return result;
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
-  runFunction(id, dv, futexHandle) {
+  handleJsCall(id, argAddress, argSize, futexHandle = 0) {
+    const dv = this.obtainZigView(argAddress, argSize);
     const caller = this.jsFunctionCallerMap.get(id);
-    if (!caller) {
-      return CallResult.Failure;
-    }
-    return caller(dv, futexHandle);
+    const result = (caller) ? caller(dv, futexHandle) : CallResult.Failure;
+    this.releaseZigView(dv);
+    return result;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -229,8 +205,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
-      performJsAction: { argType: 'iiii', returnType: 'i' },
-      queueJsAction: { argType: 'iiiii' },
+      handleJsCall: { argType: 'iiii', returnType: 'i' },
+      releaseFunction: { argType: 'i' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },
@@ -245,7 +221,8 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      performJsAction: null,
+      handleJsCall: null,
+      releaseFunction: null,
     },
     imports: {
       createJsThunk: null,

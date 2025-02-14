@@ -5,18 +5,9 @@ const fn_transform = @import("fn-transform.zig");
 const expect = std.testing.expect;
 
 const Memory = types.Memory;
+const Result = types.Result;
 
-pub const ActionResult = enum(u32) {
-    ok,
-    failure,
-    failure_deadlock,
-    failure_disabled,
-};
-pub const ActionType = enum(u32) {
-    // performed by js:
-    call,
-    release,
-    // performed by zig:
+pub const Action = enum(u32) {
     create,
     destroy,
     get_ptr,
@@ -24,7 +15,7 @@ pub const ActionType = enum(u32) {
 };
 pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
-pub const ThunkController = *const fn (?*anyopaque, ActionType, usize) anyerror!usize;
+pub const ThunkController = *const fn (?*anyopaque, Action, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.isWasm()) {
     true => wasm,
@@ -37,7 +28,7 @@ const native = struct {
 
     pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
         const ft_ns = struct {
-            fn control(ptr: ?*anyopaque, action: ActionType, arg: usize) anyerror!usize {
+            fn control(ptr: ?*anyopaque, action: Action, arg: usize) anyerror!usize {
                 const vars = .{
                     .@"-2" = ptr,
                     .@"-1" = arg,
@@ -77,7 +68,6 @@ const native = struct {
                             return Error.UnableToFindThunk;
                         }
                     },
-                    else => unreachable,
                 }
             }
         };
@@ -88,7 +78,7 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
+            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
                 if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -143,7 +133,7 @@ const wasm = struct {
                 break :init array;
             };
 
-            fn control(_: ?*anyopaque, action: ActionType, arg: usize) !usize {
+            fn control(_: ?*anyopaque, action: Action, arg: usize) !usize {
                 switch (action) {
                     .create => {
                         const fn_id = arg;
@@ -174,7 +164,7 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
+            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .ok;
@@ -260,7 +250,7 @@ test "getJsCallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
+        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .ok;
@@ -280,7 +270,7 @@ test "getJsCallHandler (error handling)" {
             return .{};
         }
 
-        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) ActionResult {
+        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) Result {
             return .failure;
         }
     };
