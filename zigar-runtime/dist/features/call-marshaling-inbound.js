@@ -1,4 +1,4 @@
-import { StructureType, StructFlag, MemberType, Action, CallResult } from '../constants.js';
+import { StructureType, StructFlag, MemberType, CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UnexpectedGenerator } from '../errors.js';
 import { MEMORY, ZIG, ALLOCATOR, VISIT, THROWING, RETURN, YIELD } from '../symbols.js';
@@ -177,28 +177,12 @@ var callMarshalingInbound = mixin({
       }
     };
   },
-  performJsAction(action, id, argAddress, argSize, futexHandle = 0) {
-    if (action === Action.Call) {
-      const dv = this.obtainZigView(argAddress, argSize);
-      let result;
-      {
-        result = this.runFunction(id, dv, futexHandle);
-      }
-      if (id) {
-        // for function calls the argAddress will be point to the stack
-        this.releaseZigView(dv);
-      }
-      return result;
-    } else if (action === Action.Release) {
-      return this.releaseFunction(id);
-    }
-  },
-  runFunction(id, dv, futexHandle) {
+  handleJsCall(id, argAddress, argSize, futexHandle = 0) {
+    const dv = this.obtainZigView(argAddress, argSize);
     const caller = this.jsFunctionCallerMap.get(id);
-    if (!caller) {
-      return CallResult.Failure;
-    }
-    return caller(dv, futexHandle);
+    const result = (caller) ? caller(dv, futexHandle) : CallResult.Failure;
+    this.releaseZigView(dv);
+    return result;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -217,8 +201,8 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      performJsAction: { argType: 'iiii', returnType: 'i' },
-      queueJsAction: { argType: 'iiiii' },
+      handleJsCall: { argType: 'iiii', returnType: 'i' },
+      releaseFunction: { argType: 'i' },
     },
     imports: {
       createJsThunk: { argType: 'ii', returnType: 'i' },

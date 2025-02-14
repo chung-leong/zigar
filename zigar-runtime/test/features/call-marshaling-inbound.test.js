@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  Action, ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag, StructFlag,
+  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag, StructFlag, 
   StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';

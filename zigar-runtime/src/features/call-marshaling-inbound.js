@@ -1,4 +1,4 @@
-import { Action, CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
+import { CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UnexpectedGenerator } from '../errors.js';
 import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';
@@ -73,7 +73,6 @@ export default mixin({
             argStruct[RETURN](value);
           } catch (err) {
             result = CallResult.Failure;
-            console.log('onReturn failed');
             console.error(err);
           }
         };

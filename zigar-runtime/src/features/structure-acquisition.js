@@ -2,8 +2,8 @@ import {
   ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
 import {
-  ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag,
-  StructureFlag, structureNames, StructureType,
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, 
+  structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';

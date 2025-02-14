@@ -1,3 +1,4 @@
+import '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 

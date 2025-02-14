@@ -1056,7 +1056,7 @@
 "                        try {\n"
 "                            o[Qt](t);\n"
 "                        } catch (t) {\n"
-"                            i = H, console.log(\"onReturn failed\"), console.error(t);\n"
+"                            i = H, console.error(t);\n"
 "                        }\n"
 "                    };\n"
 "                    try {\n"

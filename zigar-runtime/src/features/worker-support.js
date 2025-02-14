@@ -158,8 +158,8 @@ function workerMain() {
   }
 
   function createRouter(module, name) {
-    if (name === '_queueJsAction') {
-      // waiting occurs in WASM when queueJsAction() gets called
+    if (name === '_handleJsCall') {
+      // waiting occurs in on Zig side
       return function(...args) {
         postMessage({ type: 'call', module, name, args });
         return 0;

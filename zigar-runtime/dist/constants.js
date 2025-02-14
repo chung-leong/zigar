@@ -116,21 +116,11 @@ const MemberFlag = {
   IsBackingInt:     0x0040,
 };
 
-const ExportFlag = {
-  OmitMethods:      0x0001,
-  OmitVariables:    0x0002,
-};
-
 const CallResult = {
   OK: 0,
   Failure: 1,
   Deadlock: 2,
   Disabled: 3,
-};
-
-const Action = {
-  Call: 0,
-  Release: 1,
 };
 
 const ModuleAttribute = {
@@ -149,4 +139,4 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-export { Action, ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, ExportFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

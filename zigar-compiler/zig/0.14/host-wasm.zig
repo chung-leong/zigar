@@ -6,6 +6,7 @@ const thunk_js = @import("thunk-js.zig");
 const types = @import("types.zig");
 
 const Value = types.Value;
+const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
 const ActionType = thunk_js.ActionType;
@@ -39,14 +40,14 @@ extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
-extern fn _performJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize) ActionResult;
-extern fn _queueJsAction(type: ActionType, id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) ActionResult;
+extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) Result;
+extern fn _releaseFunction(id: usize) void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
-threadlocal var main_thread: bool = false;
+threadlocal var in_main_thread: bool = false;
 
 export fn initialize() void {
-    main_thread = true;
+    in_main_thread = true;
 }
 
 export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
@@ -102,12 +103,12 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const can_allocate = builtin.single_threaded and main_thread;
+    const can_allocate = builtin.single_threaded and in_main_thread;
     const thunk_address = controller(null, .create, fn_id) catch switch (can_allocate) {
         true => _allocateJsThunk(controller_address, fn_id),
         false => 0,
     };
-    if (main_thread and thunk_address > 0) {
+    if (in_main_thread and thunk_address > 0) {
         js_thunk_list.append(.{ .fn_id = fn_id, .address = thunk_address }) catch {};
     }
     return thunk_address;
@@ -115,12 +116,12 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const can_allocate = builtin.single_threaded and main_thread;
+    const can_allocate = builtin.single_threaded and in_main_thread;
     const fn_id = controller(null, .destroy, thunk_address) catch switch (can_allocate) {
         true => _freeJsThunk(controller_address, thunk_address),
         false => 0,
     };
-    if (main_thread and fn_id > 0) {
+    if (in_main_thread and fn_id > 0) {
         for (js_thunk_list.items, 0..) |item, i| {
             if (item.address == thunk_address) {
                 _ = js_thunk_list.swapRemove(i);
@@ -290,22 +291,24 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) ActionResult {
-    if (main_thread) {
-        return _performJsAction(.call, fn_id, arg_ptr, arg_size);
-    } else {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+    const initial_value = 0xffff_ffff;
+    var futex: Futex = undefined;
+    const futex_handle = switch (in_main_thread) {
+        true => 0,
+        false => init: {
+            futex.value = std.atomic.Value(u32).init(initial_value);
+            futex.handle = @intFromPtr(&futex);
+            break :init futex.handle;
+        },
+    };
+    var result = _handleJsCall(fn_id, arg_ptr, arg_size, futex_handle);
+    if (!in_main_thread and result == .ok) {
         if (comptime builtin.single_threaded) unreachable;
-        const initial_value = 0xffff_ffff;
-        var futex: Futex = undefined;
-        futex.value = .{ .raw = initial_value };
-        futex.handle = @intFromPtr(&futex);
-        var result = _queueJsAction(.call, fn_id, arg_ptr, arg_size, futex.handle);
-        if (result == .ok) {
-            std.Thread.Futex.wait(&futex.value, initial_value);
-            result = @enumFromInt(futex.value.load(.acquire));
-        }
-        return result;
+        std.Thread.Futex.wait(&futex.value, initial_value);
+        result = @enumFromInt(futex.value.load(.acquire));
     }
+    return result;
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
@@ -313,12 +316,7 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const fn_id = for (js_thunk_list.items) |item| {
         if (item.address == thunk_address) break item.fn_id;
     } else return;
-    if (main_thread) {
-        _ = _performJsAction(.release, fn_id, null, 0);
-    } else {
-        if (comptime builtin.single_threaded) unreachable;
-        _ = _queueJsAction(.release, fn_id, null, 0, 0);
-    }
+    _releaseFunction(fn_id);
 }
 
 pub fn startMultithread() !void {}

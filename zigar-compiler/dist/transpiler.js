@@ -3116,7 +3116,6 @@ var callMarshalingInbound = mixin({
             argStruct[RETURN](value);
           } catch (err) {
             result = CallResult.Failure;
-            console.log('onReturn failed');
             console.error(err);
           }
         };
