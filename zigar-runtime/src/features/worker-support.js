@@ -17,8 +17,6 @@ export default mixin({
         }
         /* c8 ignore end */
         return this.spawnThread.bind(this);
-      case 'wait-async':
-        return this.waitAsync.bind(this);
     }
   },
   spawnThread(arg) {
@@ -69,18 +67,6 @@ export default mixin({
       });
     }
     return tid;
-  },
-  waitAsync(tidAddress, cbIndex, arg) {
-    const ta = new Int32Array(this.memory.buffer, tidAddress, 1);
-    const tid = Atomics.load(ta, 0);
-    const cb = this.table.get(cbIndex);
-    const call = () => cb(arg);
-    const result = (tid !== 0) ? Atomics.waitAsync(ta, 0, tid) : { async: false };
-    if (result.async) {
-      result.value.then(call);
-    } else {
-      call();
-    }
   },
   /* c8 ignore start */
   ...(process.env.DEV ? {
