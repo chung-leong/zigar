@@ -16,8 +16,18 @@ pub const PromiseOf = types.PromiseOf;
 pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const AbortSignal = types.AbortSignal;
-pub const WorkQueue = types.WorkQueue;
-pub const Queue = types.Queue;
+
+pub fn WorkQueue(ns: type) type {
+    return types.WorkQueue(ns, struct {
+        pub fn onQueueInit() !void {
+            try startMultithread();
+        }
+
+        pub fn onQueueDeinit() void {
+            stopMultithread();
+        }
+    });
+}
 
 const ModuleData = opaque {};
 

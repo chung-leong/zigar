@@ -2275,7 +2275,7 @@ test "Queue" {
     queue.deinit();
 }
 
-pub fn WorkQueue(comptime ns: type) type {
+pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
     const decls = std.meta.declarations(ns);
     return struct {
         queue: Queue(WorkItem) = undefined,
@@ -2346,6 +2346,16 @@ pub fn WorkQueue(comptime ns: type) type {
             errdefer allocator.free(self.threads);
             errdefer for (0..self.thread_count) |i| self.threads[i].join();
             errdefer self.queue.deinit();
+            if (@hasDecl(internal_ns, "onQueueInit")) {
+                const result = @call(.auto, internal_ns.onQueueInit, .{});
+                switch (@typeInfo(@TypeOf(result))) {
+                    .error_union => if (result) |_| {} else |err| return err,
+                    else => {},
+                }
+            }
+            errdefer if (@hasDecl(internal_ns, "onQueueDeinit")) {
+                _ = @call(.auto, internal_ns.onQueueDeinit, .{});
+            };
             const min_stack_size: usize = if (std.Thread.use_pthreads) switch (@bitSizeOf(usize)) {
                 32 => 4096,
                 else => 1048576,
@@ -2385,10 +2395,7 @@ pub fn WorkQueue(comptime ns: type) type {
             }
             self.status = .deinitializing;
             self.queue.stop();
-            for (self.threads) |thread| thread.join();
-            self.queue.deinit();
-            self.queue.allocator.free(self.threads);
-            self.status = .uninitialized;
+            for (self.threads) |thread| thread.detach();
         }
 
         pub fn deinitAsync(self: *@This(), promise: Promise(void)) void {
@@ -2396,10 +2403,8 @@ pub fn WorkQueue(comptime ns: type) type {
                 .initialized => {},
                 else => return promise.resolve({}),
             }
-            self.status = .deinitializing;
             self.deinit_promise = promise;
-            self.queue.stop();
-            for (self.threads) |thread| thread.detach();
+            self.deinit();
         }
 
         pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
@@ -2533,12 +2538,14 @@ pub fn WorkQueue(comptime ns: type) type {
                 }
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
-                // perform actual deinit here if deinitAsync() was called
+                self.queue.allocator.free(self.threads);
+                self.queue.deinit();
+                self.status = .uninitialized;
                 if (self.deinit_promise) |promise| {
-                    self.queue.allocator.free(self.threads);
-                    self.queue.deinit();
-                    self.status = .uninitialized;
                     promise.resolve({});
+                }
+                if (@hasDecl(internal_ns, "onQueueDeinit")) {
+                    _ = @call(.auto, internal_ns.onQueueDeinit, .{});
                 }
             }
         }

@@ -17,8 +17,10 @@ pub const PromiseOf = types.PromiseOf;
 pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const AbortSignal = types.AbortSignal;
-pub const WorkQueue = types.WorkQueue;
-pub const Queue = types.Queue;
+
+pub fn WorkQueue(ns: type) type {
+    return types.WorkQueue(ns, struct {});
+}
 
 extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
 extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;

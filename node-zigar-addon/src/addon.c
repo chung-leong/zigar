@@ -852,10 +852,10 @@ void write_bytes_cb(napi_env env,
 result disable_multithread(module_data* md,
                            bool in_main_thread) {
     if (in_main_thread) {
-        napi_release_threadsafe_function(md->ts_disable_multithread, napi_tsfn_release);
-        napi_release_threadsafe_function(md->ts_handle_js_call, napi_tsfn_release);
-        napi_release_threadsafe_function(md->ts_release_function, napi_tsfn_release);
-        napi_release_threadsafe_function(md->ts_write_bytes, napi_tsfn_release);
+        napi_release_threadsafe_function(md->ts_disable_multithread, napi_tsfn_abort);
+        napi_release_threadsafe_function(md->ts_handle_js_call, napi_tsfn_abort);
+        napi_release_threadsafe_function(md->ts_release_function, napi_tsfn_abort);
+        napi_release_threadsafe_function(md->ts_write_bytes, napi_tsfn_abort);
         md->ts_disable_multithread = NULL;
         md->ts_handle_js_call = NULL;
         md->ts_release_function = NULL;
