@@ -35,7 +35,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const BFT = BoundFunction(FT, CT);
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
-    const code_align = Instruction.alignment;
+    const code_align = @alignOf(fn () void);
     const binding_signature: u64 = 0xef20_90b6_415d_2fe3;
 
     return extern struct {
@@ -525,7 +525,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn getSignatureOffset() comptime_int {
-            return 4096;
+            return switch (builtin.target.cpu.arch) {
+                .x86, .x86_64 => 1024,
+                .aarch64, .arm => 2048,
+                else => 4096,
+            };
         }
     };
 }
@@ -786,7 +790,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         pub const Prefix = enum(u8) {
             _,
         };
-        pub const alignment = @sizeOf(u8);
 
         const REX = packed struct {
             b: u1 = 0,
@@ -818,8 +821,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
-        pub const alignment = @sizeOf(u32);
-
         movz: packed struct(u32) {
             rd: u5,
             imm16: u16,
@@ -864,8 +865,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .riscv64 => union(enum) {
-        pub const alignment = @sizeOf(u32);
-
         lui: packed struct(u32) {
             opc: u7 = 0x37,
             rd: u5,
@@ -923,8 +922,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .powerpc64le => union(enum) {
-        pub const alignment = @sizeOf(u32);
-
         addi: packed struct(u32) {
             imm16: i16,
             ra: u5,
@@ -994,8 +991,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .arm => union(enum) {
-        pub const alignment = @sizeOf(u32);
-
         ldr: packed struct(u32) {
             imm12: u12,
             rt: u4,
