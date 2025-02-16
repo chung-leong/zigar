@@ -3,7 +3,8 @@ import { AlignmentConflict } from '../errors.js';
 import { ALIGN, FALLBACK, MEMORY, ZIG } from '../symbols.js';
 import {
   adjustAddress, alignForward, findSortedIndex, isInvalidAddress, isMisaligned, usizeInvalid,
-  usizeMax
+  usizeMax,
+  usizeMin
 } from '../utils.js';
 
 export default mixin({
@@ -223,18 +224,20 @@ export default mixin({
         this.shadowMemoryBytes -= dv.byteLength;
       }
     },
-    obtainZigView(address, len) {
+    obtainZigView(address, len, cache = true) {
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
       if (!address && len) {
         return null;
       }
+      let { buffer } = this.memory;
       if (address === usizeMax) {
-        return this.obtainView(this.usizeMaxBuffer, 0, 0);
-      } else {
-        return this.obtainView(this.memory.buffer, address, len);
+        buffer = this.usizeMaxBuffer;
+        address = usizeMin;
+        len = 0;
       }
+      return (cache) ? this.obtainView(buffer, 0, 0) : new DataView(buffer, address, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -271,27 +274,32 @@ export default mixin({
     freeShadowMemory(dv) {
       // nothing needs to happen
     },
-    obtainZigView(address, len) {
+    obtainZigView(address, len, cache = true) {
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
       if (!address && len) {
         return null;
       }
-      const index = findMemoryIndex(this.externBufferList, address);
-      const entry = this.externBufferList[index - 1];
-      let buffer, offset;
-      if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
-        buffer = entry.buffer;
-        offset = Number(address - entry.address);
+      if (cache) {
+        const index = findMemoryIndex(this.externBufferList, address);
+        const entry = this.externBufferList[index - 1];
+        let buffer, offset;
+        if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
+          buffer = entry.buffer;
+          offset = Number(address - entry.address);
+        } else {
+          // cannot obtain zero-length buffer
+          buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
+          buffer[ZIG] = { address, len };
+          this.externBufferList.splice(index, 0, { address, len, buffer })
+          offset = 0;
+        }
+        return this.obtainView(buffer, offset, len);  
       } else {
-        // cannot obtain zero-length buffer
-        buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-        buffer[ZIG] = { address, len };
-        this.externBufferList.splice(index, 0, { address, len, buffer })
-        offset = 0;
+        const buffer = this.obtainExternBuffer(address, len, FALLBACK);
+        return new DataView(buffer, 0, len);
       }
-      return this.obtainView(buffer, offset, len);
     },
     unregisterBuffer(address) {
       const index = findMemoryIndex(this.externBufferList, address);

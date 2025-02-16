@@ -65,10 +65,8 @@ export default mixin({
     },
 
     writeBytes(address, len) {
-      const dv = this.obtainZigView(address, len);
-      const success = this.writeToConsole(dv);
-      this.releaseZigView(dv);
-      return (success) ? CallResult.OK : CallResult.Failure;
+      const dv = this.obtainZigView(address, len, false);
+      return this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
     },      
     /* c8 ignore start */
   } : undefined),

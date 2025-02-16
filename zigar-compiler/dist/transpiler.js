@@ -358,6 +358,8 @@ const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
 ;
+
+const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
@@ -3224,11 +3226,9 @@ var callMarshalingInbound = mixin({
     };
   },
   handleJsCall(id, argAddress, argSize, futexHandle = 0) {
-    const dv = this.obtainZigView(argAddress, argSize);
+    const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
-    const result = (caller) ? caller(dv, futexHandle) : CallResult.Failure;
-    this.releaseZigView(dv);
-    return result;
+    return (caller) ? caller(dv, futexHandle) : CallResult.Failure;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -4020,18 +4020,20 @@ var memoryMapping = mixin({
       }
       this.releaseZigView(dv);
     },
-    obtainZigView(address, len) {
+    obtainZigView(address, len, cache = true) {
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
       if (!address && len) {
         return null;
       }
+      let { buffer } = this.memory;
       if (address === usizeMax) {
-        return this.obtainView(this.usizeMaxBuffer, 0, 0);
-      } else {
-        return this.obtainView(this.memory.buffer, address, len);
+        buffer = this.usizeMaxBuffer;
+        address = usizeMin;
+        len = 0;
       }
+      return (cache) ? this.obtainView(buffer, 0, 0) : new DataView(buffer, address, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];

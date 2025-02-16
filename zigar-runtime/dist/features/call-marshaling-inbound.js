@@ -178,11 +178,9 @@ var callMarshalingInbound = mixin({
     };
   },
   handleJsCall(id, argAddress, argSize, futexHandle = 0) {
-    const dv = this.obtainZigView(argAddress, argSize);
+    const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
-    const result = (caller) ? caller(dv, futexHandle) : CallResult.Failure;
-    this.releaseZigView(dv);
-    return result;
+    return (caller) ? caller(dv, futexHandle) : CallResult.Failure;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
