@@ -82,6 +82,10 @@ var imports: Imports = undefined;
 threadlocal var main_thread: ?MainThread = null;
 threadlocal var parent_thread_id: ?std.Thread.Id = null;
 
+pub fn setParentThreadId(id: std.Thread.Id) void {
+    parent_thread_id = id;
+}
+
 fn getModuleData() !*ModuleData {
     return if (main_thread) |mt| mt.module_data else Error.NotInMainThread;
 }
