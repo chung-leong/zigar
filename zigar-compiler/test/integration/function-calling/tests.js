@@ -512,6 +512,17 @@ export function addTests(importModule, options) {
       string.length = 11;
       expect(string.string).to.equal('Hello world');
     })
+    it('should modify a pointer target', async function() {
+      this.timeout(0);
+      const { Actor, deage } = await importTest('modify-pointer-target');
+      const actor = new Actor({
+        name: 'Arnold Schwarzenegger',
+        age: 77,
+      });
+      expect(actor.age).to.equal(77);
+      deage(actor, 40);
+      expect(actor.age).to.equal(37);
+    })
     it('should call C functions', async function() {
       this.timeout(0);
       const { fopen, fwrite, fclose, puts, stream } = await importTest('call-c-functions', { useLibc: true });
