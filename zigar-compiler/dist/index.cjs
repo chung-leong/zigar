@@ -1203,9 +1203,13 @@ const optionsForCompile = {
     type: 'string',
     title: 'Directory where compiled library files are placed',
   },
-  zigCmd: {
+  zigPath: {
     type: 'string',
     title: 'Zig command used to build libraries',
+  },
+  zigArgs: {
+    type: 'string',
+    title: 'Addition command-line passed to the Zig compiler',
   },
   sourceFiles: {
     type: 'object',
