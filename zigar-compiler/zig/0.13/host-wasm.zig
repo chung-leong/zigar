@@ -327,6 +327,8 @@ pub fn startMultithread() !void {}
 
 pub fn stopMultithread() void {}
 
+pub fn setParentThreadId(_: std.Thread.Id) void {}
+
 const allocator = std.heap.wasm_allocator;
 
 const ScratchAllocator = struct {

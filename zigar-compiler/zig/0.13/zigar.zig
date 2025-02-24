@@ -14,7 +14,7 @@ pub const function = struct {
 pub const thread = struct {
     pub const use = host.startMultithread;
     pub const end = host.stopMultithread;
+    pub const setParentId = host.setParentThreadId;
 
     pub const WorkQueue = host.WorkQueue;
-    pub const Queue = host.Queue;
 };
