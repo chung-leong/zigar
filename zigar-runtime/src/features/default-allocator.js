@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { MEMORY, ZIG } from '../symbols.js';
-import { usizeMax } from '../utils.js';
+import { defineProperty, usizeMax } from '../utils.js';
 
 export default mixin({
   init() {
@@ -64,7 +64,7 @@ export default mixin({
       this.registerMemory(address, len, align, true, targetDV);
       // pretend that the view holds Zig memory to get around code that prevents pointers
       // in Zig memory to point at JS memory
-      targetDV[ZIG] = { address, len, js: true };
+      defineProperty(targetDV, ZIG, { value: { address, len, js: true }, enumerable: false });
       return targetDV;
     }
   },
