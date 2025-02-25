@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, CONST_TARGET, COPY, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { CACHE, CONST_TARGET, COPY, FALLBACK, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
@@ -90,6 +90,13 @@ export default mixin({
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
       target[COPY](source);
+    }
+    if (process.env.TARGET === 'node' && this.usingBufferFallback()) {
+      const dv = target[MEMORY];
+      const address = dv.buffer[FALLBACK];
+      if (address !== undefined) {
+        this.syncExternalBuffer(dv.buffer, address, true);
+      }
     }
   },
   findViewAt(buffer, offset, len) {

@@ -15,7 +15,7 @@ export default mixin({
         if (process.env.TARGET === 'node' && thisEnv.usingBufferFallback()) {
           const address = dv.buffer[FALLBACK];
           if (address !== undefined) {
-            thisEnv.syncExternalBuffer(dv.buffer, address);
+            thisEnv.syncExternalBuffer(dv.buffer, address, false);
           }
         }
         return dv;

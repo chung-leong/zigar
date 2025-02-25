@@ -721,20 +721,27 @@ napi_value require_buffer_fallback(napi_env env,
 
 napi_value sync_external_buffer(napi_env env,
                                 napi_callback_info info) {
-    size_t argc = 2;
-    napi_value args[2];
+    size_t argc = 3;
+    napi_value args[3];
     napi_value value;
     void* bytes;
     // check arguments
     size_t len;
     uintptr_t address;
+    bool to;
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok
      || napi_get_arraybuffer_info(env, args[0], &bytes, &len) != napi_ok) {
         return throw_error(env, "Argument must be ArrayBuffer");
     } else if (napi_get_value_uintptr(env, args[1], &address) != napi_ok) {
         return throw_error(env, "Address must be a number");
+    } else if (napi_get_value_bool(env, args[2], &to) != napi_ok) {
+        return throw_error(env, "To must be a boolean");
     }
-    memcpy(bytes, (void*) address, len);
+    if (to) {
+        memcpy((void*) address, bytes, len);
+    } else {
+        memcpy(bytes, (void*) address, len);
+    }
     return get_undefined(env);
 }
 
