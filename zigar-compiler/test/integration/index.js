@@ -22,10 +22,10 @@ export function addTests(importModule, options) {
   ErrorHandling.addTests(importModule, options);
   FunctionCalling.addTests(importModule, options);
   FunctionPointer.addTests(importModule, options);
+  Iterator.addTests(importModule, options);
   MemoryAllocation.addTests(importModule, options);
   Options.addTests(importModule, options);
   PackageManager.addTests(importModule, options);
   ThreadHandling.addTests(importModule, options);
   TypeHandling.addTests(importModule, options);
-  Iterator.addTests(importModule, options);
 }
