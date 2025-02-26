@@ -22,7 +22,7 @@ pub fn call(
     const arg_struct: *Args = @ptrCast(@alignCast(arg_ptr));
     const arg_bytes: [*]u8 = @ptrCast(arg_ptr);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
-    if (comptime builtin.target.isWasm()) {
+    if (comptime builtin.target.cpu.arch.isWasm()) {
         const param_count = f.params.len + 1;
         const params: [param_count]std.builtin.Type.Fn.Param = define: {
             comptime var list: [param_count]std.builtin.Type.Fn.Param = undefined;

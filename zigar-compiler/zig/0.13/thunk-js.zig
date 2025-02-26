@@ -17,7 +17,7 @@ pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
 pub const ThunkController = *const fn (?*anyopaque, Action, usize) anyerror!usize;
 
-pub usingnamespace switch (builtin.target.isWasm()) {
+pub usingnamespace switch (builtin.target.cpu.arch.isWasm()) {
     true => wasm,
     false => native,
 };

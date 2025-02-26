@@ -80,7 +80,6 @@ test2.array.typedArray[0] = 0;
 test2.printArray();
 test2.array.typedArray = new Int32Array([ 1, 2, 3, 4 ]);
 test2.printArray();
-
 console.log(``);
 
 const test3 = require('../zig/test3.zig');

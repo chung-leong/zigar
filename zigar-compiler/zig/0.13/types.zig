@@ -2244,6 +2244,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         inline fn getUnmarkedReference(ptr: *Node) *Node {
+            @setRuntimeSafety(false);
             return @ptrFromInt(@intFromPtr(ptr) & ~@as(usize, 1));
         }
 
@@ -2306,7 +2307,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
-                stack_size: usize = if (builtin.target.isWasm()) 262144 else 1048576,
+                stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else 1048576,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
@@ -2579,7 +2580,7 @@ test "WorkQueue" {
         pub fn world() void {}
     };
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var queue: WorkQueue(test_ns) = .{};
+    var queue: WorkQueue(test_ns, struct {}) = .{};
     try queue.init(.{ .allocator = gpa.allocator(), .n_jobs = 1 });
     try queue.push(test_ns.hello, .{123}, null);
     try queue.push(test_ns.hello, .{456}, null);
@@ -2587,6 +2588,8 @@ test "WorkQueue" {
     std.time.sleep(1e+8);
     try expect(test_ns.total == 123 + 456);
     queue.deinit();
+    // wait for thread shutdown
+    std.time.sleep(1e+6);
 }
 
 fn expectCT(comptime value: bool) !void {
@@ -2598,12 +2601,9 @@ fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool
         .Fn => |f| {
             if (f.params.len == 2 and f.return_type == RT) {
                 if (f.params[0].type != null and f.params[1].type == AT) {
-                    switch (@typeInfo(f.params[0].type.?)) {
-                        .Pointer => |pt| if (pt.size == .One) {
-                            return true;
-                        },
-                        else => {},
-                    }
+                    comptime var T = f.params[0].type.?;
+                    if (@typeInfo(T) == .Optional) T = @typeInfo(T).Optional.child;
+                    if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true;
                 }
             }
         },
@@ -2621,6 +2621,7 @@ test "isValidCallback" {
     try expect(isValidCallback(void, u32, void) == false);
     try expect(isValidCallback(*anyopaque, u32, void) == false);
     try expect(isValidCallback(*fn (*anyopaque, u32) void, u32, void) == true);
+    try expect(isValidCallback(*fn (?*anyopaque, u32) void, u32, void) == true);
     try expect(isValidCallback(*fn (*anyopaque, u32) bool, u32, void) == false);
     try expect(isValidCallback(*fn (*usize, u32) void, u32, void) == true);
     try expect(isValidCallback(*fn (*usize, u32) i32, u32, void) == false);

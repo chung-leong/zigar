@@ -1193,7 +1193,7 @@ pub const ExecutablePageAllocator = struct {
         const aligned_len = mem.alignForward(usize, n, mem.page_size);
         const hint = @atomicLoad(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, .unordered);
         var map_flags: std.posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
-        if (builtin.target.isDarwin()) {
+        if (builtin.target.os.tag.isDarwin()) {
             // set MAP_JIT
             var map_flags_u32: u32 = @bitCast(map_flags);
             map_flags_u32 |= 0x0800;
@@ -1227,7 +1227,7 @@ test "ExecutablePageAllocator" {
 }
 
 fn protect(state: bool) void {
-    if (builtin.target.isDarwin()) {
+    if (builtin.target.os.tag.isDarwin()) {
         const c = @cImport({
             @cInclude("pthread.h");
         });
@@ -1236,7 +1236,7 @@ fn protect(state: bool) void {
 }
 
 fn invalidate(slice: []u8) void {
-    if (builtin.target.isDarwin()) {
+    if (builtin.target.os.tag.isDarwin()) {
         const c = @cImport({
             @cInclude("libkern/OSCacheControl.h");
         });
