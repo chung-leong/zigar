@@ -2244,7 +2244,6 @@ pub fn Queue(comptime T: type) type {
         }
 
         inline fn getUnmarkedReference(ptr: *Node) *Node {
-            @setRuntimeSafety(false);
             return @ptrFromInt(@intFromPtr(ptr) & ~@as(usize, 1));
         }
 
