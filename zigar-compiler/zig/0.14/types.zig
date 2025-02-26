@@ -909,24 +909,31 @@ pub const TypeData = struct {
         return self.attrs.is_slice;
     }
 
+    fn BaseType(comptime self: @This()) type {
+        return switch (@typeInfo(self.type)) {
+            .optional => |op| op.child,
+            else => self.type,
+        };
+    }
+
     pub fn isOptional(comptime self: @This()) bool {
-        return self.isAllocator() or getInternalType(self.type) != null;
+        return self.isAllocator() or getInternalType(self.BaseType()) != null;
     }
 
     pub fn isAllocator(comptime self: @This()) bool {
-        return self.type == std.mem.Allocator;
+        return self.BaseType() == std.mem.Allocator;
     }
 
     pub fn isPromise(comptime self: @This()) bool {
-        return getInternalType(self.type) == .promise;
+        return getInternalType(self.BaseType()) == .promise;
     }
 
     pub fn isGenerator(comptime self: @This()) bool {
-        return getInternalType(self.type) == .generator;
+        return getInternalType(self.BaseType()) == .generator;
     }
 
     pub fn isAbortSignal(comptime self: @This()) bool {
-        return getInternalType(self.type) == .abort_signal;
+        return getInternalType(self.BaseType()) == .abort_signal;
     }
 
     pub fn isOptionalStruct(comptime self: @This()) bool {
@@ -2223,6 +2230,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         pub fn stop(self: *@This()) void {
+            if (self.stopped) return;
             self.stopped = true;
             while (self.pull()) |_| {}
             // wake up awaking threads and prevent them from sleep again
@@ -2279,7 +2287,6 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
     const decls = std.meta.declarations(ns);
     return struct {
         queue: Queue(WorkItem) = undefined,
-        threads: []std.Thread = undefined,
         thread_count: usize = 0,
         status: Status = .uninitialized,
         init_remaining: usize = undefined,
@@ -2337,15 +2344,11 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             }
             const allocator = options.allocator;
             self.queue = .{ .allocator = allocator };
-            self.threads = try allocator.alloc(std.Thread, options.n_jobs);
-            self.init_remaining = self.threads.len;
+            self.init_remaining = options.n_jobs;
             self.init_futex = std.atomic.Value(u32).init(0);
             self.init_result = {};
             self.init_promise = null;
             self.deinit_promise = null;
-            errdefer allocator.free(self.threads);
-            errdefer for (0..self.thread_count) |i| self.threads[i].join();
-            errdefer self.queue.deinit();
             if (@hasDecl(internal_ns, "onQueueInit")) {
                 const result = @call(.auto, internal_ns.onQueueInit, .{});
                 switch (@typeInfo(@TypeOf(result))) {
@@ -2353,9 +2356,12 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     else => {},
                 }
             }
-            errdefer if (@hasDecl(internal_ns, "onQueueDeinit")) {
-                _ = @call(.auto, internal_ns.onQueueDeinit, .{});
-            };
+            errdefer {
+                if (@hasDecl(internal_ns, "onQueueDeinit")) {
+                    _ = @call(.auto, internal_ns.onQueueDeinit, .{});
+                }
+                self.queue.stop();
+            }
             const min_stack_size: usize = if (std.Thread.use_pthreads) switch (@bitSizeOf(usize)) {
                 32 => 4096,
                 else => 1048576,
@@ -2364,12 +2370,13 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 .stack_size = @max(min_stack_size, options.stack_size),
                 .allocator = allocator,
             };
-            for (0..options.n_jobs) |i| {
-                self.threads[i] = try std.Thread.spawn(spawn_config, handleWorkItems, .{
+            for (0..options.n_jobs) |_| {
+                const thread = try std.Thread.spawn(spawn_config, handleWorkItems, .{
                     self,
                     options.thread_start_params,
                     options.thread_end_params,
                 });
+                thread.detach();
                 self.thread_count += 1;
             }
             self.status = .initialized;
@@ -2388,23 +2395,17 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             }
         }
 
-        pub fn deinit(self: *@This()) void {
+        pub fn deinitAsync(self: *@This(), promise: ?Promise(void)) void {
             switch (self.status) {
                 .initialized => {},
-                else => return,
-            }
-            self.status = .deinitializing;
-            self.queue.stop();
-            for (self.threads) |thread| thread.detach();
-        }
-
-        pub fn deinitAsync(self: *@This(), promise: Promise(void)) void {
-            switch (self.status) {
-                .initialized => {},
-                else => return promise.resolve({}),
+                else => {
+                    if (promise) |p| p.resolve({});
+                    return;
+                },
             }
             self.deinit_promise = promise;
-            self.deinit();
+            self.status = .deinitializing;
+            self.queue.stop();
         }
 
         pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
@@ -2514,8 +2515,9 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 const result = @call(.auto, ns.onThreadStart, thread_start_params);
                 if (comptime ThreadStartError != error{}) {
                     if (result) |_| {} else |err| {
-                        self.init_result = err;
                         error_encountered = true;
+                        self.init_result = err;
+                        self.queue.stop();
                     }
                 }
             }
@@ -2537,8 +2539,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     _ = @call(.auto, ns.onThreadEnd, thread_end_params);
                 }
             }
-            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
-                self.queue.allocator.free(self.threads);
+            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .monotonic) == 1) {
                 self.queue.deinit();
                 self.status = .uninitialized;
                 if (self.deinit_promise) |promise| {
