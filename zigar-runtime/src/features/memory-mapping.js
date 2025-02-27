@@ -237,7 +237,7 @@ export default mixin({
         address = usizeMin;
         len = 0;
       }
-      return (cache) ? this.obtainView(buffer, 0, 0) : new DataView(buffer, address, len);
+      return (cache) ? this.obtainView(buffer, address, len) : new DataView(buffer, address, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];

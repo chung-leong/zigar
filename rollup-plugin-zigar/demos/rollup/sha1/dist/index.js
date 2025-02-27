@@ -1330,7 +1330,7 @@ mixin({
     }
   },
   allocateZigMemory(len, align, type = MemoryType.Normal) {
-    const address = (len) ? this.allocateExternMemory(type, len, align) : 0;
+    const address = (len) ? this.allocateScratchMemory(type, len, align) : 0;
     if (!address && len) {
       throw new Error('Out of memory');
     }
@@ -1345,7 +1345,7 @@ mixin({
   freeZigMemory(dv) {
     const { address, unalignedAddress, len, align, type } = dv[ZIG];
     if (len) {
-      this.freeExternMemory(type, unalignedAddress ?? address, len, align);
+      this.freeScratchMemory(type, unalignedAddress ?? address, len, align);
     }
   },
   releaseZigView(dv) {
