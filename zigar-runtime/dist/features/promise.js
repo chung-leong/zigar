@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { PROMISE, MEMORY, ZIG, RETURN, FINALIZE } from '../symbols.js';
+import { RETURN, PROMISE, MEMORY, ZIG, FINALIZE } from '../symbols.js';
 
 var promise = mixin({
   // create promise struct for outbound call

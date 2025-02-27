@@ -1,8 +1,8 @@
-import { StructureFlag, ArgStructFlag, MemberType } from '../constants.js';
+import { ArgStructFlag, StructureFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { ALIGN, VIVIFICATE, VISIT, RETURN, COPY, THROWING, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
-import { defineProperties, defineValue } from '../utils.js';
+import { THROWING, ALIGN, VIVIFICATE, VISIT, RETURN, COPY, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
+import { defineValue, defineProperties } from '../utils.js';
 
 var variadicStruct = mixin({
   defineVariadicStruct(structure, descriptors) {

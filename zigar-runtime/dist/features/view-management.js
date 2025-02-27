@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ArrayLengthMismatch, BufferSizeMismatch, BufferExpected } from '../errors.js';
-import { TYPED_ARRAY, MEMORY, SENTINEL, SHAPE, COPY, ZIG, CONST_TARGET, CACHE, PROXY } from '../symbols.js';
-import { isCompatibleInstanceOf, findElements, usizeInvalid } from '../utils.js';
+import { BufferSizeMismatch, ArrayLengthMismatch, BufferExpected } from '../errors.js';
+import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, COPY, TYPED_ARRAY } from '../symbols.js';
+import { usizeInvalid, isCompatibleInstanceOf, findElements } from '../utils.js';
 
 var viewManagement = mixin({
   init() {

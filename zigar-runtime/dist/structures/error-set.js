@@ -1,7 +1,7 @@
-import { StructureType, ErrorSetFlag, MemberType } from '../constants.js';
+import { MemberType, ErrorSetFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidInitializer, isErrorJSON, deanimalizeErrorName, NotInErrorSet, ErrorExpected } from '../errors.js';
-import { INITIALIZE, SLOTS, PROPS, CAST, CLASS } from '../symbols.js';
+import { isErrorJSON, InvalidInitializer, deanimalizeErrorName, NotInErrorSet, ErrorExpected } from '../errors.js';
+import { SLOTS, PROPS, CAST, CLASS, INITIALIZE } from '../symbols.js';
 import { defineValue, defineProperties } from '../utils.js';
 
 var errorSet = mixin({

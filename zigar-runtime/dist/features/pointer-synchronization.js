@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { VISIT, ADDRESS, LENGTH, MEMORY, POINTER, SLOTS, ZIG, UPDATE } from '../symbols.js';
+import { MEMORY, VISIT, ADDRESS, LENGTH, POINTER, SLOTS, UPDATE, ZIG } from '../symbols.js';
 import { findSortedIndex } from '../utils.js';
 
 var pointerSynchronization = mixin({

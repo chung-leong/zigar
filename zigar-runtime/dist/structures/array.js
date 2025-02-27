@@ -1,8 +1,8 @@
 import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, SENTINEL, COPY } from '../symbols.js';
-import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
+import { SENTINEL, ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, COPY } from '../symbols.js';
+import { defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 var array = mixin({
   defineArray(structure, descriptors) {

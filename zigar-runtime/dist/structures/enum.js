@@ -1,8 +1,8 @@
-import { MemberFlag, EnumFlag, MemberType } from '../constants.js';
+import { MemberType, MemberFlag, EnumFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer, EnumExpected } from '../errors.js';
-import { NAME, INITIALIZE, SLOTS, CAST, TAG, TYPED_ARRAY } from '../symbols.js';
-import { defineValue, toString, defineProperty } from '../utils.js';
+import { SLOTS, NAME, CAST, TAG, TYPED_ARRAY, INITIALIZE } from '../symbols.js';
+import { defineProperty, defineValue, toString } from '../utils.js';
 
 var _enum = mixin({
   defineEnum(structure, descriptors) {

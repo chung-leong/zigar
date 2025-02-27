@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
-import { MEMORY, ALIGN, ZIG } from '../symbols.js';
-import { alignForward, adjustAddress, isMisaligned, usizeInvalid, isInvalidAddress, usizeMax, usizeMin, findSortedIndex } from '../utils.js';
+import { MEMORY, ZIG, ALIGN } from '../symbols.js';
+import { isInvalidAddress, usizeMax, usizeMin, adjustAddress, usizeInvalid, alignForward, isMisaligned, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
   init() {

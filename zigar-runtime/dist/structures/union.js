@@ -1,8 +1,8 @@
 import { UnionFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
+import { InactiveUnionProperty, MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InaccessiblePointer } from '../errors.js';
 import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
-import { empty, defineValue, defineProperties, isCompatibleInstanceOf } from '../utils.js';
+import { defineValue, empty, defineProperties, isCompatibleInstanceOf } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {

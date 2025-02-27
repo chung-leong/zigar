@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch, PreviouslyFreed } from '../errors.js';
-import { MEMORY, ZIG, TYPE, ALIGN } from '../symbols.js';
+import { ZIG, MEMORY, TYPE, ALIGN } from '../symbols.js';
 import { usizeInvalid, encodeText } from '../utils.js';
 
 var allocatorMethods = mixin({

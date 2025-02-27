@@ -2,7 +2,7 @@ import { StructureFlag, VectorFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
 import { ENTRIES, INITIALIZE, VIVIFICATE, VISIT, COPY } from '../symbols.js';
-import { getSelf, defineValue, isCompatibleInstanceOf } from '../utils.js';
+import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
 var vector = mixin({
   defineVector(structure, descriptors) {

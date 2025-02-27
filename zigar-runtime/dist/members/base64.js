@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { markAsSpecial, encodeBase64, decodeBase64 } from '../utils.js';
+import { markAsSpecial, decodeBase64, encodeBase64 } from '../utils.js';
 
 var base64 = mixin({
   defineBase64(structure) {

@@ -1,8 +1,8 @@
-import { structureNames, StructureType, MemberFlag, MemberType, StructureFlag } from '../constants.js';
+import { StructureType, MemberType, MemberFlag, structureNames, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { CONST_TARGET, SETTERS, KEYS, COPY, RESTORE, SIGNATURE, ENVIRONMENT, ALIGN, SIZE, TYPE, FLAGS, PROPS, TYPED_ARRAY, ENTRIES, SLOTS, CACHE, MEMORY, UPDATE, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE } from '../symbols.js';
-import { defineValue, defineProperties, defineProperty, ObjectCache } from '../utils.js';
+import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
+import { ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
 
 var all = mixin({
   defineStructure(structure) {

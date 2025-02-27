@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { GENERATOR, RETURN, YIELD, THROWING, FINALIZE } from '../symbols.js';
+import { YIELD, THROWING, GENERATOR, RETURN, FINALIZE } from '../symbols.js';
 
 var generator = mixin({
   createGenerator(args, func) {

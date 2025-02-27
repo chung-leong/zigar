@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { INITIALIZE, BIT_SIZE, PRIMITIVE, COPY } from '../symbols.js';
+import { BIT_SIZE, PRIMITIVE, INITIALIZE, COPY } from '../symbols.js';
 import { defineValue, isCompatibleInstanceOf, getPrimitiveName } from '../utils.js';
 
 var primitive = mixin({

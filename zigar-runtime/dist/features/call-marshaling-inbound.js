@@ -1,4 +1,4 @@
-import { StructureType, StructFlag, MemberType, CallResult } from '../constants.js';
+import { CallResult, StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UnexpectedGenerator } from '../errors.js';
 import { MEMORY, ZIG, ALLOCATOR, VISIT, THROWING, RETURN, YIELD } from '../symbols.js';

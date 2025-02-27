@@ -1,7 +1,7 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ZigMemoryTargetRequired } from '../errors.js';
-import { SLOTS, MEMORY, ZIG, LAST_ADDRESS, VIVIFICATE, VISIT } from '../symbols.js';
+import { SLOTS, LAST_ADDRESS, MEMORY, ZIG, VIVIFICATE, VISIT } from '../symbols.js';
 
 var all = mixin({
   defineVisitor() {

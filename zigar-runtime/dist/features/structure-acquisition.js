@@ -1,7 +1,7 @@
-import { SLOTS, MEMORY, ZIG, ENVIRONMENT, SENTINEL } from '../symbols.js';
-import { StructureFlag, ModuleAttribute, StructureType, structureNames, MemberType, PrimitiveFlag, ErrorSetFlag, PointerFlag, SliceFlag } from '../constants.js';
+import { SENTINEL, SLOTS, MEMORY, ZIG, ENVIRONMENT } from '../symbols.js';
+import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { findObjects, adjustAddress, decodeText } from '../utils.js';
+import { decodeText, findObjects, adjustAddress } from '../utils.js';
 
 var structureAcquisition = mixin({
   init() {

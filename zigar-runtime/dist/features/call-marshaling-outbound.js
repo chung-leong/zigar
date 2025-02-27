@@ -1,7 +1,7 @@
 import { StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { UndefinedArgument, adjustArgumentError, ZigError, Exit } from '../errors.js';
-import { SETTERS, ATTRIBUTES, MEMORY, FINALIZE, COPY, RETURN, PROMISE, GENERATOR, ALLOCATOR, VISIT } from '../symbols.js';
+import { ZigError, UndefinedArgument, adjustArgumentError, Exit } from '../errors.js';
+import { ATTRIBUTES, MEMORY, FINALIZE, COPY, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {

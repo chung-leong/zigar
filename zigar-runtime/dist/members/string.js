@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { SENTINEL } from '../symbols.js';
-import { markAsSpecial, decodeText, encodeText } from '../utils.js';
+import { markAsSpecial, encodeText, decodeText } from '../utils.js';
 
 var string = mixin({
   defineString(structure) {

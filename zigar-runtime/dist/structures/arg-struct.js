@@ -1,7 +1,7 @@
-import { StructureFlag, ArgStructFlag } from '../constants.js';
+import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { VIVIFICATE, VISIT, RETURN, ALLOCATOR, COPY, THROWING, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
+import { THROWING, VIVIFICATE, VISIT, RETURN, ALLOCATOR, COPY, MEMORY, SLOTS, FINALIZE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var argStruct = mixin({

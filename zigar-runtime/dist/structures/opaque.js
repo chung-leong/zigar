@@ -1,6 +1,6 @@
 import { OpaqueFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { CreatingOpaque, AccessingOpaque } from '../errors.js';
+import { AccessingOpaque, CreatingOpaque } from '../errors.js';
 import { INITIALIZE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 

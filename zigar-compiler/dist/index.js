@@ -1,6 +1,6 @@
 import childProcess from 'child_process';
 import { openSync, readSync, closeSync, writeFileSync } from 'fs';
-import fs, { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
+import fs, { open, readdir, lstat, rmdir, readFile, stat, mkdir, writeFile, chmod, unlink } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
 import { fileURLToPath, URL } from 'url';
@@ -8,45 +8,12 @@ import { promisify } from 'util';
 import { createHash } from 'crypto';
 
 const StructureType = {
-  Primitive: 0,
-  Array: 1,
-  Struct: 2,
-  Union: 3,
-  ErrorUnion: 4,
-  ErrorSet: 5,
-  Enum: 6,
-  Optional: 7,
-  Pointer: 8,
-  Slice: 9,
-  Vector: 10,
-  Opaque: 11,
-  ArgStruct: 12,
-  VariadicStruct: 13,
-  Function: 14,
-};
+  Primitive: 0};
 
 const MemberType = {
-  Void: 0,
-  Bool: 1,
-  Int: 2,
-  Uint: 3,
-  Float: 4,
-  Object: 5,
-  Type: 6,
-  Literal: 7,
-  Null: 8,
-  Undefined: 9,
-  Unsupported: 10,
-};
+  Void: 0};
 const MemberFlag = {
-  IsRequired:       0x0001,
-  IsReadOnly:       0x0002,
-  IsPartOfSet:      0x0004,
-  IsSelector:       0x0008,
-  IsMethod:         0x0010,
-  IsSentinel:       0x0020,
-  IsBackingInt:     0x0040,
-};
+  IsReadOnly:       0x0002};
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 

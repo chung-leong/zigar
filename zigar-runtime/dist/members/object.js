@@ -1,4 +1,4 @@
-import { StructureFlag, MemberFlag } from '../constants.js';
+import { MemberFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly } from '../errors.js';
 import { SLOTS, VIVIFICATE, INITIALIZE } from '../symbols.js';

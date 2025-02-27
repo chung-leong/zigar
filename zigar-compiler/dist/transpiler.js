@@ -1,6 +1,6 @@
 import childProcess from 'child_process';
 import { openSync, readSync, closeSync, writeFileSync } from 'fs';
-import fs, { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
+import fs, { open, readdir, lstat, rmdir, readFile, stat, mkdir, writeFile, chmod, unlink } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
 import { fileURLToPath, URL } from 'url';
@@ -57,15 +57,10 @@ const UnionFlag = {
   HasSelector:      0x0010,
   HasTag:           0x0020,
   HasInaccessible:  0x0040,
-  IsExtern:         0x0080,
-
-  IsPacked:         0x0100,
   IsIterator:       0x0200,
 };
 const EnumFlag = {
-  IsOpenEnded:      0x0010,
-  IsIterator:       0x0020,
-};
+  IsOpenEnded:      0x0010};
 const OptionalFlag = {
   HasSelector:      0x0010,
 };
@@ -119,9 +114,7 @@ const MemberFlag = {
   IsRequired:       0x0001,
   IsReadOnly:       0x0002,
   IsPartOfSet:      0x0004,
-  IsSelector:       0x0008,
   IsMethod:         0x0010,
-  IsSentinel:       0x0020,
   IsBackingInt:     0x0040,
 };
 
@@ -4067,7 +4060,6 @@ function findMemoryIndex(array, address) {
 }
 
 const MemoryType = {
-  Normal: 0,
   Scratch: 1,
 };
 
@@ -8567,19 +8559,12 @@ const MagicNumber = 0x6d736100;
 const Version = 1;
 const SectionType = {
   Custom: 0,
-  Type: 1,
   Import: 2,
   Function: 3,
-  Table: 4,
-  Memory: 5,
-  Global: 6,
   Export: 7,
   Start: 8,
   Element: 9,
-  Code: 10,
-  Data: 11,
-  DataCount: 12
-};
+  Code: 10};
 const ObjectType = {
   Function: 0,
   Table: 1,
@@ -10039,7 +10024,6 @@ async function transpile(path, options) {
     }
   }
   const { code, exports, structures } = generateCode(definition, {
-    declareFeatures: true,
     runtimeURL,
     binarySource,
     topLevelAwait,

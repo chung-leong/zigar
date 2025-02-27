@@ -1,6 +1,6 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
-import { SIZE, ALIGN, TYPE, MEMORY, SLOTS, ENVIRONMENT } from '../symbols.js';
+import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 
 var baseline = mixin({
   init() {

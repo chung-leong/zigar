@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, CACHE, VISIT, UPDATE, ZIG, SLOTS } from '../symbols.js';
+import { MEMORY, ZIG, CACHE, VISIT, UPDATE, SLOTS } from '../symbols.js';
 
 var objectLinkage = mixin({
   linkVariables(writeBack) {

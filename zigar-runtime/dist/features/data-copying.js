@@ -1,6 +1,6 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { RESTORE, MEMORY, ZIG } from '../symbols.js';
+import { MEMORY, ZIG, RESTORE } from '../symbols.js';
 import { empty } from '../utils.js';
 
 var dataCopying = mixin({

@@ -1,8 +1,8 @@
 import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
-import { ENTRIES, COPY, MEMORY, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, SENTINEL, LENGTH } from '../symbols.js';
-import { getProxy, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
+import { SENTINEL, ENTRIES, COPY, MEMORY, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, LENGTH } from '../symbols.js';
+import { defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 var slice = mixin({
   defineSlice(structure, descriptors) {

@@ -1,8 +1,8 @@
-import { PointerFlag, MemberType, PrimitiveFlag, SliceFlag, StructureFlag, StructureType } from '../constants.js';
+import { PointerFlag, StructureType, MemberType, PrimitiveFlag, SliceFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { throwReadOnly, NoCastingToPointer, NullPointer, ZigMemoryTargetRequired, InvalidSliceLength, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed } from '../errors.js';
-import { LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, CAST, ENVIRONMENT, PARENT, POINTER, ZIG, SENTINEL, SIZE, RESTORE, TYPE, CONST_TARGET, SETTERS, TYPED_ARRAY } from '../symbols.js';
-import { getProxy, defineValue, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
+import { NoCastingToPointer, throwReadOnly, NullPointer, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed, InvalidSliceLength, ZigMemoryTargetRequired } from '../errors.js';
+import { CAST, ENVIRONMENT, PARENT, LAST_LENGTH, TARGET, INITIALIZE, FINALIZE, MEMORY, SLOTS, PROXY, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, POINTER, TYPE, RESTORE, CONST_TARGET, SETTERS, TYPED_ARRAY, ZIG, SENTINEL, SIZE } from '../symbols.js';
+import { defineValue, getProxy, isCompatibleType, isCompatibleInstanceOf, usizeInvalid, findElements } from '../utils.js';
 
 var pointer = mixin({
   definePointer(structure, descriptors) {

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { defineProperty, empty, decodeText } from '../utils.js';
+import { decodeText, empty, defineProperty } from '../utils.js';
 
 var moduleLoading = mixin({
   init() {
