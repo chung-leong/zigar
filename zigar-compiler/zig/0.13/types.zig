@@ -2510,43 +2510,48 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             thread_start_params: ThreadStartParams,
             thread_end_params: ThreadEndParams,
         ) void {
-            var error_encountered = false;
+            var start_succeeded = true;
             if (comptime @hasDecl(ns, "onThreadStart")) {
                 const result = @call(.auto, ns.onThreadStart, thread_start_params);
                 if (comptime ThreadStartError != error{}) {
                     if (result) |_| {} else |err| {
-                        error_encountered = true;
                         self.init_result = err;
-                        self.queue.stop();
+                        start_succeeded = false;
                     }
                 }
             }
             if (@atomicRmw(usize, &self.init_remaining, .Sub, 1, .monotonic) == 1) {
-                self.init_futex.store(1, .release);
-                std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
-                if (self.init_promise) |promise| promise.resolve(self.init_result);
+                if (!std.meta.isError(self.init_result)) {
+                    self.init_futex.store(1, .release);
+                    std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
+                    if (self.init_promise) |promise| promise.resolve(self.init_result);
+                } else {
+                    // delay reporting error until threads have stopped
+                    self.queue.stop();
+                }
             }
-            if (!error_encountered) {
-                while (true) {
-                    if (self.queue.pull()) |item| {
-                        invokeFunction(item);
-                    } else switch (self.queue.stopped) {
-                        false => self.queue.wait(),
-                        true => break,
-                    }
+            while (true) {
+                if (self.queue.pull()) |item| {
+                    invokeFunction(item);
+                } else switch (self.queue.stopped) {
+                    false => self.queue.wait(),
+                    true => break,
                 }
-                if (comptime @hasDecl(ns, "onThreadEnd")) {
-                    _ = @call(.auto, ns.onThreadEnd, thread_end_params);
-                }
+            }
+            if (comptime @hasDecl(ns, "onThreadEnd")) {
+                if (start_succeeded) _ = @call(.auto, ns.onThreadEnd, thread_end_params);
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
-                if (@hasDecl(internal_ns, "onQueueDeinit")) {
-                    _ = @call(.auto, internal_ns.onQueueDeinit, .{});
-                }
                 self.queue.deinit();
                 self.status = .uninitialized;
-                if (self.deinit_promise) |promise| {
-                    promise.resolve({});
+                if (std.meta.isError(self.init_result)) {
+                    self.init_futex.store(1, .release);
+                    std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
+                    if (self.init_promise) |promise| promise.resolve(self.init_result);
+                }
+                if (self.deinit_promise) |promise| promise.resolve({});
+                if (@hasDecl(internal_ns, "onQueueDeinit")) {
+                    _ = @call(.auto, internal_ns.onQueueDeinit, .{});
                 }
             }
         }
