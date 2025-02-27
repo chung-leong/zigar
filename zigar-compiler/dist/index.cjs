@@ -2,7 +2,7 @@
 
 var childProcess = require('child_process');
 var fs = require('fs');
-var promises = require('fs/promises');
+var fs$1 = require('fs/promises');
 var os = require('os');
 var path = require('path');
 var url = require('url');
@@ -546,7 +546,7 @@ async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
     try {
       await createDirectory(path.dirname(pidPath));
-      const handle = await promises.open(pidPath, 'wx');
+      const handle = await fs$1.open(pidPath, 'wx');
       handle.write(`${process.pid}`);
       handle.close();
       break;
@@ -586,7 +586,7 @@ async function checkPidFile(pidPath, staleTime) {
       }
       /* c8 ignore end */
     }
-    const stats = await promises.stat(pidPath);
+    const stats = await fs$1.stat(pidPath);
     const diff = new Date() - stats.mtime;
     if (diff > staleTime) {
       stale = true;
@@ -601,15 +601,15 @@ async function checkPidFile(pidPath, staleTime) {
 }
 
 async function copyFile(srcPath, dstPath) {
-  const info = await promises.stat(srcPath);
-  const data = await promises.readFile(srcPath);
-  await promises.writeFile(dstPath, data);
-  await promises.chmod(dstPath, info.mode);
+  const info = await fs$1.stat(srcPath);
+  const data = await fs$1.readFile(srcPath);
+  await fs$1.writeFile(dstPath, data);
+  await fs$1.chmod(dstPath, info.mode);
 }
 
 async function loadFile(path, def) {
   try {
-    return await promises.readFile(path, 'utf8');
+    return await fs$1.readFile(path, 'utf8');
   } catch (err) {
     return def;
   }
@@ -617,7 +617,7 @@ async function loadFile(path, def) {
 
 async function deleteFile(path) {
   try {
-    await promises.unlink(path);
+    await fs$1.unlink(path);
   } catch (err) {
     if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
       throw err;
@@ -627,12 +627,12 @@ async function deleteFile(path) {
 
 async function createDirectory(path$1) {
   try {
-    await promises.stat(path$1);
+    await fs$1.stat(path$1);
   } catch (err) {
     const dir = path.dirname(path$1);
     await createDirectory(dir);
     try {
-      await promises.mkdir(path$1);
+      await fs$1.mkdir(path$1);
       /* c8 ignore next 5 */
     } catch (err) {
       if (err.code != 'EEXIST') {
@@ -644,17 +644,17 @@ async function createDirectory(path$1) {
 
 async function deleteDirectory(dir) {
   try {
-    const list = await promises.readdir(dir);
+    const list = await fs$1.readdir(dir);
     for (const name of list) {
       const path$1 = path.join(dir, name);
-      const info = await promises.lstat(path$1);
+      const info = await fs$1.lstat(path$1);
       if (info.isDirectory()) {
         await deleteDirectory(path$1);
       } else if (info) {
         await deleteFile(path$1);
       }
     }
-    await promises.rmdir(dir);
+    await fs$1.rmdir(dir);
   } catch (err) {
     if (err.code !== 'ENOENT') {
       throw err;
@@ -784,10 +784,10 @@ function normalizePath(url$1) {
 
 async function getDirectoryStats(dirPath) {
   let size = 0, mtimeMs = 0;
-  const names = await promises.readdir(dirPath);
+  const names = await fs$1.readdir(dirPath);
   for (const name of names) {
     const path$1 = path.join(dirPath, name);
-    let info = await promises.stat(path$1);
+    let info = await fs$1.stat(path$1);
     if(info.isDirectory()) {
       info = await getDirectoryStats(path$1);
     } else if (!info.isFile()) {
@@ -804,7 +804,7 @@ async function getDirectoryStats(dirPath) {
 const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
-  const srcInfo = (srcPath) ? await promises.stat(srcPath) : null;
+  const srcInfo = (srcPath) ? await fs$1.stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = path.join(srcPath, '?');
   }
@@ -816,14 +816,14 @@ async function compile(srcPath, modPath, options) {
     // add custom build file
     try {
       const path$1 = path.join(moduleDir, 'build.zig');
-      await promises.stat(path$1);
+      await fs$1.stat(path$1);
       config.buildFilePath = path$1;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
       const path$1 = path.join(moduleDir, 'build.zig.zon');
-      await promises.stat(path$1);
+      await fs$1.stat(path$1);
       config.packageConfigPath = path$1;
     } catch (err) {
     }
@@ -833,7 +833,7 @@ async function compile(srcPath, modPath, options) {
     await acquireLock(pidPath);
     const getOutputMTime = async () => {
       try {
-        const stats = await promises.stat(outputPath);
+        const stats = await fs$1.stat(outputPath);
         return stats.mtimeMs;
       } catch (err) {
       }
@@ -933,7 +933,7 @@ async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
   const cfgFilePath = path.join(dir, 'build-cfg.zig');
-  await promises.writeFile(cfgFilePath, content);
+  await fs$1.writeFile(cfgFilePath, content);
   const buildFilePath = path.join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
@@ -1078,12 +1078,12 @@ async function getManifestLists(buildPath) {
   let names;
   try {
     dirPath = path.join(buildPath, '.zig-cache', 'h');
-    names = await promises.readdir(dirPath);
+    names = await fs$1.readdir(dirPath);
     /* c8 ignore next 8 */
   } catch (err) {
     try {
       dirPath = path.join(buildPath, 'zig-cache', 'h');
-      names = await promises.readdir(dirPath);
+      names = await fs$1.readdir(dirPath);
     } catch (err) {
       names = [];
     }
@@ -1096,7 +1096,7 @@ async function findSourcePaths(buildPath) {
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
-      const data = await promises.readFile(manifestPath, 'utf-8');
+      const data = await fs$1.readFile(manifestPath, 'utf-8');
       if (data.length > 0) {
         const lines = data.split(/\r?\n/);
         // https://ziglang.org/documentation/master/std/#std.Build.Cache.Manifest.writeManifest
@@ -1108,7 +1108,7 @@ async function findSourcePaths(buildPath) {
             const srcPath = m[1];
             if(path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
               try {
-                await promises.stat(srcPath);
+                await fs$1.stat(srcPath);
                 involved[srcPath] = true;
                 /* c8 ignore next */
               } catch {};
@@ -1126,12 +1126,12 @@ async function findSourcePaths(buildPath) {
 async function cleanBuildDirectory(config) {
   const { buildDir, buildDirSize } = config;
   try {
-    const names = await promises.readdir(buildDir);
+    const names = await fs$1.readdir(buildDir);
     const list = [];
     let total = 0;
     for (const name of names) {
       const path$1 = path.join(buildDir, name);
-      const info = await promises.stat(path$1);
+      const info = await fs$1.stat(path$1);
       if (info.isDirectory()) {
         const { size, mtimeMs } = await getDirectoryStats(path$1);
         total += size;
@@ -1139,8 +1139,13 @@ async function cleanBuildDirectory(config) {
       }
     }
     list.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    let free = Infinity;
+    if (fs$1.statfs) {
+      const { bsize, bavail } = await fs$1.statfs(buildDir);
+      free = bsize * bavail;
+    }
     for (const { path, size } of list) {
-      if (!(total > buildDirSize)) {
+      if (!(total > buildDirSize) && (free > 1073741824)) {
         break;
       }
       try {
@@ -1149,6 +1154,7 @@ async function cleanBuildDirectory(config) {
         try {
           await deleteDirectory(path);
           total -= size;
+          free += size;
         } finally {
           await releaseLock(pidPath);
         }
@@ -1309,7 +1315,7 @@ class UnknownOption extends Error {
 async function findConfigFile(name, dir) {
   const path$1 = path.join(dir, name);
   try {
-    await promises.stat(path$1);
+    await fs$1.stat(path$1);
     return path$1;
   } catch (err) {
     const parent = path.dirname(dir);

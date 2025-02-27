@@ -1,6 +1,6 @@
 import childProcess from 'child_process';
 import { openSync, readSync, closeSync, writeFileSync } from 'fs';
-import { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
+import fs, { open, stat, readFile, writeFile, chmod, unlink, mkdir, readdir, lstat, rmdir } from 'fs/promises';
 import os from 'os';
 import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
 import { fileURLToPath, URL } from 'url';
@@ -1464,8 +1464,13 @@ async function cleanBuildDirectory(config) {
       }
     }
     list.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    let free = Infinity;
+    if (fs.statfs) {
+      const { bsize, bavail } = await fs.statfs(buildDir);
+      free = bsize * bavail;
+    }
     for (const { path, size } of list) {
-      if (!(total > buildDirSize)) {
+      if (!(total > buildDirSize) && (free > 1073741824)) {
         break;
       }
       try {
@@ -1474,6 +1479,7 @@ async function cleanBuildDirectory(config) {
         try {
           await deleteDirectory(path);
           total -= size;
+          free += size;
         } finally {
           await releaseLock(pidPath);
         }
