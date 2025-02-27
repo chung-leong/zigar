@@ -30,12 +30,12 @@ describe('Feature: default-allocator', function() {
       VTable[ALIGN] = 8;
       const structure = { constructor };
       let nextAddress = usize(0x1000);
-      env.allocateExternMemory = function(len, align) {
+      env.allocateScratchMemory = function(len, align) {
         const address = nextAddress;
         nextAddress += usize(0x1000);
         return address;
       };
-      env.freeExternMemory = function(type, address, len, align) {};
+      env.freeScratchMemory = function(address, len, align) {};
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
@@ -90,7 +90,7 @@ describe('Feature: default-allocator', function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return usize(0x1000);
         };
       } else {
@@ -105,7 +105,7 @@ describe('Feature: default-allocator', function() {
       it('should return null when shadow memory cannot be allocated', function() {
         const env = new Env();
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           throw new Error('Out of memory');
         };
         const dv = env.allocateHostMemory(40, 4);
@@ -118,10 +118,10 @@ describe('Feature: default-allocator', function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return usize(0x1000);
         };
-        env.freeExternMemory = function(type, address, len, align) {
+        env.freeScratchMemory = function(address, len, align) {
           expect(type).to.equal(MemoryType.Scratch);
           expect(address).to.equal(usize(0x1000));
         };

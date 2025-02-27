@@ -562,7 +562,7 @@ describe('Structure: slice', function() {
     })
     it('should initialize correctly from a string when zig is specified', function() {
       const env = new Env();
-      env.allocateExternMemory = function(type, len, align) {
+      env.allocateScratchMemory = function(len, align) {
         return usize(0x1000);
       };
       if (process.env.TARGET === 'wasm') {

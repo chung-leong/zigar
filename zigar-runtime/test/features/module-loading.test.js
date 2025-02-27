@@ -257,9 +257,9 @@ describe('Feature: module-loading', function() {
         let freed;
         const exports = {
           initialize: () => {},
-          allocateExternMemory: () => {},
-          freeExternMemory: (type, address, len, align) => {
-            freed = { type, address, len, align };
+          allocateScratchMemory: () => {},
+          freeScratchMemory: (address, len, align) => {
+            freed = { address, len, align };
           },
           runThunk: () => {},
           runVariadicThunk: () => {},
@@ -272,12 +272,12 @@ describe('Feature: module-loading', function() {
           getModuleAttributes: () => {},
         };
         env.importFunctions(exports);
-        expect(env.allocateExternMemory).to.be.a('function');
-        expect(env.freeExternMemory).to.be.a('function');
+        expect(env.allocateScratchMemory).to.be.a('function');
+        expect(env.freeScratchMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
         expect(env.runVariadicThunk).to.be.a('function');
-        expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
-        expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
+        expect(() => env.freeScratchMemory(123, 4, 2)).to.not.throw();
+        expect(freed).to.eql({ address: 123, len: 4, align: 2 });
       })
     })
     describe('instantiateWebAssembly', function() {
@@ -320,8 +320,8 @@ describe('Feature: module-loading', function() {
           tableInitial: 210,
           multithreaded: false,
         });
-        expect(env.allocateExternMemory).to.be.a('function');
-        expect(env.freeExternMemory).to.be.a('function');
+        expect(env.allocateScratchMemory).to.be.a('function');
+        expect(env.freeSratchMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
       })
     })
@@ -346,12 +346,7 @@ describe('Feature: module-loading', function() {
     describe('importFunctions', function() {
       it('should attach methods to environment', function() {
         const env = new Env();
-        let freed;
         const exports = {
-          allocateExternMemory: () => {},
-          freeExternMemory: (type, address, len, align) => {
-            freed = { type, address, len, align };
-          },
           runThunk: () => {},
           runVariadicThunk: () => {},
           finalizeAsyncCall: () => {},
@@ -372,12 +367,8 @@ describe('Feature: module-loading', function() {
           syncExternalBuffer: () => {},
         };
         env.importFunctions(exports);
-        expect(env.allocateExternMemory).to.be.a('function');
-        expect(env.freeExternMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
         expect(env.runVariadicThunk).to.be.a('function');
-        expect(() => env.freeExternMemory(0, 123, 4, 2)).to.not.throw();
-        expect(freed).to.eql({ type: 0, address: 123, len: 4, align: 2 });
       })
     })
   }

@@ -120,7 +120,7 @@ describe('Feature: abort-signal', function() {
       const context = env.startContext();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
-        env.allocateExternMemory = function(len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
       } else {

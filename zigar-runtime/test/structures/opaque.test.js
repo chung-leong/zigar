@@ -192,10 +192,10 @@ describe('Structure: opaque', function() {
         return true;
       };
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function(address) {
+        env.freeScratchMemory = function(address) {
         };
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else if (process.env.TARGET === 'node') {

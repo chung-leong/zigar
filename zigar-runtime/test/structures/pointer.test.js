@@ -1910,7 +1910,7 @@ describe('Structure: pointer', function() {
       });
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
-      env.allocateExternMemory = function(type, len, align) {
+      env.allocateScratchMemory = function(len, align) {
         return usize(0x1000);
       };
       if (process.env.TARGET === 'wasm') {
@@ -1957,7 +1957,7 @@ describe('Structure: pointer', function() {
       });
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
-      env.allocateExternMemory = function(type, len, align) {
+      env.allocateScratchMemory = function(len, align) {
         return usize(0x1000);
       };
       if (process.env.TARGET === 'wasm') {
@@ -2007,7 +2007,7 @@ describe('Structure: pointer', function() {
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
       let address = usize(0);
-      env.allocateExternMemory = function(type, len, align) {
+      env.allocateScratchMemory = function(len, align) {
         address += usize(1000);
         return address;
       };
@@ -2080,7 +2080,7 @@ describe('Structure: pointer', function() {
       env.endStructure(structure);
       let nextAddress = usize(1000);
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += usize(1000);
           return address;
@@ -2089,7 +2089,7 @@ describe('Structure: pointer', function() {
       } else {
         const bufferMap = new Map();
         const addressMap = new Map();
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += usize(1000);
           const buffer = new ArrayBuffer(len);

@@ -28,7 +28,7 @@ describe('Feature: memory-mapping', function() {
     it('should free shadow memory when context count reaches zero', function() {
       const env = new Env();
       const freed = [];
-      env.freeExternMemory = function(type, address, len, align) {
+      env.freeScratchMemory = function(address, len, align) {
         freed.push(address);
       };
       const context1 = env.startContext();
@@ -238,97 +238,6 @@ describe('Feature: memory-mapping', function() {
       env.registerMemory(address, len, 1, false, targetDV, shadowDV);
       env.endContext();
       expect(freed).to.equal(shadowDV);
-    })
-  })
-  describe('allocateZigMemory', function() {
-    it('should try to allocate Zig memory from zig', function() {
-      const env = new Env();
-      env.allocateExternMemory = function(type, len, align) {
-        return usize(0x1000);
-      };
-      env.obtainZigView = function(address, len) {
-        const dv = new DataView(new ArrayBuffer(len));
-        dv[ZIG] = { address, len };
-        return dv;
-      };
-      const dv = env.allocateZigMemory(400, 4);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.byteLength).to.equal(400);
-      expect(dv[ZIG]).to.be.an('object');
-    })
-    it('should return empty data view when len is 0', function() {
-      const env = new Env();
-      env.allocateExternMemory = function(type, len, align) {
-        return usize(0x1000);
-      };
-      env.obtainZigView = function(address, len) {
-        const dv = new DataView(new ArrayBuffer(len));
-        dv[ZIG] = { address, len };
-        return dv;
-      };
-      const dv1 = env.allocateZigMemory(0, 4);
-      const dv2 = env.allocateZigMemory(0, 1);
-      expect(dv1.byteLength).to.equal(0);
-      expect(dv2.byteLength).to.equal(0);
-      expect(dv1[ZIG]).to.be.an('object')
-    })
-    it('should throw when request for memory yields null ', function() {
-      const env = new Env();
-      env.allocateExternMemory = function(type, len, align) {
-        return usize(0);
-      };
-      expect(() => env.allocateZigMemory(400, 4)).to.throw();
-    })
-  })
-  describe('freeZigMemory', function() {
-    it('should try to free Zig memory through Zig', function() {
-      const env = new Env();
-      let args;
-      env.freeExternMemory = function(type, address, len, align) {
-        args = { type, address, len, align };
-      };
-      const dv = new DataView(new ArrayBuffer(16));
-      dv[ZIG] = {
-        type: 0,
-        address: usize(0x1000),
-        len: 16,
-        align: 4,
-      };
-      env.freeZigMemory(dv);
-      expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
-    })
-    it('should try to free Zig memory with unaligned address through Zig', function() {
-      const env = new Env();
-      let args;
-      env.freeExternMemory = function(type, address, len, align) {
-        args = { type, address, len, align };
-      };
-      const dv = new DataView(new ArrayBuffer(16));
-      dv[ZIG] = {
-        type: 0,
-        unalignedAddress: usize(0x1000),
-        address: usize(0x1004),
-        len: 16,
-        align: 4,
-      };
-      env.freeZigMemory(dv);
-      expect(args).to.eql({ type: 0, address: usize(0x1000), len: 16, align: 4 });
-    })
-    it('should do nothing when len is 0', function() {
-      const env = new Env();
-      let called = false;
-      env.freeExternMemory = function(address, len, align) {
-        called = true;
-      };
-      const dv = new DataView(new ArrayBuffer(0));
-      dv[ZIG] = {
-        type: 0,
-        address: usize(0x1000),
-        len: 0,
-        align: 0,
-      };
-      env.freeZigMemory(dv);
-      expect(called).to.equal(false);
     })
   })
   describe('obtainZigView', function() {
@@ -646,7 +555,7 @@ describe('Feature: memory-mapping', function() {
         const object = {
           [MEMORY]: env.allocateMemory(16, 8, false)
         };
-        env.allocateExternMemory = function(type, address, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return usize(0x1234);
         };
         env.memory = new WebAssembly.Memory({ initial: 1 });

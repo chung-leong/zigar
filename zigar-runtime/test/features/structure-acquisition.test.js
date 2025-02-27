@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ErrorSetFlag, ExportFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag, 
   StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
@@ -269,8 +269,6 @@ describe('Feature: structure-acquisition', function() {
       }
       env.acquireStructures({ omitFunctions: true, omitVariables: true });
       expect(thunkAddress).to.equal(usize(0x1234));
-      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitMethods)).to.be.true;
-      expect(!!(optionsDV.getUint32(0, env.littleEndian) & ExportFlag.OmitVariables)).to.be.true;
     })
     it('should acquire default pointers', function() {
       const env = new Env();

@@ -79,10 +79,10 @@ describe('Feature: call-marshaling-outbound', function() {
       };
       self[MEMORY] = new DataView(new ArrayBuffer(0));
       self[MEMORY][ZIG] = { address: usize(0x2008) };
-      env.allocateExternMemory = function(type, len, align) {
+      env.allocateScratchMemory = function(len, align) {
         return usize(0x4000);
       };
-      env.freeExternMemory = function() {
+      env.freeScratchMemory = function() {
       }
       const bufferMap = new Map(), addressMap = new Map();
       if (process.env.TARGET === 'wasm') {
@@ -195,10 +195,10 @@ describe('Feature: call-marshaling-outbound', function() {
           argAddress = args[2];
           return true;
         };
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.flushStdout = function() {};
         done();
         const result = await promise;
@@ -228,10 +228,10 @@ describe('Feature: call-marshaling-outbound', function() {
         env.runThunk = function(...args) {
           throw new Exit(0);
         };
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.flushStdout = function() {};
         done();
         await expect(promise).to.eventually.be.fulfilled;
@@ -257,10 +257,10 @@ describe('Feature: call-marshaling-outbound', function() {
         env.runThunk = function(...args) {
           return false;
         };
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.flushStdout = function() {};
         done();
         await expect(promise).to.eventually.be.rejectedWith();
@@ -286,10 +286,10 @@ describe('Feature: call-marshaling-outbound', function() {
         env.runThunk = function(...args) {
           throw new Exit(-1);
         };
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.flushStdout = function() {};
         done();
         await expect(promise).to.eventually.be.rejectedWith(Exit).with.property('code', -1);
@@ -985,10 +985,10 @@ describe('Feature: call-marshaling-outbound', function() {
         return true;
       };
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1014,10 +1014,10 @@ describe('Feature: call-marshaling-outbound', function() {
         return true;
       };
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1046,10 +1046,10 @@ describe('Feature: call-marshaling-outbound', function() {
         return true;
       };
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1081,10 +1081,10 @@ describe('Feature: call-marshaling-outbound', function() {
         return false;
       };
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           return 0x1000;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1116,12 +1116,12 @@ describe('Feature: call-marshaling-outbound', function() {
       };
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += 0x1000;
           return address;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1156,12 +1156,12 @@ describe('Feature: call-marshaling-outbound', function() {
       env.runThunk = () => true;
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += 0x1000;
           return address;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1174,6 +1174,7 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
         this[PROMISE] = new Promise(resolve => this[RETURN] = resolve);
+        this[FINALIZE] = function() {};
         this.retval = 1234;
       };
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
@@ -1187,12 +1188,12 @@ describe('Feature: call-marshaling-outbound', function() {
       env.runThunk = () => true;
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += 0x1000;
           return address;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {
@@ -1222,12 +1223,12 @@ describe('Feature: call-marshaling-outbound', function() {
       env.runThunk = () => true;
       let nextAddress = 0x1000;
       if (process.env.TARGET === 'wasm') {
-        env.allocateExternMemory = function(type, len, align) {
+        env.allocateScratchMemory = function(len, align) {
           const address = nextAddress;
           nextAddress += 0x1000;
           return address;
         };
-        env.freeExternMemory = function() {};
+        env.freeScratchMemory = function() {};
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         env.getBufferAddress = function(buffer) {

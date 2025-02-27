@@ -89,10 +89,10 @@ describe('Structure: function', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
-        env.allocateExternMemory = function(address, len) {
+        env.allocateScratchMemory = function(len, align) {
           return usize(0x4000);
         };
-        env.freeExternMemory = function() {
+        env.freeScratchMemory = function() {
         }
       } else {
         env.getBufferAddress = function(buffer) {
