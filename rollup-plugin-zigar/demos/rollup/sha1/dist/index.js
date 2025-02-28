@@ -41,6 +41,8 @@ const StructFlag = {
   IsPromise:        0x0200,
   IsGenerator:      0x0400,
   IsAbortSignal:    0x0800,
+
+  IsOptional:       0x1000,
 };
 const PointerFlag = {
   HasLength:        0x0010,
@@ -98,10 +100,10 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-const dict = globalThis[Symbol.for('ZIGAR')] ??= {};
+const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {
-  return dict[name] ??= Symbol(name);
+  return dict[name] ||= Symbol(name);
 }
 
 function symbol(name) {
@@ -132,7 +134,6 @@ const SIZE = symbol('size');
 const BIT_SIZE = symbol('bit size');
 const ALIGN = symbol('align');
 const CONST_TARGET = symbol('const target');
-const CONST_PROXY = symbol('const proxy');
 const ENVIRONMENT = symbol('environment');
 const ATTRIBUTES = symbol('attributes');
 const PRIMITIVE = symbol('primitive');
@@ -141,7 +142,7 @@ const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const GENERATOR = symbol('generator');
-const CALLBACK = symbol('callback');
+const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
@@ -151,6 +152,7 @@ const VISIT = symbol('visit');
 const COPY = symbol('copy');
 const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
+const RESTRICT = symbol('restrict');
 const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
@@ -188,6 +190,18 @@ function defineValue(value) {
   return (value !== undefined) ? { value } : undefined;
 }
 
+function getErrorHandler(options) {
+  return (options?.error === 'return')
+  ? (cb) => {
+      try {
+        return cb();
+      } catch (err) {
+        return err;
+      }
+    }
+  : (cb) => cb();
+}
+
 function getPrimitiveName({ type, bitSize }) {
   switch (type) {
     case MemberType.Bool: return 'boolean';
@@ -201,7 +215,7 @@ function getPrimitiveName({ type, bitSize }) {
 }
 
 function decodeText(arrays, encoding = 'utf-8') {
-  const decoder = decoders[encoding] ??= new TextDecoder(encoding);
+  const decoder = decoders[encoding] ||= new TextDecoder(encoding);
   let array;
   if (Array.isArray(arrays)) {
     if (arrays.length === 1) {
@@ -239,7 +253,7 @@ function encodeText(text, encoding = 'utf-8') {
       return ta;
     }
     default: {
-      const encoder = encoders[encoding] ??= new TextEncoder();
+      const encoder = encoders[encoding] ||= new TextEncoder();
       return encoder.encode(text);
     }
   }
@@ -284,27 +298,25 @@ function findSortedIndex(array, value, cb) {
 const isMisaligned = function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
-  /* c8 ignore next */
 ;
 
 const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-  /* c8 ignore next */
 ;
+
+const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-  /* c8 ignore next */
 ;
 
 const adjustAddress = function(address, addend) {
     return address + addend;
   }
-  /* c8 ignore next */
 ;
 
 function transformIterable(arg) {
@@ -348,7 +360,7 @@ function findElements(arg, Child) {
 
 function isCompatibleType(TypeA, TypeB) {
   return (TypeA === TypeB)
-      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA[ENVIRONMENT] !== TypeB[ENVIRONMENT]));
+      || ((TypeA?.[SIGNATURE] === TypeB[SIGNATURE]) && (TypeA?.[ENVIRONMENT] !== TypeB?.[ENVIRONMENT]));
 }
 
 function isCompatibleInstanceOf(object, Type) {
@@ -406,30 +418,30 @@ function defineEnvironment() {
 }
 
 function defineClass(name, mixins) {
-  const props = {};
+  const initFunctions = [];
   const constructor = function() {
-    for (const [ name, object ] of Object.entries(props)) {
-      this[name] = structuredClone(object);
+    for (const init of initFunctions) {
+      init.call(this);
     }
   };
   const { prototype } = constructor;
   defineProperty(constructor, 'name', defineValue(name));
   for (const mixin of mixins) {
     for (let [ name, object ] of Object.entries(mixin)) {
-      if (typeof(object) === 'function') {
-        {
-          defineProperty(prototype, name, defineValue(object));
-        }
+      if (name === 'init') {
+        initFunctions.push(object);
       } else {
-        let current = props[name];
-        if (current !== undefined) {
-          if (current?.constructor === Object) {
-            object = Object.assign({ ...current }, object);
-          } else if (current !== object) {
-            throw new Error(`Duplicate property: ${name}`);
+        if (typeof(object) === 'function') ; else {
+          let current = prototype[name];
+          if (current !== undefined) {
+            if (current?.constructor === Object) {
+              object = Object.assign({ ...current }, object);
+            } else if (current !== object) {
+              throw new Error(`Duplicate property: ${name}`);
+            }
           }
         }
-        props[name] = object;
+        defineProperty(prototype, name, defineValue(object));
       }
     }
   }
@@ -445,8 +457,9 @@ function createEnvironment() {
 // handle retrieval of accessors
 
 mixin({
-  accessorCache: new Map(),
-
+  init() {
+    this.accessorCache = new Map();
+  },
   getAccessor(access, member) {
     const { type, bitSize, bitOffset, byteSize } = member;
     const names = [];
@@ -640,21 +653,18 @@ class NoProperty extends TypeError {
 }
 
 class ArgumentCountMismatch extends Error {
-  constructor(expected, actual, variadic = false) {
+  constructor(expected, received, variadic = false) {
     super();
-    this.fnName = 'fn';
-    this.argIndex = expected;
-    this.argCount = actual;
-    this.variadic = variadic;
-  }
-
-  get message() {
-    const s = (this.argIndex !== 1) ? 's' : '';
-    let count = this.argIndex;
-    if (this.variadic) {
-      count = `at least ${count}`;
-    }
-    return `${this.fnName}(): Expecting ${count} argument${s}, received ${this.argCount}`;
+    const updateText = (argOffset) => {
+      expected -= argOffset;
+      received -= argOffset;
+      const s = (expected !== 1) ? 's' : '';
+      const p = (variadic) ? 'at least ' : '';
+      this.message = `Expecting ${p}${expected} argument${s}, received ${received}`;
+      this.stack = adjustStack(this.stack, 'new Arg(');
+    };
+    updateText(0);
+    defineProperty(this, UPDATE, { value: updateText, enumerable: false });
   }
 }
 
@@ -725,7 +735,7 @@ class InvalidPointerTarget extends TypeError {
 }
 
 class ZigMemoryTargetRequired extends TypeError {
-  constructor(structure, arg) {
+  constructor() {
     super(`Pointers in Zig memory cannot point to garbage-collected object`);
   }
 }
@@ -758,8 +768,14 @@ class ReadOnlyTarget extends TypeError {
 }
 
 class ZigError extends Error {
-  constructor(message) {
-    super(message ?? 'Error encountered in Zig code');
+  constructor(error, remove = 0) {
+    if (error instanceof Error) {
+      super(error.message);
+      error.stack = adjustStack(this.stack, remove);
+      return error;
+    } else {
+      super(error ?? 'Error encountered in Zig code');
+    }
   }
 }
 
@@ -770,24 +786,27 @@ class Exit extends ZigError {
   }
 }
 
-function adjustArgumentError(argIndex, argCount) {
-  const { message } = this;
-  defineProperties(this, {
-    fnName: defineValue('fn'),
-    argIndex: defineValue(argIndex),
-    argCount: defineValue(argCount),
-    message: {
-      get() {
-        const { fnName, argIndex, argCount } = this;
-        const argName = `args[${argIndex}]`;
-        const prefix = (argIndex !== 0) ? '..., ' : '';
-        const suffix = (argIndex !== argCount - 1) ? ', ...' : '';
-        const argLabel = prefix + argName + suffix;
-        return `${fnName}(${argLabel}): ${message}`;
-      },
+function adjustArgumentError(err, argIndex) {
+  const updateText = (argOffset) => {
+    argIndex -= argOffset;
+    err.message = `args[${argIndex}]: ${err.message}`;
+    err.stack = adjustStack(err.stack, 'new Arg(');
+  };
+  updateText(0);
+  defineProperty(err, UPDATE, { value: updateText, enumerable: false });
+  return err;
+}
+
+function adjustStack(stack, search) {
+  if (typeof(stack) === 'string') {
+    const lines = stack.split('\n');
+    const index = lines.findIndex(s => s.includes(search));
+    if (index !== -1) {
+      lines.splice(1, index);
+      stack = lines.join('\n');
     }
-  });
-  return this;
+  }
+  return stack;
 }
 
 function replaceRangeError(member, index, err) {
@@ -799,12 +818,6 @@ function replaceRangeError(member, index, err) {
 
 function throwReadOnly() {
   throw new ReadOnly();
-}
-
-function warnImplicitArrayCreation(structure, arg) {
-  const created = addArticle(structure.constructor[TYPED_ARRAY].name);
-  const source = addArticle(arg.constructor.name);
-  console.warn(`Implicitly creating ${created} from ${source}`);
 }
 
 function getDescription(arg) {
@@ -846,27 +859,28 @@ mixin({
           });
         }
       }
-      try {
-        return thisEnv.invokeThunk(thunk, self, new ArgStruct(args));
-      } catch (err) {
-        if ('fnName' in err) {
-          err.fnName = self.name;
-        }
-        {
+      // `this` is present when running a promise and generator callback received from a inbound call
+      // it's going to be the argument struct of that call
+      const argStruct = new ArgStruct(args, this?.[ALLOCATOR]);
+      {
+        try {
+          return thisEnv.invokeThunk(thunk, self, argStruct);
+        } catch (err) {
           // do nothing when exit code is 0
           if (err instanceof Exit && err.code === 0) {
             return;
           }
+          throw err;
         }
-        throw err;
       }
     };
     return self;
   },
-  copyArguments(dest, src, members, options) {
-    let srcIndex = 0;
+  copyArguments(argStruct, argList, members, options, argAlloc) {
+    let destIndex = 0, srcIndex = 0;
     let allocatorCount = 0;
-    for (const [ destIndex, { type, structure } ] of members.entries()) {
+    const setters = argStruct[SETTERS];
+    for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
         if (structure.flags & StructFlag.IsAllocator) {
@@ -876,73 +890,58 @@ mixin({
           ? options?.['allocator'] ?? options?.['allocator1']
           : options?.[`allocator${allocatorCount}`];
           // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(dest, structure);
+          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          // invoke programmer-supplied callback if there's one, otherwise a function that
-          // resolves/rejects a promise attached to the argument struct
-          if (!promise) {
-            promise = {
-              ptr: null,
-              callback: this.createPromiseCallback(dest, options?.['callback']),
-            };
-          }
+          promise ||= this.createPromise(argStruct, options?.['callback']);
           arg = promise;
         } else if (structure.flags & StructFlag.IsGenerator) {
-          if (!generator) {
-            generator = {
-              ptr: null,
-              callback: this.createGeneratorCallback(dest, options?.['callback']),
-            };
-          }
+          generator ||= this.createGenerator(argStruct, options?.['callback']);
           arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
           // AbortSignal object if found
-          if (!signal) {
-            signal = { ptr: this.createSignalArray(structure, options?.['signal']) };
-          }
+          signal ||= this.createSignal(structure, options?.['signal']);
           arg = signal;
         }
       }
       if (arg === undefined) {
         // just a regular argument
-        arg = src[srcIndex++];
+        arg = argList[srcIndex++];
         // only void has the value of undefined
         if (arg === undefined && type !== MemberType.Void) {
           throw new UndefinedArgument();
         }
       }
       try {
-        dest[destIndex] = arg;
+        const set = setters[destIndex++];
+        set.call(argStruct, arg, argAlloc);
       } catch (err) {
-        throw adjustArgumentError.call(err, destIndex, src.length);
+        throw adjustArgumentError(err, destIndex - 1);
       }
     }
   },
-  invokeThunk(thunk, fn, args) {
+  invokeThunk(thunk, fn, argStruct) {
     const context = this.startContext();
-    const attrs = args[ATTRIBUTES];
+    const attrs = argStruct[ATTRIBUTES];
     const thunkAddress = this.getViewAddress(thunk[MEMORY]);
     const fnAddress = this.getViewAddress(fn[MEMORY]);
-    const hasPointers = VISIT in args;
+    const isAsync = FINALIZE in argStruct;
+    const hasPointers = VISIT in argStruct;
     if (hasPointers) {
-      this.updatePointerAddresses(context, args);
+      this.updatePointerAddresses(context, argStruct);
     }
     // return address of shadow for argumnet struct
-    const argAddress = this.getShadowAddress(context, args, null, false)
+    const argAddress = this.getShadowAddress(context, argStruct, null, false)
     ;
     // get address of attributes if function variadic
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
-    const success = (attrs)
-    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
-    : this.runThunk(thunkAddress, fnAddress, argAddress);
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
       if (hasPointers) {
-        this.updatePointerTargets(context, args);
+        this.updatePointerTargets(context, argStruct);
       }
       if (this.libc) {
         this.flushStdout?.();
@@ -950,37 +949,40 @@ mixin({
       this.flushConsole?.();
       this.endContext();
     };
+    if (isAsync) {
+      argStruct[FINALIZE] = finalize;
+    }
+    const success = (attrs)
+    ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
+    : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
       finalize();
       throw new ZigError();
     }
     {
       // copy retval from shadow view
-      args[COPY]?.(this.findShadowView(args[MEMORY]));
+      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
     }
-    if (FINALIZE in args) {
-      args[FINALIZE] = finalize;
-    } else {
-      finalize();
-    }
-    const promise = args[PROMISE];
-    const generator = args[GENERATOR];
-    const callback = args[CALLBACK];
-    if (callback) {
+    if (isAsync) {
+      let retval = null;
+      // if a function has returned a value or failed synchronmously, the promise is resolved immediately
       try {
-        // ensure the function hasn't return an error
-        const { retval } = args;
-        if (retval != null) {
-          // if a function returns a value, then the promise is fulfilled immediately
-          callback(null, retval);
-        }
+        retval = argStruct.retval;
       } catch (err) {
-        callback(null, err);
+        retval = new ZigError(err, 1);
+      }
+      if (retval != null) {
+        argStruct[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
-      return promise ?? generator;
+      return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
-      return args.retval;
+      finalize();
+      try {
+        return argStruct.retval;
+      } catch (err) {
+        throw new ZigError(err, 1);
+      }
     }
   },
   ...({
@@ -992,49 +994,7 @@ mixin({
 });
 
 mixin({
-  copiers: null,
-  resetters: null,
-
-  defineCopier(size, multiple) {
-    const copy = this.getCopyFunction(size, multiple);
-    return {
-      value(target) {
-        {
-          this[RESTORE]?.();
-          target[RESTORE]?.();
-        }
-        const src = target[MEMORY];
-        const dest = this[MEMORY];
-        copy(dest, src);
-      },
-    };
-  },
-  defineResetter(offset, size) {
-    const reset = this.getResetFunction(size);
-    return {
-      value() {
-        {
-          this[RESTORE]?.();
-        }
-        const dest = this[MEMORY];
-        reset(dest, offset, size);
-      }
-    };
-  },
-  getCopyFunction(size, multiple = false) {
-    if (!this.copiers) {
-      this.copiers = this.defineCopiers();
-    }
-    const f = !multiple ? this.copiers[size] : undefined;
-    return f ?? this.copiers.any;
-  },
-  getResetFunction(size) {
-    if (!this.resetters) {
-      this.resetters = this.defineResetters();
-    }
-    return this.resetters[size] ?? this.resetters.any;
-  },
-  defineCopiers() {
+  init() {
     const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
     const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
     const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
@@ -1044,8 +1004,7 @@ mixin({
     const setInt16 = this.getAccessor('set', int16);
     const getInt32 = this.getAccessor('get', int32);
     const setInt32 = this.getAccessor('set', int32);
-
-    return {
+    this.copiers = {
       0: empty,
       1: function(dest, src) {
         setInt8.call(dest, 0, getInt8.call(src, 0));
@@ -1078,16 +1037,8 @@ mixin({
           i++;
         }
       },
-    }
-  },
-  defineResetters() {
-    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
-    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
-    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
-    const setInt8 = this.getAccessor('set', int8);
-    const setInt16 = this.getAccessor('set', int16);
-    const setInt32 = this.getAccessor('set', int32);
-    return {
+    };
+    this.resetters = {
       0: empty,
       1: function(dest, offset) {
         setInt8.call(dest, offset, 0);
@@ -1122,6 +1073,39 @@ mixin({
       },
     };
   },
+  defineCopier(size, multiple) {
+    const copy = this.getCopyFunction(size, multiple);
+    return {
+      value(target) {
+        {
+          this[RESTORE]?.();
+          target[RESTORE]?.();
+        }
+        const src = target[MEMORY];
+        const dest = this[MEMORY];
+        copy(dest, src);
+      },
+    };
+  },
+  defineResetter(offset, size) {
+    const reset = this.getResetFunction(size);
+    return {
+      value() {
+        {
+          this[RESTORE]?.();
+        }
+        const dest = this[MEMORY];
+        reset(dest, offset, size);
+      }
+    };
+  },
+  getCopyFunction(size, multiple = false) {
+    const f = !multiple ? this.copiers[size] : undefined;
+    return f ?? this.copiers.any;
+  },
+  getResetFunction(size) {
+    return this.resetters[size] ?? this.resetters.any;
+  },
   ...({
     defineRetvalCopier({ byteSize, bitOffset }) {
       if (byteSize > 0) {
@@ -1138,7 +1122,13 @@ mixin({
           }
         };
       }
-    }
+    },
+    copyExternBytes(dst, address, len) {
+      const { memory } = this;
+      const src = new DataView(memory.buffer, address, len);
+      const copy = this.getCopyFunction(len);
+      copy(dst, src);
+    },
   } )
 });
 
@@ -1176,9 +1166,11 @@ mixin({
 });
 
 mixin({
-  memoryList: [],
-  contextCount: 0,
-
+  init() {
+    this.isMemoryMapping = true;
+    this.memoryList = [];
+    this.contextCount = 0;
+  },
   startContext() {
     ++this.contextCount;
     return { shadowList: [] };
@@ -1294,7 +1286,7 @@ mixin({
     let dv;
     if (entry?.address === address && entry.len === len) {
       dv = entry.targetDV;
-    } else if (entry?.address <= address && adjustAddress(address, len) < adjustAddress(entry.address, entry.len)) {
+    } else if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
       const offset = Number(address - entry.address);
       const isOpaque = size === undefined;
       const { targetDV } = entry;
@@ -1329,25 +1321,6 @@ mixin({
       }
     }
   },
-  allocateZigMemory(len, align, type = MemoryType.Normal) {
-    const address = (len) ? this.allocateScratchMemory(type, len, align) : 0;
-    if (!address && len) {
-      throw new Error('Out of memory');
-    }
-    const dv = this.obtainZigView(address, len);
-    const zig = dv?.[ZIG];
-    if (zig) {
-      zig.align = align;
-      zig.type = type;
-    }
-    return dv;
-  },
-  freeZigMemory(dv) {
-    const { address, unalignedAddress, len, align, type } = dv[ZIG];
-    if (len) {
-      this.freeScratchMemory(type, unalignedAddress ?? address, len, align);
-    }
-  },
   releaseZigView(dv) {
     const zig = dv[ZIG];
     const address = zig?.address;
@@ -1367,8 +1340,8 @@ mixin({
   },
   ...({
     imports: {
-      allocateExternMemory: { argType: 'iii', returnType: 'i' },
-      freeExternMemory: { argType: 'iiii' },
+      allocateScratchMemory: { argType: 'ii', returnType: 'i' },
+      freeScratchMemory: { argType: 'iii' },
     },
     exports: {
       getViewAddress: { argType: 'v', returnType: 'i' },
@@ -1376,23 +1349,38 @@ mixin({
     usizeMaxBuffer: new ArrayBuffer(0),
 
     allocateShadowMemory(len, align) {
-      return this.allocateZigMemory(len, align, MemoryType.Scratch);
+      const address = (len) ? this.allocateScratchMemory(len, align) : 0;
+      if (!address && len) {
+        throw new Error('Out of memory');
+      }
+      const dv = this.obtainZigView(address, len);
+      const zig = dv?.[ZIG];
+      if (zig) {
+        zig.align = align;
+      }
+      return dv;
     },
     freeShadowMemory(dv) {
-      return this.freeZigMemory(dv);
+      const { address, unalignedAddress, len, align } = dv[ZIG];
+      if (len) {
+        this.freeScratchMemory(unalignedAddress ?? address, len, align);
+      }
+      this.releaseZigView(dv);
     },
-    obtainZigView(address, len) {
+    obtainZigView(address, len, cache = true) {
       if (isInvalidAddress(address)) {
         address = (len > 0) ? 0 : usizeMax;
       }
       if (!address && len) {
         return null;
       }
+      let { buffer } = this.memory;
       if (address === usizeMax) {
-        return this.obtainView(this.usizeMaxBuffer, 0, 0);
-      } else {
-        return this.obtainView(this.memory.buffer, address, len);
+        buffer = this.usizeMaxBuffer;
+        address = usizeMin;
+        len = 0;
       }
+      return (cache) ? this.obtainView(buffer, address, len) : new DataView(buffer, address, len);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -1408,12 +1396,6 @@ mixin({
     getBufferAddress(buffer) {
       return 0;
     },
-    copyExternBytes(dst, address, len) {
-      const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
-      const copy = this.getCopyFunction(len);
-      copy(dst, src);
-    },
   } ),
 });
 
@@ -1427,9 +1409,21 @@ const MemoryType = {
 };
 
 mixin({
-  released: false,
-  abandoned: false,
-
+  init() {
+    this.released = false;
+    this.abandoned = false;
+    {
+      this.nextValueIndex = 1;
+      this.valueMap = new Map();
+      this.valueIndices = new Map();
+      this.options = null;
+      this.executable = null;
+      this.memory = null;
+      this.table = null;
+      this.initialTableLength = 0;
+      this.exportedFunctions = null;
+    }
+  },
   releaseFunctions() {
     const throwError = () => { throw new Error(`Module was abandoned`) };
     for (const name of Object.keys(this.imports)) {
@@ -1452,15 +1446,6 @@ mixin({
     exports: {
       displayPanic: { argType: 'ii' },
     },
-    nextValueIndex: 1,
-    valueMap: new Map(),
-    valueIndices: new Map(),
-    options: null,
-    executable: null,
-    memory: null,
-    table: null,
-    initialTableLength: 0,
-    exportedFunctions: null,
 
     async initialize(wasi) {
       this.setCustomWASI?.(wasi);
@@ -1539,7 +1524,7 @@ mixin({
         multithreaded,
       } = this.options = options;
       const res = await source;
-      const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
+      const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
       const w = WebAssembly;
       const f = w['compile' + suffix];
       const executable = this.executable = await f(res);
@@ -1549,11 +1534,11 @@ mixin({
       for (const { module, name, kind } of w.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
-            env[name] = functions[name] ?? /* c8 ignore next */ empty;
+            env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
-            wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;
+            wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
         }
       }
@@ -1581,7 +1566,7 @@ mixin({
           const exportsPlusMemory = { ...exports, memory: this.memory };
           const instanceProxy = new Proxy(instance, {
             get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
+              return (name === 'exports') ? exportsPlusMemory : inst[name];
             }
           });
           this.customWASI.initialize?.(instanceProxy);
@@ -1603,124 +1588,9 @@ mixin({
 });
 
 mixin({
-  linkVariables(writeBack) {
-    {
-      // linkage occurs when WASM compilation is complete and functions have been imported
-      if (!this.memory) {
-        this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
-        return;
-      }
-    }
-    const copy = this.getCopyFunction();
-    for (const { object, handle } of this.variables) {
-      const jsDV = object[MEMORY];
-      // objects in WebAssembly have fixed addresses so the handle is the address
-      // for native code module, locations of objects in memory can change depending on
-      // where the shared library is loaded
-      const address = handle ;
-      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
-      if (writeBack) {
-        copy(zigDV, jsDV);
-      }
-      object.constructor[CACHE]?.save?.(zigDV, object);
-      const linkChildren = (object) => {
-        const slots = object[SLOTS];
-        if (slots) {
-          const parentOffset = zigDV.byteOffset;
-          for (const child of Object.values(slots)) {
-            if (child) {
-              const childDV = child[MEMORY];
-              if (childDV.buffer === jsDV.buffer) {
-                const offset = parentOffset + childDV.byteOffset - jsDV.byteOffset;
-                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
-                child.constructor[CACHE]?.save?.(zigDV, child);
-                linkChildren(child);
-              }
-            }
-          }
-        }
-      };
-      linkChildren(object);
-      // update pointer targets
-      object[VISIT]?.(function() { this[UPDATE](); });
-    }
+  init() {
+    this.viewMap = new WeakMap();
   },
-  unlinkVariables() {
-    const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
-      const zigDV = this.restoreView(object[MEMORY]) ;
-      const zig = zigDV[ZIG];
-      if (zig) {
-        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
-        copy(jsDV, zigDV);
-      }
-    }
-  },
-  ...({
-    imports: {
-      recreateAddress: { argType: 'i', returnType: 'i' },
-    },
-  } ),
-  });
-
-mixin({
-  consoleObject: null,
-  consolePending: [],
-  consoleTimeout: 0,
-
-  writeToConsole(dv) {
-    try {
-      // make copy of array, in case incoming buffer is pointing to stack memory
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.consolePending.push(array);
-      } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.subarray(index + 1);
-        this.writeToConsoleNow([ ...this.consolePending, beginning ]);
-        this.consolePending.splice(0);
-        if (remaining.length > 0) {
-          this.consolePending.push(remaining);
-        }
-      }
-      clearTimeout(this.consoleTimeout);
-      this.consoleTimeout = 0;
-      if (this.consolePending.length > 0) {
-        this.consoleTimeout = setTimeout(() => {
-          this.writeToConsoleNow(this.consolePending);
-          this.consolePending.splice(0);
-        }, 250);
-      }
-      return true;
-      /* c8 ignore next 4 */
-    } catch (err) {
-      console.error(err);
-      return false;
-    }
-  },
-  writeToConsoleNow(array) {
-    const c = this.consoleObject ?? globalThis.console;
-    c.log?.call?.(c, decodeText(array));
-  },
-  flushConsole() {
-    if (this.consolePending.length > 0) {
-      this.writeToConsoleNow(this.consolePending);
-      this.consolePending.splice(0);
-      clearTimeout(this.consoleTimeout);
-    }
-  },
-  ...({
-    imports: {
-      flushStdout: { argType: '', returnType: '' },
-    },
-  } ),
-});
-
-mixin({
-  viewMap: null,
-
   extractView(structure, arg, onError = throwError) {
     const { type, byteSize, constructor } = structure;
     let dv;
@@ -1798,13 +1668,14 @@ mixin({
     }
   },
   findViewAt(buffer, offset, len) {
-    let entry = (this.viewMap ??= new WeakMap()).get(buffer);
+    let entry = this.viewMap.get(buffer);
     let existing;
     if (entry) {
       if (entry instanceof DataView) {
         // only one view created thus far--see if that's the matching one
         if (entry.byteOffset === offset && entry.byteLength === len) {
           existing = entry;
+          entry = null;
         } else {
           // no, need to replace the entry with a hash keyed by `offset:len`
           const prev = entry;
@@ -1829,12 +1700,13 @@ mixin({
     let dv;
     if (existing) {
       return existing;
-    } else if (entry) {
-      dv = new DataView(buffer, offset, len);
+    }
+    dv = new DataView(buffer, offset, len);
+    if (entry) {
       entry.set(`${offset}:${len}`, dv);
     } else {
       // just one view of this buffer for now
-      this.viewMap.set(buffer, dv = new DataView(buffer, offset, len));
+      this.viewMap.set(buffer, dv);
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -1883,8 +1755,10 @@ mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            this[MEMORY] = newDV;
-            this.constructor[CACHE]?.save?.(newDV, this);
+            const target = this[CONST_TARGET] ?? this;
+            target[MEMORY] = newDV;
+            // pointers are referenced by their proxies in the cache
+            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
             return true;
           } else {
             return false;
@@ -1911,6 +1785,102 @@ function isArrayLike(type) {
 
 function throwError(structure) {
   throw new BufferExpected(structure);
+}
+
+mixin({
+  defineArrayEntries() {
+    return defineValue(getArrayEntries);
+  },
+  defineArrayIterator() {
+    return defineValue(getArrayIterator);
+  }
+});
+
+function getArrayIterator() {
+  const self = this[ARRAY] ?? this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = self.get(current);
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getArrayEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
+  const self = this[ARRAY] ?? this;
+  const length = this.length;
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < length) {
+        const current = index++;
+        value = [ current, handleError(() => self.get(current)) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
+}
+
+function getArrayEntries(options) {
+  return {
+    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
+    length: this.length,
+  };
+}
+
+mixin({
+  defineStructEntries() {
+    return defineValue(getStructEntries);
+  },
+  defineStructIterator() {
+    return defineValue(getStructIterator);
+  }
+});
+
+function getStructEntries(options) {
+  return {
+    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
+    length: this[PROPS].length,
+  };
+}
+
+function getStructIterator(options) {
+  const entries = getStructEntries.call(this, options);
+  return entries[Symbol.iterator]();
+}
+
+function getStructEntriesIterator(options) {
+  const handleError = getErrorHandler(options);
+  const self = this;
+  const props = this[PROPS];
+  let index = 0;
+  return {
+    next() {
+      let value, done;
+      if (index < props.length) {
+        const current = props[index++];
+        value = [ current, handleError(() => self[current]) ];
+        done = false;
+      } else {
+        done = true;
+      }
+      return { value, done };
+    },
+  };
 }
 
 mixin({
@@ -2175,17 +2145,17 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Union:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = {};
           break;
         case StructureType.Array:
         case StructureType.Vector:
         case StructureType.Slice:
-          entries = value[ENTRIES];
+          entries = value[ENTRIES]();
           result = [];
           break;
         case StructureType.Pointer:
@@ -2259,152 +2229,6 @@ mixin({
   },
 });
 
-function getZigIterator() {
-  const self = this;
-  return {
-    next() {
-      const value = self.next();
-      const done = value === null;
-      return { value, done };
-    },
-  };
-}
-
-function getStructEntries(options) {
-  return {
-    [Symbol.iterator]: getStructEntriesIterator.bind(this, options),
-    length: this[PROPS].length,
-  };
-}
-
-function getStructIterator(options) {
-  const entries = getStructEntries.call(this, options);
-  return entries[Symbol.iterator]();
-}
-
-function getStructEntriesIterator(options) {
-  const handleError = getErrorHandler(options);
-  const self = this;
-  const props = this[PROPS];
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < props.length) {
-        const current = props[index++];
-        value = [ current, handleError(() => self[current]) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self.get(current);
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayEntriesIterator(options) {
-  const handleError = getErrorHandler(options);
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, handleError(() => self.get(current)) ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getArrayEntries(options) {
-  return {
-    [Symbol.iterator]: getArrayEntriesIterator.bind(this, options),
-    length: this.length,
-  };
-}
-
-function getVectorIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = self[current];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntriesIterator() {
-  const self = this;
-  const length = this.length;
-  let index = 0;
-  return {
-    next() {
-      let value, done;
-      if (index < length) {
-        const current = index++;
-        value = [ current, self[current] ];
-        done = false;
-      } else {
-        done = true;
-      }
-      return { value, done };
-    },
-  };
-}
-
-function getVectorEntries() {
-  return {
-    [Symbol.iterator]: getVectorEntriesIterator.bind(this),
-    length: this.length,
-  };
-}
-
-function getErrorHandler(options) {
-  return (options?.error === 'return')
-  ? (cb) => {
-      try {
-        return cb();
-      } catch (err) {
-        return err;
-      }
-    }
-  : (cb) => cb();
-}
-
 mixin({
   defineStructure(structure) {
     const {
@@ -2434,7 +2258,7 @@ mixin({
     const constructor = structure.constructor = f.call(this, structure, descriptors);
     for (const [ name, descriptor ] of Object.entries(descriptors)) {
       const s = descriptor?.set;
-      if (s && !setters[name]) {
+      if (s && !setters[name] && name !== '$') {
         setters[name] = s;
         keys.push(name);
       }
@@ -2466,8 +2290,8 @@ mixin({
       [FLAGS]: defineValue(flags),
       [PROPS]: defineValue(props),
       [TYPED_ARRAY]: defineValue(this.getTypedArray(structure)),
-      [Symbol.iterator]: defineValue(getStructIterator),
-      [ENTRIES]: { get: getStructEntries },
+      [Symbol.iterator]: this.defineStructIterator(),
+      [ENTRIES]: this.defineStructEntries(),
       [PROPS]: defineValue(props),
     };
     const descriptors = {
@@ -2486,7 +2310,8 @@ mixin({
         const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
         const argRequired = (accessorType === 'get') ? 0 : 1;
         if (accessorType && fn.length  === argRequired) {
-          const descriptor = staticDescriptors[propName] ??= {};
+          staticDescriptors[propName] ||= {};
+          const descriptor = staticDescriptors[propName];
           descriptor[accessorType] = fn;
         }
         // see if it's a method
@@ -2495,10 +2320,8 @@ mixin({
             try {
               return fn(this, ...args);
             } catch (err) {
-              if ('argCount' in err) {
-                err.argIndex--;
-                err.argCount--;
-              }
+              // adjust argument index/count
+              err[UPDATE]?.(1);
               throw err;
             }
           };
@@ -2508,7 +2331,7 @@ mixin({
           });
           descriptors[name] = defineValue(method);
           if (accessorType && method.length === argRequired) {
-            const descriptor = descriptors[propName] ??= {};
+            const descriptor = descriptors[propName] ||= {};
             descriptor[accessorType] = method;
           }
         }
@@ -2598,6 +2421,7 @@ mixin({
           self[SLOTS][slot] = template[SLOTS][slot];
         }
       }
+      self[RESTRICT]?.();
       if (creating) {
         // initialize object unless that's done already
         if (!(SHAPE in self)) {
@@ -2713,7 +2537,7 @@ mixin({
     } = structure;
     const thisEnv = this;
     const argMembers = members.slice(1);
-    const constructor = function(args) {
+    const constructor = function(args, argAlloc) {
       const creating = this instanceof constructor;
       let self, dv;
       if (creating) {
@@ -2741,7 +2565,7 @@ mixin({
         if (flags & ArgStructFlag.IsAsync) {
           self[FINALIZE] = null;
         }
-        thisEnv.copyArguments(self, args, argMembers, options);
+        thisEnv.copyArguments(self, args, argMembers, options, argAlloc);
       } else {
         return self;
       }
@@ -2749,10 +2573,14 @@ mixin({
     for (const member of members) {
       descriptors[member.name] = this.defineMember(member);
     }
+    const retvalSetter = descriptors.retval.set;
     descriptors.length = defineValue(argMembers.length);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
-    descriptors[RETURN] = defineValue(descriptors.retval.set);
+    descriptors[RETURN] = defineValue(function(value) {
+      // pass allocator associated with argument to setter
+      retvalSetter.call(this, value, this[ALLOCATOR]);
+    });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
@@ -2806,7 +2634,7 @@ mixin({
     };
     descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
       if (flags & ArrayFlag.IsString) {
@@ -2816,10 +2644,9 @@ mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
@@ -2945,7 +2772,7 @@ mixin({
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
         }
-        if (ArgStruct[TYPE] === StructureType.VariadicStruct) {
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
@@ -2968,7 +2795,7 @@ mixin({
       : thisEnv.createOutboundCaller(thunk, ArgStruct);
       defineProperties(self, {
         length: defineValue(argCount),
-        name: defineValue(''),
+        name: defineValue(creating ? arg.name : ''),
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
@@ -3087,7 +2914,7 @@ mixin({
           }
         } else {
           if (pointer[MEMORY][ZIG]) {
-            throw new ZigMemoryTargetRequired(structure, arg);
+            throw new ZigMemoryTargetRequired();
           }
         }
       } else if (pointer[MEMORY][ZIG]) {
@@ -3128,15 +2955,19 @@ mixin({
         }
         return;
       }
+      {
+        target[RESTORE]?.();
+      }
       const dv = target[MEMORY];
       const zig = dv[ZIG];
-      const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
       // determine the maximum length
       let max;
       if (!zig) {
         if (flags & PointerFlag.HasLength) {
-          max = this[MAX_LENGTH] ??= target.length;
+          this[MAX_LENGTH] ||= target.length;
+          max = this[MAX_LENGTH];
         } else {
+          const bytesAvailable = dv.buffer.byteLength - dv.byteOffset;
           max = (bytesAvailable / targetSize) | 0;
         }
       }
@@ -3144,11 +2975,9 @@ mixin({
         throw new InvalidSliceLength(len, max);
       }
       const byteLength = len * targetSize;
-      const newDV = (byteLength <= bytesAvailable)
-      // can use the same buffer
-      ? thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength)
-      // need to ask V8 for a larger external buffer
-      : thisEnv.obtainZigView(zig.address, byteLength);
+      const newDV = (zig)
+      ? thisEnv.obtainZigView(zig.address, byteLength)
+      : thisEnv.obtainView(dv.buffer, dv.byteOffset, byteLength);
       const Target = targetStructure.constructor;
       this[SLOTS][0] = Target.call(ENVIRONMENT, newDV);
       setLength?.call?.(this, len);
@@ -3221,19 +3050,11 @@ mixin({
             }
           }
         }
+        if (TYPED_ARRAY in Target && arg?.buffer && arg[Symbol.iterator]) {
+          throw new InvalidPointerTarget(structure, arg);
+        }
         // autovivificate target object
         const autoObj = new Target(arg, { allocator });
-        if (thisEnv.runtimeSafety) {
-          // creation of a new slice using a typed array is probably
-          // not what the user wants; it's more likely that the intention
-          // is to point to the typed array but there's a mismatch (e.g. u32 vs i32)
-          if (TYPED_ARRAY in Target) {
-            const tag = arg?.buffer?.[Symbol.toStringTag];
-            if (tag === 'ArrayBuffer') {
-              warnImplicitArrayCreation(targetStructure, arg);
-            }
-          }
-        }
         arg = autoObj;
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
@@ -3351,12 +3172,19 @@ function isCompatiblePointer(arg, Target, flags) {
   return false;
 }
 
+const constProxies = new WeakMap();
+
 function getConstProxy(target) {
-  let proxy = target[CONST_PROXY];
+  if (!target) return null;
+  let proxy = constProxies.get(target);
   if (!proxy) {
-    Object.defineProperty(target, CONST_PROXY, { value: undefined, configurable: true });
-    proxy = new Proxy(target, constTargetHandlers);
-    Object.defineProperty(target, CONST_PROXY, { value: proxy });
+    const pointer = target[POINTER];
+    if (pointer) {
+      proxy = new Proxy(pointer, readOnlyProxyHandlers);
+    } else {
+      proxy = new Proxy(target, constTargetProxyHandlers);
+    }
+    constProxies.set(target, proxy);
   }
   return proxy;
 }
@@ -3404,27 +3232,35 @@ const proxyHandlers = {
   },
 };
 
-const constTargetHandlers = {
+const readOnlyProxyHandlers = {
+  ...proxyHandlers,
+  set(pointer, name, value) {
+    if (name in pointer) {
+      throwReadOnly();
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
+    }
+    return true;
+  },
+};
+
+const constTargetProxyHandlers = {
   get(target, name) {
     if (name === CONST_TARGET) {
       return target;
     } else {
       const value = target[name];
-      if (value?.[CONST_TARGET] === null) {
+      if (value?.[MEMORY]) {
         return getConstProxy(value);
+      } else {
+        return value;
       }
-      return value;
     }
   },
   set(target, name, value) {
-    const ptr = target[POINTER];
-    if (ptr && !(name in ptr)) {
-      target[name] = value;
-    } else {
-      throwReadOnly();
-    }
-    return true;
-  },
+    throwReadOnly();
+  }
 };
 
 function isCompatibleBuffer(arg, constructor) {
@@ -3578,7 +3414,7 @@ mixin({
         descriptors.clampedArray = this.defineClampedArray(structure);
       }
     }
-    descriptors.entries = defineValue(getArrayEntries);
+    descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     descriptors.subarray = {
       value(begin, end) {
         const dv = getSubArrayView.call(this, begin, end);
@@ -3597,12 +3433,11 @@ mixin({
         return slice;
       },
     };
-    descriptors[Symbol.iterator] = defineValue(getArrayIterator);
+    descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[ENTRIES] = { get: getArrayEntries };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;
@@ -3680,9 +3515,7 @@ mixin({
     descriptors.$ = { get: getSelf, set: initializer };
     // add length and entries if struct is a tuple
     descriptors.length = defineValue(length);
-    descriptors.entries = (flags & StructFlag.IsTuple) && {
-      value: getVectorEntries,
-    };
+    descriptors.entries = (flags & StructFlag.IsTuple) && this.defineVectorEntries();
     // allow conversion of packed struct to number when there's a backing int
     descriptors[Symbol.toPrimitive] = backingInt && {
       value(hint) {
@@ -3692,19 +3525,17 @@ mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = defineValue(
-      (flags & StructFlag.IsIterator)
-      ? getZigIterator
-      : (flags & StructFlag.IsTuple)
-        ? getVectorIterator
-        : getStructIterator
-    );
+    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    ? this.defineZigIterator()
+    : (flags & StructFlag.IsTuple)
+      ? this.defineVectorIterator()
+      : this.defineStructIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     // for creating complex fields on access
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     // for operating on pointers contained in the struct
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
-    descriptors[ENTRIES] = { get: (flags & StructFlag.IsTuple) ? getVectorEntries : getStructEntries };
+    descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
     if (flags & StructFlag.IsAllocator) {
       descriptors.alloc = this.defineAlloc();
@@ -3785,7 +3616,13 @@ function visitChild(slot, cb, flags, src) {
 
 const builtinVisitors = {
   copy(flags, src) {
-    this[SLOTS][0] = src[SLOTS][0];
+    const target = src[SLOTS][0];
+    if (this[MEMORY][ZIG]) {
+      if (target && !target[MEMORY][ZIG]) {
+        throw new ZigMemoryTargetRequired();
+      }
+    }
+    this[SLOTS][0] = target;
   },
   clear(flags) {
     if (flags & VisitorFlag.IsInactive) {
@@ -3827,8 +3664,9 @@ mixin({
 });
 
 mixin({
-  variables: [],
-
+  init() {
+    this.variables = [];
+  },
   getSpecialExports() {
     const check = (v) => {
       if (v === undefined) throw new Error('Not a Zig type');
@@ -4059,6 +3897,91 @@ mixin({
   },
 });
 
+mixin({
+  linkVariables(writeBack) {
+    {
+      // linkage occurs when WASM compilation is complete and functions have been imported
+      if (!this.memory) {
+        this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
+        return;
+      }
+    }
+    const copy = this.getCopyFunction();
+    for (const { object, handle } of this.variables) {
+      const jsDV = object[MEMORY];
+      // objects in WebAssembly have fixed addresses so the handle is the address
+      // for native code module, locations of objects in memory can change depending on
+      // where the shared library is loaded
+      const address = handle ;
+      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      if (writeBack) {
+        copy(zigDV, jsDV);
+      }
+      object.constructor[CACHE]?.save?.(zigDV, object);
+      const linkChildren = (object) => {
+        const slots = object[SLOTS];
+        if (slots) {
+          const parentOffset = zigDV.byteOffset;
+          for (const child of Object.values(slots)) {
+            if (child) {
+              const childDV = child[MEMORY];
+              if (childDV.buffer === jsDV.buffer) {
+                const offset = parentOffset + childDV.byteOffset - jsDV.byteOffset;
+                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+                child.constructor[CACHE]?.save?.(zigDV, child);
+                linkChildren(child);
+              }
+            }
+          }
+        }
+      };
+      linkChildren(object);
+      // update pointer targets
+      object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
+    }
+  },
+  unlinkVariables() {
+    const copy = this.getCopyFunction();
+    for (const { object } of this.variables) {
+      const zigDV = this.restoreView(object[MEMORY]) ;
+      const zig = zigDV[ZIG];
+      if (zig) {
+        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
+        copy(jsDV, zigDV);
+      }
+    }
+  },
+  ...({
+    imports: {
+      recreateAddress: { argType: 'i', returnType: 'i' },
+    },
+  } ),
+  });
+
+// handle non-standard ints 32-bit or smaller
+
+mixin({
+  getAccessorInt(access, member) {
+    const { bitSize, byteSize } = member;
+    if (byteSize) {
+      const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize });
+      const signMask = 2 ** (bitSize - 1);
+      const valueMask = signMask - 1;
+      if (access === 'get') {
+        return function(offset, littleEndian) {
+          const n = f.call(this, offset, littleEndian);
+          return (n & valueMask) - (n & signMask);
+        };
+      } else {
+        return function(offset, value, littleEndian) {
+          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
+          f.call(this, offset, n, littleEndian);
+        };
+      }
+    }
+  }
+});
+
 // structure defaults
 const s = {
   constructor: null,
@@ -4233,7 +4156,7 @@ $(s4, {
 $(s5, {
   ...s,
   type: 14,
-  signature: 0x22ebba2cbb1239a5n,
+  signature: 0xf4ed605db5cc2d38n,
   name: "fn ([]const u8) [40]u8",
   length: 1,
   instance: {
@@ -4252,6 +4175,7 @@ $(s5, {
 $(s6, {
   ...s,
   type: 2,
+  flags: 4096,
   signature: 0x239ab4f327f6ac1bn,
   name: "sha1",
   align: 1,
@@ -4288,7 +4212,7 @@ env.recreateStructures(structures, settings);
 // initiate loading and compilation of WASM bytecodes
 const source = (async () => {
   // sha1.zig
-  const binaryString = atob("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");
+  const binaryString = atob("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");
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -4296,7 +4220,7 @@ const source = (async () => {
   await new Promise(r => setTimeout(r, 0));
   return bytes.buffer;
 })();
-env.loadModule(source, {"memoryInitial":257,"tableInitial":10,"multithreaded":false});
+env.loadModule(source, {"memoryInitial":5,"tableInitial":12,"multithreaded":false});
 env.linkVariables(false);
 
 // export root namespace and its methods and constants
