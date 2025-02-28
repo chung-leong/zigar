@@ -132,6 +132,14 @@ async function addPreload() {
   }
 }
 
+async function copyBuildFile() {
+  const require = createRequire(import.meta.url);
+  const modPath = require.resolve('zigar-compiler');
+  const srcPath = resolve(modPath, '../../zig/build.zig');
+  const dstPath = join(process.cwd(), 'build.zig');
+  await copyFile(srcPath, dstPath);
+}
+
 function printHelp() {
   const lines = [
     'Usage: bunx bun-zigar [command]',
@@ -139,8 +147,10 @@ function printHelp() {
     'Commands:',
     '',
     '  init          Create basic config file',
-    '  preload       Add bun-zigar as preloaded module to bunfig.toml',
     '  build         Build library files for Zig modules and Bun.js addon',
+    '  custom        Create a copy of Zigar\'s build.zig in the current folder',
+    '  preload       Add bun-zigar as preloaded module to bunfig.toml',
+    '',
     '  help          Show this message',
     '',
   ];
@@ -152,14 +162,17 @@ function printHelp() {
 try {
   const cmd = process.argv[2];
   switch (cmd) {
+    case 'init':
+      await createConfig();
+      break;
     case 'build':
       await buildModules();
       break;
+    case 'custom':
+      await copyBuildFile();
+      break;  
     case 'preload':
       await addPreload();
-      break;
-    case 'init':
-      await createConfig();
       break;
     case 'help':
     case undefined:

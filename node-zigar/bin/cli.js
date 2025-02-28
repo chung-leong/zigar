@@ -118,7 +118,7 @@ function printHelp() {
     '',
     '  init          Create basic config file',
     '  build         Build library files for Zig modules and Node.js addon',
-    '  build-custom  Create a copy of Zigar\'s build.zig in the current folder',
+    '  custom        Create a copy of Zigar\'s build.zig in the current folder',
     '',
     '  help          Show this message',
     '',
@@ -131,13 +131,13 @@ function printHelp() {
 try {
   const cmd = process.argv[2];
   switch (cmd) {
-    case 'build':
-      await buildModules();
-      break;
     case 'init':
       await createConfig();
       break;
-    case 'build-custom':
+    case 'build':
+      await buildModules();
+      break;
+    case 'custom':
       await copyBuildFile();
       break;
     case 'help':
