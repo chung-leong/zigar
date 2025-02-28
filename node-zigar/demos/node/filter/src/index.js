@@ -43,10 +43,14 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
   const inputImage = Sharp(path).ensureAlpha().resize(width, height);
   const { data, info } = await inputImage.raw().toBuffer({ resolveWithObject: true });
   // push data through filter
-  const { createOutputAsync, startThreadPool, stopThreadPool } = await import(`../lib/${filter}.zigar`);
+  const { 
+    createOutputAsync, 
+    startThreadPool, 
+    stopThreadPoolAsync,
+  } = await import(`../lib/${filter}.zigar`);
   if (!deinitThreadPool) {
     startThreadPool(availableParallelism());
-    deinitThreadPool = () => stopThreadPool();
+    deinitThreadPool = stopThreadPoolAsync;
   }
   const input = {
     src: {
