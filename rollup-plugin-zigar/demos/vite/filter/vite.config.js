@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), zigar({ topLevelAwait: false, multithreaded: true, optimize: 'ReleaseFast' })],
+  plugins: [react(), zigar({ topLevelAwait: false, multithreaded: true, optimize: 'ReleaseSmall' })],
   server: {
     host: true,
     headers: {

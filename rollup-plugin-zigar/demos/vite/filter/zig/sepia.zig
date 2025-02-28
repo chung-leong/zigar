@@ -394,11 +394,11 @@ const async_support = struct {
     const WorkQueue = zigar.thread.WorkQueue;
 
     var work_queue: WorkQueue(thread_ns) = .{};
-    var gpa = switch (builtin.target.isWasm()) {
+    var gpa = switch (builtin.target.cpu.arch.isWasm()) {
         true => {},
         false => std.heap.DebugAllocator(.{}){},
     };
-    const internal_allocator = switch (builtin.target.isWasm()) {
+    const internal_allocator = switch (builtin.target.cpu.arch.isWasm()) {
         true => std.heap.wasm_allocator,
         false => gpa.allocator(),
     };
@@ -409,12 +409,6 @@ const async_support = struct {
             .stack_size = 65536,
             .n_jobs = count,
         });
-        try zigar.thread.use();
-    }
-
-    pub fn stopThreadPool() void {
-        work_queue.deinit();
-        zigar.thread.end();
     }
 
     pub fn stopThreadPoolAsync(promise: zigar.function.Promise(void)) void {
