@@ -16,8 +16,8 @@
     // internet connectivity.
     .dependencies = .{
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/4322c27784c022bed67d8de24977385e432f275e.zip",
-            .hash = "1220cc71cd47b26ac53721b89d47f98cca82573e247e6299431e5d9f60a3bcd2deec",
+            .url = "https://github.com/natecraddock/ziglua/archive/00a3c39c587b1b853748c05b5f5c1dc68f5f3683.zip",
+            .hash = "1220ee6d36df8c7847234ff5212eb7fc857d284b0d2eccb47cb9ba04ce089d4d1472",
         },
     },
     .paths = .{
