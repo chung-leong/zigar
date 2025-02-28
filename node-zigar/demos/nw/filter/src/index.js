@@ -3,7 +3,7 @@ const { resolve } = require('path');
 const { pathToFileURL } = require('url');
 const { availableParallelism } = require('os');
 require('node-zigar/cjs');
-const { createOutputAsync, startThreadPool, __zigar } = require('./zig/sepia.zig');
+const { createOutputAsync, startThreadPool, __zigar } = require('./lib/sepia.zigar');
 
 const isMac = process.platform === 'darwin'
 

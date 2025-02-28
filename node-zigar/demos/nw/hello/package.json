@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "node-zigar": "^0.14.0-beta.3"
+    "node-zigar": "^0.14.0-beta.4"
   },
   "devDependencies": {
     "nw-builder": "^4.6.4"
