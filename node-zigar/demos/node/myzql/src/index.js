@@ -27,7 +27,7 @@ fastify.post('/', async (req, reply) => {
 })
 fastify.addHook('onClose', () => closeDatabase());
 
-openDatabase({
+await openDatabase({
   host: '172.17.0.2',
   username: 'zig_user',
   password: 'password123',

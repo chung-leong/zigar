@@ -19,20 +19,20 @@ var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
-pub fn openDatabase(params: DatabaseParams) !void {
-    try zigar.thread.use();
+pub fn openDatabase(
+    params: DatabaseParams,
+    promise: zigar.function.PromiseOf(@TypeOf(work_queue).waitAsync),
+) !void {
     try work_queue.init(.{
         .allocator = allocator,
         .n_jobs = params.threads,
         .thread_start_params = .{params},
     });
-    errdefer work_queue.deinit();
-    try work_queue.wait();
+    work_queue.waitAsync(promise);
 }
 
-pub fn closeDatabase() void {
-    work_queue.deinit();
-    zigar.thread.end();
+pub fn closeDatabase(promise: zigar.function.Promise(void)) void {
+    work_queue.deinitAsync(promise);
 }
 
 pub const Person = struct {
