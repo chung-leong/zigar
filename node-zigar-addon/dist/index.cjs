@@ -77,32 +77,20 @@ async function buildAddon(addonDir, options) {
       } catch (err) {
       }
     };
-    const getSourceMTime = async () => {
-      const srcDir = join(baseDir, 'src');
-      try {
-        const stats = await getDirectoryStats(srcDir);
-        return stats.mtimeMs;
-        /* c8 ignore next 2 */
-      } catch (err) {
-      }
-    };
     const outputMTimeBefore = await getOutputMTime();
-    const sourceMTime = await getSourceMTime();
-    if (!outputMTimeBefore || outputMTimeBefore < sourceMTime) {
-      try {
-        await runCompiler(zigPath, args, { cwd: baseDir, onStart, onEnd });
-      } catch (err) {
-        if (err.code === 'ENOENT') {
-          if (!outputMTimeBefore) {
-            throw new MissingModule(outputPath);
-          }
-        } else {
-          throw err;
+    try {
+      await runCompiler(zigPath, args, { cwd: baseDir, onStart, onEnd });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        if (!outputMTimeBefore) {
+          throw new MissingModule(outputPath);
         }
+      } else {
+        throw err;
       }
-      const outputMTimeAfter = await getOutputMTime();
-      changed = outputMTimeBefore !== outputMTimeAfter;
     }
+    const outputMTimeAfter = await getOutputMTime();
+    changed = outputMTimeBefore !== outputMTimeAfter;
   }
   return { outputPath, changed };
 }
