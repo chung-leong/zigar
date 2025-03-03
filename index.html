@@ -22,6 +22,18 @@
         height: 1.5em;
         vertical-align: middle;
     }
+
+    #demo-list LI {
+        display: inline-block;
+        padding: 20px;
+        border: 1px solid #000;
+    }
+
+    #demo-list IMG {
+        display: block;
+        width: 300px;
+        border: 1px solid #000;
+    }
   </style>
   <body>
     <h1><a href="https://github.com/chung-leong/zigar"><img id="logo" src="images/logo.png"></a> Zigar</h1>
@@ -29,41 +41,86 @@
     <p>A software tool set that lets you utilize <a href="https://ziglang.org/">Zig</a> code in your JavaScript projects.</p>
     <h2>Documentation</h2>
     <p>Please consult the <a href="https://github.com/chung-leong/zigar/wiki">project wiki</a>.</p>
-    <h2>Web demos</h2>
-    <h3>Vite</h3>
-    <ul>
-        <li><a href="demos/vite/hello/">Hello world</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/Hello-world-(Vite)">tutorial</a>)
+    <h2>Demonstrations:</h2>
+    <ul id="demo-list">
+        <li>
+            <a href="">
+                <img src="images/asciimii.jpg">
+                <h3>Filter: asciimii</h3>
+            </a>
         </li>
-        <li><a href="demos/vite/sha1/">SHA-1 digest</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/SHA1-digest-(Vite)">tutorial</a>)
+        <li>
+            <a href="/demo-1/?f=circle-pattern">
+                <img src="images/circle-pattern.jpg">
+                <h3>Filter: circle-pattern</h3>
+            </a>
         </li>
-        <li><a href="demos/vite/filter/">Image filter</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/Image-filter-(Vite)">tutorial</a>)
+        <li>
+            <a href="/demo-1/?f=crystallize">
+                <img src="images/crystallize.jpg">
+                <h3>Filter: crystallize</h3>
+            </a>
         </li>
-        <li><a href="demos/vite/cowsay/">Cowsay</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/Cowsay">tutorial</a>)
+        <li>
+            <a href="/demo-1/?f=circle-pattern">
+                <img src="images/circle-pattern.jpg">
+                <h3>Filter: circle-pattern</h3>
+            </a>
         </li>
-        <li><a href="demos/vite/snprintf/?format=Hello%20%25s%2C%20employee%20%2509d!&args=%22Bob%22%2C%2024601">Using snprintf</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/snprintf">tutorial</a>)
+        <li>
+            <a href="/demo-1/?f=pencil">
+                <img src="images/pencil.jpg">
+                <h3>Filter: pencil</h3>
+            </a>
         </li>
-        <br>
-        <li><a href="https://github.com/chung-leong/pb2zig?tab=readme-ov-file#pixel-bender-highlights">
-            Additional live demos</a>
+
+        <li>
+            <a href="/demo-1/?f=wave">
+                <img src="images/wave.jpg">
+                <h3>Filter: wave</h3>
+            </a>
+        </li>
+
+        <li>
+            <a href="/demo-1/?f=droste&i=ipad">
+                <img src="images/droste.jpg">
+                <h3>Filter: droste</h3>
+            </a>
+        </li>
+
+        <li>
+            <a href="/demo-2/?f=bumpmap&i1=zig-logo&i2=wood">
+                <img src="images/bumpmap.jpg">
+                <h3>Filter: bumpmap</h3>
+            </a>
+        </li>
+        <li>
+            <a href="/demo-2/?f=metallic&i1=zig-logo&i2=stripe">
+                <img src="images/metallic.jpg">
+                <h3>Filter: metallic</h3>
+            </a>
+        </li>
+
+        <li>
+            <a href="/demo-3/?f=mandelbulb-quick">
+                <img src="images/mandelbulb-quick.jpg">
+                <h3>Filter: mandelbulb-quick</h3>
+            </a>
+        </li>
+        <li>
+            <a href="/demo-3/?f=quaternion-julia">
+                <img src="images/quaternion-julia.jpg">
+                <h3>Filter: quaternion-julia</h3>
+            </a>
+        </li>
+        <li>
+            <a href="/demo-3/?f=raytracer">
+                <img src="images/raytracer.jpg">
+                <h3>Filter: raytracer</h3>
+            </a>
         </li>
     </ul>
-    <h3>Webpack</h3>
-    <ul>
-        <li><a href="demos/webpack/hello/">Hello world</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/Hello-world-(Webpack)">tutorial</a>)
-        </li>
-        <li><a href="demos/webpack/sha1/">SHA-1 digest</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/SHA1-digest-(Webpack)">tutorial</a>)
-        </li>
-        <li><a href="demos/webpack/filter/">Image filter</a>
-            (<a href="https://github.com/chung-leong/zigar/wiki/Image-filter-(Webpack)">tutorial</a>)
-        </li>
-    </ul>
+
     <h2>Zig resources</h2>
     <ul>
         <li><a href="https://ziglang.org/documentation/0.13.0/">Zig language reference</a></li>
@@ -74,3 +131,5 @@
     </ul>
   </body>
 </html>
+
+https://chung-leong.github.io/pb2zig/demo-1/?f=crystallize
