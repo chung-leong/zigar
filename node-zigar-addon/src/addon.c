@@ -1,4 +1,6 @@
 #include "addon.h"
+#include <stdio.h>
+#include <stdarg.h>
 
 int module_count = 0;
 int buffer_count = 0;
@@ -276,10 +278,20 @@ napi_value get_undefined(napi_env env) {
 }
 
 napi_value throw_error(napi_env env,
-                       const char *err_message) {
+                       const char *err_message,
+                       ...) {
     napi_value last;
     napi_get_and_clear_last_exception(env, &last);
-    napi_throw_error((env), NULL, err_message ? err_message : "Unknown error");
+    char buffer[1024];
+    va_list args;
+    va_start (args, err_message);
+    if (err_message) {
+        vsnprintf(buffer, sizeof(buffer), err_message, args);
+    } else {
+        strcpy(buffer, "Unknown error");
+    }
+    napi_throw_error((env), NULL, buffer);
+    va_end (args);
     return get_undefined(env);
 }
 
@@ -1019,7 +1031,7 @@ napi_value load_module(napi_env env,
     napi_get_value_string_utf8(env, args[0], path, path_len + 1, &path_len);
     void* handle = md->so_handle = dlopen(path, RTLD_NOW);
     if (!handle) {
-        return throw_error(env, "Unable to load shared library");
+        return throw_error(env, "Unable to load shared library '%s'", path);
     }
 
     // find the zig module
@@ -1029,7 +1041,7 @@ napi_value load_module(napi_env env,
     }
     module* mod = md->mod = (module*) symbol;
     if (mod->version != 5) {
-        return throw_error(env, "Cached module is compiled for a different version of Zigar");
+        return throw_error(env, "Cached module is compiled for a different version of Zigar (API = %d)", mod->version);
     }
 
     // set base address
