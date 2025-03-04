@@ -14,37 +14,32 @@ export async function createImageDataAsync(src, params) {
       poolStarted = true;
   }
   const { width, height } = src;
-  const { dst } = await am.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
+  const { dst } = await atm.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
   return new ImageData(dst.data.clampedArray, width, height);
 }
 
-class AbortManager {
-  currentOp = null;
+class AsyncTaskManager {
+  currentTask = null;
 
   async call(cb) {
-    const controller = new AbortController;
-    const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
+    const controller = (cb?.length > 0) ? new AbortController : null;
+    const promise = this.perform(cb, controller?.signal);
+    const thisTask = this.currentTask = { controller, promise };
+    try {
+      return await thisTask.promise;
+    } finally {
+      if (thisTask === this.currentTask) this.currentTask = null;
     }
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb?.(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
   }
 
-  async stop() {
-    await this.call(null);
+  async perform(cb, signal) {
+    if (this.currentTask) {
+      this.currentTask.controller?.abort();
+      await this.currentTask.promise?.catch(() => {});
+      // throw error now if the task was aborted before the function is called
+      if (signal?.aborted) throw new Error('Aborted');
+    }
+    return cb?.(signal);
   }
 }
-const am = new AbortManager();
+const atm = new AsyncTaskManager();
