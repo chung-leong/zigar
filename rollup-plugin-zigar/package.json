@@ -3,6 +3,9 @@
   "version": "0.14.0-beta.4",
   "description": "Rollup plugin for transpiling Zig code",
   "main": "./dist/index.js",
+  "bin": {
+    "rollup-plugin-zigar": "bin/cli.js"
+  },
   "type": "module",
   "directories": {
     "test": "test"
