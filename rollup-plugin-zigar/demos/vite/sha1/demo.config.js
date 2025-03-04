@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [ react(), zigar({ topLevelAwait: false, embedWASM: true }) ],
   build: {
-    outDir: '../../../../docs/demos/vite/sha1',
+    outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/sha1',
     emptyOutDir: true,
   },
 })

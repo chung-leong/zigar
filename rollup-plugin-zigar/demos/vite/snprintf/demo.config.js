@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), zigar({ useLibc: true })],
   build: {
     target: 'es2022',
-    outDir: '../../../../docs/demos/vite/snprintf',
+    outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/snprintf',
     emptyOutDir: true,
   }
 })

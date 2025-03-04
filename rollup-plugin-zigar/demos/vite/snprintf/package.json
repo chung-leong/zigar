@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "build:demo": "vite build --config=demo.config.js --base=/zigar/demos/vite/snprintf",
-    "preview:demo": "vite preview --config=demo.config.js --base=/zigar/demos/vite/snprintf"
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/snprintf",
+    "preview:demo": "vite preview --config=demo.config.js --base=/demos/rollup-plugin-zigar/snprintf"
   },
   "dependencies": {
     "react": "^18.3.1",

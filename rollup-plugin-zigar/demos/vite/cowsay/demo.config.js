@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), zigar({ topLevelAwait: false, useLibc: true })],
   build: {
-    outDir: '../../../../docs/demos/vite/cowsay',
+    outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/cowsay',
     emptyOutDir: true,
   },
 })

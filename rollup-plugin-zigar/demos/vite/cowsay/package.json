@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "build:demo": "vite build --config=demo.config.js --base=/zigar/demos/vite/cowsay",
-    "preview:demo": "vite --config=demo.config.js --base=/zigar/demos/vite/cowsay preview"
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/cowsay",
+    "preview:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/cowsay preview"
   },
   "dependencies": {
     "react": "^18.2.0",
