@@ -1,5 +1,5 @@
 .{
-    .name = "ziglua-example",
+    .name = .ziglua_example,
     .version = "0.0.0",
     .dependencies = .{
         .ziglua = .{
@@ -10,4 +10,5 @@
     .paths = .{
         "",
     },
+    .fingerprint = 0x427f3f675e35fa40,
 }

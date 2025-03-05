@@ -1,5 +1,5 @@
 .{
-    .name = "mysql-test",
+    .name = .mysql_demo,
     .version = "0.0.0",
     .dependencies = .{
         .myzql = .{
@@ -12,4 +12,5 @@
         "build.zig.zon",
         "src",
     },
+    .fingerprint = 0xc120485323d8f57b,
 }

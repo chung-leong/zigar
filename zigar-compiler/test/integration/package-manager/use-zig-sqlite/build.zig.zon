@@ -1,5 +1,5 @@
 .{
-    .name = "ziglite-sample",
+    .name = .ziglite_example,
     .version = "0.0.0",
     .dependencies = .{
         .sqlite = .{
@@ -10,4 +10,5 @@
     .paths = .{
         "",
     },
+    .fingerprint = 0xeb631c55e9a4d09a,
 }
