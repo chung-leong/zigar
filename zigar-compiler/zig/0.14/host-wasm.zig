@@ -54,7 +54,7 @@ export fn initialize() void {
 
 export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
     const a = getScratchAllocator();
-    const alignment = std.mem.Alignment.fromByteUnits(byte_align);
+    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
     if (a.rawAlloc(len, alignment, 0)) |bytes| {
         return bytes;
     } else {
@@ -64,7 +64,7 @@ export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
 
 export fn freeScratchMemory(bytes: [*]u8, len: usize, byte_align: u16) void {
     const a = getScratchAllocator();
-    const alignment = std.mem.Alignment.fromByteUnits(byte_align);
+    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
     a.rawFree(bytes[0..len], alignment, 0);
 }
 

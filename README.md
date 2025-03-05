@@ -10,9 +10,9 @@ and tutorials.
 
 ## Features
 
-* Zig-to-JavaScript, JavaScript-to-Zig call marshalling
 * Access to all Zig data types in JavaScript
-* Async function handling
+* Zig-to-JavaScript, JavaScript-to-Zig call marshalling
+* Async task management
 * Threads in native code and WebAssembly
 * Support for MacOS, Linux, and Windows (both 64-bit and 32-bit)
 * Support for Node.js, Bun.js, Electron, and NW.js (native code execution)
