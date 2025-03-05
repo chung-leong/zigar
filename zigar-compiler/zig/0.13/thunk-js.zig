@@ -101,7 +101,7 @@ test {
 }
 
 const wasm = struct {
-    const count = 64;
+    const count = 16;
 
     pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
         const tc_ns = struct {
