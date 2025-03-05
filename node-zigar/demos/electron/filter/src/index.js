@@ -87,7 +87,7 @@ app.whenReady().then(() => {
   ipcMain.handle('filter-image', async (_event, width, height, data, params) => {
     try {
       const src = { width, height, data };
-      const { dst } = await am.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
+      const { dst } = await atm.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
       return dst.data.clampedArray;
     } catch (err) {
       if (err.message !== 'Aborted') {
@@ -119,33 +119,32 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
-class AbortManager {
-  currentOp = null;
+class AsyncTaskManager {
+  activeTask = null;
 
   async call(cb) {
-    const controller = new AbortController;
-    const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
+    const controller = (cb?.length > 0) ? new AbortController : null;
+    const promise = this.perform(cb, controller?.signal);
+    const thisTask = this.activeTask = { controller, promise };
+    try {
+      return await thisTask.promise;
+    } finally {
+      if (thisTask === this.activeTask) {
+        this.activeTask = null;
+      }
     }
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb?.(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
   }
 
-  async stop() {
-    return this.call(null);
+  async perform(cb, signal) {
+    if (this.activeTask) {
+      this.activeTask.controller?.abort();
+      await this.activeTask.promise?.catch(() => {});
+      if (signal?.aborted) {
+        // throw error now if the operation was aborted before the function is even called
+        throw new Error('Aborted');
+      }
+    }
+    return cb?.(signal);
   }
 }
-const am = new AbortManager();
+const atm = new AsyncTaskManager();

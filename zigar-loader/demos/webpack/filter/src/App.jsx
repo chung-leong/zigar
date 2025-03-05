@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SampleImage from '../img/sample.png';
-import { createOutputAsync, startThreadPool } from '../zig/sepia.zig';
+import { createOutputAsync, startThreadPool, stopThreadPoolAsync } from '../zig/sepia.zig';
 import './App.css';
-
-startThreadPool(navigator.hardwareConcurrency);
 
 function App() {
   const srcCanvasRef = useRef();
@@ -11,7 +9,6 @@ function App() {
   const fileInputRef = useRef();
   const [ bitmap, setBitmap ] = useState();
   const [ intensity, setIntensity ] = useState(0.3);
-  const [ am ] = useState(new AbortManager());
 
   const onOpenClick = useCallback(() => {
     fileInputRef.current.click();
@@ -58,7 +55,7 @@ function App() {
           const srcImageData = srcCTX.getImageData(0, 0, width, height);
           const input = { src: srcImageData };
           const params = { intensity };
-          const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal }));
+          const output = await atm.call(signal => createOutputAsync(width, height, input, params, { signal }));
           const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
           dstCanvas.width = width;
           dstCanvas.height = height;
@@ -72,6 +69,10 @@ function App() {
       }
     })();
   }, [ bitmap, intensity ]);
+  useEffect(() => {
+    atm.call(() => startThreadPool(navigator.hardwareConcurrency));
+    return () => atm.call(() => stopThreadPoolAsync());
+  });
   return (
     <div className="App">
       <div className="nav">
@@ -95,32 +96,28 @@ function App() {
 
 export default App
 
-class AbortManager {
-  currentOp = null;
+class AsyncTaskManager {
+  currentTask = null;
 
   async call(cb) {
-    const controller = new AbortController;
-    const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
+    const controller = (cb?.length > 0) ? new AbortController : null;
+    const promise = this.perform(cb, controller?.signal);
+    const thisTask = this.currentTask = { controller, promise };
+    try {
+      return await thisTask.promise;
+    } finally {
+      if (thisTask === this.currentTask) this.currentTask = null;
     }
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb?.(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
   }
 
-  async stop() {
-    await this.call(null);
+  async perform(cb, signal) {
+    if (this.currentTask) {
+      this.currentTask.controller?.abort();
+      await this.currentTask.promise?.catch(() => {});
+      // throw error now if the task was aborted before the function is called
+      if (signal?.aborted) throw new Error('Aborted');
+    }
+    return cb?.(signal);
   }
 }
+const atm = new AsyncTaskManager();

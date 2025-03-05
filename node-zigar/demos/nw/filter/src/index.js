@@ -91,7 +91,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
         const params = { intensity: parseFloat(intensity.value) };
         const srcImageData = srcCTX.getImageData(0, 0, width, height);
         const input = { src: srcImageData };
-        const output = await am.call(signal => createOutputAsync(width, height, input, params, { signal }));
+        const output = await atm.call(signal => createOutputAsync(width, height, input, params, { signal }));
         const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
         dstCanvas.width = width;
         dstCanvas.height = height;
@@ -121,33 +121,32 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
   };
 });
 
-class AbortManager {
-  currentOp = null;
+class AsyncTaskManager {
+  activeTask = null;
 
   async call(cb) {
-    const controller = new AbortController;
-    const { signal } = controller;
-    const prevOp = this.currentOp;
-    const thisOp = this.currentOp = { controller, promise: null };
-    if (prevOp) {
-      // abort previous call and wait for promise rejection
-      prevOp.controller.abort();
-      await prevOp.promise?.catch(() => {});
+    const controller = (cb?.length > 0) ? new AbortController : null;
+    const promise = this.perform(cb, controller?.signal);
+    const thisTask = this.activeTask = { controller, promise };
+    try {
+      return await thisTask.promise;
+    } finally {
+      if (thisTask === this.activeTask) {
+        this.activeTask = null;
+      }
     }
-    if (signal.aborted) {
-      // throw error now if the operation was aborted,
-      // before the function is even called
-      throw new Error('Aborted');
-    }
-    const result = await (this.currentOp.promise = cb?.(signal));
-    if (thisOp === this.currentOp) {
-      this.currentOp = null;
-    }
-    return result;
   }
 
-  async stop() {
-    return this.call(null);
+  async perform(cb, signal) {
+    if (this.activeTask) {
+      this.activeTask.controller?.abort();
+      await this.activeTask.promise?.catch(() => {});
+      if (signal?.aborted) {
+        // throw error now if the operation was aborted before the function is even called
+        throw new Error('Aborted');
+      }
+    }
+    return cb?.(signal);
   }
 }
-const am = new AbortManager();
+const atm = new AsyncTaskManager();
