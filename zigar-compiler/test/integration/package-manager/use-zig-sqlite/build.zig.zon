@@ -10,5 +10,5 @@
     .paths = .{
         "",
     },
-    .fingerprint = 0xeb631c55e9a4d09a,
+    .fingerprint = 0x779ac584a9d7d503,
 }
