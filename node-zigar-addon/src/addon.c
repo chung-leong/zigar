@@ -6,51 +6,6 @@ int module_count = 0;
 int buffer_count = 0;
 int function_count = 0;
 
-void reference_module(module_data* md) {
-    md->ref_count++;
-}
-
-module_data* new_module(napi_env env, napi_ref js_env_ref) {
-    module_data* md = (module_data*) calloc(1, sizeof(module_data));
-    md->env = env;
-    md->js_env = js_env_ref;
-    md->ref_count = 1;
-    module_count++;
-    return md;
-}
-
-void release_module(napi_env env,
-                    module_data* md) {
-    md->ref_count--;
-    if (md->ref_count == 0) {
-        napi_value js_env, released;
-        if (napi_get_reference_value(env, md->js_env, &js_env) == napi_ok
-          && js_env != NULL
-          && napi_get_boolean(env, true, &released) == napi_ok) {
-            // indicate to the environment that the shared lib has been released
-            napi_set_named_property(env, js_env, "released", released);
-        }
-        for (int i = 0; i < IMPORT_COUNT; i++) {
-            napi_reference_unref(env, md->js_fns[i], NULL);
-        }
-        if (md->so_handle) {
-            if (md->mod) {
-                md->mod->imports->deinitialize();
-            }
-            dlclose(md->so_handle);
-        }
-        free(md);
-        module_count--;
-    }
-}
-
-void finalize_external_buffer(napi_env env,
-                              void* finalize_data,
-                              void* finalize_hint) {
-    release_module(env, (module_data*) finalize_hint);
-    buffer_count--;
-}
-
 enum {
     captureView,
     castView,
@@ -78,6 +33,43 @@ bool call_js_function(module_data* md,
     return napi_get_reference_value(env, md->js_fns[index], &fn) == napi_ok
         && napi_get_null(env, &null) == napi_ok
         && napi_call_function(env, null, fn, argc, argv, dest) == napi_ok;
+}
+
+void reference_module(module_data* md) {
+    md->ref_count++;
+}
+
+module_data* new_module(napi_env env) {
+    module_data* md = (module_data*) calloc(1, sizeof(module_data));
+    md->env = env;
+    md->ref_count = 1;
+    module_count++;
+    return md;
+}
+
+void release_module(napi_env env,
+                    module_data* md) {
+    md->ref_count--;
+    if (md->ref_count == 0) {
+        for (int i = 0; i < IMPORT_COUNT; i++) {
+            napi_delete_reference(env, md->js_fns[i]);
+        }
+        if (md->so_handle) {
+            if (md->mod) {
+                md->mod->imports->deinitialize();
+            }
+            dlclose(md->so_handle);
+        }
+        free(md);
+        module_count--;
+    }
+}
+
+void finalize_external_buffer(napi_env env,
+                              void* finalize_data,
+                              void* finalize_hint) {
+    release_module(env, (module_data*) finalize_hint);
+    buffer_count--;
 }
 
 result capture_string(module_data* md,
@@ -778,7 +770,7 @@ result handle_js_call(module_data* md,
         if (!md->ts_handle_js_call) {
             return FAILURE_DISABLED;
         }
-        if (napi_call_threadsafe_function(md->ts_handle_js_call, call, napi_tsfn_nonblocking) == napi_ok) {
+        if (napi_call_threadsafe_function(md->ts_handle_js_call, (void *) call, napi_tsfn_nonblocking) == napi_ok) {
             return OK;
         }
     }
@@ -917,10 +909,6 @@ void finalize_function(napi_env env,
                        void* finalize_hint) {
     release_module(env, (module_data*) finalize_hint);
     function_count--;
-}
-
-void release_addon_data(void* data) {
-    free(data);
 }
 
 napi_value load_module(napi_env, napi_callback_info);
@@ -1096,43 +1084,29 @@ bool compile_javascript(napi_env env,
         && napi_run_script(env, string, dest) == napi_ok;
 }
 
-
 napi_value create_environment(napi_env env,
                               napi_callback_info info) {
-    // look for cached copy of createEnvironment
-    addon_data* ad;
-    napi_value create_env;
-    if (napi_get_cb_info(env, info, NULL, NULL, NULL, (void*) &ad) != napi_ok
-     || !ad->create_env
-     || napi_get_reference_value(env, ad->create_env, &create_env) != napi_ok
-     || !create_env) {
-        // compile embedded JavaScript
-        napi_value js_module;
-        if (!compile_javascript(env, &js_module)) {
-            return throw_error(env, "Unable to compile embedded JavaScript");
-        }
-        // look for the Environment class
-        napi_value env_name;
-        if (napi_create_string_utf8(env, "createEnvironment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
-        || napi_get_property(env, js_module, env_name, &create_env) != napi_ok) {
-            return throw_error(env, "Unable to find the function \"createEnvironment\"");
-        }
-        // save in weak reference
-        if (napi_create_reference(env, create_env, 0, &ad->create_env) != napi_ok) {
-            ad->create_env = NULL;
-        }
+    // compile embedded JavaScript
+    napi_value js_module;
+    if (!compile_javascript(env, &js_module)) {
+        return throw_error(env, "Unable to compile embedded JavaScript");
     }
-    // create the environment and a reference to it
+    // look for the Environment class
+    napi_value env_name;
+    napi_value create_env;
+    if (napi_create_string_utf8(env, "createEnvironment", NAPI_AUTO_LENGTH, &env_name) != napi_ok
+     || napi_get_property(env, js_module, env_name, &create_env) != napi_ok) {
+        return throw_error(env, "Unable to find the function \"createEnvironment\"");
+    }
+    // create the environment
     napi_value js_env;
-    napi_ref js_env_ref;
     napi_value null;
     if (napi_get_null(env, &null) != napi_ok
-     || napi_call_function(env, null, create_env, 0, NULL, &js_env) != napi_ok
-     || napi_create_reference(env, js_env, 0, &js_env_ref) != napi_ok) {
+     || napi_call_function(env, null, create_env, 0, NULL, &js_env) != napi_ok) {
         return throw_error(env, "Unable to create runtime environment");
     }
     // export functions to the environment and import functions from it
-    module_data* md = new_module(env, js_env_ref);
+    module_data* md = new_module(env);
     bool success = export_functions(md, js_env) && import_functions(md, js_env);
     release_module(env, md);
     if (!success) {
@@ -1169,13 +1143,10 @@ bool add_function(napi_env env,
 }
 
 napi_value create_addon(napi_env env) {
-    addon_data* ad = (addon_data*) calloc(1, sizeof(addon_data));
     napi_value exports;
     if (napi_create_object(env, &exports) != napi_ok
-     || !add_function(env, exports, "createEnvironment", create_environment, ad)
-     || !add_function(env, exports, "getGCStatistics", get_gc_statistics, ad)
-     || napi_add_env_cleanup_hook(env, release_addon_data, ad) != napi_ok) {
-        free(ad);
+     || !add_function(env, exports, "createEnvironment", create_environment, NULL)
+     || !add_function(env, exports, "getGCStatistics", get_gc_statistics, NULL)) {
         return throw_last_error(env);
     }
     return exports;

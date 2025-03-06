@@ -3,7 +3,6 @@ import { decodeText, defineProperty, empty } from '../utils.js';
 
 export default mixin({
   init() {
-    this.released = false;
     this.abandoned = false;
     if (process.env.TARGET === 'wasm') {
       this.nextValueIndex = 1;
@@ -158,7 +157,6 @@ export default mixin({
         const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;
         this.importFunctions(exports);
-        this.trackInstance(instance);
         if (this.customWASI) {
           // use a proxy to attach the memory object to the list of exports
           const exportsPlusMemory = { ...exports, memory: this.memory };
@@ -176,11 +174,6 @@ export default mixin({
       const array = new Uint8Array(this.memory.buffer, address, len);
       const msg = decodeText(array);
       console.error(`Zig panic: ${msg}`);
-    },
-    trackInstance(instance) {
-      // use WeakRef to detect whether web-assembly instance has been gc'ed
-      const ref = new WeakRef(instance);
-      Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
@@ -217,7 +210,6 @@ export default mixin({
       ] : [];
       this.showDiagnostics('Module loading', [
         `Abandoned: ${this.abandoned}`,
-        `Released: ${this.released}`,
         ...targetSpecific,
       ]);
     }

@@ -126,17 +126,12 @@ typedef struct {
     void* so_handle;
     uintptr_t base_address;
     napi_env env;
-    napi_ref js_env;
     napi_ref js_fns[IMPORT_COUNT];
     napi_threadsafe_function ts_disable_multithread;
     napi_threadsafe_function ts_handle_js_call;
     napi_threadsafe_function ts_release_function;
     napi_threadsafe_function ts_write_bytes;
 } module_data;
-
-typedef struct {
-    napi_ref create_env;
-} addon_data;
 
 typedef struct {
     size_t fn_id;
