@@ -3,8 +3,8 @@ import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon'
 import { dirname, extname, join, parse } from 'path';
 import { pathToFileURL } from 'url';
 import {
-  compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
-  getModuleCachePath, getPlatform, normalizePath, optionsForCompile
+  compile, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath,
+  getPlatform, normalizePath, optionsForCompile
 } from 'zigar-compiler';
 import { loadConfigFile } from './config.js';
 import { hideStatus, showStatus } from './status.js';
@@ -35,8 +35,6 @@ await plugin({
         // add options from config file
         Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
       }
-      // allow overriding of options using query variables
-      Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
       const ext = extname(path);
       const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
       const modPath = (ext === '.zig') ? getModuleCachePath(path, options) : path;

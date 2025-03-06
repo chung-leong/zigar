@@ -7,6 +7,7 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Options', function() {
+    skip.if(process.versions.bun).
     it('should omit functions when option is set', async function() {
       this.timeout(0);
       const { default: moduleWO } = await importTest('omit-functions', { omitFunctions: true });
@@ -14,6 +15,7 @@ export function addTests(importModule, options) {
       expect(moduleWO.b).to.be.undefined;
       expect(moduleWO.c).to.be.undefined;
     })
+    skip.if(process.versions.bun).
     it('should omit variables when option is set', async function() {
       this.timeout(0);
       const { default: moduleWO } = await importTest('omit-variables', { omitVariables: true });
