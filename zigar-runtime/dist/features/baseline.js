@@ -14,7 +14,6 @@ var baseline = mixin({
     return {
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
-      released: () => this.released,
       connect: (console) => this.consoleObject = console,
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),

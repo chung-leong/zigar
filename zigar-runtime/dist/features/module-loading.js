@@ -3,7 +3,6 @@ import { decodeText, empty, defineProperty } from '../utils.js';
 
 var moduleLoading = mixin({
   init() {
-    this.released = false;
     this.abandoned = false;
     {
       this.nextValueIndex = 1;
@@ -153,7 +152,6 @@ var moduleLoading = mixin({
         const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;
         this.importFunctions(exports);
-        this.trackInstance(instance);
         if (this.customWASI) {
           // use a proxy to attach the memory object to the list of exports
           const exportsPlusMemory = { ...exports, memory: this.memory };
@@ -171,11 +169,6 @@ var moduleLoading = mixin({
       const array = new Uint8Array(this.memory.buffer, address, len);
       const msg = decodeText(array);
       console.error(`Zig panic: ${msg}`);
-    },
-    trackInstance(instance) {
-      // use WeakRef to detect whether web-assembly instance has been gc'ed
-      const ref = new WeakRef(instance);
-      Object.defineProperty(this, 'released', { get: () => !ref.deref(), enumerable: true });
     },
   } ),
 });

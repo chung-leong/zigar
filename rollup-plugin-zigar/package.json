@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-zigar",
-  "version": "0.14.0-beta.4",
+  "version": "0.14.0-beta.5",
   "description": "Rollup plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "bin": {
@@ -17,7 +17,8 @@
     "coverage": "c8 mocha -- test/*.test.js"
   },
   "files": [
-    "dist/*"
+    "dist/*",
+    "bin/*"
   ],
   "repository": {
     "type": "git",
@@ -34,8 +35,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
-    "zigar-compiler": "^0.14.0-beta.4",
-    "zigar-runtime": "^0.14.0-beta.4"
+    "zigar-compiler": "^0.14.0-beta.5",
+    "zigar-runtime": "^0.14.0-beta.5"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.0",
@@ -43,7 +44,7 @@
     "chai": "^5.2.0",
     "mocha": "^11.1.0",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.34.8",
+    "rollup": "^4.34.9",
     "vite": "^6.2.0"
   }
 }
