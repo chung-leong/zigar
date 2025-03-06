@@ -497,9 +497,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             };
                             i += 1;
                             if (match) {
-                                const address = ptr[i];
                                 // the context pointer is right below the signature (larger address)
-                                context_pos = i;
+                                const address = ptr[i];
+                                // not sure why, but on 32-bit Windows the distance between the stack pointer and
+                                // where self_address is stored can be off by one sometimes when optimize = Debug
+                                if (builtin.mode != .Debug or @bitSizeOf(usize) != 32) {
+                                    context_pos = i;
+                                }
                                 break :search_result address;
                             }
                         }
