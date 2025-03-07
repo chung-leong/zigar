@@ -5,4 +5,5 @@
         "custom.zig",
         "build.zig",
     },
+    .fingerprint = 0xf584169b8ed919d5,
 }

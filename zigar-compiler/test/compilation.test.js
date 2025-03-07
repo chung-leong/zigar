@@ -328,13 +328,18 @@ describe('Compilation', function() {
     it('should begin deleting files from build directory when it becomes too large', async function() {
       this.timeout(0);
       const srcPath = absolute('./zig-samples/basic/integers.zig');
-      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const buildDir = join(tmpdir(), 'zigar-build-test-removal');
+      const options = { 
+        optimize: 'Debug', 
+        platform: os.platform(), 
+        arch: os.arch(),
+        buildDir,
+      };
       const modPath = getModuleCachePath(srcPath, options);
       await compile(srcPath, modPath, options);
       await compile(srcPath, modPath, { ...options, buildDirSize: 0 });
       // wait for removal of directories
-      await delay(1000);
-      const buildDir = join(tmpdir(), 'zigar-build');
+      await delay(500);
       const names = await readdir(buildDir);
       expect(names).to.have.lengthOf(0);
     })

@@ -127,6 +127,19 @@ describe('Transpilation', function() {
       const { code } = await transpile(path, options);
       expect(code).to.contain('"spawn"');
     })
+    it('should transpile zig source code involving atomic operations', async function() {
+      this.timeout(0);
+      const path = getSamplePath('atomic');
+      const options = {
+        optimize: 'ReleaseSmall',
+        stripWASM: true,
+        embedWASM: false,
+        wasmLoader: saveWASM,
+        multithreaded: true,
+      };
+      const { code } = await transpile(path, options);
+      expect(code).to.contain('"wait"');
+    })
     it('should create JS code compatible with Node.js', async function() {
       this.timeout(0);
       const path = getSamplePath('thread');
