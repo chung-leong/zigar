@@ -106,3 +106,9 @@ a:hover {
     color: #ffffff;
     background-color: #1c78c0;
 }
+
+@media (max-width: 500px) {
+    .demo-list LI {
+        width: 100%;
+    }
+}
