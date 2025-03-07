@@ -4,126 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zigar - Toolkit for using Zig in JavaScript projects</title>
+    <link rel="stylesheet" href="./style.css">
   </head>
-  <style>
-    * {
-        box-sizing: border-box;
-    }
-
-    body {
-        font-family: Arial, Helvetica, sans-serif;
-    }
-
-    a:link, a:visited {
-        text-decoration: none;
-    }
-
-    a:hover {
-        text-decoration: underline;
-    }
-
-    #logo {
-        height: 1.5em;
-        vertical-align: middle;
-    }
-
-    .demo-list {
-        padding-inline-start: 0;
-    }
-
-    .demo-list LI {
-        display: inline-block;
-        padding: 20px;
-        border: 1px solid #000;
-        padding: 0;
-        margin-left: 0;
-        margin-right: 1em;
-        width: 302px;
-    }
-
-    .demo-list IMG {
-        display: block;
-        width: 100%;
-    }
-
-    .demo-list .caption {
-        border-top: 1px solid #000;
-    }
-
-    .demo-list .title {
-        margin: 0 0 0 0;
-        padding: .3em .3em .1em 0.3em
-    }
-
-    .demo-list .description {
-        padding: 0 .3em .3em 0.3em
-    }
-
-    .demo-list .tags {
-        padding: .2em .2em .2em 0.2em;
-        text-align: right;
-    }
-
-    .demo-list .tag {
-        font-size: 0.8em;
-        display: inline-block;
-        background-color: grey;
-        padding: 1px 4px 1px 4px;
-        margin-left: -1px;
-        border-radius: 4px;
-    }
-
-    .demo-list .tag.bun {
-        background-color: #fbf0df;
-    }
-
-    .demo-list .tag.node {
-        background-color: #6cbe49;
-    }
-
-    .demo-list .tag.electron {
-        color: #9feaf9;
-        background-color: #2b2e3a;        
-    }
-
-    .demo-list .tag.nw {
-        color: #ffffff;
-        background-color: #1ca0da;
-    }
-
-    .demo-list .tag.rollup {
-        background-color: #ff3333;
-    }
-
-    .demo-list .tag.vite {
-        color: #ffdd35;
-        background-color: #bd34fe;
-    }
-
-    .demo-list .tag.webpack {
-        color: #ffffff;
-        background-color: #1c78c0;
-    }
-
-  </style>
   <body>
     <h1><a href="https://github.com/chung-leong/zigar"><img id="logo" src="images/logo.png"></a> Zigar</h1>
     <hr>
     <p>A software tool set that lets you utilize <a href="https://ziglang.org/">Zig</a> code in your JavaScript projects.</p>
+    <h2>Features</h2>
+    <ul>
+        <li>Access to all Zig data types in JavaScript</li>
+        <li>Zig-to-JavaScript, JavaScript-to-Zig call marshalling</li>
+        <li>Async task management</li>
+        <li>Threads in native code and WebAssembly</li>
+        <li>Support for MacOS, Linux, and Windows (both 64-bit and 32-bit)</li>
+        <li>Support for Node.js, Bun.js, Electron, and NW.js (native code execution)</li>
+        <li>Support for Webpack, Rollup, and Vite (WebAssembly)</li>
+    </ul>
     <h2>Documentation</h2>
     <p>Please consult the <a href="https://github.com/chung-leong/zigar/wiki">project wiki</a>.</p>
     <h2>Tutorials</h2>
     <ul class="demo-list">
         <li>
-            <a href="" target="_blank">
+            <a href="https://github.com/chung-leong/zigar/wiki/Hello-world" target="_blank">
                 <img src="images/hello.jpg">
             </a>
             <div class="caption">
-                <a href="" target="_blank">
+                <a href="https://github.com/chung-leong/zigar/wiki/Hello-world" target="_blank">
                     <h3 class="title">Hello world</h3>
                 </a>
                 <div class="description">
-                    This is a test
+                    Simple "Hello world" tutorial that demonstrates the basics of using Zigar.
                 </div>
                 <div class="tags">
                     <span class="tag bun">bun</span>
@@ -136,17 +46,60 @@
                 </div>
             </div>
         </li>
-
         <li>
-            <a href="" target="_blank">
-                <img src="images/cowsay.jpg">
+            <a href="https://github.com/chung-leong/zigar/wiki/SHA1-digest" target="_blank">
+                <img src="images/sha1.jpg">
             </a>
             <div class="caption">
-                <a href="" target="_blank">
-                    <h3 class="title">Cowsay</h3>
+                <a href="https://github.com/chung-leong/zigar/wiki/SHA1-digest" target="_blank">
+                    <h3 class="title">SHA-1 digest</h3>
                 </a>
                 <div class="description">
-                    This is a test
+                    Making use of a function in Zig's standard library.
+                </div>
+                <div class="tags">
+                    <span class="tag bun">bun</span>
+                    <span class="tag node">node</span>
+                    <span class="tag electron">electron</span>
+                    <span class="tag nw">nw</span>
+                    <span class="tag rollup">rollup</span>
+                    <span class="tag vite">vite</span>
+                    <span class="tag webpack">webpack</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/Image-filter" target="_blank">
+                <img src="images/filter.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/Image-filter" target="_blank">
+                    <h3 class="title">Image filter</h3>
+                </a>
+                <div class="description">
+                    An tutorial that demonstrates multithreaded programming in Zig.
+                </div>
+                <div class="tags">
+                    <span class="tag bun">bun</span>
+                    <span class="tag node">node</span>
+                    <span class="tag electron">electron</span>
+                    <span class="tag nw">nw</span>
+                    <span class="tag rollup">rollup</span>
+                    <span class="tag vite">vite</span>
+                    <span class="tag webpack">webpack</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/HTTP-server" target="_blank">
+                <img src="images/http.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/HTTP-server" target="_blank">
+                    <h3 class="title">HTTP server</h3>
+                </a>
+                <div class="description">
+                    Creating a simple HTTP server that serves static contents.
                 </div>
                 <div class="tags">
                     <span class="tag node">node</span>
@@ -154,101 +107,242 @@
             </div>
         </li>
         <li>
-            <a href="" target="_blank">
-                <img src="images/snprintf.jpg">
-                <h3>snprintf</h3>
+            <a href="https://github.com/chung-leong/zigar/wiki/Lua-interpreter" target="_blank">
+                <img src="images/lua.jpg">
             </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/Lua-interpreter" target="_blank">
+                    <h3 class="title">Lua interpreter</h3>
+                </a>
+                <div class="description">
+                    Creating a cross-platform Lua interpreter with the help of a third-part package.
+                </div>
+                <div class="tags">
+                    <span class="tag electron">electron</span>
+                </div>
+            </div>
         </li>
         <li>
-            <a href="" target="_blank">
+            <a href="https://github.com/chung-leong/zigar/wiki/SQLite" target="_blank">
+                <img src="images/sqlite.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/SQLite" target="_blank">
+                    <h3 class="title">SQLite</h3>
+                </a>
+                <div class="description">
+                    Accessing an in-memory database with the help of Zig.
+                </div>
+                <div class="tags">
+                    <span class="tag electron">electron</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/Cowsay" target="_blank">
+                <img src="images/cowsay.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/Cowsay" target="_blank">
+                    <h3 class="title">Cowsay</h3>
+                </a>
+                <div class="description">
+                    Running a silly C program in the browser with the help of Zig.
+                </div>
+                <div class="tags">
+                    <span class="tag vite">vite</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/MySQL" target="_blank">
                 <img src="images/mariadb.jpg">
-                <h3>MySQL/MariaDB</h3>
             </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/MySQL" target="_blank">
+                    <h3 class="title">MySQL/MariaDB</h3>
+                </a>
+                <div class="description">
+                    Reading from and writing to a MySQL/MariaDB database.
+                </div>
+                <div class="tags">
+                    <span class="tag node">node</span>
+                </div>
+            </div>
         </li>
         <li>
-            <a href="" target="_blank">
-                <img src="images/zzz.jpg">
-                <h3>ZZZ</h3>
+            <a href="https://github.com/chung-leong/zigar/wiki/Snprintf" target="_blank">
+                <img src="images/snprintf.jpg">
             </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/Snprintf" target="_blank">
+                    <h3 class="title">snprintf(...)</h3>
+                </a>
+                <div class="description">
+                    Calling a C variadic function from JavaScript--because you can.
+                </div>
+                <div class="tags">
+                    <span class="tag vite">vite</span>
+                </div>
+            </div>
+        </li>
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/HTTP-server-(zzz)" target="_blank">
+                <img src="images/zzz.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/HTTP-server-(zzz)" target="_blank">
+                    <h3 class="title">HTTP server (zzz)</h3>
+                </a>
+                <div class="description">
+                    Creating a fast web server that obtains contents from JavaScript.
+                </div>
+                <div class="tags">
+                    <span class="tag node">node</span>
+                </div>
+            </div>
+        </li>
+
+        <li>
+            <a href="https://github.com/chung-leong/zigar/wiki/Donut" target="_blank">
+                <img src="images/donut.jpg">
+            </a>
+            <div class="caption">
+                <a href="https://github.com/chung-leong/zigar/wiki/Donut" target="_blank">
+                    <h3 class="title">Donut</h3>
+                </a>
+                <div class="description">
+                    Running another silly C program in the web browser.
+                </div>
+                <div class="tags">
+                    <span class="tag vite">vite</span>
+                </div>
+            </div>
         </li>
     </ul>
-
-    <h2>Demonstrations</h2>
+    <h2>Web demos</h2>
     <ul class="demo-list">
         <li>
             <a href="pb2zig/demo-1/?f=circle-pattern" target="_blank">
                 <img src="images/circle-pattern.jpg">
-                <h3>Filter: circle-pattern</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=circle-pattern" target="_blank">
+                    <h3 class="title">Image filter: circle-pattern</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-1/?f=crystallize" target="_blank">
                 <img src="images/crystallize.jpg">
-                <h3>Filter: crystallize</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=crystallize" target="_blank">
+                    <h3 class="title">Image filter: crystallize</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-1/?f=circle-pattern" target="_blank">
                 <img src="images/circle-pattern.jpg">
-                <h3>Filter: circle-pattern</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=circle-pattern" target="_blank">
+                    <h3 class="title">Image filter: crystallize</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-1/?f=pencil" target="_blank">
                 <img src="images/pencil.jpg">
-                <h3>Filter: pencil</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=pencil" target="_blank">
+                    <h3 class="title">Image filter: pencil</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-1/?f=wave" target="_blank">
                 <img src="images/wave.jpg">
-                <h3>Filter: wave</h3>
             </a>
-        </li>
-        <li>
-            <a href="pb2zig/demo-1/?f=droste&i=ipad" target="_blank">
-                <img src="images/droste.jpg">
-                <h3>Filter: droste</h3>
-            </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=wave" target="_blank">
+                    <h3 class="title">Image filter: wave</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-2/?f=asciimii&i2=fontmap&i2=fontmap" target="_blank">
                 <img src="images/asciimii.jpg">
-                <h3>Filter: asciimii</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-2/?f=asciimii&i2=fontmap&i2=fontmap" target="_blank">
+                    <h3 class="title">Image filter: asciimii</h3>
+                </a>
+            </div>
+        </li>
+        <li>
+            <a href="pb2zig/demo-1/?f=droste&i=ipad" target="_blank">
+                <img src="images/droste.jpg">
+            </a>
+            <div class="caption">
+                <a href="pb2zig/demo-1/?f=droste&i=ipad" target="_blank">
+                    <h3 class="title">Image filter: droste</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-2/?f=bumpmap&i1=zig-logo&i2=wood" target="_blank">
                 <img src="images/bumpmap.jpg">
-                <h3>Filter: bumpmap</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-2/?f=bumpmap&i1=zig-logo&i2=wood" target="_blank">
+                    <h3 class="title">Image filter: bumpmap</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-2/?f=metallic&i1=zig-logo&i2=stripe" target="_blank">
                 <img src="images/metallic.jpg">
-                <h3>Filter: metallic</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-2/?f=metallic&i1=zig-logo&i2=stripe" target="_blank">
+                    <h3 class="title">Image filter: metallic</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-3/?f=mandelbulb-quick" target="_blank">
                 <img src="images/mandelbulb-quick.jpg">
-                <h3>Filter: mandelbulb-quick</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-3/?f=mandelbulb-quick" target="_blank">
+                    <h3 class="title">Rendering: mandelbulb</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-3/?f=quaternion-julia" target="_blank">
                 <img src="images/quaternion-julia.jpg">
-                <h3>Filter: quaternion-julia</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-3/?f=quaternion-julia" target="_blank">
+                    <h3 class="title">Rendering: quaternion-julia</h3>
+                </a>
+            </div>
         </li>
         <li>
             <a href="pb2zig/demo-3/?f=raytracer" target="_blank">
                 <img src="images/raytracer.jpg">
-                <h3>Filter: raytracer</h3>
             </a>
+            <div class="caption">
+                <a href="pb2zig/demo-3/?f=raytracer" target="_blank">
+                    <h3 class="title">Rendering: raytracer</h3>
+                </a>
+            </div>
         </li>
     </ul>
-
     <h2>Zig resources</h2>
     <ul>
         <li><a href="https://ziglang.org/documentation/0.13.0/">Zig language reference</a></li>
@@ -257,7 +351,6 @@
         <li><a href="https://ziggit.dev/">Ziggit - A Zig community</a></li>
         <li><a href="https://www.openmymind.net/learning_zig/">Learning Zig by Karl Seguin</a></li>
     </ul>
+    <hr>
   </body>
 </html>
-
-https://chung-leong.github.io/pb2zig/demo-1/?f=crystallize

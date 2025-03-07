@@ -1,0 +1,108 @@
+* {
+    box-sizing: border-box;
+}
+
+html {
+    display: flex;
+    justify-content: center;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    max-width: 104em;
+}
+
+a:link, a:visited {
+    text-decoration: none;
+    color: #a66800;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: #f5ac20;
+}
+
+#logo {
+    height: 1.5em;
+    vertical-align: middle;
+}
+
+.demo-list {
+    padding-inline-start: 0;
+}
+
+.demo-list LI {
+    display: inline-block;
+    padding: 20px;
+    border: 1px solid #000;
+    padding: 0 0 .2em 0;
+    margin-left: 0;
+    margin-right: 1em;
+    margin-bottom: 1em;
+
+    width: 302px;
+}
+
+.demo-list IMG {
+    display: block;
+    width: 100%;
+}
+
+.demo-list .caption {
+    border-top: 1px solid #000;
+}
+
+.demo-list .title {
+    margin: 0 0 0 0;
+    padding: .3em .3em .1em 0.3em
+}
+
+.demo-list .description {
+    padding: 0 .3em .3em 0.3em
+}
+
+.demo-list .tags {
+    padding: .2em .2em 0 0.2em;
+    text-align: right;
+}
+
+.demo-list .tag {
+    font-size: 0.8em;
+    display: inline-block;
+    background-color: grey;
+    padding: 1px 4px 1px 4px;
+    margin-left: -1px;
+    border-radius: 4px;
+}
+
+.demo-list .tag.bun {
+    background-color: #fbf0df;
+}
+
+.demo-list .tag.node {
+    background-color: #6cbe49;
+}
+
+.demo-list .tag.electron {
+    color: #9feaf9;
+    background-color: #2b2e3a;        
+}
+
+.demo-list .tag.nw {
+    color: #ffffff;
+    background-color: #1ca0da;
+}
+
+.demo-list .tag.rollup {
+    background-color: #ff3333;
+}
+
+.demo-list .tag.vite {
+    color: #ffdd35;
+    background-color: #bd34fe;
+}
+
+.demo-list .tag.webpack {
+    color: #ffffff;
+    background-color: #1c78c0;
+}
