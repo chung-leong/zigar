@@ -731,6 +731,49 @@ describe('Structure: pointer', function() {
       object.cat = 777;
       expect(target.cat).to.equal(777);
     })
+    it('should handle const pointer correct when there is no target', function() {
+      const env = new Env();
+      const structStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: 8,
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'cat',
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        structure: {},
+      });
+      env.attachMember(structStructure, {
+        type: MemberType.Uint,
+        name: 'dog',
+        bitSize: 32,
+        bitOffset: 32,
+        byteSize: 4,
+        structure: {},
+      });
+      env.defineStructure(structStructure);
+      env.endStructure(structStructure);
+      const structure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst | PointerFlag.IsNullable,
+        byteSize: 4,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Object,
+        bitSize: 32,
+        bitOffset: 0,
+        byteSize: 4,
+        slot: 0,
+        structure: structStructure,
+      });
+      env.defineStructure(structure);
+      env.endStructure(structure);
+      const { constructor: HelloPtr } = structure;
+      const pointer = new HelloPtr(null);
+      expect(pointer['*']).to.be.null;
+    })
     it('should throw when read-only object is assigned to non-const pointer', function() {
       const env = new Env();
       const structStructure = env.beginStructure({

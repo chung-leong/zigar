@@ -34,6 +34,22 @@ describe('Feature: allocator-methods', function() {
       expect(dv.byteLength).to.equal(16);
       expect(dv[ZIG].align).to.equal(4);
     })
+    it('should throw an error when function in vtable returns null', function() {
+      const env = new Env();
+      const struct = {
+        ptr: {},
+        vtable: {
+          alloc(ptr, len, ptrAlign) {
+            return null;
+          },
+          free() {},
+        }
+      };
+      defineProperties(struct, {
+        alloc: env.defineAlloc(),
+      });
+      expect(() => struct.alloc(16, 4)).to.throw(Error);
+    })
   })
   describe('defineFree', function() {
     it('should return descriptor for the free method', function() {

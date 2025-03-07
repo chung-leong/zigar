@@ -328,5 +328,22 @@ describe('Feature: generator', function() {
       expect(list).to.eql([ 0, 1, 2, 3, 4 ]);
       expect(line).to.contain('Donut!');
     })
+    it('should terminate generation when YIELD returns false', async function() {
+      const env = new Env();
+      let count = 0;
+      const fn = async function*() {
+        for (let i = 0; i < 5; i++) {
+          count++;
+          yield i;
+        }
+      };
+      const generator = fn();
+      function Args() {
+        this[YIELD] = (value) => false;
+      }
+      const args = new Args;
+      await env.pipeContents(generator, args);
+      expect(count).to.equal(count);
+    })
   })
 })

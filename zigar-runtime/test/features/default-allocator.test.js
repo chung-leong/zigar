@@ -26,6 +26,7 @@ describe('Feature: default-allocator', function() {
         self[MEMORY] = dv;
         return self;
       };
+      constructor.noRemap = function() {};
       VTable[SIZE] = 3 * 8;
       VTable[ALIGN] = 8;
       const structure = { constructor };

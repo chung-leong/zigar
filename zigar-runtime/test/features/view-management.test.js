@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
+import { COPY, FALLBACK, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
 
@@ -325,6 +325,30 @@ describe('Feature: view-management', function() {
       expect(target[MEMORY]).to.not.equal(dv);
       expect(target[MEMORY].getInt8(9)).to.equal(123);
     })
+    if (process.env.TARGET === 'node') {
+      it('should call syncExternalBuffer when target buffer requires fallback support', function() {
+        const env = new Env();
+        const buffer = new ArrayBuffer(16);
+        buffer[FALLBACK] = usize(0x1000);
+        const target = {
+          [MEMORY]: new DataView(buffer),
+          [COPY]: function() {},
+        };
+        const dv = new DataView(new ArrayBuffer(16));
+        const structure = { byteSize: 16, type: StructureType.Array };
+        env.requireBufferFallback = () => true;
+        let targetBuffer, targetAddress, syncTo;
+        env.syncExternalBuffer = (buffer, address, to) => {
+          targetBuffer = buffer;
+          targetAddress = address;
+          syncTo = to;
+        };
+        env.assignView(target, dv, structure);
+        expect(targetBuffer).to.equal(buffer);
+        expect(targetAddress).to.equal(usize(0x1000));
+        expect(syncTo).to.be.true;
+      })
+    }
   })
   describe('allocateMemory', function() {
     it('should return a data view of a newly created array buffer', function() {
@@ -378,4 +402,19 @@ describe('Feature: view-management', function() {
       })
     }
   })
+  if (process.env.TARGET === 'node') {
+    describe('usingBufferFallback', function() {
+      it('should call requireBufferFallback if it exists', function() {
+        const env = new Env();
+        let called = false;
+        env.requireBufferFallback = function() {
+          called = true;
+          return false;
+        };
+        const result = env.usingBufferFallback();
+        expect(result).to.be.false;
+        expect(called).to.be.true;
+      })
+    })
+  }
 })

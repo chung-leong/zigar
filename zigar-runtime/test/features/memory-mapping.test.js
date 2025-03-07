@@ -488,6 +488,26 @@ describe('Feature: memory-mapping', function() {
     })
   })
   if (process.env.TARGET === 'wasm') {
+    describe('allocateShadowMemory', function() {
+      it('should allocate memory for call marshalling', function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.allocateScratchMemory = function(len, align) {
+          return 0x1000;
+        };
+        const dv = env.allocateShadowMemory(16, 4);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv.byteLength).to.equal(16);
+      })
+      it('should throw when allocateScratchMemory returns 0', function() {
+        const env = new Env();
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.allocateScratchMemory = function(len, align) {
+          return 0;
+        };
+        expect(() => env.allocateShadowMemory(16, 4)).to.throw();
+      })
+    })
     describe('obtainZigView', function() {
       it('should return a view to WASM memory', function() {
         const env = new Env();
