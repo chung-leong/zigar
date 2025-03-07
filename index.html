@@ -6,6 +6,10 @@
     <title>Zigar - Toolkit for using Zig in JavaScript projects</title>
   </head>
   <style>
+    * {
+        box-sizing: border-box;
+    }
+
     body {
         font-family: Arial, Helvetica, sans-serif;
     }
@@ -23,17 +27,84 @@
         vertical-align: middle;
     }
 
+    .demo-list {
+        padding-inline-start: 0;
+    }
+
     .demo-list LI {
         display: inline-block;
         padding: 20px;
         border: 1px solid #000;
+        padding: 0;
+        margin-left: 0;
+        margin-right: 1em;
+        width: 302px;
     }
 
     .demo-list IMG {
         display: block;
-        width: 300px;
-        border: 1px solid #000;
+        width: 100%;
     }
+
+    .demo-list .caption {
+        border-top: 1px solid #000;
+    }
+
+    .demo-list .title {
+        margin: 0 0 0 0;
+        padding: .3em .3em .1em 0.3em
+    }
+
+    .demo-list .description {
+        padding: 0 .3em .3em 0.3em
+    }
+
+    .demo-list .tags {
+        padding: .2em .2em .2em 0.2em;
+        text-align: right;
+    }
+
+    .demo-list .tag {
+        font-size: 0.8em;
+        display: inline-block;
+        background-color: grey;
+        padding: 1px 4px 1px 4px;
+        margin-left: -1px;
+        border-radius: 4px;
+    }
+
+    .demo-list .tag.bun {
+        background-color: #fbf0df;
+    }
+
+    .demo-list .tag.node {
+        background-color: #6cbe49;
+    }
+
+    .demo-list .tag.electron {
+        color: #9feaf9;
+        background-color: #2b2e3a;        
+    }
+
+    .demo-list .tag.nw {
+        color: #ffffff;
+        background-color: #1ca0da;
+    }
+
+    .demo-list .tag.rollup {
+        background-color: #ff3333;
+    }
+
+    .demo-list .tag.vite {
+        color: #ffdd35;
+        background-color: #bd34fe;
+    }
+
+    .demo-list .tag.webpack {
+        color: #ffffff;
+        background-color: #1c78c0;
+    }
+
   </style>
   <body>
     <h1><a href="https://github.com/chung-leong/zigar"><img id="logo" src="images/logo.png"></a> Zigar</h1>
@@ -45,10 +116,42 @@
     <ul class="demo-list">
         <li>
             <a href="" target="_blank">
-                <img src="images/cowsay.jpg">
-                <h3>Cowsay</h3>
+                <img src="images/hello.jpg">
             </a>
+            <div class="caption">
+                <a href="" target="_blank">
+                    <h3 class="title">Hello world</h3>
+                </a>
+                <div class="description">
+                    This is a test
+                </div>
+                <div class="tags">
+                    <span class="tag bun">bun</span>
+                    <span class="tag node">node</span>
+                    <span class="tag electron">electron</span>
+                    <span class="tag nw">nw</span>
+                    <span class="tag rollup">rollup</span>
+                    <span class="tag vite">vite</span>
+                    <span class="tag webpack">webpack</span>
+                </div>
+            </div>
+        </li>
 
+        <li>
+            <a href="" target="_blank">
+                <img src="images/cowsay.jpg">
+            </a>
+            <div class="caption">
+                <a href="" target="_blank">
+                    <h3 class="title">Cowsay</h3>
+                </a>
+                <div class="description">
+                    This is a test
+                </div>
+                <div class="tags">
+                    <span class="tag node">node</span>
+                </div>
+            </div>
         </li>
         <li>
             <a href="" target="_blank">
