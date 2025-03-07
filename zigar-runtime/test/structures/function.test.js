@@ -196,8 +196,22 @@ describe('Structure: function', function() {
       expect(f2).to.equal(f);
       expect(constructorAddr).to.equal(usize(0x8888));
       expect(fnIds).to.eql([ 1 ]);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
-      const result = env.runFunction(1, argStruct[MEMORY]);
+
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
+      const result = env.handleJsCall(1, address, len);
       expect(result).to.equal(CallResult.OK);
       expect(argStruct.retval).to.equal(123 + 456);
     })

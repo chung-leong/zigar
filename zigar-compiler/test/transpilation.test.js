@@ -107,7 +107,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('fn-pointer');
       const options = {
         optimize: 'ReleaseSmall',
-        stripWASM: true,
+        stripWASM: false,
         embedWASM: false,
         wasmLoader: saveWASM,
       };
@@ -119,7 +119,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('thread');
       const options = {
         optimize: 'ReleaseSmall',
-        stripWASM: true,
+        stripWASM: false,
         embedWASM: false,
         wasmLoader: saveWASM,
         multithreaded: true,
@@ -132,7 +132,7 @@ describe('Transpilation', function() {
       const path = getSamplePath('thread');
       const options = {
         optimize: 'ReleaseSmall',
-        stripWASM: true,
+        stripWASM: false,
         embedWASM: false,
         wasmLoader: saveWASM,
         multithreaded: true,

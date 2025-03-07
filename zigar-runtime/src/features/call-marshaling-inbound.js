@@ -210,12 +210,6 @@ export default mixin({
       destroyJsThunk: { argType: 'ii', returnType: 'i' },
       finalizeAsyncCall: { argType: 'ii' },
     },
-    queueJsAction(action, id, argAddress, argSize, futexHandle) {
-      // in the main thread, this method is never called from WASM;
-      // the implementation of queueJsAction() in worker.js, call this
-      // through postMessage() when it is called the worker's WASM instance
-      this.performJsAction(action, id, argAddress, argSize, futexHandle);
-    },
   } : process.env.TARGET === 'node' ? {
     exports: {
       handleJsCall: null,

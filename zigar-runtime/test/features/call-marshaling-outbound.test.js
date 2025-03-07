@@ -115,63 +115,6 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(argStruct[0]).to.equal(1);
       expect(argStruct[1]).to.equal(2);
     })
-    it('should add function name to argument error', function() {
-      const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        byteSize: 4,
-        flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const structure = env.beginStructure({
-        type: StructureType.ArgStruct,
-        byteSize: 4 * 3,
-        length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
-      const thunk = {
-        [MEMORY]: new DataView(new ArrayBuffer(0)),
-      };
-      thunk[MEMORY][ZIG] = { address: usize(0x1004) };
-      const self = env.createOutboundCaller(thunk, ArgStruct)
-      defineProperty(self, 'name', { value: 'dingo' });
-      env.runThunk = () => {};
-      expect(() => self('hello', 'world')).to.throw(SyntaxError)
-        .with.property('message').that.match(/^dingo\(args\[0\],/);
-    })
     if (process.env.TARGET === 'wasm') {
       it('should return promise when thunk runner is not ready', async function() {
         const env = new Env();
@@ -1206,6 +1149,7 @@ describe('Feature: call-marshaling-outbound', function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
         this[PROMISE] = new Promise(resolve => this[RETURN] = resolve);
+        this[FINALIZE] = function() {};
         defineProperty(this, 'retval', {
           get() {
             throw new Error('Doh!');
@@ -1241,15 +1185,13 @@ describe('Feature: call-marshaling-outbound', function() {
       const Arg = function() {
         this[MEMORY] = new DataView(new ArrayBuffer(16));
         this[MEMORY][ALIGN] = 4;
-        this[RETURN] = (arg) => retval = arg;
         this.retval = 1234;
       };
       const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
       const fn = { [MEMORY]: env.obtainZigView(usize(200), 0) };
       const args = new Arg();
       const result = env.invokeThunk(thunk, fn, args);
-      expect(result).to.be.undefined;
-      expect(retval).to.equal(1234);
+      expect(result).to.equal(1234);
     })
   })
   describe('detectArgumentFeatures', function() {

@@ -321,18 +321,8 @@ describe('Feature: module-loading', function() {
           multithreaded: false,
         });
         expect(env.allocateScratchMemory).to.be.a('function');
-        expect(env.freeSratchMemory).to.be.a('function');
+        expect(env.freeScratchMemory).to.be.a('function');
         expect(env.runThunk).to.be.a('function');
-      })
-    })
-    describe('trackInstance', function() {
-      it('should make released a dynamic property', function() {
-        const env = new Env();
-        const instance = {};
-        env.trackInstance(instance);
-        const { get } = Object.getOwnPropertyDescriptor(env, 'released');
-        expect(get).to.be.an('function');
-        expect(env.released).to.be.false;
       })
     })
   } else if (process.env.TARGET === 'node') {

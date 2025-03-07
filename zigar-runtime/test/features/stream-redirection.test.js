@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { capture, delay } from '../test-utils.js';
+import { capture, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -56,5 +56,25 @@ describe('Feature: stream-redirection', function() {
       expect(lines).to.eql([ 'Hello world!' ]);
     })
   })
+  if (process.env.TARGET === 'node') {
+    describe('writeBytes', function() {
+      it('should call writeToConsole', function() {
+        const env = new Env();
+        let called;
+        let success = true;
+        env.writeToConsole = function(dv) {
+          called = true;
+          return success;
+        };
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+        env.writeBytes(usize(0x1234), 4);
+        expect(called).to.be.true;
+        success = false;
+        env.writeBytes(usize(0x1234), 4);
+      })  
+    })
+  }
 })
 

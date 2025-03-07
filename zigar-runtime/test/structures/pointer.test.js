@@ -9,7 +9,7 @@ import {
   ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
   UPDATE, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineValue } from '../../src/utils.js';
+import { defineValue, usizeInvalid } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -1920,7 +1920,7 @@ describe('Structure: pointer', function() {
           return new ArrayBuffer(len);
         };
       }
-      const dv = env.allocateZigMemory(structure.byteSize, 0);
+      const dv = env.obtainZigView(usize(0x1000), structure.byteSize);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv);
       const int32 = new Int32(1234);
       expect(() => intPtr.$ = int32).to.throw(TypeError)
@@ -1957,9 +1957,6 @@ describe('Structure: pointer', function() {
       });
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
-      env.allocateScratchMemory = function(len, align) {
-        return usize(0x1000);
-      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -1967,7 +1964,7 @@ describe('Structure: pointer', function() {
           return new ArrayBuffer(len);
         };
       }
-      const dv = env.allocateZigMemory(structure.byteSize, 0);
+      const dv = env.obtainZigView(usize(0x1000), structure.byteSize);
       const intPtr1 = Int32Ptr.call(ENVIRONMENT, dv);
       const int32 = new Int32(1234);
       const intPtr2 = new Int32Ptr(int32);
@@ -2006,11 +2003,6 @@ describe('Structure: pointer', function() {
       });
       const Int32Ptr = env.defineStructure(structure);
       env.endStructure(structure);
-      let address = usize(0);
-      env.allocateScratchMemory = function(len, align) {
-        address += usize(1000);
-        return address;
-      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2018,12 +2010,12 @@ describe('Structure: pointer', function() {
           return new ArrayBuffer(len);
         };
       }
-      const dv1 = env.allocateZigMemory(intStructure.byteSize, 0);
-      const dv2 = env.allocateZigMemory(structure.byteSize, 0);
+      const dv1 = env.obtainZigView(usize(0x1000), intStructure.byteSize);
+      const dv2 = env.obtainZigView(usize(0x2000), structure.byteSize);
       const int32 = Int32.call(ENVIRONMENT, dv1);
       const intPtr = Int32Ptr.call(ENVIRONMENT, dv2);
       intPtr.$ = int32;
-      expect(getUsize.call(dv2, 0, true)).to.equal(usize(1000));
+      expect(getUsize.call(dv2, 0, true)).to.equal(usize(0x1000));
     })
     it('should immediately write to slice pointer in Zig memory', function() {
       const env = new Env();
@@ -2078,40 +2070,24 @@ describe('Structure: pointer', function() {
       });
       const HelloPtr = env.defineStructure(structure);
       env.endStructure(structure);
-      let nextAddress = usize(1000);
       if (process.env.TARGET === 'wasm') {
-        env.allocateScratchMemory = function(len, align) {
-          const address = nextAddress;
-          nextAddress += usize(1000);
-          return address;
-        };
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
-        const bufferMap = new Map();
-        const addressMap = new Map();
-        env.allocateScratchMemory = function(len, align) {
-          const address = nextAddress;
-          nextAddress += usize(1000);
-          const buffer = new ArrayBuffer(len);
-          bufferMap.set(address, buffer);
-          addressMap.set(buffer, address);
-          return address;
-        };
         env.obtainExternBuffer = function(address, len) {
-          return bufferMap.get(address);
+          return new ArrayBuffer(len);
         };
       }
-      const dv1 = env.allocateZigMemory(sliceStructure.byteSize * 4, 0);
-      const dv2 = env.allocateZigMemory(structure.byteSize, 0);
-      const dv3 = env.allocateZigMemory(structure.byteSize, 0);
+      const dv1 = env.obtainZigView(usize(0x1000), sliceStructure.byteSize * 4);
+      const dv2 = env.obtainZigView(usize(0x2000), structure.byteSize);
+      const dv3 = env.obtainZigView(usize(0x3000), structure.byteSize);
       const target = HelloPtr.child(dv1);
       const pointer1 = HelloPtr.call(ENVIRONMENT, dv2);
       pointer1.$ = target;
-      expect(getUsize.call(dv2, 0, true)).to.equal(usize(1000));
+      expect(getUsize.call(dv2, 0, true)).to.equal(usize(0x1000));
       expect(getUsize.call(dv2, addressByteSize, true)).to.equal(usize(4));
       const pointer2 = HelloPtr.call(ENVIRONMENT, dv3);
       pointer2.$ = pointer1;
-      expect(getUsize.call(dv3, 0, true)).to.equal(usize(1000));
+      expect(getUsize.call(dv3, 0, true)).to.equal(usize(0x1000));
       expect(getUsize.call(dv3, addressByteSize, true)).to.equal(usize(4));
     })
     it('should yield underlying pointer object', function() {

@@ -644,15 +644,15 @@ describe('Error functions', function() {
   })
   describe('adjustArgumentError', function() {
     it('should add argument number to an error', function() {
-      const err1 = adjustArgumentError.call(new TypeError('Something'), 0, 3);
-      expect(err1.message).to.contain('(args[0], ...)').and.contain('Something');
-      const err2 = adjustArgumentError.call(new TypeError('Something'), 1, 3);
-      expect(err2.message).to.contain('(..., args[1], ...)');
-      const err3 = adjustArgumentError.call(new TypeError('Something'), 2, 3);
-      expect(err3.message).to.contain('(..., args[2])');
+      const err1 = adjustArgumentError(new TypeError('Something'), 0);
+      expect(err1.message).to.contain('args[0]').and.contain('Something');
+      const err2 = adjustArgumentError(new TypeError('Something'), 1);
+      expect(err2.message).to.contain('args[1]');
+      const err3 = adjustArgumentError(new TypeError('Something'), 2);
+      expect(err3.message).to.contain('args[2]');
     })
     it('should return error of the same class', function() {
-      const err1 = adjustArgumentError.call(new UndefinedArgument(), 0, 3);
+      const err1 = adjustArgumentError(new UndefinedArgument(), 0);
       expect(() => { throw err1 }).to.throw(UndefinedArgument);
     })
   })

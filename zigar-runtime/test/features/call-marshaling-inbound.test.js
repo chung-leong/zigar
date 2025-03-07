@@ -5,7 +5,7 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, MEMORY, RETURN, SLOTS, THROWING, YIELD, ZIG } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, RETURN, SIZE, SLOTS, THROWING, YIELD, ZIG } from '../../src/symbols.js';
 import {
   addressByteSize, addressSize, capture, captureError, delay, usize
 } from '../test-utils.js';
@@ -1486,58 +1486,7 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(signal.aborted).to.be.true;
     })
   })
-  describe('performJsAction', function() {
-    it('should call runFunction', function() {
-      const env = new Env();
-      let called;
-      env.runFunction = function(id, dv, futexHandle) {
-        called = true;
-        return CallResult.OK;
-      };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else {
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-      }
-      const result = env.performJsAction(Action.Call, 100, usize(0x1234), 4);
-      expect(called).to.be.true;
-      expect(result).to.equal(CallResult.OK);
-    })
-    it('should call releaseFunction', function() {
-      const env = new Env();
-      let called;
-      env.releaseFunction = function(id) {
-        called = true;
-      };
-      env.performJsAction(Action.Release, 100);
-      expect(called).to.be.true;
-    })
-    if (process.env.TARGET === 'node') {
-      it('should call writeToConsole when function id is 0', function() {
-        const env = new Env();
-        let called;
-        let success = true;
-        env.writeToConsole = function(dv) {
-          called = true;
-          return success;
-        };
-        env.obtainExternBuffer = function(address, len) {
-          return new ArrayBuffer(len);
-        };
-        env.finalizeAsyncCall = function(futexHandle, value) {
-          expect(futexHandle).to.equal(usize(0x4000));
-          expect(value).to.equal(success ? CallResult.OK : CallResult.Failure);
-        };
-        env.performJsAction(Action.Call, 0, usize(0x1234), 4, usize(0x4000));
-        expect(called).to.be.true;
-        success = false;
-        env.performJsAction(Action.Call, 0, usize(0x1234), 4, usize(0x4000));
-      })
-    }
-  })
-  describe('runFunction', function() {
+  describe('handleJsCall', function() {
     it('should run JavaScript function registered to function id', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -1591,11 +1540,24 @@ describe('Feature: call-marshaling-inbound', function() {
         return arg1 + arg2;
       };
       env.createInboundCaller(fn, ArgStruct)
-      const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const funcId = env.getFunctionId(fn);      
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
       let result;
       const [ line ] = await capture(() => {
-        result = env.runFunction(funcId, argStruct[MEMORY]);
+        result = env.handleJsCall(funcId, address, len);
       });
       expect(result).to.equal(CallResult.OK);
       expect(line).to.equal('123 456');
@@ -1654,17 +1616,40 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
       let result;
       const [ line ] = await captureError(() => {
-        result = env.runFunction(funcId, argStruct[MEMORY]);
+        result = env.handleJsCall(funcId, address, len);
       });
       expect(result).to.equal(CallResult.Failure);
       expect(line).to.contain('Boo!');
     })
     it('should return failure code when function is not found', async function() {
       const env = new Env();
-      const result = env.runFunction(1234, null);
+      const len = 12;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const result = env.handleJsCall(1234, address, len);
       expect(result).to.equal(CallResult.Failure);
     })
     it('should place error into error union when JavaScript function throws one from error set', async function() {
@@ -1779,8 +1764,21 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
-      const result = env.runFunction(funcId, argStruct[MEMORY]);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
+      const result = env.handleJsCall(funcId, address, len);
       expect(result).to.equal(CallResult.OK);
       expect(() => argStruct.retval).to.throw(MyError.UnableToCreateObject);
     })
@@ -1896,10 +1894,23 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
       let result;
       const [ line ] = await captureError(() => {
-        result = env.runFunction(funcId, argStruct[MEMORY]);
+        result = env.handleJsCall(funcId, address, len);
       });
       expect(result).to.equal(CallResult.Failure);
       expect(line).to.contain('Boo!');
@@ -1958,14 +1969,27 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
       let called = false, futexHandle, result;
       env.finalizeAsyncCall = (...args) => {
         called = true;
         futexHandle = args[0];
         result = args[1];
       };
-      env.runFunction(funcId, argStruct[MEMORY], 0x1234);
+      env.handleJsCall(funcId, address, len, 0x1234);
       await delay(100);
       expect(called).to.be.true;
       expect(futexHandle).to.equal(0x1234);
@@ -2026,7 +2050,20 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
       let called = false, futexHandle, result;
       env.finalizeAsyncCall = (...args) => {
         called = true;
@@ -2034,7 +2071,7 @@ describe('Feature: call-marshaling-inbound', function() {
         result = args[1];
       };
       await captureError(async () => {
-        env.runFunction(funcId, argStruct[MEMORY], 0x1234);
+        env.handleJsCall(funcId, address, len, 0x1234);
         await delay(100);
       });
       expect(called).to.be.true;
@@ -2095,8 +2132,21 @@ describe('Feature: call-marshaling-inbound', function() {
       };
       env.createInboundCaller(fn, ArgStruct)
       const funcId = env.getFunctionId(fn);
-      const argStruct = new ArgStruct([ 123, 456 ], 'hello', 0);
-      const result = env.runFunction(funcId, argStruct[MEMORY], 0);
+      const len = ArgStruct[SIZE];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, len);
+      const argStruct = ArgStruct(dv);
+      argStruct[0] = 123;
+      argStruct[1] = 456;
+      const result = env.handleJsCall(funcId, address, len, 0);
       expect(result).to.equal(CallResult.Deadlock);
     })
   })
@@ -2135,19 +2185,6 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(called).to.be.true;
     })
   })
-  if (process.env.TARGET === 'wasm') {
-    describe('queueJsAction', function() {
-      it('should call performJsAction', function() {
-        const env = new Env();
-        let called = true;
-        env.performJsAction = function() {
-          called = true;
-        };
-        env.queueJsAction(Action.Call, 1, usize(0x1000), 4, usize(0x4000));
-        expect()
-      })
-    })
-  }
 })
 
 function errorData(index) {

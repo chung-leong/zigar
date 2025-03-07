@@ -77,8 +77,20 @@ describe('Feature: default-allocator', function() {
         return self;
       };
       VTable[SIZE] = 3 * 8;
-      VTable[ALIGN] = 8;
+      VTable[ALIGN] = 8;     
       const structure = { constructor };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          const buffer = new ArrayBuffer(len);
+          buffer[ZIG] = { address, len };
+          return buffer;
+        };
+        env.getBufferAddress = function(buffer) {
+          return buffer[ZIG]?.address ?? usize(0xf_0000);
+        };
+      }
       env.createDefaultAllocator(args, structure);
       env.freeDefaultAllocator();
       expect(env.defaultAllocator).to.be.null;
@@ -122,7 +134,6 @@ describe('Feature: default-allocator', function() {
           return usize(0x1000);
         };
         env.freeScratchMemory = function(address, len, align) {
-          expect(type).to.equal(MemoryType.Scratch);
           expect(address).to.equal(usize(0x1000));
         };
       } else {

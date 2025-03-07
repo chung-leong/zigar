@@ -10,6 +10,7 @@ pub fn spawn() !i32 {
     };
     _ = try std.Thread.spawn(.{
         .allocator = gpa.allocator(),
+        .stack_size = 64 * 1024,
     }, ns.run, .{});
     return 123;
 }

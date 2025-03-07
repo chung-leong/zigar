@@ -16,9 +16,9 @@ if (process.env.TARGET === 'wasm') {
         const url = new URL('./wasm-samples/thread.wasm', import.meta.url);
         const buffer = await readFile(fileURLToPath(url));
         await env.loadModule(buffer, {
-          memoryInitial: 1024,
-          memoryMax: 10240,
-          tableInitial: 48,
+          memoryInitial: 256,
+          memoryMax: 1024,
+          tableInitial: 17,
           multithreaded: true,
         });
         env.acquireStructures({});

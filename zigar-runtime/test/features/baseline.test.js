@@ -310,13 +310,11 @@ describe('Feature: baseline', function() {
       const object = env.getSpecialExports();
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
-      expect(object.released).to.be.a('function');
       expect(object.connect).to.be.a('function');
       await object.init();
       expect(env.abandoned).to.be.false;
       object.abandon();
       expect(env.abandoned).to.be.true;
-      expect(object.released()).to.be.false;
     })
     it('should allow redirection of console output', async function() {
       const env = new Env();
