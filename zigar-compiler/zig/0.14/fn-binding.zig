@@ -458,8 +458,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const cc = bf.calling_convention;
             const Self = @This();
             const ns = struct {
-                var context_pos: ?usize = null;
-
                 inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
                     const sp_address = switch (builtin.target.cpu.arch) {
                         .x86_64 => asm (""
@@ -479,7 +477,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const signature = comptime getSignature();
                     const signature_offset = comptime getSignatureOffset();
                     const ptr: [*]usize = @ptrFromInt(sp_address - signature_offset);
-                    const self_address = if (context_pos) |i| ptr[i] else search_result: {
+                    const self_address = search_result: {
                         var i: usize = 0;
                         while (i >= 0) {
                             const match = switch (@bitSizeOf(usize)) {
@@ -496,16 +494,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 else => unreachable,
                             };
                             i += 1;
-                            if (match) {
-                                // the context pointer is right below the signature (larger address)
-                                const address = ptr[i];
-                                // not sure why, but on 32-bit Windows the distance between the stack pointer and
-                                // where self_address is stored can be off by one sometimes when optimize = Debug
-                                if (builtin.mode != .Debug or @bitSizeOf(usize) != 32) {
-                                    context_pos = i;
-                                }
-                                break :search_result address;
-                            }
+                            // the context pointer is right below the signature (larger address)
+                            if (match) break :search_result ptr[i];
                         }
                     };
                     const self: *const Self = @ptrFromInt(self_address);
@@ -529,10 +519,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn getSignatureOffset() comptime_int {
+            const arg_size = @sizeOf(std.meta.ArgsTuple(BFT));
             return switch (builtin.target.cpu.arch) {
-                .x86, .x86_64 => 1024,
-                .aarch64, .arm => 2048,
-                else => 4096,
+                .x86 => 1024 + arg_size * 8,
+                .x86_64 => 1024 + arg_size * 8,
+                .aarch64 => 512 + arg_size * 8,
+                .arm => 1024 + arg_size * 8,
+                .powerpc64le => 1024 + arg_size * 8,
+                .riscv64 => 4096 + arg_size * 8,
+                else => unreachable,
             };
         }
     };
@@ -574,6 +569,26 @@ test "Binding (i64 x 3)" {
     try expect(bf1(1, 2, 3) == 1 + 2 + 3 + 1234);
 }
 
+test "Binding (i64 x 6)" {
+    const ns = struct {
+        var called = false;
+
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) callconv(.C) i64 {
+            called = true;
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7;
+        }
+    };
+    var number: i64 = 7;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var gpa = executable();
+    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
+    defer _ = Binding1.unbind(gpa.allocator(), bf);
+    const sum = bf(1, 2, 3, 4, 5, 6);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7);
+}
+
 test "Binding (i64 x 9)" {
     const ns = struct {
         var called = false;
@@ -592,6 +607,26 @@ test "Binding (i64 x 9)" {
     defer _ = Binding1.unbind(gpa.allocator(), bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
+}
+
+test "Binding (i64 x 12)" {
+    const ns = struct {
+        var called = false;
+
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64) callconv(.C) i64 {
+            called = true;
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13;
+        }
+    };
+    var number: i64 = 13;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var gpa = executable();
+    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
+    defer _ = Binding1.unbind(gpa.allocator(), bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13);
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
