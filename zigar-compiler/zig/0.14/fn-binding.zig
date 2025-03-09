@@ -21,11 +21,11 @@ pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
 
 test "executable" {
     protect(false);
-    var gpa = executable();
-    var allocator = gpa.allocator();
+    var ea = executable();
+    var allocator = ea.allocator();
     const memory = try allocator.alloc(u8, 256);
     allocator.free(memory);
-    try expect(gpa.detectLeaks() == false);
+    try expect(ea.detectLeaks() == false);
     protect(true);
 }
 
@@ -45,6 +45,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         context_bytes: [@sizeOf(CT)]u8 align(@alignOf(CT)),
         code: [0]u8 align(code_align) = undefined,
 
+        var code_len: ?usize = null;
+        var self_offset: ?isize = null;
+
         pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
             const binding = try init(allocator, func, vars);
             return binding.function();
@@ -62,11 +65,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
             protect(false);
             defer protect(true);
-            var instrs = getInstructions(0, 0);
-            // determine the code len by doing a dry-run of the encoding process
-            var encoder: InstructionEncoder = .{};
-            const code_len = encoder.encode(&instrs, null);
-            const instance_size = @offsetOf(@This(), "code") + code_len;
+            const len = code_len orelse init: {
+                // determine the code len by doing a dry-run of the encoding process
+                const instrs = try getInstructions(0);
+                var encoder: InstructionEncoder = .{};
+                encoder.encode(&instrs);
+                code_len = encoder.len;
+                break :init encoder.len;
+            };
+            const instance_size = @offsetOf(@This(), "code") + len;
             const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
             const self: *@This() = @ptrCast(new_bytes);
             var ctx: CT = undefined;
@@ -85,12 +92,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .context_bytes = std.mem.toBytes(ctx),
             };
             const self_address = @intFromPtr(self);
-            const caller = getCaller();
-            const caller_address = @intFromPtr(&caller);
-            instrs = getInstructions(self_address, caller_address);
-            // encode the instructions (for real this time)
+            const instrs = try getInstructions(self_address);
             const output_ptr = @as([*]u8, @ptrCast(&self.code));
-            _ = encoder.encode(&instrs, output_ptr[0..code_len]);
+            var encoder: InstructionEncoder = .{ .output = output_ptr[0..len] };
+            encoder.encode(&instrs);
             invalidate(new_bytes);
             return self;
         }
@@ -147,56 +152,45 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             try expect(ptr2 == null);
         }
 
-        fn getInstructions(self_address: usize, caller_address: usize) return_type: {
+        fn getInstructions(self_address: usize) !return_type: {
             const count = switch (builtin.target.cpu.arch) {
-                .x86_64 => 7,
+                .x86_64 => 4,
                 .aarch64 => 11,
                 .riscv64 => 15,
                 .powerpc64le => 19,
-                .x86 => 10,
+                .x86 => 4,
                 .arm => 15,
                 else => unreachable,
             };
             break :return_type [count]Instruction;
         } {
-            const signature = comptime getSignature();
-            const signature_offset = comptime getSignatureOffset();
-            const code_address = self_address + @offsetOf(@This(), "code");
+            const trampoline = getTrampoline();
+            const trampoline_address = @intFromPtr(&trampoline);
+            const self_address_offset = self_offset orelse init: {
+                const offset = try findAddressOffset(&trampoline);
+                self_offset = offset;
+                break :init offset;
+            };
+            // std.debug.print("self_address = {d}\n", .{self_address});
+            // std.debug.print("self_address_offset = {d}\n", .{self_address_offset});
             return switch (builtin.target.cpu.arch) {
                 .x86_64 => .{
-                    .{ // mov rax, signature
-                        .rex = .{},
-                        .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm64 = signature,
-                    },
-                    .{ // not rax
-                        .rex = .{},
-                        .opcode = Instruction.Opcode.calc_rm,
-                        .mod_rm = .{ .reg = 2, .mod = 3 },
-                    },
-                    .{ // mov [rsp - signature_offset], rax
-                        .rex = .{},
-                        .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset,
-                    },
                     .{ // mov rax, self_address
                         .rex = .{},
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm64 = self_address,
                     },
-                    .{ // mov [rsp - signature_offset + 8], rax
+                    .{ // mov [rsp + self_address_offset], rax
                         .rex = .{},
                         .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
                         .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 8,
+                        .disp32 = @truncate(self_address_offset),
                     },
-                    .{ // mov rax, caller_address
+                    .{ // mov rax, trampoline_address
                         .rex = .{},
                         .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm64 = caller_address,
+                        .imm64 = trampoline_address,
                     },
                     .{ // jmp [rax]
                         .rex = .{},
@@ -204,301 +198,257 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
-                .aarch64 => .{
-                    .{ // sub x10, sp, signature_offset
-                        .sub = .{
-                            .rd = 10,
-                            .rn = 31,
-                            .imm12 = if (signature_offset < 0x1000) signature_offset else signature_offset >> 12,
-                            .shift = if (signature_offset < 0x1000) 0 else 1,
-                        },
-                    },
-                    .{ // ldr x9, [pc + 28] (signature)
-                        .ldr = .{ .rt = 9, .imm19 = 7 },
-                    },
-                    .{ // mvn x9, x9
-                        .mvn = .{ .rd = 9, .rm = 9 },
-                    },
-                    .{ // str [x10], x9
-                        .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
-                    },
-                    .{ // ldr x9, [pc + 24] (self_address)
-                        .ldr = .{ .rt = 9, .imm19 = 4 + 2 },
-                    },
-                    .{ // str [x10 + 8], x9
-                        .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
-                    },
-                    .{ // ldr x9, [pc + 24] (caller_address)
-                        .ldr = .{ .rt = 9, .imm19 = 2 + 4 },
-                    },
-                    .{ // br [x9]
-                        .br = .{ .rn = 9 },
-                    },
-                    .{ .literal = signature },
-                    .{ .literal = self_address },
-                    .{ .literal = caller_address },
-                },
-                .riscv64 => .{
-                    .{ // lui x5, signature_offset >> 12 + (sign adjustment)
-                        .lui = .{ .rd = 5, .imm20 = (signature_offset >> 12) + ((signature_offset >> 11) & 1) },
-                    },
-                    .{ // mv x5, (signature_offset & 0xff_ffff)
-                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @bitCast(@as(u12, signature_offset & 0xfff)) },
-                    },
-                    .{ // sub x6, sp, x5
-                        .sub = .{ .rd = 31, .rs1 = 2, .rs2 = 5 },
-                    },
-                    .{ // auipc x7, pc
-                        .auipc = .{ .rd = 7 },
-                    },
-                    .{ // ld x5, [x7 + 32] (signature)
-                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 0 },
-                    },
-                    .{
-                        .xor = .{ .rd = 5, .rs = 5, .imm12 = -1 },
-                    },
-                    .{ // sd [x6], x5
-                        .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 0 },
-                    },
-                    .{ // ld x5, [x7 + 40] (self_address)
-                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 1 },
-                    },
-                    .{ // sd [x6 + 8], x5
-                        .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 1 },
-                    },
-                    .{ // ld x5, [x7 + 48] (caller_address)
-                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 2 },
-                    },
-                    .{ // jmp [x5]
-                        .jalr = .{ .rd = 0, .rs = 5 },
-                    },
-                    .{ // nop
-                        .addi = .{ .rd = 0, .rs = 0, .imm12 = 0 },
-                    },
-                    .{ .literal = signature },
-                    .{ .literal = self_address },
-                    .{ .literal = caller_address },
-                },
-                .powerpc64le => .{
-                    .{ // lis r11, (code_address >> 48) & 0xffff
-                        .addi = .{
-                            .rt = 11,
-                            .ra = 0,
-                            .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
-                        },
-                    },
-                    .{ // ori r11, r11, (code_address >> 32) & 0xffff
-                        .ori = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 32) & 0xffff),
-                        },
-                    },
-                    .{ // rldic r11, r11, 32
-                        .rldic = .{
-                            .rs = 11,
-                            .ra = 11,
-                            .sh = 0,
-                            .sh2 = 1,
-                        },
-                    },
-                    .{ // oris r11, r11, (code_address >> 16) & 0xffff
-                        .oris = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 16) & 0xffff),
-                        },
-                    },
-                    .{ // ori r11, r11, (code_address >> 0) & 0xffff
-                        .ori = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 0) & 0xffff),
-                        },
-                    },
-                    .{ // ld r12, [r11 + 48] (signature)
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 0 },
-                    },
-                    .{ // std [sp - 8], r11
-                        .std = .{ .ra = 1, .rs = 11, .ds = -2 },
-                    },
-                    .{ // lis r11. -1
-                        .addi = .{
-                            .rt = 11,
-                            .ra = 0,
-                            .imm16 = -1,
-                        },
-                    },
-                    .{ // xor r12, r12, r11
-                        .xor = .{ .ra = 12, .rs = 12, .rb = 11 },
-                    },
-                    .{ // std [sp - signature_offset], r12
-                        .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 0 },
-                    },
-                    .{ // ld r11, [sp - 8]
-                        .ld = .{ .rt = 11, .ra = 1, .ds = -2 },
-                    },
-                    .{ // ld r12, [r11 + 56] (self_address)
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 2 },
-                    },
-                    .{ // std [sp - signature_offset + 8], r12
-                        .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 2 },
-                    },
-                    .{ // ld r12, [r11 + 64] (caller_address)
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 4 },
-                    },
-                    .{ // mtctr r12
-                        .mtctr = .{ .rs = 12 },
-                    },
-                    .{ // bctrl
-                        .bctrl = .{},
-                    },
-                    .{ .literal = signature },
-                    .{ .literal = self_address },
-                    .{ .literal = caller_address },
-                },
+                // .aarch64 => .{
+                //     .{ // sub x10, sp, signature_offset
+                //         .sub = .{
+                //             .rd = 10,
+                //             .rn = 31,
+                //             .imm12 = if (signature_offset < 0x1000) signature_offset else signature_offset >> 12,
+                //             .shift = if (signature_offset < 0x1000) 0 else 1,
+                //         },
+                //     },
+                //     .{ // ldr x9, [pc + 28] (signature)
+                //         .ldr = .{ .rt = 9, .imm19 = 7 },
+                //     },
+                //     .{ // mvn x9, x9
+                //         .mvn = .{ .rd = 9, .rm = 9 },
+                //     },
+                //     .{ // str [x10], x9
+                //         .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
+                //     },
+                //     .{ // ldr x9, [pc + 24] (self_address)
+                //         .ldr = .{ .rt = 9, .imm19 = 4 + 2 },
+                //     },
+                //     .{ // str [x10 + 8], x9
+                //         .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
+                //     },
+                //     .{ // ldr x9, [pc + 24] (caller_address)
+                //         .ldr = .{ .rt = 9, .imm19 = 2 + 4 },
+                //     },
+                //     .{ // br [x9]
+                //         .br = .{ .rn = 9 },
+                //     },
+                //     .{ .literal = signature },
+                //     .{ .literal = self_address },
+                //     .{ .literal = caller_address },
+                // },
+                // .riscv64 => .{
+                //     .{ // lui x5, signature_offset >> 12 + (sign adjustment)
+                //         .lui = .{ .rd = 5, .imm20 = (signature_offset >> 12) + ((signature_offset >> 11) & 1) },
+                //     },
+                //     .{ // mv x5, (signature_offset & 0xff_ffff)
+                //         .addi = .{ .rd = 5, .rs = 0, .imm12 = @bitCast(@as(u12, signature_offset & 0xfff)) },
+                //     },
+                //     .{ // sub x6, sp, x5
+                //         .sub = .{ .rd = 31, .rs1 = 2, .rs2 = 5 },
+                //     },
+                //     .{ // auipc x7, pc
+                //         .auipc = .{ .rd = 7 },
+                //     },
+                //     .{ // ld x5, [x7 + 32] (signature)
+                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 0 },
+                //     },
+                //     .{
+                //         .xor = .{ .rd = 5, .rs = 5, .imm12 = -1 },
+                //     },
+                //     .{ // sd [x6], x5
+                //         .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 0 },
+                //     },
+                //     .{ // ld x5, [x7 + 40] (self_address)
+                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 1 },
+                //     },
+                //     .{ // sd [x6 + 8], x5
+                //         .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 1 },
+                //     },
+                //     .{ // ld x5, [x7 + 48] (caller_address)
+                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 2 },
+                //     },
+                //     .{ // jmp [x5]
+                //         .jalr = .{ .rd = 0, .rs = 5 },
+                //     },
+                //     .{ // nop
+                //         .addi = .{ .rd = 0, .rs = 0, .imm12 = 0 },
+                //     },
+                //     .{ .literal = signature },
+                //     .{ .literal = self_address },
+                //     .{ .literal = caller_address },
+                // },
+                // .powerpc64le => .{
+                //     .{ // lis r11, (code_address >> 48) & 0xffff
+                //         .addi = .{
+                //             .rt = 11,
+                //             .ra = 0,
+                //             .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
+                //         },
+                //     },
+                //     .{ // ori r11, r11, (code_address >> 32) & 0xffff
+                //         .ori = .{
+                //             .ra = 11,
+                //             .rs = 11,
+                //             .imm16 = @truncate((code_address >> 32) & 0xffff),
+                //         },
+                //     },
+                //     .{ // rldic r11, r11, 32
+                //         .rldic = .{
+                //             .rs = 11,
+                //             .ra = 11,
+                //             .sh = 0,
+                //             .sh2 = 1,
+                //         },
+                //     },
+                //     .{ // oris r11, r11, (code_address >> 16) & 0xffff
+                //         .oris = .{
+                //             .ra = 11,
+                //             .rs = 11,
+                //             .imm16 = @truncate((code_address >> 16) & 0xffff),
+                //         },
+                //     },
+                //     .{ // ori r11, r11, (code_address >> 0) & 0xffff
+                //         .ori = .{
+                //             .ra = 11,
+                //             .rs = 11,
+                //             .imm16 = @truncate((code_address >> 0) & 0xffff),
+                //         },
+                //     },
+                //     .{ // ld r12, [r11 + 48] (signature)
+                //         .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 0 },
+                //     },
+                //     .{ // std [sp - 8], r11
+                //         .std = .{ .ra = 1, .rs = 11, .ds = -2 },
+                //     },
+                //     .{ // lis r11. -1
+                //         .addi = .{
+                //             .rt = 11,
+                //             .ra = 0,
+                //             .imm16 = -1,
+                //         },
+                //     },
+                //     .{ // xor r12, r12, r11
+                //         .xor = .{ .ra = 12, .rs = 12, .rb = 11 },
+                //     },
+                //     .{ // std [sp - signature_offset], r12
+                //         .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 0 },
+                //     },
+                //     .{ // ld r11, [sp - 8]
+                //         .ld = .{ .rt = 11, .ra = 1, .ds = -2 },
+                //     },
+                //     .{ // ld r12, [r11 + 56] (self_address)
+                //         .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 2 },
+                //     },
+                //     .{ // std [sp - signature_offset + 8], r12
+                //         .std = .{ .ra = 1, .rs = 12, .ds = -signature_offset / 4 + 2 },
+                //     },
+                //     .{ // ld r12, [r11 + 64] (caller_address)
+                //         .ld = .{ .rt = 12, .ra = 11, .ds = 16 + 4 },
+                //     },
+                //     .{ // mtctr r12
+                //         .mtctr = .{ .rs = 12 },
+                //     },
+                //     .{ // bctrl
+                //         .bctrl = .{},
+                //     },
+                //     .{ .literal = signature },
+                //     .{ .literal = self_address },
+                //     .{ .literal = caller_address },
+                // },
                 .x86 => .{
-                    .{ // mov ax, signature
-                        .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm32 = signature & 0xffff_ffff,
-                    },
-                    .{ // not ax, ax
-                        .opcode = Instruction.Opcode.calc_rm,
-                        .mod_rm = .{ .reg = 2, .mod = 3 },
-                    },
-                    .{ // mov [sp - signature_offset], ax
-                        .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset,
-                    },
-                    .{ // mov ax, signature
-                        .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm32 = signature >> 32,
-                    },
-                    .{ // not ax
-                        .opcode = Instruction.Opcode.calc_rm,
-                        .mod_rm = .{ .reg = 2, .mod = 3 },
-                    },
-                    .{ // mov [sp - signature_offset + 4], ax
-                        .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 4,
-                    },
-                    .{ // mov ax, self_address
+                    .{ // mov eax, self_address
                         .opcode = Instruction.Opcode.mov_ax_imm,
                         .imm32 = self_address,
                     },
-                    .{ // mov [sp - signature_offset + 8], ax
+                    .{ // mov [esp + self_address_offset], eax
                         .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2 },
+                        .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
                         .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = -signature_offset + 8,
+                        .disp32 = @truncate(self_address_offset),
                     },
-                    .{ // mov ax, caller_address
+                    .{ // mov eax, trampoline_address
                         .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm32 = caller_address,
+                        .imm32 = trampoline_address,
                     },
-                    .{ // jmp [ax]
+                    .{ // jmp [eax]
                         .opcode = Instruction.Opcode.jmp_rm,
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
-                .arm => .{
-                    .{ // sub r5, sp, signature_offset
-                        .sub = .{
-                            .rd = 5,
-                            .rn = 13,
-                            .imm12 = comptime Instruction.imm12(signature_offset),
-                        },
-                    },
-                    .{ // ldr r4, [pc + 32] (signature & 0xffffffff)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 8 + @sizeOf(u32) * 0) },
-                    },
-                    .{ // not r4, r4
-                        .mvn = .{ .rd = 4, .rm = 4 },
-                    },
-                    .{ // str [r5], r4
-                        .str = .{ .rn = 5, .rt = 4 },
-                    },
-                    .{ // ldr r4, [pc + ?] (signature >> 32)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 5 + @sizeOf(u32) * 1) },
-                    },
-                    .{ // not r4, r4
-                        .mvn = .{ .rd = 4, .rm = 4 },
-                    },
-                    .{ // str [r5 + 4], r4
-                        .str = .{ .rn = 5, .rt = 4, .imm12 = 4 },
-                    },
-                    .{ // ldr r4, [pc + ?] (self_address)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 2) },
-                    },
-                    .{ // str [r5 + 8], r4
-                        .str = .{ .rn = 5, .rt = 4, .imm12 = 8 },
-                    },
-                    .{ // ldr r4, [pc + ?] (caller_addr)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 3) },
-                    },
-                    .{ // bx [r4]
-                        .bx = .{ .rm = 4 },
-                    },
-                    .{ .literal = signature & 0xffff_ffff },
-                    .{ .literal = signature >> 32 },
-                    .{ .literal = self_address },
-                    .{ .literal = caller_address },
-                },
+                // .arm => .{
+                //     .{ // sub r5, sp, signature_offset
+                //         .sub = .{
+                //             .rd = 5,
+                //             .rn = 13,
+                //             .imm12 = comptime Instruction.imm12(signature_offset),
+                //         },
+                //     },
+                //     .{ // ldr r4, [pc + 32] (signature & 0xffffffff)
+                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 8 + @sizeOf(u32) * 0) },
+                //     },
+                //     .{ // not r4, r4
+                //         .mvn = .{ .rd = 4, .rm = 4 },
+                //     },
+                //     .{ // str [r5], r4
+                //         .str = .{ .rn = 5, .rt = 4 },
+                //     },
+                //     .{ // ldr r4, [pc + ?] (signature >> 32)
+                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 5 + @sizeOf(u32) * 1) },
+                //     },
+                //     .{ // not r4, r4
+                //         .mvn = .{ .rd = 4, .rm = 4 },
+                //     },
+                //     .{ // str [r5 + 4], r4
+                //         .str = .{ .rn = 5, .rt = 4, .imm12 = 4 },
+                //     },
+                //     .{ // ldr r4, [pc + ?] (self_address)
+                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 2) },
+                //     },
+                //     .{ // str [r5 + 8], r4
+                //         .str = .{ .rn = 5, .rt = 4, .imm12 = 8 },
+                //     },
+                //     .{ // ldr r4, [pc + ?] (caller_addr)
+                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 3) },
+                //     },
+                //     .{ // bx [r4]
+                //         .bx = .{ .rm = 4 },
+                //     },
+                //     .{ .literal = signature & 0xffff_ffff },
+                //     .{ .literal = signature >> 32 },
+                //     .{ .literal = self_address },
+                //     .{ .literal = caller_address },
+                // },
                 else => .{},
             };
         }
 
-        fn getCaller() BFT {
+        fn getTrampoline() BFT {
             const bf = @typeInfo(BFT).@"fn";
             const RT = bf.return_type.?;
             const cc = bf.calling_convention;
             const Self = @This();
             const ns = struct {
                 inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
-                    const sp_address = switch (builtin.target.cpu.arch) {
-                        .x86_64 => asm (""
-                            : [ret] "={rsp}" (-> usize),
+                    // disable runtime safety so self_address isn't written with 0xaa when optimize = Debug
+                    @setRuntimeSafety(false);
+                    // this variable will be set by dynamically generated code before the jump
+                    var self_address: usize = undefined;
+                    // insert nop x 3 so we can find the displacement for self_address in the instruction stream
+                    const asm_code =
+                        \\ nop
+                        \\ nop
+                        \\ nop
+                    ;
+                    switch (builtin.target.cpu.arch) {
+                        .x86_64 => asm volatile (asm_code
+                            :
+                            : [arg1] "{rax}" (&self_address),
                         ),
-                        .x86 => asm (""
-                            : [ret] "={esp}" (-> usize),
+                        .x86 => asm volatile (asm_code
+                            :
+                            : [arg1] "{eax}" (&self_address),
                         ),
-                        .powerpc64le => asm (""
-                            : [ret] "={r1}" (-> usize),
-                        ),
-                        else => asm (""
-                            : [ret] "={sp}" (-> usize),
-                        ),
-                    };
-                    // look for context pointer in memory above the stack
-                    const signature = comptime getSignature();
-                    const signature_offset = comptime getSignatureOffset();
-                    const ptr: [*]usize = @ptrFromInt(sp_address - signature_offset);
-                    const self_address = search_result: {
-                        var i: usize = 0;
-                        while (i >= 0) {
-                            const match = switch (@bitSizeOf(usize)) {
-                                64 => (ptr[i] ^ 0xffff_ffff_ffff_ffff) == signature,
-                                32 => result: {
-                                    if ((ptr[i] ^ 0xffff_ffff) == (signature & 0xffff_ffff)) {
-                                        if ((ptr[i + 1] ^ 0xffff_ffff) == (signature >> 32)) {
-                                            i += 1;
-                                            break :result true;
-                                        }
-                                    }
-                                    break :result false;
-                                },
-                                else => unreachable,
-                            };
-                            i += 1;
-                            // the context pointer is right below the signature (larger address)
-                            if (match) break :search_result ptr[i];
-                        }
-                    };
+                        else => unreachable,
+                    }
+                    // std.debug.print("self_address(r) = {d}\n", .{self_address});
                     const self: *const Self = @ptrFromInt(self_address);
+                    std.debug.assert(self.signature == binding_signature);
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -514,27 +464,38 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             return fn_transform.spreadArgs(ns.call, cc);
         }
 
-        fn getSignature() u64 {
-            return std.hash.cityhash.CityHash64.hash(@typeName(@This()));
-        }
-
-        fn getSignatureOffset() comptime_int {
-            const arg_size = @sizeOf(std.meta.ArgsTuple(BFT));
-            return switch (builtin.target.cpu.arch) {
-                .x86 => 1024 + arg_size * 8,
-                .x86_64 => 1024 + arg_size * 8,
-                .aarch64 => 512 + arg_size * 8,
-                .arm => 1024 + arg_size * 8,
-                .powerpc64le => 1024 + arg_size * 8,
-                .riscv64 => 4096 + arg_size * 8,
+        fn findAddressOffset(ptr: *const anyopaque) !isize {
+            switch (builtin.target.cpu.arch) {
+                .x86, .x86_64 => {
+                    const instrs: [*]const u8 = @ptrCast(ptr);
+                    for (0..65536) |i| {
+                        if (instrs[i] == 0x90 and instrs[i + 1] == 0x90 and instrs[i + 2] == 0x90) {
+                            for ([_]usize{ i - 3, i - 6 }) |j| { // disp is either i8 or i32
+                                if (instrs[j] == @intFromEnum(Instruction.Opcode.lea_r_r)) {
+                                    const mod_rm: Instruction.ModRM = @bitCast(instrs[j + 1]);
+                                    if (mod_rm.rm == 5) { // EBP/RBP
+                                        const disp: isize = switch (mod_rm.mod) {
+                                            1 => std.mem.bytesToValue(i8, instrs[j + 2 .. j + 3]),
+                                            2 => std.mem.bytesToValue(i32, instrs[j + 2 .. j + 6]),
+                                            else => unreachable,
+                                        };
+                                        // account for EBP/RBP being pushed at function start
+                                        return disp - @sizeOf(usize);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return error.Unexpected;
+                },
                 else => unreachable,
-            };
+            }
         }
     };
 }
 
-test "Binding (i64 x 3)" {
-    const ns1 = struct {
+test "Binding (i64 x 3 + i64 x 1)" {
+    const ns = struct {
         var called = false;
 
         fn add(a1: i64, a2: i64, a3: i64, a4: i64) callconv(.C) i64 {
@@ -544,32 +505,64 @@ test "Binding (i64 x 3)" {
     };
     var number: i64 = 1234;
     _ = &number;
-    const vars1 = .{ .@"-1" = number };
-    const Binding1 = Binding(@TypeOf(ns1.add), @TypeOf(vars1));
-    var gpa = executable();
-    const bf1 = try Binding1.bind(gpa.allocator(), ns1.add, vars1);
-    try expect(@TypeOf(bf1) == *const fn (i64, i64, i64) callconv(.C) i64);
-    defer _ = Binding1.unbind(gpa.allocator(), bf1);
-    const sum1 = bf1(1, 2, 3);
-    try expect(ns1.called == true);
+    const vars = .{ .@"-1" = number };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) callconv(.C) i64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum1 = bf(1, 2, 3);
+    try expect(ns.called == true);
     try expect(sum1 == 1 + 2 + 3 + 1234);
-    const ns2 = struct {
+}
+
+test "Binding (i64 x 3 + *i64 x 1)" {
+    const ns = struct {
         var called = false;
 
         fn add(a1: *i64, a2: i64, a3: i64, a4: i64) void {
             a1.* = a2 + a3 + a4;
         }
     };
-    const vars2 = .{&number};
-    const Binding2 = Binding(@TypeOf(ns2.add), @TypeOf(vars2));
-    const bf2 = try Binding2.bind(gpa.allocator(), ns2.add, vars2);
-    defer _ = Binding2.unbind(gpa.allocator(), bf2);
-    bf2(1, 2, 3);
+    var number: i64 = undefined;
+    const vars = .{&number};
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    bf(1, 2, 3);
     try expect(number == 1 + 2 + 3);
-    try expect(bf1(1, 2, 3) == 1 + 2 + 3 + 1234);
 }
 
-test "Binding (i64 x 6)" {
+test "Binding ([no args] + i64 x 4)" {
+    const ns = struct {
+        var called = false;
+
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) callconv(.C) i64 {
+            called = true;
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var number1: i64 = 1;
+    var number2: i64 = 2;
+    var number3: i64 = 3;
+    var number4: i64 = 4;
+    _ = &number1;
+    _ = &number2;
+    _ = &number3;
+    _ = &number4;
+    const vars = .{ number1, number2, number3, number4 };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn () callconv(.C) i64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum1 = bf();
+    try expect(ns.called == true);
+    try expect(sum1 == 1 + 2 + 3 + 4);
+}
+
+test "Binding (i64 x 6 + i64 x 1)" {
     const ns = struct {
         var called = false;
 
@@ -581,15 +574,15 @@ test "Binding (i64 x 6)" {
     var number: i64 = 7;
     _ = &number;
     const vars = .{ .@"-1" = number };
-    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var gpa = executable();
-    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
-    defer _ = Binding1.unbind(gpa.allocator(), bf);
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(1, 2, 3, 4, 5, 6);
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7);
 }
 
-test "Binding (i64 x 9)" {
+test "Binding (i64 x 9 + i64 x 1)" {
     const ns = struct {
         var called = false;
 
@@ -601,15 +594,15 @@ test "Binding (i64 x 9)" {
     var number: i64 = 10;
     _ = &number;
     const vars = .{ .@"-1" = number };
-    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var gpa = executable();
-    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
-    defer _ = Binding1.unbind(gpa.allocator(), bf);
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
 }
 
-test "Binding (i64 x 12)" {
+test "Binding (i64 x 12 + i64 x 1)" {
     const ns = struct {
         var called = false;
 
@@ -621,10 +614,10 @@ test "Binding (i64 x 12)" {
     var number: i64 = 13;
     _ = &number;
     const vars = .{ .@"-1" = number };
-    const Binding1 = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var gpa = executable();
-    const bf = try Binding1.bind(gpa.allocator(), ns.add, vars);
-    defer _ = Binding1.unbind(gpa.allocator(), bf);
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13);
 }
@@ -820,6 +813,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
     .x86, .x86_64 => struct {
         pub const Opcode = enum(u8) {
             mov_rm_r = 0x89,
+            lea_r_r = 0x8d,
             nop = 0x90,
             mov_ax_imm = 0xb8,
             calc_rm = 0xf7,
@@ -830,19 +824,19 @@ const Instruction = switch (builtin.target.cpu.arch) {
             _,
         };
 
-        const REX = packed struct {
+        pub const REX = packed struct {
             b: u1 = 0,
             x: u1 = 0,
             r: u1 = 0,
             w: u1 = 1,
             pat: u4 = 4,
         };
-        const ModRM = packed struct {
+        pub const ModRM = packed struct {
             rm: u3 = 0,
             reg: u3 = 0,
             mod: u2 = 0,
         };
-        const SIB = packed struct {
+        pub const SIB = packed struct {
             base: u3 = 0,
             index: u3 = 0,
             scale: u2 = 0,
@@ -1101,13 +1095,10 @@ const InstructionEncoder = struct {
     output: ?[]u8 = null,
     len: usize = 0,
 
-    pub fn encode(self: *@This(), instrs: []Instruction, output: ?[]u8) usize {
-        self.output = output;
-        self.len = 0;
+    pub fn encode(self: *@This(), instrs: []const Instruction) void {
         for (instrs) |instr| {
             self.add(instr);
         }
-        return self.len;
     }
 
     fn add(self: *@This(), instr: anytype) void {
