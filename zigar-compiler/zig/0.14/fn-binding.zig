@@ -155,7 +155,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         fn getInstructions(self_address: usize) !return_type: {
             const count = switch (builtin.target.cpu.arch) {
                 .x86_64 => 4,
-                .aarch64 => 11,
+                .aarch64 => 7,
                 .riscv64 => 15,
                 .powerpc64le => 19,
                 .x86 => 4,
@@ -198,40 +198,30 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
-                // .aarch64 => .{
-                //     .{ // sub x10, sp, signature_offset
-                //         .sub = .{
-                //             .rd = 10,
-                //             .rn = 31,
-                //             .imm12 = if (signature_offset < 0x1000) signature_offset else signature_offset >> 12,
-                //             .shift = if (signature_offset < 0x1000) 0 else 1,
-                //         },
-                //     },
-                //     .{ // ldr x9, [pc + 28] (signature)
-                //         .ldr = .{ .rt = 9, .imm19 = 7 },
-                //     },
-                //     .{ // mvn x9, x9
-                //         .mvn = .{ .rd = 9, .rm = 9 },
-                //     },
-                //     .{ // str [x10], x9
-                //         .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
-                //     },
-                //     .{ // ldr x9, [pc + 24] (self_address)
-                //         .ldr = .{ .rt = 9, .imm19 = 4 + 2 },
-                //     },
-                //     .{ // str [x10 + 8], x9
-                //         .str = .{ .rn = 10, .rt = 9, .imm12 = 1 },
-                //     },
-                //     .{ // ldr x9, [pc + 24] (caller_address)
-                //         .ldr = .{ .rt = 9, .imm19 = 2 + 4 },
-                //     },
-                //     .{ // br [x9]
-                //         .br = .{ .rn = 9 },
-                //     },
-                //     .{ .literal = signature },
-                //     .{ .literal = self_address },
-                //     .{ .literal = caller_address },
-                // },
+                .aarch64 => .{
+                    .{ // sub x10, sp, -self_address_offset
+                        .sub = .{
+                            .rd = 10,
+                            .rn = 31,
+                            .imm12 = @as(u12, @intCast(if (-self_address_offset < 0x1000) -self_address_offset else -self_address_offset >> 12)),
+                            .shift = if (-self_address_offset < 0x1000) 0 else 1,
+                        },
+                    },
+                    .{ // ldr x9, [pc + 24] (self_address)
+                        .ldr = .{ .rt = 9, .imm19 = 4 },
+                    },
+                    .{ // str [x10], x9
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
+                    },
+                    .{ // ldr x9, [pc + 24] (trampoline_address)
+                        .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
+                    },
+                    .{ // br [x9]
+                        .br = .{ .rn = 9 },
+                    },
+                    .{ .literal = self_address },
+                    .{ .literal = trampoline_address },
+                },
                 // .riscv64 => .{
                 //     .{ // lui x5, signature_offset >> 12 + (sign adjustment)
                 //         .lui = .{ .rd = 5, .imm20 = (signature_offset >> 12) + ((signature_offset >> 11) & 1) },
@@ -440,13 +430,29 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             :
                             : [arg1] "{rax}" (&self_address),
                         ),
+                        .aarch64 => asm volatile (asm_code
+                            :
+                            : [arg1] "{x1}" (&self_address),
+                        ),
                         .x86 => asm volatile (asm_code
                             :
                             : [arg1] "{eax}" (&self_address),
                         ),
                         else => unreachable,
                     }
+                    // const x10 = asm (""
+                    //     : [ret] "={x10}" (-> usize),
+                    // );
+                    // const x11 = asm (""
+                    //     : [ret] "={x11}" (-> usize),
+                    // );
+                    // const sp = asm (""
+                    //     : [ret] "={sp}" (-> usize),
+                    // );
                     // std.debug.print("self_address(r) = {d}\n", .{self_address});
+                    // std.debug.print("&self_address = {d}\n", .{@intFromPtr(&self_address)});
+                    // std.debug.print("sp = {d}\n", .{sp});
+                    // std.debug.print("x10 = {d}\n", .{x10});
                     const self: *const Self = @ptrFromInt(self_address);
                     std.debug.assert(self.signature == binding_signature);
                     var args: std.meta.ArgsTuple(FT) = undefined;
@@ -468,10 +474,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             switch (builtin.target.cpu.arch) {
                 .x86, .x86_64 => {
                     const instrs: [*]const u8 = @ptrCast(ptr);
-                    for (0..65536) |i| {
-                        if (instrs[i] == 0x90 and instrs[i + 1] == 0x90 and instrs[i + 2] == 0x90) {
-                            for ([_]usize{ i - 3, i - 6 }) |j| { // disp is either i8 or i32
-                                if (instrs[j] == @intFromEnum(Instruction.Opcode.lea_r_r)) {
+                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    const lea = @intFromEnum(Instruction.Opcode.lea_r_r);
+                    for (0..262144) |i| {
+                        if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            for ([_]usize{ 3, 6 }) |offset| { // disp is either i8 or i32
+                                if (i >= offset and instrs[i - offset] == lea) {
+                                    const j = i - offset;
                                     const mod_rm: Instruction.ModRM = @bitCast(instrs[j + 1]);
                                     if (mod_rm.rm == 5) { // EBP/RBP
                                         const disp: isize = switch (mod_rm.mod) {
@@ -483,13 +492,45 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                         return disp - @sizeOf(usize);
                                     }
                                 }
+                            } else break;
+                        }
+                    }
+                },
+                .aarch64 => {
+                    const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
+                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    var registers: [32]isize = .{0} ** 32;
+                    var target_op: ?Instruction.ADD = null;
+                    for (0..65536) |i| {
+                        if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            if (target_op) |op| {
+                                var offset = registers[1];
+                                if (op.rn != 31) {
+                                    // sometimes another register holds an offset from the stack pointer
+                                    offset += registers[op.rn];
+                                }
+                                offset += registers[31];
+                                return offset;
+                            } else break;
+                        } else {
+                            const add: Instruction.ADD = @bitCast(instrs[i]);
+                            const is_add = add.opc == @intFromEnum(Instruction.Opcode.add);
+                            const is_sub = add.opc == @intFromEnum(Instruction.Opcode.sub);
+                            if ((is_add or is_sub) and (add.rn == 31 or add.rd == 1)) {
+                                const disp = switch (add.shift) {
+                                    0 => add.imm12,
+                                    1 => @as(isize, @intCast(add.imm12)) << 12,
+                                };
+                                registers[add.rd] = if (is_sub) -disp else disp;
+                                // x1 is where the address of self_address goes
+                                if (add.rd == 1) target_op = add;
                             }
                         }
                     }
-                    return error.Unexpected;
                 },
                 else => unreachable,
             }
+            return error.Unexpected;
         }
     };
 }
@@ -816,7 +857,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
             lea_r_r = 0x8d,
             nop = 0x90,
             mov_ax_imm = 0xb8,
-            calc_rm = 0xf7,
             jmp_rm = 0xff,
             _,
         };
@@ -854,47 +894,51 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
-        movz: packed struct(u32) {
-            rd: u5,
-            imm16: u16,
-            hw: u2,
-            opc: u9 = 0x1a5,
-        },
-        sub: packed struct(u32) {
+        pub const Opcode = enum(u32) {
+            add = 0x122,
+            sub = 0x1a2,
+            ldr = 0x58,
+            str = 0x3e4,
+            br = 0x35_87c0,
+            nop = 0xd503_201f,
+            _,
+        };
+        const ADD = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
-            opc: u9 = 0x162,
-        },
-        mvn: packed struct(u32) {
+            opc: u9 = @intFromEnum(Opcode.add),
+        };
+        const SUB = packed struct(u32) {
             rd: u5,
-            rn: u5 = 0x1f,
-            imm6: u6 = 0,
-            rm: u5,
-            _: u1 = 1,
-            shift: u2 = 0,
-            opc: u8 = 0xaa,
-        },
-        ldr: packed struct(u32) {
+            rn: u5,
+            imm12: u12,
+            shift: u1 = 0,
+            opc: u9 = @intFromEnum(Opcode.sub),
+        };
+        const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
-            opc: u8 = 0x58,
-        },
-        str: packed struct(u32) {
+            opc: u8 = @intFromEnum(Opcode.ldr),
+        };
+        const STR = packed struct(u32) {
             rt: u5,
             rn: u5,
             imm12: u12 = 0,
-            opc: u10 = 0x3e4,
-        },
-        br: packed struct(u32) {
+            opc: u10 = @intFromEnum(Opcode.str),
+        };
+        const BR = packed struct(u32) {
             rm: u5 = 0,
             rn: u5,
-            opc: u22 = 0x35_87c0,
-        },
-        nop: packed struct(u32) {
-            opc: u32 = 0xd503_201f,
-        },
+            opc: u22 = @intFromEnum(Opcode.br),
+        };
+
+        add: ADD,
+        sub: SUB,
+        ldr: LDR,
+        str: STR,
+        br: BR,
         literal: usize,
     },
     .riscv64 => union(enum) {
