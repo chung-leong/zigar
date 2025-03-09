@@ -156,10 +156,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const count = switch (builtin.target.cpu.arch) {
                 .x86_64 => 4,
                 .aarch64 => 7,
-                .riscv64 => 15,
+                .riscv64 => 7,
                 .powerpc64le => 19,
                 .x86 => 4,
-                .arm => 15,
+                .arm => 7,
                 else => unreachable,
             };
             break :return_type [count]Instruction;
@@ -207,13 +207,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             .shift = if (-self_address_offset < 0x1000) 0 else 1,
                         },
                     },
-                    .{ // ldr x9, [pc + 24] (self_address)
+                    .{ // ldr x9, [pc + 16] (self_address)
                         .ldr = .{ .rt = 9, .imm19 = 4 },
                     },
                     .{ // str [x10], x9
                         .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
                     },
-                    .{ // ldr x9, [pc + 24] (trampoline_address)
+                    .{ // ldr x9, [pc + 16] (trampoline_address)
                         .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
                     },
                     .{ // br [x9]
@@ -361,49 +361,29 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
-                // .arm => .{
-                //     .{ // sub r5, sp, signature_offset
-                //         .sub = .{
-                //             .rd = 5,
-                //             .rn = 13,
-                //             .imm12 = comptime Instruction.imm12(signature_offset),
-                //         },
-                //     },
-                //     .{ // ldr r4, [pc + 32] (signature & 0xffffffff)
-                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 8 + @sizeOf(u32) * 0) },
-                //     },
-                //     .{ // not r4, r4
-                //         .mvn = .{ .rd = 4, .rm = 4 },
-                //     },
-                //     .{ // str [r5], r4
-                //         .str = .{ .rn = 5, .rt = 4 },
-                //     },
-                //     .{ // ldr r4, [pc + ?] (signature >> 32)
-                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 5 + @sizeOf(u32) * 1) },
-                //     },
-                //     .{ // not r4, r4
-                //         .mvn = .{ .rd = 4, .rm = 4 },
-                //     },
-                //     .{ // str [r5 + 4], r4
-                //         .str = .{ .rn = 5, .rt = 4, .imm12 = 4 },
-                //     },
-                //     .{ // ldr r4, [pc + ?] (self_address)
-                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 2) },
-                //     },
-                //     .{ // str [r5 + 8], r4
-                //         .str = .{ .rn = 5, .rt = 4, .imm12 = 8 },
-                //     },
-                //     .{ // ldr r4, [pc + ?] (caller_addr)
-                //         .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 3) },
-                //     },
-                //     .{ // bx [r4]
-                //         .bx = .{ .rm = 4 },
-                //     },
-                //     .{ .literal = signature & 0xffff_ffff },
-                //     .{ .literal = signature >> 32 },
-                //     .{ .literal = self_address },
-                //     .{ .literal = caller_address },
-                // },
+                .arm => .{
+                    .{ // sub r5, sp, -self_address_offset
+                        .sub = .{
+                            .rd = 5,
+                            .rn = 13,
+                            .imm12 = Instruction.imm12(@as(u32, @intCast(-self_address_offset))),
+                        },
+                    },
+                    .{ // ldr r4, [pc + 4] (self_address)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 0) },
+                    },
+                    .{ // str [r5], r4
+                        .str = .{ .rn = 5, .rt = 4, .imm12 = 0 },
+                    },
+                    .{ // ldr r4, [pc + 4] (trampoline_address)
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 1) },
+                    },
+                    .{ // bx [r4]
+                        .bx = .{ .rm = 4 },
+                    },
+                    .{ .literal = self_address },
+                    .{ .literal = trampoline_address },
+                },
                 else => .{},
             };
         }
@@ -437,6 +417,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .x86 => asm volatile (asm_code
                             :
                             : [arg1] "{eax}" (&self_address),
+                        ),
+                        .arm => asm volatile (asm_code
+                            :
+                            : [arg1] "{r1}" (&self_address),
                         ),
                         else => unreachable,
                     }
@@ -524,6 +508,30 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 registers[add.rd] = if (is_sub) -disp else disp;
                                 // x1 is where the address of self_address goes
                                 if (add.rd == 1) target_op = add;
+                            }
+                        }
+                    }
+                },
+                .arm => {
+                    const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
+                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    var registers: [32]isize = .{0} ** 32;
+                    for (0..65536) |i| {
+                        if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            return registers[1];
+                        } else {
+                            const add: Instruction.ADD = @bitCast(instrs[i]);
+                            const is_add = add.opc == @intFromEnum(Instruction.Opcode.add);
+                            const is_sub = add.opc == @intFromEnum(Instruction.Opcode.sub);
+                            if ((is_add or is_sub) and (add.rn == 13 or add.rd == 1)) {
+                                const amount: isize = @intCast(Instruction.decodeIMM12(add.imm12));
+                                registers[add.rd] = registers[add.rn] + if (is_sub) -amount else amount;
+                            } else {
+                                const push: Instruction.PUSH = @bitCast(instrs[i]);
+                                if (push.opc == @intFromEnum(Instruction.Opcode.push)) {
+                                    const count: isize = @popCount(push.regs);
+                                    registers[13] -= count * 4;
+                                }
                             }
                         }
                     }
@@ -1068,68 +1076,88 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .arm => union(enum) {
-        ldr: packed struct(u32) {
+        const Opcode = enum(u32) {
+            ldr = 0x59,
+            str = 0x58,
+            add = 0x28,
+            sub = 0x24,
+            bx = 0x12,
+            push = 0x92d,
+            nop = 0xe320f000,
+        };
+        const LDR = packed struct(u32) {
             imm12: u12,
             rt: u4,
             rn: u4,
-            opc: u8 = 0x59,
+            opc: u8 = @intFromEnum(Opcode.ldr),
             _: u4 = 0,
-        },
-        sub: packed struct(u32) {
-            imm12: u12,
-            rd: u4,
-            rn: u4,
-            opc: u8 = 0x24,
-            _: u4 = 0,
-        },
-        mvn: packed struct(u32) {
-            rm: u4,
-            ___: u1 = 0,
-            type: u2 = 0,
-            imm5: u5 = 0,
-            rd: u4,
-            __: u4 = 0,
-            opc: u8 = 0x1e,
-            _: u4 = 0,
-        },
-        str: packed struct(u32) {
+        };
+        const STR = packed struct(u32) {
             imm12: u12 = 0,
             rt: u4,
             rn: u4,
-            opc: u8 = 0x58,
+            opc: u8 = @intFromEnum(Opcode.str),
             _: u4 = 0,
-        },
-        bx: packed struct(u32) {
+        };
+        const ADD = packed struct(u32) {
+            imm12: u12,
+            rd: u4,
+            rn: u4,
+            opc: u8 = @intFromEnum(Opcode.add),
+            _: u4 = 0,
+        };
+        const SUB = packed struct(u32) {
+            imm12: u12,
+            rd: u4,
+            rn: u4,
+            opc: u8 = @intFromEnum(Opcode.sub),
+            _: u4 = 0,
+        };
+        const BX = packed struct(u32) {
             rm: u4,
             flags: u4 = 0x1,
             imm12: u12 = 0xfff,
-            opc: u8 = 0x12,
+            opc: u8 = @intFromEnum(Opcode.bx),
             _: u4 = 0,
-        },
-        nop: packed struct(u32) {
-            _____: u8 = 0,
-            ____: u4 = 0,
-            ___: u4 = 0xf,
-            __: u4 = 0,
-            opc: u8 = 0x32,
+        };
+        const PUSH = packed struct(u32) {
+            regs: u16,
+            opc: u12 = @intFromEnum(Opcode.push),
             _: u4 = 0,
-        },
+        };
+
+        ldr: LDR,
+        str: STR,
+        sub: SUB,
+        bx: BX,
         literal: usize,
 
-        fn imm12(comptime value: u32) u12 {
-            comptime {
-                var r: u32 = 0;
-                var v: u32 = value;
-                // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
-                while (v & ~@as(u32, 0xff) != 0) {
-                    v = (v << 2) | (v >> 30);
-                    r += 1;
-                    if (r > 15) {
+        pub fn imm12(value: u32) u12 {
+            var r: u32 = 0;
+            var v: u32 = value;
+            // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
+            while (v & ~@as(u32, 0xff) != 0) {
+                v = (v << 2) | (v >> 30);
+                r += 1;
+                if (r > 15) {
+                    if (@inComptime()) {
                         @compileError(std.fmt.comptimePrint("Cannot encode value as imm12: {d}", .{value}));
+                    } else {
+                        @panic("Cannot encode value as imm12");
                     }
                 }
-                return r << 8 | v;
             }
+            return @intCast(r << 8 | v);
+        }
+
+        pub fn decodeIMM12(encoded: u12) u32 {
+            const r: u32 = encoded >> 8;
+            var v: u32 = encoded & 0xff;
+            var i: u32 = 0;
+            while (i < r) : (i += 1) {
+                v = (v >> 2) | (v << 30);
+            }
+            return v;
         }
     },
     else => void,
