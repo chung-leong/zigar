@@ -160,12 +160,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .powerpc64le => 12,
                 .x86 => 4,
                 .arm => 7,
-                else => unreachable,
+                else => @compileError("No support"),
             };
             break :return_type [count]Instruction;
         } {
             const trampoline = getTrampoline();
             const trampoline_address = @intFromPtr(&trampoline);
+            // find the displacement of self_address inside the trampoline function
             const self_address_offset = self_offset orelse init: {
                 const offset = try findAddressOffset(&trampoline);
                 self_offset = offset;
@@ -173,184 +174,218 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             };
             // std.debug.print("self_address = {d}\n", .{self_address});
             // std.debug.print("self_address_offset = {d}\n", .{self_address_offset});
-            const code_address = self_address + @offsetOf(@This(), "code");
-            return switch (builtin.target.cpu.arch) {
-                .x86_64 => .{
-                    .{ // mov rax, self_address
-                        .rex = .{},
-                        .opcode = .mov_ax_imm,
-                        .imm64 = self_address,
-                    },
-                    .{ // mov [rsp + self_address_offset], rax
-                        .rex = .{},
-                        .opcode = .mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = @truncate(self_address_offset),
-                    },
-                    .{ // mov rax, trampoline_address
-                        .rex = .{},
-                        .opcode = .mov_ax_imm,
-                        .imm64 = trampoline_address,
-                    },
-                    .{ // jmp [rax]
-                        .rex = .{},
-                        .opcode = .jmp_rm,
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    },
+            switch (builtin.target.cpu.arch) {
+                .x86_64 => {
+                    return .{
+                        .{ // mov rax, self_address
+                            .rex = .{},
+                            .opcode = .mov_ax_imm,
+                            .imm64 = self_address,
+                        },
+                        switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
+                            // mov [rsp + self_address_offset], rax
+                            true => .{
+                                .rex = .{},
+                                .opcode = .mov_rm_r,
+                                .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                                .sib = .{ .base = 4, .index = 4 },
+                                .disp8 = @truncate(self_address_offset),
+                            },
+                            false => .{
+                                .rex = .{},
+                                .opcode = .mov_rm_r,
+                                .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                                .sib = .{ .base = 4, .index = 4 },
+                                .disp32 = @truncate(self_address_offset),
+                            },
+                        },
+                        .{ // mov rax, trampoline_address
+                            .rex = .{},
+                            .opcode = .mov_ax_imm,
+                            .imm64 = trampoline_address,
+                        },
+                        .{ // jmp [rax]
+                            .rex = .{},
+                            .opcode = .jmp_rm,
+                            .mod_rm = .{ .reg = 4, .mod = 3 },
+                        },
+                    };
                 },
-                .aarch64 => .{
-                    .{ // sub x10, sp, -self_address_offset
-                        .sub = .{
-                            .rd = 10,
-                            .rn = 31,
-                            .imm12 = @as(u12, @intCast(if (-self_address_offset < 0x1000) -self_address_offset else -self_address_offset >> 12)),
-                            .shift = if (-self_address_offset < 0x1000) 0 else 1,
+                .aarch64 => {
+                    const offset = -self_address_offset;
+                    return .{
+                        .{ // sub x10, sp, offset
+                            .sub = .{
+                                .rd = 10,
+                                .rn = 31,
+                                .imm12 = @as(u12, @intCast(if (offset < 0x1000) offset else offset >> 12)),
+                                .shift = if (offset < 0x1000) 0 else 1,
+                            },
                         },
-                    },
-                    .{ // ldr x9, [pc + 16] (self_address)
-                        .ldr = .{ .rt = 9, .imm19 = 4 },
-                    },
-                    .{ // str [x10], x9
-                        .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
-                    },
-                    .{ // ldr x9, [pc + 16] (trampoline_address)
-                        .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
-                    },
-                    .{ // br [x9]
-                        .br = .{ .rn = 9 },
-                    },
-                    .{ .literal = self_address },
-                    .{ .literal = trampoline_address },
+                        .{ // ldr x9, [pc + 16] (self_address)
+                            .ldr = .{ .rt = 9, .imm19 = 4 },
+                        },
+                        .{ // str [x10], x9
+                            .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
+                        },
+                        .{ // ldr x9, [pc + 16] (trampoline_address)
+                            .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
+                        },
+                        .{ // br [x9]
+                            .br = .{ .rn = 9 },
+                        },
+                        .{ .literal = self_address },
+                        .{ .literal = trampoline_address },
+                    };
                 },
-                .riscv64 => .{
-                    .{ // lui x5, -self_address_offset >> 12 + (sign adjustment)
-                        .lui = .{ .rd = 5, .imm20 = @intCast((-self_address_offset >> 12) + ((-self_address_offset >> 11) & 1)) },
-                    },
-                    .{ // addi x5, (-self_address_offset & 0xfff)
-                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(-self_address_offset & 0xfff) },
-                    },
-                    .{ // sub x6, sp, x5
-                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
-                    },
-                    .{ // auipc x7, pc
-                        .auipc = .{ .rd = 7 },
-                    },
-                    .{ // ld x5, [x7 + 20] (self_address)
-                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
-                    },
-                    .{ // sd [x6], x5
-                        .sd = .{ .rs1 = 6, .rs2 = 5 },
-                    },
-                    .{ // ld x5, [x7 + 28] (trampoline_address)
-                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
-                    },
-                    .{ // jmp [x5]
-                        .jalr = .{ .rd = 0, .rs = 5 },
-                    },
-                    .{ .literal = self_address },
-                    .{ .literal = trampoline_address },
+                .riscv64 => {
+                    const offset = -self_address_offset;
+                    return .{
+                        .{ // lui x5, offset >> 12 + (sign adjustment)
+                            .lui = .{ .rd = 5, .imm20 = @intCast((offset >> 12) + ((offset >> 11) & 1)) },
+                        },
+                        .{ // addi x5, (offset & 0xfff)
+                            .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(offset & 0xfff) },
+                        },
+                        .{ // sub x6, sp, x5
+                            .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                        },
+                        .{ // auipc x7, pc
+                            .auipc = .{ .rd = 7 },
+                        },
+                        .{ // ld x5, [x7 + 20] (self_address)
+                            .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
+                        },
+                        .{ // sd [x6], x5
+                            .sd = .{ .rs1 = 6, .rs2 = 5 },
+                        },
+                        .{ // ld x5, [x7 + 28] (trampoline_address)
+                            .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
+                        },
+                        .{ // jmp [x5]
+                            .jalr = .{ .rd = 0, .rs = 5 },
+                        },
+                        .{ .literal = self_address },
+                        .{ .literal = trampoline_address },
+                    };
                 },
-                .powerpc64le => .{
-                    .{ // lis r11, (code_address >> 48) & 0xffff
-                        .addi = .{
-                            .rt = 11,
-                            .ra = 0,
-                            .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
+                .powerpc64le => {
+                    const code_address = self_address + @offsetOf(@This(), "code");
+                    return .{
+                        .{ // lis r11, (code_address >> 48) & 0xffff
+                            .addi = .{
+                                .rt = 11,
+                                .ra = 0,
+                                .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
+                            },
                         },
-                    },
-                    .{ // ori r11, r11, (code_address >> 32) & 0xffff
-                        .ori = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 32) & 0xffff),
+                        .{ // ori r11, r11, (code_address >> 32) & 0xffff
+                            .ori = .{
+                                .ra = 11,
+                                .rs = 11,
+                                .imm16 = @truncate((code_address >> 32) & 0xffff),
+                            },
                         },
-                    },
-                    .{ // rldic r11, r11, 32
-                        .rldic = .{
-                            .rs = 11,
-                            .ra = 11,
-                            .sh = 0,
-                            .sh2 = 1,
+                        .{ // rldic r11, r11, 32
+                            .rldic = .{
+                                .rs = 11,
+                                .ra = 11,
+                                .sh = 0,
+                                .sh2 = 1,
+                            },
                         },
-                    },
-                    .{ // oris r11, r11, (code_address >> 16) & 0xffff
-                        .oris = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 16) & 0xffff),
+                        .{ // oris r11, r11, (code_address >> 16) & 0xffff
+                            .oris = .{
+                                .ra = 11,
+                                .rs = 11,
+                                .imm16 = @truncate((code_address >> 16) & 0xffff),
+                            },
                         },
-                    },
-                    .{ // ori r11, r11, (code_address >> 0) & 0xffff
-                        .ori = .{
-                            .ra = 11,
-                            .rs = 11,
-                            .imm16 = @truncate((code_address >> 0) & 0xffff),
+                        .{ // ori r11, r11, (code_address >> 0) & 0xffff
+                            .ori = .{
+                                .ra = 11,
+                                .rs = 11,
+                                .imm16 = @truncate((code_address >> 0) & 0xffff),
+                            },
                         },
-                    },
-                    .{ // ld r12, [r11 + 40] (self_address)
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
-                    },
-                    .{ // std [sp + self_address_offset], r12
-                        .std = .{ .ra = 1, .rs = 12, .ds = @intCast(self_address_offset >> 2) },
-                    },
-                    .{ // ld r12, [r11 + 48] (trampoline_address)
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 12 },
-                    },
-                    .{ // mtctr r12
-                        .mtctr = .{ .rs = 12 },
-                    },
-                    .{ // bctrl
-                        .bctrl = .{},
-                    },
-                    .{ .literal = self_address },
-                    .{ .literal = trampoline_address },
+                        .{ // ld r12, [r11 + 40] (self_address)
+                            .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
+                        },
+                        .{ // std [sp + self_address_offset], r12
+                            .std = .{ .ra = 1, .rs = 12, .ds = @intCast(self_address_offset >> 2) },
+                        },
+                        .{ // ld r12, [r11 + 48] (trampoline_address)
+                            .ld = .{ .rt = 12, .ra = 11, .ds = 12 },
+                        },
+                        .{ // mtctr r12
+                            .mtctr = .{ .rs = 12 },
+                        },
+                        .{ // bctrl
+                            .bctrl = .{},
+                        },
+                        .{ .literal = self_address },
+                        .{ .literal = trampoline_address },
+                    };
                 },
-                .x86 => .{
-                    .{ // mov eax, self_address
-                        .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm32 = self_address,
-                    },
-                    .{ // mov [esp + self_address_offset], eax
-                        .opcode = Instruction.Opcode.mov_rm_r,
-                        .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                        .sib = .{ .base = 4, .index = 4 },
-                        .disp32 = @truncate(self_address_offset),
-                    },
-                    .{ // mov eax, trampoline_address
-                        .opcode = Instruction.Opcode.mov_ax_imm,
-                        .imm32 = trampoline_address,
-                    },
-                    .{ // jmp [eax]
-                        .opcode = Instruction.Opcode.jmp_rm,
-                        .mod_rm = .{ .reg = 4, .mod = 3 },
-                    },
-                },
-                .arm => .{
-                    .{ // sub r5, sp, -self_address_offset
-                        .sub = .{
-                            .rd = 5,
-                            .rn = 13,
-                            .imm12 = Instruction.imm12(@as(u32, @intCast(-self_address_offset))),
+                .x86 => {
+                    return .{
+                        .{ // mov eax, self_address
+                            .opcode = Instruction.Opcode.mov_ax_imm,
+                            .imm32 = self_address,
                         },
-                    },
-                    .{ // ldr r4, [pc + 4] (self_address)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 2 + @sizeOf(u32) * 0) },
-                    },
-                    .{ // str [r5], r4
-                        .str = .{ .rn = 5, .rt = 4, .imm12 = 0 },
-                    },
-                    .{ // ldr r4, [pc + 4] (trampoline_address)
-                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = comptime Instruction.imm12(@sizeOf(u32) * 0 + @sizeOf(u32) * 1) },
-                    },
-                    .{ // bx [r4]
-                        .bx = .{ .rm = 4 },
-                    },
-                    .{ .literal = self_address },
-                    .{ .literal = trampoline_address },
+                        switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
+                            // mov [esp + self_address_offset], eax
+                            true => .{
+                                .opcode = Instruction.Opcode.mov_rm_r,
+                                .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                                .sib = .{ .base = 4, .index = 4 },
+                                .disp8 = @truncate(self_address_offset),
+                            },
+                            false => .{
+                                .opcode = Instruction.Opcode.mov_rm_r,
+                                .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                                .sib = .{ .base = 4, .index = 4 },
+                                .disp32 = @truncate(self_address_offset),
+                            },
+                        },
+                        .{ // mov eax, trampoline_address
+                            .opcode = Instruction.Opcode.mov_ax_imm,
+                            .imm32 = trampoline_address,
+                        },
+                        .{ // jmp [eax]
+                            .opcode = Instruction.Opcode.jmp_rm,
+                            .mod_rm = .{ .reg = 4, .mod = 3 },
+                        },
+                    };
                 },
-                else => .{},
-            };
+                .arm => {
+                    const offset = Instruction.imm12(@as(u32, @intCast(-self_address_offset)));
+                    return .{
+                        .{ // sub r5, sp, offset
+                            .sub = .{
+                                .rd = 5,
+                                .rn = 13,
+                                .imm12 = offset,
+                            },
+                        },
+                        .{ // ldr r4, [pc + 8] (self_address)
+                            .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
+                        },
+                        .{ // str [r5], r4
+                            .str = .{ .rn = 5, .rt = 4, .imm12 = 0 },
+                        },
+                        .{ // ldr r4, [pc + 4] (trampoline_address)
+                            .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) },
+                        },
+                        .{ // bx [r4]
+                            .bx = .{ .rm = 4 },
+                        },
+                        .{ .literal = self_address },
+                        .{ .literal = trampoline_address },
+                    };
+                },
+                else => unreachable,
+            }
         }
 
         fn getTrampoline() BFT {
