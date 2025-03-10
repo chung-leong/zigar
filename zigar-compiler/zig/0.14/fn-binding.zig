@@ -527,7 +527,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         } else if (instrs[i] & 3 == 3) {
                             const instr32_ptr: *align(@alignOf(u16)) const u32 = @ptrCast(&instrs[i]);
                             const addi: Instruction.ADDI = @bitCast(instr32_ptr.*);
-                            if (addi.opc == .addi and (addi.rs == 2 or addi.rd == 5)) {
+                            if (addi.opc == .addi) {
                                 const amount: isize = addi.imm12;
                                 registers[addi.rd] = registers[addi.rs] + amount;
                             }
@@ -536,7 +536,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             const addi: Instruction.ADDI.C = @bitCast(instrs[i]);
                             const lui: Instruction.LUI.C = @bitCast(instrs[i]);
                             const mv: Instruction.ADD.C = @bitCast(instrs[i]);
-                            if (addi.grp == 1 and addi.opc == .addi and (addi.rd == 2 or addi.rd == 5)) {
+                            if (addi.grp == 1 and addi.opc == .addi) {
                                 const int: packed struct(isize) {
                                     @"0:4": u5,
                                     @"5:63": i59,
@@ -561,7 +561,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 };
                                 const amount: isize = @bitCast(int);
                                 registers[addi.rd] = registers[addi.rd] + amount;
-                            } else if (mv.grp == 2 and mv.opc == .add and (mv.rs == 2 or mv.rd == 5)) {
+                            } else if (mv.grp == 2 and mv.opc == .add) {
                                 registers[mv.rd] = registers[mv.rs];
                             }
                         }
