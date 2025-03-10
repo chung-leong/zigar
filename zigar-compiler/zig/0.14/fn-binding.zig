@@ -594,7 +594,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             return registers[4];
                         } else {
                             const add: Instruction.ADD = @bitCast(instrs[i]);
-                            if ((add.opc == .add or add.opc == .sub) and (add.rn == 13 or add.rd == 4)) {
+                            if (add.opc == .add or add.opc == .sub) {
                                 const amount: isize = @intCast(Instruction.decodeIMM12(add.imm12));
                                 registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
                             } else {
