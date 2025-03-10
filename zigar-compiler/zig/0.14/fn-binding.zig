@@ -156,7 +156,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             const count = switch (builtin.target.cpu.arch) {
                 .x86_64 => 4,
                 .aarch64 => 7,
-                .riscv64 => 7,
+                .riscv64 => 10,
                 .powerpc64le => 19,
                 .x86 => 4,
                 .arm => 7,
@@ -222,47 +222,34 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     .{ .literal = self_address },
                     .{ .literal = trampoline_address },
                 },
-                // .riscv64 => .{
-                //     .{ // lui x5, signature_offset >> 12 + (sign adjustment)
-                //         .lui = .{ .rd = 5, .imm20 = (signature_offset >> 12) + ((signature_offset >> 11) & 1) },
-                //     },
-                //     .{ // mv x5, (signature_offset & 0xff_ffff)
-                //         .addi = .{ .rd = 5, .rs = 0, .imm12 = @bitCast(@as(u12, signature_offset & 0xfff)) },
-                //     },
-                //     .{ // sub x6, sp, x5
-                //         .sub = .{ .rd = 31, .rs1 = 2, .rs2 = 5 },
-                //     },
-                //     .{ // auipc x7, pc
-                //         .auipc = .{ .rd = 7 },
-                //     },
-                //     .{ // ld x5, [x7 + 32] (signature)
-                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 0 },
-                //     },
-                //     .{
-                //         .xor = .{ .rd = 5, .rs = 5, .imm12 = -1 },
-                //     },
-                //     .{ // sd [x6], x5
-                //         .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 0 },
-                //     },
-                //     .{ // ld x5, [x7 + 40] (self_address)
-                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 1 },
-                //     },
-                //     .{ // sd [x6 + 8], x5
-                //         .sd = .{ .rs1 = 31, .rs2 = 5, .imm12_4_0 = @sizeOf(usize) * 1 },
-                //     },
-                //     .{ // ld x5, [x7 + 48] (caller_address)
-                //         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 9 + @sizeOf(usize) * 2 },
-                //     },
-                //     .{ // jmp [x5]
-                //         .jalr = .{ .rd = 0, .rs = 5 },
-                //     },
-                //     .{ // nop
-                //         .addi = .{ .rd = 0, .rs = 0, .imm12 = 0 },
-                //     },
-                //     .{ .literal = signature },
-                //     .{ .literal = self_address },
-                //     .{ .literal = caller_address },
-                // },
+                .riscv64 => .{
+                    .{ // lui x5, -self_address_offset >> 12 + (sign adjustment)
+                        .lui = .{ .rd = 5, .imm20 = @intCast((-self_address_offset >> 12) + ((-self_address_offset >> 11) & 1)) },
+                    },
+                    .{ // addi x5, (-self_address_offset & 0xfff)
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(-self_address_offset & 0xfff) },
+                    },
+                    .{ // sub x6, sp, x5
+                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                    },
+                    .{ // auipc x7, pc
+                        .auipc = .{ .rd = 7 },
+                    },
+                    .{ // ld x5, [x7 + 20] (self_address)
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
+                    },
+                    .{ // sd [x6], x5
+                        .sd = .{ .rs1 = 6, .rs2 = 5 },
+                    },
+                    .{ // ld x5, [x7 + 28] (trampoline_address)
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
+                    },
+                    .{ // jmp [x5]
+                        .jalr = .{ .rd = 0, .rs = 5 },
+                    },
+                    .{ .literal = self_address },
+                    .{ .literal = trampoline_address },
+                },
                 // .powerpc64le => .{
                 //     .{ // lis r11, (code_address >> 48) & 0xffff
                 //         .addi = .{
@@ -414,6 +401,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             :
                             : [arg1] "{x1}" (&self_address),
                         ),
+                        .riscv64 => asm volatile (asm_code
+                            :
+                            : [arg1] "{x5}" (&self_address),
+                        ),
                         .x86 => asm volatile (asm_code
                             :
                             : [arg1] "{eax}" (&self_address),
@@ -512,6 +503,57 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         }
                     }
                 },
+                .riscv64 => {
+                    const instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
+                    const nop = 1;
+                    var registers: [32]isize = .{0} ** 32;
+                    var i: usize = 0;
+                    while (i < 131072) : (i += 1) {
+                        if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            return registers[5];
+                        } else if (instrs[i] & 3 == 3) {
+                            const instr32_ptr: *align(@alignOf(u16)) const u32 = @ptrCast(&instrs[i]);
+                            const addi: Instruction.ADDI = @bitCast(instr32_ptr.*);
+                            if (addi.opc == .addi and (addi.rs == 2 or addi.rd == 5)) {
+                                const amount: isize = addi.imm12;
+                                registers[addi.rd] = registers[addi.rs] + amount;
+                            }
+                            i += 1;
+                        } else {
+                            const addi: Instruction.ADDI.C = @bitCast(instrs[i]);
+                            const lui: Instruction.LUI.C = @bitCast(instrs[i]);
+                            const mv: Instruction.ADD.C = @bitCast(instrs[i]);
+                            if (addi.grp == 1 and addi.opc == .addi and (addi.rd == 2 or addi.rd == 5)) {
+                                const int: packed struct(isize) {
+                                    @"0:4": u5,
+                                    @"5:63": i59,
+                                } = .{ .@"0:4" = addi.nzimm_0_4, .@"5:63" = -@as(i55, addi.nzimm_5) };
+                                const amount: isize = @bitCast(int);
+                                registers[addi.rd] = registers[addi.rd] + amount;
+                            } else if (lui.grp == 1 and lui.opc == .lui and lui.rd == 2) {
+                                // addisp operation actually: nzimmm_12_16 => nzimm[4|6|8:7|5], nzimm_17 => nzimm9
+                                const int: packed struct(isize) {
+                                    @"0:3": u4 = 0,
+                                    @"4": u1,
+                                    @"5": u1,
+                                    @"6": u1,
+                                    @"7:8": u2,
+                                    @"9:63": i55,
+                                } = .{
+                                    .@"5" = @intCast((lui.nzimm_12_16 >> 0) & 0x01),
+                                    .@"7:8" = @intCast((lui.nzimm_12_16 >> 1) & 0x03),
+                                    .@"6" = @intCast((lui.nzimm_12_16 >> 3) & 0x01),
+                                    .@"4" = @intCast((lui.nzimm_12_16 >> 4) & 0x01),
+                                    .@"9:63" = -@as(i55, lui.nzimm_17),
+                                };
+                                const amount: isize = @bitCast(int);
+                                registers[addi.rd] = registers[addi.rd] + amount;
+                            } else if (mv.grp == 2 and mv.opc == .add and (mv.rs == 2 or mv.rd == 5)) {
+                                registers[mv.rd] = registers[mv.rs];
+                            }
+                        }
+                    }
+                },
                 .arm => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     const nop = @intFromEnum(Instruction.Opcode.nop);
@@ -538,6 +580,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 else => unreachable,
             }
+
             return error.Unexpected;
         }
     };
@@ -911,32 +954,32 @@ const Instruction = switch (builtin.target.cpu.arch) {
             nop = 0xd503_201f,
             _,
         };
-        const ADD = packed struct(u32) {
+        pub const ADD = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
             opc: u9 = @intFromEnum(Opcode.add),
         };
-        const SUB = packed struct(u32) {
+        pub const SUB = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
             opc: u9 = @intFromEnum(Opcode.sub),
         };
-        const LDR = packed struct(u32) {
+        pub const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
             opc: u8 = @intFromEnum(Opcode.ldr),
         };
-        const STR = packed struct(u32) {
+        pub const STR = packed struct(u32) {
             rt: u5,
             rn: u5,
             imm12: u12 = 0,
             opc: u10 = @intFromEnum(Opcode.str),
         };
-        const BR = packed struct(u32) {
+        pub const BR = packed struct(u32) {
             rm: u5 = 0,
             rn: u5,
             opc: u22 = @intFromEnum(Opcode.br),
@@ -950,60 +993,112 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .riscv64 => union(enum) {
-        lui: packed struct(u32) {
-            opc: u7 = 0x37,
+        pub const Opcode = enum(u7) {
+            addi = 0x13,
+            add = 0x33,
+            lui = 0x37,
+            auipc = 0x17,
+            ld = 0x03,
+            sd = 0x23,
+            jalr = 0x67,
+
+            const C = struct {
+                const G1 = enum(u3) {
+                    addi = 0x00,
+                    lui = 0x03,
+                };
+                const G2 = enum(u3) {
+                    add = 0x04,
+                };
+            };
+        };
+        pub const ADDI = packed struct(u32) {
+            opc: Opcode = .addi,
+            rd: u5,
+            func: u3 = 0,
+            rs: u5,
+            imm12: i12 = 0,
+
+            pub const C = packed struct(u16) {
+                grp: u2 = 1,
+                nzimm_0_4: u5,
+                rd: u5,
+                nzimm_5: u1,
+                opc: Opcode.C.G1 = .addi,
+            };
+        };
+        pub const ADD = packed struct(u32) {
+            opc: Opcode = .add,
+            rd: u5,
+            func: u3 = 0,
+            rs1: u5,
+            rs2: u5,
+            type: i7 = 0,
+
+            pub const C = packed struct(u16) {
+                grp: u2 = 0,
+                rs: u5,
+                rd: u5,
+                _: u1 = 0,
+                opc: Opcode.C.G2 = .add,
+            };
+        };
+        pub const LUI = packed struct(u32) {
+            opc: Opcode = .lui,
             rd: u5,
             imm20: i20 = 0,
-        },
-        auipc: packed struct(u32) {
-            opc: u7 = 0x17,
+
+            pub const C = packed struct(u16) {
+                grp: u2 = 1,
+                nzimm_12_16: u5,
+                rd: u5,
+                nzimm_17: u1,
+                opc: Opcode.C.G1 = .lui,
+            };
+        };
+        pub const AUIPC = packed struct(u32) {
+            opc: Opcode = .auipc,
             rd: u5,
             imm20: i20 = 0,
-        },
-        ld: packed struct(u32) {
-            opc: u7 = 0x3,
+        };
+        pub const LD = packed struct(u32) {
+            opc: Opcode = .ld,
             rd: u5,
             func: u3 = 0x3,
             rs: u5,
             imm12: i12 = 0,
-        },
-        sd: packed struct(u32) {
-            opc: u7 = 0x23,
+        };
+        pub const SD = packed struct(u32) {
+            opc: Opcode = .sd,
             imm12_4_0: u5 = 0,
             func: u3 = 0x3,
             rs1: u5,
             rs2: u5,
             imm12_11_5: i7 = 0,
-        },
-        xor: packed struct(u32) {
-            opc: u7 = 0x13,
-            rs: u5,
-            func: u3 = 4,
-            rd: u5,
-            imm12: i12,
-        },
-        sub: packed struct(u32) {
-            opc: u7 = 0x33,
+        };
+        pub const SUB = packed struct(u32) {
+            opc: Opcode = .add,
             rd: u5,
             func: u3 = 0,
             rs1: u5,
             rs2: u5,
-            offset_11_5: u7 = 0x20,
-        },
-        jalr: packed struct(u32) {
-            opc: u7 = 0x67,
+            type: u7 = 0x20,
+        };
+        pub const JALR = packed struct(u32) {
+            opc: Opcode = .jalr,
             rd: u5,
             func: u3 = 0,
             rs: u5,
             imm12: i12 = 0,
-        },
-        addi: packed struct(u32) {
-            opc: u7 = 0x13,
-            rs: u5,
-            func: u3 = 0,
-            rd: u5,
-            imm12: i12 = 0,
-        },
+        };
+
+        addi: ADDI,
+        lui: LUI,
+        auipc: AUIPC,
+        ld: LD,
+        sd: SD,
+        sub: SUB,
+        jalr: JALR,
         literal: usize,
     },
     .powerpc64le => union(enum) {
