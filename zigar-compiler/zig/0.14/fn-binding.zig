@@ -367,20 +367,23 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     };
                 },
                 .arm => {
-                    const offset = Instruction.imm12(@as(u32, @intCast(-self_address_offset)));
+                    const offset_amount: u32 = @abs(self_address_offset);
+                    const base_offset = Instruction.getNearestIMM12(offset_amount);
+                    const remainder = offset_amount - Instruction.decodeIMM12(base_offset);
+                    const displacement = Instruction.getNearestIMM12(remainder);
                     return .{
                         .{ // sub r5, sp, offset
                             .sub = .{
                                 .rd = 5,
                                 .rn = 13,
-                                .imm12 = offset,
+                                .imm12 = base_offset,
                             },
                         },
                         .{ // ldr r4, [pc + 8] (self_address)
                             .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
                         },
                         .{ // str [r5], r4
-                            .str = .{ .rn = 5, .rt = 4, .imm12 = 0 },
+                            .str = .{ .rn = 5, .rt = 4, .imm12 = displacement },
                         },
                         .{ // ldr r4, [pc + 4] (trampoline_address)
                             .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) },
@@ -1307,32 +1310,18 @@ const Instruction = switch (builtin.target.cpu.arch) {
         bx: BX,
         literal: usize,
 
-        pub fn imm12(value: u32) u12 {
-            var r: u32 = 0;
-            var v: u32 = value;
-            // keep rotating left, attaching overflow on the right side, until v fits an 8-bit int
-            while (v & ~@as(u32, 0xff) != 0) {
-                v = (v << 2) | (v >> 30);
-                r += 1;
-                if (r > 15) {
-                    if (@inComptime()) {
-                        @compileError(std.fmt.comptimePrint("Cannot encode value as imm12: {d}", .{value}));
-                    } else {
-                        @panic("Cannot encode value as imm12");
-                    }
-                }
-            }
-            return @intCast(r << 8 | v);
+        pub fn getNearestIMM12(value: u32) u12 {
+            const last_one_pos: u32 = @ctz(value & ~@as(u32, 0xff));
+            const rotations: u32 = (32 - last_one_pos + 1) >> 1;
+            if (rotations == 0) return @intCast(value);
+            const bits = value >> @intCast((32 - (2 * rotations))) & 0xff;
+            return @intCast(rotations << 8 | bits);
         }
 
         pub fn decodeIMM12(encoded: u12) u32 {
-            const r: u32 = encoded >> 8;
-            var v: u32 = encoded & 0xff;
-            var i: u32 = 0;
-            while (i < r) : (i += 1) {
-                v = (v >> 2) | (v << 30);
-            }
-            return v;
+            const rotations: u32 = encoded >> 8;
+            const bits: u32 = encoded & 0xff;
+            return if (rotations > 0) bits << @intCast((32 - (2 * rotations))) else bits;
         }
     },
     else => void,
