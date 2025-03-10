@@ -178,24 +178,24 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .x86_64 => .{
                     .{ // mov rax, self_address
                         .rex = .{},
-                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .opcode = .mov_ax_imm,
                         .imm64 = self_address,
                     },
                     .{ // mov [rsp + self_address_offset], rax
                         .rex = .{},
-                        .opcode = Instruction.Opcode.mov_rm_r,
+                        .opcode = .mov_rm_r,
                         .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
                         .sib = .{ .base = 4, .index = 4 },
                         .disp32 = @truncate(self_address_offset),
                     },
                     .{ // mov rax, trampoline_address
                         .rex = .{},
-                        .opcode = Instruction.Opcode.mov_ax_imm,
+                        .opcode = .mov_ax_imm,
                         .imm64 = trampoline_address,
                     },
                     .{ // jmp [rax]
                         .rex = .{},
-                        .opcode = Instruction.Opcode.jmp_rm,
+                        .opcode = .jmp_rm,
                         .mod_rm = .{ .reg = 4, .mod = 3 },
                     },
                 },
@@ -377,7 +377,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         ),
                         .aarch64 => asm volatile (asm_code
                             :
-                            : [arg1] "{x1}" (&self_address),
+                            : [arg1] "{x9}" (&self_address),
                         ),
                         .riscv64 => asm volatile (asm_code
                             :
@@ -393,7 +393,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         ),
                         .arm => asm volatile (asm_code
                             :
-                            : [arg1] "{r1}" (&self_address),
+                            : [arg1] "{r4}" (&self_address),
                         ),
                         else => unreachable,
                     }
@@ -452,32 +452,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .aarch64 => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    const nop = @intFromEnum(Instruction.Opcode.G32.nop);
                     var registers: [32]isize = .{0} ** 32;
-                    var target_op: ?Instruction.ADD = null;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            if (target_op) |op| {
-                                var offset = registers[1];
-                                if (op.rn != 31) {
-                                    // sometimes another register holds an offset from the stack pointer
-                                    offset += registers[op.rn];
-                                }
-                                offset += registers[31];
-                                return offset;
-                            } else break;
+                            return registers[9];
                         } else {
                             const add: Instruction.ADD = @bitCast(instrs[i]);
-                            const is_add = add.opc == @intFromEnum(Instruction.Opcode.add);
-                            const is_sub = add.opc == @intFromEnum(Instruction.Opcode.sub);
-                            if ((is_add or is_sub) and (add.rn == 31 or add.rd == 1)) {
-                                const disp = switch (add.shift) {
+                            if ((add.opc == .add or add.opc == .sub) and (add.rn == 31 or add.rd == 9)) {
+                                const amount: isize = switch (add.shift) {
                                     0 => add.imm12,
                                     1 => @as(isize, @intCast(add.imm12)) << 12,
                                 };
-                                registers[add.rd] = if (is_sub) -disp else disp;
-                                // x1 is where the address of self_address goes
-                                if (add.rd == 1) target_op = add;
+                                registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
                             }
                         }
                     }
@@ -553,21 +540,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .arm => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    const nop = @intFromEnum(Instruction.Opcode.G32.nop);
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[1];
+                            return registers[4];
                         } else {
                             const add: Instruction.ADD = @bitCast(instrs[i]);
-                            const is_add = add.opc == @intFromEnum(Instruction.Opcode.add);
-                            const is_sub = add.opc == @intFromEnum(Instruction.Opcode.sub);
-                            if ((is_add or is_sub) and (add.rn == 13 or add.rd == 1)) {
+                            if ((add.opc == .add or add.opc == .sub) and (add.rn == 13 or add.rd == 4)) {
                                 const amount: isize = @intCast(Instruction.decodeIMM12(add.imm12));
-                                registers[add.rd] = registers[add.rn] + if (is_sub) -amount else amount;
+                                registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
                             } else {
                                 const push: Instruction.PUSH = @bitCast(instrs[i]);
-                                if (push.opc == @intFromEnum(Instruction.Opcode.push)) {
+                                if (push.opc == .push) {
                                     const count: isize = @popCount(push.regs);
                                     registers[13] -= count * 4;
                                 }
@@ -942,44 +927,58 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
-        pub const Opcode = enum(u32) {
-            add = 0x122,
-            sub = 0x1a2,
-            ldr = 0x58,
-            str = 0x3e4,
-            br = 0x35_87c0,
-            nop = 0xd503_201f,
-            _,
+        pub const Opcode = struct {
+            const G8 = enum(u8) {
+                ldr = 0x58,
+                _,
+            };
+            const G9 = enum(u9) {
+                add = 0x122,
+                sub = 0x1a2,
+                _,
+            };
+            const G10 = enum(u10) {
+                str = 0x3e4,
+                _,
+            };
+            const G22 = enum(u22) {
+                br = 0x35_87c0,
+                _,
+            };
+            const G32 = enum(u32) {
+                nop = 0xd503_201f,
+                _,
+            };
         };
         pub const ADD = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
-            opc: u9 = @intFromEnum(Opcode.add),
+            opc: Opcode.G9 = .add,
         };
         pub const SUB = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
             shift: u1 = 0,
-            opc: u9 = @intFromEnum(Opcode.sub),
+            opc: Opcode.G9 = .sub,
         };
         pub const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
-            opc: u8 = @intFromEnum(Opcode.ldr),
+            opc: Opcode.G8 = .ldr,
         };
         pub const STR = packed struct(u32) {
             rt: u5,
             rn: u5,
             imm12: u12 = 0,
-            opc: u10 = @intFromEnum(Opcode.str),
+            opc: Opcode.G10 = .str,
         };
         pub const BR = packed struct(u32) {
             rm: u5 = 0,
             rn: u5,
-            opc: u22 = @intFromEnum(Opcode.br),
+            opc: Opcode.G22 = .br,
         };
 
         add: ADD,
@@ -998,14 +997,17 @@ const Instruction = switch (builtin.target.cpu.arch) {
             ld = 0x03,
             sd = 0x23,
             jalr = 0x67,
+            _,
 
             const C = struct {
                 const G1 = enum(u3) {
                     addi = 0x00,
                     lui = 0x03,
+                    _,
                 };
                 const G2 = enum(u3) {
                     add = 0x04,
+                    _,
                 };
             };
         };
@@ -1108,6 +1110,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             std = 0x3e,
             mtctr = 0x1f,
             nop = 0,
+            _,
         };
         pub const ADDI = packed struct(u32) {
             imm16: i16,
@@ -1179,53 +1182,60 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .arm => union(enum) {
-        const Opcode = enum(u32) {
-            ldr = 0x59,
-            str = 0x58,
-            add = 0x28,
-            sub = 0x24,
-            bx = 0x12,
-            push = 0x92d,
-            nop = 0xe320f000,
+        const Opcode = struct {
+            const G8 = enum(u8) {
+                ldr = 0x59,
+                str = 0x58,
+                add = 0x28,
+                sub = 0x24,
+                bx = 0x12,
+                _,
+            };
+            const G12 = enum(u12) {
+                push = 0x92d,
+            };
+            const G32 = enum(u32) {
+                nop = 0xe320f000,
+            };
         };
         const LDR = packed struct(u32) {
             imm12: u12,
             rt: u4,
             rn: u4,
-            opc: u8 = @intFromEnum(Opcode.ldr),
+            opc: Opcode.G8 = .ldr,
             _: u4 = 0,
         };
         const STR = packed struct(u32) {
             imm12: u12 = 0,
             rt: u4,
             rn: u4,
-            opc: u8 = @intFromEnum(Opcode.str),
+            opc: Opcode.G8 = .str,
             _: u4 = 0,
         };
         const ADD = packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
-            opc: u8 = @intFromEnum(Opcode.add),
+            opc: Opcode.G8 = .add,
             _: u4 = 0,
         };
         const SUB = packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
-            opc: u8 = @intFromEnum(Opcode.sub),
+            opc: Opcode.G8 = .sub,
             _: u4 = 0,
         };
         const BX = packed struct(u32) {
             rm: u4,
             flags: u4 = 0x1,
             imm12: u12 = 0xfff,
-            opc: u8 = @intFromEnum(Opcode.bx),
+            opc: Opcode.G8 = .bx,
             _: u4 = 0,
         };
         const PUSH = packed struct(u32) {
             regs: u16,
-            opc: u12 = @intFromEnum(Opcode.push),
+            opc: Opcode.G12 = .push,
             _: u4 = 0,
         };
 
