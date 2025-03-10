@@ -172,8 +172,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 self_offset = offset;
                 break :init offset;
             };
-            // std.debug.print("self_address = {d}\n", .{self_address});
-            // std.debug.print("self_address_offset = {d}\n", .{self_address_offset});
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
                     return .{
@@ -410,46 +408,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     // this variable will be set by dynamically generated code before the jump
                     var self_address: usize = undefined;
                     // insert nop x 3 so we can find the displacement for self_address in the instruction stream
-                    const asm_code =
-                        \\ nop
-                        \\ nop
-                        \\ nop
-                    ;
-                    switch (builtin.target.cpu.arch) {
-                        .x86_64 => asm volatile (asm_code
-                            :
-                            : [arg1] "{rax}" (&self_address),
-                        ),
-                        .aarch64 => asm volatile (asm_code
-                            :
-                            : [arg1] "{x9}" (&self_address),
-                        ),
-                        .riscv64 => asm volatile (asm_code
-                            :
-                            : [arg1] "{x5}" (&self_address),
-                        ),
-                        .powerpc64le => asm volatile (asm_code
-                            :
-                            : [arg1] "{r11}" (&self_address),
-                        ),
-                        .x86 => asm volatile (asm_code
-                            :
-                            : [arg1] "{eax}" (&self_address),
-                        ),
-                        .arm => asm volatile (asm_code
-                            :
-                            : [arg1] "{r4}" (&self_address),
-                        ),
-                        else => unreachable,
-                    }
-                    // const sp = asm (""
-                    //     : [ret] "={sp}" (-> usize),
-                    // );
-                    // std.debug.print("self_address(r) = {d}\n", .{self_address});
-                    // std.debug.print("&self_address = {d}\n", .{@intFromPtr(&self_address)});
-                    // std.debug.print("sp = {d}\n", .{sp});
+                    insertNOPs(&self_address);
                     const self: *const Self = @ptrFromInt(self_address);
-                    std.debug.assert(self.signature == binding_signature);
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -463,6 +423,45 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 }
             };
             return fn_transform.spreadArgs(ns.call, cc);
+        }
+
+        inline fn insertNOPs(ptr: *const anyopaque) void {
+            const asm_code =
+                \\ nop
+                \\ nop
+                \\ nop
+            ;
+            switch (builtin.target.cpu.arch) {
+                .x86_64 => asm volatile (asm_code
+                    :
+                    : [arg1] "{rax}" (ptr),
+                ),
+                .aarch64 => asm volatile (asm_code
+                    :
+                    : [arg1] "{x9}" (ptr),
+                ),
+                .riscv64 => asm volatile (asm_code
+                    :
+                    : [arg1] "{x5}" (ptr),
+                ),
+                .powerpc64le => asm volatile (
+                // actual nop's would get reordered for some reason despite the use of "volatile"
+                    \\ li %r0, %r0
+                    \\ li %r0, %r0
+                    \\ li %r0, %r0        
+                    :
+                    : [arg1] "{r11}" (ptr),
+                ),
+                .x86 => asm volatile (asm_code
+                    :
+                    : [arg1] "{eax}" (ptr),
+                ),
+                .arm => asm volatile (asm_code
+                    :
+                    : [arg1] "{r4}" (ptr),
+                ),
+                else => unreachable,
+            }
         }
 
         fn findAddressOffset(ptr: *const anyopaque) !isize {
@@ -569,7 +568,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .powerpc64le => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = @intFromEnum(Instruction.Opcode.nop);
+                    const nop = 0x38000000; // li r0 r0
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
@@ -577,10 +576,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         } else {
                             const addi: Instruction.ADDI = @bitCast(instrs[i]);
                             const stdu: Instruction.STD = @bitCast(instrs[i]);
-                            if (addi.opc == .addi and (addi.ra == 1 or addi.rt == 11)) {
+                            const mr: Instruction.OR = @bitCast(instrs[i]);
+                            if (addi.opc == .addi) {
                                 registers[addi.rt] = registers[addi.ra] + addi.imm16;
                             } else if (stdu.opc == .std and stdu.update == 1) {
-                                registers[stdu.ra] = @as(isize, stdu.ds) << 2;
+                                registers[stdu.ra] += @as(isize, stdu.ds) << 2;
+                            } else if (mr.opc == .ext_31 and mr.func == .@"or" and mr.rb == mr.rs) {
+                                registers[mr.ra] = registers[mr.rs];
                             }
                         }
                     }
@@ -1154,9 +1156,15 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rldic = 0x1e,
             ld = 0x3a,
             std = 0x3e,
-            mtctr = 0x1f,
+            ext_31 = 0x1f,
             nop = 0,
             _,
+
+            const G31 = enum(u10) {
+                mtctr = 467,
+                @"or" = 444,
+                _,
+            };
         };
         pub const ADDI = packed struct(u32) {
             imm16: i16,
@@ -1200,12 +1208,20 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rs: u5,
             opc: Opcode = .std,
         };
+        pub const OR = packed struct(u32) {
+            _: u1 = 0,
+            func: Opcode.G31 = .@"or",
+            rb: u5,
+            ra: u5,
+            rs: u5,
+            opc: Opcode = .ext_31,
+        };
         pub const MTCTR = packed struct(u32) {
             _: u1 = 0,
-            func: u10 = 467,
+            func: Opcode.G31 = .mtctr,
             spr: u10 = 0x120,
             rs: u5,
-            opc: Opcode = .mtctr,
+            opc: Opcode = .ext_31,
         };
         pub const BCTRL = packed struct(u32) {
             lk: u1 = 0,
