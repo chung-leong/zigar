@@ -212,21 +212,31 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     };
                 },
                 .aarch64 => {
-                    const offset = -self_address_offset;
+                    const offset_amount = -self_address_offset;
+                    var base_offset: u12 = undefined;
+                    var displacement: u12 = 0;
+                    var shift: u1 = 0;
+                    if (offset_amount <= 0xfff) {
+                        base_offset = @intCast(offset_amount);
+                    } else {
+                        base_offset = @intCast(offset_amount >> 12);
+                        displacement = @intCast(offset_amount & 0xfff);
+                        shift = 1;
+                    }
                     return .{
-                        .{ // sub x10, sp, offset
+                        .{ // sub x10, sp, base_offset
                             .sub = .{
                                 .rd = 10,
                                 .rn = 31,
-                                .imm12 = @as(u12, @intCast(if (offset < 0x1000) offset else offset >> 12)),
-                                .shift = if (offset < 0x1000) 0 else 1,
+                                .imm12 = base_offset,
+                                .shift = shift,
                             },
                         },
                         .{ // ldr x9, [pc + 16] (self_address)
                             .ldr = .{ .rt = 9, .imm19 = 4 },
                         },
-                        .{ // str [x10], x9
-                            .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
+                        .{ // str [x10 + displacement], x9
+                            .str = .{ .rn = 10, .rt = 9, .imm12 = displacement },
                         },
                         .{ // ldr x9, [pc + 16] (trampoline_address)
                             .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
@@ -432,16 +442,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         ),
                         else => unreachable,
                     }
-                    // const x10 = asm (""
-                    //     : [ret] "={x10}" (-> usize),
-                    // );
                     // const sp = asm (""
-                    //     : [ret] "={r1}" (-> usize),
+                    //     : [ret] "={sp}" (-> usize),
                     // );
                     // std.debug.print("self_address(r) = {d}\n", .{self_address});
                     // std.debug.print("&self_address = {d}\n", .{@intFromPtr(&self_address)});
                     // std.debug.print("sp = {d}\n", .{sp});
-                    // std.debug.print("x10 = {d}\n", .{x10});
                     const self: *const Self = @ptrFromInt(self_address);
                     std.debug.assert(self.signature == binding_signature);
                     var args: std.meta.ArgsTuple(FT) = undefined;
@@ -494,12 +500,18 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             return registers[9];
                         } else {
                             const add: Instruction.ADD = @bitCast(instrs[i]);
-                            if ((add.opc == .add or add.opc == .sub) and (add.rn == 31 or add.rd == 9)) {
+                            const mov: Instruction.MOV = @bitCast(instrs[i]);
+                            const stp: Instruction.STP = @bitCast(instrs[i]);
+                            if (add.opc == .add or add.opc == .sub) {
                                 const amount: isize = switch (add.shift) {
                                     0 => add.imm12,
                                     1 => @as(isize, @intCast(add.imm12)) << 12,
                                 };
                                 registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
+                            } else if (mov.opc == .mov) {
+                                registers[mov.rd] = registers[mov.rm];
+                            } else if (stp.opc == .stp) {
+                                registers[stp.rn] += @as(isize, stp.imm7) * 8;
                             }
                         }
                     }
@@ -974,6 +986,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
             };
             const G10 = enum(u10) {
                 str = 0x3e4,
+                stp = 0x2a6, // pre-index
+                mov = 0x2a8,
                 _,
             };
             const G22 = enum(u22) {
@@ -999,6 +1013,14 @@ const Instruction = switch (builtin.target.cpu.arch) {
             shift: u1 = 0,
             opc: Opcode.G9 = .sub,
         };
+        pub const MOV = packed struct(u32) {
+            rd: u5,
+            rn: u5 = 0x1f,
+            imm6: u6 = 0,
+            rm: u5,
+            n: u1 = 0,
+            opc: Opcode.G10 = .mov,
+        };
         pub const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
@@ -1010,6 +1032,13 @@ const Instruction = switch (builtin.target.cpu.arch) {
             imm12: u12 = 0,
             opc: Opcode.G10 = .str,
         };
+        pub const STP = packed struct(u32) {
+            rt: u5,
+            rn: u5,
+            rt2: u5,
+            imm7: i7 = 0,
+            opc: Opcode.G10 = .stp,
+        };
         pub const BR = packed struct(u32) {
             rm: u5 = 0,
             rn: u5,
@@ -1018,6 +1047,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
 
         add: ADD,
         sub: SUB,
+        mov: MOV,
         ldr: LDR,
         str: STR,
         br: BR,
