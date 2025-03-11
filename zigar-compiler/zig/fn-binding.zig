@@ -613,22 +613,23 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .arm => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = @intFromEnum(Instruction.Opcode.G32.nop);
+                    const nop: u32 = @bitCast(Instruction.NOP{});
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            // std.debug.print("{d}\n", .{registers});
                             return registers[4];
                         } else {
-                            const add: Instruction.ADD = @bitCast(instrs[i]);
-                            if (add.opc == .add or add.opc == .sub) {
+                            const instr = instrs[i];
+                            if (match(Instruction.ADD, instr)) |add| {
                                 const amount: isize = @intCast(Instruction.decodeIMM12(add.imm12));
-                                registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
-                            } else {
-                                const push: Instruction.PUSH = @bitCast(instrs[i]);
-                                if (push.opc == .push) {
-                                    const count: isize = @popCount(push.regs);
-                                    registers[13] -= count * 4;
-                                }
+                                registers[add.rd] = registers[add.rn] + amount;
+                            } else if (match(Instruction.SUB, instr)) |sub| {
+                                const amount: isize = @intCast(Instruction.decodeIMM12(sub.imm12));
+                                registers[sub.rd] = registers[sub.rn] - amount;
+                            } else if (match(Instruction.PUSH, instr)) |push| {
+                                const count: isize = @popCount(push.regs);
+                                registers[13] -= count * 4;
                             }
                         }
                     }
@@ -677,9 +678,7 @@ test "Binding ([no args] + i64 x 4)" {
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
     try expect(@TypeOf(bf) == *const fn () i64);
     defer _ = Add.unbind(ea.allocator(), bf);
-    std.debug.print("calling\n", .{});
     const sum1 = bf();
-    std.debug.print("called\n", .{});
     try expect(sum1 == 1 + 2 + 3 + 4);
 }
 
@@ -1209,16 +1208,6 @@ const Instruction = switch (builtin.target.cpu.arch) {
         imm64: ?u64 = null,
     },
     .aarch64 => union(enum) {
-        pub const Opcode = struct {
-            const G22 = enum(u22) {
-                br = 0x3587c0,
-                _,
-            };
-            const G32 = enum(u32) {
-                nop = 0xd503_201f,
-                _,
-            };
-        };
         pub const ADD = packed struct(u32) {
             rd: u5,
             rn: u5,
@@ -1513,61 +1502,42 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .arm => union(enum) {
-        const Opcode = struct {
-            const G8 = enum(u8) {
-                ldr = 0x59,
-                str = 0x58,
-                add = 0x28,
-                sub = 0x24,
-                bx = 0x12,
-                _,
-            };
-            const G12 = enum(u12) {
-                push = 0x92d,
-            };
-            const G32 = enum(u32) {
-                nop = 0xe320f000,
-            };
-        };
         const LDR = packed struct(u32) {
             imm12: u12,
             rt: u4,
             rn: u4,
-            opc: Opcode.G8 = .ldr,
-            _: u4 = 0,
+            @"31:20": u12 = 0b1110_0101_1001,
         };
         const STR = packed struct(u32) {
-            imm12: u12 = 0,
+            imm12: u12,
             rt: u4,
             rn: u4,
-            opc: Opcode.G8 = .str,
-            _: u4 = 0,
+            @"31:20": u12 = 0b1110_0101_1000,
         };
         const ADD = packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
-            opc: Opcode.G8 = .add,
-            _: u4 = 0,
+            @"31:20": u12 = 0b1110_0010_1000,
         };
         const SUB = packed struct(u32) {
             imm12: u12,
             rd: u4,
             rn: u4,
-            opc: Opcode.G8 = .sub,
-            _: u4 = 0,
+            @"31:20": u12 = 0b1110_0010_0100,
         };
         const BX = packed struct(u32) {
             rm: u4,
-            flags: u4 = 0x1,
-            imm12: u12 = 0xfff,
-            opc: Opcode.G8 = .bx,
-            _: u4 = 0,
+            flags: u4 = 0b0001,
+            imm12: u12 = 0b1111_1111_1111,
+            @"31:20": u12 = 0b1110_0001_0010,
         };
         const PUSH = packed struct(u32) {
             regs: u16,
-            opc: Opcode.G12 = .push,
-            _: u4 = 0,
+            @"31:20": u16 = 0b1110_1001_0010_1101,
+        };
+        const NOP = packed struct(u32) {
+            @"31:0": u32 = 0b1110_0011_0010_0000_1111_0000_0000_0000,
         };
 
         ldr: LDR,
