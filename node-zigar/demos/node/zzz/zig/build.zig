@@ -2,26 +2,18 @@ const std = @import("std");
 const builtin = @import("builtin");
 const cfg = @import("build-cfg.zig");
 
-const host_type = if (cfg.is_wasm) "wasm" else "napi";
-const zig_path = std.fmt.comptimePrint("{s}{d}.{d}{c}", .{
-    cfg.zigar_src_path,
-    builtin.zig_version.major,
-    builtin.zig_version.minor,
-    std.fs.path.sep,
-});
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = zig_path ++ "stub-" ++ host_type ++ ".zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub-" ++ host_type ++ ".zig" },
         .target = target,
         .optimize = optimize,
         .single_threaded = !cfg.multithreaded,
     });
     const zigar = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = zig_path ++ "zigar.zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
     const zzz = b.dependency("zzz", .{
         .target = target,

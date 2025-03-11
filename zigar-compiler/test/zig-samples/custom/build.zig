@@ -2,25 +2,22 @@ const std = @import("std");
 const builtin = @import("builtin");
 const cfg = @import("build-cfg.zig");
 
-const host_type = if (cfg.is_wasm) "wasm" else "napi";
-const zig_path = for (.{ .{ 0, 13 }, .{ 0, 14 } }) |v| {
-    if (builtin.zig_version.major == v[0] and builtin.zig_version.minor == v[1]) {
-        break std.fmt.comptimePrint("{s}{d}.{d}{c}", .{ cfg.zigar_src_path, v[0], v[1], std.fs.path.sep });
-    }
-} else @compileError("Unsupported Zig version");
-
 pub fn build(b: *std.Build) void {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
+        @compileError("Unsupported Zig version");
+    }
+    const host_type = if (cfg.is_wasm) "wasm" else "napi";
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = zig_path ++ "stub-" ++ host_type ++ ".zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub-" ++ host_type ++ ".zig" },
         .target = target,
         .optimize = optimize,
         .single_threaded = !cfg.multithreaded,
     });
     const zigar = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = zig_path ++ "zigar.zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
     const number = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_dir ++ "/modules/number.zig" },
