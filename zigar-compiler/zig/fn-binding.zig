@@ -261,19 +261,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
                         },
                         .{ // auipc x7, pc
-                            .auipc = .{ .rd = 7 },
+                            .auipc = .{ .rd = 7, .imm20 = 0 },
                         },
                         .{ // ld x5, [x7 + 20] (self_address)
                             .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
                         },
                         .{ // sd [x6], x5
-                            .sd = .{ .rs1 = 6, .rs2 = 5 },
+                            .sd = .{ .rs1 = 6, .rs2 = 5, .imm12_4_0 = 0, .imm12_11_5 = 0 },
                         },
                         .{ // ld x5, [x7 + 28] (trampoline_address)
                             .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
                         },
                         .{ // jmp [x5]
-                            .jalr = .{ .rd = 0, .rs = 5 },
+                            .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
                         },
                         .{ .literal = self_address },
                         .{ .literal = trampoline_address },
@@ -541,7 +541,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .riscv64 => {
                     const instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
-                    const nop = 1;
+                    const nop: u16 = @bitCast(Instruction.NOP.C{});
                     var registers: [32]isize = .{0} ** 32;
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
@@ -549,25 +549,22 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             return registers[5];
                         } else if (instrs[i] & 3 == 3) {
                             const instr32_ptr: *align(@alignOf(u16)) const u32 = @ptrCast(&instrs[i]);
-                            const addi: Instruction.ADDI = @bitCast(instr32_ptr.*);
-                            if (addi.opc == .addi) {
+                            const instr = instr32_ptr.*;
+                            i += 1;
+                            if (match(Instruction.ADDI, instr)) |addi| {
                                 const amount: isize = addi.imm12;
                                 registers[addi.rd] = registers[addi.rs] + amount;
                             }
-                            i += 1;
                         } else {
-                            const addi: Instruction.ADDI.C = @bitCast(instrs[i]);
-                            const lui: Instruction.LUI.C = @bitCast(instrs[i]);
-                            const mv: Instruction.ADD.C = @bitCast(instrs[i]);
-                            if (addi.grp == 1 and addi.opc == .addi) {
+                            const instr = instrs[i];
+                            if (match(Instruction.ADDI.C, instr)) |addi| {
                                 const int: packed struct(isize) {
                                     @"0:4": u5,
                                     @"5:63": i59,
                                 } = .{ .@"0:4" = addi.nzimm_0_4, .@"5:63" = -@as(i55, addi.nzimm_5) };
                                 const amount: isize = @bitCast(int);
                                 registers[addi.rd] = registers[addi.rd] + amount;
-                            } else if (lui.grp == 1 and lui.opc == .lui and lui.rd == 2) {
-                                // addisp operation actually: nzimmm_12_16 => nzimm[4|6|8:7|5], nzimm_17 => nzimm9
+                            } else if (match(Instruction.ADDI.C.SP, instr)) |addisp| {
                                 const int: packed struct(isize) {
                                     @"0:3": u4 = 0,
                                     @"4": u1,
@@ -576,16 +573,17 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     @"7:8": u2,
                                     @"9:63": i55,
                                 } = .{
-                                    .@"5" = @intCast((lui.nzimm_12_16 >> 0) & 0x01),
-                                    .@"7:8" = @intCast((lui.nzimm_12_16 >> 1) & 0x03),
-                                    .@"6" = @intCast((lui.nzimm_12_16 >> 3) & 0x01),
-                                    .@"4" = @intCast((lui.nzimm_12_16 >> 4) & 0x01),
-                                    .@"9:63" = -@as(i55, lui.nzimm_17),
+                                    .@"5" = @intCast((addisp.nzimm_46875 >> 0) & 0x01),
+                                    .@"7:8" = @intCast((addisp.nzimm_46875 >> 1) & 0x03),
+                                    .@"6" = @intCast((addisp.nzimm_46875 >> 3) & 0x01),
+                                    .@"4" = @intCast((addisp.nzimm_46875 >> 4) & 0x01),
+                                    .@"9:63" = addisp.imm_9,
                                 };
                                 const amount: isize = @bitCast(int);
-                                registers[addi.rd] = registers[addi.rd] + amount;
-                            } else if (mv.grp == 2 and mv.opc == .add) {
-                                registers[mv.rd] = registers[mv.rs];
+                                registers[2] = registers[2] + amount;
+                            } else if (match(Instruction.ADD.C, instr)) |add| {
+                                // compressed form of ADD is actual a MOV
+                                registers[add.rd] = registers[add.rs];
                             }
                         }
                     }
@@ -1295,106 +1293,90 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .riscv64 => union(enum) {
-        pub const Opcode = enum(u7) {
-            addi = 0x13,
-            add = 0x33,
-            lui = 0x37,
-            auipc = 0x17,
-            ld = 0x03,
-            sd = 0x23,
-            jalr = 0x67,
-            _,
-
-            const C = struct {
-                const G1 = enum(u3) {
-                    addi = 0x00,
-                    lui = 0x03,
-                    _,
-                };
-                const G2 = enum(u3) {
-                    add = 0x04,
-                    _,
-                };
-            };
-        };
         pub const ADDI = packed struct(u32) {
-            opc: Opcode = .addi,
+            @"6:0": u7 = 0b0010_011,
             rd: u5,
-            func: u3 = 0,
+            @"14-12": u3 = 0b000,
             rs: u5,
-            imm12: i12 = 0,
+            imm12: i12,
 
             pub const C = packed struct(u16) {
-                grp: u2 = 1,
+                @"1:0": u2 = 0b01,
                 nzimm_0_4: u5,
                 rd: u5,
                 nzimm_5: u1,
-                opc: Opcode.C.G1 = .addi,
+                @"15:13": u3 = 0b000,
+
+                pub const SP = packed struct(u16) {
+                    @"1:0": u2 = 0b01,
+                    nzimm_46875: u5,
+                    @"11:7": u5 = 0b0001_0,
+                    imm_9: i1,
+                    @"15:13": u3 = 0b11,
+                };
             };
         };
         pub const ADD = packed struct(u32) {
-            opc: Opcode = .add,
+            @"6:0": u7 = 0b0110_011,
             rd: u5,
-            func: u3 = 0,
+            @"14:12": u3 = 0b000,
             rs1: u5,
             rs2: u5,
-            type: i7 = 0,
+            @"31:27": i7 = 0b0000_000,
 
             pub const C = packed struct(u16) {
-                grp: u2 = 0,
+                @"1:0": u2 = 0b00,
                 rs: u5,
                 rd: u5,
-                _: u1 = 0,
-                opc: Opcode.C.G2 = .add,
+                @"15:12": u4 = 0b1000,
             };
         };
         pub const LUI = packed struct(u32) {
-            opc: Opcode = .lui,
+            @"6:0": u7 = 0b0110_111,
             rd: u5,
-            imm20: i20 = 0,
-
-            pub const C = packed struct(u16) {
-                grp: u2 = 1,
-                nzimm_12_16: u5,
-                rd: u5,
-                nzimm_17: u1,
-                opc: Opcode.C.G1 = .lui,
-            };
+            imm20: i20,
         };
         pub const AUIPC = packed struct(u32) {
-            opc: Opcode = .auipc,
+            @"6:0": u7 = 0b0010_111,
             rd: u5,
-            imm20: i20 = 0,
+            imm20: i20,
         };
         pub const LD = packed struct(u32) {
-            opc: Opcode = .ld,
+            @"6:0": u7 = 0b0000_011,
             rd: u5,
-            func: u3 = 0x3,
+            @"14:12": u3 = 0b011,
             rs: u5,
-            imm12: i12 = 0,
+            imm12: i12,
         };
         pub const SD = packed struct(u32) {
-            opc: Opcode = .sd,
-            imm12_4_0: u5 = 0,
-            func: u3 = 0x3,
+            @"6:0": u7 = 0b0100_011,
+            imm12_4_0: u5,
+            @"14:12": u3 = 0b011,
             rs1: u5,
             rs2: u5,
-            imm12_11_5: i7 = 0,
+            imm12_11_5: i7,
         };
         pub const SUB = packed struct(u32) {
-            opc: Opcode = .add,
+            @"6:0": u7 = 0b0110_011,
             rd: u5,
-            func: u3 = 0,
+            @"14:12": u3 = 0b000,
             rs1: u5,
             rs2: u5,
-            type: u7 = 0x20,
+            @"31:27": u7 = 0b0100_000,
         };
         pub const JALR = packed struct(u32) {
-            opc: Opcode = .jalr,
+            @"6:0": u7 = 0b1100_111,
             rd: u5,
-            func: u3 = 0,
+            @"14:0": u3 = 0b000,
             rs: u5,
-            imm12: i12 = 0,
+            imm12: i12,
+        };
+        pub const NOP = packed struct(u32) {
+            @"31:0": u32 = 0b0000_0000_0000_0000_0000_0000_0001_0011,
+
+            pub const C = packed struct(u16) {
+                @"15:0": u16 = 0b0000_0000_0000_0001,
+            };
         };
 
         addi: ADDI,
@@ -1563,14 +1545,14 @@ const Instruction = switch (builtin.target.cpu.arch) {
     else => void,
 };
 
-fn match(comptime ST: type, word: u32) ?ST {
-    const instr: ST = @bitCast(word);
+fn match(comptime ST: type, instr: anytype) ?ST {
+    const instr_struct: ST = @bitCast(instr);
     return inline for (@typeInfo(ST).@"struct".fields) |field| {
         if (field.default_value_ptr) |opaque_ptr| {
             const ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-            if (@field(instr, field.name) != ptr.*) break null;
+            if (@field(instr_struct, field.name) != ptr.*) break null;
         }
-    } else instr;
+    } else instr_struct;
 }
 
 const InstructionEncoder = struct {
