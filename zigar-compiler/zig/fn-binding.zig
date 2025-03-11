@@ -172,6 +172,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 self_offset = offset;
                 break :init offset;
             };
+            std.debug.print("self_address = {d}\n", .{self_address});
+            std.debug.print("self_address_offset = {d}\n", .{self_address_offset});
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
                     return .{
@@ -413,6 +415,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     // insert nop x 3 so we can find the displacement for self_address in the instruction stream
                     insertNOPs(&self_address);
                     const self: *const Self = @ptrFromInt(self_address);
+                    // std.debug.print("self_address (read) = {d}\n", .{self_address});
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -503,24 +506,34 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .aarch64 => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = @intFromEnum(Instruction.Opcode.G32.nop);
+                    const nop: u32 = @bitCast(Instruction.NOP{});
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             return registers[9];
                         } else {
-                            const add: Instruction.ADD = @bitCast(instrs[i]);
-                            const mov: Instruction.MOV = @bitCast(instrs[i]);
-                            const stp: Instruction.STP = @bitCast(instrs[i]);
-                            if (add.opc == .add or add.opc == .sub) {
+                            const instr = instrs[i];
+                            if (match(Instruction.ADD, instr)) |add| {
                                 const amount: isize = switch (add.shift) {
                                     0 => add.imm12,
                                     1 => @as(isize, @intCast(add.imm12)) << 12,
                                 };
-                                registers[add.rd] = registers[add.rn] + if (add.opc == .sub) -amount else amount;
-                            } else if (mov.opc == .mov) {
+                                registers[add.rd] = registers[add.rn] + amount;
+                            } else if (match(Instruction.SUB, instr)) |sub| {
+                                const amount: isize = switch (sub.shift) {
+                                    0 => sub.imm12,
+                                    1 => @as(isize, @intCast(sub.imm12)) << 12,
+                                };
+                                registers[sub.rd] = registers[sub.rn] - amount;
+                            } else if (match(Instruction.MOV, instr)) |mov| {
                                 registers[mov.rd] = registers[mov.rm];
-                            } else if (stp.opc == .stp) {
+                            } else if (match(Instruction.STR.PRE, instr)) |str| {
+                                registers[str.rn] += @as(isize, str.imm9);
+                            } else if (match(Instruction.STR.POST, instr)) |str| {
+                                registers[str.rn] += @as(isize, str.imm9);
+                            } else if (match(Instruction.STP.PRE, instr)) |stp| {
+                                registers[stp.rn] += @as(isize, stp.imm7) * 8;
+                            } else if (match(Instruction.STP.POST, instr)) |stp| {
                                 registers[stp.rn] += @as(isize, stp.imm7) * 8;
                             }
                         }
@@ -664,7 +677,9 @@ test "Binding ([no args] + i64 x 4)" {
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
     try expect(@TypeOf(bf) == *const fn () i64);
     defer _ = Add.unbind(ea.allocator(), bf);
+    std.debug.print("calling\n", .{});
     const sum1 = bf();
+    std.debug.print("called\n", .{});
     try expect(sum1 == 1 + 2 + 3 + 4);
 }
 
@@ -1195,23 +1210,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
     },
     .aarch64 => union(enum) {
         pub const Opcode = struct {
-            const G8 = enum(u8) {
-                ldr = 0x58,
-                _,
-            };
-            const G9 = enum(u9) {
-                add = 0x122,
-                sub = 0x1a2,
-                _,
-            };
-            const G10 = enum(u10) {
-                str = 0x3e4,
-                stp = 0x2a6, // pre-index
-                mov = 0x2a8,
-                _,
-            };
             const G22 = enum(u22) {
-                br = 0x35_87c0,
+                br = 0x3587c0,
                 _,
             };
             const G32 = enum(u32) {
@@ -1223,46 +1223,78 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rd: u5,
             rn: u5,
             imm12: u12,
-            shift: u1 = 0,
-            opc: Opcode.G9 = .add,
+            shift: u1,
+            @"31:23": u9 = 0b1001_0001_0,
         };
         pub const SUB = packed struct(u32) {
             rd: u5,
             rn: u5,
             imm12: u12,
-            shift: u1 = 0,
-            opc: Opcode.G9 = .sub,
+            shift: u1,
+            @"31:23": u9 = 0b1101_0001_0,
         };
         pub const MOV = packed struct(u32) {
             rd: u5,
-            rn: u5 = 0x1f,
-            imm6: u6 = 0,
+            rn: u5 = 0b11111,
+            imm6: u6,
             rm: u5,
-            n: u1 = 0,
-            opc: Opcode.G10 = .mov,
+            @"31:22": u11 = 0b1010_1010_000,
         };
         pub const LDR = packed struct(u32) {
             rt: u5,
             imm19: u19,
-            opc: Opcode.G8 = .ldr,
+            @"31:24": u8 = 0b0101_1000,
         };
         pub const STR = packed struct(u32) {
             rt: u5,
             rn: u5,
-            imm12: u12 = 0,
-            opc: Opcode.G10 = .str,
+            imm12: u12,
+            @"31:22": u10 = 0b1111_1001_00,
+
+            pub const PRE = packed struct(u32) {
+                rt: u5,
+                rn: u5,
+                @"11:10": u2 = 0b11,
+                imm9: i9,
+                @"31:21": u11 = 0b1111_1000_000,
+            };
+            pub const POST = packed struct(u32) {
+                rt: u5,
+                rn: u5,
+                @"11:10": u2 = 0b01,
+                imm9: i9,
+                @"31:21": u11 = 0b1111_1000_000,
+            };
         };
         pub const STP = packed struct(u32) {
             rt: u5,
             rn: u5,
             rt2: u5,
-            imm7: i7 = 0,
-            opc: Opcode.G10 = .stp,
+            imm7: i7,
+            @"31:22": u10 = 0b1010_1001_00,
+
+            pub const PRE = packed struct(u32) {
+                rt: u5,
+                rn: u5,
+                rt2: u5,
+                imm7: i7,
+                @"31:22": u10 = 0b1010_1001_10,
+            };
+            pub const POST = packed struct(u32) {
+                rt: u5,
+                rn: u5,
+                rt2: u5,
+                imm7: i7,
+                @"31:22": u10 = 0b1010_1000_10,
+            };
         };
         pub const BR = packed struct(u32) {
-            rm: u5 = 0,
+            rm: u5 = 0b0000,
             rn: u5,
-            opc: Opcode.G22 = .br,
+            @"31:10": u22 = 0b1101_0110_0001_1111_0000_00,
+        };
+        pub const NOP = packed struct(u32) {
+            @"31:0": u32 = 0b1101_0101_0000_0011_0010_0000_0001_1111,
         };
 
         add: ADD,
@@ -1560,6 +1592,16 @@ const Instruction = switch (builtin.target.cpu.arch) {
     },
     else => void,
 };
+
+fn match(comptime ST: type, word: u32) ?ST {
+    const instr: ST = @bitCast(word);
+    return inline for (@typeInfo(ST).@"struct".fields) |field| {
+        if (field.default_value_ptr) |opaque_ptr| {
+            const ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+            if (@field(instr, field.name) != ptr.*) break null;
+        }
+    } else instr;
+}
 
 const InstructionEncoder = struct {
     output: ?[]u8 = null,
