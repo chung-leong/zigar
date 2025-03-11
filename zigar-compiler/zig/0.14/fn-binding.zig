@@ -473,13 +473,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const instrs: [*]const u8 = @ptrCast(ptr);
                     const nop = @intFromEnum(Instruction.Opcode.nop);
                     const lea = @intFromEnum(Instruction.Opcode.lea_r_r);
+                    var next_must_match = false;
                     for (0..262144) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             // the previous instruction should be a LEA; it is either 3 or 6 bytes
-                            // ahead since disp can be i8 or i32; we need to check position 2 as
-                            // well, in case the displacement happens to be 144 (0x90), which
-                            // matches the opcode of nop
-                            for ([_]usize{ 3, 6, 2 }) |offset| {
+                            // ahead since disp can be i8 or i32
+                            for ([_]usize{ 3, 6 }) |offset| {
                                 if (i >= offset and instrs[i - offset] == lea) {
                                     const j = i - offset;
                                     const mod_rm: Instruction.ModRM = @bitCast(instrs[j + 1]);
@@ -493,8 +492,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                         return disp - @sizeOf(usize);
                                     }
                                 }
-                            } else break;
-                        }
+                            } else {
+                                // if the last byte of disp of the previous LEA happens to be 144
+                                // or 0x90, we'd get a premature match; skip over this byte and
+                                // try again before erroring out
+                                next_must_match = true;
+                            }
+                        } else if (next_must_match) break;
                     }
                 },
                 .aarch64 => {
