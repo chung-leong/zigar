@@ -475,9 +475,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const lea = @intFromEnum(Instruction.Opcode.lea_r_r);
                     for (0..262144) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            // disp is either i8 or i32, so the previous instruction is either 3 or 6 bytes ahead
-                            // we need to check 2 as well, since the compiler is smart enough to use one less byte if
-                            // the displacement happens to match the opcode of nop
+                            // the previous instruction should be a LEA; it is either 3 or 6 bytes
+                            // ahead since disp can be i8 or i32; we need to check position 2 as
+                            // well, in case the displacement happens to be 144 (0x90), which
+                            // matches the opcode of nop
                             for ([_]usize{ 3, 6, 2 }) |offset| {
                                 if (i >= offset and instrs[i - offset] == lea) {
                                     const j = i - offset;
