@@ -297,9 +297,9 @@ pub const Memory = struct {
 
     pub fn from(ptr: anytype, is_comptime: bool) Memory {
         const PtrT = @TypeOf(ptr);
-        const pt = @typeInfo(PtrT).Pointer;
+        const pt = @typeInfo(PtrT).pointer;
         const address = switch (pt.size) {
-            .Slice => @intFromPtr(ptr.ptr),
+            .slice => @intFromPtr(ptr.ptr),
             else => @intFromPtr(ptr),
         };
         const invalid_address = create: {
@@ -316,15 +316,15 @@ pub const Memory = struct {
             };
         }
         const child_size = switch (@typeInfo(pt.child)) {
-            .Fn => 0,
+            .@"fn" => 0,
             else => @sizeOf(pt.child),
         };
         const len: usize = switch (pt.size) {
-            .One => child_size,
-            .Slice => child_size * ptr.len,
-            .Many, .C => get: {
+            .one => child_size,
+            .slice => child_size * ptr.len,
+            .many, .c => get: {
                 if (address != 0) {
-                    if (pt.sentinel) |opaque_ptr| {
+                    if (pt.sentinel_ptr) |opaque_ptr| {
                         const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
                         var len: usize = 0;
                         while (ptr[len] != sentinel_ptr.*) {
@@ -375,10 +375,10 @@ pub const Memory = struct {
     }
 
     pub fn to(self: Memory, comptime PtrT: type) PtrT {
-        const pt = @typeInfo(PtrT).Pointer;
+        const pt = @typeInfo(PtrT).pointer;
         return switch (pt.size) {
-            .One => @ptrCast(@alignCast(self.bytes)),
-            .Slice => slice: {
+            .one => @ptrCast(@alignCast(self.bytes)),
+            .slice => slice: {
                 if (self.bytes == null) {
                     break :slice &.{};
                 }
@@ -386,8 +386,8 @@ pub const Memory = struct {
                 const many_ptr: [*]pt.child = @ptrCast(@alignCast(self.bytes));
                 break :slice many_ptr[0..count];
             },
-            .Many => @ptrCast(@alignCast(self.bytes)),
-            .C => @ptrCast(@alignCast(self.bytes)),
+            .many => @ptrCast(@alignCast(self.bytes)),
+            .c => @ptrCast(@alignCast(self.bytes)),
         };
     }
 
@@ -399,17 +399,17 @@ pub const Memory = struct {
         };
         const p1 = memory.to(*u8);
         try expect(p1.* == 'H');
-        try expect(@typeInfo(@TypeOf(p1)).Pointer.size == .One);
+        try expect(@typeInfo(@TypeOf(p1)).pointer.size == .one);
         const p2 = memory.to([]u8);
         try expect(p2[0] == 'H');
         try expect(p2.len == 5);
-        try expect(@typeInfo(@TypeOf(p2)).Pointer.size == .Slice);
+        try expect(@typeInfo(@TypeOf(p2)).pointer.size == .slice);
         const p3 = memory.to([*]u8);
         try expect(p3[0] == 'H');
-        try expect(@typeInfo(@TypeOf(p3)).Pointer.size == .Many);
+        try expect(@typeInfo(@TypeOf(p3)).pointer.size == .many);
         const p4 = memory.to([*c]u8);
         try expect(p4[0] == 'H');
-        try expect(@typeInfo(@TypeOf(p4)).Pointer.size == .C);
+        try expect(@typeInfo(@TypeOf(p4)).pointer.size == .c);
     }
 };
 
@@ -417,7 +417,7 @@ pub fn IntFor(comptime n: comptime_int) type {
     comptime var bits = 8;
     const signedness = if (n < 0) .signed else .unsigned;
     return inline while (true) : (bits *= 2) {
-        const T = @Type(.{ .Int = .{ .signedness = signedness, .bits = bits } });
+        const T = @Type(.{ .int = .{ .signedness = signedness, .bits = bits } });
         if (std.math.minInt(T) <= n and n <= std.math.maxInt(T)) {
             break T;
         }
@@ -433,7 +433,7 @@ test "IntFor" {
 }
 
 pub const ErrorInt = @Type(.{
-    .Int = .{
+    .int = .{
         .signedness = .unsigned,
         .bits = @bitSizeOf(anyerror),
     },
@@ -441,10 +441,10 @@ pub const ErrorInt = @Type(.{
 
 pub fn Uninlined(comptime FT: type) type {
     return switch (@typeInfo(FT)) {
-        .Fn => |f| @Type(.{
-            .Fn = .{
+        .@"fn" => |f| @Type(.{
+            .@"fn" = .{
                 .calling_convention = switch (f.calling_convention) {
-                    .Inline => .Unspecified,
+                    .@"inline" => .auto,
                     else => |cc| cc,
                 },
                 .is_generic = f.is_generic,
@@ -458,7 +458,7 @@ pub fn Uninlined(comptime FT: type) type {
 }
 
 test "Uninlined" {
-    try expect(Uninlined(fn () callconv(.Inline) void) == fn () void);
+    try expect(Uninlined(fn () callconv(.@"inline") void) == fn () void);
     try expect(Uninlined(fn () void) == fn () void);
 }
 
@@ -537,7 +537,7 @@ pub const TypeData = struct {
         return if (self.attrs.is_slice)
             self.type.ElementType
         else switch (@typeInfo(self.type)) {
-            inline .Array, .Vector => |ar| ar.child,
+            inline .array, .vector => |ar| ar.child,
             else => @compileError("Not an array, vector, or slice"),
         };
     }
@@ -548,13 +548,13 @@ pub const TypeData = struct {
 
     pub fn getTargetType(comptime self: @This()) type {
         return switch (@typeInfo(self.type)) {
-            .Pointer => |pt| switch (pt.size) {
-                .One => if (pt.child == anyopaque) Slice(anyopaque, null) else pt.child,
+            .pointer => |pt| switch (pt.size) {
+                .one => if (pt.child == anyopaque) Slice(anyopaque, null) else pt.child,
                 else => define: {
-                    if (pt.sentinel) |ptr| {
+                    if (pt.sentinel_ptr) |ptr| {
                         const sentinel_ptr: *const pt.child = @alignCast(@ptrCast(ptr));
                         break :define Slice(pt.child, .{ .value = sentinel_ptr.* });
-                    } else if (pt.size == .C and (pt.child == u8 or pt.child == u16)) {
+                    } else if (pt.size == .c and (pt.child == u8 or pt.child == u16)) {
                         break :define Slice(pt.child, .{ .value = 0, .is_required = false });
                     } else {
                         break :define Slice(pt.child, null);
@@ -577,9 +577,9 @@ pub const TypeData = struct {
             return null;
         }
         return switch (@typeInfo(self.type)) {
-            .Null, .Undefined, .Fn => 0,
-            .Opaque => null,
-            .ErrorSet => @sizeOf(anyerror),
+            .null, .undefined, .@"fn" => 0,
+            .@"opaque" => null,
+            .error_set => @sizeOf(anyerror),
             else => return @sizeOf(self.type),
         };
     }
@@ -592,9 +592,9 @@ pub const TypeData = struct {
 
     pub fn getBitSize(comptime self: @This()) ?usize {
         return switch (@typeInfo(self.type)) {
-            .Null, .Undefined, .Fn => 0,
-            .Opaque => null,
-            .ErrorSet => @bitSizeOf(anyerror),
+            .null, .undefined, .@"fn" => 0,
+            .@"opaque" => null,
+            .error_set => @bitSizeOf(anyerror),
             else => return @bitSizeOf(self.type),
         };
     }
@@ -611,9 +611,9 @@ pub const TypeData = struct {
             return null;
         }
         return switch (@typeInfo(self.type)) {
-            .Null, .Undefined, .Fn => 0,
-            .Opaque => null,
-            .ErrorSet => @alignOf(anyerror),
+            .null, .undefined, .@"fn" => 0,
+            .@"opaque" => null,
+            .error_set => @alignOf(anyerror),
             else => return @alignOf(self.type),
         };
     }
@@ -628,7 +628,7 @@ pub const TypeData = struct {
         return if (self.attrs.is_slice)
             self.type.sentinel
         else switch (@typeInfo(self.type)) {
-            inline .Array => |ar| if (ar.sentinel) |opaque_ptr| sentinel: {
+            inline .array => |ar| if (ar.sentinel_ptr) |opaque_ptr| sentinel: {
                 const ptr: *const self.getElementType() = @ptrCast(opaque_ptr);
                 break :sentinel .{ .value = ptr.*, .is_required = true };
             } else null,
@@ -645,9 +645,9 @@ pub const TypeData = struct {
 
     pub fn hasSelector(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Union => self.getSelectorType() != null,
-            .Optional => |op| switch (@typeInfo(op.child)) {
-                .Pointer, .ErrorSet => false,
+            .@"union" => self.getSelectorType() != null,
+            .optional => |op| switch (@typeInfo(op.child)) {
+                .pointer, .error_set => false,
                 else => true,
             },
             else => @compileError("Not a union or optional"),
@@ -656,13 +656,13 @@ pub const TypeData = struct {
 
     pub fn getSelectorType(comptime self: @This()) ?type {
         return switch (@typeInfo(self.type)) {
-            .Union => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
+            .@"union" => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
                 true => IntFor(un.fields.len),
                 false => null,
             },
-            .Optional => |op| switch (@typeInfo(op.child)) {
-                .Pointer => usize, // size of the pointer itself
-                .ErrorSet => ErrorInt,
+            .optional => |op| switch (@typeInfo(op.child)) {
+                .pointer => usize, // size of the pointer itself
+                .error_set => ErrorInt,
                 else => u8,
             },
             else => @compileError("Not a union or optional"),
@@ -687,9 +687,9 @@ pub const TypeData = struct {
 
     pub fn getSelectorBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.type)) {
-            .Union => get: {
+            .@"union" => get: {
                 const TT = self.getSelectorType().?;
-                const fields = @typeInfo(self.type).Union.fields;
+                const fields = @typeInfo(self.type).@"union".fields;
                 // selector comes first unless content needs larger align
                 comptime var offset = 0;
                 inline for (fields) |field| {
@@ -702,8 +702,8 @@ pub const TypeData = struct {
                 }
                 break :get offset;
             },
-            .Optional => |op| switch (@typeInfo(op.child)) {
-                .Pointer, .ErrorSet => 0, // offset of the pointer/error itself
+            .optional => |op| switch (@typeInfo(op.child)) {
+                .pointer, .error_set => 0, // offset of the pointer/error itself
                 else => @sizeOf(op.child) * 8,
             },
             else => @compileError("Not a union or optional"),
@@ -721,19 +721,19 @@ pub const TypeData = struct {
     pub fn getErrorBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.type)) {
             // value is placed after the error number if its alignment is smaller than that of anyerror
-            .ErrorUnion => |eu| if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8,
+            .error_union => |eu| if (@alignOf(anyerror) > @alignOf(eu.payload)) 0 else @sizeOf(eu.payload) * 8,
             else => @compileError("Not an error union"),
         };
     }
 
     pub fn getContentBitOffset(comptime self: @This()) comptime_int {
         return switch (@typeInfo(self.type)) {
-            .Union => if (self.getSelectorType()) |TT| switch (self.getSelectorBitOffset()) {
+            .@"union" => if (self.getSelectorType()) |TT| switch (self.getSelectorBitOffset()) {
                 0 => @sizeOf(TT) * 8,
                 else => 0,
             } else 0,
-            .Optional => 0,
-            .ErrorUnion => switch (self.getErrorBitOffset()) {
+            .optional => 0,
+            .error_union => switch (self.getErrorBitOffset()) {
                 0 => @sizeOf(anyerror) * 8,
                 else => 0,
             },
@@ -755,7 +755,7 @@ pub const TypeData = struct {
 
     pub fn isConst(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Pointer => |pt| pt.is_const,
+            .pointer => |pt| pt.is_const,
             else => false,
         };
     }
@@ -768,8 +768,8 @@ pub const TypeData = struct {
 
     pub fn isPacked(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Struct => |st| st.layout == .@"packed",
-            .Union => |un| un.layout == .@"packed",
+            .@"struct" => |st| st.layout == .@"packed",
+            .@"union" => |un| un.layout == .@"packed",
             else => false,
         };
     }
@@ -789,7 +789,7 @@ pub const TypeData = struct {
 
     pub fn isBitVector(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.type),
+            .vector => |ve| @sizeOf(ve.child) * ve.len > @sizeOf(self.type),
             else => false,
         };
     }
@@ -813,11 +813,11 @@ pub const TypeData = struct {
 
     pub fn isMethodOf(comptime self: @This(), comptime T: type) bool {
         switch (@typeInfo(self.type)) {
-            .Fn => |f| {
+            .@"fn" => |f| {
                 if (f.params.len > 0) {
                     if (f.params[0].type) |PT| {
                         return (PT == T) or switch (@typeInfo(PT)) {
-                            .Pointer => |pt| pt.child == T,
+                            .pointer => |pt| pt.child == T,
                             else => false,
                         };
                     }
@@ -854,28 +854,28 @@ pub const TypeData = struct {
 
     pub fn isPointer(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Pointer => true,
+            .pointer => true,
             else => false,
         };
     }
 
     pub fn isObject(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Struct, .Union, .Array, .ErrorUnion, .Optional, .Pointer, .Vector, .Fn => true,
+            .@"struct", .@"union", .array, .error_union, .optional, .pointer, .vector, .@"fn" => true,
             else => false,
         };
     }
 
     pub fn isFunction(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Fn => true,
+            .@"fn" => true,
             else => false,
         };
     }
 
     pub fn isVariadic(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Fn => |f| f.is_var_args,
+            .@"fn" => |f| f.is_var_args,
             else => false,
         };
     }
@@ -885,17 +885,17 @@ pub const TypeData = struct {
     }
 
     pub fn isThrowing(comptime self: @This()) bool {
-        return inline for (@typeInfo(self.type).Struct.fields, 0..) |field, i| {
+        return inline for (@typeInfo(self.type).@"struct".fields, 0..) |field, i| {
             if (i == 0) {
                 // retval
-                if (@typeInfo(field.type) == .ErrorUnion) break true;
+                if (@typeInfo(field.type) == .error_union) break true;
             } else {
                 const internal_type = comptime getInternalType(field.type);
                 if (internal_type == .promise or internal_type == .generator) {
                     switch (@typeInfo(field.type.payload)) {
-                        .ErrorUnion => break true,
-                        .Optional => |op| switch (@typeInfo(op.child)) {
-                            .ErrorUnion => break true,
+                        .error_union => break true,
+                        .optional => |op| switch (@typeInfo(op.child)) {
+                            .error_union => break true,
                             else => {},
                         },
                         else => {},
@@ -911,7 +911,7 @@ pub const TypeData = struct {
 
     fn BaseType(comptime self: @This()) type {
         return switch (@typeInfo(self.type)) {
-            .Optional => |op| op.child,
+            .optional => |op| op.child,
             else => self.type,
         };
     }
@@ -954,7 +954,7 @@ pub const TypeData = struct {
 
     pub fn isInternal(comptime self: @This()) bool {
         return switch (@typeInfo(self.type)) {
-            .Struct => @hasDecl(self.type, "internal_type") and @TypeOf(self.type.internal_type) == InternalType,
+            .@"struct" => @hasDecl(self.type, "internal_type") and @TypeOf(self.type.internal_type) == InternalType,
             else => false,
         };
     }
@@ -1070,11 +1070,11 @@ pub const TypeDataCollector = struct {
         self.types = self.types.concat(td);
         // add fields and function args/retval
         switch (@typeInfo(T)) {
-            .ErrorUnion => |eu| {
+            .error_union => |eu| {
                 self.add(eu.payload);
                 self.add(eu.error_set);
             },
-            .Fn => |f| {
+            .@"fn" => |f| {
                 if (!f.is_generic) {
                     inline for (f.params) |param| {
                         if (param.type) |PT| {
@@ -1086,15 +1086,15 @@ pub const TypeDataCollector = struct {
                     if (f.return_type) |RT| self.add(RT);
                 }
             },
-            inline .Array, .Vector, .Optional, .Pointer => |ar| {
+            inline .array, .vector, .optional, .pointer => |ar| {
                 self.add(ar.child);
             },
-            inline .Struct, .Union => |st, Tag| {
+            inline .@"struct", .@"union" => |st, Tag| {
                 inline for (st.fields) |field| {
                     self.add(field.type);
-                    if (Tag == .Struct and field.is_comptime) {
+                    if (Tag == .@"struct" and field.is_comptime) {
                         // deal with comptime fields
-                        const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value.?));
+                        const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value_ptr.?));
                         self.addTypeOf(def_value_ptr.*);
                     }
                 }
@@ -1103,12 +1103,12 @@ pub const TypeDataCollector = struct {
         }
         // add decls
         switch (@typeInfo(T)) {
-            inline .Struct, .Union, .Enum, .Opaque => |st| {
+            inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
                 inline for (st.decls) |decl| {
                     // decls are accessed through pointers
                     const PT = @TypeOf(&@field(T, decl.name));
                     _ = self.append(.{ .type = PT, .attrs = .{ .is_in_use = false } });
-                    if (@typeInfo(PT).Pointer.is_const) {
+                    if (@typeInfo(PT).pointer.is_const) {
                         self.addTypeOf(@field(T, decl.name));
                     }
                 }
@@ -1117,8 +1117,8 @@ pub const TypeDataCollector = struct {
         }
         // add other implicit types
         switch (@typeInfo(T)) {
-            .NoReturn => self.add(void),
-            .Pointer => |pt| {
+            .noreturn => self.add(void),
+            .pointer => |pt| {
                 const TT = TypeData.getTargetType(.{ .type = T });
                 if (TT != pt.child) {
                     self.append(.{
@@ -1128,9 +1128,9 @@ pub const TypeDataCollector = struct {
                 }
                 self.add(usize);
             },
-            .ErrorSet => self.add(ErrorInt),
-            .Struct => |st| if (st.backing_integer) |IT| self.add(IT),
-            .Fn => |f| if (!f.is_generic) {
+            .error_set => self.add(ErrorInt),
+            .@"struct" => |st| if (st.backing_integer) |IT| self.add(IT),
+            .@"fn" => |f| if (!f.is_generic) {
                 const ArgT = ArgumentStruct(T);
                 self.append(.{
                     .type = ArgT,
@@ -1139,11 +1139,11 @@ pub const TypeDataCollector = struct {
                         .is_variadic = f.is_var_args,
                     },
                 });
-                if (f.calling_convention == .Inline) {
+                if (f.calling_convention == .@"inline") {
                     self.add(Uninlined(T));
                 }
             },
-            inline .Union, .Optional => if (self.at(index).getSelectorType()) |ST| {
+            inline .@"union", .optional => if (self.at(index).getSelectorType()) |ST| {
                 self.add(ST);
             },
             else => {},
@@ -1153,13 +1153,13 @@ pub const TypeDataCollector = struct {
     fn addTypeOf(comptime self: *@This(), comptime value: anytype) void {
         const T = @TypeOf(value);
         switch (@typeInfo(T)) {
-            .Type => self.add(value),
-            .ComptimeFloat => self.add(*const f64),
-            .ComptimeInt => self.add(*const IntFor(value)),
-            .EnumLiteral => self.add(@TypeOf(removeSentinel(@tagName(value)))),
-            .Optional => if (value) |v| self.addTypeOf(v),
-            .ErrorUnion => if (value) |v| self.addTypeOf(v) else |_| {},
-            .Union => |un| {
+            .type => self.add(value),
+            .comptime_float => self.add(*const f64),
+            .comptime_int => self.add(*const IntFor(value)),
+            .enum_literal => self.add(@TypeOf(removeSentinel(@tagName(value)))),
+            .optional => if (value) |v| self.addTypeOf(v),
+            .error_union => if (value) |v| self.addTypeOf(v) else |_| {},
+            .@"union" => |un| {
                 if (un.tag_type) |TT| {
                     const active_tag: TT = value;
                     inline for (un.fields) |field| {
@@ -1170,10 +1170,10 @@ pub const TypeDataCollector = struct {
                     }
                 }
             },
-            .Struct => |st| inline for (st.fields) |field| self.addTypeOf(@field(value, field.name)),
-            .Array => inline for (value) |element| self.addTypeOf(element),
+            .@"struct" => |st| inline for (st.fields) |field| self.addTypeOf(@field(value, field.name)),
+            .array => inline for (value) |element| self.addTypeOf(element),
             // add function to the list so we can create its arg struct later
-            .Fn => self.functions = self.functions.concat(T),
+            .@"fn" => self.functions = self.functions.concat(T),
             else => {},
         }
     }
@@ -1221,44 +1221,44 @@ pub const TypeDataCollector = struct {
         // prevent endless recursion
         td.attrs.known = true;
         switch (@typeInfo(td.type)) {
-            .Bool,
-            .Int,
-            .Float,
-            .Void,
-            .ErrorSet,
-            .Enum,
-            .Opaque,
-            .NoReturn,
+            .bool,
+            .int,
+            .float,
+            .void,
+            .error_set,
+            .@"enum",
+            .@"opaque",
+            .noreturn,
             => td.attrs.is_supported = true,
-            .Type,
-            .ComptimeFloat,
-            .ComptimeInt,
-            .EnumLiteral,
-            .Null,
-            .Undefined,
+            .type,
+            .comptime_float,
+            .comptime_int,
+            .enum_literal,
+            .null,
+            .undefined,
             => {
                 td.attrs.is_supported = true;
                 td.attrs.is_comptime_only = true;
             },
-            .ErrorUnion => |eu| {
+            .error_union => |eu| {
                 const payload_attrs = self.getAttributes(eu.payload);
                 td.attrs.is_supported = payload_attrs.is_supported;
                 td.attrs.is_comptime_only = payload_attrs.is_comptime_only;
                 td.attrs.has_pointer = payload_attrs.has_pointer;
             },
-            .Pointer => |pt| {
+            .pointer => |pt| {
                 const child_attrs = self.getAttributes(pt.child);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
             },
-            inline .Array, .Vector, .Optional => |ar| {
+            inline .array, .vector, .optional => |ar| {
                 const child_attrs = self.getAttributes(ar.child);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = child_attrs.has_pointer;
             },
-            .Struct => |st| {
+            .@"struct" => |st| {
                 td.attrs.is_supported = true;
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
@@ -1275,7 +1275,7 @@ pub const TypeDataCollector = struct {
                     }
                 }
             },
-            .Union => |un| {
+            .@"union" => |un| {
                 td.attrs.is_supported = true;
                 inline for (un.fields) |field| {
                     const field_attrs = self.getAttributes(field.type);
@@ -1287,7 +1287,7 @@ pub const TypeDataCollector = struct {
                     }
                 }
             },
-            .Fn => |f| {
+            .@"fn" => |f| {
                 td.attrs.is_supported = inline for (f.params) |param| {
                     if (param.is_generic) break false;
                     if (param.type == null) break false;
@@ -1315,7 +1315,7 @@ pub const TypeDataCollector = struct {
         td.attrs.signature_known = true;
         var md5 = std.crypto.hash.Md5.init(.{});
         switch (@typeInfo(td.type)) {
-            .Struct => |st| {
+            .@"struct" => |st| {
                 md5.update(switch (st.layout) {
                     .@"extern" => "extern struct",
                     .@"packed" => "packed struct",
@@ -1340,7 +1340,7 @@ pub const TypeDataCollector = struct {
                 }
                 md5.update("}");
             },
-            .Union => |un| {
+            .@"union" => |un| {
                 md5.update(switch (un.layout) {
                     .@"extern" => "extern union",
                     else => "union",
@@ -1362,25 +1362,25 @@ pub const TypeDataCollector = struct {
                 }
                 md5.update("}");
             },
-            .Array => |ar| {
+            .array => |ar| {
                 md5.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
                 md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
             },
-            .Vector => |ar| {
+            .vector => |ar| {
                 md5.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
                 md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
                 md5.update(")");
             },
-            .Optional => |op| {
+            .optional => |op| {
                 md5.update("?");
                 md5.update(std.mem.asBytes(&self.getSignature(op.child)));
             },
-            .ErrorUnion => |eu| {
+            .error_union => |eu| {
                 md5.update(std.mem.asBytes(&self.getSignature(eu.error_set)));
                 md5.update("!");
                 md5.update(std.mem.asBytes(&self.getSignature(eu.payload)));
             },
-            .ErrorSet => |es| {
+            .error_set => |es| {
                 if (td.type == anyerror) {
                     md5.update("anyerror");
                 } else {
@@ -1394,19 +1394,19 @@ pub const TypeDataCollector = struct {
                     md5.update("}");
                 }
             },
-            .Pointer => |pt| {
+            .pointer => |pt| {
                 md5.update(switch (pt.size) {
-                    .One => "*",
-                    .Many => "[*",
-                    .Slice => "[",
-                    .C => "[*c",
+                    .one => "*",
+                    .many => "[*",
+                    .slice => "[",
+                    .c => "[*c",
                 });
-                if (pt.sentinel) |ptr| {
+                if (pt.sentinel_ptr) |ptr| {
                     const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
                     md5.update(std.fmt.comptimePrint(":{d}", .{value}));
                 }
                 md5.update(switch (pt.size) {
-                    .One => "",
+                    .one => "",
                     else => "]",
                 });
                 if (pt.is_const) {
@@ -1417,7 +1417,7 @@ pub const TypeDataCollector = struct {
                 }
                 md5.update(std.mem.asBytes(&self.getSignature(pt.child)));
             },
-            .Fn => |f| {
+            .@"fn" => |f| {
                 md5.update("fn (");
                 if (f.is_var_args) {
                     md5.update("...");
@@ -1434,7 +1434,7 @@ pub const TypeDataCollector = struct {
                     md5.update(", ");
                 }
                 md5.update(") ");
-                if (f.calling_convention != .Unspecified) {
+                if (f.calling_convention != .auto) {
                     md5.update("callconv(.");
                     md5.update(@tagName(f.calling_convention));
                     md5.update(") ");
@@ -1594,7 +1594,7 @@ pub const TypeDataCollector = struct {
             pub const PtrB = *const u32;
             pub const FnA = fn () i32;
             pub const FnB = fn () u32;
-            pub const FnC = fn () callconv(.C) u32;
+            pub const FnC = fn () callconv(.c) u32;
             pub const FnD = fn (u32) u32;
         };
         comptime var tdc = init(0);
@@ -1644,7 +1644,7 @@ fn TypeDatabase(comptime len: comptime_int) type {
 
 fn Sentinel(comptime T: type) type {
     const ET = switch (@typeInfo(T)) {
-        .Opaque => u8,
+        .@"opaque" => u8,
         else => T,
     };
     return struct {
@@ -1655,7 +1655,7 @@ fn Sentinel(comptime T: type) type {
 
 pub fn Slice(comptime T: type, comptime s: ?Sentinel(T)) type {
     const ET = switch (@typeInfo(T)) {
-        .Opaque => u8,
+        .@"opaque" => u8,
         else => T,
     };
     return struct {
@@ -1676,7 +1676,7 @@ test "Slice" {
 }
 
 pub fn ArgumentStruct(comptime T: type) type {
-    const f = @typeInfo(T).Fn;
+    const f = @typeInfo(T).@"fn";
     const count = get: {
         var count = 1;
         for (f.params) |param| {
@@ -1696,7 +1696,7 @@ pub fn ArgumentStruct(comptime T: type) type {
         .type = RT,
         .is_comptime = false,
         .alignment = @alignOf(RT),
-        .default_value = null,
+        .default_value_ptr = null,
     };
     var arg_index = 0;
     for (f.params) |param| {
@@ -1707,13 +1707,13 @@ pub fn ArgumentStruct(comptime T: type) type {
                 .type = param.type.?,
                 .is_comptime = false,
                 .alignment = @alignOf(param.type.?),
-                .default_value = null,
+                .default_value_ptr = null,
             };
             arg_index += 1;
         }
     }
     return @Type(.{
-        .Struct = .{
+        .@"struct" = .{
             .layout = .auto,
             .decls = &.{},
             .fields = &fields,
@@ -1755,8 +1755,8 @@ test "ArgumentStruct" {
 
 pub fn FnPointerTarget(comptime T: type) type {
     return switch (@typeInfo(T)) {
-        .Pointer => |pt| switch (@typeInfo(pt.child)) {
-            .Fn => pt.child,
+        .pointer => |pt| switch (@typeInfo(pt.child)) {
+            .@"fn" => pt.child,
             else => @compileError("Not a function pointer"),
         },
         else => @compileError("Not a function pointer"),
@@ -1770,18 +1770,18 @@ test "FnPointerTarget" {
 
 pub fn removeSentinel(comptime ptr: anytype) retval_type: {
     const PT = @TypeOf(ptr);
-    var pt = @typeInfo(PT).Pointer;
-    var ar = @typeInfo(pt.child).Array;
-    ar.sentinel = null;
-    pt.child = @Type(.{ .Array = ar });
-    break :retval_type @Type(.{ .Pointer = pt });
+    var pt = @typeInfo(PT).pointer;
+    var ar = @typeInfo(pt.child).array;
+    ar.sentinel_ptr = null;
+    pt.child = @Type(.{ .array = ar });
+    break :retval_type @Type(.{ .pointer = pt });
 } {
     return @ptrCast(ptr);
 }
 
 fn ReturnValue(comptime arg: anytype) type {
     const FT = Function(arg);
-    const f = @typeInfo(FT).Fn;
+    const f = @typeInfo(FT).@"fn";
     return f.return_type orelse @TypeOf(undefined);
 }
 
@@ -1792,11 +1792,11 @@ test "ReturnValue" {
 
 fn IteratorPayload(comptime T: type) ?type {
     return switch (@typeInfo(T)) {
-        .Optional => |op| switch (@typeInfo(op.child)) {
-            .ErrorUnion => |eu| eu.payload,
+        .optional => |op| switch (@typeInfo(op.child)) {
+            .error_union => |eu| eu.payload,
             else => op.child,
         },
-        .ErrorUnion => |eu| IteratorPayload(eu.payload),
+        .error_union => |eu| IteratorPayload(eu.payload),
         else => null,
     };
 }
@@ -1816,8 +1816,8 @@ test "IteratorPayload" {
 
 fn hasDefaultFields(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct => |st| inline for (st.fields) |field| {
-            if (field.default_value == null) break false;
+        .@"struct" => |st| inline for (st.fields) |field| {
+            if (field.default_value_ptr == null) break false;
         } else true,
         else => false,
     };
@@ -1842,7 +1842,7 @@ test "hasDefaultFields" {
 }
 
 fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
-    const f = @typeInfo(FT).Fn;
+    const f = @typeInfo(FT).@"fn";
     const arg_match = comptime check: {
         var self_count = 0;
         var alloc_count = 0;
@@ -1918,13 +1918,13 @@ test "NextMethodReturnValue" {
 
 pub fn IteratorReturnValue(comptime T: type) ?type {
     switch (@typeInfo(T)) {
-        .Struct, .Union, .Opaque => if (@hasDecl(T, "next")) {
+        .@"struct", .@"union", .@"opaque" => if (@hasDecl(T, "next")) {
             const next = @field(T, "next");
             return NextMethodReturnValue(@TypeOf(next), T);
         },
-        .ErrorUnion => |eu| if (IteratorReturnValue(eu.payload)) |RT| {
+        .error_union => |eu| if (IteratorReturnValue(eu.payload)) |RT| {
             return switch (@typeInfo(RT)) {
-                .ErrorUnion => |rt_eu| (eu.error_set || rt_eu.error_set)!rt_eu.payload,
+                .error_union => |rt_eu| (eu.error_set || rt_eu.error_set)!rt_eu.payload,
                 else => eu.error_set!RT,
             };
         },
@@ -1950,7 +1950,7 @@ const InternalType = enum {
 
 pub fn getInternalType(comptime OT: ?type) ?InternalType {
     if (OT) |T| {
-        if (@typeInfo(T) == .Struct) {
+        if (@typeInfo(T) == .@"struct") {
             if (@hasDecl(T, "internal_type") and @TypeOf(T.internal_type) == InternalType) {
                 return T.internal_type;
             }
@@ -1999,7 +1999,7 @@ pub fn Promise(comptime T: type) type {
                 pub fn resolve(ctx: *@This(), value: T) void {
                     var call = false;
                     var free = false;
-                    if (@typeInfo(T) == .ErrorUnion) {
+                    if (@typeInfo(T) == .error_union) {
                         if (value) |_| {
                             free = @atomicRmw(usize, &ctx.count, .Sub, 1, .acq_rel) == 1;
                             call = free and @cmpxchgStrong(bool, &ctx.fired, false, true, .acq_rel, .monotonic) == null;
@@ -2057,16 +2057,16 @@ test {
 
 pub fn Function(comptime arg: anytype) type {
     const AT = @TypeOf(arg);
-    const FT = if (@typeInfo(AT) == .Type) arg else AT;
+    const FT = if (@typeInfo(AT) == .type) arg else AT;
     return switch (@typeInfo(FT)) {
-        .Fn => FT,
+        .@"fn" => FT,
         else => @compileError("Function expected, received " ++ @typeName(FT)),
     };
 }
 
 pub fn PromiseOf(comptime arg: anytype) type {
     const FT = Function(arg);
-    const f = @typeInfo(FT).Fn;
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .promise) break param.type.?;
     } else Promise(f.return_type.?);
@@ -2105,7 +2105,7 @@ pub fn Generator(comptime T: type) type {
                 @compileError("Expecting an iterator, received: " ++ @typeName(AT));
             }
             var iter = switch (@typeInfo(AT)) {
-                .ErrorUnion => arg catch |err| {
+                .error_union => arg catch |err| {
                     _ = self.yield(err);
                     return;
                 },
@@ -2117,10 +2117,10 @@ pub fn Generator(comptime T: type) type {
                 if (!self.yield(result)) break;
                 // break if result is an error or null
                 switch (@typeInfo(@TypeOf(result))) {
-                    .ErrorUnion => if (result) |value| {
+                    .error_union => if (result) |value| {
                         if (value == null) break;
                     } else |_| break,
-                    .Optional => if (result == null) break,
+                    .optional => if (result == null) break,
                     else => {},
                 }
             }
@@ -2130,7 +2130,7 @@ pub fn Generator(comptime T: type) type {
 
 pub fn GeneratorOf(comptime arg: anytype) type {
     const FT = Function(arg);
-    const f = @typeInfo(FT).Fn;
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .generator) break param.type.?;
     } else typedef: {
@@ -2267,7 +2267,7 @@ pub fn Queue(comptime T: type) type {
 }
 
 test "Queue" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}).init;
     var queue: Queue(i32) = .{ .allocator = gpa.allocator() };
     try queue.push(123);
     try queue.push(456);
@@ -2295,20 +2295,20 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         init_promise: ?Promise(ThreadStartError!void) = undefined,
         deinit_promise: ?Promise(void) = undefined,
 
-        const ThreadStartParams = switch (@hasDecl(ns, "onThreadStart")) {
+        pub const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
+            false => error{},
+            true => switch (@typeInfo(ReturnValue(ns.onThreadStart))) {
+                .error_union => |eu| eu.error_set,
+                else => error{},
+            },
+        };
+        pub const ThreadStartParams = switch (@hasDecl(ns, "onThreadStart")) {
             false => struct {},
             true => std.meta.ArgsTuple(@TypeOf(ns.onThreadStart)),
         };
-        const ThreadEndParams = switch (@hasDecl(ns, "onThreadEnd")) {
+        pub const ThreadEndParams = switch (@hasDecl(ns, "onThreadEnd")) {
             false => struct {},
             true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnd)),
-        };
-        const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
-            false => error{},
-            true => switch (@typeInfo(ReturnValue(ns.onThreadStart))) {
-                .ErrorUnion => |eu| eu.error_set,
-                else => error{},
-            },
         };
         pub const Options = init: {
             const fields = std.meta.fields(struct {
@@ -2323,11 +2323,11 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             for (fields, 0..) |field, i| {
                 new_fields[i] = field;
                 if (@sizeOf(field.type) == 0) {
-                    new_fields[i].default_value = @ptrCast(&@as(field.type, .{}));
+                    new_fields[i].default_value_ptr = @ptrCast(&@as(field.type, .{}));
                 }
             }
             break :init @Type(.{
-                .Struct = .{
+                .@"struct" = .{
                     .layout = .auto,
                     .fields = &new_fields,
                     .decls = &.{},
@@ -2352,7 +2352,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             if (@hasDecl(internal_ns, "onQueueInit")) {
                 const result = @call(.auto, internal_ns.onQueueInit, .{});
                 switch (@typeInfo(@TypeOf(result))) {
-                    .ErrorUnion => if (result) |_| {} else |err| return err,
+                    .error_union => if (result) |_| {} else |err| return err,
                     else => {},
                 }
             }
@@ -2365,7 +2365,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             const min_stack_size: usize = if (std.Thread.use_pthreads) switch (@bitSizeOf(usize)) {
                 32 => 4096,
                 else => 1048576,
-            } else std.mem.page_size;
+            } else std.heap.pageSize();
             const spawn_config: std.Thread.SpawnConfig = .{
                 .stack_size = @max(min_stack_size, options.stack_size),
                 .allocator = allocator,
@@ -2415,10 +2415,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             }
             const key = comptime enumOf(func);
             const fieldName = @tagName(key);
-            // @FieldType() not available in 0.13.0
-            const Call = inline for (@typeInfo(WorkItem).Union.fields) |field| {
-                if (comptime std.mem.eql(u8, field.name, fieldName)) break field.type;
-            } else unreachable;
+            const Call = @FieldType(WorkItem, fieldName);
             const item = switch (@hasField(Call, "generator")) {
                 true => @unionInit(WorkItem, fieldName, .{ .args = args, .generator = dest }),
                 false => @unionInit(WorkItem, fieldName, .{ .args = args, .promise = dest }),
@@ -2446,7 +2443,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             for (decls) |decl| {
                 const DT = @TypeOf(@field(ns, decl.name));
                 switch (@typeInfo(DT)) {
-                    .Fn => |f| {
+                    .@"fn" => |f| {
                         if (f.return_type) |RT| {
                             // if the return value is an iterator, then a generator is expected
                             // otherwise an optional promise can be provided
@@ -2470,10 +2467,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 }
             }
             break :init @Type(.{
-                .Union = .{
+                .@"union" = .{
                     .layout = .auto,
                     .tag_type = @Type(.{
-                        .Enum = .{
+                        .@"enum" = .{
                             .tag_type = if (count <= 256) u8 else u16,
                             .fields = enum_fields[0..count],
                             .decls = &.{},
@@ -2485,7 +2482,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 },
             });
         };
-        const WorkItemEnum = @typeInfo(WorkItem).Union.tag_type.?;
+        const WorkItemEnum = @typeInfo(WorkItem).@"union".tag_type.?;
 
         fn enumOf(comptime func: anytype) WorkItemEnum {
             return for (decls) |decl| {
@@ -2541,7 +2538,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             if (comptime @hasDecl(ns, "onThreadEnd")) {
                 if (start_succeeded) _ = @call(.auto, ns.onThreadEnd, thread_end_params);
             }
-            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .acq_rel) == 1) {
+            if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .monotonic) == 1) {
                 self.queue.deinit();
                 self.status = .uninitialized;
                 if (std.meta.isError(self.init_result)) {
@@ -2557,7 +2554,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         }
 
         fn invokeFunction(item: WorkItem) void {
-            const un = @typeInfo(WorkItem).Union;
+            const un = @typeInfo(WorkItem).@"union";
             inline for (un.fields) |field| {
                 const key = @field(WorkItemEnum, field.name);
                 if (item == key) {
@@ -2592,7 +2589,7 @@ test "WorkQueue" {
     try queue.push(test_ns.world, .{}, null);
     std.time.sleep(1e+8);
     try expect(test_ns.total == 123 + 456);
-    queue.deinitAsync(null);
+    queue.deinit();
     // wait for thread shutdown
     std.time.sleep(1e+6);
 }
@@ -2603,17 +2600,17 @@ fn expectCT(comptime value: bool) !void {
 
 fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool {
     switch (@typeInfo(FT)) {
-        .Fn => |f| {
+        .@"fn" => |f| {
             if (f.params.len == 2 and f.return_type == RT) {
                 if (f.params[0].type != null and f.params[1].type == AT) {
                     comptime var T = f.params[0].type.?;
-                    if (@typeInfo(T) == .Optional) T = @typeInfo(T).Optional.child;
-                    if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true;
+                    if (@typeInfo(T) == .optional) T = @typeInfo(T).optional.child;
+                    if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return true;
                 }
             }
         },
-        .Pointer => |pt| {
-            if (@typeInfo(pt.child) == .Fn and isValidCallback(pt.child, AT, RT)) {
+        .pointer => |pt| {
+            if (@typeInfo(pt.child) == .@"fn" and isValidCallback(pt.child, AT, RT)) {
                 return true;
             }
         },
@@ -2636,13 +2633,13 @@ test "isValidCallback" {
 
 fn getCallback(comptime FT: type, cb: anytype) *const FT {
     const CBT = @TypeOf(cb);
-    const f = @typeInfo(FT).Fn;
+    const f = @typeInfo(FT).@"fn";
     if (comptime !isValidCallback(CBT, f.params[1].type.?, f.return_type.?)) {
         @compileError("Expecting " ++ @typeName(FT) ++ ", received: " ++ @typeName(CBT));
     }
     const fn_ptr = switch (@typeInfo(CBT)) {
-        .Pointer => cb,
-        .Fn => &cb,
+        .pointer => cb,
+        .@"fn" => &cb,
         else => unreachable,
     };
     return @ptrCast(fn_ptr);
