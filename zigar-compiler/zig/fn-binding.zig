@@ -172,8 +172,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 self_offset = offset;
                 break :init offset;
             };
-            std.debug.print("self_address = {d}\n", .{self_address});
-            std.debug.print("self_address_offset = {d}\n", .{self_address_offset});
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
                     return .{
@@ -281,42 +279,25 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .powerpc64le => {
                     const code_address = self_address + @offsetOf(@This(), "code");
+                    const code_addr_63_48: u16 = @truncate((code_address >> 48) & 0xffff);
+                    const code_addr_47_32: u16 = @truncate((code_address >> 32) & 0xffff);
+                    const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
+                    const code_addr_15_0: u16 = @truncate((code_address >> 0) & 0xffff);
                     return .{
-                        .{ // lis r11, (code_address >> 48) & 0xffff
-                            .addi = .{
-                                .rt = 11,
-                                .ra = 0,
-                                .imm16 = @bitCast(@as(u16, @truncate((code_address >> 48) & 0xffff))),
-                            },
+                        .{ // lis r11, code_addr_63_48
+                            .addi = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_63_48) },
                         },
-                        .{ // ori r11, r11, (code_address >> 32) & 0xffff
-                            .ori = .{
-                                .ra = 11,
-                                .rs = 11,
-                                .imm16 = @truncate((code_address >> 32) & 0xffff),
-                            },
+                        .{ // ori r11, r11, code_addr_47_32
+                            .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_47_32) },
                         },
                         .{ // rldic r11, r11, 32
-                            .rldic = .{
-                                .rs = 11,
-                                .ra = 11,
-                                .sh = 0,
-                                .sh2 = 1,
-                            },
+                            .rldic = .{ .rs = 11, .ra = 11, .sh = 0, .sh2 = 1, .mb = 0, .rc = 0 },
                         },
-                        .{ // oris r11, r11, (code_address >> 16) & 0xffff
-                            .oris = .{
-                                .ra = 11,
-                                .rs = 11,
-                                .imm16 = @truncate((code_address >> 16) & 0xffff),
-                            },
+                        .{ // oris r11, r11, code_addr_31_16
+                            .oris = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_31_16) },
                         },
-                        .{ // ori r11, r11, (code_address >> 0) & 0xffff
-                            .ori = .{
-                                .ra = 11,
-                                .rs = 11,
-                                .imm16 = @truncate((code_address >> 0) & 0xffff),
-                            },
+                        .{ // ori r11, r11, code_addr_15_0
+                            .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
                         },
                         .{ // ld r12, [r11 + 40] (self_address)
                             .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
@@ -415,7 +396,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     // insert nop x 3 so we can find the displacement for self_address in the instruction stream
                     insertNOPs(&self_address);
                     const self: *const Self = @ptrFromInt(self_address);
-                    // std.debug.print("self_address (read) = {d}\n", .{self_address});
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -590,21 +570,22 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 .powerpc64le => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
-                    const nop = 0x38000000; // li r0 r0
+                    // li 0, 0 is used as nop instead of regular nop
+                    const nop: u32 = @bitCast(Instruction.ADDI{ .ra = 0, .rt = 0, .imm16 = 0 });
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             return registers[11];
                         } else {
-                            const addi: Instruction.ADDI = @bitCast(instrs[i]);
-                            const stdu: Instruction.STD = @bitCast(instrs[i]);
-                            const mr: Instruction.OR = @bitCast(instrs[i]);
-                            if (addi.opc == .addi) {
+                            const instr = instrs[i];
+                            if (match(Instruction.ADDI, instr)) |addi| {
                                 registers[addi.rt] = registers[addi.ra] + addi.imm16;
-                            } else if (stdu.opc == .std and stdu.update == 1) {
+                            } else if (match(Instruction.STDU, instr)) |stdu| {
                                 registers[stdu.ra] += @as(isize, stdu.ds) << 2;
-                            } else if (mr.opc == .ext_31 and mr.func == .@"or" and mr.rb == mr.rs) {
-                                registers[mr.ra] = registers[mr.rs];
+                            } else if (match(Instruction.OR, instr)) |@"or"| {
+                                if (@"or".rb == @"or".rs) { // => mr ra rs
+                                    registers[@"or".ra] = registers[@"or".rs];
+                                }
                             }
                         }
                     }
@@ -615,7 +596,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            // std.debug.print("{d}\n", .{registers});
                             return registers[4];
                         } else {
                             const instr = instrs[i];
@@ -1389,88 +1369,78 @@ const Instruction = switch (builtin.target.cpu.arch) {
         literal: usize,
     },
     .powerpc64le => union(enum) {
-        pub const Opcode = enum(u6) {
-            addi = 0x0e,
-            ori = 0x18,
-            oris = 0x19,
-            rldic = 0x1e,
-            ld = 0x3a,
-            std = 0x3e,
-            ext_31 = 0x1f,
-            nop = 0,
-            _,
-
-            const G31 = enum(u10) {
-                mtctr = 467,
-                @"or" = 444,
-                _,
-            };
-        };
         pub const ADDI = packed struct(u32) {
             imm16: i16,
             ra: u5,
             rt: u5,
-            opc: Opcode = .addi,
+            @"31:26": u6 = 14,
         };
         pub const ORI = packed struct(u32) {
             imm16: u16,
             ra: u5,
             rs: u5,
-            opc: Opcode = .ori,
+            @"31:26": u6 = 24,
         };
         pub const ORIS = packed struct(u32) {
             imm16: u16,
             ra: u5,
             rs: u5,
-            opc: Opcode = .oris,
+            @"31:26": u6 = 25,
         };
         pub const RLDIC = packed struct(u32) {
-            rc: u1 = 0,
+            rc: u1,
             sh2: u1,
-            _: u3 = 2,
-            mb: u6 = 0,
+            @"4:2": u3 = 2,
+            mb: u6,
             sh: u5,
             ra: u5,
             rs: u5,
-            opc: Opcode = .rldic,
+            @"31:26": u6 = 30,
         };
         pub const LD = packed struct {
-            _: u2 = 0,
-            ds: i14 = 0,
+            @"1:0": u2 = 0,
+            ds: i14,
             ra: u5,
             rt: u5,
-            opc: Opcode = .ld,
+            @"31:26": u6 = 58,
         };
         pub const STD = packed struct {
-            update: u2 = 0,
-            ds: i14 = 0,
+            @"1:0": u2 = 0,
+            ds: i14,
             ra: u5,
             rs: u5,
-            opc: Opcode = .std,
+            @"31:26": u6 = 62,
+        };
+        pub const STDU = packed struct {
+            @"1:0": u2 = 1,
+            ds: i14,
+            ra: u5,
+            rs: u5,
+            @"31:26": u6 = 62,
         };
         pub const OR = packed struct(u32) {
-            _: u1 = 0,
-            func: Opcode.G31 = .@"or",
+            @"0": u1 = 0,
+            @"9:1": u10 = 444,
             rb: u5,
             ra: u5,
             rs: u5,
-            opc: Opcode = .ext_31,
+            @"31:26": u6 = 31,
         };
         pub const MTCTR = packed struct(u32) {
-            _: u1 = 0,
-            func: Opcode.G31 = .mtctr,
+            @"0": u1 = 0,
+            @"9:1": u10 = 467,
             spr: u10 = 0x120,
             rs: u5,
-            opc: Opcode = .ext_31,
+            @"31:26": u6 = 31,
         };
         pub const BCTRL = packed struct(u32) {
             lk: u1 = 0,
-            func: u10 = 528,
-            bh: u2 = 0,
-            _: u3 = 0,
-            bi: u5 = 0,
-            bo: u5 = 0x14,
-            opc: u6 = 0x13,
+            @"10:1": u10 = 528,
+            bh: u2 = 0b00000,
+            @"15:13": u3 = 0,
+            bi: u5 = 0b00000,
+            bo: u5 = 0b10100,
+            @"31:26": u6 = 19,
         };
 
         addi: ADDI,
