@@ -204,7 +204,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         },
                         .{ // jmp [rax]
                             .rex = .{},
-                            .opcode = .jmp_rm,
+                            .opcode = .mux_rm,
                             .mod_rm = .{ .reg = 4, .mod = 3 },
                         },
                     };
@@ -344,7 +344,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             .imm32 = trampoline_address,
                         },
                         .{ // jmp [eax]
-                            .opcode = Instruction.Opcode.jmp_rm,
+                            .opcode = Instruction.Opcode.mux_rm,
                             .mod_rm = .{ .reg = 4, .mod = 3 },
                         },
                     };
@@ -455,33 +455,35 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .x86, .x86_64 => {
                     const instrs: [*]const u8 = @ptrCast(ptr);
                     const nop = @intFromEnum(Instruction.Opcode.nop);
-                    const lea = @intFromEnum(Instruction.Opcode.lea_r_r);
-                    var next_must_match = false;
-                    for (0..262144) |i| {
+                    const sp = 4;
+                    var i: usize = 0;
+                    var registers = [1]isize{0} ** 16;
+                    while (i < 262144) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            // the previous instruction should be a LEA; it is either 3 or 6 bytes
-                            // ahead since disp can be i8 or i32
-                            for ([_]usize{ 3, 6 }) |offset| {
-                                if (i >= offset and instrs[i - offset] == lea) {
-                                    const j = i - offset;
-                                    const mod_rm: Instruction.ModRM = @bitCast(instrs[j + 1]);
-                                    if (mod_rm.rm == 5) { // EBP/RBP
-                                        const disp: isize = switch (mod_rm.mod) {
-                                            1 => std.mem.bytesToValue(i8, instrs[j + 2 .. j + 3]),
-                                            2 => std.mem.bytesToValue(i32, instrs[j + 2 .. j + 6]),
-                                            else => unreachable,
-                                        };
-                                        // account for EBP/RBP being pushed at function start
-                                        return disp - @sizeOf(usize);
-                                    }
+                            // std.debug.print("registers: {d}\n", .{registers});
+                            return registers[0];
+                        } else {
+                            const instr, const attrs, const len = Instruction.decode(instrs[i..]);
+                            // std.debug.print("{any} {d}\n", .{ instr.opcode, attrs.stack_change });
+                            if (instr.getMod()) |mod| {
+                                switch (instr.opcode) {
+                                    .mov_rm_r => if (mod == 3) {
+                                        const rs = instr.getReg();
+                                        const rd = instr.getRM();
+                                        registers[rd] = registers[rs];
+                                    },
+                                    .lea_rm_r => if (mod == 1) {
+                                        const disp = instr.getDisp();
+                                        const rs = instr.getRM();
+                                        const rd = instr.getReg();
+                                        registers[rd] = registers[rs] + disp;
+                                    },
+                                    else => {},
                                 }
-                            } else {
-                                // if the last byte of disp of the previous LEA happens to be 144
-                                // or 0x90, we'd get a premature match; skip over this byte and
-                                // try again before erroring out
-                                next_must_match = true;
                             }
-                        } else if (next_must_match) break;
+                            registers[sp] += attrs.stack_change * 8;
+                            i += len;
+                        }
                     }
                 },
                 .aarch64 => {
@@ -1145,17 +1147,141 @@ test "FnType" {
 const Instruction = switch (builtin.target.cpu.arch) {
     .x86, .x86_64 => struct {
         pub const Opcode = enum(u8) {
+            add_rm8_r8 = 0x00,
+            add_rm_r = 0x01,
+            add_r8_rm8 = 0x02,
+            add_r_rm = 0x03,
+            add_ax_imm8 = 0x04,
+            add_ax_imm32 = 0x05,
+            or_ax_imm8 = 0x0c,
+            or_ax_imm32 = 0x0d,
+            ext_imm8 = 0x0f,
+            adc_rm8_r8 = 0x10,
+            adc_rm_r = 0x11,
+            adc_r8_rm8 = 0x12,
+            adc_r_rm = 0x13,
+            adc_ax_imm8 = 0x14,
+            adc_ax_imm32 = 0x15,
+            push_ss = 0x16,
+            pop_ss = 0x17,
+            sub_rm_r = 0x28,
+            sub_ax_imm8 = 0x2c,
+            sub_ax_imm32 = 0x2d,
+            xor_rm8_r8 = 0x30,
+            xor_rm_r = 0x31,
+            xor_r8_rm8 = 0x32,
+            xor_r_rm = 0x33,
+            cmp_rm8_r8 = 0x38,
+            cmp_rm_r = 0x39,
+            cmp_r8_rm8 = 0x3a,
+            cmp_r_rm = 0x3b,
+            cmp_al_imm8 = 0x3c,
+            cmp_ax_imm32 = 0x3d,
+            dec_ax = 0x48,
+            dec_cx = 0x49,
+            dec_dx = 0x4a,
+            dec_bx = 0x4b,
+            dec_sp = 0x4c,
+            dec_bp = 0x4d,
+            dec_si = 0x4e,
+            dec_di = 0x4f,
+            push_ax = 0x50,
+            push_cx = 0x51,
+            push_dx = 0x52,
+            push_bx = 0x53,
+            push_sp = 0x54,
+            push_bp = 0x55,
+            push_si = 0x56,
+            push_di = 0x57,
+            pop_ax = 0x58,
+            pop_cx = 0x59,
+            pop_dx = 0x5a,
+            pop_bx = 0x5b,
+            pop_sp = 0x5c,
+            pop_bp = 0x5d,
+            pop_si = 0x5e,
+            pop_di = 0x5f,
+            push_all = 0x60,
+            pop_all = 0x61,
+            arpl = 0x63,
+            push_imm32 = 0x68,
+            jo_imm8 = 0x70,
+            jno_imm8 = 0x71,
+            jb_imm8 = 0x72,
+            jnb_imm8 = 0x73,
+            jz_imm8 = 0x74,
+            jnz_imm8 = 0x75,
+            jbe_imm8 = 0x76,
+            jnbe_imm8 = 0x77,
+            js_imm8 = 0x78,
+            jns_imm8 = 0x79,
+            jp_imm8 = 0x7a,
+            jnp_imm8 = 0x7b,
+            jl_imm8 = 0x7c,
+            jnl_imm8 = 0x7d,
+            jle_imm8 = 0x7e,
+            jnle_imm8 = 0x7f,
+            add_rm_imm32 = 0x80,
+            mux_rm_imm8 = 0x81,
+            add_rm_imm8 = 0x83,
+            xchg_rm_r = 0x87,
+            mov_rm8_r8 = 0x88,
             mov_rm_r = 0x89,
-            lea_r_r = 0x8d,
+            mov_r_m = 0x8b,
+            lea_rm_r = 0x8d,
+            xop_imm16 = 0x8f,
             nop = 0x90,
+            xchg_cx_ax = 0x91,
+            xchg_dx_ax = 0x92,
+            xchg_bx_ax = 0x93,
+            xchg_sp_ax = 0x94,
+            xchg_bp_ax = 0x95,
+            xchg_si_ax = 0x96,
+            xchg_di_ax = 0x97,
+            test_al_imm8 = 0xa8,
+            test_ax_imm32 = 0xa9,
+            mov_ax_imm8 = 0xb0,
+            mov_cx_imm8 = 0xb1,
+            mov_dx_imm8 = 0xb2,
+            mov_bx_imm8 = 0xb3,
+            mov_sp_imm8 = 0xb4,
+            mov_bp_imm8 = 0xb5,
+            mov_si_imm8 = 0xb6,
+            mov_di_imm8 = 0xb7,
             mov_ax_imm = 0xb8,
-            jmp_rm = 0xff,
+            mov_cx_imm = 0xb9,
+            mov_dx_imm = 0xba,
+            mov_bx_imm = 0xbb,
+            mov_sp_imm = 0xbc,
+            mov_bp_imm = 0xbd,
+            mov_si_imm = 0xbe,
+            mov_di_imm = 0xbf,
+            bw_rm_imm8 = 0xc1,
+            vex_imm16 = 0xc4,
+            vex_imm8 = 0xc5,
+            enter_imm16_imm8 = 0xc8,
+            leave = 0xc9,
+            ret = 0xc3,
+            mov_rm_imm32 = 0xc7,
+            call_immh = 0xe8,
+            jmp_immh = 0xe9,
+            jmp_imm8 = 0xeb,
+            clc = 0xf8,
+            mux_rm = 0xff,
             _,
         };
         pub const Prefix = enum(u8) {
-            _,
+            es = 0x26,
+            cs = 0x2e,
+            ss = 0x36,
+            ds = 0x3e,
+            fs = 0x64,
+            gs = 0x65,
+            os = 0x66,
+            as = 0x67,
+            f2 = 0xf2,
+            f3 = 0xf3,
         };
-
         pub const REX = packed struct {
             b: u1 = 0,
             x: u1 = 0,
@@ -1174,6 +1300,142 @@ const Instruction = switch (builtin.target.cpu.arch) {
             scale: u2 = 0,
         };
 
+        const Attributes = packed struct {
+            stack_change: i8 = 0,
+            has_mod_rm: bool = false,
+            has_imm8: bool = false,
+            has_imm16: bool = false,
+            has_imm32: bool = false,
+            has_imm64: bool = false,
+        };
+        const attribute_table = init: {
+            @setEvalBranchQuota(200000);
+            var table: [256]Attributes = undefined;
+            for (@typeInfo(Opcode).@"enum".fields) |field| {
+                var attrs: Attributes = .{};
+                const name = field.name;
+                if (std.mem.containsAtLeast(u8, name, 1, "_r")) {
+                    attrs.has_mod_rm = true;
+                }
+                if (std.mem.endsWith(u8, name, "imm8")) {
+                    attrs.has_imm8 = true;
+                } else if (std.mem.endsWith(u8, name, "imm32")) {
+                    attrs.has_imm32 = true;
+                } else if (std.mem.endsWith(u8, name, "imm")) {
+                    switch (@bitSizeOf(usize)) {
+                        64 => attrs.has_imm64 = true,
+                        else => attrs.has_imm32 = true,
+                    }
+                } else if (std.mem.endsWith(u8, name, "immh")) {
+                    switch (@bitSizeOf(usize)) {
+                        64 => attrs.has_imm32 = true,
+                        else => attrs.has_imm16 = true,
+                    }
+                }
+                if (std.mem.containsAtLeast(u8, name, 1, "_imm16")) {
+                    attrs.has_imm16 = true;
+                }
+                if (std.mem.startsWith(u8, name, "push_")) {
+                    if (std.mem.endsWith(u8, name, "_all")) {
+                        attrs.stack_change = switch (@bitSizeOf(usize)) {
+                            64 => -16,
+                            else => -8,
+                        };
+                    } else attrs.stack_change = -1;
+                } else if (std.mem.startsWith(u8, name, "pop_")) {
+                    if (std.mem.endsWith(u8, name, "_all")) {
+                        attrs.stack_change = switch (@bitSizeOf(usize)) {
+                            64 => 16,
+                            else => 8,
+                        };
+                    } else attrs.stack_change = 1;
+                }
+                const index: usize = field.value;
+                table[index] = attrs;
+            }
+            break :init table;
+        };
+
+        pub fn decode(bytes: [*]const u8) std.meta.Tuple(&.{ @This(), Attributes, usize }) {
+            var i: usize = 0;
+            var instr: @This() = .{};
+            if (std.meta.intToEnum(Prefix, bytes[i]) catch null) |prefix| {
+                i += 1;
+                instr.prefix = prefix;
+            }
+            if (@bitSizeOf(usize) == 64) {
+                const rex: REX = @bitCast(bytes[i]);
+                if (rex.pat == 4) {
+                    i += 1;
+                    instr.rex = rex;
+                }
+            }
+            const attrs = attribute_table[bytes[i]];
+            instr.opcode = @enumFromInt(bytes[i]);
+            i += 1;
+            if (attrs.has_mod_rm) {
+                const mod_rm: ModRM = @bitCast(bytes[i]);
+                var disp_size: ?usize = null;
+                i += 1;
+                if (mod_rm.mod == 2 or (mod_rm.mod == 0 and mod_rm.rm == 5)) {
+                    disp_size = 32;
+                } else if (mod_rm.mod == 1) {
+                    disp_size = 8;
+                }
+                instr.mod_rm = mod_rm;
+                if (mod_rm.mod != 3 and mod_rm.rm == 4) {
+                    const sib: SIB = @bitCast(bytes[i]);
+                    i += 1;
+                    if (sib.base == 5) disp_size = 32;
+                    instr.sib = sib;
+                }
+                if (disp_size) |size| {
+                    if (size == 8) {
+                        instr.disp8 = std.mem.bytesToValue(i8, bytes[i .. i + 1]);
+                        i += 1;
+                    } else if (size == 32) {
+                        instr.disp32 = std.mem.bytesToValue(i32, bytes[i .. i + 4]);
+                        i += 4;
+                    }
+                }
+            }
+            if (attrs.has_imm16) {
+                instr.imm16 = std.mem.bytesToValue(u16, bytes[i .. i + 2]);
+                i += 2;
+            }
+            if (attrs.has_imm64) {
+                instr.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
+                i += 8;
+            } else if (attrs.has_imm32) {
+                instr.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
+                i += 4;
+            } else if (attrs.has_imm8) {
+                instr.imm8 = std.mem.bytesToValue(u8, bytes[i .. i + 1]);
+                i += 1;
+            }
+            return .{ instr, attrs, i };
+        }
+
+        pub fn getMod(self: @This()) ?u8 {
+            return if (self.mod_rm) |m| m.mod else null;
+        }
+
+        pub fn getReg(self: @This()) usize {
+            var index: usize = self.mod_rm.?.reg;
+            if (self.rex) |rex| index |= @as(usize, rex.r) << 3;
+            return index;
+        }
+
+        pub fn getRM(self: @This()) usize {
+            var index: usize = self.mod_rm.?.rm;
+            if (self.rex) |rex| index |= @as(usize, rex.b) << 3;
+            return index;
+        }
+
+        pub fn getDisp(self: @This()) isize {
+            return self.disp8 orelse self.disp32 orelse 0;
+        }
+
         prefix: ?Prefix = null,
         rex: ?REX = null,
         opcode: Opcode = .nop,
@@ -1182,6 +1444,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
         disp8: ?i8 = null,
         disp32: ?i32 = null,
         imm8: ?u8 = null,
+        imm16: ?u16 = null,
         imm32: ?u32 = null,
         imm64: ?u64 = null,
     },
