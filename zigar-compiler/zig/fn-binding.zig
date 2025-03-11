@@ -646,7 +646,7 @@ test "Binding (i64 x 3 + *i64 x 1)" {
 
 test "Binding ([no args] + i64 x 4)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
             return a1 + a2 + a3 + a4;
         }
     };
@@ -662,7 +662,7 @@ test "Binding ([no args] + i64 x 4)" {
     const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var ea = executable();
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn () callconv(.C) i64);
+    try expect(@TypeOf(bf) == *const fn () i64);
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum1 = bf();
     try expect(sum1 == 1 + 2 + 3 + 4);
@@ -670,7 +670,7 @@ test "Binding ([no args] + i64 x 4)" {
 
 test "Binding (i64 x 3 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
             return a1 + a2 + a3 + a4;
         }
     };
@@ -680,7 +680,7 @@ test "Binding (i64 x 3 + i64 x 1)" {
     const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var ea = executable();
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) callconv(.C) i64);
+    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) i64);
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum1 = bf(1, 2, 3);
     try expect(sum1 == 1 + 2 + 3 + 1234);
@@ -688,7 +688,7 @@ test "Binding (i64 x 3 + i64 x 1)" {
 
 test "Binding (i64 x 4 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) i64 {
             return a1 + a2 + a3 + a4 + a5;
         }
     };
@@ -705,7 +705,7 @@ test "Binding (i64 x 4 + i64 x 1)" {
 
 test "Binding (i64 x 5 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6;
         }
     };
@@ -722,7 +722,7 @@ test "Binding (i64 x 5 + i64 x 1)" {
 
 test "Binding (i64 x 6 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7;
         }
     };
@@ -739,7 +739,7 @@ test "Binding (i64 x 6 + i64 x 1)" {
 
 test "Binding (i64 x 7 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8;
         }
     };
@@ -756,7 +756,7 @@ test "Binding (i64 x 7 + i64 x 1)" {
 
 test "Binding (i64 x 8 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9;
         }
     };
@@ -773,7 +773,7 @@ test "Binding (i64 x 8 + i64 x 1)" {
 
 test "Binding (i64 x 9 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
         }
     };
@@ -790,7 +790,7 @@ test "Binding (i64 x 9 + i64 x 1)" {
 
 test "Binding (i64 x 10 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11;
         }
     };
@@ -807,7 +807,7 @@ test "Binding (i64 x 10 + i64 x 1)" {
 
 test "Binding (i64 x 11 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12;
         }
     };
@@ -824,7 +824,7 @@ test "Binding (i64 x 11 + i64 x 1)" {
 
 test "Binding (i64 x 12 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13;
         }
     };
@@ -841,7 +841,7 @@ test "Binding (i64 x 12 + i64 x 1)" {
 
 test "Binding (i64 x 13 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
         }
     };
@@ -858,7 +858,7 @@ test "Binding (i64 x 13 + i64 x 1)" {
 
 test "Binding (i64 x 14 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15;
         }
     };
@@ -875,7 +875,7 @@ test "Binding (i64 x 14 + i64 x 1)" {
 
 test "Binding (i64 x 15 + i64 x 1)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
         }
     };
@@ -892,7 +892,7 @@ test "Binding (i64 x 15 + i64 x 1)" {
 
 test "Binding ([no args] + i64 x 16)" {
     const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) callconv(.C) i64 {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
             return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
         }
     };
@@ -907,7 +907,7 @@ test "Binding ([no args] + i64 x 16)" {
 
 test "Binding (f64 x 3 + f64 x 1)" {
     const ns = struct {
-        fn add(a1: f64, a2: f64, a3: f64, a4: f64) callconv(.C) f64 {
+        fn add(a1: f64, a2: f64, a3: f64, a4: f64) f64 {
             return a1 + a2 + a3 + a4;
         }
     };
@@ -917,10 +917,50 @@ test "Binding (f64 x 3 + f64 x 1)" {
     const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var ea = executable();
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (f64, f64, f64) callconv(.C) f64);
+    try expect(@TypeOf(bf) == *const fn (f64, f64, f64) f64);
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum1 = bf(1, 2, 3);
     try expect(sum1 == 1 + 2 + 3 + 1234);
+}
+
+test "Binding ([]const u8 x 1 + []const u8 x 1)" {
+    const ns = struct {
+        fn add(a1: []const u8, a2: []const u8) [2][]const u8 {
+            return .{ a1, a2 };
+        }
+    };
+    var string: []const u8 = "Basia";
+    _ = &string;
+    const vars = .{ .@"-1" = string };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (a1: []const u8) [2][]const u8);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const array = bf("Agnieszka");
+    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
+    try expect(std.mem.eql(u8, array[1], "Basia"));
+}
+
+test "Binding ([]const u8 x 3 + []const u8 x 1)" {
+    const ns = struct {
+        fn add(a1: []const u8, a2: []const u8, a3: []const u8, a4: []const u8) [4][]const u8 {
+            return .{ a1, a2, a3, a4 };
+        }
+    };
+    var string: []const u8 = "Dagmara";
+    _ = &string;
+    const vars = .{ .@"-1" = string };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (a1: []const u8, a2: []const u8, a3: []const u8) [4][]const u8);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const array = bf("Agnieszka", "Basia", "Czcibora");
+    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
+    try expect(std.mem.eql(u8, array[1], "Basia"));
+    try expect(std.mem.eql(u8, array[2], "Czcibora"));
+    try expect(std.mem.eql(u8, array[3], "Dagmara"));
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
