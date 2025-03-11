@@ -19,13 +19,13 @@ pub fn build(b: *std.Build) void {
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
-    const ziglua = b.dependency("ziglua", .{
+    const lua_wrapper = b.dependency("lua_wrapper", .{
         .target = target,
         .optimize = optimize,
-    }).module("ziglua");
+    }).module("lua_wrapper");
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
-        .{ .name = "ziglua", .module = ziglua },
+        .{ .name = "lua_wrapper", .module = lua_wrapper },
     };
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
