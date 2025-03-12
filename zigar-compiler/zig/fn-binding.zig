@@ -392,10 +392,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     // disable runtime safety so self_address isn't written with 0xaa when optimize = Debug
                     @setRuntimeSafety(false);
                     // this variable will be set by dynamically generated code before the jump
-                    var self_address: usize = undefined;
+                    // using a two-element array to ensure the compiler doesn't attempt to keep it in register
+                    var self_address: [2]usize = undefined;
                     // insert nop x 3 so we can find the displacement for self_address in the instruction stream
                     insertNOPs(&self_address);
-                    const self: *const Self = @ptrFromInt(self_address);
+                    const self: *const Self = @ptrFromInt(self_address[0]);
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
@@ -631,7 +632,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
 
 test "Binding (i64 x 3 + *i64 x 1)" {
     const ns = struct {
-        fn add(a1: *i64, a2: i64, a3: i64, a4: i64) void {
+        fn add(a1: *i64, a2: i64, a3: i64, a4: i64) callconv(.c) void {
             a1.* = a2 + a3 + a4;
         }
     };
