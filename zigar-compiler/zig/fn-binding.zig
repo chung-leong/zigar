@@ -479,7 +479,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     .@"add/or/etc rm imm8", .@"add/or/etc rm imm32" => if (mod == 3) {
                                         const imm = instr.getImm(isize);
                                         const rd = instr.getRM();
-                                        registers[rd] += imm;
+                                        switch (instr.mod_rm.?.reg) {
+                                            0 => registers[rd] += imm,
+                                            5 => registers[rd] -= imm,
+                                            else => {},
+                                        }
                                     },
                                     else => {},
                                 }
