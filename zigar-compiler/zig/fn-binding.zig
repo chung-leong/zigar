@@ -421,15 +421,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             switch (builtin.target.cpu.arch) {
                 .x86_64 => asm volatile (asm_code
                     :
-                    : [arg1] "{rax}" (ptr),
+                    : [arg] "{rax}" (ptr),
                 ),
                 .aarch64 => asm volatile (asm_code
                     :
-                    : [arg1] "{x9}" (ptr),
+                    : [arg] "{x9}" (ptr),
                 ),
                 .riscv64 => asm volatile (asm_code
                     :
-                    : [arg1] "{x5}" (ptr),
+                    : [arg] "{x5}" (ptr),
                 ),
                 .powerpc64le => asm volatile (
                 // actual nop's would get reordered for some reason despite the use of "volatile"
@@ -437,15 +437,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     \\ li %r0, %r0
                     \\ li %r0, %r0        
                     :
-                    : [arg1] "{r11}" (ptr),
+                    : [arg] "{r11}" (ptr),
                 ),
                 .x86 => asm volatile (asm_code
                     :
-                    : [arg1] "{eax}" (ptr),
+                    : [arg] "{eax}" (ptr),
                 ),
                 .arm => asm volatile (asm_code
                     :
-                    : [arg1] "{r4}" (ptr),
+                    : [arg] "{r4}" (ptr),
                 ),
                 else => unreachable,
             }
@@ -457,13 +457,21 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const instrs: [*]const u8 = @ptrCast(ptr);
                     const nop = @intFromEnum(Instruction.Opcode.nop);
                     const sp = 4;
-                    var i: usize = 0;
+                    // ensure that the stack is aligned after the ebp/rbp gets pushed
+                    // without this adjustment we'd get the wrong offset when the compiler
+                    // uses AND operation to align the stack pointer
+                    const stack_offset = if (builtin.mode == .Debug) @sizeOf(isize) else 0;
                     var registers = [1]isize{0} ** 16;
+                    registers[sp] -= stack_offset;
+                    var i: usize = 0;
                     while (i < 262144) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[0];
+                            // remove the stack offset if there's one
+                            return registers[0] + stack_offset;
                         } else {
                             const instr, const attrs, const len = Instruction.decode(instrs[i..]);
+                            i += len;
+                            // std.debug.print("{any}\n", .{instr.opcode});
                             if (instr.getMod()) |mod| {
                                 switch (instr.opcode) {
                                     .@"mov rm r" => if (mod == 3) {
@@ -482,6 +490,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                         const rd = instr.getRM();
                                         switch (instr.mod_rm.?.reg) {
                                             0 => registers[rd] += imm,
+                                            4 => registers[rd] &= imm,
                                             5 => registers[rd] -= imm,
                                             else => {},
                                         }
@@ -489,8 +498,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     else => {},
                                 }
                             }
-                            registers[sp] += attrs.stack_change * @sizeOf(usize);
-                            i += len;
+                            const size_one: isize = @sizeOf(usize);
+                            const size_all: isize = size_one * size_one * 2;
+                            if (attrs.pushes) {
+                                registers[sp] -= if (attrs.affects_all) size_all else size_one;
+                            } else if (attrs.pops) {
+                                registers[sp] -= if (attrs.affects_all) size_all else size_one;
+                            }
                         }
                     }
                 },
@@ -1434,12 +1448,14 @@ const Instruction = switch (builtin.target.cpu.arch) {
         };
 
         const Attributes = packed struct {
-            stack_change: i8 = 0,
             has_mod_rm: bool = false,
             has_imm8: bool = false,
             has_imm16: bool = false,
             has_imm32: bool = false,
             @"has_imm32/64": bool = false,
+            pushes: bool = false,
+            pops: bool = false,
+            affects_all: bool = false,
         };
         const attribute_table = init: {
             @setEvalBranchQuota(200000);
@@ -1468,13 +1484,11 @@ const Instruction = switch (builtin.target.cpu.arch) {
                     attrs.has_imm16 = true;
                 }
                 if (std.mem.startsWith(u8, name, "push ")) {
-                    attrs.stack_change = -1;
-                } else if (std.mem.eql(u8, name, "pusha")) {
-                    attrs.stack_change = -@sizeOf(usize) * 2;
+                    attrs.pushes = true;
+                    attrs.affects_all = std.mem.startsWith(u8, name, " all");
                 } else if (std.mem.startsWith(u8, name, "pop ")) {
-                    attrs.stack_change = 1;
-                } else if (std.mem.eql(u8, name, "popa")) {
-                    attrs.stack_change = @sizeOf(usize) * 2;
+                    attrs.pops = true;
+                    attrs.affects_all = std.mem.startsWith(u8, name, " all");
                 }
                 const index: usize = field.value;
                 table[index] = attrs;
