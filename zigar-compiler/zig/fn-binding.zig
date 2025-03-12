@@ -177,35 +177,35 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     return .{
                         .{ // mov rax, self_address
                             .rex = .{},
-                            .opcode = .mov_ax_imm,
+                            .opcode = .@"mov ax imm32/64",
                             .imm64 = self_address,
                         },
                         switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
                             // mov [rsp + self_address_offset], rax
                             true => .{
                                 .rex = .{},
-                                .opcode = .mov_rm_r,
+                                .opcode = .@"mov rm r",
                                 .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4 },
+                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
                                 .disp8 = @truncate(self_address_offset),
                             },
                             false => .{
                                 .rex = .{},
-                                .opcode = .mov_rm_r,
+                                .opcode = .@"mov rm r",
                                 .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4 },
+                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
                                 .disp32 = @truncate(self_address_offset),
                             },
                         },
                         .{ // mov rax, trampoline_address
                             .rex = .{},
-                            .opcode = .mov_ax_imm,
+                            .opcode = .@"mov ax imm32/64",
                             .imm64 = trampoline_address,
                         },
                         .{ // jmp [rax]
                             .rex = .{},
-                            .opcode = .mux_rm,
-                            .mod_rm = .{ .reg = 4, .mod = 3 },
+                            .opcode = .@"jmp/call/etc rm",
+                            .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
                         },
                     };
                 },
@@ -467,12 +467,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             // std.debug.print("{any} {d}\n", .{ instr.opcode, attrs.stack_change });
                             if (instr.getMod()) |mod| {
                                 switch (instr.opcode) {
-                                    .mov_rm_r => if (mod == 3) {
+                                    .@"mov rm r" => if (mod == 3) {
                                         const rs = instr.getReg();
                                         const rd = instr.getRM();
                                         registers[rd] = registers[rs];
                                     },
-                                    .lea_rm_r => if (mod == 1) {
+                                    .@"lea rm r" => if (mod == 1) {
                                         const disp = instr.getDisp();
                                         const rs = instr.getRM();
                                         const rd = instr.getReg();
@@ -1147,127 +1147,250 @@ test "FnType" {
 const Instruction = switch (builtin.target.cpu.arch) {
     .x86, .x86_64 => struct {
         pub const Opcode = enum(u8) {
-            add_rm8_r8 = 0x00,
-            add_rm_r = 0x01,
-            add_r8_rm8 = 0x02,
-            add_r_rm = 0x03,
-            add_ax_imm8 = 0x04,
-            add_ax_imm32 = 0x05,
-            or_ax_imm8 = 0x0c,
-            or_ax_imm32 = 0x0d,
-            ext_imm8 = 0x0f,
-            adc_rm8_r8 = 0x10,
-            adc_rm_r = 0x11,
-            adc_r8_rm8 = 0x12,
-            adc_r_rm = 0x13,
-            adc_ax_imm8 = 0x14,
-            adc_ax_imm32 = 0x15,
-            push_ss = 0x16,
-            pop_ss = 0x17,
-            sub_rm_r = 0x28,
-            sub_ax_imm8 = 0x2c,
-            sub_ax_imm32 = 0x2d,
-            xor_rm8_r8 = 0x30,
-            xor_rm_r = 0x31,
-            xor_r8_rm8 = 0x32,
-            xor_r_rm = 0x33,
-            cmp_rm8_r8 = 0x38,
-            cmp_rm_r = 0x39,
-            cmp_r8_rm8 = 0x3a,
-            cmp_r_rm = 0x3b,
-            cmp_al_imm8 = 0x3c,
-            cmp_ax_imm32 = 0x3d,
-            dec_ax = 0x48,
-            dec_cx = 0x49,
-            dec_dx = 0x4a,
-            dec_bx = 0x4b,
-            dec_sp = 0x4c,
-            dec_bp = 0x4d,
-            dec_si = 0x4e,
-            dec_di = 0x4f,
-            push_ax = 0x50,
-            push_cx = 0x51,
-            push_dx = 0x52,
-            push_bx = 0x53,
-            push_sp = 0x54,
-            push_bp = 0x55,
-            push_si = 0x56,
-            push_di = 0x57,
-            pop_ax = 0x58,
-            pop_cx = 0x59,
-            pop_dx = 0x5a,
-            pop_bx = 0x5b,
-            pop_sp = 0x5c,
-            pop_bp = 0x5d,
-            pop_si = 0x5e,
-            pop_di = 0x5f,
-            push_all = 0x60,
-            pop_all = 0x61,
+            @"add rm8 r8" = 0x00,
+            @"add rm r" = 0x01,
+            @"add r8 rm8" = 0x02,
+            @"add r rm" = 0x03,
+            @"add ax8 imm8" = 0x04,
+            @"add ax imm32" = 0x05,
+            @"push es" = 0x06,
+            @"pop es" = 0x07,
+            @"or rm8 r8" = 0x08,
+            @"or rm r" = 0x09,
+            @"or r8 rm8" = 0x0a,
+            @"or r rm" = 0x0b,
+            @"or ax8 imm8" = 0x0c,
+            @"or ax imm32" = 0x0d,
+            @"push cs" = 0x0e,
+            @"ext imm8" = 0x0f,
+            @"adc rm8 r8" = 0x10,
+            @"adc rm r" = 0x11,
+            @"adc r8 rm8" = 0x12,
+            @"adc r rm" = 0x13,
+            @"adc ax8 imm8" = 0x14,
+            @"adc ax imm32" = 0x15,
+            @"push ss" = 0x16,
+            @"pop ss" = 0x17,
+            @"sbb rm8 r8" = 0x18,
+            @"sbb rm r" = 0x19,
+            @"sbb r8 rm8" = 0x1a,
+            @"sbb r rm" = 0x1b,
+            @"sbb ax8 imm8" = 0x1c,
+            @"sbb ax imm32" = 0x1d,
+            @"push ds" = 0x1e,
+            @"pop ds" = 0x1f,
+            @"and rm8 r8" = 0x20,
+            @"and rm r" = 0x21,
+            @"and r8 rm8" = 0x22,
+            @"and r rm" = 0x23,
+            @"and ax8 imm8" = 0x24,
+            @"and ax imm32" = 0x25,
+            @"daa ax" = 0x27,
+            @"sub rm8 r8" = 0x28,
+            @"sub rm r" = 0x29,
+            @"sub r8 rm8" = 0x2a,
+            @"sub r rm" = 0x2b,
+            @"sub ax8 imm8" = 0x2c,
+            @"sub ax imm32" = 0x2d,
+            @"das ax" = 0x2f,
+            @"xor rm8 r8" = 0x30,
+            @"xor rm r" = 0x31,
+            @"xor r8 rm8" = 0x32,
+            @"xor r rm" = 0x33,
+            @"xor ax8 imm8" = 0x34,
+            @"xor ax imm32" = 0x35,
+            @"aaa ax" = 0x37,
+            @"cmp rm8 r8" = 0x38,
+            @"cmp rm r" = 0x39,
+            @"cmp r8 rm8" = 0x3a,
+            @"cmp r rm" = 0x3b,
+            @"cmp ax8 imm8" = 0x3c,
+            @"cmp ax imm32" = 0x3d,
+            @"aas ax" = 0x3f,
+            @"inc ax" = 0x40,
+            @"inc cx" = 0x41,
+            @"inc dx" = 0x42,
+            @"inc bx" = 0x43,
+            @"inc sp" = 0x44,
+            @"inc bp" = 0x45,
+            @"inc si" = 0x46,
+            @"inc di" = 0x47,
+            @"dec ax" = 0x48,
+            @"dec cx" = 0x49,
+            @"dec dx" = 0x4a,
+            @"dec bx" = 0x4b,
+            @"dec sp" = 0x4c,
+            @"dec bp" = 0x4d,
+            @"dec si" = 0x4e,
+            @"dec di" = 0x4f,
+            @"push ax" = 0x50,
+            @"push cx" = 0x51,
+            @"push dx" = 0x52,
+            @"push bx" = 0x53,
+            @"push sp" = 0x54,
+            @"push bp" = 0x55,
+            @"push si" = 0x56,
+            @"push di" = 0x57,
+            @"pop ax" = 0x58,
+            @"pop cx" = 0x59,
+            @"pop dx" = 0x5a,
+            @"pop bx" = 0x5b,
+            @"pop sp" = 0x5c,
+            @"pop bp" = 0x5d,
+            @"pop si" = 0x5e,
+            @"pop di" = 0x5f,
+            pusha = 0x60,
+            popa = 0x61,
+            @"bound r rm" = 0x62,
             arpl = 0x63,
-            push_imm32 = 0x68,
-            jo_imm8 = 0x70,
-            jno_imm8 = 0x71,
-            jb_imm8 = 0x72,
-            jnb_imm8 = 0x73,
-            jz_imm8 = 0x74,
-            jnz_imm8 = 0x75,
-            jbe_imm8 = 0x76,
-            jnbe_imm8 = 0x77,
-            js_imm8 = 0x78,
-            jns_imm8 = 0x79,
-            jp_imm8 = 0x7a,
-            jnp_imm8 = 0x7b,
-            jl_imm8 = 0x7c,
-            jnl_imm8 = 0x7d,
-            jle_imm8 = 0x7e,
-            jnle_imm8 = 0x7f,
-            add_rm_imm32 = 0x80,
-            mux_rm_imm8 = 0x81,
-            add_rm_imm8 = 0x83,
-            xchg_rm_r = 0x87,
-            mov_rm8_r8 = 0x88,
-            mov_rm_r = 0x89,
-            mov_r_m = 0x8b,
-            lea_rm_r = 0x8d,
-            xop_imm16 = 0x8f,
+            @"push imm32" = 0x68,
+            @"imul r rm imm32" = 0x69,
+            @"push imm8" = 0x6a,
+            @"imul r rm imm8" = 0x6b,
+            @"ins m8 dx" = 0x6c,
+            @"ins m32 dx" = 0x6d,
+            @"outs dx m8" = 0x6e,
+            @"outs dx m32" = 0x6f,
+            @"jo moffs8" = 0x70,
+            @"jno moffs8" = 0x71,
+            @"jb moffs8" = 0x72,
+            @"jnb moffs8" = 0x73,
+            @"jz moffs8" = 0x74,
+            @"jnz moffs8" = 0x75,
+            @"jbe moffs8" = 0x76,
+            @"jnbe moffs8" = 0x77,
+            @"js moffs8" = 0x78,
+            @"jns moffs8" = 0x79,
+            @"jp moffs8" = 0x7a,
+            @"jnp moffs8" = 0x7b,
+            @"jl moffs8" = 0x7c,
+            @"jnl moffs8" = 0x7d,
+            @"jle moffs8" = 0x7e,
+            @"jnle moffs8" = 0x7f,
+            @"add rm imm32" = 0x80,
+            @"add/or/etc rm imm32" = 0x81,
+            @"add/or/etc rm8 imm8" = 0x82,
+            @"add/or/etc rm imm8" = 0x83,
+            @"test rm8 r8" = 0x84,
+            @"test rm r" = 0x85,
+            @"xchg r8 r8" = 0x86,
+            @"xchg rm r" = 0x87,
+            @"mov rm8 r8" = 0x88,
+            @"mov rm r" = 0x89,
+            @"mov r8 rm8" = 0x8a,
+            @"mov r rm" = 0x8b,
+            @"mov r sreg" = 0x8c,
+            @"lea rm r" = 0x8d,
+            @"mov sreg rm" = 0x8e,
+            @"xop imm16" = 0x8f,
             nop = 0x90,
-            xchg_cx_ax = 0x91,
-            xchg_dx_ax = 0x92,
-            xchg_bx_ax = 0x93,
-            xchg_sp_ax = 0x94,
-            xchg_bp_ax = 0x95,
-            xchg_si_ax = 0x96,
-            xchg_di_ax = 0x97,
-            test_al_imm8 = 0xa8,
-            test_ax_imm32 = 0xa9,
-            mov_ax_imm8 = 0xb0,
-            mov_cx_imm8 = 0xb1,
-            mov_dx_imm8 = 0xb2,
-            mov_bx_imm8 = 0xb3,
-            mov_sp_imm8 = 0xb4,
-            mov_bp_imm8 = 0xb5,
-            mov_si_imm8 = 0xb6,
-            mov_di_imm8 = 0xb7,
-            mov_ax_imm = 0xb8,
-            mov_cx_imm = 0xb9,
-            mov_dx_imm = 0xba,
-            mov_bx_imm = 0xbb,
-            mov_sp_imm = 0xbc,
-            mov_bp_imm = 0xbd,
-            mov_si_imm = 0xbe,
-            mov_di_imm = 0xbf,
-            bw_rm_imm8 = 0xc1,
-            vex_imm16 = 0xc4,
-            vex_imm8 = 0xc5,
-            enter_imm16_imm8 = 0xc8,
-            leave = 0xc9,
+            @"xchg cx ax" = 0x91,
+            @"xchg dx ax" = 0x92,
+            @"xchg bx ax" = 0x93,
+            @"xchg sp ax" = 0x94,
+            @"xchg bp ax" = 0x95,
+            @"xchg si ax" = 0x96,
+            @"xchg di ax" = 0x97,
+            @"cwde/cdqe ax ax" = 0x98,
+            @"cdq/cqo dx ax" = 0x99,
+            @"call ptr16:32" = 0x9a,
+            @"push flags" = 0x9c,
+            @"pop flags" = 0x9d,
+            @"sahf ax8" = 0x9e,
+            @"lahf ax8" = 0x9f,
+            @"mov ax8 moffs8" = 0xa0,
+            @"mov ax moffs32/64" = 0xa1,
+            @"mov moffs8 ax8" = 0xa2,
+            @"mov moffs32/64 ax" = 0xa3,
+            movsb = 0xa4,
+            @"movsd/q" = 0xa5,
+            @"cmps m8" = 0xa6,
+            @"cmps m32/64" = 0xa7,
+            @"test ax8 imm8" = 0xa8,
+            @"test ax imm32" = 0xa9,
+            @"stos m8" = 0xaa,
+            @"stos m32/64" = 0xab,
+            @"lods m8" = 0xac,
+            @"lods m32/64" = 0xad,
+            @"scas m8" = 0xae,
+            @"scas m32/64" = 0xaf,
+            @"mov ax8 imm8" = 0xb0,
+            @"mov cx8 imm8" = 0xb1,
+            @"mov dx8 imm8" = 0xb2,
+            @"mov bx8 imm8" = 0xb3,
+            @"mov sp8 imm8" = 0xb4,
+            @"mov bp8 imm8" = 0xb5,
+            @"mov si8 imm8" = 0xb6,
+            @"mov di imm8" = 0xb7,
+            @"mov ax imm32/64" = 0xb8,
+            @"mov cx imm32/64" = 0xb9,
+            @"mov dx imm32/64" = 0xba,
+            @"mov bx imm32/64" = 0xbb,
+            @"mov sp imm32/64" = 0xbc,
+            @"mov bp imm32/64" = 0xbd,
+            @"mov si imm32/64" = 0xbe,
+            @"mov di imm32/64" = 0xbf,
+            @"rol/ror/etc rm8 imm8" = 0xc0,
+            @"rol/ror/etc rm imm8" = 0xc1,
+            @"ret imm16" = 0xc2,
             ret = 0xc3,
-            mov_rm_imm32 = 0xc7,
-            call_immh = 0xe8,
-            jmp_immh = 0xe9,
-            jmp_imm8 = 0xeb,
+            @"vex imm16" = 0xc4,
+            @"vex imm8" = 0xc5,
+            @"mov rm8 imm8" = 0xc6,
+            @"mov rm imm32" = 0xc7,
+            @"enter imm16 imm8" = 0xc8,
+            leave = 0xc9,
+            @"retf imm16" = 0xca,
+            retf = 0xcb,
+            @"int 3 flags" = 0xcc,
+            @"int 0 flags" = 0xce,
+            @"int imm8" = 0xcd,
+            @"iret flags" = 0xcf,
+            @"ro/ror/etc rm8 1" = 0xd0,
+            @"ro/ror/etc rm 1" = 0xd1,
+            @"ro/ror/etc rm8 cx" = 0xd2,
+            @"ro/ror/etc rm cx" = 0xd3,
+            @"amx ax8 imm8" = 0xd4,
+            @"aad ax8 imm8" = 0xd5,
+            @"salc ax8" = 0xd6,
+            @"xlat ax8 m8" = 0xd7,
+            @"fadd/fmul/etc st m32" = 0xd8,
+            @"fld/fxch/etc st m32" = 0xd9,
+            @"fiadd/fimul/etc st m32" = 0xda,
+            @"fisttp/fist/etc m32 st" = 0xdb,
+            @"fadd/fmul/etc st m64" = 0xdc,
+            @"fld/fxch/etc st m64" = 0xdd,
+            @"fiadd/fimul/etc st m16" = 0xde,
+            @"fisttp/fist/etc m16 st" = 0xdf,
+            @"loopne cx moffs8" = 0xe0,
+            @"loope cx moffs8" = 0xe1,
+            @"loop cx moffs8" = 0xe2,
+            @"jz moffs8 cx" = 0xe3,
+            @"in ax8 imm8" = 0xe4,
+            @"in ax imm8" = 0xe5,
+            @"out imm8 ax8 " = 0xe6,
+            @"out imm8 ax" = 0xe7,
+            @"call moffs32" = 0xe8,
+            @"jmp moffs32" = 0xe9,
+            @"jmp ptr16:32" = 0xea,
+            @"jmp moffs8" = 0xeb,
+            @"in ax8 dx" = 0xec,
+            @"in ax dx" = 0xed,
+            @"out dx ax8" = 0xee,
+            @"out dx ax" = 0xef,
+            @"int 1 flags" = 0xf1,
+            hlt = 0xf4,
+            cmc = 0xf5,
+            @"not/neg/etc rm8" = 0xf6,
+            @"not/neg/etc rm" = 0xf7,
             clc = 0xf8,
-            mux_rm = 0xff,
+            stc = 0xf9,
+            cli = 0xfa,
+            sti = 0xfb,
+            cld = 0xfc,
+            std = 0xfd,
+            @"inc/dev rm8" = 0xfe,
+            @"jmp/call/etc rm" = 0xff,
             _,
         };
         pub const Prefix = enum(u8) {
@@ -1279,6 +1402,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
             gs = 0x65,
             os = 0x66,
             as = 0x67,
+            wait = 0x9b,
+            f0 = 0xf0,
             f2 = 0xf2,
             f3 = 0xf3,
         };
@@ -1286,18 +1411,18 @@ const Instruction = switch (builtin.target.cpu.arch) {
             b: u1 = 0,
             x: u1 = 0,
             r: u1 = 0,
-            w: u1 = 1,
+            w: bool = true,
             pat: u4 = 4,
         };
         pub const ModRM = packed struct {
-            rm: u3 = 0,
-            reg: u3 = 0,
-            mod: u2 = 0,
+            rm: u3,
+            reg: u3,
+            mod: u2,
         };
         pub const SIB = packed struct {
-            base: u3 = 0,
-            index: u3 = 0,
-            scale: u2 = 0,
+            base: u3,
+            index: u3,
+            scale: u2,
         };
 
         const Attributes = packed struct {
@@ -1306,7 +1431,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             has_imm8: bool = false,
             has_imm16: bool = false,
             has_imm32: bool = false,
-            has_imm64: bool = false,
+            @"has_imm32/64": bool = false,
         };
         const attribute_table = init: {
             @setEvalBranchQuota(200000);
@@ -1314,41 +1439,34 @@ const Instruction = switch (builtin.target.cpu.arch) {
             for (@typeInfo(Opcode).@"enum".fields) |field| {
                 var attrs: Attributes = .{};
                 const name = field.name;
-                if (std.mem.containsAtLeast(u8, name, 1, "_r")) {
+                // modR/M byte is needed when the instruction works with
+                if (std.mem.containsAtLeast(u8, name, 1, " r") or name[0] == 'f') {
                     attrs.has_mod_rm = true;
                 }
-                if (std.mem.endsWith(u8, name, "imm8")) {
+                if (std.mem.endsWith(u8, name, " imm8")) {
                     attrs.has_imm8 = true;
-                } else if (std.mem.endsWith(u8, name, "imm32")) {
+                } else if (std.mem.endsWith(u8, name, " imm32")) {
                     attrs.has_imm32 = true;
-                } else if (std.mem.endsWith(u8, name, "imm")) {
-                    switch (@bitSizeOf(usize)) {
-                        64 => attrs.has_imm64 = true,
-                        else => attrs.has_imm32 = true,
-                    }
-                } else if (std.mem.endsWith(u8, name, "immh")) {
-                    switch (@bitSizeOf(usize)) {
-                        64 => attrs.has_imm32 = true,
-                        else => attrs.has_imm16 = true,
-                    }
+                } else if (std.mem.endsWith(u8, name, " imm32/64")) {
+                    attrs.@"has_imm32/64" = true;
                 }
-                if (std.mem.containsAtLeast(u8, name, 1, "_imm16")) {
+                if (std.mem.containsAtLeast(u8, name, 1, " moffs8")) {
+                    attrs.has_imm8 = true;
+                } else if (std.mem.containsAtLeast(u8, name, 1, " moffs32")) {
+                    attrs.has_imm32 = true;
+                } else if (std.mem.containsAtLeast(u8, name, 1, " moffs32/64")) {
+                    attrs.@"has_imm32/64" = true;
+                } else if (std.mem.containsAtLeast(u8, name, 1, " imm16")) {
                     attrs.has_imm16 = true;
                 }
-                if (std.mem.startsWith(u8, name, "push_")) {
-                    if (std.mem.endsWith(u8, name, "_all")) {
-                        attrs.stack_change = switch (@bitSizeOf(usize)) {
-                            64 => -16,
-                            else => -8,
-                        };
-                    } else attrs.stack_change = -1;
-                } else if (std.mem.startsWith(u8, name, "pop_")) {
-                    if (std.mem.endsWith(u8, name, "_all")) {
-                        attrs.stack_change = switch (@bitSizeOf(usize)) {
-                            64 => 16,
-                            else => 8,
-                        };
-                    } else attrs.stack_change = 1;
+                if (std.mem.startsWith(u8, name, "push ")) {
+                    attrs.stack_change = -1;
+                } else if (std.mem.eql(u8, name, "pusha")) {
+                    attrs.stack_change = -@sizeOf(usize) * 2;
+                } else if (std.mem.startsWith(u8, name, "pop ")) {
+                    attrs.stack_change = 1;
+                } else if (std.mem.eql(u8, name, "popa")) {
+                    attrs.stack_change = @sizeOf(usize) * 2;
                 }
                 const index: usize = field.value;
                 table[index] = attrs;
@@ -1363,11 +1481,13 @@ const Instruction = switch (builtin.target.cpu.arch) {
                 i += 1;
                 instr.prefix = prefix;
             }
+            var wide = false;
             if (@bitSizeOf(usize) == 64) {
                 const rex: REX = @bitCast(bytes[i]);
                 if (rex.pat == 4) {
                     i += 1;
                     instr.rex = rex;
+                    wide = rex.w;
                 }
             }
             const attrs = attribute_table[bytes[i]];
@@ -1403,10 +1523,10 @@ const Instruction = switch (builtin.target.cpu.arch) {
                 instr.imm16 = std.mem.bytesToValue(u16, bytes[i .. i + 2]);
                 i += 2;
             }
-            if (attrs.has_imm64) {
+            if (attrs.@"has_imm32/64" and wide) {
                 instr.imm64 = std.mem.bytesToValue(u64, bytes[i .. i + 8]);
                 i += 8;
-            } else if (attrs.has_imm32) {
+            } else if (attrs.has_imm32 or (attrs.@"has_imm32/64" and !wide)) {
                 instr.imm32 = std.mem.bytesToValue(u32, bytes[i .. i + 4]);
                 i += 4;
             } else if (attrs.has_imm8) {
@@ -1443,8 +1563,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
         sib: ?SIB = null,
         disp8: ?i8 = null,
         disp32: ?i32 = null,
+        imm16: ?u16 = null, // used by ENTER only, comes before imm8
         imm8: ?u8 = null,
-        imm16: ?u16 = null,
         imm32: ?u32 = null,
         imm64: ?u64 = null,
     },
