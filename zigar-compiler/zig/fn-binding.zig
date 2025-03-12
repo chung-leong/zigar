@@ -680,8 +680,8 @@ test "Binding ([no args] + i64 x 4)" {
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
     try expect(@TypeOf(bf) == *const fn () i64);
     defer _ = Add.unbind(ea.allocator(), bf);
-    const sum1 = bf();
-    try expect(sum1 == 1 + 2 + 3 + 4);
+    const sum = bf();
+    try expect(sum == 1 + 2 + 3 + 4);
 }
 
 test "Binding (i64 x 3 + i64 x 1)" {
@@ -698,8 +698,8 @@ test "Binding (i64 x 3 + i64 x 1)" {
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
     try expect(@TypeOf(bf) == *const fn (i64, i64, i64) i64);
     defer _ = Add.unbind(ea.allocator(), bf);
-    const sum1 = bf(1, 2, 3);
-    try expect(sum1 == 1 + 2 + 3 + 1234);
+    const sum = bf(1, 2, 3);
+    try expect(sum == 1 + 2 + 3 + 1234);
 }
 
 test "Binding (i64 x 4 + i64 x 1)" {
@@ -935,8 +935,8 @@ test "Binding (f64 x 3 + f64 x 1)" {
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
     try expect(@TypeOf(bf) == *const fn (f64, f64, f64) f64);
     defer _ = Add.unbind(ea.allocator(), bf);
-    const sum1 = bf(1, 2, 3);
-    try expect(sum1 == 1 + 2 + 3 + 1234);
+    const sum = bf(1, 2, 3);
+    try expect(sum == 1 + 2 + 3 + 1234);
 }
 
 test "Binding ([]const u8 x 1 + []const u8 x 1)" {
@@ -977,6 +977,28 @@ test "Binding ([]const u8 x 3 + []const u8 x 1)" {
     try expect(std.mem.eql(u8, array[1], "Basia"));
     try expect(std.mem.eql(u8, array[2], "Czcibora"));
     try expect(std.mem.eql(u8, array[3], "Dagmara"));
+}
+
+test "Binding (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
+    const ns = struct {
+        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64)) @Vector(4, f64) {
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var vector: @Vector(4, f64) = .{ 10, 20, 30, 40 };
+    _ = &vector;
+    const vars = .{ .@"-1" = vector };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (@Vector(4, f64), @Vector(4, f64), @Vector(4, f64)) @Vector(4, f64));
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(
+        .{ 1, 2, 3, 4 },
+        .{ 0.1, 0.2, 0.3, 0.4 },
+        .{ 0.01, 0.02, 0.03, 0.04 },
+    );
+    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }));
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
