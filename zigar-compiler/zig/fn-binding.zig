@@ -321,31 +321,31 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .x86 => {
                     return .{
                         .{ // mov eax, self_address
-                            .opcode = Instruction.Opcode.mov_ax_imm,
+                            .opcode = .@"mov ax imm32/64",
                             .imm32 = self_address,
                         },
                         switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
                             // mov [esp + self_address_offset], eax
                             true => .{
-                                .opcode = Instruction.Opcode.mov_rm_r,
+                                .opcode = .@"mov rm r",
                                 .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4 },
+                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
                                 .disp8 = @truncate(self_address_offset),
                             },
                             false => .{
-                                .opcode = Instruction.Opcode.mov_rm_r,
+                                .opcode = .@"mov rm r",
                                 .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4 },
+                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
                                 .disp32 = @truncate(self_address_offset),
                             },
                         },
                         .{ // mov eax, trampoline_address
-                            .opcode = Instruction.Opcode.mov_ax_imm,
+                            .opcode = .@"mov ax imm32/64",
                             .imm32 = trampoline_address,
                         },
                         .{ // jmp [eax]
-                            .opcode = Instruction.Opcode.mux_rm,
-                            .mod_rm = .{ .reg = 4, .mod = 3 },
+                            .opcode = .@"jmp/call/etc rm",
+                            .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
                         },
                     };
                 },
@@ -460,11 +460,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var registers = [1]isize{0} ** 16;
                     while (i < 262144) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            // std.debug.print("registers: {d}\n", .{registers});
                             return registers[0];
                         } else {
                             const instr, const attrs, const len = Instruction.decode(instrs[i..]);
-                            // std.debug.print("{any} {d}\n", .{ instr.opcode, attrs.stack_change });
                             if (instr.getMod()) |mod| {
                                 switch (instr.opcode) {
                                     .@"mov rm r" => if (mod == 3) {
@@ -472,16 +470,21 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                         const rd = instr.getRM();
                                         registers[rd] = registers[rs];
                                     },
-                                    .@"lea rm r" => if (mod == 1) {
+                                    .@"lea rm r" => {
                                         const disp = instr.getDisp();
                                         const rs = instr.getRM();
                                         const rd = instr.getReg();
                                         registers[rd] = registers[rs] + disp;
                                     },
+                                    .@"add/or/etc rm imm8", .@"add/or/etc rm imm32" => if (mod == 3) {
+                                        const imm = instr.getImm(isize);
+                                        const rd = instr.getRM();
+                                        registers[rd] += imm;
+                                    },
                                     else => {},
                                 }
                             }
-                            registers[sp] += attrs.stack_change * 8;
+                            registers[sp] += attrs.stack_change * @sizeOf(usize);
                             i += len;
                         }
                     }
@@ -1554,6 +1557,22 @@ const Instruction = switch (builtin.target.cpu.arch) {
 
         pub fn getDisp(self: @This()) isize {
             return self.disp8 orelse self.disp32 orelse 0;
+        }
+
+        pub fn getImm(self: @This(), comptime T: type) T {
+            const signedness = @typeInfo(T).int.signedness;
+            if (self.imm8) |value| {
+                return @as(std.meta.Int(signedness, 8), @bitCast(value));
+            }
+            if (self.imm32) |value| {
+                return @as(std.meta.Int(signedness, 32), @bitCast(value));
+            }
+            if (@bitSizeOf(usize) == 64) {
+                if (self.imm64) |value| {
+                    return @as(std.meta.Int(signedness, 64), @bitCast(value));
+                }
+            }
+            unreachable;
         }
 
         prefix: ?Prefix = null,
