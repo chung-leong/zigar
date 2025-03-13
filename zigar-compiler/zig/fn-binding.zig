@@ -177,7 +177,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         // add rsp, address_pos.stack_offset
                         encoder.encode(.{
                             .rex = .{},
-                            .opcode = .@"add r/m imm32",
+                            .opcode = .@"add/or/etc r/m imm32",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
                             .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
                         });
@@ -395,9 +395,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         });
                         // add esp, address_pos.stack_offset
                         encoder.encode(.{
-                            .opcode = .@"add r/m imm32",
+                            .opcode = .@"add/or/etc r/m imm32",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                            .imm32 = @bitCast(address_pos.stack_offset),
+                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
                         });
                         // and esp, mask
                         encoder.encode(.{
@@ -1453,7 +1453,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             @"jnl moffs8" = 0x7d,
             @"jle moffs8" = 0x7e,
             @"jnle moffs8" = 0x7f,
-            @"add r/m imm32" = 0x80,
+            @"add/or/etc (no sign ext) r/m imm8" = 0x80,
             @"add/or/etc r/m imm32" = 0x81,
             @"add/or/etc r/m8 imm8" = 0x82,
             @"add/or/etc r/m imm8" = 0x83,
