@@ -33,7 +33,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const FT = FnType(T);
     const CT = ContextType(TT);
     const BFT = BoundFunction(FT, CT);
-    const AddressPosition = struct { offset: isize, stack_offset: isize, stack_align_mask: isize };
+    const AddressPosition = struct { offset: isize, stack_offset: isize, stack_align_mask: ?isize };
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
     const code_align = @alignOf(fn () void);
@@ -167,28 +167,26 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .opcode = .@"mov ax imm32/64",
                         .imm64 = self_address,
                     });
-                    if (address_pos.stack_align_mask != -1) {
+                    if (address_pos.stack_align_mask) |mask| {
                         // mov r11, rsp
                         encoder.encode(.{
                             .rex = .{ .b = 1 },
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 3, .mod = 3, .reg = 4 },
                         });
-                        if (address_pos.stack_offset > 0) {
-                            // add rsp, address_pos.stack_offset
-                            encoder.encode(.{
-                                .rex = .{},
-                                .opcode = .@"add r/m imm32",
-                                .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                                .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
-                            });
-                        }
-                        // and rsp, address_pos.stack_align_mask
+                        // add rsp, address_pos.stack_offset
+                        encoder.encode(.{
+                            .rex = .{},
+                            .opcode = .@"add r/m imm32",
+                            .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
+                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
+                        });
+                        // and rsp, mask
                         encoder.encode(.{
                             .rex = .{},
                             .opcode = .@"add/or/etc r/m imm8",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 4 },
-                            .imm8 = @bitCast(@as(i8, @truncate(address_pos.stack_align_mask))),
+                            .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
                     // mov [rsp + address_pos.offset], rax
@@ -209,7 +207,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             .disp32 = @truncate(address_pos.offset),
                         });
                     }
-                    if (address_pos.stack_align_mask != -1) {
+                    if (address_pos.stack_align_mask) |_| {
                         // mov rsp, r11
                         encoder.encode(.{
                             .rex = .{ .r = 1 },
@@ -231,33 +229,60 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     });
                 },
                 .aarch64 => {
-                    const offset_amount = -address_pos.offset;
-                    var base_offset: u12 = undefined;
-                    var displacement: u12 = 0;
-                    var shift: u1 = 0;
-                    if (offset_amount <= 0xfff) {
-                        base_offset = @intCast(offset_amount);
+                    if (address_pos.stack_align_mask) |mask| {
+                        encoder.encode(.{
+                            .sub = .{
+                                .rd = 11,
+                                .rn = 31,
+                                .imm12 = 0,
+                                .shift = 0,
+                            },
+                        });
+
+                        // sub x10, sp, -address_pos.stack_offset
+                        encoder.encode(.{
+                            .sub = .{
+                                .rd = 10,
+                                .rn = 31,
+                                .imm12 = @truncate(@as(usize, @bitCast(-address_pos.stack_offset))),
+                                .shift = 0,
+                            },
+                        });
+                        // and x10, x10, mask
+                        encoder.encode(.{
+                            .@"and" = .{
+                                .rd = 10,
+                                .rn = 10,
+                                .imm = @truncate(@as(usize, @bitCast(mask))),
+                            },
+                        });
+                        // add x10, x10, address_pos.offset
+                        encoder.encode(.{
+                            .add = .{
+                                .rd = 10,
+                                .rn = 10,
+                                .imm12 = @truncate(@as(usize, @bitCast(address_pos.offset))),
+                                .shift = 0,
+                            },
+                        });
                     } else {
-                        base_offset = @intCast(offset_amount >> 12);
-                        displacement = @intCast(offset_amount & 0xfff);
-                        shift = 1;
+                        // sub x10, sp, -address_pos.offset
+                        encoder.encode(.{
+                            .sub = .{
+                                .rd = 10,
+                                .rn = 31,
+                                .imm12 = @truncate(@as(usize, @bitCast(-address_pos.offset))),
+                                .shift = 0,
+                            },
+                        });
                     }
-                    // sub x10, sp, base_offset
-                    encoder.encode(.{
-                        .sub = .{
-                            .rd = 10,
-                            .rn = 31,
-                            .imm12 = base_offset,
-                            .shift = shift,
-                        },
-                    });
                     // ldr x9, [pc + 16] (self_address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 9, .imm19 = 4 },
                     });
-                    // str [x10 + displacement], x9
+                    // str [x10], x9
                     encoder.encode(.{
-                        .str = .{ .rn = 10, .rt = 9, .imm12 = displacement },
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = 0 },
                     });
                     // ldr x9, [pc + 16] (trampoline_address)
                     encoder.encode(.{
@@ -362,25 +387,23 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .opcode = .@"mov ax imm32/64",
                         .imm32 = self_address,
                     });
-                    if (address_pos.stack_align_mask != -1) {
+                    if (address_pos.stack_align_mask) |mask| {
                         // mov ecx, esp
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 1, .mod = 3, .reg = 4 },
                         });
-                        if (address_pos.stack_offset > 0) {
-                            // add esp, address_pos.stack_offset
-                            encoder.encode(.{
-                                .opcode = .@"add r/m imm32",
-                                .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                                .imm32 = @bitCast(address_pos.stack_offset),
-                            });
-                        }
-                        // and esp, address_pos.stack_align_mask
+                        // add esp, address_pos.stack_offset
+                        encoder.encode(.{
+                            .opcode = .@"add r/m imm32",
+                            .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
+                            .imm32 = @bitCast(address_pos.stack_offset),
+                        });
+                        // and esp, mask
                         encoder.encode(.{
                             .opcode = .@"add/or/etc r/m imm8",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 4 },
-                            .imm8 = @bitCast(@as(i8, @truncate(address_pos.stack_align_mask))),
+                            .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
                     // mov [esp + address_pos.offset], eax
@@ -399,7 +422,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             .disp32 = @truncate(address_pos.offset),
                         });
                     }
-                    if (address_pos.stack_align_mask != -1) {
+                    if (address_pos.stack_align_mask) |_| {
                         // mov esp, ecx
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
@@ -523,7 +546,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         }
 
         fn findAddressPosition(ptr: *const anyopaque) !AddressPosition {
-            var stack_align_mask: isize = -1;
+            var stack_align_mask: ?isize = null;
             var stack_offset: isize = 0;
             var index: ?isize = null;
             switch (builtin.target.cpu.arch) {
@@ -560,8 +583,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                             0 => registers[rd] += imm,
                                             4 => if (rd == sp) {
                                                 // stack alignment
-                                                stack_offset = registers[rd];
                                                 stack_align_mask = imm;
+                                                stack_offset = registers[rd];
                                                 registers[rd] = 0;
                                             } else {
                                                 registers[rd] &= imm;
@@ -615,6 +638,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 registers[stp.rn] += @as(isize, stp.imm7) * 8;
                             } else if (match(Instruction.STP.POST, instr)) |stp| {
                                 registers[stp.rn] += @as(isize, stp.imm7) * 8;
+                            } else if (match(Instruction.AND, instr)) |@"and"| {
+                                if (@"and".rd == 31) {
+                                    // stack alignment
+                                    stack_align_mask = @"and".imm;
+                                    stack_offset = registers[@"and".rn];
+                                    registers[31] = 0;
+                                }
                             }
                         }
                     }
@@ -717,11 +747,13 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 },
                 else => unreachable,
             }
-            return if (index) |i| .{
-                .offset = i,
-                .stack_offset = stack_offset,
-                .stack_align_mask = stack_align_mask,
-            } else error.Unexpected;
+            if (index) |i| {
+                return .{
+                    .offset = i,
+                    .stack_offset = stack_offset,
+                    .stack_align_mask = stack_align_mask,
+                };
+            } else return error.Unexpected;
         }
     };
 }
@@ -1555,8 +1587,8 @@ const Instruction = switch (builtin.target.cpu.arch) {
             @"lar rm r" = 0x02,
             @"lsl rm r" = 0x03,
             @"clts cr0" = 0x06,
-            @"invd " = 0x08,
-            @"wbinvd " = 0x09,
+            invd = 0x08,
+            wbinvd = 0x09,
             @"movups xmm xmm/m128" = 0x10,
             @"movups xmm/m128 xmm" = 0x11,
             @"movhlps xmm xmm" = 0x12,
@@ -1838,6 +1870,12 @@ const Instruction = switch (builtin.target.cpu.arch) {
             shift: u1,
             @"31:23": u9 = 0b1101_0001_0,
         };
+        pub const AND = packed struct(u32) {
+            rd: u5,
+            rn: u5,
+            imm: u13,
+            @"32:22": u9 = 0b100100100,
+        };
         pub const MOV = packed struct(u32) {
             rd: u5,
             rn: u5 = 0b11111,
@@ -1904,6 +1942,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
 
         add: ADD,
         sub: SUB,
+        @"and": AND,
         mov: MOV,
         ldr: LDR,
         str: STR,
