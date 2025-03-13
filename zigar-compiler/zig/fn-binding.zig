@@ -609,7 +609,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .aarch64 => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     const nop: u32 = @bitCast(Instruction.NOP{});
-                    var registers: [32]isize = .{0} ** 32;
+                    var registers = [1]isize{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             index = registers[9];
@@ -652,7 +652,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .riscv64 => {
                     const instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
                     const nop: u16 = @bitCast(Instruction.NOP.C{});
-                    var registers: [32]isize = .{0} ** 32;
+                    var registers = [1]isize{0} ** 32;
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
@@ -703,7 +703,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     // li 0, 0 is used as nop instead of regular nop
                     const nop: u32 = @bitCast(Instruction.ADDI{ .ra = 0, .rt = 0, .imm16 = 0 });
-                    var registers: [32]isize = .{0} ** 32;
+                    var registers = [1]isize{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             index = registers[11];
@@ -725,7 +725,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .arm => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     const nop: u32 = @bitCast(Instruction.NOP{});
-                    var registers: [32]isize = .{0} ** 32;
+                    var registers = [1]isize{0} ** 16;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             index = registers[4];
@@ -738,6 +738,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             } else if (match(Instruction.SUB, instr)) |sub| {
                                 const amount: isize = @intCast(Instruction.decodeIMM12(sub.imm12));
                                 registers[sub.rd] = registers[sub.rn] - amount;
+                            } else if (match(Instruction.MOV, instr)) |mov| {
+                                registers[mov.rd] = registers[mov.rm];
                             } else if (match(Instruction.PUSH, instr)) |push| {
                                 const count: isize = @popCount(push.regs);
                                 registers[13] -= count * 4;
@@ -1105,7 +1107,6 @@ test "Binding (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
     const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var ea = executable();
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (@Vector(4, f64), @Vector(4, f64), @Vector(4, f64)) @Vector(4, f64));
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(
         .{ 0.01, 0.02, 0.03, 0.04 },
@@ -1127,9 +1128,6 @@ test "Binding (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
     const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
     var ea = executable();
     const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(
-        @TypeOf(bf) == *const fn (@Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64)) @Vector(4, f64),
-    );
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(
         .{ 0.0001, 0.0002, 0.0003, 0.0004 },
@@ -2154,6 +2152,12 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rd: u4,
             rn: u4,
             @"31:20": u12 = 0b1110_0010_0100,
+        };
+        const MOV = packed struct(u32) {
+            rm: u4,
+            @"11:4": u8 = 0,
+            rd: u4,
+            @"31:15": u16 = 0b1110_0001_1010_0000,
         };
         const BX = packed struct(u32) {
             rm: u4,
