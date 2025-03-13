@@ -1982,7 +1982,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
             @"31:27": i7 = 0b0000_000,
 
             pub const C = packed struct(u16) {
-                @"1:0": u2 = 0b00,
+                @"1:0": u2 = 0b10,
                 rs: u5,
                 rd: u5,
                 @"15:12": u4 = 0b1000,
