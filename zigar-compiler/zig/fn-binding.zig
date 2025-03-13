@@ -33,6 +33,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
     const FT = FnType(T);
     const CT = ContextType(TT);
     const BFT = BoundFunction(FT, CT);
+    const AddressPosition = struct { index: isize, stack_align: usize };
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
     const code_align = @alignOf(fn () void);
@@ -46,7 +47,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
         code: [0]u8 align(code_align) = undefined,
 
         var code_len: ?usize = null;
-        var self_offset: ?isize = null;
+        var self_address_pos: ?AddressPosition = null;
 
         pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
             const binding = try init(allocator, func, vars);
@@ -67,10 +68,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             defer protect(true);
             const len = code_len orelse init: {
                 // determine the code len by doing a dry-run of the encoding process
-                const instrs = try getInstructions(0);
                 var encoder: InstructionEncoder = .{};
-                encoder.encode(&instrs);
-                code_len = encoder.len;
+                try writeInstructions(&encoder, 0);
                 break :init encoder.len;
             };
             const instance_size = @offsetOf(@This(), "code") + len;
@@ -92,10 +91,9 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 .context_bytes = std.mem.toBytes(ctx),
             };
             const self_address = @intFromPtr(self);
-            const instrs = try getInstructions(self_address);
             const output_ptr = @as([*]u8, @ptrCast(&self.code));
             var encoder: InstructionEncoder = .{ .output = output_ptr[0..len] };
-            encoder.encode(&instrs);
+            try writeInstructions(&encoder, self_address);
             invalidate(new_bytes);
             return self;
         }
@@ -152,65 +150,56 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             try expect(ptr2 == null);
         }
 
-        fn getInstructions(self_address: usize) !return_type: {
-            const count = switch (builtin.target.cpu.arch) {
-                .x86_64 => 4,
-                .aarch64 => 7,
-                .riscv64 => 10,
-                .powerpc64le => 12,
-                .x86 => 4,
-                .arm => 7,
-                else => @compileError("No support"),
-            };
-            break :return_type [count]Instruction;
-        } {
+        fn writeInstructions(encoder: *InstructionEncoder, self_address: usize) !void {
             const trampoline = getTrampoline();
             const trampoline_address = @intFromPtr(&trampoline);
             // find the displacement of self_address inside the trampoline function
-            const self_address_offset = self_offset orelse init: {
-                const offset = try findAddressOffset(&trampoline);
-                self_offset = offset;
+            const address_pos = self_address_pos orelse init: {
+                const offset = try findAddressPosition(&trampoline);
+                self_address_pos = offset;
                 break :init offset;
             };
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    return .{
-                        .{ // mov rax, self_address
+                    // mov rax, self_address
+                    encoder.encode(.{
+                        .rex = .{},
+                        .opcode = .@"mov ax imm32/64",
+                        .imm64 = self_address,
+                    });
+                    // mov [rsp + address_pos.index], rax
+                    if (address_pos.index >= std.math.minInt(i8) and address_pos.index <= std.math.maxInt(i8)) {
+                        encoder.encode(.{
                             .rex = .{},
-                            .opcode = .@"mov ax imm32/64",
-                            .imm64 = self_address,
-                        },
-                        switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
-                            // mov [rsp + self_address_offset], rax
-                            true => .{
-                                .rex = .{},
-                                .opcode = .@"mov rm r",
-                                .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                                .disp8 = @truncate(self_address_offset),
-                            },
-                            false => .{
-                                .rex = .{},
-                                .opcode = .@"mov rm r",
-                                .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                                .disp32 = @truncate(self_address_offset),
-                            },
-                        },
-                        .{ // mov rax, trampoline_address
+                            .opcode = .@"mov rm r",
+                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                            .sib = .{ .base = 4, .index = 4, .scale = 0 },
+                            .disp8 = @truncate(address_pos.index),
+                        });
+                    } else {
+                        encoder.encode(.{
                             .rex = .{},
-                            .opcode = .@"mov ax imm32/64",
-                            .imm64 = trampoline_address,
-                        },
-                        .{ // jmp [rax]
-                            .rex = .{},
-                            .opcode = .@"jmp/call/etc rm",
-                            .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
-                        },
-                    };
+                            .opcode = .@"mov rm r",
+                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                            .sib = .{ .base = 4, .index = 4, .scale = 0 },
+                            .disp32 = @truncate(address_pos.index),
+                        });
+                    }
+                    // mov rax, trampoline_address
+                    encoder.encode(.{
+                        .rex = .{},
+                        .opcode = .@"mov ax imm32/64",
+                        .imm64 = trampoline_address,
+                    });
+                    // jmp [rax]
+                    encoder.encode(.{
+                        .rex = .{},
+                        .opcode = .@"jmp/call/etc rm",
+                        .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
+                    });
                 },
                 .aarch64 => {
-                    const offset_amount = -self_address_offset;
+                    const offset_amount = -address_pos.index;
                     var base_offset: u12 = undefined;
                     var displacement: u12 = 0;
                     var shift: u1 = 0;
@@ -221,61 +210,70 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         displacement = @intCast(offset_amount & 0xfff);
                         shift = 1;
                     }
-                    return .{
-                        .{ // sub x10, sp, base_offset
-                            .sub = .{
-                                .rd = 10,
-                                .rn = 31,
-                                .imm12 = base_offset,
-                                .shift = shift,
-                            },
+                    // sub x10, sp, base_offset
+                    encoder.encode(.{
+                        .sub = .{
+                            .rd = 10,
+                            .rn = 31,
+                            .imm12 = base_offset,
+                            .shift = shift,
                         },
-                        .{ // ldr x9, [pc + 16] (self_address)
-                            .ldr = .{ .rt = 9, .imm19 = 4 },
-                        },
-                        .{ // str [x10 + displacement], x9
-                            .str = .{ .rn = 10, .rt = 9, .imm12 = displacement },
-                        },
-                        .{ // ldr x9, [pc + 16] (trampoline_address)
-                            .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
-                        },
-                        .{ // br [x9]
-                            .br = .{ .rn = 9 },
-                        },
-                        .{ .literal = self_address },
-                        .{ .literal = trampoline_address },
-                    };
+                    });
+                    // ldr x9, [pc + 16] (self_address)
+                    encoder.encode(.{
+                        .ldr = .{ .rt = 9, .imm19 = 4 },
+                    });
+                    // str [x10 + displacement], x9
+                    encoder.encode(.{
+                        .str = .{ .rn = 10, .rt = 9, .imm12 = displacement },
+                    });
+                    // ldr x9, [pc + 16] (trampoline_address)
+                    encoder.encode(.{
+                        .ldr = .{ .rt = 9, .imm19 = 2 + 2 },
+                    });
+                    // br [x9]
+                    encoder.encode(.{
+                        .br = .{ .rn = 9 },
+                    });
+                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = trampoline_address });
                 },
                 .riscv64 => {
-                    const offset = -self_address_offset;
-                    return .{
-                        .{ // lui x5, offset >> 12 + (sign adjustment)
-                            .lui = .{ .rd = 5, .imm20 = @intCast((offset >> 12) + ((offset >> 11) & 1)) },
-                        },
-                        .{ // addi x5, (offset & 0xfff)
-                            .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(offset & 0xfff) },
-                        },
-                        .{ // sub x6, sp, x5
-                            .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
-                        },
-                        .{ // auipc x7, pc
-                            .auipc = .{ .rd = 7, .imm20 = 0 },
-                        },
-                        .{ // ld x5, [x7 + 20] (self_address)
-                            .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
-                        },
-                        .{ // sd [x6], x5
-                            .sd = .{ .rs1 = 6, .rs2 = 5, .imm12_4_0 = 0, .imm12_11_5 = 0 },
-                        },
-                        .{ // ld x5, [x7 + 28] (trampoline_address)
-                            .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
-                        },
-                        .{ // jmp [x5]
-                            .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
-                        },
-                        .{ .literal = self_address },
-                        .{ .literal = trampoline_address },
-                    };
+                    const offset = -address_pos.index;
+                    // lui x5, offset >> 12 + (sign adjustment)
+                    encoder.encode(.{
+                        .lui = .{ .rd = 5, .imm20 = @intCast((offset >> 12) + ((offset >> 11) & 1)) },
+                    });
+                    // addi x5, (offset & 0xfff)
+                    encoder.encode(.{
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(offset & 0xfff) },
+                    });
+                    // sub x6, sp, x5
+                    encoder.encode(.{
+                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                    });
+                    // auipc x7, pc
+                    encoder.encode(.{
+                        .auipc = .{ .rd = 7, .imm20 = 0 },
+                    });
+                    // ld x5, [x7 + 20] (self_address)
+                    encoder.encode(.{
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
+                    });
+                    // sd [x6], x5
+                    encoder.encode(.{
+                        .sd = .{ .rs1 = 6, .rs2 = 5, .imm12_4_0 = 0, .imm12_11_5 = 0 },
+                    });
+                    // ld x5, [x7 + 28] (trampoline_address)
+                    encoder.encode(.{
+                        .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
+                    });
+                    // jmp [x5]
+                    encoder.encode(.{
+                        .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
+                    });
+                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = trampoline_address });
                 },
                 .powerpc64le => {
                     const code_address = self_address + @offsetOf(@This(), "code");
@@ -283,100 +281,113 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     const code_addr_47_32: u16 = @truncate((code_address >> 32) & 0xffff);
                     const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
                     const code_addr_15_0: u16 = @truncate((code_address >> 0) & 0xffff);
-                    return .{
-                        .{ // lis r11, code_addr_63_48
-                            .addi = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_63_48) },
-                        },
-                        .{ // ori r11, r11, code_addr_47_32
-                            .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_47_32) },
-                        },
-                        .{ // rldic r11, r11, 32
-                            .rldic = .{ .rs = 11, .ra = 11, .sh = 0, .sh2 = 1, .mb = 0, .rc = 0 },
-                        },
-                        .{ // oris r11, r11, code_addr_31_16
-                            .oris = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_31_16) },
-                        },
-                        .{ // ori r11, r11, code_addr_15_0
-                            .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
-                        },
-                        .{ // ld r12, [r11 + 40] (self_address)
-                            .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
-                        },
-                        .{ // std [sp + self_address_offset], r12
-                            .std = .{ .ra = 1, .rs = 12, .ds = @intCast(self_address_offset >> 2) },
-                        },
-                        .{ // ld r12, [r11 + 48] (trampoline_address)
-                            .ld = .{ .rt = 12, .ra = 11, .ds = 12 },
-                        },
-                        .{ // mtctr r12
-                            .mtctr = .{ .rs = 12 },
-                        },
-                        .{ // bctrl
-                            .bctrl = .{},
-                        },
-                        .{ .literal = self_address },
-                        .{ .literal = trampoline_address },
-                    };
+                    // lis r11, code_addr_63_48
+                    encoder.encode(.{
+                        .addi = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_63_48) },
+                    });
+                    // ori r11, r11, code_addr_47_32
+                    encoder.encode(.{
+                        .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_47_32) },
+                    });
+                    // rldic r11, r11, 32
+                    encoder.encode(.{
+                        .rldic = .{ .rs = 11, .ra = 11, .sh = 0, .sh2 = 1, .mb = 0, .rc = 0 },
+                    });
+                    // oris r11, r11, code_addr_31_16
+                    encoder.encode(.{
+                        .oris = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_31_16) },
+                    });
+                    // ori r11, r11, code_addr_15_0
+                    encoder.encode(.{
+                        .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
+                    });
+                    // ld r12, [r11 + 40] (self_address)
+                    encoder.encode(.{
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
+                    });
+                    // std [sp + address_pos.index], r12
+                    encoder.encode(.{
+                        .std = .{ .ra = 1, .rs = 12, .ds = @intCast(address_pos.index >> 2) },
+                    });
+                    // ld r12, [r11 + 48] (trampoline_address)
+                    encoder.encode(.{
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 12 },
+                    });
+                    // mtctr r12
+                    encoder.encode(.{
+                        .mtctr = .{ .rs = 12 },
+                    });
+                    // bctrl
+                    encoder.encode(.{
+                        .bctrl = .{},
+                    });
+                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = trampoline_address });
                 },
                 .x86 => {
-                    return .{
-                        .{ // mov eax, self_address
-                            .opcode = .@"mov ax imm32/64",
-                            .imm32 = self_address,
-                        },
-                        switch (self_address_offset >= std.math.minInt(i8) and self_address_offset <= std.math.maxInt(i8)) {
-                            // mov [esp + self_address_offset], eax
-                            true => .{
-                                .opcode = .@"mov rm r",
-                                .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                                .disp8 = @truncate(self_address_offset),
-                            },
-                            false => .{
-                                .opcode = .@"mov rm r",
-                                .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
-                                .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                                .disp32 = @truncate(self_address_offset),
-                            },
-                        },
-                        .{ // mov eax, trampoline_address
-                            .opcode = .@"mov ax imm32/64",
-                            .imm32 = trampoline_address,
-                        },
-                        .{ // jmp [eax]
-                            .opcode = .@"jmp/call/etc rm",
-                            .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
-                        },
-                    };
+                    // mov eax, self_address
+                    encoder.encode(.{
+                        .opcode = .@"mov ax imm32/64",
+                        .imm32 = self_address,
+                    });
+                    // mov [esp + address_pos.index], eax
+                    if (address_pos.index >= std.math.minInt(i8) and address_pos.index <= std.math.maxInt(i8)) {
+                        encoder.encode(.{
+                            .opcode = .@"mov rm r",
+                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                            .sib = .{ .base = 4, .index = 4, .scale = 0 },
+                            .disp8 = @truncate(address_pos.index),
+                        });
+                    } else {
+                        encoder.encode(.{
+                            .opcode = .@"mov rm r",
+                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                            .sib = .{ .base = 4, .index = 4, .scale = 0 },
+                            .disp32 = @truncate(address_pos.index),
+                        });
+                    }
+                    // mov eax, trampoline_address
+                    encoder.encode(.{
+                        .opcode = .@"mov ax imm32/64",
+                        .imm32 = trampoline_address,
+                    });
+                    // jmp [eax]
+                    encoder.encode(.{
+                        .opcode = .@"jmp/call/etc rm",
+                        .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
+                    });
                 },
                 .arm => {
-                    const offset_amount: u32 = @abs(self_address_offset);
+                    const offset_amount: u32 = @abs(address_pos.index);
                     const base_offset = Instruction.getNearestIMM12(offset_amount);
                     const remainder = offset_amount - Instruction.decodeIMM12(base_offset);
                     const displacement = Instruction.getNearestIMM12(remainder);
-                    return .{
-                        .{ // sub r5, sp, offset
-                            .sub = .{
-                                .rd = 5,
-                                .rn = 13,
-                                .imm12 = base_offset,
-                            },
+                    // sub r5, sp, offset
+                    encoder.encode(.{
+                        .sub = .{
+                            .rd = 5,
+                            .rn = 13,
+                            .imm12 = base_offset,
                         },
-                        .{ // ldr r4, [pc + 8] (self_address)
-                            .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
-                        },
-                        .{ // str [r5], r4
-                            .str = .{ .rn = 5, .rt = 4, .imm12 = displacement },
-                        },
-                        .{ // ldr r4, [pc + 4] (trampoline_address)
-                            .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) },
-                        },
-                        .{ // bx [r4]
-                            .bx = .{ .rm = 4 },
-                        },
-                        .{ .literal = self_address },
-                        .{ .literal = trampoline_address },
-                    };
+                    });
+                    // ldr r4, [pc + 8] (self_address)
+                    encoder.encode(.{
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
+                    });
+                    // str [r5], r4
+                    encoder.encode(.{
+                        .str = .{ .rn = 5, .rt = 4, .imm12 = displacement },
+                    });
+                    // ldr r4, [pc + 4] (trampoline_address)
+                    encoder.encode(.{
+                        .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) },
+                    });
+                    // bx [r4]
+                    encoder.encode(.{
+                        .bx = .{ .rm = 4 },
+                    });
+                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = trampoline_address });
                 },
                 else => unreachable,
             }
@@ -451,23 +462,21 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             }
         }
 
-        fn findAddressOffset(ptr: *const anyopaque) !isize {
+        fn findAddressPosition(ptr: *const anyopaque) !AddressPosition {
+            var stack_align: usize = 1;
+            _ = &stack_align;
             switch (builtin.target.cpu.arch) {
                 .x86, .x86_64 => {
                     const instrs: [*]const u8 = @ptrCast(ptr);
                     const nop = @intFromEnum(Instruction.Opcode.nop);
                     const sp = 4;
-                    // ensure that the stack is aligned after the ebp/rbp gets pushed
-                    // without this adjustment we'd get the wrong offset when the compiler
-                    // uses AND operation to align the stack pointer
                     const stack_offset = if (builtin.mode == .Debug) @sizeOf(isize) else 0;
                     var registers = [1]isize{0} ** 16;
                     registers[sp] -= stack_offset;
                     var i: usize = 0;
                     while (i < 262144) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            // remove the stack offset if there's one
-                            return registers[0] + stack_offset;
+                            return .{ .index = registers[0], .stack_align = stack_align };
                         } else {
                             const instr, const attrs, const len = Instruction.decode(instrs[i..]);
                             i += len;
@@ -514,7 +523,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[9];
+                            return .{ .index = registers[9], .stack_align = stack_align };
                         } else {
                             const instr = instrs[i];
                             if (match(Instruction.ADD, instr)) |add| {
@@ -550,7 +559,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[5];
+                            return .{ .index = registers[5], .stack_align = stack_align };
                         } else if (instrs[i] & 3 == 3) {
                             const instr32_ptr: *align(@alignOf(u16)) const u32 = @ptrCast(&instrs[i]);
                             const instr = instr32_ptr.*;
@@ -599,7 +608,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[11];
+                            return .{ .index = registers[11], .stack_align = stack_align };
                         } else {
                             const instr = instrs[i];
                             if (match(Instruction.ADDI, instr)) |addi| {
@@ -620,7 +629,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var registers: [32]isize = .{0} ** 32;
                     for (0..65536) |i| {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            return registers[4];
+                            return .{ .index = registers[4], .stack_align = stack_align };
                         } else {
                             const instr = instrs[i];
                             if (match(Instruction.ADD, instr)) |add| {
@@ -994,11 +1003,41 @@ test "Binding (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
     try expect(@TypeOf(bf) == *const fn (@Vector(4, f64), @Vector(4, f64), @Vector(4, f64)) @Vector(4, f64));
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(
-        .{ 1, 2, 3, 4 },
-        .{ 0.1, 0.2, 0.3, 0.4 },
         .{ 0.01, 0.02, 0.03, 0.04 },
+        .{ 0.1, 0.2, 0.3, 0.4 },
+        .{ 1, 2, 3, 4 },
     );
     try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }));
+}
+
+test "Binding (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
+    const ns = struct {
+        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64), a5: @Vector(4, f64), a6: @Vector(4, f64), a7: @Vector(4, f64), a8: @Vector(4, f64), a9: @Vector(4, f64), a10: @Vector(4, f64)) @Vector(4, f64) {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
+        }
+    };
+    var vector: @Vector(4, f64) = .{ 100000, 200000, 300000, 400000 };
+    _ = &vector;
+    const vars = .{ .@"-1" = vector };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(
+        @TypeOf(bf) == *const fn (@Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64), @Vector(4, f64)) @Vector(4, f64),
+    );
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(
+        .{ 0.0001, 0.0002, 0.0003, 0.0004 },
+        .{ 0.001, 0.002, 0.003, 0.004 },
+        .{ 0.01, 0.02, 0.03, 0.04 },
+        .{ 0.1, 0.2, 0.3, 0.4 },
+        .{ 1, 2, 3, 4 },
+        .{ 10, 20, 30, 40 },
+        .{ 100, 200, 300, 400 },
+        .{ 1000, 2000, 3000, 4000 },
+        .{ 10000, 2000, 30000, 40000 },
+    );
+    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }));
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
@@ -1972,10 +2011,8 @@ const InstructionEncoder = struct {
     output: ?[]u8 = null,
     len: usize = 0,
 
-    pub fn encode(self: *@This(), instrs: []const Instruction) void {
-        for (instrs) |instr| {
-            self.add(instr);
-        }
+    pub fn encode(self: *@This(), instr: Instruction) void {
+        self.add(instr);
     }
 
     fn add(self: *@This(), instr: anytype) void {
