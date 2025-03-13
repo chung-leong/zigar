@@ -800,6 +800,42 @@ test "Binding ([no args] + i64 x 4)" {
     try expect(sum == 1 + 2 + 3 + 4);
 }
 
+test "Binding (i64 x 1 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64) i64 {
+            return a1 + a2;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(1);
+    try expect(sum == 1 + 1234);
+}
+
+test "Binding (i64 x 2 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64) i64 {
+            return a1 + a2 + a3;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64, i64) i64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(1, 2);
+    try expect(sum == 1 + 2 + 1234);
+}
+
 test "Binding (i64 x 3 + i64 x 1)" {
     const ns = struct {
         fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
@@ -1141,6 +1177,50 @@ test "Binding (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
         .{ 10000, 2000, 30000, 40000 },
     );
     try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }));
+}
+
+test "Binding ([12]f64 x 1 + [3]i32 x 1)" {
+    const ns = struct {
+        fn add(a: [3]i32, b: [12]f64) f64 {
+            var int_sum: i32 = 0;
+            var float_sum: f64 = 0;
+            for (a) |v| int_sum += v;
+            for (b) |v| float_sum += v;
+            return float_sum + @as(f64, @floatFromInt(int_sum));
+        }
+    };
+    var array: [3]i32 = .{ 10, 20, 30 };
+    _ = &array;
+    const vars = .{array};
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn ([12]f64) f64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+}
+
+test "Binding ([3]i32 x 1 + [12]f64 x 1)" {
+    const ns = struct {
+        fn add(a: [3]i32, b: [12]f64) f64 {
+            var int_sum: i32 = 0;
+            var float_sum: f64 = 0;
+            for (a) |v| int_sum += v;
+            for (b) |v| float_sum += v;
+            return float_sum + @as(f64, @floatFromInt(int_sum));
+        }
+    };
+    var array: [12]f64 = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    _ = &array;
+    const vars = .{ .@"1" = array };
+    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Add.bind(ea.allocator(), ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn ([3]i32) f64);
+    defer _ = Add.unbind(ea.allocator(), bf);
+    const sum = bf(.{ 10, 20, 30 });
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
