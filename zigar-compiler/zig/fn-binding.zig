@@ -295,19 +295,18 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{ .literal = self_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
-                .riscv32, .riscv64 => {
-                    const offset = -address_pos.offset;
-                    // lui x5, offset >> 12 + (sign adjustment)
+                .riscv64 => {
+                    // lui x5, address_pos.offset >> 12 + (sign adjustment)
                     encoder.encode(.{
-                        .lui = .{ .rd = 5, .imm20 = @intCast((offset >> 12) + ((offset >> 11) & 1)) },
+                        .lui = .{ .rd = 5, .imm20 = @truncate((address_pos.offset >> 12) + ((address_pos.offset >> 11) & 1)) },
                     });
-                    // addi x5, (offset & 0xfff)
+                    // addi x5, (address_pos.offset & 0xfff)
                     encoder.encode(.{
-                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @intCast(offset & 0xfff) },
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(address_pos.offset & 0xfff) },
                     });
-                    // sub x6, sp, x5
+                    // add x6, sp, x5
                     encoder.encode(.{
-                        .sub = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                        .add = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
                     });
                     // auipc x7, pc
                     encoder.encode(.{
@@ -482,6 +481,42 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{ .literal = self_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
+                .riscv32 => {
+                    // lui x5, address_pos.offset >> 12 + (sign adjustment)
+                    encoder.encode(.{
+                        .lui = .{ .rd = 5, .imm20 = @truncate((address_pos.offset >> 12) + ((address_pos.offset >> 11) & 1)) },
+                    });
+                    // addi x5, (address_pos.offset & 0xfff)
+                    encoder.encode(.{
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(address_pos.offset & 0xfff) },
+                    });
+                    // add x6, sp, x5
+                    encoder.encode(.{
+                        .add = .{ .rd = 6, .rs1 = 2, .rs2 = 5 },
+                    });
+                    // auipc x7, pc
+                    encoder.encode(.{
+                        .auipc = .{ .rd = 7, .imm20 = 0 },
+                    });
+                    // lw x5, [x7 + 20] (self_address)
+                    encoder.encode(.{
+                        .lw = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
+                    });
+                    // sw [x6], x5
+                    encoder.encode(.{
+                        .sw = .{ .rs1 = 6, .rs2 = 5, .imm12_4_0 = 0, .imm12_11_5 = 0 },
+                    });
+                    // lw x5, [x7 + 24] (trampoline_address)
+                    encoder.encode(.{
+                        .lw = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 1 },
+                    });
+                    // jmp [x5]
+                    encoder.encode(.{
+                        .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
+                    });
+                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = trampoline_address });
+                },
                 else => @compileError("No support for '" ++ @tagName(builtin.target.cpu.arch) ++ "'"),
             }
         }
@@ -533,7 +568,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                 ),
                 .riscv32, .riscv64 => asm volatile (asm_code
                     :
-                    : [arg] "{x5}" (ptr),
+                    : [arg] "{x6}" (ptr),
                 ),
                 .powerpc64le => asm volatile (
                 // actual nop's would get reordered for some reason despite the use of "volatile"
@@ -662,7 +697,8 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 if (prev_index != null) break;
                                 const old_pc: isize = @bitCast(@intFromPtr(&instrs[i]));
                                 const new_pc: usize = @bitCast(old_pc + bl.imm26 * 4);
-                                instrs = @ptrFromInt(new_pc);
+                                // subtract @sizeOf(u32) to account for the while loop's (i += 1)
+                                instrs = @ptrFromInt(new_pc - @sizeOf(u32));
                                 prev_index = i;
                                 i = 0;
                             } else if (match(Instruction.RET, instr)) |_| {
@@ -675,13 +711,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     }
                 },
                 .riscv32, .riscv64 => {
-                    const instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
+                    var instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
                     const nop: u16 = @bitCast(Instruction.NOP.C{});
+                    const sp = 2;
                     var registers = [1]isize{0} ** 32;
+                    var prev_index: ?usize = null;
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            index = registers[5];
+                            index = registers[6];
                             break;
                         } else if (instrs[i] & 3 == 3) {
                             const instr32_ptr: *align(@alignOf(u16)) const u32 = @ptrCast(&instrs[i]);
@@ -690,6 +728,17 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             if (match(Instruction.ADDI, instr)) |addi| {
                                 const amount: isize = addi.imm12;
                                 registers[addi.rd] = registers[addi.rs] + amount;
+                            } else if (match(Instruction.AUIPC, instr)) |auipc| {
+                                const pc: isize = @bitCast(@intFromPtr(&instrs[i - 1]));
+                                registers[auipc.rd] = pc + (@as(isize, auipc.imm20) << 12);
+                            } else if (match(Instruction.JALR, instr)) |jalr| {
+                                if (prev_index != null) break;
+                                // jump to outlined section
+                                const new_pc: usize = @bitCast(registers[jalr.rs] + jalr.imm12);
+                                // subtract @sizeOf(u16) to account for the while loop's (i += 1)
+                                instrs = @ptrFromInt(new_pc - @sizeOf(u16));
+                                prev_index = i;
+                                i = 0;
                             }
                         } else {
                             const instr = instrs[i];
@@ -718,7 +767,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     .@"63:9" = addisp.imm_9,
                                 };
                                 const amount: isize = @bitCast(int);
-                                registers[2] = registers[2] + amount;
+                                registers[sp] = registers[sp] + amount;
+                            } else if (match(Instruction.JALR.C, instr)) |_| {
+                                // return from outlined section
+                                // this check need to happen before the one for ADD.C since
+                                // JALR.C looks like ADD.C with rs = 0
+                                if (prev_index == null) break;
+                                instrs = @ptrCast(@alignCast(ptr));
+                                i = prev_index.?;
                             } else if (match(Instruction.ADD.C, instr)) |add| {
                                 // compressed form of ADD is actual a MOV
                                 registers[add.rd] = registers[add.rs];
@@ -2376,10 +2432,25 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rs: u5,
             imm12: i12,
         };
+        pub const LW = packed struct(u32) {
+            @"6:0": u7 = 0b0000_011,
+            rd: u5,
+            @"14:12": u3 = 0b010,
+            rs: u5,
+            imm12: i12,
+        };
         pub const SD = packed struct(u32) {
             @"6:0": u7 = 0b0100_011,
             imm12_4_0: u5,
             @"14:12": u3 = 0b011,
+            rs1: u5,
+            rs2: u5,
+            imm12_11_5: i7,
+        };
+        pub const SW = packed struct(u32) {
+            @"6:0": u7 = 0b0100_011,
+            imm12_4_0: u5,
+            @"14:12": u3 = 0b010,
             rs1: u5,
             rs2: u5,
             imm12_11_5: i7,
@@ -2398,6 +2469,20 @@ const Instruction = switch (builtin.target.cpu.arch) {
             @"14:0": u3 = 0b000,
             rs: u5,
             imm12: i12,
+
+            pub const C = packed struct(u16) {
+                @"6:0": u7 = 0b0000010,
+                rs1: u5,
+                @"15:12": u4 = 0b1000,
+            };
+        };
+        pub const JAL = packed struct(u32) {
+            @"6:0": u7 = 0b1101_111,
+            rd: u5,
+            @"offset19:12": u8,
+            offset11: u1,
+            @"offset10:1": u10,
+            offset20: u1,
         };
         pub const NOP = packed struct(u32) {
             @"31:0": u32 = 0b0000_0000_0000_0000_0000_0000_0001_0011,
@@ -2411,7 +2496,10 @@ const Instruction = switch (builtin.target.cpu.arch) {
         lui: LUI,
         auipc: AUIPC,
         ld: LD,
+        lw: LW,
         sd: SD,
+        sw: SW,
+        add: ADD,
         sub: SUB,
         jalr: JALR,
         literal: usize,
