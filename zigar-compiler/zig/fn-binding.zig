@@ -617,10 +617,12 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     }
                 },
                 .aarch64 => {
-                    const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
+                    var instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     const nop: u32 = @bitCast(Instruction.NOP{});
                     var registers = [1]isize{0} ** 32;
-                    for (0..65536) |i| {
+                    var prev_index: ?usize = null;
+                    var i: usize = 0;
+                    while (i < 65536) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
                             index = registers[9];
                             break;
@@ -655,6 +657,19 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     stack_offset = registers[@"and".rn];
                                     registers[31] = 0;
                                 }
+                            } else if (match(Instruction.BL, instr)) |bl| {
+                                // jump to outlined section
+                                if (prev_index != null) break;
+                                const old_pc: isize = @bitCast(@intFromPtr(&instrs[i]));
+                                const new_pc: usize = @bitCast(old_pc + bl.imm26 * 4);
+                                instrs = @ptrFromInt(new_pc);
+                                prev_index = i;
+                                i = 0;
+                            } else if (match(Instruction.RET, instr)) |_| {
+                                // return from outlined section
+                                if (prev_index == null) break;
+                                instrs = @ptrCast(@alignCast(ptr));
+                                i = prev_index.?;
                             }
                         }
                     }
@@ -666,7 +681,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
-                            std.debug.print("registers: {d}\n", .{registers});
                             index = registers[5];
                             break;
                         } else if (instrs[i] & 3 == 3) {
@@ -1234,6 +1248,110 @@ test "Binding ([3]i32 x 1 + [12]f64 x 1)" {
     defer _ = Add.unbind(ea.allocator(), bf);
     const sum = bf(.{ 10, 20, 30 });
     try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+}
+
+test "Binding (*i8 x 3 + *i8 x 1)" {
+    const T = i8;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Set.bind(ea.allocator(), ns.set, vars);
+    defer _ = Set.unbind(ea.allocator(), bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "Binding (*i16 x 3 + *i16 x 1)" {
+    const T = i16;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Set.bind(ea.allocator(), ns.set, vars);
+    defer _ = Set.unbind(ea.allocator(), bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "Binding (*i32 x 3 + *i32 x 1)" {
+    const T = i32;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Set.bind(ea.allocator(), ns.set, vars);
+    defer _ = Set.unbind(ea.allocator(), bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "Binding (*i64 x 3 + *i64 x 1)" {
+    const T = i64;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
+    var ea = executable();
+    const bf = try Set.bind(ea.allocator(), ns.set, vars);
+    defer _ = Set.unbind(ea.allocator(), bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
@@ -2180,6 +2298,15 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rn: u5,
             @"31:10": u22 = 0b1101_0110_0001_1111_0000_00,
         };
+        pub const BL = packed struct(u32) {
+            imm26: i26,
+            @"31:26": u6 = 0b100101,
+        };
+        pub const RET = packed struct(u32) {
+            rm: u5 = 0,
+            rn: u5,
+            @"31:10": u22 = 0b1101011001011111000000,
+        };
         pub const NOP = packed struct(u32) {
             @"31:0": u32 = 0b1101_0101_0000_0011_0010_0000_0001_1111,
         };
@@ -2427,7 +2554,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
 
         pub fn getNearestIMM12(value: u32) u12 {
             const last_one_pos: u32 = @ctz(value & ~@as(u32, 0xff));
-            const rotations: u32 = (32 - last_one_pos + 1) >> 1;
+            const rotations: u32 = (32 - last_one_pos + 1) / 2;
             if (rotations == 0) return @intCast(value);
             const shl: u5 = @intCast(rotations * 2);
             const shr: u5 = @intCast(32 - rotations * 2);
