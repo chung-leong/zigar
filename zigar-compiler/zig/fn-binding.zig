@@ -601,7 +601,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             if (attrs.pushes) {
                                 registers[sp] -= if (attrs.affects_all) size_all else size_one;
                             } else if (attrs.pops) {
-                                registers[sp] -= if (attrs.affects_all) size_all else size_one;
+                                registers[sp] += if (attrs.affects_all) size_all else size_one;
                             }
                         }
                     }
