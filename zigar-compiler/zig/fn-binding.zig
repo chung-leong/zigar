@@ -441,25 +441,35 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     });
                 },
                 .arm => {
-                    const offset_amount: u32 = @abs(address_pos.offset);
-                    const base_offset = Instruction.getNearestIMM12(offset_amount);
-                    const remainder = offset_amount - Instruction.decodeIMM12(base_offset);
-                    const displacement = Instruction.getNearestIMM12(remainder);
-                    // sub r5, sp, offset
+                    const total_amount: u32 = @abs(address_pos.offset);
+                    const offset1 = Instruction.getNearestIMM12(total_amount);
+                    const remainder = total_amount - Instruction.decodeIMM12(offset1);
+                    const offset2 = Instruction.getNearestIMM12(remainder);
+                    // sub r5, sp, offset1
                     encoder.encode(.{
                         .sub = .{
                             .rd = 5,
                             .rn = 13,
-                            .imm12 = base_offset,
+                            .imm12 = offset1,
                         },
                     });
+                    if (offset2 > 0) {
+                        // sub r5, sp, offset2
+                        encoder.encode(.{
+                            .sub = .{
+                                .rd = 5,
+                                .rn = 5,
+                                .imm12 = offset2,
+                            },
+                        });
+                    }
                     // ldr r4, [pc + 8] (self_address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
                     });
                     // str [r5], r4
                     encoder.encode(.{
-                        .str = .{ .rn = 5, .rt = 4, .imm12 = displacement },
+                        .str = .{ .rn = 5, .rt = 4, .imm12 = 0 },
                     });
                     // ldr r4, [pc + 4] (trampoline_address)
                     encoder.encode(.{
