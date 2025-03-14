@@ -1236,7 +1236,7 @@ const Abi = struct {
                     },
                 },
             },
-            .riscv64 => .{
+            .riscv32, .riscv64 => .{
                 .int = .{
                     .type = i64,
                     .available_registers = 8, // a0 - a7
