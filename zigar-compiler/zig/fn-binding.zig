@@ -295,7 +295,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{ .literal = self_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
-                .riscv64 => {
+                .riscv32, .riscv64 => {
                     const offset = -address_pos.offset;
                     // lui x5, offset >> 12 + (sign adjustment)
                     encoder.encode(.{
@@ -482,7 +482,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{ .literal = self_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
-                else => unreachable,
+                else => @compileError("No support for '" ++ @tagName(builtin.target.cpu.arch) ++ "'"),
             }
         }
 
@@ -531,7 +531,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     :
                     : [arg] "{x9}" (ptr),
                 ),
-                .riscv64 => asm volatile (asm_code
+                .riscv32, .riscv64 => asm volatile (asm_code
                     :
                     : [arg] "{x5}" (ptr),
                 ),
@@ -659,13 +659,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         }
                     }
                 },
-                .riscv64 => {
+                .riscv32, .riscv64 => {
                     const instrs: [*]const u16 = @ptrCast(@alignCast(ptr));
                     const nop: u16 = @bitCast(Instruction.NOP.C{});
                     var registers = [1]isize{0} ** 32;
                     var i: usize = 0;
                     while (i < 131072) : (i += 1) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
+                            std.debug.print("registers: {d}\n", .{registers});
                             index = registers[5];
                             break;
                         } else if (instrs[i] & 3 == 3) {
@@ -679,26 +680,28 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         } else {
                             const instr = instrs[i];
                             if (match(Instruction.ADDI.C, instr)) |addi| {
+                                const IntRemaining = std.meta.Int(.signed, @bitSizeOf(isize) - 5);
                                 const int: packed struct(isize) {
-                                    @"0:4": u5,
-                                    @"5:63": i59,
-                                } = .{ .@"0:4" = addi.nzimm_0_4, .@"5:63" = -@as(i55, addi.nzimm_5) };
+                                    @"4:0": u5,
+                                    @"63:5": IntRemaining,
+                                } = .{ .@"4:0" = addi.nzimm_0_4, .@"63:5" = addi.nzimm_5 };
                                 const amount: isize = @bitCast(int);
                                 registers[addi.rd] = registers[addi.rd] + amount;
                             } else if (match(Instruction.ADDI.C.SP, instr)) |addisp| {
+                                const IntRemaining = std.meta.Int(.signed, @bitSizeOf(isize) - 9);
                                 const int: packed struct(isize) {
-                                    @"0:3": u4 = 0,
+                                    @"3:0": u4 = 0,
                                     @"4": u1,
                                     @"5": u1,
                                     @"6": u1,
-                                    @"7:8": u2,
-                                    @"9:63": i55,
+                                    @"8:7": u2,
+                                    @"63:9": IntRemaining,
                                 } = .{
                                     .@"5" = @intCast((addisp.nzimm_46875 >> 0) & 0x01),
-                                    .@"7:8" = @intCast((addisp.nzimm_46875 >> 1) & 0x03),
+                                    .@"8:7" = @intCast((addisp.nzimm_46875 >> 1) & 0x03),
                                     .@"6" = @intCast((addisp.nzimm_46875 >> 3) & 0x01),
                                     .@"4" = @intCast((addisp.nzimm_46875 >> 4) & 0x01),
-                                    .@"9:63" = addisp.imm_9,
+                                    .@"63:9" = addisp.imm_9,
                                 };
                                 const amount: isize = @bitCast(int);
                                 registers[2] = registers[2] + amount;
@@ -2190,7 +2193,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
         br: BR,
         literal: usize,
     },
-    .riscv64 => union(enum) {
+    .riscv32, .riscv64 => union(enum) {
         pub const ADDI = packed struct(u32) {
             @"6:0": u7 = 0b0010_011,
             rd: u5,
@@ -2202,7 +2205,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
                 @"1:0": u2 = 0b01,
                 nzimm_0_4: u5,
                 rd: u5,
-                nzimm_5: u1,
+                nzimm_5: i1,
                 @"15:13": u3 = 0b000,
 
                 pub const SP = packed struct(u16) {
