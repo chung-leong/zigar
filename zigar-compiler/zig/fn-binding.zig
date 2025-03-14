@@ -238,7 +238,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 .shift = 0,
                             },
                         });
-
                         // sub x10, sp, -address_pos.stack_offset
                         encoder.encode(.{
                             .sub = .{
@@ -693,19 +692,24 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                     registers[31] = 0;
                                 }
                             } else if (match(Instruction.BL, instr)) |bl| {
-                                // jump to outlined section
-                                if (prev_index != null) break;
-                                const old_pc: isize = @bitCast(@intFromPtr(&instrs[i]));
-                                const new_pc: usize = @bitCast(old_pc + bl.imm26 * 4);
-                                // subtract @sizeOf(u32) to account for the while loop's (i += 1)
-                                instrs = @ptrFromInt(new_pc - @sizeOf(u32));
-                                prev_index = i;
-                                i = 0;
+                                if (builtin.mode == .ReleaseSmall) {
+                                    // jump to outlined section (happen only when optimizing for size)
+                                    if (prev_index != null) break;
+                                    const old_pc: isize = @bitCast(@intFromPtr(&instrs[i]));
+                                    const new_pc: usize = @bitCast(old_pc + bl.imm26 * 4);
+                                    // subtract @sizeOf(u32) to account for the while loop's (i += 1)
+                                    instrs = @ptrFromInt(new_pc - @sizeOf(u32));
+                                    prev_index = i;
+                                    i = 0;
+                                }
                             } else if (match(Instruction.RET, instr)) |_| {
-                                // return from outlined section
-                                if (prev_index == null) break;
-                                instrs = @ptrCast(@alignCast(ptr));
-                                i = prev_index.?;
+                                if (builtin.mode == .ReleaseSmall) {
+                                    // return from outlined section
+                                    if (prev_index == null) break;
+                                    instrs = @ptrCast(@alignCast(ptr));
+                                    i = prev_index.?;
+                                    prev_index = null;
+                                }
                             }
                         }
                     }
@@ -729,16 +733,20 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 const amount: isize = addi.imm12;
                                 registers[addi.rd] = registers[addi.rs] + amount;
                             } else if (match(Instruction.AUIPC, instr)) |auipc| {
-                                const pc: isize = @bitCast(@intFromPtr(&instrs[i - 1]));
-                                registers[auipc.rd] = pc + (@as(isize, auipc.imm20) << 12);
+                                if (builtin.mode == .ReleaseSmall) {
+                                    const pc: isize = @bitCast(@intFromPtr(&instrs[i - 1]));
+                                    registers[auipc.rd] = pc + (@as(isize, auipc.imm20) << 12);
+                                }
                             } else if (match(Instruction.JALR, instr)) |jalr| {
-                                if (prev_index != null) break;
-                                // jump to outlined section
-                                const new_pc: usize = @bitCast(registers[jalr.rs] + jalr.imm12);
-                                // subtract @sizeOf(u16) to account for the while loop's (i += 1)
-                                instrs = @ptrFromInt(new_pc - @sizeOf(u16));
-                                prev_index = i;
-                                i = 0;
+                                if (builtin.mode == .ReleaseSmall) {
+                                    // jump to outlined section (happen only when optimizing for size)
+                                    if (prev_index != null) break;
+                                    const new_pc: usize = @bitCast(registers[jalr.rs] + jalr.imm12);
+                                    // subtract @sizeOf(u16) to account for the while loop's (i += 1)
+                                    instrs = @ptrFromInt(new_pc - @sizeOf(u16));
+                                    prev_index = i;
+                                    i = 0;
+                                }
                             }
                         } else {
                             const instr = instrs[i];
@@ -769,12 +777,15 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                                 const amount: isize = @bitCast(int);
                                 registers[sp] = registers[sp] + amount;
                             } else if (match(Instruction.JALR.C, instr)) |_| {
-                                // return from outlined section
-                                // this check need to happen before the one for ADD.C since
-                                // JALR.C looks like ADD.C with rs = 0
-                                if (prev_index == null) break;
-                                instrs = @ptrCast(@alignCast(ptr));
-                                i = prev_index.?;
+                                if (builtin.mode == .ReleaseSmall) {
+                                    // return from outlined section
+                                    // this check need to happen before the one for ADD.C since
+                                    // JALR.C looks like ADD.C with rs = 0
+                                    if (prev_index == null) break;
+                                    instrs = @ptrCast(@alignCast(ptr));
+                                    i = prev_index.?;
+                                    prev_index = null;
+                                }
                             } else if (match(Instruction.ADD.C, instr)) |add| {
                                 // compressed form of ADD is actual a MOV
                                 registers[add.rd] = registers[add.rs];
