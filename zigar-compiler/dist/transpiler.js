@@ -187,7 +187,7 @@ const TYPED_ARRAY = symbol('typed array');
 const THROWING = symbol('throwing');
 const PROMISE = symbol('promise');
 const GENERATOR = symbol('generator');
-const ALLOCATOR$1 = symbol('allocator');
+const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
 
 const UPDATE = symbol('update');
@@ -1294,7 +1294,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigArgs: zigArgsStr = '',
     multithreaded = (isWASM) ? false : true,
     stackSize = 256 * 1024,
-    maxMemory = (isWASM && multithreaded) ? 16 * 1024 * 1024 : undefined,
+    maxMemory = (isWASM && multithreaded) ? 64 * 1024 * 1024 : undefined,
     evalBranchQuota = 2000000,
     omitFunctions = false,
     omitVariables = false,
@@ -3189,7 +3189,7 @@ var callMarshalingInbound = mixin({
             if (structure.type === StructureType.Struct) {
               if (structure.flags & StructFlag.IsAllocator) {
                 optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = this[ALLOCATOR$1] = arg;
+                opt = this[ALLOCATOR] = arg;
               } else if (structure.flags & StructFlag.IsPromise) {
                 optName = 'callback';
                 if (++callbackCount === 1) {
@@ -3257,12 +3257,6 @@ var callMarshalingInbound = mixin({
       destroyJsThunk: { argType: 'ii', returnType: 'i' },
       finalizeAsyncCall: { argType: 'ii' },
     },
-    queueJsAction(action, id, argAddress, argSize, futexHandle) {
-      // in the main thread, this method is never called from WASM;
-      // the implementation of queueJsAction() in worker.js, call this
-      // through postMessage() when it is called the worker's WASM instance
-      this.performJsAction(action, id, argAddress, argSize, futexHandle);
-    },
   } ),
 });
 
@@ -3279,7 +3273,7 @@ var callMarshalingOutbound = mixin({
       }
       // `this` is present when running a promise and generator callback received from a inbound call
       // it's going to be the argument struct of that call
-      const argStruct = new ArgStruct(args, this?.[ALLOCATOR$1]);
+      const argStruct = new ArgStruct(args, this?.[ALLOCATOR]);
       {
         try {
           return thisEnv.invokeThunk(thunk, self, argStruct);
@@ -6438,7 +6432,7 @@ var argStruct = mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArgStruct(members);
     descriptors[RETURN] = defineValue(function(value) {
       // pass allocator associated with argument to setter
-      retvalSetter.call(this, value, this[ALLOCATOR$1]);
+      retvalSetter.call(this, value, this[ALLOCATOR]);
     });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
@@ -7520,7 +7514,6 @@ function isCompatiblePointer(arg, Target, flags) {
 const constProxies = new WeakMap();
 
 function getConstProxy(target) {
-  if (!target) return null;
   let proxy = constProxies.get(target);
   if (!proxy) {
     const pointer = target[POINTER];

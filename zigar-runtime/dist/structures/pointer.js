@@ -365,7 +365,6 @@ function isCompatiblePointer(arg, Target, flags) {
 const constProxies = new WeakMap();
 
 function getConstProxy(target) {
-  if (!target) return null;
   let proxy = constProxies.get(target);
   if (!proxy) {
     const pointer = target[POINTER];
