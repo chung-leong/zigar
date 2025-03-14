@@ -2426,14 +2426,19 @@ const Instruction = switch (builtin.target.cpu.arch) {
             const last_one_pos: u32 = @ctz(value & ~@as(u32, 0xff));
             const rotations: u32 = (32 - last_one_pos + 1) >> 1;
             if (rotations == 0) return @intCast(value);
-            const bits = value >> @intCast((32 - (2 * rotations))) & 0xff;
-            return @intCast(rotations << 8 | bits);
+            const shl: u5 = @intCast(rotations * 2);
+            const shr: u5 = @intCast(32 - rotations * 2);
+            const bits = (value << shl) | (value >> shr);
+            return @intCast((rotations << 8) | (bits & 0xff));
         }
 
         pub fn decodeIMM12(encoded: u12) u32 {
-            const rotations: u32 = encoded >> 8;
             const bits: u32 = encoded & 0xff;
-            return if (rotations > 0) bits << @intCast((32 - (2 * rotations))) else bits;
+            const rotations: u32 = encoded >> 8;
+            if (rotations == 0) return bits;
+            const shl: u5 = @intCast(rotations * 2);
+            const shr: u5 = @intCast(32 - rotations * 2);
+            return (bits >> shl) | (bits << shr);
         }
     },
     else => void,
