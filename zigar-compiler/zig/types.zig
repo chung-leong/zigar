@@ -2580,6 +2580,11 @@ test "WorkQueue" {
         }
 
         pub fn world() void {}
+
+        pub fn shutdown(futex: *std.atomic.Value(u32), _: void) void {
+            futex.store(1, .monotonic);
+            std.Thread.Futex.wake(futex, 1);
+        }
     };
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var queue: WorkQueue(test_ns, struct {}) = .{};
@@ -2589,9 +2594,10 @@ test "WorkQueue" {
     try queue.push(test_ns.world, .{}, null);
     std.time.sleep(1e+8);
     try expect(test_ns.total == 123 + 456);
-    queue.deinit();
+    var futex: std.atomic.Value(u32) = .init(0);
+    queue.deinitAsync(.init(&futex, test_ns.shutdown));
     // wait for thread shutdown
-    std.time.sleep(1e+6);
+    std.Thread.Futex.wait(&futex, 0);
 }
 
 fn expectCT(comptime value: bool) !void {
