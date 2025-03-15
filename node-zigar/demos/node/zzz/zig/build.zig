@@ -3,6 +3,10 @@ const builtin = @import("builtin");
 const cfg = @import("build-cfg.zig");
 
 pub fn build(b: *std.Build) void {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
+        @compileError("Unsupported Zig version");
+    }
+    const host_type = if (cfg.is_wasm) "wasm" else "napi";
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
@@ -41,6 +45,7 @@ pub fn build(b: *std.Build) void {
         lib.wasi_exec_model = .reactor;
         lib.import_memory = true;
         lib.import_table = true;
+        lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     }
     const options = b.addOptions();

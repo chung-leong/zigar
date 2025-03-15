@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .zzz = .{
-            .url = "https://github.com/mookums/zzz/archive/refs/heads/main.zip",
-            .hash = "1220a11b4b349663170cdfe2feaa147080023f899a5d5b4bb6cb0244dd12f7b4415b",
+            .url = "https://github.com/tardy-org/zzz/archive/90cc62494644e7234efd85ab1df5d65440f9eead.zip",
+            .hash = "zzz-0.3.0-4HoaJqpQAgDgcImt8cC2cpT59J25JNDynMDt4qLaXDYK",
         },
     },
     .paths = .{
