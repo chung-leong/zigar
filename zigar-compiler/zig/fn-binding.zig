@@ -386,16 +386,20 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         .imm32 = self_address,
                     });
                     if (address_pos.stack_align_mask) |mask| {
+                        // push ecx
+                        encoder.encode(.{
+                            .opcode = .@"push cx",
+                        });
                         // mov ecx, esp
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 1, .mod = 3, .reg = 4 },
                         });
-                        // add esp, address_pos.stack_offset
+                        // add esp, address_pos.stack_offset + 4 (to offset the earlier push)
                         encoder.encode(.{
                             .opcode = .@"add/or/etc r/m imm32",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
+                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset + 4))),
                         });
                         // and esp, mask
                         encoder.encode(.{
@@ -425,6 +429,10 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 1 },
+                        });
+                        // pop ecx
+                        encoder.encode(.{
+                            .opcode = .@"pop cx",
                         });
                     }
                     // mov eax, trampoline_address
