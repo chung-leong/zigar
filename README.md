@@ -8,6 +8,10 @@ projects.
 Consult the [project wiki](https://github.com/chung-leong/zigar/wiki) for installation instructions
 and tutorials.
 
+## <span style="color: red">Upcoming Release</span>
+
+Version 1.4 is not yet available. It will be released in the coming days. Stay tuned!
+
 ## Features
 
 * Access to all Zig data types in JavaScript
