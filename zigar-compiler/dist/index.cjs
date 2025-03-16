@@ -953,7 +953,6 @@ function createConfig(srcPath, modPath, options = {}) {
   const modulePath = (src.name !== '?') ? srcPath : undefined;
   const moduleDir = src.dir + path.sep;
   const modulePrefix = path.basename(moduleName).slice(0, 16);
-  console.log({ sha1: sha1(moduleDir), moduleDir });
   const moduleHash = sha1(moduleDir).slice(0, 8);
   const moduleBuildDir = path.join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {

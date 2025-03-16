@@ -43,7 +43,6 @@ import {
   ZigMemoryTargetRequired,
   adjustArgumentError,
   article,
-  deanimalizeErrorName,
   formatList,
   getDescription,
   replaceRangeError,
@@ -667,28 +666,6 @@ describe('Error functions', function() {
       expect(err1.message).to.contain('hello');
       const err2 = replaceRangeError(member, 5, new TypeError);
       expect(err2).to.be.instanceOf(TypeError);
-    })
-  })
-  describe('deanimalizeErrorName', function() {
-    it('should turn error name into readable sentence', function() {
-      const name = 'UnableToRetrieveMemoryLocation';
-      const result = deanimalizeErrorName(name);
-      expect(result).to.equal('Unable to retrieve memory location');
-    })
-    it('should handle error name in snake_cast', function() {
-      const name = 'unable_to_retrieve_memory_location';
-      const result = deanimalizeErrorName(name);
-      expect(result).to.equal('Unable to retrieve memory location');
-    })
-    it('should decamelize error names containing acronyms correctly', function() {
-      const name = 'SQLiteCantOpenFullPath';
-      const result = deanimalizeErrorName(name);
-      expect(result).to.equal('SQLite cant open full path');
-    })
-    it('should keep acronyms in uppercase', function() {
-      const name = 'InvalidHTML';
-      const result = deanimalizeErrorName(name);
-      expect(result).to.equal('Invalid HTML');
     })
   })
   describe('article', function() {
