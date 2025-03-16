@@ -135,8 +135,8 @@ export async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
 }
 
-export function md5(text) {
-  const hash = createHash('md5');
+export function sha1(text) {
+  const hash = createHash('sha1');
   hash.update(text);
   return hash.digest('hex');
 }

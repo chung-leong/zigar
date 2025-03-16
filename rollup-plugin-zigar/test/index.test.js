@@ -102,7 +102,7 @@ describe('Loader', function() {
 })
 
 async function transpile(path, options = {}) {
-  const hash = await md5(path);
+  const hash = await sha1(path);
   const jsPath = join(tmpdir(), 'rollup-test', `${hash}.mjs`);
   const inputOptions = {
     input: path,
@@ -127,9 +127,9 @@ async function transpile(path, options = {}) {
   return code;
 }
 
-async function md5(text) {
+async function sha1(text) {
   const { createHash } = await import('crypto');
-  const hash = createHash('md5');
+  const hash = createHash('sha1');
   hash.update(text);
   return hash.digest('hex');
 }

@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "zigar", .module = zigar },
     };
     const mod = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.module_dir ++ "/integers.zig" },
+        .root_source_file = .{ .cwd_relative = cfg.module_dir ++ "integers.zig" },
         .imports = &imports,
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });

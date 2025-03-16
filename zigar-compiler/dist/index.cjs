@@ -633,8 +633,8 @@ async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
 }
 
-function md5(text) {
-  const hash = crypto.createHash('md5');
+function sha1(text) {
+  const hash = crypto.createHash('sha1');
   hash.update(text);
   return hash.digest('hex');
 }
@@ -782,16 +782,16 @@ async function compile(srcPath, modPath, options) {
   if (srcPath) {
     // add custom build file
     try {
-      const path$1 = path.join(moduleDir, 'build.zig');
-      await fs.stat(path$1);
-      config.buildFilePath = path$1;
+      const path = moduleDir + 'build.zig';
+      await fs.stat(path);
+      config.buildFilePath = path;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
-      const path$1 = path.join(moduleDir, 'build.zig.zon');
-      await fs.stat(path$1);
-      config.packageConfigPath = path$1;
+      const path = moduleDir + 'build.zig.zon';
+      await fs.stat(path);
+      config.packageConfigPath = path;
     } catch (err) {
     }
     const { zigPath, zigArgs, moduleBuildDir } = config;
@@ -923,7 +923,7 @@ function getModuleCachePath(srcPath, options) {
     optimize,
   } = options;
   const src = path.parse(srcPath);
-  const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + sha1(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
   return path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
@@ -951,9 +951,10 @@ function createConfig(srcPath, modPath, options = {}) {
   const mod = path.parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
-  const moduleDir = src.dir;
+  const moduleDir = src.dir + path.sep;
   const modulePrefix = path.basename(moduleName).slice(0, 16);
-  const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
+  console.log({ sha1: sha1(moduleDir), moduleDir });
+  const moduleHash = sha1(moduleDir).slice(0, 8);
   const moduleBuildDir = path.join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {

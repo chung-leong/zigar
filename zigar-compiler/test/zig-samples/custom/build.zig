@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
     });
     const number = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = cfg.module_dir ++ "/modules/number.zig" },
+        .root_source_file = .{ .cwd_relative = cfg.module_dir ++ "modules/number.zig" },
     });
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
