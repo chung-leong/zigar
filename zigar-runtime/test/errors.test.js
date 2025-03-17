@@ -43,6 +43,7 @@ import {
   ZigMemoryTargetRequired,
   adjustArgumentError,
   article,
+  deanimalizeErrorName,
   formatList,
   getDescription,
   replaceRangeError,
@@ -668,7 +669,29 @@ describe('Error functions', function() {
       expect(err2).to.be.instanceOf(TypeError);
     })
   })
-  describe('article', function() {
+  describe('deanimalizeErrorName', function() {
+    it('should turn error name into readable sentence', function() {
+      const name = 'UnableToRetrieveMemoryLocation';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('Unable to retrieve memory location');
+    })
+    it('should handle error name in snake_cast', function() {
+      const name = 'unable_to_retrieve_memory_location';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('Unable to retrieve memory location');
+    })
+    it('should decamelize error names containing acronyms correctly', function() {
+      const name = 'SQLiteCantOpenFullPath';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('SQLite cant open full path');
+    })
+    it('should keep acronyms in uppercase', function() {
+      const name = 'InvalidHTML';
+      const result = deanimalizeErrorName(name);
+      expect(result).to.equal('Invalid HTML');
+    })
+  })
+   describe('article', function() {
     it('should return an when noun starts with a vowel', function() {
       expect(article('apple')).to.equal('an');
       expect(article('[apple]')).to.equal('an');
