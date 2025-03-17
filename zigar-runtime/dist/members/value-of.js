@@ -1,6 +1,7 @@
 import { StructureType, StructFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TYPE, ENTRIES, FLAGS } from '../symbols.js';
+import { getErrorHandler } from '../utils.js';
 
 var valueOf = mixin({
   defineValueOf() {
@@ -16,15 +17,8 @@ const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
 function normalizeObject(object, forJSON) {
-  const handleError = (forJSON)
-  ? (cb) => {
-      try {
-        return cb();
-      } catch (err) {
-        return err;
-      }
-    }
-  : (cb) => cb();
+  const options = { error: (forJSON) ? 'return' : 'throw' };
+  const handleError = getErrorHandler(options);
   const resultMap = new Map();
   const process = function(value) {
     // handle type (i.e. constructor) like a struct
@@ -44,11 +38,11 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-          entries = value[ENTRIES]();
+          entries = value[ENTRIES](options);
           result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Union:
-          entries = value[ENTRIES]();
+          entries = value[ENTRIES](options);
           result = {};
           break;
         case StructureType.Array:
