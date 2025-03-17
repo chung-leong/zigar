@@ -281,25 +281,25 @@ export default mixin({
       if (!address && len) {
         return null;
       }
+      let buffer, offset;
       if (cache) {
         const index = findMemoryIndex(this.externBufferList, address);
         const entry = this.externBufferList[index - 1];
-        let buffer, offset;
         if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
           buffer = entry.buffer;
           offset = Number(address - entry.address);
         } else {
           // cannot obtain zero-length buffer
           buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-          buffer[ZIG] = { address, len };
           this.externBufferList.splice(index, 0, { address, len, buffer })
           offset = 0;
         }
-        return this.obtainView(buffer, offset, len);  
       } else {
-        const buffer = this.obtainExternBuffer(address, len, FALLBACK);
-        return new DataView(buffer, 0, len);
+        buffer = this.obtainExternBuffer(address, len, FALLBACK);
+        offset = 0;
       }
+      buffer[ZIG] = { address, len };
+      return this.obtainView(buffer, offset, len);  
     },
     unregisterBuffer(address) {
       const index = findMemoryIndex(this.externBufferList, address);
