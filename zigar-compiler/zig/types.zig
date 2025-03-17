@@ -2291,8 +2291,8 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         status: Status = .uninitialized,
         init_remaining: usize = undefined,
         init_futex: std.atomic.Value(u32) = undefined,
-        init_result: ThreadStartError!void = undefined,
-        init_promise: ?Promise(ThreadStartError!void) = undefined,
+        init_result: WaitResult = undefined,
+        init_promise: ?Promise(WaitResult) = undefined,
         deinit_promise: ?Promise(void) = undefined,
 
         pub const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
@@ -2382,12 +2382,12 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             self.status = .initialized;
         }
 
-        pub fn wait(self: *@This()) ThreadStartError!void {
+        pub fn wait(self: *@This()) WaitResult {
             std.Thread.Futex.wait(&self.init_futex, 0);
             return self.init_result;
         }
 
-        pub fn waitAsync(self: *@This(), promise: Promise(ThreadStartError!void)) void {
+        pub fn waitAsync(self: *@This(), promise: Promise(WaitResult)) void {
             if (self.init_futex.load(.acquire) == 1) {
                 promise.resolve(self.init_result);
             } else {
@@ -2435,6 +2435,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             uninitialized,
             initialized,
             deinitializing,
+        };
+        const WaitResult = switch (ThreadStartError) {
+            error{} => void,
+            else => ThreadStartError!void,
         };
         const WorkItem = init: {
             var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
@@ -2508,9 +2512,9 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             thread_end_params: ThreadEndParams,
         ) void {
             var start_succeeded = true;
-            if (comptime @hasDecl(ns, "onThreadStart")) {
+            if (@hasDecl(ns, "onThreadStart")) {
                 const result = @call(.auto, ns.onThreadStart, thread_start_params);
-                if (comptime ThreadStartError != error{}) {
+                if (ThreadStartError != error{}) {
                     if (result) |_| {} else |err| {
                         self.init_result = err;
                         start_succeeded = false;
@@ -2518,7 +2522,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 }
             }
             if (@atomicRmw(usize, &self.init_remaining, .Sub, 1, .monotonic) == 1) {
-                if (!std.meta.isError(self.init_result)) {
+                if (@typeInfo(WaitResult) != .error_union or !std.meta.isError(self.init_result)) {
                     self.init_futex.store(1, .release);
                     std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
                     if (self.init_promise) |promise| promise.resolve(self.init_result);
@@ -2535,13 +2539,13 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     true => break,
                 }
             }
-            if (comptime @hasDecl(ns, "onThreadEnd")) {
+            if (@hasDecl(ns, "onThreadEnd")) {
                 if (start_succeeded) _ = @call(.auto, ns.onThreadEnd, thread_end_params);
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .monotonic) == 1) {
                 self.queue.deinit();
                 self.status = .uninitialized;
-                if (std.meta.isError(self.init_result)) {
+                if (@typeInfo(WaitResult) == .error_union and std.meta.isError(self.init_result)) {
                     self.init_futex.store(1, .release);
                     std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
                     if (self.init_promise) |promise| promise.resolve(self.init_result);
