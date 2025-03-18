@@ -1985,6 +1985,10 @@ pub fn Promise(comptime T: type) type {
             self.callback(self.ptr, value);
         }
 
+        pub fn any(self: @This()) Promise(anyerror!@typeInfo(T).error_union.payload) {
+            return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
+        }
+
         pub fn partition(self: @This(), allocator: std.mem.Allocator, count: usize) !@This() {
             if (count == 1) {
                 return self;
@@ -2067,9 +2071,15 @@ pub fn Function(comptime arg: anytype) type {
 pub fn PromiseOf(comptime arg: anytype) type {
     const FT = Function(arg);
     const f = @typeInfo(FT).@"fn";
+    return Promise(f.return_type.?);
+}
+
+pub fn PromiseArgOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .promise) break param.type.?;
-    } else Promise(f.return_type.?);
+    } else @compileError("No promise argument: " ++ @typeName(FT));
 }
 
 pub fn Generator(comptime T: type) type {
@@ -2125,21 +2135,28 @@ pub fn Generator(comptime T: type) type {
                 }
             }
         }
+
+        pub fn any(self: @This()) Generator(anyerror!@typeInfo(T).error_union.payload) {
+            return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
+        }
     };
 }
 
 pub fn GeneratorOf(comptime arg: anytype) type {
     const FT = Function(arg);
     const f = @typeInfo(FT).@"fn";
+    return if (IteratorReturnValue(f.return_type.?)) |T|
+        Generator(T)
+    else
+        @compileError("Function does not return an iterator: " ++ @typeName(FT));
+}
+
+pub fn GeneratorArgOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .generator) break param.type.?;
-    } else typedef: {
-        if (IteratorReturnValue(f.return_type.?)) |T| {
-            break :typedef Generator(T);
-        } else {
-            @compileError("Function does not return an iterator: " ++ @typeName(FT));
-        }
-    };
+    } else @compileError("No promise argument: " ++ @typeName(FT));
 }
 
 pub const AbortSignal = struct {
