@@ -3,8 +3,8 @@
     .version = "0.0.0",
     .dependencies = .{
         .raylib = .{
-            .url = "https://github.com/raysan5/raylib/archive/refs/heads/master.zip",
-            .hash = "1220fc14fc3e523cf617d4760c7c329946afb1e181b107204753f260610ab61aa90e",
+            .url = "https://github.com/raysan5/raylib/archive/cd9206956caa774c3ed9df0957b6b3167e5000c7.zip",
+            .hash = "raylib-5.5.0-whq8uKV0zQBqlO6I6eodSUsMeRngbFTt0pYX1z4OvDxO",
         },
     },
     .paths = .{
@@ -12,4 +12,5 @@
         "build.zig.zon",
         "src",
     },
+    .fingerprint = 0x3eff0a2b01df4966,
 }
