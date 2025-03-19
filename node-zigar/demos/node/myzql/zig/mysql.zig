@@ -16,12 +16,12 @@ const DatabaseParams = struct {
 };
 
 var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
 pub fn openDatabase(
     params: DatabaseParams,
-    promise: zigar.function.PromiseOf(@TypeOf(work_queue).waitAsync),
+    promise: zigar.function.PromiseArgOf(@TypeOf(work_queue).waitAsync),
 ) !void {
     try work_queue.init(.{
         .allocator = allocator,
