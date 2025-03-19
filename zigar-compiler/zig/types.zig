@@ -1965,6 +1965,13 @@ test "getInternalType" {
     try expect(getInternalType(AbortSignal) == .abort_signal);
 }
 
+fn Any(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .error_union => |eu| anyerror!eu.payload,
+        else => T,
+    };
+}
+
 pub fn Promise(comptime T: type) type {
     return struct {
         ptr: ?*anyopaque = null,
@@ -1985,7 +1992,7 @@ pub fn Promise(comptime T: type) type {
             self.callback(self.ptr, value);
         }
 
-        pub fn any(self: @This()) Promise(anyerror!@typeInfo(T).error_union.payload) {
+        pub fn any(self: @This()) Promise(Any(T)) {
             return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
         }
 
@@ -2136,7 +2143,7 @@ pub fn Generator(comptime T: type) type {
             }
         }
 
-        pub fn any(self: @This()) Generator(anyerror!@typeInfo(T).error_union.payload) {
+        pub fn any(self: @This()) Generator(Any(T)) {
             return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
         }
     };
