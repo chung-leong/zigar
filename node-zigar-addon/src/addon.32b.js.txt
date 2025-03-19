@@ -1943,7 +1943,7 @@
 "                }\n"
 "            }\n"
 "            t.sort(((t, e) => e.len - t.len));\n"
-"            for (const e of t) if (!e.replaced) for (const n of t) if (e !== n && !n.replaced && !n.handle && e.address <= n.address && n.address < ge(e.address, e.len)) {\n"
+"            for (const e of t) if (!e.replaced) for (const n of t) if (e !== n && !n.replaced && !n.handle && e.address <= n.address && ge(n.address, n.len) <= ge(e.address, e.len)) {\n"
 "                const t = e.owner[it], r = Number(n.address - e.address) + t.byteOffset;\n"
 "                n.owner[it] = this.obtainView(t.buffer, r, n.len), n.replaced = !0;\n"
 "            }\n"

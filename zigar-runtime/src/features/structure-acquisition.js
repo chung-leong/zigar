@@ -174,7 +174,7 @@ export default mixin({
       if (!a.replaced) {
         for (const b of list) {
           if (a !== b && !b.replaced && !b.handle) {
-            if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
+            if (a.address <= b.address && adjustAddress(b.address, b.len) <= adjustAddress(a.address, a.len)) {
               // B is inside A--replace it with a view of A's buffer
               const dvA = a.owner[MEMORY];
               const pos = Number(b.address - a.address) + dvA.byteOffset;
