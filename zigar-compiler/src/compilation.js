@@ -2,12 +2,12 @@ import ChildProcess from 'child_process';
 import { writeFileSync } from 'fs';
 import fs, { readdir, readFile, stat, writeFile } from 'fs/promises';
 import os from 'os';
-import { basename, isAbsolute, join, parse } from 'path';
+import { basename, isAbsolute, join, parse, sep } from 'path';
 import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import {
   acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getDirectoryStats, getPlatform,
-  md5, releaseLock,
+  releaseLock, sha1
 } from './utility-functions.js';
 
 const execFile = promisify(ChildProcess.execFile);
@@ -24,14 +24,14 @@ export async function compile(srcPath, modPath, options) {
   if (srcPath) {
     // add custom build file
     try {
-      const path = join(moduleDir, 'build.zig');
+      const path = moduleDir + 'build.zig';
       await stat(path);
       config.buildFilePath = path;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
-      const path = join(moduleDir, 'build.zig.zon');
+      const path = moduleDir + 'build.zig.zon';
       await stat(path);
       config.packageConfigPath = path;
     } catch (err) {
@@ -165,7 +165,7 @@ export function getModuleCachePath(srcPath, options) {
     optimize,
   } = options;
   const src = parse(srcPath);
-  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const folder = basename(src.dir).slice(0, 16).trim() + '-' + sha1(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
@@ -193,9 +193,9 @@ export function createConfig(srcPath, modPath, options = {}) {
   const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
-  const moduleDir = src.dir;
+  const moduleDir = src.dir + sep;
   const modulePrefix = basename(moduleName).slice(0, 16);
-  const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
+  const moduleHash = sha1(moduleDir).slice(0, 8);
   const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {

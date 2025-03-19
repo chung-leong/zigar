@@ -986,8 +986,8 @@ async function delay(ms) {
   await new Promise(r => setTimeout(r, ms));
 }
 
-function md5(text) {
-  const hash = createHash('md5');
+function sha1(text) {
+  const hash = createHash('sha1');
   hash.update(text);
   return hash.digest('hex');
 }
@@ -1135,14 +1135,14 @@ async function compile(srcPath, modPath, options) {
   if (srcPath) {
     // add custom build file
     try {
-      const path = join(moduleDir, 'build.zig');
+      const path = moduleDir + 'build.zig';
       await stat(path);
       config.buildFilePath = path;
     } catch (err) {
     }
     // add custom package manager manifest
     try {
-      const path = join(moduleDir, 'build.zig.zon');
+      const path = moduleDir + 'build.zig.zon';
       await stat(path);
       config.packageConfigPath = path;
     } catch (err) {
@@ -1275,7 +1275,7 @@ function getModuleCachePath(srcPath, options) {
     optimize,
   } = options;
   const src = parse(srcPath);
-  const folder = basename(src.dir).slice(0, 16).trim() + '-' + md5(src.dir).slice(0, 8);
+  const folder = basename(src.dir).slice(0, 16).trim() + '-' + sha1(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
@@ -1303,9 +1303,9 @@ function createConfig(srcPath, modPath, options = {}) {
   const mod = parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
-  const moduleDir = src.dir;
+  const moduleDir = src.dir + sep;
   const modulePrefix = basename(moduleName).slice(0, 16);
-  const moduleHash = md5(`${moduleDir}/${moduleName}`).slice(0, 8);
+  const moduleHash = sha1(moduleDir).slice(0, 8);
   const moduleBuildDir = join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {
@@ -2977,7 +2977,7 @@ var baseline = mixin({
       connect: (console) => this.consoleObject = console,
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
-      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
+      typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
     };
   },
   recreateStructures(structures, settings) {
@@ -3052,6 +3052,8 @@ var baseline = mixin({
     }
   },
 });
+
+const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
 
 var callMarshalingInbound = mixin({
   init() {
@@ -4738,7 +4740,7 @@ var structureAcquisition = mixin({
       if (!a.replaced) {
         for (const b of list) {
           if (a !== b && !b.replaced && !b.handle) {
-            if (a.address <= b.address && b.address < adjustAddress(a.address, a.len)) {
+            if (a.address <= b.address && adjustAddress(b.address, b.len) <= adjustAddress(a.address, a.len)) {
               // B is inside A--replace it with a view of A's buffer
               const dvA = a.owner[MEMORY];
               const pos = Number(b.address - a.address) + dvA.byteOffset;
@@ -5911,15 +5913,8 @@ const INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 const INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 
 function normalizeObject(object, forJSON) {
-  const handleError = (forJSON)
-  ? (cb) => {
-      try {
-        return cb();
-      } catch (err) {
-        return err;
-      }
-    }
-  : (cb) => cb();
+  const options = { error: (forJSON) ? 'return' : 'throw' };
+  const handleError = getErrorHandler(options);
   const resultMap = new Map();
   const process = function(value) {
     // handle type (i.e. constructor) like a struct
@@ -5939,11 +5934,11 @@ function normalizeObject(object, forJSON) {
       let entries;
       switch (type) {
         case StructureType.Struct:
-          entries = value[ENTRIES]();
+          entries = value[ENTRIES](options);
           result = (value.constructor[FLAGS] & StructFlag.IsTuple) ? [] : {};
           break;
         case StructureType.Union:
-          entries = value[ENTRIES]();
+          entries = value[ENTRIES](options);
           result = {};
           break;
         case StructureType.Array:

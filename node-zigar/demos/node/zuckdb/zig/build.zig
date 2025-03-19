@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("zuckdb");
-    lib.addLibraryPath(.{ .cwd_relative = cfg.module_dir ++ "/../lib" });
+    lib.addLibraryPath(.{ .cwd_relative = cfg.module_dir ++ "../lib" });
     const imports = [_]std.Build.Module.Import{
         .{ .name = "zigar", .module = zigar },
         .{ .name = "zuckdb", .module = zuckdb },

@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     mod.addCSourceFile(.{
-        .file = .{ .cwd_relative = cfg.module_dir ++ std.fs.path.sep_str ++ "donut.c" },
+        .file = .{ .cwd_relative = cfg.module_dir ++ "donut.c" },
         .flags = &.{"-std=c89"},
     });
     lib.root_module.addImport("module", mod);

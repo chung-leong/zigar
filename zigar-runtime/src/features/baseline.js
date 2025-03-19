@@ -17,7 +17,7 @@ export default mixin({
       connect: (console) => this.consoleObject = console,
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
-      typeOf: (T) => structureNames[check(T?.[TYPE])]?.toLowerCase(),
+      typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
     };
   },
   recreateStructures(structures, settings) {
@@ -113,3 +113,5 @@ export default mixin({
   } : undefined),
   /* c8 ignore end */
 });
+
+const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());

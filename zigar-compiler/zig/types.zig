@@ -1965,6 +1965,13 @@ test "getInternalType" {
     try expect(getInternalType(AbortSignal) == .abort_signal);
 }
 
+fn Any(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .error_union => |eu| anyerror!eu.payload,
+        else => T,
+    };
+}
+
 pub fn Promise(comptime T: type) type {
     return struct {
         ptr: ?*anyopaque = null,
@@ -1983,6 +1990,10 @@ pub fn Promise(comptime T: type) type {
 
         pub fn resolve(self: @This(), value: T) void {
             self.callback(self.ptr, value);
+        }
+
+        pub fn any(self: @This()) Promise(Any(T)) {
+            return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
         }
 
         pub fn partition(self: @This(), allocator: std.mem.Allocator, count: usize) !@This() {
@@ -2067,9 +2078,15 @@ pub fn Function(comptime arg: anytype) type {
 pub fn PromiseOf(comptime arg: anytype) type {
     const FT = Function(arg);
     const f = @typeInfo(FT).@"fn";
+    return Promise(f.return_type.?);
+}
+
+pub fn PromiseArgOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .promise) break param.type.?;
-    } else Promise(f.return_type.?);
+    } else @compileError("No promise argument: " ++ @typeName(FT));
 }
 
 pub fn Generator(comptime T: type) type {
@@ -2125,21 +2142,28 @@ pub fn Generator(comptime T: type) type {
                 }
             }
         }
+
+        pub fn any(self: @This()) Generator(Any(T)) {
+            return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
+        }
     };
 }
 
 pub fn GeneratorOf(comptime arg: anytype) type {
     const FT = Function(arg);
     const f = @typeInfo(FT).@"fn";
+    return if (IteratorReturnValue(f.return_type.?)) |T|
+        Generator(T)
+    else
+        @compileError("Function does not return an iterator: " ++ @typeName(FT));
+}
+
+pub fn GeneratorArgOf(comptime arg: anytype) type {
+    const FT = Function(arg);
+    const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .generator) break param.type.?;
-    } else typedef: {
-        if (IteratorReturnValue(f.return_type.?)) |T| {
-            break :typedef Generator(T);
-        } else {
-            @compileError("Function does not return an iterator: " ++ @typeName(FT));
-        }
-    };
+    } else @compileError("No promise argument: " ++ @typeName(FT));
 }
 
 pub const AbortSignal = struct {
@@ -2291,8 +2315,8 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         status: Status = .uninitialized,
         init_remaining: usize = undefined,
         init_futex: std.atomic.Value(u32) = undefined,
-        init_result: ThreadStartError!void = undefined,
-        init_promise: ?Promise(ThreadStartError!void) = undefined,
+        init_result: WaitResult = undefined,
+        init_promise: ?Promise(WaitResult) = undefined,
         deinit_promise: ?Promise(void) = undefined,
 
         pub const ThreadStartError = switch (@hasDecl(ns, "onThreadStart")) {
@@ -2382,12 +2406,12 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             self.status = .initialized;
         }
 
-        pub fn wait(self: *@This()) ThreadStartError!void {
+        pub fn wait(self: *@This()) WaitResult {
             std.Thread.Futex.wait(&self.init_futex, 0);
             return self.init_result;
         }
 
-        pub fn waitAsync(self: *@This(), promise: Promise(ThreadStartError!void)) void {
+        pub fn waitAsync(self: *@This(), promise: Promise(WaitResult)) void {
             if (self.init_futex.load(.acquire) == 1) {
                 promise.resolve(self.init_result);
             } else {
@@ -2435,6 +2459,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             uninitialized,
             initialized,
             deinitializing,
+        };
+        const WaitResult = switch (ThreadStartError) {
+            error{} => void,
+            else => ThreadStartError!void,
         };
         const WorkItem = init: {
             var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
@@ -2508,9 +2536,9 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             thread_end_params: ThreadEndParams,
         ) void {
             var start_succeeded = true;
-            if (comptime @hasDecl(ns, "onThreadStart")) {
+            if (@hasDecl(ns, "onThreadStart")) {
                 const result = @call(.auto, ns.onThreadStart, thread_start_params);
-                if (comptime ThreadStartError != error{}) {
+                if (ThreadStartError != error{}) {
                     if (result) |_| {} else |err| {
                         self.init_result = err;
                         start_succeeded = false;
@@ -2518,7 +2546,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 }
             }
             if (@atomicRmw(usize, &self.init_remaining, .Sub, 1, .monotonic) == 1) {
-                if (!std.meta.isError(self.init_result)) {
+                if (@typeInfo(WaitResult) != .error_union or !std.meta.isError(self.init_result)) {
                     self.init_futex.store(1, .release);
                     std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
                     if (self.init_promise) |promise| promise.resolve(self.init_result);
@@ -2535,13 +2563,13 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     true => break,
                 }
             }
-            if (comptime @hasDecl(ns, "onThreadEnd")) {
+            if (@hasDecl(ns, "onThreadEnd")) {
                 if (start_succeeded) _ = @call(.auto, ns.onThreadEnd, thread_end_params);
             }
             if (@atomicRmw(usize, &self.thread_count, .Sub, 1, .monotonic) == 1) {
                 self.queue.deinit();
                 self.status = .uninitialized;
-                if (std.meta.isError(self.init_result)) {
+                if (@typeInfo(WaitResult) == .error_union and std.meta.isError(self.init_result)) {
                     self.init_futex.store(1, .release);
                     std.Thread.Futex.wake(&self.init_futex, std.math.maxInt(u32));
                     if (self.init_promise) |promise| promise.resolve(self.init_result);

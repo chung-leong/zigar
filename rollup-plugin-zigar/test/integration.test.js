@@ -45,7 +45,7 @@ async function importModule(url, options) {
     currentModule = null;
   }
   const path = fileURLToPath(url);
-  const hash = md5(path + JSON.stringify(options));
+  const hash = sha1(path + JSON.stringify(options));
   const jsPath = join(tmpdir(), 'rollup-integration-test', optimize, `${hash}.mjs`);
   const inputOptions = {
     input: path,
@@ -81,8 +81,8 @@ async function importModule(url, options) {
   return currentModule;
 }
 
-function md5(text) {
-  const hash = createHash('md5');
+function sha1(text) {
+  const hash = createHash('sha1');
   hash.update(text);
   return hash.digest('hex');
 }

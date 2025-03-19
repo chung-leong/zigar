@@ -66,7 +66,7 @@ export default mixin({
 
     writeBytes(address, len) {
       const dv = this.obtainZigView(address, len, false);
-      return this.writeToConsole(dv) ? CallResult.OK : CallResult.Failure;
+      return (dv && this.writeToConsole(dv)) ? CallResult.OK : CallResult.Failure;
     },      
     /* c8 ignore start */
   } : undefined),

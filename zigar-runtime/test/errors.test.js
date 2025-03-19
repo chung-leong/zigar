@@ -691,7 +691,7 @@ describe('Error functions', function() {
       expect(result).to.equal('Invalid HTML');
     })
   })
-  describe('article', function() {
+   describe('article', function() {
     it('should return an when noun starts with a vowel', function() {
       expect(article('apple')).to.equal('an');
       expect(article('[apple]')).to.equal('an');

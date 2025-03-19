@@ -8,6 +8,8 @@
 * Implemented WorkQueue
 * Improved dead-code removal
 * Enabled variables in Electron
+* Removed automatic allocation of Zig memory
+* Passing an incompatible typed array triggers an error instead of a warning
 
 ## 0.13.2
 
