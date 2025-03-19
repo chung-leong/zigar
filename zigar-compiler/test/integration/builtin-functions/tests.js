@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
       for (let i = 0; i < data.byteLength; i++) {
         data[i] = i & 0xFF;
       }
-      const digest1 = sha1(data);
+      const digest1 = md5(data);
       const hash = createHash('md5');
       hash.update(data);
       const digest2 = hash.digest();
