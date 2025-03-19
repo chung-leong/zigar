@@ -13,8 +13,10 @@ const Error = types.Error;
 
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
+pub const PromiseArgOf = types.PromiseArgOf;
 pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
+pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
 
 pub fn WorkQueue(ns: type) type {
