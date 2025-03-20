@@ -4,7 +4,7 @@ const htmlWebpackPlugin = require('html-webpack-plugin');
 module.exports = {
   entry: './src/index.js',
   output: {
-    path: path.resolve(__dirname, '../../../../docs/demos/webpack/sha1'),
+    path: path.resolve(__dirname, '../../../../../zigar.website/demos/webpack/sha1'),
     filename: 'bundle.js',
   },
   plugins: [
