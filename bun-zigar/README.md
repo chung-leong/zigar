@@ -1,6 +1,6 @@
 # bun-zigar
 
-![Logo](https://github.com/chung-leong/zigar/raw/development/docs/images/logo.png)
+![Logo](https://github.com/chung-leong/zigar/blob/main/logo.png?raw=true)
 
 Bun.js addon that lets you use functions written in the [Zig language](https://ziglang.org/).
 
