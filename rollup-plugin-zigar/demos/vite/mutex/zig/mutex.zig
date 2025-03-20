@@ -1,12 +1,11 @@
 const std = @import("std");
 const zigar = @import("zigar");
-const Mutex = @import("./WasmMainThreadMutex.zig");
 
 const Promise = zigar.function.Promise(void);
 const Signal = zigar.function.AbortSignal;
 const allocator = std.heap.wasm_allocator;
 
-var mutex = Mutex{};
+var mutex = std.Thread.Mutex{};
 var mainCount = std.atomic.Value(usize).init(0);
 var workerCount = std.atomic.Value(usize).init(0);
 
