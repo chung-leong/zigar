@@ -8,9 +8,12 @@ var allocatorMethods = mixin({
   defineAlloc() {
     return {
       value(len, align = 1) {
-        const ptrAlign = 31 - Math.clz32(align);
+        const lz = Math.clz32(align);        
+        if (align !== (1 << (31 - lz)) || align > 64) {
+          throw new Error(`Invalid alignment: ${align}`);
+        }
         const { vtable: { alloc }, ptr } = this;
-        const slicePtr = alloc(ptr, len, ptrAlign, 0);
+        const slicePtr = alloc(ptr, len, align, 0);
         if (!slicePtr) {
           throw new Error('Out of memory');
         }
@@ -36,9 +39,8 @@ var allocatorMethods = mixin({
         if (address === usizeInvalid) {
           throw new PreviouslyFreed(arg);
         }
-        const ptrAlign = 31 - Math.clz32(align);
         const { vtable: { free }, ptr } = this;
-        free(ptr, dv, ptrAlign, 0);
+        free(ptr, dv, align, 0);
         thisEnv.releaseZigView(dv);
       }
     };
@@ -63,9 +65,9 @@ function getMemory(arg) {
   let dv, align = 1, constructor = null;
   if (arg instanceof DataView) {
     dv = arg;
-    const fixedMemoryAlign = dv?.[ZIG]?.align;
-    if (fixedMemoryAlign) {
-      align = fixedMemoryAlign;
+    const zigMemoryAlign = dv?.[ZIG]?.align;
+    if (zigMemoryAlign) {
+      align = zigMemoryAlign;
     }
   } else if (arg instanceof ArrayBuffer) {
     dv = new DataView(arg);
