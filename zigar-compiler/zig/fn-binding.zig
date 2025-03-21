@@ -3,169 +3,128 @@ const builtin = @import("builtin");
 const fn_transform = @import("fn-transform.zig");
 const expect = std.testing.expect;
 
-usingnamespace fn_transform;
+const Header = extern struct {
+    signature: u64 = magic_number,
+    ctx_offset: u32,
+    len: u32,
 
-pub const BindingError = error{
-    TooManyInstructions,
-    PlaceholderNotFound,
+    const magic_number: u64 = 0x380f_fc59_7bac_4e96;
 };
 
-pub fn executable() std.heap.GeneralPurposeAllocator(.{}) {
-    return .{
-        .backing_allocator = .{
-            .ptr = undefined,
-            .vtable = &ExecutablePageAllocator.vtable,
-        },
-    };
-}
-
-test "executable" {
+pub fn create(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BoundFunction(@TypeOf(func), @TypeOf(vars)) {
+    const RB = RuntimeBinding(@TypeOf(func), @TypeOf(vars));
+    const CT = ContextType(@TypeOf(vars));
+    // binding structure: [header][instructions][fn_address][context]
+    const instr_len = try RB.findInstructionLength();
+    const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
+    const ctx_index = std.mem.alignForward(usize, instr_index + instr_len + @sizeOf(usize), @alignOf(CT));
+    const fn_address_index = ctx_index - @sizeOf(usize);
+    const binding_len = ctx_index + @sizeOf(CT);
+    const max_align = @max(@alignOf(Header), @alignOf(CT));
+    const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
+    const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
+    const instr_ptr: []u8 = new_bytes[instr_index .. instr_index + instr_len];
+    const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
+    const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
     protect(false);
-    var ea = executable();
-    var allocator = ea.allocator();
-    const memory = try allocator.alloc(u8, 256);
-    allocator.free(memory);
-    try expect(ea.detectLeaks() == false);
-    protect(true);
+    defer protect(true);
+    header_ptr.* = .{
+        .ctx_offset = @intCast(ctx_index - @sizeOf(Header)),
+        .len = @intCast(binding_len),
+    };
+    _ = try RB.encodeInstructions(instr_ptr, @intFromPtr(ctx_ptr));
+    const fields = @typeInfo(CT).@"struct".fields;
+    inline for (fields) |field| {
+        @field(ctx_ptr.*, field.name) = @field(vars, field.name);
+    }
+    const fn_ptr = switch (@typeInfo(@TypeOf(func))) {
+        .@"fn" => &func,
+        .pointer => func,
+        else => unreachable,
+    };
+    fn_address_ptr.* = @intFromPtr(fn_ptr);
+    invalidate(new_bytes);
+    return @ptrCast(@alignCast(instr_ptr));
 }
 
-pub fn Binding(comptime T: type, comptime TT: type) type {
+pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
+    const fn_addr = @intFromPtr(fn_ptr);
+    if (fn_addr >= @sizeOf(Header) and std.mem.isAligned(fn_addr - @sizeOf(Header), @alignOf(Header))) {
+        const header_ptr: *Header = @ptrFromInt(fn_addr - @sizeOf(Header));
+        if (header_ptr.signature == Header.magic_number) {
+            protect(false);
+            defer protect(true);
+            const binding_ptr: [*]const u8 = @ptrCast(header_ptr);
+            allocator.free(binding_ptr[0..header_ptr.len]);
+        }
+    }
+}
+
+pub fn get(comptime T: type, fn_ptr: *const anyopaque) ?T {
+    const fn_addr = @intFromPtr(fn_ptr);
+    if (fn_addr >= @sizeOf(Header) and std.mem.isAligned(fn_addr - @sizeOf(Header), @alignOf(Header))) {
+        const header_ptr: *Header = @ptrFromInt(fn_addr - @sizeOf(Header));
+        if (header_ptr.signature == Header.magic_number) {
+            const ctx_ptr: *const T = @ptrFromInt(fn_addr + header_ptr.ctx_offset);
+            return ctx_ptr.*;
+        }
+    }
+    return null;
+}
+
+pub fn bind(func: anytype, vars: anytype) !*const BoundFunction(@TypeOf(func), @TypeOf(vars)) {
+    return create(exec_allocator, func, vars);
+}
+
+pub fn unbind(fn_ptr: *const anyopaque) void {
+    destroy(exec_allocator, fn_ptr);
+}
+
+var exec_da: std.heap.DebugAllocator(.{ .safety = false }) = .{
+    .backing_allocator = .{
+        .ptr = undefined,
+        .vtable = &ExecutablePageAllocator.vtable,
+    },
+};
+const exec_allocator = exec_da.allocator();
+
+pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
     const FT = FnType(T);
     const CT = ContextType(TT);
     const BFT = BoundFunction(FT, CT);
     const AddressPosition = struct { offset: isize, stack_offset: isize, stack_align_mask: ?isize };
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
-    const code_align = @alignOf(fn () void);
-    const binding_signature: u64 = 0xef20_90b6_415d_2fe3;
 
-    return extern struct {
-        signature: u64 = binding_signature,
-        size: usize,
-        fn_address: usize,
-        context_bytes: [@sizeOf(CT)]u8 align(@alignOf(CT)),
-        code: [0]u8 align(code_align) = undefined,
+    return struct {
+        var encoded_instr_len: ?usize = null;
+        var ctx_address_pos: ?AddressPosition = null;
 
-        var code_len: ?usize = null;
-        var self_address_pos: ?AddressPosition = null;
-
-        pub fn bind(allocator: std.mem.Allocator, func: T, vars: TT) !*const BFT {
-            const binding = try init(allocator, func, vars);
-            return binding.function();
-        }
-
-        pub fn unbind(allocator: std.mem.Allocator, func: *const BFT) ?CT {
-            if (fromFunction(func)) |self| {
-                defer self.deinit(allocator);
-                return self.context().*;
-            } else {
-                return null;
-            }
-        }
-
-        pub fn init(allocator: std.mem.Allocator, func: T, vars: TT) !*@This() {
-            protect(false);
-            defer protect(true);
-            const len = code_len orelse init: {
-                // determine the code len by doing a dry-run of the encoding process
-                var encoder: InstructionEncoder = .{};
-                try writeInstructions(&encoder, 0);
-                break :init encoder.len;
+        fn findInstructionLength() !usize {
+            return encoded_instr_len orelse init: {
+                const len = try encodeInstructions(null, 0);
+                encoded_instr_len = len;
+                break :init len;
             };
-            const instance_size = @offsetOf(@This(), "code") + len;
-            const new_bytes = try allocator.alignedAlloc(u8, @alignOf(@This()), instance_size);
-            const self: *@This() = @ptrCast(new_bytes);
-            var ctx: CT = undefined;
-            const fields = @typeInfo(CT).@"struct".fields;
-            inline for (fields) |field| {
-                @field(ctx, field.name) = @field(vars, field.name);
-            }
-            const fn_ptr = switch (@typeInfo(T)) {
-                .@"fn" => &func,
-                .pointer => func,
-                else => unreachable,
-            };
-            self.* = .{
-                .size = instance_size,
-                .fn_address = @intFromPtr(fn_ptr),
-                .context_bytes = std.mem.toBytes(ctx),
-            };
-            const self_address = @intFromPtr(self);
-            const output_ptr = @as([*]u8, @ptrCast(&self.code));
-            var encoder: InstructionEncoder = .{ .output = output_ptr[0..len] };
-            try writeInstructions(&encoder, self_address);
-            invalidate(new_bytes);
-            return self;
         }
 
-        pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-            protect(false);
-            defer protect(true);
-            self.signature = 0;
-            // free memory using correct alignment to avoid warning
-            const alignment = @alignOf(@This());
-            const ST = []align(alignment) u8;
-            const MT = [*]align(alignment) u8;
-            const slice: ST = @as(MT, @ptrCast(self))[0..self.size];
-            allocator.free(slice);
-        }
-
-        pub inline fn function(self: *const @This()) *const BFT {
-            return @ptrCast(&self.code);
-        }
-
-        test "function" {
-            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
-            const func = b.function();
-            try expect(@TypeOf(func) == *const BFT);
-        }
-
-        pub inline fn context(self: *const @This()) *const CT {
-            return @ptrCast(&self.context_bytes);
-        }
-
-        test "context" {
-            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
-            const ctx = b.context();
-            try expect(@TypeOf(ctx) == *const CT);
-        }
-
-        pub fn fromFunction(fn_ptr: *align(code_align) const anyopaque) ?*@This() {
-            const code: *align(code_align) const [0]u8 = @ptrCast(fn_ptr);
-            const ptr: *align(1) @This() = @fieldParentPtr("code", @constCast(code));
-            if (!std.mem.isAligned(@intFromPtr(ptr), @alignOf(@This()))) return null;
-            const self: *@This() = @alignCast(ptr);
-            return if (self.signature == binding_signature) self else null;
-        }
-
-        test "fromFunction" {
-            const b: @This() = .{ .context_bytes = undefined, .fn_address = 0, .size = 0 };
-            const func = b.function();
-            const ptr1 = fromFunction(func);
-            try expect(ptr1 == &b);
-            const ns = struct {
-                fn hello() void {}
-            };
-            const ptr2 = fromFunction(&ns.hello);
-            try expect(ptr2 == null);
-        }
-
-        fn writeInstructions(encoder: *InstructionEncoder, self_address: usize) !void {
+        fn encodeInstructions(output: ?[]u8, ctx_address: usize) !usize {
             const trampoline = getTrampoline();
             const trampoline_address = @intFromPtr(&trampoline);
-            // find the offset of self_address inside the trampoline function
-            const address_pos = self_address_pos orelse init: {
+            // find the offset of ctx_address inside the trampoline function
+            const address_pos = ctx_address_pos orelse init: {
                 const offset = try findAddressPosition(&trampoline);
-                self_address_pos = offset;
+                ctx_address_pos = offset;
                 break :init offset;
             };
+            var encoder: InstructionEncoder = .{ .output = output };
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    // mov rax, self_address
+                    // mov rax, ctx_address
                     encoder.encode(.{
                         .rex = .{},
                         .opcode = .@"mov ax imm32/64",
-                        .imm64 = self_address,
+                        .imm64 = ctx_address,
                     });
                     if (address_pos.stack_align_mask) |mask| {
                         // mov r11, rsp
@@ -275,7 +234,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             },
                         });
                     }
-                    // ldr x9, [pc + 16] (self_address)
+                    // ldr x9, [pc + 16] (ctx_address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 9, .imm19 = 4 },
                     });
@@ -291,7 +250,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .br = .{ .rn = 9 },
                     });
-                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = ctx_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .riscv64 => {
@@ -311,7 +270,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .auipc = .{ .rd = 7, .imm20 = 0 },
                     });
-                    // ld x5, [x7 + 20] (self_address)
+                    // ld x5, [x7 + 20] (ctx_address)
                     encoder.encode(.{
                         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
                     });
@@ -327,11 +286,11 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
                     });
-                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = ctx_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .powerpc64le => {
-                    const code_address = self_address + @offsetOf(@This(), "code");
+                    const code_address = ctx_address + @offsetOf(@This(), "code");
                     const code_addr_63_48: u16 = @truncate((code_address >> 48) & 0xffff);
                     const code_addr_47_32: u16 = @truncate((code_address >> 32) & 0xffff);
                     const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
@@ -356,7 +315,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
                     });
-                    // ld r12, [r11 + 40] (self_address)
+                    // ld r12, [r11 + 40] (ctx_address)
                     encoder.encode(.{
                         .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
                     });
@@ -376,14 +335,14 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .bctrl = .{},
                     });
-                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = ctx_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .x86 => {
-                    // mov eax, self_address
+                    // mov eax, ctx_address
                     encoder.encode(.{
                         .opcode = .@"mov ax imm32/64",
-                        .imm32 = self_address,
+                        .imm32 = ctx_address,
                     });
                     if (address_pos.stack_align_mask) |mask| {
                         // push ecx
@@ -469,7 +428,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                             },
                         });
                     }
-                    // ldr r4, [pc + 8] (self_address)
+                    // ldr r4, [pc + 8] (ctx_address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
                     });
@@ -485,7 +444,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .bx = .{ .rm = 4 },
                     });
-                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = ctx_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .riscv32 => {
@@ -505,7 +464,7 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .auipc = .{ .rd = 7, .imm20 = 0 },
                     });
-                    // lw x5, [x7 + 20] (self_address)
+                    // lw x5, [x7 + 20] (ctx_address)
                     encoder.encode(.{
                         .lw = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
                     });
@@ -521,37 +480,38 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
                     });
-                    encoder.encode(.{ .literal = self_address });
+                    encoder.encode(.{ .literal = ctx_address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 else => @compileError("No support for '" ++ @tagName(builtin.target.cpu.arch) ++ "'"),
             }
+            return encoder.len;
         }
 
         fn getTrampoline() BFT {
             const bf = @typeInfo(BFT).@"fn";
             const RT = bf.return_type.?;
             const cc = bf.calling_convention;
-            const Self = @This();
             const ns = struct {
                 inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
-                    // disable runtime safety so self_address isn't written with 0xaa when optimize = Debug
+                    // disable runtime safety so ctx_address isn't written with 0xaa when optimize = Debug
                     @setRuntimeSafety(false);
                     // this variable will be set by dynamically generated code before the jump
                     // using a two-element array to ensure the compiler doesn't attempt to keep it in register
-                    var self_address: [2]usize = undefined;
-                    // insert nop x 3 so we can find the displacement for self_address in the instruction stream
-                    insertNOPs(&self_address);
-                    const self: *const Self = @ptrFromInt(self_address[0]);
+                    var target: [2]usize = undefined;
+                    // insert nop x 3 so we can find the displacement for ctx_address in the instruction stream
+                    insertNOPs(&target);
+                    const ctx_address = target[0];
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    const ctx = self.context();
+                    const ctx_ptr: *const CT = @ptrFromInt(ctx_address);
                     inline for (ctx_mapping) |m| {
-                        @field(args, m.dest) = @field(ctx, m.src);
+                        @field(args, m.dest) = @field(ctx_ptr.*, m.src);
                     }
-                    const fn_ptr: *const FT = @ptrFromInt(self.fn_address);
+                    const fn_address_ptr: *usize = @ptrFromInt(ctx_address - @sizeOf(usize));
+                    const fn_ptr: *const FT = @ptrFromInt(fn_address_ptr.*);
                     return @call(.never_inline, fn_ptr, args);
                 }
             };
@@ -860,573 +820,6 @@ pub fn Binding(comptime T: type, comptime TT: type) type {
             } else return error.Unexpected;
         }
     };
-}
-
-test "Binding (i64 x 3 + *i64 x 1)" {
-    const ns = struct {
-        fn add(a1: *i64, a2: i64, a3: i64, a4: i64) callconv(.c) void {
-            a1.* = a2 + a3 + a4;
-        }
-    };
-    var number: i64 = undefined;
-    const vars = .{&number};
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    bf(1, 2, 3);
-    try expect(number == 1 + 2 + 3);
-}
-
-test "Binding ([no args] + i64 x 4)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
-            return a1 + a2 + a3 + a4;
-        }
-    };
-    var number1: i64 = 1;
-    var number2: i64 = 2;
-    var number3: i64 = 3;
-    var number4: i64 = 4;
-    _ = &number1;
-    _ = &number2;
-    _ = &number3;
-    _ = &number4;
-    const vars = .{ number1, number2, number3, number4 };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn () i64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf();
-    try expect(sum == 1 + 2 + 3 + 4);
-}
-
-test "Binding (i64 x 1 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64) i64 {
-            return a1 + a2;
-        }
-    };
-    var number: i64 = 1234;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64) i64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1);
-    try expect(sum == 1 + 1234);
-}
-
-test "Binding (i64 x 2 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64) i64 {
-            return a1 + a2 + a3;
-        }
-    };
-    var number: i64 = 1234;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64, i64) i64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2);
-    try expect(sum == 1 + 2 + 1234);
-}
-
-test "Binding (i64 x 3 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
-            return a1 + a2 + a3 + a4;
-        }
-    };
-    var number: i64 = 1234;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) i64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3);
-    try expect(sum == 1 + 2 + 3 + 1234);
-}
-
-test "Binding (i64 x 4 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5;
-        }
-    };
-    var number: i64 = 5;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4);
-    try expect(sum == 1 + 2 + 3 + 4 + 5);
-}
-
-test "Binding (i64 x 5 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6;
-        }
-    };
-    var number: i64 = 6;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6);
-}
-
-test "Binding (i64 x 6 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7;
-        }
-    };
-    var number: i64 = 7;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7);
-}
-
-test "Binding (i64 x 7 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8;
-        }
-    };
-    var number: i64 = 8;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8);
-}
-
-test "Binding (i64 x 8 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9;
-        }
-    };
-    var number: i64 = 9;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9);
-}
-
-test "Binding (i64 x 9 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
-        }
-    };
-    var number: i64 = 10;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
-}
-
-test "Binding (i64 x 10 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11;
-        }
-    };
-    var number: i64 = 11;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11);
-}
-
-test "Binding (i64 x 11 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12;
-        }
-    };
-    var number: i64 = 12;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12);
-}
-
-test "Binding (i64 x 12 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13;
-        }
-    };
-    var number: i64 = 13;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13);
-}
-
-test "Binding (i64 x 13 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
-        }
-    };
-    var number: i64 = 14;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
-}
-
-test "Binding (i64 x 14 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15;
-        }
-    };
-    var number: i64 = 15;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15);
-}
-
-test "Binding (i64 x 15 + i64 x 1)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
-        }
-    };
-    var number: i64 = 16;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
-}
-
-test "Binding ([no args] + i64 x 16)" {
-    const ns = struct {
-        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
-        }
-    };
-    const vars = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf();
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
-}
-
-test "Binding (f64 x 3 + f64 x 1)" {
-    const ns = struct {
-        fn add(a1: f64, a2: f64, a3: f64, a4: f64) f64 {
-            return a1 + a2 + a3 + a4;
-        }
-    };
-    var number: f64 = 1234;
-    _ = &number;
-    const vars = .{ .@"-1" = number };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (f64, f64, f64) f64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(1, 2, 3);
-    try expect(sum == 1 + 2 + 3 + 1234);
-}
-
-test "Binding ([]const u8 x 1 + []const u8 x 1)" {
-    const ns = struct {
-        fn add(a1: []const u8, a2: []const u8) [2][]const u8 {
-            return .{ a1, a2 };
-        }
-    };
-    var string: []const u8 = "Basia";
-    _ = &string;
-    const vars = .{ .@"-1" = string };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (a1: []const u8) [2][]const u8);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const array = bf("Agnieszka");
-    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
-    try expect(std.mem.eql(u8, array[1], "Basia"));
-}
-
-test "Binding ([]const u8 x 3 + []const u8 x 1)" {
-    const ns = struct {
-        fn add(a1: []const u8, a2: []const u8, a3: []const u8, a4: []const u8) [4][]const u8 {
-            return .{ a1, a2, a3, a4 };
-        }
-    };
-    var string: []const u8 = "Dagmara";
-    _ = &string;
-    const vars = .{ .@"-1" = string };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (a1: []const u8, a2: []const u8, a3: []const u8) [4][]const u8);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const array = bf("Agnieszka", "Basia", "Czcibora");
-    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
-    try expect(std.mem.eql(u8, array[1], "Basia"));
-    try expect(std.mem.eql(u8, array[2], "Czcibora"));
-    try expect(std.mem.eql(u8, array[3], "Dagmara"));
-}
-
-test "Binding (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
-    const ns = struct {
-        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64)) @Vector(4, f64) {
-            return a1 + a2 + a3 + a4;
-        }
-    };
-    var vector: @Vector(4, f64) = .{ 10, 20, 30, 40 };
-    _ = &vector;
-    const vars = .{ .@"-1" = vector };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(
-        .{ 0.01, 0.02, 0.03, 0.04 },
-        .{ 0.1, 0.2, 0.3, 0.4 },
-        .{ 1, 2, 3, 4 },
-    );
-    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }));
-}
-
-test "Binding (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
-    const ns = struct {
-        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64), a5: @Vector(4, f64), a6: @Vector(4, f64), a7: @Vector(4, f64), a8: @Vector(4, f64), a9: @Vector(4, f64), a10: @Vector(4, f64)) @Vector(4, f64) {
-            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
-        }
-    };
-    var vector: @Vector(4, f64) = .{ 100000, 200000, 300000, 400000 };
-    _ = &vector;
-    const vars = .{ .@"-1" = vector };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(
-        .{ 0.0001, 0.0002, 0.0003, 0.0004 },
-        .{ 0.001, 0.002, 0.003, 0.004 },
-        .{ 0.01, 0.02, 0.03, 0.04 },
-        .{ 0.1, 0.2, 0.3, 0.4 },
-        .{ 1, 2, 3, 4 },
-        .{ 10, 20, 30, 40 },
-        .{ 100, 200, 300, 400 },
-        .{ 1000, 2000, 3000, 4000 },
-        .{ 10000, 2000, 30000, 40000 },
-    );
-    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }));
-}
-
-test "Binding ([12]f64 x 1 + [3]i32 x 1)" {
-    const ns = struct {
-        fn add(a: [3]i32, b: [12]f64) f64 {
-            var int_sum: i32 = 0;
-            var float_sum: f64 = 0;
-            for (a) |v| int_sum += v;
-            for (b) |v| float_sum += v;
-            return float_sum + @as(f64, @floatFromInt(int_sum));
-        }
-    };
-    var array: [3]i32 = .{ 10, 20, 30 };
-    _ = &array;
-    const vars = .{array};
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn ([12]f64) f64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
-}
-
-test "Binding ([3]i32 x 1 + [12]f64 x 1)" {
-    const ns = struct {
-        fn add(a: [3]i32, b: [12]f64) f64 {
-            var int_sum: i32 = 0;
-            var float_sum: f64 = 0;
-            for (a) |v| int_sum += v;
-            for (b) |v| float_sum += v;
-            return float_sum + @as(f64, @floatFromInt(int_sum));
-        }
-    };
-    var array: [12]f64 = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
-    _ = &array;
-    const vars = .{ .@"1" = array };
-    const Add = Binding(@TypeOf(ns.add), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Add.bind(ea.allocator(), ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn ([3]i32) f64);
-    defer _ = Add.unbind(ea.allocator(), bf);
-    const sum = bf(.{ 10, 20, 30 });
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
-}
-
-test "Binding (*i8 x 3 + *i8 x 1)" {
-    const T = i8;
-    const ns = struct {
-        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
-            a1.* = 123;
-            a2.* = 123;
-            a3.* = 123;
-            a4.* = 123;
-        }
-    };
-    var number1: T = undefined;
-    var number2: T = undefined;
-    var number3: T = undefined;
-    var number4: T = undefined;
-    const vars = .{&number4};
-    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Set.bind(ea.allocator(), ns.set, vars);
-    defer _ = Set.unbind(ea.allocator(), bf);
-    bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
-}
-
-test "Binding (*i16 x 3 + *i16 x 1)" {
-    const T = i16;
-    const ns = struct {
-        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
-            a1.* = 123;
-            a2.* = 123;
-            a3.* = 123;
-            a4.* = 123;
-        }
-    };
-    var number1: T = undefined;
-    var number2: T = undefined;
-    var number3: T = undefined;
-    var number4: T = undefined;
-    const vars = .{&number4};
-    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Set.bind(ea.allocator(), ns.set, vars);
-    defer _ = Set.unbind(ea.allocator(), bf);
-    bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
-}
-
-test "Binding (*i32 x 3 + *i32 x 1)" {
-    const T = i32;
-    const ns = struct {
-        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
-            a1.* = 123;
-            a2.* = 123;
-            a3.* = 123;
-            a4.* = 123;
-        }
-    };
-    var number1: T = undefined;
-    var number2: T = undefined;
-    var number3: T = undefined;
-    var number4: T = undefined;
-    const vars = .{&number4};
-    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Set.bind(ea.allocator(), ns.set, vars);
-    defer _ = Set.unbind(ea.allocator(), bf);
-    bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
-}
-
-test "Binding (*i64 x 3 + *i64 x 1)" {
-    const T = i64;
-    const ns = struct {
-        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
-            a1.* = 123;
-            a2.* = 123;
-            a3.* = 123;
-            a4.* = 123;
-        }
-    };
-    var number1: T = undefined;
-    var number2: T = undefined;
-    var number3: T = undefined;
-    var number4: T = undefined;
-    const vars = .{&number4};
-    const Set = Binding(@TypeOf(ns.set), @TypeOf(vars));
-    var ea = executable();
-    const bf = try Set.bind(ea.allocator(), ns.set, vars);
-    defer _ = Set.unbind(ea.allocator(), bf);
-    bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
 }
 
 pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
@@ -2757,9 +2150,8 @@ const InstructionEncoder = struct {
         const size = @bitSizeOf(T) / 8;
         if (self.output) |buffer| {
             const bytes = std.mem.toBytes(instr);
-            if (self.len + size <= buffer.len) {
-                @memcpy(buffer[self.len .. self.len + size], bytes[0..size]);
-            }
+            assert(self.len + size <= buffer.len);
+            @memcpy(buffer[self.len .. self.len + size], bytes[0..size]);
         }
         self.len += size;
     }
@@ -2924,4 +2316,532 @@ fn invalidate(slice: []u8) void {
         });
         c.sys_icache_invalidate(slice.ptr, slice.len);
     }
+}
+
+test "bind (i64 x 3 + *i64 x 1)" {
+    const ns = struct {
+        fn add(a1: *i64, a2: i64, a3: i64, a4: i64) callconv(.c) void {
+            a1.* = a2 + a3 + a4;
+        }
+    };
+    var number: i64 = undefined;
+    const vars = .{&number};
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    bf(1, 2, 3);
+    try expect(number == 1 + 2 + 3);
+}
+
+test "bind ([no args] + i64 x 4)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var number1: i64 = 1;
+    var number2: i64 = 2;
+    var number3: i64 = 3;
+    var number4: i64 = 4;
+    _ = &number1;
+    _ = &number2;
+    _ = &number3;
+    _ = &number4;
+    const vars = .{ number1, number2, number3, number4 };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn () i64);
+    defer unbind(bf);
+    const sum = bf();
+    try expect(sum == 1 + 2 + 3 + 4);
+}
+
+test "bind (i64 x 1 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64) i64 {
+            return a1 + a2;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    defer unbind(bf);
+    const sum = bf(1);
+    try expect(sum == 1 + 1234);
+}
+
+test "bind (i64 x 2 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64) i64 {
+            return a1 + a2 + a3;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64, i64) i64);
+    defer unbind(bf);
+    const sum = bf(1, 2);
+    try expect(sum == 1 + 2 + 1234);
+}
+
+test "bind (i64 x 3 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64) i64 {
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) i64);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3);
+    try expect(sum == 1 + 2 + 3 + 1234);
+}
+
+test "bind (i64 x 4 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5;
+        }
+    };
+    var number: i64 = 5;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4);
+    try expect(sum == 1 + 2 + 3 + 4 + 5);
+}
+
+test "bind (i64 x 5 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6;
+        }
+    };
+    var number: i64 = 6;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6);
+}
+
+test "bind (i64 x 6 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7;
+        }
+    };
+    var number: i64 = 7;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7);
+}
+
+test "bind (i64 x 7 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8;
+        }
+    };
+    var number: i64 = 8;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8);
+}
+
+test "bind (i64 x 8 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9;
+        }
+    };
+    var number: i64 = 9;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9);
+}
+
+test "bind (i64 x 9 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
+        }
+    };
+    var number: i64 = 10;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
+}
+
+test "bind (i64 x 10 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11;
+        }
+    };
+    var number: i64 = 11;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11);
+}
+
+test "bind (i64 x 11 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12;
+        }
+    };
+    var number: i64 = 12;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12);
+}
+
+test "bind (i64 x 12 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13;
+        }
+    };
+    var number: i64 = 13;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13);
+}
+
+test "bind (i64 x 13 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14;
+        }
+    };
+    var number: i64 = 14;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
+}
+
+test "bind (i64 x 14 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15;
+        }
+    };
+    var number: i64 = 15;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15);
+}
+
+test "bind (i64 x 15 + i64 x 1)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
+        }
+    };
+    var number: i64 = 16;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
+}
+
+test "bind ([no args] + i64 x 16)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64, a16: i64) i64 {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16;
+        }
+    };
+    var numbers: [16]i64 = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    _ = &numbers;
+    const vars = .{
+        numbers[0],
+        numbers[1],
+        numbers[2],
+        numbers[3],
+        numbers[4],
+        numbers[5],
+        numbers[6],
+        numbers[7],
+        numbers[8],
+        numbers[9],
+        numbers[10],
+        numbers[11],
+        numbers[12],
+        numbers[13],
+        numbers[14],
+        numbers[15],
+    };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf();
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
+}
+
+test "bind (f64 x 3 + f64 x 1)" {
+    const ns = struct {
+        fn add(a1: f64, a2: f64, a3: f64, a4: f64) f64 {
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var number: f64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (f64, f64, f64) f64);
+    defer unbind(bf);
+    const sum = bf(1, 2, 3);
+    try expect(sum == 1 + 2 + 3 + 1234);
+}
+
+test "bind ([]const u8 x 1 + []const u8 x 1)" {
+    const ns = struct {
+        fn add(a1: []const u8, a2: []const u8) [2][]const u8 {
+            return .{ a1, a2 };
+        }
+    };
+    var string: []const u8 = "Basia";
+    _ = &string;
+    const vars = .{ .@"-1" = string };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (a1: []const u8) [2][]const u8);
+    defer unbind(bf);
+    const array = bf("Agnieszka");
+    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
+    try expect(std.mem.eql(u8, array[1], "Basia"));
+}
+
+test "bind ([]const u8 x 3 + []const u8 x 1)" {
+    const ns = struct {
+        fn add(a1: []const u8, a2: []const u8, a3: []const u8, a4: []const u8) [4][]const u8 {
+            return .{ a1, a2, a3, a4 };
+        }
+    };
+    var string: []const u8 = "Dagmara";
+    _ = &string;
+    const vars = .{ .@"-1" = string };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (a1: []const u8, a2: []const u8, a3: []const u8) [4][]const u8);
+    defer unbind(bf);
+    const array = bf("Agnieszka", "Basia", "Czcibora");
+    try expect(std.mem.eql(u8, array[0], "Agnieszka"));
+    try expect(std.mem.eql(u8, array[1], "Basia"));
+    try expect(std.mem.eql(u8, array[2], "Czcibora"));
+    try expect(std.mem.eql(u8, array[3], "Dagmara"));
+}
+
+test "bind (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
+    const ns = struct {
+        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64)) @Vector(4, f64) {
+            return a1 + a2 + a3 + a4;
+        }
+    };
+    var vector: @Vector(4, f64) = .{ 10, 20, 30, 40 };
+    _ = &vector;
+    const vars = .{ .@"-1" = vector };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(
+        .{ 0.01, 0.02, 0.03, 0.04 },
+        .{ 0.1, 0.2, 0.3, 0.4 },
+        .{ 1, 2, 3, 4 },
+    );
+    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }));
+}
+
+test "bind (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
+    const ns = struct {
+        fn add(a1: @Vector(4, f64), a2: @Vector(4, f64), a3: @Vector(4, f64), a4: @Vector(4, f64), a5: @Vector(4, f64), a6: @Vector(4, f64), a7: @Vector(4, f64), a8: @Vector(4, f64), a9: @Vector(4, f64), a10: @Vector(4, f64)) @Vector(4, f64) {
+            return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10;
+        }
+    };
+    var vector: @Vector(4, f64) = .{ 100000, 200000, 300000, 400000 };
+    _ = &vector;
+    const vars = .{ .@"-1" = vector };
+    const bf = try bind(ns.add, vars);
+    defer unbind(bf);
+    const sum = bf(
+        .{ 0.0001, 0.0002, 0.0003, 0.0004 },
+        .{ 0.001, 0.002, 0.003, 0.004 },
+        .{ 0.01, 0.02, 0.03, 0.04 },
+        .{ 0.1, 0.2, 0.3, 0.4 },
+        .{ 1, 2, 3, 4 },
+        .{ 10, 20, 30, 40 },
+        .{ 100, 200, 300, 400 },
+        .{ 1000, 2000, 3000, 4000 },
+        .{ 10000, 2000, 30000, 40000 },
+    );
+    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }));
+}
+
+test "bind ([12]f64 x 1 + [3]i32 x 1)" {
+    const ns = struct {
+        fn add(a: [3]i32, b: [12]f64) f64 {
+            var int_sum: i32 = 0;
+            var float_sum: f64 = 0;
+            for (a) |v| int_sum += v;
+            for (b) |v| float_sum += v;
+            return float_sum + @as(f64, @floatFromInt(int_sum));
+        }
+    };
+    var array: [3]i32 = .{ 10, 20, 30 };
+    _ = &array;
+    const vars = .{array};
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn ([12]f64) f64);
+    defer unbind(bf);
+    const sum = bf(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+}
+
+test "bind ([3]i32 x 1 + [12]f64 x 1)" {
+    const ns = struct {
+        fn add(a: [3]i32, b: [12]f64) f64 {
+            var int_sum: i32 = 0;
+            var float_sum: f64 = 0;
+            for (a) |v| int_sum += v;
+            for (b) |v| float_sum += v;
+            return float_sum + @as(f64, @floatFromInt(int_sum));
+        }
+    };
+    var array: [12]f64 = .{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    _ = &array;
+    const vars = .{ .@"1" = array };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn ([3]i32) f64);
+    defer unbind(bf);
+    const sum = bf(.{ 10, 20, 30 });
+    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+}
+
+test "bind (*i8 x 3 + *i8 x 1)" {
+    const T = i8;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const bf = try bind(ns.set, vars);
+    defer unbind(bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "bind (*i16 x 3 + *i16 x 1)" {
+    const T = i16;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const bf = try bind(ns.set, vars);
+    defer unbind(bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "bind (*i32 x 3 + *i32 x 1)" {
+    const T = i32;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const bf = try bind(ns.set, vars);
+    defer unbind(bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
+}
+
+test "bind (*i64 x 3 + *i64 x 1)" {
+    const T = i64;
+    const ns = struct {
+        fn set(a1: *T, a2: *T, a3: *T, a4: *T) callconv(.c) void {
+            a1.* = 123;
+            a2.* = 123;
+            a3.* = 123;
+            a4.* = 123;
+        }
+    };
+    var number1: T = undefined;
+    var number2: T = undefined;
+    var number3: T = undefined;
+    var number4: T = undefined;
+    const vars = .{&number4};
+    const bf = try bind(ns.set, vars);
+    defer unbind(bf);
+    bf(&number1, &number2, &number3);
+    try expect(number1 == 123);
+    try expect(number2 == 123);
+    try expect(number3 == 123);
+    try expect(number4 == 123);
 }
