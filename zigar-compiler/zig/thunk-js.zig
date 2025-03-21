@@ -23,8 +23,7 @@ pub usingnamespace switch (builtin.target.cpu.arch.isWasm()) {
 };
 
 const native = struct {
-    const binding = @import("fn-binding.zig");
-    var gpa = binding.executable();
+    const fn_binding = @import("fn-binding.zig");
 
     pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
         const ft_ns = struct {
@@ -33,12 +32,11 @@ const native = struct {
                     .@"-2" = ptr,
                     .@"-1" = arg,
                 };
-                const CHT = CallHandler(BFT);
-                const Binding = binding.Binding(CHT, @TypeOf(vars));
+                const CT = @TypeOf(vars);
                 const caller = getJsCallHandler(host, BFT);
                 switch (action) {
                     .create => {
-                        if (Binding.bind(gpa.allocator(), caller, vars)) |thunk| {
+                        if (fn_binding.bind(caller, vars)) |thunk| {
                             return @intFromPtr(thunk);
                         } else |_| {
                             return Error.UnableToCreateThunk;
@@ -46,7 +44,8 @@ const native = struct {
                     },
                     .destroy => {
                         const thunk: *const BFT = @ptrFromInt(arg);
-                        if (Binding.unbind(gpa.allocator(), thunk)) |ctx| {
+                        if (fn_binding.bound(CT, thunk)) |ctx| {
+                            defer fn_binding.unbind(thunk);
                             return ctx.@"-1";
                         } else {
                             return Error.UnableToFindThunk;
@@ -54,16 +53,16 @@ const native = struct {
                     },
                     .get_ptr => {
                         const thunk: *const BFT = @ptrFromInt(arg);
-                        if (Binding.fromFunction(thunk)) |b| {
-                            return @intFromPtr(b.context().@"-2");
+                        if (fn_binding.bound(CT, thunk)) |ctx| {
+                            return @intFromPtr(ctx.@"-2");
                         } else {
                             return Error.UnableToFindThunk;
                         }
                     },
                     .get_id => {
                         const thunk: *const BFT = @ptrFromInt(arg);
-                        if (Binding.fromFunction(thunk)) |b| {
-                            return b.context().@"-1";
+                        if (fn_binding.bound(CT, thunk)) |ctx| {
+                            return ctx.@"-1";
                         } else {
                             return Error.UnableToFindThunk;
                         }
