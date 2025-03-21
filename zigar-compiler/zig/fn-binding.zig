@@ -5,46 +5,55 @@ const expect = std.testing.expect;
 
 const Header = extern struct {
     signature: u64 = magic_number,
-    ctx_offset: u32,
     len: u32,
+    alignment: u16,
+    ctx_offset: u16,
 
     const magic_number: u64 = 0x380f_fc59_7bac_4e96;
 };
 
 pub fn create(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BoundFunction(@TypeOf(func), @TypeOf(vars)) {
-    const RB = RuntimeBinding(@TypeOf(func), @TypeOf(vars));
-    const CT = ContextType(@TypeOf(vars));
-    // binding structure: [header][instructions][fn_address][context]
-    const instr_len = try RB.findInstructionLength();
-    const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
-    const ctx_index = std.mem.alignForward(usize, instr_index + instr_len + @sizeOf(usize), @alignOf(CT));
-    const fn_address_index = ctx_index - @sizeOf(usize);
-    const binding_len = ctx_index + @sizeOf(CT);
-    const max_align = @max(@alignOf(Header), @alignOf(CT));
-    const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
-    const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
-    const instr_ptr: []u8 = new_bytes[instr_index .. instr_index + instr_len];
-    const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
-    const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
-    protect(false);
-    defer protect(true);
-    header_ptr.* = .{
-        .ctx_offset = @intCast(ctx_index - @sizeOf(Header)),
-        .len = @intCast(binding_len),
-    };
-    _ = try RB.encodeInstructions(instr_ptr, @intFromPtr(ctx_ptr));
-    const fields = @typeInfo(CT).@"struct".fields;
-    inline for (fields) |field| {
-        @field(ctx_ptr.*, field.name) = @field(vars, field.name);
+    const T = @TypeOf(func);
+    const CT = @TypeOf(vars);
+    const binding = Binding(T, CT);
+    if (!@inComptime()) {
+        // binding structure: [header][instructions][fn_address][context]
+        const instr_len = try binding.findInstructionLength();
+        const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
+        const ctx_index = std.mem.alignForward(usize, instr_index + instr_len + @sizeOf(usize), @max(@alignOf(CT), @alignOf(usize)));
+        const fn_address_index = ctx_index - @sizeOf(usize);
+        const binding_len = ctx_index + @sizeOf(CT);
+        const max_align = @max(@alignOf(Header), @alignOf(CT));
+        const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
+        const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
+        const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
+        const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
+        const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
+        protect(false);
+        defer protect(true);
+        header_ptr.* = .{
+            .ctx_offset = @intCast(ctx_index - instr_index),
+            .len = @intCast(binding_len),
+            .alignment = @intCast(max_align),
+        };
+        try binding.encodeInstructions(instr_slice, @intFromPtr(fn_address_ptr));
+        ctx_ptr.* = vars;
+        const fn_ptr = switch (@typeInfo(T)) {
+            .@"fn" => &func,
+            .pointer => func,
+            else => unreachable,
+        };
+        fn_address_ptr.* = @intFromPtr(fn_ptr);
+        invalidate(new_bytes);
+        return @ptrCast(@alignCast(instr_slice));
+    } else {
+        const target = switch (@typeInfo(T)) {
+            .@"fn" => func,
+            .pointer => func.*,
+            else => unreachable,
+        };
+        return binding.getComptime(target, vars);
     }
-    const fn_ptr = switch (@typeInfo(@TypeOf(func))) {
-        .@"fn" => &func,
-        .pointer => func,
-        else => unreachable,
-    };
-    fn_address_ptr.* = @intFromPtr(fn_ptr);
-    invalidate(new_bytes);
-    return @ptrCast(@alignCast(instr_ptr));
 }
 
 pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
@@ -54,19 +63,20 @@ pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
         if (header_ptr.signature == Header.magic_number) {
             protect(false);
             defer protect(true);
-            const binding_ptr: [*]const u8 = @ptrCast(header_ptr);
-            allocator.free(binding_ptr[0..header_ptr.len]);
+            header_ptr.signature = 0;
+            const binding_ptr: [*]u8 = @ptrCast(header_ptr);
+            const alignment: std.mem.Alignment = @enumFromInt(@ctz(header_ptr.alignment));
+            allocator.rawFree(binding_ptr[0..header_ptr.len], alignment, 0);
         }
     }
 }
 
-pub fn get(comptime T: type, fn_ptr: *const anyopaque) ?T {
+pub fn bound(comptime CT: type, fn_ptr: *const anyopaque) ?*CT {
     const fn_addr = @intFromPtr(fn_ptr);
     if (fn_addr >= @sizeOf(Header) and std.mem.isAligned(fn_addr - @sizeOf(Header), @alignOf(Header))) {
         const header_ptr: *Header = @ptrFromInt(fn_addr - @sizeOf(Header));
         if (header_ptr.signature == Header.magic_number) {
-            const ctx_ptr: *const T = @ptrFromInt(fn_addr + header_ptr.ctx_offset);
-            return ctx_ptr.*;
+            return @ptrFromInt(fn_addr + header_ptr.ctx_offset);
         }
     }
     return null;
@@ -80,7 +90,25 @@ pub fn unbind(fn_ptr: *const anyopaque) void {
     destroy(exec_allocator, fn_ptr);
 }
 
-var exec_da: std.heap.DebugAllocator(.{ .safety = false }) = .{
+pub fn protect(state: bool) void {
+    if (builtin.target.os.tag.isDarwin()) {
+        const c = @cImport({
+            @cInclude("pthread.h");
+        });
+        c.pthread_jit_write_protect_np(if (state) 1 else 0);
+    }
+}
+
+fn invalidate(slice: []u8) void {
+    if (builtin.target.os.tag.isDarwin()) {
+        const c = @cImport({
+            @cInclude("libkern/OSCacheControl.h");
+        });
+        c.sys_icache_invalidate(slice.ptr, slice.len);
+    }
+}
+
+var exec_da: std.heap.DebugAllocator(.{}) = .{
     .backing_allocator = .{
         .ptr = undefined,
         .vtable = &ExecutablePageAllocator.vtable,
@@ -88,57 +116,60 @@ var exec_da: std.heap.DebugAllocator(.{ .safety = false }) = .{
 };
 const exec_allocator = exec_da.allocator();
 
-pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
+pub fn Binding(comptime T: type, comptime CT: type) type {
     const FT = FnType(T);
-    const CT = ContextType(TT);
     const BFT = BoundFunction(FT, CT);
     const AddressPosition = struct { offset: isize, stack_offset: isize, stack_align_mask: ?isize };
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
 
     return struct {
-        var encoded_instr_len: ?usize = null;
-        var ctx_address_pos: ?AddressPosition = null;
+        var instr_len: ?usize = null;
+        var address_pos: ?AddressPosition = null;
 
         fn findInstructionLength() !usize {
-            return encoded_instr_len orelse init: {
-                const len = try encodeInstructions(null, 0);
-                encoded_instr_len = len;
+            return instr_len orelse init: {
+                const len = try encodeInstructionsReturnLength(null, 0);
+                instr_len = len;
                 break :init len;
             };
         }
 
-        fn encodeInstructions(output: ?[]u8, ctx_address: usize) !usize {
+        fn encodeInstructions(output: []u8, address: usize) !void {
+            _ = try encodeInstructionsReturnLength(output, address);
+        }
+
+        fn encodeInstructionsReturnLength(output: ?[]u8, address: usize) !usize {
             const trampoline = getTrampoline();
             const trampoline_address = @intFromPtr(&trampoline);
-            // find the offset of ctx_address inside the trampoline function
-            const address_pos = ctx_address_pos orelse init: {
+            // find the offset of target inside the trampoline function
+            const pos = address_pos orelse init: {
                 const offset = try findAddressPosition(&trampoline);
-                ctx_address_pos = offset;
+                address_pos = offset;
                 break :init offset;
             };
             var encoder: InstructionEncoder = .{ .output = output };
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    // mov rax, ctx_address
+                    // mov rax, address
                     encoder.encode(.{
                         .rex = .{},
                         .opcode = .@"mov ax imm32/64",
-                        .imm64 = ctx_address,
+                        .imm64 = address,
                     });
-                    if (address_pos.stack_align_mask) |mask| {
+                    if (pos.stack_align_mask) |mask| {
                         // mov r11, rsp
                         encoder.encode(.{
                             .rex = .{ .b = 1 },
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 3, .mod = 3, .reg = 4 },
                         });
-                        // add rsp, address_pos.stack_offset
+                        // add rsp, pos.stack_offset
                         encoder.encode(.{
                             .rex = .{},
                             .opcode = .@"add/or/etc r/m imm32",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset))),
+                            .imm32 = @bitCast(@as(i32, @truncate(pos.stack_offset))),
                         });
                         // and rsp, mask
                         encoder.encode(.{
@@ -148,14 +179,14 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                             .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
-                    // mov [rsp + address_pos.offset], rax
-                    if (address_pos.offset >= std.math.minInt(i8) and address_pos.offset <= std.math.maxInt(i8)) {
+                    // mov [rsp + po.offset], rax
+                    if (pos.offset >= std.math.minInt(i8) and pos.offset <= std.math.maxInt(i8)) {
                         encoder.encode(.{
                             .rex = .{},
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                            .disp8 = @truncate(address_pos.offset),
+                            .disp8 = @truncate(pos.offset),
                         });
                     } else {
                         encoder.encode(.{
@@ -163,10 +194,10 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                            .disp32 = @truncate(address_pos.offset),
+                            .disp32 = @truncate(pos.offset),
                         });
                     }
-                    if (address_pos.stack_align_mask) |_| {
+                    if (pos.stack_align_mask) |_| {
                         // mov rsp, r11
                         encoder.encode(.{
                             .rex = .{ .r = 1 },
@@ -188,7 +219,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     });
                 },
                 .aarch64 => {
-                    if (address_pos.stack_align_mask) |mask| {
+                    if (pos.stack_align_mask) |mask| {
                         encoder.encode(.{
                             .sub = .{
                                 .rd = 11,
@@ -197,12 +228,12 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                                 .shift = 0,
                             },
                         });
-                        // sub x10, sp, -address_pos.stack_offset
+                        // sub x10, sp, -pos.stack_offset
                         encoder.encode(.{
                             .sub = .{
                                 .rd = 10,
                                 .rn = 31,
-                                .imm12 = @truncate(@as(usize, @bitCast(-address_pos.stack_offset))),
+                                .imm12 = @truncate(@as(usize, @bitCast(-pos.stack_offset))),
                                 .shift = 0,
                             },
                         });
@@ -214,27 +245,27 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                                 .imm = @truncate(@as(usize, @bitCast(mask))),
                             },
                         });
-                        // add x10, x10, address_pos.offset
+                        // add x10, x10, pos.offset
                         encoder.encode(.{
                             .add = .{
                                 .rd = 10,
                                 .rn = 10,
-                                .imm12 = @truncate(@as(usize, @bitCast(address_pos.offset))),
+                                .imm12 = @truncate(@as(usize, @bitCast(pos.offset))),
                                 .shift = 0,
                             },
                         });
                     } else {
-                        // sub x10, sp, -address_pos.offset
+                        // sub x10, sp, -pos.offset
                         encoder.encode(.{
                             .sub = .{
                                 .rd = 10,
                                 .rn = 31,
-                                .imm12 = @truncate(@as(usize, @bitCast(-address_pos.offset))),
+                                .imm12 = @truncate(@as(usize, @bitCast(-pos.offset))),
                                 .shift = 0,
                             },
                         });
                     }
-                    // ldr x9, [pc + 16] (ctx_address)
+                    // ldr x9, [pc + 16] (address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 9, .imm19 = 4 },
                     });
@@ -250,17 +281,17 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .br = .{ .rn = 9 },
                     });
-                    encoder.encode(.{ .literal = ctx_address });
+                    encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .riscv64 => {
-                    // lui x5, address_pos.offset >> 12 + (sign adjustment)
+                    // lui x5, pos.offset >> 12 + (sign adjustment)
                     encoder.encode(.{
-                        .lui = .{ .rd = 5, .imm20 = @truncate((address_pos.offset >> 12) + ((address_pos.offset >> 11) & 1)) },
+                        .lui = .{ .rd = 5, .imm20 = @truncate((pos.offset >> 12) + ((pos.offset >> 11) & 1)) },
                     });
-                    // addi x5, (address_pos.offset & 0xfff)
+                    // addi x5, (pos.offset & 0xfff)
                     encoder.encode(.{
-                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(address_pos.offset & 0xfff) },
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(pos.offset & 0xfff) },
                     });
                     // add x6, sp, x5
                     encoder.encode(.{
@@ -270,7 +301,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .auipc = .{ .rd = 7, .imm20 = 0 },
                     });
-                    // ld x5, [x7 + 20] (ctx_address)
+                    // ld x5, [x7 + 20] (address)
                     encoder.encode(.{
                         .ld = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
                     });
@@ -286,11 +317,11 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
                     });
-                    encoder.encode(.{ .literal = ctx_address });
+                    encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .powerpc64le => {
-                    const code_address = ctx_address + @offsetOf(@This(), "code");
+                    const code_address = address + @offsetOf(@This(), "code");
                     const code_addr_63_48: u16 = @truncate((code_address >> 48) & 0xffff);
                     const code_addr_47_32: u16 = @truncate((code_address >> 32) & 0xffff);
                     const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
@@ -315,13 +346,13 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
                     });
-                    // ld r12, [r11 + 40] (ctx_address)
+                    // ld r12, [r11 + 40] (address)
                     encoder.encode(.{
                         .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
                     });
-                    // std [sp + address_pos.offset], r12
+                    // std [sp + pos.offset], r12
                     encoder.encode(.{
-                        .std = .{ .ra = 1, .rs = 12, .ds = @intCast(address_pos.offset >> 2) },
+                        .std = .{ .ra = 1, .rs = 12, .ds = @intCast(pos.offset >> 2) },
                     });
                     // ld r12, [r11 + 48] (trampoline_address)
                     encoder.encode(.{
@@ -335,16 +366,16 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .bctrl = .{},
                     });
-                    encoder.encode(.{ .literal = ctx_address });
+                    encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .x86 => {
-                    // mov eax, ctx_address
+                    // mov eax, address
                     encoder.encode(.{
                         .opcode = .@"mov ax imm32/64",
-                        .imm32 = ctx_address,
+                        .imm32 = address,
                     });
-                    if (address_pos.stack_align_mask) |mask| {
+                    if (pos.stack_align_mask) |mask| {
                         // push ecx
                         encoder.encode(.{
                             .opcode = .@"push cx",
@@ -354,11 +385,11 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 1, .mod = 3, .reg = 4 },
                         });
-                        // add esp, address_pos.stack_offset + 4 (to offset the earlier push)
+                        // add esp, pos.stack_offset + 4 (to offset the earlier push)
                         encoder.encode(.{
                             .opcode = .@"add/or/etc r/m imm32",
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 0 },
-                            .imm32 = @bitCast(@as(i32, @truncate(address_pos.stack_offset + 4))),
+                            .imm32 = @bitCast(@as(i32, @truncate(pos.stack_offset + 4))),
                         });
                         // and esp, mask
                         encoder.encode(.{
@@ -367,23 +398,23 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                             .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
-                    // mov [esp + address_pos.offset], eax
-                    if (address_pos.offset >= std.math.minInt(i8) and address_pos.offset <= std.math.maxInt(i8)) {
+                    // mov [esp + pos.offset], eax
+                    if (pos.offset >= std.math.minInt(i8) and pos.offset <= std.math.maxInt(i8)) {
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                            .disp8 = @truncate(address_pos.offset),
+                            .disp8 = @truncate(pos.offset),
                         });
                     } else {
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
                             .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
-                            .disp32 = @truncate(address_pos.offset),
+                            .disp32 = @truncate(pos.offset),
                         });
                     }
-                    if (address_pos.stack_align_mask) |_| {
+                    if (pos.stack_align_mask) |_| {
                         // mov esp, ecx
                         encoder.encode(.{
                             .opcode = .@"mov r/m r",
@@ -406,7 +437,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     });
                 },
                 .arm => {
-                    const total_amount: u32 = @abs(address_pos.offset);
+                    const total_amount: u32 = @abs(pos.offset);
                     const offset1 = Instruction.getNearestIMM12(total_amount);
                     const remainder = total_amount - Instruction.decodeIMM12(offset1);
                     const offset2 = Instruction.getNearestIMM12(remainder);
@@ -428,7 +459,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                             },
                         });
                     }
-                    // ldr r4, [pc + 8] (ctx_address)
+                    // ldr r4, [pc + 8] (address)
                     encoder.encode(.{
                         .ldr = .{ .rt = 4, .rn = 15, .imm12 = @sizeOf(u32) * 2 },
                     });
@@ -444,17 +475,17 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .bx = .{ .rm = 4 },
                     });
-                    encoder.encode(.{ .literal = ctx_address });
+                    encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 .riscv32 => {
-                    // lui x5, address_pos.offset >> 12 + (sign adjustment)
+                    // lui x5, pos.offset >> 12 + (sign adjustment)
                     encoder.encode(.{
-                        .lui = .{ .rd = 5, .imm20 = @truncate((address_pos.offset >> 12) + ((address_pos.offset >> 11) & 1)) },
+                        .lui = .{ .rd = 5, .imm20 = @truncate((pos.offset >> 12) + ((pos.offset >> 11) & 1)) },
                     });
-                    // addi x5, (address_pos.offset & 0xfff)
+                    // addi x5, (pos.offset & 0xfff)
                     encoder.encode(.{
-                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(address_pos.offset & 0xfff) },
+                        .addi = .{ .rd = 5, .rs = 0, .imm12 = @truncate(pos.offset & 0xfff) },
                     });
                     // add x6, sp, x5
                     encoder.encode(.{
@@ -464,7 +495,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .auipc = .{ .rd = 7, .imm20 = 0 },
                     });
-                    // lw x5, [x7 + 20] (ctx_address)
+                    // lw x5, [x7 + 20] (address)
                     encoder.encode(.{
                         .lw = .{ .rd = 5, .rs = 7, .imm12 = @sizeOf(u32) * 5 + @sizeOf(usize) * 0 },
                     });
@@ -480,7 +511,7 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
                     encoder.encode(.{
                         .jalr = .{ .rd = 0, .rs = 5, .imm12 = 0 },
                     });
-                    encoder.encode(.{ .literal = ctx_address });
+                    encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
                 else => @compileError("No support for '" ++ @tagName(builtin.target.cpu.arch) ++ "'"),
@@ -488,31 +519,47 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
             return encoder.len;
         }
 
+        const bf = @typeInfo(BFT).@"fn";
+        const RT = bf.return_type.?;
+        const cc = bf.calling_convention;
+
         fn getTrampoline() BFT {
-            const bf = @typeInfo(BFT).@"fn";
-            const RT = bf.return_type.?;
-            const cc = bf.calling_convention;
             const ns = struct {
                 inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
-                    // disable runtime safety so ctx_address isn't written with 0xaa when optimize = Debug
+                    // disable runtime safety so target isn't written with 0xaa when optimize = Debug
                     @setRuntimeSafety(false);
                     // this variable will be set by dynamically generated code before the jump
                     // using a two-element array to ensure the compiler doesn't attempt to keep it in register
                     var target: [2]usize = undefined;
-                    // insert nop x 3 so we can find the displacement for ctx_address in the instruction stream
+                    // insert nop x 3 so we can find the displacement for target in the instruction stream
                     insertNOPs(&target);
-                    const ctx_address = target[0];
+                    const fn_address_ptr: *const usize = @ptrFromInt(target[0]);
+                    const ctx_ptr: *const CT = @ptrFromInt(target[0] + @sizeOf(usize));
                     var args: std.meta.ArgsTuple(FT) = undefined;
                     inline for (arg_mapping) |m| {
                         @field(args, m.dest) = @field(bf_args, m.src);
                     }
-                    const ctx_ptr: *const CT = @ptrFromInt(ctx_address);
                     inline for (ctx_mapping) |m| {
                         @field(args, m.dest) = @field(ctx_ptr.*, m.src);
                     }
-                    const fn_address_ptr: *usize = @ptrFromInt(ctx_address - @sizeOf(usize));
                     const fn_ptr: *const FT = @ptrFromInt(fn_address_ptr.*);
                     return @call(.never_inline, fn_ptr, args);
+                }
+            };
+            return fn_transform.spreadArgs(ns.call, cc);
+        }
+
+        fn getComptime(comptime func: anytype, comptime vars: anytype) BFT {
+            const ns = struct {
+                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
+                    var args: std.meta.ArgsTuple(FT) = undefined;
+                    inline for (arg_mapping) |m| {
+                        @field(args, m.dest) = @field(bf_args, m.src);
+                    }
+                    inline for (ctx_mapping) |m| {
+                        @field(args, m.dest) = @field(vars, m.src);
+                    }
+                    return @call(.auto, func, args);
                 }
             };
             return fn_transform.spreadArgs(ns.call, cc);
@@ -822,7 +869,8 @@ pub fn RuntimeBinding(comptime T: type, comptime TT: type) type {
     };
 }
 
-pub fn BoundFunction(comptime FT: type, comptime CT: type) type {
+pub fn BoundFunction(comptime T: type, comptime CT: type) type {
+    const FT = FnType(T);
     const f = @typeInfo(FT).@"fn";
     const params = @typeInfo(FT).@"fn".params;
     const fields = @typeInfo(CT).@"struct".fields;
@@ -848,46 +896,6 @@ test "BoundFunction" {
     };
     const BFT = BoundFunction(FT, CT);
     try expect(BFT == fn (i8, i16, i64) i64);
-}
-
-fn ContextType(comptime TT: type) type {
-    const fields = switch (@typeInfo(TT)) {
-        .@"struct" => |st| st.fields,
-        else => @compileError("Not a tuple or struct"),
-    };
-    var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
-    var index: usize = 0;
-    for (fields) |field| {
-        if (field.type != @TypeOf(undefined)) {
-            new_fields[index] = field;
-            index += 1;
-        }
-    }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = new_fields[0..index],
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
-}
-
-test "ContextType" {
-    var number: i32 = 5;
-    _ = &number;
-    const args1 = .{ number, 1 };
-    const CT1 = ContextType(@TypeOf(args1));
-    const fields1 = @typeInfo(CT1).@"struct".fields;
-    try expect(fields1.len == 2);
-    try expect(fields1[0].is_comptime == false);
-    try expect(fields1[1].is_comptime == true);
-    const args2 = .{ undefined, 123, undefined, 456 };
-    const CT2 = ContextType(@TypeOf(args2));
-    const fields2 = @typeInfo(CT2).@"struct".fields;
-    try expect(fields2.len == 2);
-    try expect(fields2[0].name[0] == '1');
-    try expect(fields2[1].name[0] == '3');
 }
 
 const Mapping = struct {
@@ -2300,24 +2308,6 @@ test "ExecutablePageAllocator" {
     _ = ExecutablePageAllocator;
 }
 
-fn protect(state: bool) void {
-    if (builtin.target.os.tag.isDarwin()) {
-        const c = @cImport({
-            @cInclude("pthread.h");
-        });
-        c.pthread_jit_write_protect_np(if (state) 1 else 0);
-    }
-}
-
-fn invalidate(slice: []u8) void {
-    if (builtin.target.os.tag.isDarwin()) {
-        const c = @cImport({
-            @cInclude("libkern/OSCacheControl.h");
-        });
-        c.sys_icache_invalidate(slice.ptr, slice.len);
-    }
-}
-
 test "bind (i64 x 3 + *i64 x 1)" {
     const ns = struct {
         fn add(a1: *i64, a2: i64, a3: i64, a4: i64) callconv(.c) void {
@@ -2844,4 +2834,41 @@ test "bind (*i64 x 3 + *i64 x 1)" {
     try expect(number2 == 123);
     try expect(number3 == 123);
     try expect(number4 == 123);
+}
+
+test "bind (i64 x 1 + i64 x 1, comptime)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64) i64 {
+            return a1 + a2;
+        }
+    };
+    const number: i64 = 1234;
+    const vars = .{ .@"-1" = number };
+    const bf = comptime try bind(&ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    defer unbind(bf);
+    const sum = bf(1);
+    try expect(sum == 1 + 1234);
+}
+
+test "bound" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64) i64 {
+            return a1 + a2;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    const bf = try bind(ns.add, vars);
+    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    defer unbind(bf);
+    const sum1 = bf(1);
+    try expect(sum1 == 1 + 1234);
+    const ctx_ptr = bound(@TypeOf(vars), bf) orelse return error.NotFound;
+    protect(false);
+    ctx_ptr.@"-1" = 4567;
+    protect(true);
+    const sum2 = bf(1);
+    try expect(sum2 == 1 + 4567);
 }
