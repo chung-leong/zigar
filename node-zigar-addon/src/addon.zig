@@ -451,6 +451,109 @@ fn finalizeAsyncCall(
     if (md.module.imports.wake_caller(futex_handle, result) != .ok) return error.Failure;
 }
 
+fn getNumericValue(
+    md: *ModuleData,
+    args: [3]Value,
+) !Value {
+    const env = md.env;
+    const member_type = try std.meta.intToEnum(MemberType, try env.getValueUint32(args[0]));
+    const bits = try env.getValueUint32(args[1]);
+    const address = try env.getValueUsize(args[2]);
+    return switch (member_type) {
+        .int => switch (bits) {
+            64 => try env.createBigInt64(@as(*i64, @ptrFromInt(address)).*),
+            32 => try env.createInt32(@as(*i32, @ptrFromInt(address)).*),
+            16 => try env.createInt32(@as(*i16, @ptrFromInt(address)).*),
+            8 => try env.createInt32(@as(*i16, @ptrFromInt(address)).*),
+            else => error.InvalidArg,
+        },
+        .uint => switch (bits) {
+            64 => try env.createBigUint64(@as(*i64, @ptrFromInt(address)).*),
+            32 => try env.createUint32(@as(*i32, @ptrFromInt(address)).*),
+            16 => try env.createUint32(@as(*i16, @ptrFromInt(address)).*),
+            8 => try env.createUint32(@as(*i16, @ptrFromInt(address)).*),
+            else => error.InvalidArg,
+        },
+        .float => switch (bits) {
+            64 => try env.createDouble(@as(*f64, @ptrFromInt(address)).*),
+            32 => try env.createDouble(@as(*f32, @ptrFromInt(address)).*),
+            else => return error.InvalidArg,
+        },
+        else => return error.Unexpected,
+    };
+}
+
+fn setNumericValue(
+    md: *ModuleData,
+    args: [4]Value,
+) !void {
+    const env = md.env;
+    const member_type = try std.meta.intToEnum(MemberType, try env.getValueUint32(args[0]));
+    const bits = try env.getValueUint32(args[1]);
+    const address = try env.getValueUsize(args[2]);
+    switch (member_type) {
+        .int => if (bits == 64) {
+            var value: i64 = undefined;
+            _ = try env.getValueBigintInt64(args[3], &value);
+            @as(*i64, @ptrFromInt(address)).* = value;
+        } else {
+            const value = try env.getValueInt32(args[3]);
+            switch (bits) {
+                32 => @as(*i32, @ptrFromInt(address)).* = value,
+                16 => @as(*i16, @ptrFromInt(address)).* = value,
+                8 => @as(*i8, @ptrFromInt(address)).* = value,
+                else => return error.InvalidArg,
+            }
+        },
+        .uint => if (bits == 64) {
+            var value: u64 = undefined;
+            _ = try env.getValueBigintUint64(args[3], &value);
+            @as(*u64, @ptrFromInt(address)).* = value;
+        } else {
+            const value = try env.getValueUint32(args[3]);
+            switch (bits) {
+                32 => @as(*u32, @ptrFromInt(address)).* = value,
+                16 => @as(*u16, @ptrFromInt(address)).* = value,
+                8 => @as(*u8, @ptrFromInt(address)).* = value,
+                else => return error.InvalidArg,
+            }
+        },
+        .float => {
+            const value = try env.getValueDouble(args[3]);
+            switch (bits) {
+                64 => @as(*u64, @ptrFromInt(address)).* = value,
+                32 => @as(*u32, @ptrFromInt(address)).* = value,
+                else => return error.InvalidArg,
+            }
+        },
+        else => return error.Unexpected,
+    }
+}
+
+fn requireBufferFallback(
+    md: *ModuleData,
+    _: [0]Value,
+) !Value {
+    const env = md.env;
+    return env.getBoolean(canCreateExternalBuffer(env));
+}
+
+fn syncExternalBuffer(
+    md: *ModuleData,
+    args: [3]Value,
+) !void {
+    const env = md.env;
+    var bytes1: [*]u8 = undefined;
+    const len = try env.getArraybufferInfo(args[0], &bytes1);
+    const address = try env.getValueUsize(args[1]);
+    const to = try env.getValueBool(args[2]);
+    const bytes2: [*]u8 = @ptrFromInt(address);
+    if (to)
+        @memcpy(bytes2[0..len], bytes1[0..len])
+    else
+        @memcpy(bytes1[0..len], bytes2[0..len]);
+}
+
 fn throwError(
     env: Env,
     fmt: []const u8,
