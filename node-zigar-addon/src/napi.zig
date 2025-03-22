@@ -43,7 +43,7 @@ pub const NapiError = error{
     NoExternalBuffersAllowed,
     CannotRunJs,
 };
-pub const Env = opaque {
+pub const Env = *const opaque {
     // Environment life cycle APIs
     pub const setInstanceData = translateFromC(c.napi_set_instance_data);
     pub const getInstanceData = translateFromC(c.napi_get_instance_data);
@@ -228,6 +228,7 @@ pub const Env = opaque {
     // Miscellaneous utilities
     pub const getModuleFileName = translateFromC(c.node_api_get_module_file_name);
 };
+const auto_length = c.NAPI_AUTO_LENGTH;
 
 fn TranslatedFromC(comptime func: anytype) type {
     const CFT = @TypeOf(func);
@@ -251,7 +252,7 @@ fn TranslatedFromC(comptime func: anytype) type {
         if (index < param_count) {
             const CPT = param.type.?;
             const TPT = switch (CPT) {
-                c.napi_env => *Env,
+                c.napi_env => Env,
                 c_uint => TranslateEnumType(func, index),
                 else => CPT,
             };
