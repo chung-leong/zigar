@@ -1,3 +1,3 @@
-import { run } from '../lib/raylib.zigar';
+import { launch } from '../zig/main.zig';
 
-await run();
+await launch();
