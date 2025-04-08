@@ -5,11 +5,11 @@ const r = @cImport(@cInclude("raylib.h"));
 pub fn launch(promise: zigar.function.Promise(void)) !void {
     try zigar.thread.use();
     errdefer zigar.thread.end();
-    const thread = try std.Thread.spawn(.{}, run_main, .{promise});
+    const thread = try std.Thread.spawn(.{}, runMain, .{promise});
     thread.detach();
 }
 
-fn run_main(promise: zigar.function.Promise(void)) void {
+fn runMain(promise: zigar.function.Promise(void)) void {
     main();
     promise.resolve({});
     zigar.thread.end();
