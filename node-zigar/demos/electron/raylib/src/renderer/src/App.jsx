@@ -56,7 +56,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    window.electron.ipcRenderer.invoke('raylib:get-settings', settings.current).then((obj) => {
+    window.electron.ipcRenderer.invoke('raylib:get-settings').then((obj) => {
       settings.current = obj;
       setX(obj.x);
       setY(obj.y);
@@ -64,7 +64,7 @@ function App() {
       setTextColor(stringifyColor(obj.text_color));
       setBkColor(stringifyColor(obj.background_color));
     });
-    window.electron.ipcRenderer.invoke('raylib:get-text', settings.current).then((str) => {
+    window.electron.ipcRenderer.invoke('raylib:get-text').then((str) => {
       setText(str);
     });
     window.electron.ipcRenderer.on('raylib:key-pressed', (evt, keyCode) => setLastKey(keyCode));
