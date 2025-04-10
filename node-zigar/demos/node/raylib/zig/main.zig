@@ -2,17 +2,20 @@ const std = @import("std");
 const zigar = @import("zigar");
 const r = @cImport(@cInclude("raylib.h"));
 
-pub fn run(promise: zigar.function.Promise(void)) !void {
+pub fn launch(promise: zigar.function.Promise(void)) !void {
     try zigar.thread.use();
     errdefer zigar.thread.end();
-    const thread = try std.Thread.spawn(.{}, main, .{promise});
+    const thread = try std.Thread.spawn(.{}, run_main, .{promise});
     thread.detach();
 }
 
-fn main(promise: zigar.function.Promise(void)) void {
-    defer zigar.thread.end();
-    defer promise.resolve({});
+fn run_main(promise: zigar.function.Promise(void)) void {
+    main();
+    promise.resolve({});
+    zigar.thread.end();
+}
 
+pub fn main() void {
     r.InitWindow(800, 450, "raylib [core] example - basic window");
     defer r.CloseWindow();
 
