@@ -55,7 +55,7 @@ pub const PropertyAttributes = packed struct(c_uint) {
     _: u7 = 0,
     static: bool = false,
     __: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 11) = 0,
-
+    
     pub const default: @This() = .{};
     pub const default_method: @This() = .{ .writable = true, .configurable = true };
     pub const default_jsproperty: @This() = .{ .writable = true, .enumerable = true, .configurable = true };
@@ -164,7 +164,7 @@ pub const Filter = packed struct(c_uint) {
     skip_strings: bool = false,
     skip_symbols: bool = false,
     _: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 5) = 0,
-
+    
     pub const all_properties: @This() = .{};
 };
 /// https://nodejs.org/api/n-api.html#napi_key_conversion
@@ -1264,19 +1264,4 @@ test {
     inline for (comptime std.meta.declarations(@This())) |decl| {
         _ = @field(@This(), decl.name);
     }
-}
-
-pub const version = c.NAPI_VERSION;
-
-pub fn createAddon(comptime addExports: anytype) void {
-    const Env = @This();
-    _ = struct {
-        export fn node_api_module_get_api_version_v1() i32 {
-            return version;
-        }
-
-        export fn napi_register_module_v1(env: *Env, exports: Value) ?Value {
-            return addExports(env, exports) catch null;
-        }
-    };
 }

@@ -10,23 +10,15 @@ pub fn build(b: *std.Build) !void {
     const os = if (@hasDecl(@TypeOf(target), "getOsTag")) target.getOsTag() else target.result.os.tag;
     const lib = b.addSharedLibrary(.{
         .name = "node-zigar-addon",
+        .root_source_file = b.path("src/addon.zig"),
         .target = target,
         .optimize = optimize,
     });
-    const clang_flags = &.{ "-std=gnu11", "-Wno-trigraphs" };
     lib.addIncludePath(b.path("../node-api-headers/include"));
     lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
-    lib.addCSourceFile(.{ .file = b.path("./src/addon-node.c"), .flags = clang_flags });
-    lib.addCSourceFile(.{ .file = b.path("./src/addon.c"), .flags = clang_flags });
-    lib.addCSourceFile(.{ .file = b.path("./src/redirect.c"), .flags = clang_flags });
     switch (os) {
-        .windows => {
-            lib.addCSourceFile(.{ .file = b.path("./src/win32-shim.c"), .flags = &.{} });
-            lib.linkSystemLibrary("dbghelp");
-        },
-        .macos => {
-            lib.linker_allow_shlib_undefined = true;
-        },
+        .windows => lib.linkSystemLibrary("dbghelp"),
+        .macos => lib.linker_allow_shlib_undefined = true,
         else => {},
     }
     lib.linkLibC();
