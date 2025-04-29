@@ -1,5 +1,6 @@
 const std = @import("std");
-const api_translator = @import("code-gen/api-translator.zig");
+const builtin = @import("builtin");
+const api_translator = @import("zigft/api-translator.zig");
 const inout = api_translator.inout;
 const c = @cImport({
     @cInclude("node_api.h");
@@ -31,6 +32,8 @@ pub const Error = error{
     CannotRunJs,
     Unexpected,
 };
+/// https://nodejs.org/api/n-api.html#napi_env
+pub const Env = *@This();
 /// https://nodejs.org/api/n-api.html#node_api_nogc_env
 pub const NogcEnv = *@This();
 /// https://nodejs.org/api/n-api.html#node_api_basic_env
@@ -55,7 +58,7 @@ pub const PropertyAttributes = packed struct(c_uint) {
     _: u7 = 0,
     static: bool = false,
     __: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 11) = 0,
-
+    
     pub const default: @This() = .{};
     pub const default_method: @This() = .{ .writable = true, .configurable = true };
     pub const default_jsproperty: @This() = .{ .writable = true, .enumerable = true, .configurable = true };
@@ -164,7 +167,7 @@ pub const Filter = packed struct(c_uint) {
     skip_strings: bool = false,
     skip_symbols: bool = false,
     _: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 5) = 0,
-
+    
     pub const all_properties: @This() = .{};
 };
 /// https://nodejs.org/api/n-api.html#napi_key_conversion
@@ -280,8 +283,8 @@ pub const createFunction: fn (
     env: *@This(),
     utf8name: ?[]const u8,
     cb: Callback,
-    data: *anyopaque,
-) Error!Value = c_to_zig.translateMerge("napi_create_function", true, false, .{ .@"1" = ?[*:0]const u8 }, &.{
+    data: ?*anyopaque,
+) Error!Value = c_to_zig.translateMerge("napi_create_function", true, false, .{ .@"1" = ?[*:0]const u8, .@"4" = ?*anyopaque }, &.{
     .{ .ptr_index = 1, .len_index = 2 },
 });
 
@@ -346,25 +349,28 @@ pub const getValueBool: fn (
 pub const getValueStringLatin1: fn (
     env: *@This(),
     value: Value,
-    buf: [*:0]u8,
-    bufsize: usize,
-) Error!usize = c_to_zig.translate("napi_get_value_string_latin1", true, false, .{});
+    buf: []u8,
+) Error!usize = c_to_zig.translateMerge("napi_get_value_string_latin1", true, false, .{}, &.{
+    .{ .ptr_index = 2, .len_index = 3 },
+});
 
 /// https://nodejs.org/api/n-api.html#napi_get_value_string_utf8
 pub const getValueStringUtf8: fn (
     env: *@This(),
     value: Value,
-    buf: [*:0]u8,
-    bufsize: usize,
-) Error!usize = c_to_zig.translate("napi_get_value_string_utf8", true, false, .{});
+    buf: []u8,
+) Error!usize = c_to_zig.translateMerge("napi_get_value_string_utf8", true, false, .{}, &.{
+    .{ .ptr_index = 2, .len_index = 3 },
+});
 
 /// https://nodejs.org/api/n-api.html#napi_get_value_string_utf16
 pub const getValueStringUtf16: fn (
     env: *@This(),
     value: Value,
-    buf: [*:0]u16,
-    bufsize: usize,
-) Error!usize = c_to_zig.translate("napi_get_value_string_utf16", true, false, .{});
+    buf: []u16,
+) Error!usize = c_to_zig.translateMerge("napi_get_value_string_utf16", true, false, .{}, &.{
+    .{ .ptr_index = 2, .len_index = 3 },
+});
 
 /// https://nodejs.org/api/n-api.html#napi_coerce_to_bool
 pub const coerceToBool: fn (
@@ -546,7 +552,9 @@ pub const instanceof: fn (
 pub const getCbInfo: fn (
     env: *@This(),
     cbinfo: CallbackInfo,
-) Error!std.meta.Tuple(&.{ usize, Value, Value, *anyopaque }) = c_to_zig.translate("napi_get_cb_info", true, false, .{});
+    argc: *usize,
+    argv: [*]Value,
+) Error!std.meta.Tuple(&.{ Value, ?*anyopaque }) = c_to_zig.translate("napi_get_cb_info", true, false, .{ .@"3" = inout([*]Value), .@"5" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_get_new_target
 pub const getNewTarget: fn (
@@ -1233,10 +1241,11 @@ const c_to_zig = api_translator.Translator(.{
         .{ .old = [*c]const c.napi_node_version, .new = *const NodeVersion },
         .{ .old = [*c]const c.napi_property_descriptor, .new = *const PropertyDescriptor },
         .{ .old = [*c]const c.napi_type_tag, .new = *const TypeTag },
-        .{ .old = [*c]const c.napi_value, .new = *const Value },
+        .{ .old = [*c]const c.napi_value, .new = [*]const Value },
         .{ .old = [*c]const u64, .new = *const u64 },
         .{ .old = [*c]const u8, .new = [*:0]const u8 },
         .{ .old = [*c]u8, .new = [*:0]u8 },
+        .{ .old = [*c]usize, .new = *usize },
         .{ .old = c.napi_async_cleanup_hook, .new = AsyncCleanupHook },
         .{ .old = c.napi_async_cleanup_hook_handle, .new = AsyncCleanupHookHandle },
         .{ .old = c.napi_async_complete_callback, .new = AsyncCompleteCallback },
@@ -1258,6 +1267,7 @@ const c_to_zig = api_translator.Translator(.{
         .{ .old = c.napi_value, .new = Value },
     },
     .error_scheme = api_translator.BasicErrorScheme(Status, Error, Error.Unexpected),
+    .late_bind_fn = late_binder,
 });
 
 test {
@@ -1268,15 +1278,153 @@ test {
 
 pub const version = c.NAPI_VERSION;
 
-pub fn createAddon(comptime addExports: anytype) void {
-    const Env = @This();
+pub fn createAddon(comptime attachExports: anytype) void {
     _ = struct {
         export fn node_api_module_get_api_version_v1() i32 {
             return version;
         }
 
-        export fn napi_register_module_v1(env: *Env, exports: Value) ?Value {
-            return addExports(env, exports) catch null;
+        export fn napi_register_module_v1(env: Env, exports: Value) ?Value {
+            attachExports(env, exports) catch |err| {
+                std.debug.print("Unable to register Node API module: {s}", .{getErrorMessage(err)});
+            };
+            return null;
         }
     };
 }
+
+pub fn createCallback(
+    self: *@This(),
+    utf8name: ?[]const u8,
+    comptime func: anytype,
+    comptime need_this: bool,
+    data: ?*anyopaque,
+) Error!Value {
+    const FT = @TypeOf(func);
+    const f = switch (@typeInfo(FT)) {
+        .@"fn" => |f| f,
+        else => @compileError("Function expected, found '" + @typeName(FT) + "'"),
+    };
+    // figure out how many arguments the function has and whether it needs the data pointer
+    comptime var need_data = false;
+    comptime var need_env = false;
+    comptime var arg_count: usize = 0;
+    comptime {
+        for (f.params, 0..) |param, i| {
+            const PT = param.type orelse @compileError("Missing parameter type");
+            if (!need_env and PT == Env) {
+                if (!need_data and i != 0) @compileError("Env is expected to be the first argument");
+                if (need_data and i != 1) @compileError("Env is expected to be the second argument");
+                need_env = true;
+            } else if (PT == Value) {
+                arg_count += 1;
+            } else if (!need_data and @typeInfo(PT) == .pointer) {
+                if (i != 0) @compileError("Data pointer is expected to be the first argument");
+                need_data = true;
+            } else @compileError("Unexpected argument '" + @typeName(PT) + "'");
+        }
+        if (need_this) {
+            if (arg_count == 0) @compileError("Missing this argument");
+            arg_count -= 1;
+        }
+    }
+    const ns = struct {
+        fn callback(env: Env, cb_info: CallbackInfo) callconv(.c) Value {
+            return handleCall(env, cb_info) catch |err| {
+                env.throwError(null, getErrorMessage(err)) catch {};
+                return env.getUndefined() catch @panic("Cannot even get undefined");
+            };
+        }
+
+        fn handleCall(env: Env, cb_info: CallbackInfo) !Value {
+            // retrieve arguments from Node
+            var argc = arg_count;
+            var argv: [arg_count]Value = undefined;
+            const this, const ptr = try env.getCbInfo(cb_info, &argc, &argv);
+            // copy arguments into arg tuple
+            var args: std.meta.ArgsTuple(FT) = undefined;
+            comptime var offset: usize = 0;
+            if (need_data) {
+                args[offset] = @ptrCast(ptr.?);
+                offset += 1;
+            }
+            if (need_env) {
+                args[offset] = env;
+                offset += 1;
+            }
+            if (need_this) {
+                args[offset] = this;
+                offset += 1;
+            }
+            inline for (0..arg_count) |i| {
+                args[offset + i] = if (i < argc) argv[i] else try env.getUndefined();
+            }
+            // call function
+            const retval = @call(.auto, func, args);
+            // check for error if it's possible
+            const result = switch (@typeInfo(@TypeOf(retval))) {
+                .error_union => try retval,
+                else => retval,
+            };
+            // deal with void retval
+            const RT = @TypeOf(result);
+            return switch (RT) {
+                Value => result,
+                void => try env.getUndefined(),
+                else => @compileError("Return value must be void or Value, found '" + @typeName(RT) + "'"),
+            };
+        }
+    };
+    if ((need_data and data == null) or (!need_data and data != null)) {
+        return error.InvalidArg;
+    }
+    return try self.createFunction(utf8name, ns.callback, data);
+}
+
+fn getErrorMessage(err: anytype) [:0]const u8 {
+    @setEvalBranchQuota(200000);
+    switch (err) {
+        inline else => |e| {
+            const message = comptime decamelize: {
+                const name = @errorName(e);
+                var cap_count: usize = 0;
+                for (name, 0..) |letter, i| {
+                    if (i > 0 and std.ascii.isUpper(letter)) cap_count += 1;
+                }
+                var buffer: [name.len + cap_count + 1]u8 = undefined;
+                var index: usize = 0;
+                for (name, 0..) |letter, i| {
+                    if (std.ascii.isUpper(letter)) {
+                        if (i > 0) {
+                            buffer[index] = ' ';
+                            index += 1;
+                            buffer[index] = std.ascii.toLower(letter);
+                        } else {
+                            buffer[index] = letter;
+                        }
+                    } else {
+                        buffer[index] = letter;
+                    }
+                    index += 1;
+                }
+                buffer[index] = 0;
+                break :decamelize buffer;
+            };
+            return @ptrCast(&message);
+        },
+    }
+}
+
+fn getProcAddress(name: [:0]const u8) *const anyopaque {
+    const module = std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable;
+    return std.os.windows.kernel32.GetProcAddress(module, name) orelse {
+        var buffer: [256]u8 = undefined;
+        const msg = std.fmt.bufPrint(&buffer, "Unable to import function: {s}", .{name}) catch &buffer;
+        @panic(msg);
+    };
+}
+
+const late_binder = switch (builtin.target.os.tag) {
+    .windows => getProcAddress,
+    else => null,
+};

@@ -7,9 +7,10 @@ pub fn main() !void {
     var generator: *api_translator.CodeGenerator(.{
         .include_paths = &.{"../../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
-        .zigft_path = "code-gen/",
+        .zigft_path = "zigft/",
         .c_error_type = "napi_status",
         .c_root_struct = "napi_env",
+        .late_bind_expr = "late_binder",
         .filter_fn = filter,
         .type_name_fn = getTypeName,
         .fn_name_fn = getFnName,
@@ -19,19 +20,34 @@ pub fn main() !void {
         .param_is_slice_len_fn = getPtrParamIndex,
         .param_is_optional_fn = isParamOptional,
         .param_is_input_fn = isParamInput,
+        .ptr_is_many_fn = isPointerMany,
         .doc_comment_fn = getDocComment,
     }) = try .init(gpa.allocator());
     defer generator.deinit();
     // analyze the headers
     try generator.analyze();
     // save translated code to file
-    const path = try std.fs.path.resolve(generator.allocator, &.{
+    const output_path = try std.fs.path.resolve(generator.allocator, &.{
         generator.cwd,
-        "gen-napi-output.zig",
+        "..",
+        "napi.zig",
     });
-    var file = try std.fs.createFileAbsolute(path, .{});
-    try generator.print(file.writer());
-    file.close();
+    const custom_path = try std.fs.path.resolve(generator.allocator, &.{
+        generator.cwd,
+        "gen-napi-custom.zig",
+    });
+    var output_file = try std.fs.createFileAbsolute(output_path, .{});
+    defer output_file.close();
+    var custom_file = try std.fs.openFileAbsolute(custom_path, .{});
+    defer custom_file.close();
+    try generator.print(output_file.writer());
+    _ = try output_file.write("\n");
+    while (true) {
+        var buffer: [1024]u8 = undefined;
+        const count = try custom_file.read(&buffer);
+        if (count == 0) break;
+        _ = try output_file.write(buffer[0..count]);
+    }
 }
 
 const camelize = api_translator.camelize;
@@ -59,6 +75,9 @@ const slice_len_after_fns = .{
     "napi_create_string_utf16",
     "napi_create_external_arraybuffer",
     "napi_create_function",
+    "napi_get_value_string_latin1",
+    "napi_get_value_string_utf8",
+    "napi_get_value_string_utf16",
     "napi_define_class",
     "napi_fatal_error",
 };
@@ -72,17 +91,19 @@ const optional_params = .{
     .{ .fn_name = "napi_define_class", .arg_indices = .{4} },
     .{ .fn_name = "napi_wrap", .arg_indices = .{ 3, 4 } },
     .{ .fn_name = "napi_property_descriptor", .arg_indices = .{ 0, 1 } },
-    .{ .fn_name = "napi_create_function", .arg_indices = .{1} },
+    .{ .fn_name = "napi_create_function", .arg_indices = .{ 1, 4 } },
     .{ .fn_name = "napi_create_external", .arg_indices = .{ 2, 3 } },
     .{ .fn_name = "napi_create_external_arraybuffer", .arg_indices = .{ 3, 4 } },
     .{ .fn_name = "napi_create_threadsafe_function", .arg_indices = .{ 6, 7, 8, 9 } },
     .{ .fn_name = "napi_fatal_error", .arg_indices = .{0} },
+    .{ .fn_name = "napi_get_cb_info", .arg_indices = .{5} },
     // function pointers
     .{ .fn_name = "napi_finalize", .arg_indices = .{2} },
     .{ .fn_name = "napi_threadsafe_function_call_js", .arg_indices = .{ 2, 3 } },
 };
 const inout_params = .{
     .{ .fn_name = "napi_module_register", .arg_indices = .{0} },
+    .{ .fn_name = "napi_get_cb_info", .arg_indices = .{ 2, 3 } },
 };
 
 fn filter(name: []const u8) bool {
@@ -145,6 +166,11 @@ fn isParamInput(fn_name: []const u8, _: ?[]const u8, param_index: usize, _: []co
         if (std.mem.eql(u8, fn_name, f.fn_name))
             if (std.mem.indexOfScalar(usize, &f.arg_indices, param_index) != null) break true;
     } else false;
+}
+
+fn isPointerMany(ptr_type: []const u8, child_type: []const u8) bool {
+    if (api_translator.isTargetChar(ptr_type, child_type)) return true;
+    return std.mem.eql(u8, child_type, "napi_value");
 }
 
 fn getDocComment(allocator: std.mem.Allocator, old_name: []const u8, _: []const u8) std.mem.Allocator.Error!?[]const u8 {
