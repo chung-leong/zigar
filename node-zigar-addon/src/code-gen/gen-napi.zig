@@ -7,7 +7,7 @@ pub fn main() !void {
     var generator: *api_translator.CodeGenerator(.{
         .include_paths = &.{"../../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
-        .zigft_path = "zigft/",
+        .zigft_path = "code-gen/",
         .c_error_type = "napi_status",
         .c_root_struct = "napi_env",
         .late_bind_expr = "late_binder",
@@ -87,7 +87,7 @@ const alway_optional_params = .{
 };
 const optional_params = .{
     .{ .fn_name = "node_api_post_finalizer", .arg_indices = .{ 2, 3 } },
-    .{ .fn_name = "napi_add_finalizer", .arg_indices = .{ 2, 4 } },
+    .{ .fn_name = "napi_add_finalizer", .arg_indices = .{4} },
     .{ .fn_name = "napi_define_class", .arg_indices = .{4} },
     .{ .fn_name = "napi_wrap", .arg_indices = .{ 3, 4 } },
     .{ .fn_name = "napi_property_descriptor", .arg_indices = .{ 0, 1 } },
@@ -97,6 +97,7 @@ const optional_params = .{
     .{ .fn_name = "napi_create_threadsafe_function", .arg_indices = .{ 6, 7, 8, 9 } },
     .{ .fn_name = "napi_fatal_error", .arg_indices = .{0} },
     .{ .fn_name = "napi_get_cb_info", .arg_indices = .{5} },
+    .{ .fn_name = "napi_add_finalizer", .arg_indices = .{5} },
     // function pointers
     .{ .fn_name = "napi_finalize", .arg_indices = .{2} },
     .{ .fn_name = "napi_threadsafe_function_call_js", .arg_indices = .{ 2, 3 } },
@@ -104,6 +105,7 @@ const optional_params = .{
 const inout_params = .{
     .{ .fn_name = "napi_module_register", .arg_indices = .{0} },
     .{ .fn_name = "napi_get_cb_info", .arg_indices = .{ 2, 3 } },
+    .{ .fn_name = "napi_add_finalizer", .arg_indices = .{5} },
 };
 
 fn filter(name: []const u8) bool {

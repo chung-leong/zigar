@@ -35,12 +35,11 @@ export default [
       }),
     ],
     output: {
-      file: 'src/addon.64b.js.txt',
+      file: 'src/addon.64b.js',
       format: 'iife',
       name: 'variable',
       plugins: [
         Terser(terserOptions),
-        CPPString(),
       ]
     },
   },
@@ -62,26 +61,12 @@ export default [
       }),
     ],
     output: {
-      file: 'src/addon.32b.js.txt',
+      file: 'src/addon.32b.js',
       format: 'iife',
       name: 'variable',
       plugins: [
         Terser(terserOptions),
-        CPPString(),
       ]
     },
   }
 ]
-
-function CPPString() {
-  // place JS code into a C++ raw string
-  return {
-    name: 'cpp_string',
-    renderChunk (code) {
-      const iife = code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
-      const lines = iife.split(/(?<=\n)/);
-      const literals = lines.map(l => JSON.stringify(l));
-      return literals.join('\n');
-    }
-  };
-}

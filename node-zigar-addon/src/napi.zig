@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const api_translator = @import("zigft/api-translator.zig");
+const api_translator = @import("code-gen/api-translator.zig");
 const inout = api_translator.inout;
 const c = @cImport({
     @cInclude("node_api.h");
@@ -845,10 +845,11 @@ pub const getDateValue: fn (
 pub const addFinalizer: fn (
     env: *@This(),
     js_object: Value,
-    finalize_data: ?*anyopaque,
+    finalize_data: *anyopaque,
     finalize_cb: BasicFinalize,
     finalize_hint: ?*anyopaque,
-) Error!Ref = c_to_zig.translate("napi_add_finalizer", true, false, .{ .@"2" = ?*anyopaque, .@"4" = ?*anyopaque });
+    result: ?*Ref,
+) Error!void = c_to_zig.translate("napi_add_finalizer", true, false, .{ .@"4" = ?*anyopaque, .@"5" = inout(?*Ref) });
 
 /// https://nodejs.org/api/n-api.html#napi_create_bigint_int64
 pub const createBigintInt64: fn (
@@ -1293,6 +1294,28 @@ pub fn createAddon(comptime attachExports: anytype) void {
     };
 }
 
+pub fn createUsize(
+    self: *@This(),
+    value: usize,
+) Error!Value {
+    return switch (@bitSizeOf(usize)) {
+        32 => try self.createUint32(value),
+        64 => try self.createBigintUint64(value),
+        else => @compileError("Unexpected size"),
+    };
+}
+
+pub fn getValueUsize(
+    self: *@This(),
+    value: Value,
+) Error!usize {
+    return switch (@bitSizeOf(usize)) {
+        32 => try self.getValueUint32(value),
+        64 => (try self.getValueBigintUint64(value))[0],
+        else => @compileError("Unexpected size"),
+    };
+}
+
 pub fn createCallback(
     self: *@This(),
     utf8name: ?[]const u8,
@@ -1345,7 +1368,7 @@ pub fn createCallback(
             var args: std.meta.ArgsTuple(FT) = undefined;
             comptime var offset: usize = 0;
             if (need_data) {
-                args[offset] = @ptrCast(ptr.?);
+                args[offset] = @ptrCast(@alignCast(ptr.?));
                 offset += 1;
             }
             if (need_env) {

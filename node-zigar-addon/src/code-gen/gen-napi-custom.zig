@@ -15,6 +15,28 @@ pub fn createAddon(comptime attachExports: anytype) void {
     };
 }
 
+pub fn createUsize(
+    self: *@This(),
+    value: usize,
+) Error!Value {
+    return switch (@bitSizeOf(usize)) {
+        32 => try self.createUint32(value),
+        64 => try self.createBigintUint64(value),
+        else => @compileError("Unexpected size"),
+    };
+}
+
+pub fn getValueUsize(
+    self: *@This(),
+    value: Value,
+) Error!usize {
+    return switch (@bitSizeOf(usize)) {
+        32 => try self.getValueUint32(value),
+        64 => (try self.getValueBigintUint64(value))[0],
+        else => @compileError("Unexpected size"),
+    };
+}
+
 pub fn createCallback(
     self: *@This(),
     utf8name: ?[]const u8,
@@ -67,7 +89,7 @@ pub fn createCallback(
             var args: std.meta.ArgsTuple(FT) = undefined;
             comptime var offset: usize = 0;
             if (need_data) {
-                args[offset] = @ptrCast(ptr.?);
+                args[offset] = @ptrCast(@alignCast(ptr.?));
                 offset += 1;
             }
             if (need_env) {
