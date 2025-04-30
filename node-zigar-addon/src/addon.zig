@@ -1,5 +1,6 @@
 const std = @import("std");
 const napi = @import("napi.zig");
+const fn_transform = @import("code-gen/fn-transform.zig");
 
 const Env = napi.Env;
 const Value = napi.Value;
@@ -13,40 +14,39 @@ comptime {
 }
 
 const ModuleHost = struct {
-    ref_count: isize,
-    ready: bool,
-    module: *Module,
-    dynlib: std.DynLib,
-    base_address: usize,
+    ref_count: isize = 1,
+    module: ?*Module = null,
+    library: ?std.DynLib = null,
+    base_address: usize = 0,
     env: Env,
     js: struct {
-        capture_view: Ref,
-        cast_view: Ref,
-        read_slot: Ref,
-        write_slot: Ref,
-        begin_structure: Ref,
-        attach_member: Ref,
-        attach_template: Ref,
-        define_structure: Ref,
-        end_structure: Ref,
-        create_template: Ref,
-        handle_js_call: Ref,
-        release_function: Ref,
-        write_bytes: Ref,
-    },
+        capture_view: ?Ref = null,
+        cast_view: ?Ref = null,
+        read_slot: ?Ref = null,
+        write_slot: ?Ref = null,
+        begin_structure: ?Ref = null,
+        attach_member: ?Ref = null,
+        attach_template: ?Ref = null,
+        define_structure: ?Ref = null,
+        end_structure: ?Ref = null,
+        create_template: ?Ref = null,
+        handle_js_call: ?Ref = null,
+        release_function: ?Ref = null,
+        write_bytes: ?Ref = null,
+    } = .{},
     ts: struct {
-        disable_multithread: ThreadsafeFunction,
-        handle_js_call: ThreadsafeFunction,
-        release_function: ThreadsafeFunction,
-        write_bytes: ThreadsafeFunction,
-    },
+        disable_multithread: ?ThreadsafeFunction = null,
+        handle_js_call: ?ThreadsafeFunction = null,
+        release_function: ?ThreadsafeFunction = null,
+        write_bytes: ?ThreadsafeFunction = null,
+    } = .{},
 
-    var module_count: usize = 0;
-    var buffer_count: usize = 0;
-    var function_count: usize = 0;
+    var module_count: i32 = 0;
+    var buffer_count: i32 = 0;
+    var function_count: i32 = 0;
 
     fn attachExports(env: Env, exports: Value) !void {
-        inline for (.{"createEnvironment"}) |name| {
+        inline for (.{ "createEnvironment", "getGCStatistics" }) |name| {
             const func = @field(@This(), name);
             try env.setNamedProperty(exports, name, try env.createCallback(name, func, false, null));
         }
@@ -68,6 +68,15 @@ const ModuleHost = struct {
         return js_env;
     }
 
+    fn getGCStatistics(env: Env) !Value {
+        std.debug.print("getGCStatistics\n", .{});
+        const stats = try env.createObject();
+        try env.setNamedProperty(stats, "modules", try env.createInt32(module_count));
+        try env.setNamedProperty(stats, "functions", try env.createInt32(function_count));
+        try env.setNamedProperty(stats, "buffers", try env.createInt32(buffer_count));
+        return stats;
+    }
+
     fn compileJavaScript(env: Env) !Value {
         const js_file_name = switch (@bitSizeOf(usize)) {
             64 => "addon.64b.js",
@@ -81,9 +90,7 @@ const ModuleHost = struct {
 
     fn createSelf(env: Env) !*@This() {
         const self = try allocator.create(@This());
-        self.ref_count = 1;
-        self.ready = false;
-        self.env = env;
+        self.* = .{ .env = env };
         return self;
     }
 
@@ -96,9 +103,11 @@ const ModuleHost = struct {
         if (self.ref_count == 0) {
             const env = self.env;
             inline for (comptime std.meta.fields(@FieldType(ModuleHost, "js"))) |field| {
-                env.deleteReference(@field(self.js, field.name)) catch {};
+                if (@field(self.js, field.name)) |ref| {
+                    env.deleteReference(ref) catch {};
+                }
             }
-            // TODO release .so
+            if (self.library) |*lib| lib.close();
             allocator.destroy(self);
             module_count -= 1;
         }
@@ -156,15 +165,23 @@ const ModuleHost = struct {
 
     fn loadModule(self: *@This(), path: Value) !void {
         const env = self.env;
-        const path_len = try env.getValueStringUtf8(path, &.{});
+        const path_len = try env.getValueStringUtf8(path, null);
         const path_bytes = try allocator.alloc(u8, path_len + 1);
         defer allocator.free(path_bytes);
         _ = try env.getValueStringUtf8(path, path_bytes);
+        var lib = try std.DynLib.open(path_bytes);
+        errdefer lib.close();
+        const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
+        if (module.version != 5) return error.IncorrectVersion;
+        try self.exportFunctionsToModule();
+        self.library = lib;
+        self.module = module;
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
         const env = self.env;
-        const attrs: u32 = @bitCast(self.module.attributes);
+        const module = self.module orelse return error.NoLoadedModule;
+        const attrs: u32 = @bitCast(module.attributes);
         return try env.createUint32(attrs);
     }
 
@@ -248,7 +265,8 @@ const ModuleHost = struct {
     fn getFactoryThunk(self: *@This()) !Value {
         const env = self.env;
         var thunk_address: usize = 0;
-        _ = self.module.exports.get_factory_thunk(&thunk_address);
+        const module = self.module orelse return error.NoLoadedModule;
+        _ = module.exports.get_factory_thunk(&thunk_address);
         return try env.createUsize(thunk_address);
     }
 
@@ -259,7 +277,8 @@ const ModuleHost = struct {
         arg_address: Value,
     ) !Value {
         const env = self.env;
-        const result = self.module.exports.run_thunk(
+        const module = self.module orelse return error.NoLoadedModule;
+        const result = module.exports.run_thunk(
             try env.getValueUsize(thunk_address),
             try env.getValueUsize(fn_address),
             try env.getValueUsize(arg_address),
@@ -276,7 +295,8 @@ const ModuleHost = struct {
         arg_len: Value,
     ) !Value {
         const env = self.env;
-        const result = self.module.exports.run_variadic_thunk(
+        const module = self.module orelse return error.NoLoadedModule;
+        const result = module.exports.run_variadic_thunk(
             try env.getValueUsize(thunk_address),
             try env.getValueUsize(fn_address),
             try env.getValueUsize(arg_address),
@@ -289,7 +309,8 @@ const ModuleHost = struct {
     fn createJsThunk(self: *@This(), controller_address: Value, fn_id: Value) !Value {
         const env = self.env;
         var thunk_address: usize = 0;
-        _ = self.module.exports.create_js_thunk(
+        const module = self.module orelse return error.NoLoadedModule;
+        _ = module.exports.create_js_thunk(
             try env.getValueUsize(controller_address),
             try env.getValueUint32(fn_id),
             &thunk_address,
@@ -300,7 +321,8 @@ const ModuleHost = struct {
     fn destroyJsThunk(self: *@This(), controller_address: Value, fn_address: Value) !Value {
         const env = self.env;
         var fn_id: usize = 0;
-        _ = self.module.exports.destroy_js_thunk(
+        const module = self.module orelse return error.NoLoadedModule;
+        _ = module.exports.destroy_js_thunk(
             try env.getValueUsize(controller_address),
             try env.getValueUint32(fn_address),
             &fn_id,
@@ -311,7 +333,8 @@ const ModuleHost = struct {
     fn recreateAddress(self: *@This(), handle: Value) !Value {
         const env = self.env;
         var new_address: usize = undefined;
-        const result = self.module.exports.get_export_address(
+        const module = self.module orelse return error.NoLoadedModule;
+        const result = module.exports.get_export_address(
             self.base_address + try env.getValueUsize(handle),
             &new_address,
         );
@@ -321,7 +344,8 @@ const ModuleHost = struct {
 
     fn finalizeAsyncCall(self: *@This(), futex_handle: Value, async_result: Value) !void {
         const env = self.env;
-        const result = self.module.exports.wake_caller(
+        const module = self.module orelse return error.NoLoadedModule;
+        const result = module.exports.wake_caller(
             try env.getValueUsize(futex_handle),
             try env.getValueUint32(async_result),
         );
@@ -425,323 +449,377 @@ const ModuleHost = struct {
             @memcpy(bytes1[0..len], bytes2[0..len]);
     }
 
-    // fn captureString(self: *@This(), mem: *const Memory) !Value {
-    //     const env = self.env;
-    //     return env.createStringUtf8(mem.bytes, mem.len);
-    // }
+    fn exportFunctionsToModule(self: *@This()) !void {
+        const names = .{
+            "capture_string",
+            "capture_view",
+            "cast_view",
+            "read_slot",
+            "write_slot",
+            "begin_structure",
+            "attach_member",
+            "attach_template",
+            "define_structure",
+            "end_structure",
+            "create_template",
+            "enable_multithread",
+            "disable_multithread",
+            "handle_js_call",
+            "release_function",
+            "write_bytes",
+        };
+        const module = self.module orelse return error.NoLoadedModule;
+        inline for (names) |name| {
+            const name_c = comptime camelize(name);
+            const func = @field(@This(), name_c);
+            const Args = std.meta.ArgsTuple(@TypeOf(func));
+            const RT = @typeInfo(@TypeOf(func)).@"fn".return_type.?;
+            const Payload = switch (@typeInfo(RT)) {
+                .error_union => |eu| eu.payload,
+                else => RT,
+            };
+            const NewArgs = comptime define: {
+                const fields = std.meta.fields(Args);
+                const extra = if (Payload == void) 0 else 1;
+                var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
+                var new_args_info = @typeInfo(Args);
+                new_args_info.@"struct".fields = &new_fields;
+                for (&new_fields, 0..) |*field_ptr, i| {
+                    field_ptr.* = if (i < fields.len) fields[i] else .{
+                        .name = std.fmt.comptimePrint("{d}", .{i}),
+                        .type = *Payload,
+                        .default_value_ptr = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(*Payload),
+                    };
+                }
+                break :define @Type(new_args_info);
+            };
+            const ns = struct {
+                fn call(new_args: NewArgs) Result {
+                    var args: Args = undefined;
+                    inline for (&args, 0..) |*arg_ptr, i| {
+                        arg_ptr.* = new_args[i];
+                    }
+                    const retval = @call(.auto, func, args);
+                    if (retval) |payload| {
+                        if (new_args.len > args.len) new_args[args.len].* = payload;
+                        return .ok;
+                    } else |_| {
+                        return .failure;
+                    }
+                }
+            };
+            @field(module.imports, name) = fn_transform.spreadArgs(ns.call, .c);
+        }
+    }
 
-    // fn captureView(self: *@This(), mem: *const Memory, handle: usize) !Value {
-    //     const env = self.env;
-    //     const pi_handle = if (handle != 0) handle - self.base_address else 0;
-    //     const args: [4]Value = .{
-    //         try env.createUsize(@intFromPtr(mem.bytes)),
-    //         try env.createUint32(mem.len),
-    //         try env.getBoolean(mem.attributes.is_comptime),
-    //         try env.createUsize(pi_handle),
-    //     };
-    //     return env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.capture_view),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn captureString(self: *@This(), mem: *const Memory) !Value {
+        const env = self.env;
+        return try env.createStringUtf8(mem.bytes.?[0..mem.len]);
+    }
 
-    // fn castView(self: *@This(), mem: *const Memory, structure: Value, handle: usize) !Value {
-    //     const env = self.env;
-    //     const pi_handle = if (handle != 0) handle - self.base_address else 0;
-    //     const args: [5]Value = .{
-    //         try env.createUsize(@intFromPtr(mem.bytes)),
-    //         try env.createUint32(mem.len),
-    //         try env.getBoolean(mem.attributes.is_comptime),
-    //         structure,
-    //         try env.createUsize(pi_handle),
-    //     };
-    //     return env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.cast_view),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn captureView(self: *@This(), mem: *const Memory, handle: usize) !Value {
+        const env = self.env;
+        const pi_handle = if (handle != 0) handle - self.base_address else 0;
+        const args: [4]Value = .{
+            try env.createUsize(@intFromPtr(mem.bytes)),
+            try env.createUint32(@as(u32, @truncate(mem.len))),
+            try env.getBoolean(mem.attributes.is_comptime),
+            try env.createUsize(pi_handle),
+        };
+        return env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.capture_view orelse return error.Unexpected),
+            &args,
+        );
+    }
 
-    // fn readSlot(self: *@This(), object: Value, slot: usize) !Value {
-    //     const env = self.env;
-    //     const args: [2]Value = .{
-    //         object orelse try env.getNull(),
-    //         try env.createUint32(slot),
-    //     };
-    //     const result = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.read_slot),
-    //         args.len,
-    //         &args,
-    //     );
-    //     return switch (try env.typeOf(result)) {
-    //         .undefined => error.Failed,
-    //         else => result,
-    //     };
-    // }
+    fn castView(self: *@This(), mem: *const Memory, structure: Value, handle: usize) !Value {
+        const env = self.env;
+        const pi_handle = if (handle != 0) handle - self.base_address else 0;
+        const args: [5]Value = .{
+            try env.createUsize(@intFromPtr(mem.bytes)),
+            try env.createUint32(@as(u32, @truncate(mem.len))),
+            try env.getBoolean(mem.attributes.is_comptime),
+            structure,
+            try env.createUsize(pi_handle),
+        };
+        return env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.cast_view orelse return error.Unexpected),
+            &args,
+        );
+    }
 
-    // fn writeSlot(self: *@This(), object: Value, slot: usize, value: Value) !void {
-    //     const env = self.env;
-    //     const args: [3]Value = .{
-    //         object orelse try env.getNull(),
-    //         try env.createUint32(slot),
-    //         value orelse try env.getNull(),
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.write_slot),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn readSlot(self: *@This(), object: ?Value, slot: usize) !Value {
+        const env = self.env;
+        const result = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.read_slot orelse return error.Unexpected),
+            &.{
+                object orelse try env.getNull(),
+                try env.createUint32(@as(u32, @truncate(slot))),
+            },
+        );
+        return switch (try env.typeof(result)) {
+            .undefined => error.Failed,
+            else => result,
+        };
+    }
 
-    // fn beginStructure(self: *@This(), structure: Structure) !Value {
-    //     const env = self.env;
-    //     const object = try env.createObject();
-    //     try env.setNamedProperty(object, "type", try env.createUint32(structure.type));
-    //     try env.setNamedProperty(object, "flags", try env.createUint32(structure.flags));
-    //     try env.setNamedProperty(object, "signature", try env.createUint64(structure.signature));
-    //     if (structure.length != missing(usize))
-    //         try env.setNamedProperty(object, "length", try env.createUint32(structure.length));
-    //     if (structure.byte_size != missing(usize))
-    //         try env.setNamedProperty(object, "byteSize", try env.createUint32(structure.byte_size));
-    //     if (structure.alignment != missing(usize))
-    //         try env.setNamedProperty(object, "align", try env.createUint32(structure.alignment));
-    //     if (structure.name) |name|
-    //         try env.setNamedProperty(object, "name", try env.createStringUtf8(name, napi.auto_length));
-    //     const args: [1]Value = .{
-    //         object,
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.begin_structure),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn writeSlot(self: *@This(), object: ?Value, slot: usize, value: ?Value) !void {
+        const env = self.env;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.write_slot orelse return error.Unexpected),
+            &.{
+                object orelse try env.getNull(),
+                try env.createUint32(@as(u32, @truncate(slot))),
+                value orelse try env.getNull(),
+            },
+        );
+    }
 
-    // fn attachMember(self: *@This(), structure: Value, member: *const Member, is_static: bool) !void {
-    //     const env = self.env;
-    //     const object = try env.createObject();
-    //     try env.setNamedProperty(object, "type", try env.createUint32(member.type));
-    //     try env.setNamedProperty(object, "flags", try env.createUint32(member.flags));
-    //     if (member.bit_size != missing(usize))
-    //         try env.setNamedProperty(object, "bitSize", try env.createUint32(member.bit_size));
-    //     if (member.bit_offset != missing(usize))
-    //         try env.setNamedProperty(object, "bitOffset", try env.createUint32(member.bit_offset));
-    //     if (member.byte_size != missing(usize))
-    //         try env.setNamedProperty(object, "byteSize", try env.createUint32(member.byte_size));
-    //     if (member.slot != missing(usize))
-    //         try env.setNamedProperty(object, "slot", try env.createUint32(member.slot));
-    //     if (member.name) |n|
-    //         try env.setNamedProperty(object, "name", try env.createStringUtf8(n, napi.auto_length));
-    //     if (member.structure) |s|
-    //         try env.setNamedProperty(object, "structure", s);
-    //     const args: [3]Value = .{
-    //         structure,
-    //         object,
-    //         try env.getBoolean(is_static),
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.attach_member),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn beginStructure(self: *@This(), structure: *const Structure) !Value {
+        const env = self.env;
+        const object = try env.createObject();
+        try env.setNamedProperty(object, "type", try env.createUint32(@intFromEnum(structure.type)));
+        try env.setNamedProperty(object, "flags", try env.createUint32(@as(u32, @bitCast(structure.flags))));
+        try env.setNamedProperty(object, "signature", try env.createBigintUint64(structure.signature));
+        if (structure.length != missing(usize))
+            try env.setNamedProperty(object, "length", try env.createUint32(@as(u32, @truncate(structure.length))));
+        if (structure.byte_size != missing(usize))
+            try env.setNamedProperty(object, "byteSize", try env.createUint32(@as(u32, @truncate(structure.byte_size))));
+        if (structure.alignment != missing(usize))
+            try env.setNamedProperty(object, "align", try env.createUint32(@as(u32, structure.alignment)));
+        if (structure.name) |name|
+            try env.setNamedProperty(object, "name", try env.createStringUtf8(name[0..std.mem.len(name)]));
+        return try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.begin_structure orelse return error.Unexpected),
+            &.{
+                object,
+            },
+        );
+    }
 
-    // fn attachTemplate(self: *@This(), structure: Value, template_obj: Value, is_static: bool) !void {
-    //     const env = self.env;
-    //     const args: [3]Value = .{
-    //         structure,
-    //         template_obj,
-    //         try env.getBoolean(is_static),
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.attach_template),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn attachMember(self: *@This(), structure: Value, member: *const Member, is_static: bool) !void {
+        const env = self.env;
+        const object = try env.createObject();
+        try env.setNamedProperty(object, "type", try env.createUint32(@intFromEnum(member.type)));
+        try env.setNamedProperty(object, "flags", try env.createUint32(@as(u32, @bitCast(member.flags))));
+        if (member.bit_size != missing(usize))
+            try env.setNamedProperty(object, "bitSize", try env.createUint32(@as(u32, @truncate(member.bit_size))));
+        if (member.bit_offset != missing(usize))
+            try env.setNamedProperty(object, "bitOffset", try env.createUint32(@as(u32, @truncate(member.bit_offset))));
+        if (member.byte_size != missing(usize))
+            try env.setNamedProperty(object, "byteSize", try env.createUint32(@as(u32, @truncate(member.byte_size))));
+        if (member.slot != missing(usize))
+            try env.setNamedProperty(object, "slot", try env.createUint32(@as(u32, @truncate(member.slot))));
+        if (member.name) |name|
+            try env.setNamedProperty(object, "name", try env.createStringUtf8(name[0..std.mem.len(name)]));
+        if (member.structure) |s|
+            try env.setNamedProperty(object, "structure", s);
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.attach_member orelse return error.Unexpected),
+            &.{
+                structure,
+                object,
+                try env.getBoolean(is_static),
+            },
+        );
+    }
 
-    // fn defineStructure(self: *@This(), structure: Value) !Value {
-    //     const env = self.env;
-    //     const args: [1]Value = .{
-    //         structure,
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.define_structure),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn attachTemplate(self: *@This(), structure: Value, template_obj: Value, is_static: bool) !void {
+        const env = self.env;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.attach_template orelse return error.Unexpected),
+            &.{
+                structure,
+                template_obj,
+                try env.getBoolean(is_static),
+            },
+        );
+    }
 
-    // fn endStructure(self: *@This(), structure: Value) !void {
-    //     const env = self.env;
-    //     const args: [1]Value = .{
-    //         structure,
-    //     };
-    //     _ = try env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.end_structure),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn defineStructure(self: *@This(), structure: Value) !Value {
+        const env = self.env;
+        return try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.define_structure orelse return error.Unexpected),
+            &.{
+                structure,
+            },
+        );
+    }
 
-    // fn createTemplate(self: *@This(), dv: Value) !Value {
-    //     const env = self.env;
-    //     const args: [1]Value = .{
-    //         dv orelse try env.getNull(),
-    //     };
-    //     return env.callFunction(
-    //         try env.getNull(),
-    //         try env.getReferenceValue(self.js.create_template),
-    //         args.len,
-    //         &args,
-    //     );
-    // }
+    fn endStructure(self: *@This(), structure: Value) !void {
+        const env = self.env;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.end_structure orelse return error.Unexpected),
+            &.{
+                structure,
+            },
+        );
+    }
 
-    // fn handleJsCall(self: *@This(), call: *const JsCall, in_main_thread: bool) !Result {
-    //     if (in_main_thread) {
-    //         const env = self.env;
-    //         const args: [4]Value = .{
-    //             try env.createUint32(call.fn_id),
-    //             try env.createUsize(call.arg_address),
-    //             try env.createUint32(call.arg_size),
-    //             try env.createUsize(call.futex_handle),
-    //         };
-    //         const status = env.callFunction(
-    //             try env.getNull(),
-    //             try env.getReferenceValue(self.js.handle_js_call),
-    //             args.len,
-    //             &args,
-    //         );
-    //         return try std.meta.intToEnum(Result, try env.getValueUint32(status));
-    //     } else {
-    //         if (self.ts.handle_js_call == null) return .failure_disabled;
-    //         try Env.callThreadsafeFunction(self.ts.handle_js_call, call, .nonblocking);
-    //         return .ok;
-    //     }
-    // }
+    fn createTemplate(self: *@This(), dv: ?Value) !Value {
+        const env = self.env;
+        return env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.create_template orelse return error.Unexpected),
+            &.{
+                dv orelse try env.getNull(),
+            },
+        );
+    }
 
-    // fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !Result {
-    //     if (in_main_thread) {
-    //         const env = self.env;
-    //         const args: [1]Value = .{
-    //             try env.createUint32(fn_id),
-    //         };
-    //         const status = env.callFunction(
-    //             try env.getNull(),
-    //             try env.getReferenceValue(self.js.release_function),
-    //             args.len,
-    //             &args,
-    //         );
-    //         return try std.meta.intToEnum(Result, try env.getValueUint32(status));
-    //     } else {
-    //         if (self.ts.release_function == null) return .failure_disabled;
-    //         try Env.callThreadsafeFunction(self.ts.release_function, @ptrFromInt(fn_id), .nonblocking);
-    //         return .ok;
-    //     }
-    // }
+    fn handleJsCall(self: *@This(), call: *const JsCall, in_main_thread: bool) !void {
+        if (in_main_thread) {
+            const env = self.env;
+            const status = try env.callFunction(
+                try env.getNull(),
+                try env.getReferenceValue(self.js.handle_js_call orelse return error.Unexpected),
+                &.{
+                    try env.createUint32(@as(u32, @truncate(call.fn_id))),
+                    try env.createUsize(call.arg_address),
+                    try env.createUint32(@as(u32, @truncate(call.arg_size))),
+                    try env.createUsize(call.futex_handle),
+                },
+            );
+            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
+                .ok => {},
+                .failure_deadlock => error.Deadlock,
+                else => error.Unexpected,
+            };
+        } else {
+            const func = self.ts.handle_js_call orelse return error.Disabled;
+            try napi.callThreadsafeFunction(func, @ptrCast(@constCast(call)), .nonblocking);
+        }
+    }
 
-    // fn writeBytes(self: *@This(), mem: *const Memory, in_main_thread: bool) Result {
-    //     if (in_main_thread) {
-    //         const env = self.env;
-    //         const args: [2]Value = .{
-    //             try env.createUsize(@intFromPtr(mem.bytes)),
-    //             try env.createUint32(mem.len),
-    //         };
-    //         const status = env.callFunction(
-    //             try env.getNull(),
-    //             try env.getReferenceValue(self.js.write_bytes),
-    //             args.len,
-    //             &args,
-    //         );
-    //         return try std.meta.intToEnum(Result, try env.getValueUint32(status));
-    //     } else {
-    //         if (self.ts.writeBytes == null) return .failure_disabled;
-    //         const data = try allocator.alloc(@sizeOf(Memory) + mem.len);
-    //         const copy: *Memory = @ptrCast(@alignCast(data));
-    //         copy.* = .{
-    //             .bytes = data.ptr + @sizeOf(Memory),
-    //             .len = mem.len,
-    //             .attribytes = mem.attributes,
-    //         };
-    //         @memcpy(copy.bytes[0..copy.len], mem.bytes[0..mem.len]);
-    //         try Env.callThreadsafeFunction(self.ts.write_bytes, @ptrCast(data), .nonblocking);
-    //         return .ok;
-    //     }
-    // }
+    fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
+        if (in_main_thread) {
+            const env = self.env;
+            const status = try env.callFunction(
+                try env.getNull(),
+                try env.getReferenceValue(self.js.release_function orelse return error.Unexpected),
+                &.{
+                    try env.createUint32(@as(u32, @truncate(fn_id))),
+                },
+            );
+            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
+                .ok => {},
+                .failure_deadlock => error.Deadlock,
+                else => error.Unexpected,
+            };
+        } else {
+            const func = self.ts.release_function orelse return error.Disabled;
+            try napi.callThreadsafeFunction(func, @ptrFromInt(fn_id), .nonblocking);
+        }
+    }
 
-    // fn disableMultithread(self: *@This(), in_main_thread: bool) !Result {
-    //     if (in_main_thread) {
-    //         const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-    //         inline for (fields) |field| {
-    //             try Env.releaseThreadsafeFunction(@field(self.ts, field.name), .abort);
-    //             @field(self.ts, field.name) = null;
-    //         }
-    //     } else {
-    //         if (self.ts.disableMultithread == null) return .failure_disabled;
-    //         try Env.callThreadsafeFunction(self.ts.disable_multithread, null, .nonblocking);
-    //     }
-    //     return .ok;
-    // }
+    fn writeBytes(self: *@This(), mem: *const Memory, in_main_thread: bool) !void {
+        if (in_main_thread) {
+            const env = self.env;
+            const status = try env.callFunction(
+                try env.getNull(),
+                try env.getReferenceValue(self.js.write_bytes orelse return error.Unexpected),
+                &.{
+                    try env.createUsize(@intFromPtr(mem.bytes)),
+                    try env.createUint32(@as(u32, @truncate(mem.len))),
+                },
+            );
+            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
+                .ok => {},
+                else => error.Unexpected,
+            };
+        } else {
+            const func = self.ts.write_bytes orelse return error.Disabled;
+            const data = try allocator.alloc(u8, @sizeOf(Memory) + mem.len);
+            const copy: *Memory = @ptrCast(@alignCast(data));
+            copy.* = .{
+                .bytes = data.ptr + @sizeOf(Memory),
+                .len = mem.len,
+                .attributes = mem.attributes,
+            };
+            @memcpy(copy.bytes.?[0..copy.len], mem.bytes.?[0..mem.len]);
+            try napi.callThreadsafeFunction(func, @ptrCast(data), .nonblocking);
+        }
+    }
 
-    // const threadsafe_callback = struct {
-    //     fn handle_js_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
-    //         const self: *@This() = @ptrCast(context);
-    //         const call: *const JsCall = @ptrCast(data);
-    //         const result = handleJsCall(self, call, true) catch .failure;
-    //         if (result != .ok)
-    //             self.module.imports.wake_call(call.futex_handle, result);
-    //         return result;
-    //     }
+    fn disableMultithread(self: *@This(), in_main_thread: bool) !void {
+        if (in_main_thread) {
+            const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+            inline for (fields) |field| {
+                if (@field(self.ts, field.name)) |ref|
+                    try napi.releaseThreadsafeFunction(ref, .abort);
+                @field(self.ts, field.name) = null;
+            }
+        } else {
+            const func = self.ts.disable_multithread orelse return error.Disabled;
+            try napi.callThreadsafeFunction(func, null, .nonblocking);
+        }
+    }
 
-    //     fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
-    //         const self: ModuleHost = @ptrCast(@alignCast(context));
-    //         const fn_id = @intFromPtr(data);
-    //         _ = releaseFunction(self, fn_id, true) catch .failure;
-    //     }
+    const threadsafe_callback = struct {
+        fn handle_js_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
+            const self: *ModuleHost = @ptrCast(@alignCast(context));
+            const call: *const JsCall = @ptrCast(@alignCast(data));
+            handleJsCall(self, call, true) catch {
+                // wake caller if call fails since JavaScript isn't going to do it
+                if (self.module) |module| {
+                    _ = module.exports.wake_caller(call.futex_handle, @intFromEnum(Result.failure));
+                }
+            };
+        }
 
-    //     fn write_bytes(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
-    //         const self: *@This() = @ptrCast(@alignCast(context));
-    //         const mem: *const Memory = @ptrCast(@alignCast(data));
-    //         writeBytes(self, mem, true) catch {};
-    //         const bytes: [*]u8 = @ptrCast(data);
-    //         const len = mem.len + @sizeOf(Memory);
-    //         allocator.free(bytes[0..len]);
-    //     }
+        fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
+            const self: *ModuleHost = @ptrCast(@alignCast(context));
+            const fn_id = @intFromPtr(data);
+            releaseFunction(self, fn_id, true) catch {};
+        }
 
-    //     fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) void {
-    //         const self: *@This() = @ptrCast(@alignCast(context));
-    //         disableMultithread(self, true);
-    //     }
-    // };
+        fn write_bytes(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) void {
+            const self: *ModuleHost = @ptrCast(@alignCast(context));
+            const mem: *const Memory = @ptrCast(@alignCast(data));
+            writeBytes(self, mem, true) catch {};
+            const bytes: [*]u8 = @ptrCast(data);
+            const len = mem.len + @sizeOf(Memory);
+            allocator.free(bytes[0..len]);
+        }
 
-    // fn enableMultithread(self: *@This(), in_main_thread: bool) !void {
-    //     if (!in_main_thread) return error.Unsupported;
-    //     const env = self.env;
-    //     const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-    //     const resource_name = try env.createStringUtf8("zigar", 5);
-    //     inline for (fields) |field| {
-    //         const cb = @field(threadsafe_callback, field.name);
-    //         @field(self.ts, field.name) = try env.createThreadsafeFunction(null, null, resource_name, 0, 1, null, null, @ptrCast(self), cb);
-    //     }
-    // }
+        fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) void {
+            const self: *ModuleHost = @ptrCast(@alignCast(context));
+            disableMultithread(self, true) catch {};
+        }
+    };
 
-    // fn createAddress(self: *@This(), args: [1]Value) !Value {
-    //     const env = self.env;
-    //     const handle: usize = @intFromFloat(try env.getValueDouble(args[0]));
-    //     var address_value: usize = undefined;
-    //     self.module.imports.get_export_address(self.base_address + handle, &address_value);
-    //     return env.createUsize(address_value);
-    // }
+    fn enableMultithread(self: *@This(), in_main_thread: bool) !void {
+        if (!in_main_thread) return error.Unsupported;
+        const env = self.env;
+        const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+        const resource_name = try env.createStringUtf8("zigar");
+        const none = try env.getNull();
+        inline for (fields) |field| {
+            const cb = @field(threadsafe_callback, field.name);
+            @field(self.ts, field.name) = try env.createThreadsafeFunction(
+                none,
+                none,
+                resource_name,
+                0,
+                1,
+                null,
+                null,
+                @ptrCast(self),
+                @ptrCast(&cb),
+            );
+        }
+    }
 };
 const Structure = extern struct {
     name: ?[*:0]const u8,
@@ -1057,7 +1135,7 @@ fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-inline fn camelize(comptime name: []const u8) [*:0]const u8 {
+inline fn camelize(comptime name: []const u8) [:0]const u8 {
     var buffer: [name.len + 1]u8 = undefined;
     var len: usize = 0;
     var capitalize = false;
@@ -1074,5 +1152,5 @@ inline fn camelize(comptime name: []const u8) [*:0]const u8 {
         }
     }
     buffer[len] = 0;
-    return @ptrCast(&buffer);
+    return @ptrCast(buffer[0..len]);
 }

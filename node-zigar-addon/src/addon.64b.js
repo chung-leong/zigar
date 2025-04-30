@@ -1,4 +1,4 @@
-var variable = function(t) {
+(function(t) {
     "use strict";
     const e = {
         Primitive: 0,
@@ -3878,4 +3878,4 @@ var variable = function(t) {
             throw console.error(t), t;
         }
     }, t;
-}({});
+}({}))

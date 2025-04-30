@@ -349,7 +349,7 @@ pub const getValueBool: fn (
 pub const getValueStringLatin1: fn (
     env: *@This(),
     value: Value,
-    buf: []u8,
+    buf: ?[]u8,
 ) Error!usize = c_to_zig.translateMerge("napi_get_value_string_latin1", true, false, .{}, &.{
     .{ .ptr_index = 2, .len_index = 3 },
 });
@@ -358,7 +358,7 @@ pub const getValueStringLatin1: fn (
 pub const getValueStringUtf8: fn (
     env: *@This(),
     value: Value,
-    buf: []u8,
+    buf: ?[]u8,
 ) Error!usize = c_to_zig.translateMerge("napi_get_value_string_utf8", true, false, .{}, &.{
     .{ .ptr_index = 2, .len_index = 3 },
 });
@@ -367,7 +367,7 @@ pub const getValueStringUtf8: fn (
 pub const getValueStringUtf16: fn (
     env: *@This(),
     value: Value,
-    buf: []u16,
+    buf: ?[]u16,
 ) Error!usize = c_to_zig.translateMerge("napi_get_value_string_utf16", true, false, .{}, &.{
     .{ .ptr_index = 2, .len_index = 3 },
 });
@@ -1190,9 +1190,9 @@ pub const getThreadsafeFunctionContext: fn (
 /// https://nodejs.org/api/n-api.html#napi_call_threadsafe_function
 pub const callThreadsafeFunction: fn (
     func: ThreadsafeFunction,
-    data: *anyopaque,
+    data: ?*anyopaque,
     is_blocking: ThreadsafeFunctionCallMode,
-) Error!void = c_to_zig.translate("napi_call_threadsafe_function", true, false, .{ .@"2" = ThreadsafeFunctionCallMode });
+) Error!void = c_to_zig.translate("napi_call_threadsafe_function", true, false, .{ .@"1" = ?*anyopaque, .@"2" = ThreadsafeFunctionCallMode });
 
 /// https://nodejs.org/api/n-api.html#napi_acquire_threadsafe_function
 pub const acquireThreadsafeFunction: fn (
@@ -1236,7 +1236,7 @@ const c_to_zig = api_translator.Translator(.{
         .{ .old = ?*anyopaque, .new = *anyopaque },
         .{ .old = ?*c.struct_uv_loop_s, .new = *Anonymous0000 },
         .{ .old = ?*const anyopaque, .new = *const anyopaque },
-        .{ .old = [*c]c.char16_t, .new = [*:0]u16 },
+        .{ .old = [*c]c.char16_t, .new = ?[*:0]u16 },
         .{ .old = [*c]const c.char16_t, .new = [*:0]const u16 },
         .{ .old = [*c]const c.napi_extended_error_info, .new = *const ExtendedErrorInfo },
         .{ .old = [*c]const c.napi_node_version, .new = *const NodeVersion },
@@ -1245,7 +1245,7 @@ const c_to_zig = api_translator.Translator(.{
         .{ .old = [*c]const c.napi_value, .new = [*]const Value },
         .{ .old = [*c]const u64, .new = *const u64 },
         .{ .old = [*c]const u8, .new = [*:0]const u8 },
-        .{ .old = [*c]u8, .new = [*:0]u8 },
+        .{ .old = [*c]u8, .new = ?[*:0]u8 },
         .{ .old = [*c]usize, .new = *usize },
         .{ .old = c.napi_async_cleanup_hook, .new = AsyncCleanupHook },
         .{ .old = c.napi_async_cleanup_hook_handle, .new = AsyncCleanupHookHandle },

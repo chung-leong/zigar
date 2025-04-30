@@ -95,9 +95,13 @@ const optional_params = .{
     .{ .fn_name = "napi_create_external", .arg_indices = .{ 2, 3 } },
     .{ .fn_name = "napi_create_external_arraybuffer", .arg_indices = .{ 3, 4 } },
     .{ .fn_name = "napi_create_threadsafe_function", .arg_indices = .{ 6, 7, 8, 9 } },
+    .{ .fn_name = "napi_call_threadsafe_function", .arg_indices = .{1} },
     .{ .fn_name = "napi_fatal_error", .arg_indices = .{0} },
     .{ .fn_name = "napi_get_cb_info", .arg_indices = .{5} },
     .{ .fn_name = "napi_add_finalizer", .arg_indices = .{5} },
+    .{ .fn_name = "napi_get_value_string_latin1", .arg_indices = .{2} },
+    .{ .fn_name = "napi_get_value_string_utf8", .arg_indices = .{2} },
+    .{ .fn_name = "napi_get_value_string_utf16", .arg_indices = .{2} },
     // function pointers
     .{ .fn_name = "napi_finalize", .arg_indices = .{2} },
     .{ .fn_name = "napi_threadsafe_function_call_js", .arg_indices = .{ 2, 3 } },

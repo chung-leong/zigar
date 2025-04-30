@@ -40,6 +40,7 @@ export default [
       name: 'variable',
       plugins: [
         Terser(terserOptions),
+        ExtractIIFE(),
       ]
     },
   },
@@ -66,7 +67,18 @@ export default [
       name: 'variable',
       plugins: [
         Terser(terserOptions),
+        ExtractIIFE(),
       ]
     },
   }
 ]
+
+function ExtractIIFE() {
+  // place JS code into a C++ raw string
+  return {
+    name: 'cpp_string',
+    renderChunk (code) {
+      return code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
+    }
+  };
+}
