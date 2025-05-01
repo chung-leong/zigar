@@ -69,7 +69,6 @@ const ModuleHost = struct {
     }
 
     fn getGCStatistics(env: Env) !Value {
-        std.debug.print("getGCStatistics\n", .{});
         const stats = try env.createObject();
         try env.setNamedProperty(stats, "modules", try env.createInt32(module_count));
         try env.setNamedProperty(stats, "functions", try env.createInt32(function_count));
@@ -173,9 +172,10 @@ const ModuleHost = struct {
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != 5) return error.IncorrectVersion;
-        try self.exportFunctionsToModule();
-        self.library = lib;
         self.module = module;
+        try self.exportFunctionsToModule();
+        if (module.exports.initialize(self) != .ok) return error.Unexpected;
+        self.library = lib;
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
