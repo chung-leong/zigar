@@ -1,5 +1,6 @@
 const std = @import("std");
 const napi = @import("napi.zig");
+const redirect = @import("redirect.zig");
 const fn_transform = @import("code-gen/fn-transform.zig");
 
 const Env = napi.Env;
@@ -334,8 +335,9 @@ const ModuleHost = struct {
         const env = self.env;
         var new_address: usize = undefined;
         const module = self.module orelse return error.NoLoadedModule;
+        const handle_value: usize = @intFromFloat(try env.getValueDouble(handle));
         const result = module.exports.get_export_address(
-            self.base_address + try env.getValueUsize(handle),
+            self.base_address + handle_value,
             &new_address,
         );
         if (result != .ok) return error.Unexpected;
