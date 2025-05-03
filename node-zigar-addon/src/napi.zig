@@ -1171,8 +1171,8 @@ pub const closeCallbackScope: fn (
 /// https://nodejs.org/api/n-api.html#napi_create_threadsafe_function
 pub const createThreadsafeFunction: fn (
     env: *@This(),
-    func: Value,
-    async_resource: Value,
+    func: ?Value,
+    async_resource: ?Value,
     async_resource_name: Value,
     max_queue_size: usize,
     initial_thread_count: usize,
@@ -1180,7 +1180,7 @@ pub const createThreadsafeFunction: fn (
     thread_finalize_cb: ?Finalize,
     context: ?*anyopaque,
     call_js_cb: ?ThreadsafeFunctionCallJs,
-) Error!ThreadsafeFunction = c_to_zig.translate("napi_create_threadsafe_function", true, false, .{ .@"6" = ?*anyopaque, .@"7" = ?Finalize, .@"8" = ?*anyopaque });
+) Error!ThreadsafeFunction = c_to_zig.translate("napi_create_threadsafe_function", true, false, .{ .@"1" = ?Value, .@"2" = ?Value, .@"6" = ?*anyopaque, .@"7" = ?Finalize, .@"8" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_get_threadsafe_function_context
 pub const getThreadsafeFunctionContext: fn (

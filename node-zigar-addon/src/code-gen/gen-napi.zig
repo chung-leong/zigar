@@ -94,7 +94,7 @@ const optional_params = .{
     .{ .fn_name = "napi_create_function", .arg_indices = .{ 1, 4 } },
     .{ .fn_name = "napi_create_external", .arg_indices = .{ 2, 3 } },
     .{ .fn_name = "napi_create_external_arraybuffer", .arg_indices = .{ 3, 4 } },
-    .{ .fn_name = "napi_create_threadsafe_function", .arg_indices = .{ 6, 7, 8, 9 } },
+    .{ .fn_name = "napi_create_threadsafe_function", .arg_indices = .{ 1, 2, 6, 7, 8, 9 } },
     .{ .fn_name = "napi_call_threadsafe_function", .arg_indices = .{1} },
     .{ .fn_name = "napi_fatal_error", .arg_indices = .{0} },
     .{ .fn_name = "napi_get_cb_info", .arg_indices = .{5} },

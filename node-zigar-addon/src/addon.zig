@@ -61,6 +61,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try createSelf(env);
+        defer self.release();
         // import functions from the environment
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
@@ -150,15 +151,16 @@ const ModuleHost = struct {
             const cb = @field(@This(), name);
             const func = try env.createCallback(name, cb, false, self);
             try env.setNamedProperty(imports, name, func);
-            try env.addFinalizer(func, self, finalizeFunction, null, null);
+            try env.addFinalizer(func, @constCast(name), finalizeFunction, self, null);
+            self.addRef();
             function_count += 1;
         }
         const import_fn = try env.getNamedProperty(js_env, "importFunctions");
         _ = try env.callFunction(js_env, import_fn, &.{imports});
     }
 
-    fn finalizeFunction(_: Env, data: *anyopaque, _: ?*anyopaque) callconv(.c) void {
-        const self: *@This() = @ptrCast(@alignCast(data));
+    fn finalizeFunction(_: Env, _: *anyopaque, finalize_hint: ?*anyopaque) callconv(.c) void {
+        const self: *@This() = @ptrCast(@alignCast(finalize_hint.?));
         self.release();
         function_count -= 1;
     }
@@ -176,6 +178,7 @@ const ModuleHost = struct {
         self.module = module;
         try self.exportFunctionsToModule();
         if (module.exports.initialize(self) != .ok) return error.Unexpected;
+        try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_write));
         self.library = lib;
     }
 
@@ -227,8 +230,8 @@ const ModuleHost = struct {
         };
     }
 
-    fn finalizeExternalBuffer(_: Env, data: *anyopaque, _: ?*anyopaque) callconv(.c) void {
-        const self: *@This() = @ptrCast(@alignCast(data));
+    fn finalizeExternalBuffer(_: Env, _: *anyopaque, finalize_hint: ?*anyopaque) callconv(.c) void {
+        const self: *@This() = @ptrCast(@alignCast(finalize_hint.?));
         self.release();
         buffer_count -= 1;
     }
@@ -325,7 +328,7 @@ const ModuleHost = struct {
         const module = self.module orelse return error.NoLoadedModule;
         _ = module.exports.destroy_js_thunk(
             try env.getValueUsize(controller_address),
-            try env.getValueUint32(fn_address),
+            try env.getValueUsize(fn_address),
             &fn_id,
         );
         return try env.createUint32(@as(u32, @truncate(fn_id)));
@@ -707,18 +710,13 @@ const ModuleHost = struct {
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
         if (in_main_thread) {
             const env = self.env;
-            const status = try env.callFunction(
+            _ = try env.callFunction(
                 try env.getNull(),
                 try env.getReferenceValue(self.js.release_function orelse return error.Unexpected),
                 &.{
                     try env.createUint32(@as(u32, @truncate(fn_id))),
                 },
             );
-            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
-                .ok => {},
-                .failure_deadlock => error.Deadlock,
-                else => error.Unexpected,
-            };
         } else {
             const func = self.ts.release_function orelse return error.Disabled;
             try napi.callThreadsafeFunction(func, @ptrFromInt(fn_id), .nonblocking);
@@ -806,12 +804,11 @@ const ModuleHost = struct {
         const env = self.env;
         const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
         const resource_name = try env.createStringUtf8("zigar");
-        const none = try env.getNull();
         inline for (fields) |field| {
             const cb = @field(threadsafe_callback, field.name);
             @field(self.ts, field.name) = try env.createThreadsafeFunction(
-                none,
-                none,
+                null,
+                null,
                 resource_name,
                 0,
                 1,

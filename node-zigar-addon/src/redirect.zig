@@ -30,7 +30,7 @@ const linux = struct {
         const file = try std.fs.openFileAbsolute(path, .{});
         defer file.close();
         // read ELF header
-        const header = try readStruct(Elf_Ehdr, allocator, file);
+        const header = try readStruct(Elf_Ehdr, file);
         try file.seekTo(header.e_phoff);
         const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum);
         defer allocator.free(segments);
@@ -118,22 +118,24 @@ const darwin = struct {
         const page_size = std.heap.pageSize();
         const file = try std.fs.openFileAbsolute(path, .{});
         defer file.close();
-        const header = try readStruct(MachHeader, allocator, file);
+        const header = try readStruct(MachHeader, file);
         // process mach-o commands
-        var data_segment_buffer: [8]struct {
+        const DataSegment = struct {
             index: usize,
             offset: usize,
             read_only: bool,
-        } = undefined;
-        var data_segments = data_segment_buffer[0..0];
-        var symbols: NList = .{};
-        var symbol_strs: [*]const u8 = "";
-        var bindings_buffer: [3]struct {
+        };
+        var data_segment_buffer: [8]DataSegment = undefined;
+        var data_segments: []DataSegment = data_segment_buffer[0..0];
+        var symbols: []NList = &.{};
+        var symbol_strs: []const u8 = "";
+        const Binding = struct {
             offset: usize,
             size: usize,
             byte_codes: []const u8,
-        } = undefined;
-        var bindings = bindings_buffer[0..0];
+        };
+        var bindings_buffer: [3]Binding = undefined;
+        var bindings: []Binding = bindings_buffer[0..0];
         var pos: usize = @sizeOf(MachHeader);
         for (0..header.ncmds) |_| {
             try file.seekTo(pos);
@@ -145,7 +147,7 @@ const darwin = struct {
                     const segment_cmd = try readStruct(SegmentCommand, file);
                     const index = data_segments.len;
                     if ((segment_cmd.initprot & std.macho.PROT.WRITE) != 0 and index < 8) {
-                        data_segments.len += 1;
+                        data_segments.len = index + 1;
                         data_segments[index].offset = segment_cmd.vmaddr;
                         data_segments[index].index = index + 1;
                         data_segments[index].read_only = (segment_cmd.flags & std.macho.SG_READ_ONLY) != 0;
@@ -182,7 +184,7 @@ const darwin = struct {
         defer for (bindings) |b| allocator.free(b.byte_codes);
         const base_address: usize = for (symbols) |s| {
             if (s.n_type & std.macho.N_EXT != 0) {
-                const symbol_name_ptr: [*]const u8 = @ptrCast(&symbol_strs[s.n_un.n_strx]);
+                const symbol_name_ptr: [*:0]const u8 = @ptrCast(&symbol_strs[s.n_strx]);
                 const symbol_name_len = std.mem.len(symbol_name_ptr);
                 const symbol_name: [:0]const u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
                 if (lib.lookup(*anyopaque, symbol_name)) |symbol| {
@@ -195,8 +197,8 @@ const darwin = struct {
             const bytes = binding.byte_codes;
             var offset: usize = 0;
             var segment_index: usize = 0;
-            var symbol_name: [*:0]const u8 = null;
-            var index = 0;
+            var symbol_name: ?[*:0]const u8 = null;
+            var index: usize = 0;
             while (index < bytes.len) {
                 const byte = binding.byte_codes[index];
                 index += 1;
@@ -211,8 +213,9 @@ const darwin = struct {
                     },
                     std.macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM => {},
                     std.macho.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM => {
-                        symbol_name = extractString(bytes, index);
-                        index += symbol_name.len + 1;
+                        const str = extractString(bytes, index);
+                        index += str.len + 1;
+                        symbol_name = str;
                     },
                     std.macho.BIND_OPCODE_SET_TYPE_IMM => {},
                     std.macho.BIND_OPCODE_SET_ADDEND_SLEB => {
@@ -242,6 +245,7 @@ const darwin = struct {
                                 break :get value;
                             },
                             std.macho.BIND_OPCODE_DO_BIND_ADD_ADDR_IMM_SCALED => (immediate + 1) * @sizeOf(usize),
+                            else => unreachable,
                         };
                         offset += @sizeOf(usize) + extra;
                         // here's where we do the lookup
@@ -288,9 +292,9 @@ const darwin = struct {
 
     fn extractUleb128(bytes: []const u8, index: usize) std.meta.Tuple(&.{ usize, usize }) {
         var value: isize = 0;
-        var shift: u8 = 0;
+        var shift: u6 = 0;
         return for (bytes[index..], 0..) |byte, i| {
-            value |= (byte & 0x7f) << shift;
+            value |= (@as(isize, byte) & 0x7f) << shift;
             shift += 7;
             if ((byte & 0x80) == 0) break .{ @bitCast(value), i };
         } else .{ 0, 0 };
@@ -298,9 +302,9 @@ const darwin = struct {
 
     fn extractSleb128(bytes: []const u8, index: usize) std.meta.Tuple(&.{ isize, usize }) {
         var value: isize = 0;
-        var shift: u8 = 0;
+        var shift: u6 = 0;
         return for (bytes[index..], 0..) |byte, i| {
-            value |= (byte & 0x7f) << shift;
+            value |= (@as(isize, byte) & 0x7f) << shift;
             shift += 7;
             if ((byte & 0x80) == 0) {
                 if (shift < 64 and (byte & 0x40) != 0) value |= @as(isize, -1) << shift;
@@ -312,42 +316,44 @@ const darwin = struct {
 
 const windows = struct {
     const c = @cImport({
+        @cInclude("windows.h");
         @cInclude("imagehlp.h");
     });
 
     const ThunkData = c.IMAGE_THUNK_DATA;
     const ImportDescriptor = c.IMAGE_IMPORT_DESCRIPTOR;
     const ImportByName = c.IMAGE_IMPORT_BY_NAME;
-    const MemoryBasicInformation = c.MEMORY_BASIC_INFORMATION;
     const directoryEntryToDataEx = c.ImageDirectoryEntryToDataEx;
     const snapByOrdinal = c.IMAGE_SNAP_BY_ORDINAL;
     const directory_entry_import = c.IMAGE_DIRECTORY_ENTRY_IMPORT;
+    const TRUE = c.TRUE;
 
     fn redirectIO(lib: *std.DynLib, _: []const u8, cb: Callback) !void {
         const hmodule = lib.inner.dll;
         const bytes: [*]u8 = @ptrCast(hmodule);
-        var size: usize = undefined;
-        const data = directoryEntryToDataEx(hmodule, true, directory_entry_import, &size, null);
+        var size: c_ulong = undefined;
+        const data = directoryEntryToDataEx(hmodule, TRUE, directory_entry_import, &size, null);
         const import_desc: [*]ImportDescriptor = @ptrCast(@alignCast(data));
         var desc_index: usize = 0;
         while (true) : (desc_index += 1) {
             const entry = import_desc[desc_index];
-            if (entry.Characteristics == 0 or entry.Name == 0) break;
-            const addr_table: *ThunkData = @ptrCast(@alignCast(&bytes[entry.FirstThunk]));
-            const name_table: *ThunkData = @ptrCast(@alignCast(&bytes[entry.OriginalFirstThunk]));
+            if (entry.unnamed_0.Characteristics == 0 or entry.Name == 0) break;
+            const addr_table: [*]ThunkData = @ptrCast(@alignCast(&bytes[entry.FirstThunk]));
+            const name_table: [*]ThunkData = @ptrCast(@alignCast(&bytes[entry.unnamed_0.OriginalFirstThunk]));
             var iat_index: usize = 0;
             while (true) : (iat_index += 1) {
                 const iat_ptr = &addr_table[iat_index];
                 const int_ptr = &name_table[iat_index];
                 if (snapByOrdinal(int_ptr.u1.Ordinal)) continue;
                 const ibm_ptr: *ImportByName = @ptrCast(@alignCast(&bytes[int_ptr.u1.AddressOfData]));
-                const hook = find_hook(ibm_ptr.Name) orelse continue;
+                const name: [*:0]const u8 = @ptrCast(&ibm_ptr.Name);
+                const hook = find_hook(name) orelse continue;
                 const ptr: **const anyopaque = @ptrCast(&iat_ptr.u1.Function);
                 if (ptr.* != hook) {
                     // make page writable
-                    var mbi: MemoryBasicInformation = undefined;
+                    var mbi: std.os.windows.MEMORY_BASIC_INFORMATION = undefined;
                     var protect: u32 = std.os.windows.PAGE_READWRITE;
-                    _ = try std.os.windows.VirtualQuery(ptr, &mbi, @sizeOf(MemoryBasicInformation));
+                    _ = try std.os.windows.VirtualQuery(@ptrCast(ptr), &mbi, @sizeOf(std.os.windows.MEMORY_BASIC_INFORMATION));
                     try std.os.windows.VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect);
                     defer std.os.windows.VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect) catch {};
                     // replace with hook
