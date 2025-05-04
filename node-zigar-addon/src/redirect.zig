@@ -187,12 +187,12 @@ const darwin = struct {
                 const symbol_name_ptr: [*:0]const u8 = @ptrCast(&symbol_strs[s.n_strx]);
                 const symbol_name_len = std.mem.len(symbol_name_ptr);
                 const symbol_name: [:0]const u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
-                if (lib.lookup(*anyopaque, symbol_name)) |symbol| {
+                if (lib.lookup(*anyopaque, symbol_name[1..])) |symbol| {
                     break @intFromPtr(symbol) - s.n_value;
                 }
             }
         } else 0;
-        if (base_address == 0 and data_segments.len == 0) return error.Unexpected;
+        if (base_address == 0 or data_segments.len == 0) return error.Unexpected;
         for (bindings) |binding| {
             const bytes = binding.byte_codes;
             var offset: usize = 0;
@@ -208,29 +208,36 @@ const darwin = struct {
                     std.macho.BIND_OPCODE_DONE => {},
                     std.macho.BIND_OPCODE_SET_DYLIB_ORDINAL_IMM => {},
                     std.macho.BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB => {
-                        _, const width = extractUleb128(bytes, index);
+                        _, const width = try extractUleb128(bytes, index);
                         index += width;
                     },
                     std.macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM => {},
                     std.macho.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM => {
-                        const str = extractString(bytes, index);
+                        const str = try extractString(bytes, index);
                         index += str.len + 1;
                         symbol_name = str;
                     },
                     std.macho.BIND_OPCODE_SET_TYPE_IMM => {},
                     std.macho.BIND_OPCODE_SET_ADDEND_SLEB => {
-                        _, const width = extractSleb128(bytes, index);
+                        _, const width = try extractSleb128(bytes, index);
                         index += width;
                     },
                     std.macho.BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB => {
                         segment_index = immediate;
-                        offset, const width = extractUleb128(bytes, index);
+                        offset, const width = try extractUleb128(bytes, index);
                         index += width;
                     },
                     std.macho.BIND_OPCODE_ADD_ADDR_ULEB => {
-                        const skip, const width = extractUleb128(bytes, index);
+                        const skip, const width = try extractUleb128(bytes, index);
                         index += width;
                         offset += skip;
+                    },
+                    std.macho.BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB => {
+                        const count, const width1 = try extractUleb128(bytes, index);
+                        index += width1;
+                        const skip, const width2 = try extractUleb128(bytes, index);
+                        index += width2;
+                        offset += count * (@sizeOf(usize) + skip);
                     },
                     std.macho.BIND_OPCODE_DO_BIND,
                     std.macho.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB,
@@ -240,7 +247,7 @@ const darwin = struct {
                         const extra: usize = switch (opcode) {
                             std.macho.BIND_OPCODE_DO_BIND => 0,
                             std.macho.BIND_OPCODE_DO_BIND_ADD_ADDR_ULEB => get: {
-                                const value, const width = extractUleb128(bytes, index);
+                                const value, const width = try extractUleb128(bytes, index);
                                 index += width;
                                 break :get value;
                             },
@@ -250,6 +257,7 @@ const darwin = struct {
                         offset += @sizeOf(usize) + extra;
                         // here's where we do the lookup
                         const name = symbol_name orelse continue;
+                        defer symbol_name = null;
                         const hook = find_hook(name[1..]) orelse continue;
                         const ds = for (data_segments) |ds| {
                             if (ds.index == segment_index) break ds;
@@ -270,13 +278,6 @@ const darwin = struct {
                             }
                         }
                     },
-                    std.macho.BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB => {
-                        const count, const width1 = extractUleb128(bytes, index);
-                        index += width1;
-                        const skip, const width2 = extractUleb128(bytes, index);
-                        index += width2;
-                        offset += count * (@sizeOf(usize) + skip);
-                    },
                     else => break,
                 }
             }
@@ -284,23 +285,23 @@ const darwin = struct {
         set_override(cb);
     }
 
-    fn extractString(bytes: []const u8, index: usize) [:0]const u8 {
+    fn extractString(bytes: []const u8, index: usize) ![:0]const u8 {
         return for (bytes[index..], 0..) |byte, i| {
             if (byte == 0) break @ptrCast(bytes[index .. index + i]);
-        } else "";
+        } else error.Unexpected;
     }
 
-    fn extractUleb128(bytes: []const u8, index: usize) std.meta.Tuple(&.{ usize, usize }) {
+    fn extractUleb128(bytes: []const u8, index: usize) !std.meta.Tuple(&.{ usize, usize }) {
         var value: isize = 0;
         var shift: u6 = 0;
         return for (bytes[index..], 0..) |byte, i| {
             value |= (@as(isize, byte) & 0x7f) << shift;
             shift += 7;
-            if ((byte & 0x80) == 0) break .{ @bitCast(value), i };
-        } else .{ 0, 0 };
+            if ((byte & 0x80) == 0) break .{ @bitCast(value), i + 1 };
+        } else error.Unexpected;
     }
 
-    fn extractSleb128(bytes: []const u8, index: usize) std.meta.Tuple(&.{ isize, usize }) {
+    fn extractSleb128(bytes: []const u8, index: usize) !std.meta.Tuple(&.{ isize, usize }) {
         var value: isize = 0;
         var shift: u6 = 0;
         return for (bytes[index..], 0..) |byte, i| {
@@ -308,9 +309,9 @@ const darwin = struct {
             shift += 7;
             if ((byte & 0x80) == 0) {
                 if (shift < 64 and (byte & 0x40) != 0) value |= @as(isize, -1) << shift;
-                break .{ value, i };
+                break .{ value, i + 1 };
             }
-        } else .{ 0, 0 };
+        } else error.Unexpected;
     }
 };
 
