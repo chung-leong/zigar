@@ -768,6 +768,18 @@ async function getDirectoryStats(dirPath) {
   return { size, mtimeMs };
 }
 
+async function copyZonFile(srcPath, dstPath) {
+  const srcDir = path.dirname(srcPath);
+  const dstDir = path.dirname(dstPath);
+  const srcCode = await fs.readFile(srcPath, 'utf-8');
+  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path$1, post) => {
+    const srcModulePath = path.resolve(srcDir, path$1);
+    const dstModulePath = path.relative(dstDir, srcModulePath);
+    return pre + dstModulePath + post;
+  });
+  await fs.writeFile(dstPath, dstCode);
+}
+
 const execFile = util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
@@ -905,7 +917,7 @@ async function createProject(config, dir) {
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
     const packageConfigPath = path.join(dir, 'build.zig.zon');
-    await copyFile(config.packageConfigPath, packageConfigPath);
+    await copyZonFile(config.packageConfigPath, packageConfigPath);
   }
 }
 

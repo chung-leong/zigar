@@ -2,7 +2,7 @@ import childProcess from 'child_process';
 import { openSync, readSync, closeSync, writeFileSync } from 'fs';
 import fs, { open, readdir, lstat, rmdir, readFile, stat, mkdir, writeFile, chmod, unlink } from 'fs/promises';
 import os from 'os';
-import { sep, dirname, join, parse, basename, isAbsolute, resolve } from 'path';
+import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'path';
 import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
@@ -1121,6 +1121,18 @@ async function getDirectoryStats(dirPath) {
   return { size, mtimeMs };
 }
 
+async function copyZonFile(srcPath, dstPath) {
+  const srcDir = dirname(srcPath);
+  const dstDir = dirname(dstPath);
+  const srcCode = await readFile(srcPath, 'utf-8');
+  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+    const srcModulePath = resolve(srcDir, path);
+    const dstModulePath = relative(dstDir, srcModulePath);
+    return pre + dstModulePath + post;
+  });
+  await writeFile(dstPath, dstCode);
+}
+
 const execFile = promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
@@ -1257,7 +1269,7 @@ async function createProject(config, dir) {
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
-    await copyFile(config.packageConfigPath, packageConfigPath);
+    await copyZonFile(config.packageConfigPath, packageConfigPath);
   }
 }
 

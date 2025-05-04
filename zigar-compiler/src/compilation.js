@@ -6,8 +6,8 @@ import { basename, isAbsolute, join, parse, sep } from 'path';
 import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import {
-  acquireLock, copyFile, createDirectory, deleteDirectory, getArch, getDirectoryStats, getPlatform,
-  releaseLock, sha1
+  acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, getArch, 
+  getDirectoryStats, getPlatform, releaseLock, sha1
 } from './utility-functions.js';
 
 const execFile = promisify(ChildProcess.execFile);
@@ -147,7 +147,7 @@ export async function createProject(config, dir) {
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
-    await copyFile(config.packageConfigPath, packageConfigPath);
+    await copyZonFile(config.packageConfigPath, packageConfigPath);
   }
 }
 

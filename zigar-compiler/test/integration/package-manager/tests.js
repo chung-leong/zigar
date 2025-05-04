@@ -40,5 +40,11 @@ export function addTests(importModule, options) {
       // we actually have no way of executing the statement
       db.deinit();
     })
+    it('should correctly link in local package', async function() {
+      this.timeout(0);
+      const { hello } = await importTest('use-local/local');
+      const [ line ] = await capture(() => hello(123, 456));
+      expect(line).to.eql('sum = 579');
+    })
   })
 }

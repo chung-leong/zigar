@@ -5,7 +5,7 @@ import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
 } from 'fs/promises';
 import os from 'os';
-import { dirname, join, sep } from 'path';
+import { dirname, join, relative, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
 
@@ -268,4 +268,16 @@ export async function getDirectoryStats(dirPath) {
     }
   }
   return { size, mtimeMs };
+}
+
+export async function copyZonFile(srcPath, dstPath) {
+  const srcDir = dirname(srcPath);
+  const dstDir = dirname(dstPath);
+  const srcCode = await readFile(srcPath, 'utf-8');
+  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+    const srcModulePath = resolve(srcDir, path);
+    const dstModulePath = relative(dstDir, srcModulePath);
+    return pre + dstModulePath + post;
+  });
+  await writeFile(dstPath, dstCode);
 }

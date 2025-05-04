@@ -1,0 +1,11 @@
+.{
+    .name = .use_local,
+    .version = "0.0.0",
+    .dependencies = .{
+        .foo = .{ .path = "./foo" },
+    },
+    .paths = .{
+        "",
+    },
+    .fingerprint = 0x1740a2d2afb570f2,
+}
