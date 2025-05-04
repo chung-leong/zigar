@@ -226,6 +226,13 @@ pub const NullErrorScheme = struct {
     }
 };
 
+fn getBindNamespace(comptime fn_name: [:0]const u8, comptime FT: type) type {
+    return struct {
+        const name = fn_name;
+        var func_ptr: ?*const FT = null;
+    };
+}
+
 pub fn Translator(comptime options: TranslatorOptions) type {
     return struct {
         pub fn Translated(
@@ -353,9 +360,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     }
                     // get original function
                     const func = if (options.late_bind_fn) |get| bind: {
-                        const bind_ns = struct {
-                            var func_ptr: ?*const OldFn = null;
-                        };
+                        const bind_ns = getBindNamespace(fn_name, OldFn);
                         if (bind_ns.func_ptr) |ptr| {
                             break :bind ptr;
                         } else {

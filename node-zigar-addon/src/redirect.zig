@@ -344,6 +344,7 @@ const windows = struct {
             while (true) : (iat_index += 1) {
                 const iat_ptr = &addr_table[iat_index];
                 const int_ptr = &name_table[iat_index];
+                if (iat_ptr.u1.Function == 0) break;
                 if (snapByOrdinal(int_ptr.u1.Ordinal)) continue;
                 const ibm_ptr: *ImportByName = @ptrCast(@alignCast(&bytes[int_ptr.u1.AddressOfData]));
                 const name: [*:0]const u8 = @ptrCast(&ibm_ptr.Name);
