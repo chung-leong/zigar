@@ -923,12 +923,13 @@
     xe({
         defineAlloc: () => ({
             value(t, e = 1) {
-                if (e !== 1 << 31 - Math.clz32(e) || e > 64) throw new Error(`Invalid alignment: ${e}`);
-                const {vtable: {alloc: n}, ptr: r} = this, i = n(r, t, e, 0);
-                if (!i) throw new Error("Out of memory");
-                i.length = t;
-                const s = i["*"][it];
-                return s[ct].align = e, s;
+                const n = Math.clz32(e);
+                if (e !== 1 << 31 - n) throw new Error(`Invalid alignment: ${e}`);
+                const r = 31 - n, {vtable: {alloc: i}, ptr: s} = this, o = i(s, t, r, 0);
+                if (!o) throw new Error("Out of memory");
+                o.length = t;
+                const c = o["*"][it];
+                return c[ct].align = e, c;
             }
         }),
         defineFree() {
@@ -940,7 +941,7 @@
                     const {address: s} = i;
                     if (s === ge) throw new PreviouslyFreed(e);
                     const {vtable: {free: o}, ptr: c} = this;
-                    o(c, n, r, 0), t.releaseZigView(n);
+                    o(c, n, 31 - Math.clz32(r), 0), t.releaseZigView(n);
                 }
             };
         },
@@ -2980,22 +2981,27 @@
             })), l;
         },
         finalizeEnum(t, e) {
-            const {flags: n, constructor: r, instance: {members: [i]}, static: {members: s, template: o}} = t, c = o[st], {get: a, set: l} = this.defineMember(i, !1);
+            const {flags: n, constructor: r, instance: {members: [i]}, static: {members: s, template: o}} = t, c = o[st], {get: a, set: l} = this.defineMember(i, !1), u = {};
             for (const {name: t, flags: n, slot: r} of s) if (n & J) {
                 const n = c[r];
                 ee(n, at, re(t));
                 const i = a.call(n);
-                e[t] = e[i] = {
+                e[t] = {
                     value: n,
                     writable: !1
-                };
+                }, u[i] = n;
             }
             e[Kt] = {
                 value(t) {
-                    if ("string" == typeof t || "number" == typeof t || "bigint" == typeof t) {
-                        let e = r[t];
-                        return e || n & A && "string" != typeof t && (e = new r(void 0), l.call(e, t), ee(e, at, re(t)), 
-                        ee(r, t, re(e))), e;
+                    if ("string" == typeof t) return r[t];
+                    if ("number" == typeof t || "bigint" == typeof t) {
+                        const e = u[t];
+                        if (!e && n & A) {
+                            e = new r(void 0), l.call(e, t);
+                            const n = `${t}`;
+                            ee(e, at, re(n)), ee(r, n, re(e)), u[t] = e;
+                        }
+                        return e;
                     }
                     return t instanceof r ? t : t?.[ht] instanceof r && t[ht];
                 }

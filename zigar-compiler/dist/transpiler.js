@@ -2880,11 +2880,12 @@ var allocatorMethods = mixin({
     return {
       value(len, align = 1) {
         const lz = Math.clz32(align);        
-        if (align !== (1 << (31 - lz)) || align > 64) {
+        if (align !== 1 << (31 - lz)) {
           throw new Error(`Invalid alignment: ${align}`);
         }
+        const ptrAlign = 31 - lz;
         const { vtable: { alloc }, ptr } = this;
-        const slicePtr = alloc(ptr, len, align, 0);
+        const slicePtr = alloc(ptr, len, ptrAlign, 0);
         if (!slicePtr) {
           throw new Error('Out of memory');
         }
@@ -2911,7 +2912,8 @@ var allocatorMethods = mixin({
           throw new PreviouslyFreed(arg);
         }
         const { vtable: { free }, ptr } = this;
-        free(ptr, dv, align, 0);
+        const ptrAlign = 31 - Math.clz32(align);        
+        free(ptr, dv, ptrAlign, 0);
         thisEnv.releaseZigView(dv);
       }
     };
@@ -6657,30 +6659,36 @@ var _enum = mixin({
     const items = template[SLOTS];
     // obtain getter/setter for accessing int values directly
     const { get, set } = this.defineMember(member, false);
+    const itemsByIndex = {};
     for (const { name, flags, slot } of members) {
       if (flags & MemberFlag.IsPartOfSet) {
         const item = items[slot];
         // attach name to item so tagged union code can quickly find it
         defineProperty(item, NAME, defineValue(name));
         const index = get.call(item);
-        // make item available by name and by index
-        staticDescriptors[name] = staticDescriptors[index] = { value: item, writable: false };
+        // make item available by name 
+        staticDescriptors[name] = { value: item, writable: false };
+        itemsByIndex[index] = item;
       }
     }
     // add cast handler allowing strings, numbers, and tagged union to be casted into enums
     staticDescriptors[CAST] = {
       value(arg) {
-        if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-          let item = constructor[arg];
+        if (typeof(arg)  === 'string') {
+          return constructor[arg];
+        } else if(typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+          const item = itemsByIndex[arg];
           if (!item) {
-            if (flags & EnumFlag.IsOpenEnded && typeof(arg) !== 'string') {
+            if (flags & EnumFlag.IsOpenEnded) {
               // create the item on-the-fly when enum is non-exhaustive
               item = new constructor(undefined);
               // write the value into memory
               set.call(item, arg);
               // attach the new item to the enum set
-              defineProperty(item, NAME, defineValue(arg));
-              defineProperty(constructor, arg, defineValue(item));
+              const name = `${arg}`;
+              defineProperty(item, NAME, defineValue(name));
+              defineProperty(constructor, name, defineValue(item));
+              itemsByIndex[arg] = item;
             }
           }
           return item;

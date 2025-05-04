@@ -56,30 +56,36 @@ var _enum = mixin({
     const items = template[SLOTS];
     // obtain getter/setter for accessing int values directly
     const { get, set } = this.defineMember(member, false);
+    const itemsByIndex = {};
     for (const { name, flags, slot } of members) {
       if (flags & MemberFlag.IsPartOfSet) {
         const item = items[slot];
         // attach name to item so tagged union code can quickly find it
         defineProperty(item, NAME, defineValue(name));
         const index = get.call(item);
-        // make item available by name and by index
-        staticDescriptors[name] = staticDescriptors[index] = { value: item, writable: false };
+        // make item available by name 
+        staticDescriptors[name] = { value: item, writable: false };
+        itemsByIndex[index] = item;
       }
     }
     // add cast handler allowing strings, numbers, and tagged union to be casted into enums
     staticDescriptors[CAST] = {
       value(arg) {
-        if (typeof(arg)  === 'string' || typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-          let item = constructor[arg];
+        if (typeof(arg)  === 'string') {
+          return constructor[arg];
+        } else if(typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+          const item = itemsByIndex[arg];
           if (!item) {
-            if (flags & EnumFlag.IsOpenEnded && typeof(arg) !== 'string') {
+            if (flags & EnumFlag.IsOpenEnded) {
               // create the item on-the-fly when enum is non-exhaustive
               item = new constructor(undefined);
               // write the value into memory
               set.call(item, arg);
               // attach the new item to the enum set
-              defineProperty(item, NAME, defineValue(arg));
-              defineProperty(constructor, arg, defineValue(item));
+              const name = `${arg}`;
+              defineProperty(item, NAME, defineValue(name));
+              defineProperty(constructor, name, defineValue(item));
+              itemsByIndex[arg] = item;
             }
           }
           return item;

@@ -9,11 +9,12 @@ var allocatorMethods = mixin({
     return {
       value(len, align = 1) {
         const lz = Math.clz32(align);        
-        if (align !== (1 << (31 - lz)) || align > 64) {
+        if (align !== 1 << (31 - lz)) {
           throw new Error(`Invalid alignment: ${align}`);
         }
+        const ptrAlign = 31 - lz;
         const { vtable: { alloc }, ptr } = this;
-        const slicePtr = alloc(ptr, len, align, 0);
+        const slicePtr = alloc(ptr, len, ptrAlign, 0);
         if (!slicePtr) {
           throw new Error('Out of memory');
         }
@@ -40,7 +41,8 @@ var allocatorMethods = mixin({
           throw new PreviouslyFreed(arg);
         }
         const { vtable: { free }, ptr } = this;
-        free(ptr, dv, align, 0);
+        const ptrAlign = 31 - Math.clz32(align);        
+        free(ptr, dv, ptrAlign, 0);
         thisEnv.releaseZigView(dv);
       }
     };
