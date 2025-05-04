@@ -2995,7 +2995,7 @@
                 value(t) {
                     if ("string" == typeof t) return r[t];
                     if ("number" == typeof t || "bigint" == typeof t) {
-                        const e = u[t];
+                        let e = u[t];
                         if (!e && n & A) {
                             e = new r(void 0), l.call(e, t);
                             const n = `${t}`;

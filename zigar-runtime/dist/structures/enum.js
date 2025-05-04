@@ -74,7 +74,7 @@ var _enum = mixin({
         if (typeof(arg)  === 'string') {
           return constructor[arg];
         } else if(typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-          const item = itemsByIndex[arg];
+          let item = itemsByIndex[arg];
           if (!item) {
             if (flags & EnumFlag.IsOpenEnded) {
               // create the item on-the-fly when enum is non-exhaustive
