@@ -1,29 +1,43 @@
 const std = @import("std");
-const expect = std.testing.expect;
 
-pub fn spreadArgs(func: anytype, comptime conv: ?std.builtin.CallingConvention) SpreadArgsFn(func, conv) {
-    @setEvalBranchQuota(200000);
-    const pyramid = getPyramid(func, conv);
-    const fields = getTupleFields(func);
-    const caller_name = std.fmt.comptimePrint("call{d}", .{fields.len});
-    return @field(pyramid, caller_name);
-}
+const expectEqual = std.testing.expectEqual;
 
-pub fn SpreadArgsFn(func: anytype, comptime conv: ?std.builtin.CallingConvention) type {
+/// Take a function that accepts a tuple as its only argument and create a new one with the tuple
+/// elements spread across the argument list.
+///
+/// When conv is null, the output function will have the same calling convention as the input
+/// function.
+pub fn spreadArgs(func: anytype, comptime conv: ?std.builtin.CallingConvention) SpreadFn(@TypeOf(func), conv) {
     const pyramid = getPyramid(func, conv);
-    const fields = getTupleFields(func);
+    const fields = getTupleFields(@TypeOf(func));
     const caller_name = std.fmt.comptimePrint("call{d}", .{fields.len});
     if (!@hasDecl(pyramid, caller_name)) {
         @compileError("Too many arguments");
     }
-    return @TypeOf(@field(pyramid, caller_name));
+    return @field(pyramid, caller_name);
 }
 
-pub fn ReturnType(func: anytype) type {
-    return switch (@typeInfo(@TypeOf(func))) {
-        .@"fn" => |f| f.return_type orelse @compileError("No return type available"),
-        else => @compileError("Not a function"),
-    };
+/// Return type of spreadArgs().
+pub fn SpreadFn(comptime T: type, comptime conv: ?std.builtin.CallingConvention) type {
+    const fields = getTupleFields(T);
+    const f = @typeInfo(T).@"fn";
+    var params: [fields.len]std.builtin.Type.Fn.Param = undefined;
+    inline for (fields, 0..) |field, index| {
+        params[index] = .{
+            .type = field.type,
+            .is_generic = false,
+            .is_noalias = false,
+        };
+    }
+    return @Type(.{
+        .@"fn" = .{
+            .params = &params,
+            .is_generic = false,
+            .is_var_args = false,
+            .return_type = f.return_type.?,
+            .calling_convention = conv orelse f.calling_convention,
+        },
+    });
 }
 
 test "spreadArgs" {
@@ -45,7 +59,7 @@ test "spreadArgs" {
 
         fn addLogging(func: anytype) @TypeOf(func) {
             const ns = struct {
-                fn call(args: std.meta.ArgsTuple(@TypeOf(func))) ReturnType(func) {
+                fn call(args: std.meta.ArgsTuple(@TypeOf(func))) @typeInfo(@TypeOf(func)).@"fn".return_type.? {
                     logged = true;
                     return @call(.auto, func, args);
                 }
@@ -62,25 +76,26 @@ test "spreadArgs" {
         }
     };
     const f1 = test_ns.getNegateFunc(test_ns.add);
-    try expect(f1(100, 50) == -150);
+    try expectEqual(-150, f1(100, 50));
     const f2 = spreadArgs(test_ns.sum, .C);
-    try expect(f2(1, 2, 3) == 6);
+    try expectEqual(6, f2(1, 2, 3));
     const f3 = test_ns.addLogging(test_ns.add);
-    try expect(f3(100, 50) == 150);
-    try expect(test_ns.logged == true);
+    try expectEqual(150, f3(100, 50));
+    try expectEqual(true, test_ns.logged);
 }
 
 fn getPyramid(func: anytype, comptime conv: ?std.builtin.CallingConvention) type {
     const PT = comptime param_types: {
-        const fields = getTupleFields(func);
+        const fields = getTupleFields(@TypeOf(func));
         var list: [fields.len]type = undefined;
         for (fields, 0..) |field, index| {
             list[index] = field.type;
         }
         break :param_types list;
     };
-    const RT = ReturnType(func);
-    const cc = conv orelse @typeInfo(@TypeOf(func)).@"fn".calling_convention;
+    const f = @typeInfo(@TypeOf(func)).@"fn";
+    const RT = f.return_type.?;
+    const cc = conv orelse f.calling_convention;
     return struct {
         fn call0() callconv(cc) RT {
             return func(.{});
@@ -344,8 +359,7 @@ fn getPyramid(func: anytype, comptime conv: ?std.builtin.CallingConvention) type
     };
 }
 
-fn getTupleFields(func: anytype) []const std.builtin.Type.StructField {
-    const FT = @TypeOf(func);
+fn getTupleFields(comptime FT: type) []const std.builtin.Type.StructField {
     const valid = switch (@typeInfo(FT)) {
         .@"fn" => |f| is_tuple: {
             if (f.params.len == 1) {

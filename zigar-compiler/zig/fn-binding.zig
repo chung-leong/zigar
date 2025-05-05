@@ -1,61 +1,37 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const fn_transform = @import("fn-transform.zig");
+
 const expect = std.testing.expect;
+const expectEqualSlices = std.testing.expectEqualSlices;
+const expectEqual = std.testing.expectEqual;
 
-const Header = extern struct {
-    signature: u64 = magic_number,
-    len: u32,
-    alignment: u16,
-    ctx_offset: u16,
-
-    const magic_number: u64 = 0x380f_fc59_7bac_4e96;
-};
-
-pub fn create(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BoundFunction(@TypeOf(func), @TypeOf(vars)) {
-    const T = @TypeOf(func);
-    const CT = @TypeOf(vars);
-    const binding = Binding(T, CT);
-    if (!@inComptime()) {
-        // binding structure: [header][instructions][fn_address][context]
-        const instr_len = try binding.findInstructionLength();
-        const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
-        const ctx_index = std.mem.alignForward(usize, instr_index + instr_len + @sizeOf(usize), @max(@alignOf(CT), @alignOf(usize)));
-        const fn_address_index = ctx_index - @sizeOf(usize);
-        const binding_len = ctx_index + @sizeOf(CT);
-        const max_align = @max(@alignOf(Header), @alignOf(CT));
-        const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
-        const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
-        const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
-        const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
-        const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
-        protect(false);
-        defer protect(true);
-        header_ptr.* = .{
-            .ctx_offset = @intCast(ctx_index - instr_index),
-            .len = @intCast(binding_len),
-            .alignment = @intCast(max_align),
-        };
-        try binding.encodeInstructions(instr_slice, @intFromPtr(fn_address_ptr));
-        ctx_ptr.* = vars;
-        const fn_ptr = switch (@typeInfo(T)) {
-            .@"fn" => &func,
-            .pointer => func,
-            else => unreachable,
-        };
-        fn_address_ptr.* = @intFromPtr(fn_ptr);
-        invalidate(new_bytes);
-        return @ptrCast(@alignCast(instr_slice));
-    } else {
-        const target = switch (@typeInfo(T)) {
-            .@"fn" => func,
-            .pointer => func.*,
-            else => unreachable,
-        };
-        return binding.getComptime(target, vars);
-    }
+/// Create a binding using an user-provided allocator instead of the default.
+///
+/// The allocator should use an instance of ExecutablePageAllocator as its backing allocator.
+pub fn create(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BoundFn(@TypeOf(func), @TypeOf(vars)) {
+    const binding = Binding(@TypeOf(func), @TypeOf(vars), null);
+    return if (!@inComptime())
+        binding.createRuntime(allocator, func, vars)
+    else
+        binding.getComptime(func, vars);
 }
 
+/// Create a binding with a different calling convention.
+pub fn createWithCallConv(
+    allocator: std.mem.Allocator,
+    func: anytype,
+    vars: anytype,
+    comptime cc: std.builtin.CallingConvention,
+) !*const BoundFnWithCallConv(@TypeOf(func), @TypeOf(vars), cc) {
+    const binding = Binding(@TypeOf(func), @TypeOf(vars), cc);
+    return if (!@inComptime())
+        binding.createRuntime(allocator, func, vars)
+    else
+        binding.getComptime(func, vars);
+}
+
+/// Free a binding using an user-provided allocator instead of the default.
 pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
     const fn_addr = @intFromPtr(fn_ptr);
     if (fn_addr >= @sizeOf(Header) and std.mem.isAligned(fn_addr - @sizeOf(Header), @alignOf(Header))) {
@@ -71,7 +47,11 @@ pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
     }
 }
 
-pub fn bound(comptime CT: type, fn_ptr: *const anyopaque) ?*CT {
+/// Obtain a pointer to the tuple holding variables bound to a function.
+///
+/// Before modifying the tuple, you need to call protect() to disable write protection and again
+/// afterward to reenable it.
+pub fn bound(comptime T: type, fn_ptr: *const anyopaque) ?*T {
     const fn_addr = @intFromPtr(fn_ptr);
     if (fn_addr >= @sizeOf(Header) and std.mem.isAligned(fn_addr - @sizeOf(Header), @alignOf(Header))) {
         const header_ptr: *Header = @ptrFromInt(fn_addr - @sizeOf(Header));
@@ -82,14 +62,63 @@ pub fn bound(comptime CT: type, fn_ptr: *const anyopaque) ?*CT {
     return null;
 }
 
-pub fn bind(func: anytype, vars: anytype) !*const BoundFunction(@TypeOf(func), @TypeOf(vars)) {
+/// Create a new function by binding values to some (possibly all) of its arguments.
+///
+/// When called in a comptime context the binding will occur at comptime. That is to say,
+/// you will get a normal function.
+pub fn bind(func: anytype, vars: anytype) !*const BoundFn(@TypeOf(func), @TypeOf(vars)) {
     return create(exec_allocator, func, vars);
 }
 
+/// Create a new function with a different calling convention and bind values to its arguments.
+pub fn bindWithCallConv(
+    func: anytype,
+    vars: anytype,
+    comptime cc: std.builtin.CallingConvention,
+) !*const BoundFnWithCallConv(@TypeOf(func), @TypeOf(vars), cc) {
+    return createWithCallConv(exec_allocator, func, vars, cc);
+}
+
+/// Free memory associated with a function binding.
+///
+/// Nothing happens if the given pointer does not actually point at a bound function.
 pub fn unbind(fn_ptr: *const anyopaque) void {
     destroy(exec_allocator, fn_ptr);
 }
 
+/// Bind a function at comptime.
+pub fn define(func: anytype, vars: anytype) BoundFn(@TypeOf(func), @TypeOf(vars)) {
+    if (!@inComptime()) @compileError("This function can only be called in comptime");
+    return Binding(@TypeOf(func), @TypeOf(vars), null).getComptime(func, vars).*;
+}
+
+/// Bind a function at comptime with a different calling convention.
+pub fn defineWithCallConv(
+    func: anytype,
+    vars: anytype,
+    comptime cc: std.builtin.CallingConvention,
+) BoundFn(@TypeOf(func), @TypeOf(vars)) {
+    if (!@inComptime()) @compileError("This function can only be called in comptime");
+    return Binding(@TypeOf(func), @TypeOf(vars), cc).getComptime(func, vars).*;
+}
+
+/// Create a function closure.
+pub fn close(comptime T: type, vars: T) !*const BoundFn(@TypeOf(onlyFn(T)), std.meta.Tuple(&.{T})) {
+    const func = onlyFn(T);
+    return try bind(func, .{vars});
+}
+
+/// Create a function closure with a different calling convention.
+pub fn closeWithCallConv(
+    comptime T: type,
+    vars: T,
+    comptime cc: std.builtin.CallingConvention,
+) !*const BoundFnWithCallConv(@TypeOf(onlyFn(T)), std.meta.Tuple(&.{T}), cc) {
+    const func = onlyFn(T);
+    return try bindWithCallConv(func, .{vars}, cc);
+}
+
+/// Enable or disable write protection on executable memory on platforms that has the feature.
 pub fn protect(state: bool) void {
     if (builtin.target.os.tag.isDarwin()) {
         const c = @cImport({
@@ -108,6 +137,27 @@ fn invalidate(slice: []u8) void {
     }
 }
 
+/// Return the only public function that exists in the given namespace.
+pub fn onlyFn(comptime ns: type) find: {
+    const T: type = for (std.meta.declarations(ns)) |decl| {
+        const DT = @TypeOf(@field(ns, decl.name));
+        if (@typeInfo(DT) == .@"fn") break DT;
+    } else @TypeOf(undefined);
+    break :find T;
+} {
+    var fn_name: ?[]const u8 = null;
+    inline for (std.meta.declarations(ns)) |decl| {
+        if (@typeInfo(@TypeOf(@field(ns, decl.name))) == .@"fn") {
+            if (fn_name == null) fn_name = decl.name else {
+                @compileError("Found multiple public functions in " ++ @typeName(ns));
+            }
+        }
+    }
+    return if (fn_name) |name| @field(ns, name) else {
+        @compileError("Unable to find a public function in " ++ @typeName(ns));
+    };
+}
+
 var exec_da: std.heap.DebugAllocator(.{}) = .{
     .backing_allocator = .{
         .ptr = undefined,
@@ -116,35 +166,189 @@ var exec_da: std.heap.DebugAllocator(.{}) = .{
 };
 const exec_allocator = exec_da.allocator();
 
-pub fn Binding(comptime T: type, comptime CT: type) type {
+const Header = extern struct {
+    signature: u64 = magic_number,
+    len: u32,
+    alignment: u16,
+    ctx_offset: u16,
+
+    const magic_number: u64 = 0x380f_fc59_7bac_4e96;
+};
+
+fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.CallingConvention) type {
     const FT = FnType(T);
-    const BFT = BoundFunction(FT, CT);
+    const calling_convention: std.builtin.CallingConvention = cc orelse @typeInfo(FT).@"fn".calling_convention;
+    const BFT = BoundFnWithCallConv(FT, CT, calling_convention);
     const AddressPosition = struct { offset: isize, stack_offset: isize, stack_align_mask: ?isize };
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
-
-    return struct {
-        var instr_len: ?usize = null;
-        var address_pos: ?AddressPosition = null;
-
-        fn findInstructionLength() !usize {
-            return instr_len orelse init: {
-                const len = try encodeInstructionsReturnLength(null, 0);
-                instr_len = len;
-                break :init len;
+    const BFArgsTuple = std.meta.ArgsTuple(BFT);
+    const ArgsTuple = init: {
+        // std.meta.ArgsTuple() fails when anytype is in the argument list
+        const params = @typeInfo(FT).@"fn".params;
+        var tuple_fields: [params.len]std.builtin.Type.StructField = undefined;
+        inline for (params, 0..) |param, index| {
+            const name = std.fmt.comptimePrint("{d}", .{index});
+            const var_type: ?type, const var_def_ptr: ?*const anyopaque = find: {
+                // find the variable bound to this param, if any
+                inline for (ctx_mapping) |m| {
+                    if (std.mem.eql(u8, name, m.dest)) {
+                        // find the type (and default value) from the bound variable
+                        const ctx_fields = @typeInfo(CT).@"struct".fields;
+                        inline for (ctx_fields) |field| {
+                            if (std.mem.eql(u8, m.src, field.name))
+                                break :find .{ field.type, field.default_value_ptr };
+                        }
+                    }
+                } else break :find .{ null, null };
+            };
+            tuple_fields[index] = .{
+                .name = name,
+                .type = var_type orelse (param.type orelse unreachable),
+                .default_value_ptr = var_def_ptr,
+                .is_comptime = var_def_ptr != null,
+                .alignment = 0,
             };
         }
+        break :init @Type(.{
+            .@"struct" = .{
+                .is_tuple = true,
+                .layout = .auto,
+                .decls = &.{},
+                .fields = &tuple_fields,
+            },
+        });
+    };
 
-        fn encodeInstructions(output: []u8, address: usize) !void {
-            _ = try encodeInstructionsReturnLength(output, address);
+    return struct {
+        var instr_encoded_len: ?usize = null;
+        var address_pos: ?AddressPosition = null;
+
+        pub fn createRuntime(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BFT {
+            // binding structure: [header][instructions][context][?fn_address]
+            const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
+            const instr_len = instr_encoded_len orelse init: {
+                const len = try encodeInstructions(null, 0, func);
+                instr_encoded_len = len;
+                break :init len;
+            };
+            const ctx_index = std.mem.alignForward(usize, instr_index + instr_len, @alignOf(CT));
+            const fn_address_index = std.mem.alignForward(usize, ctx_index + @sizeOf(CT), @alignOf(usize));
+            const binding_len = switch (@typeInfo(@TypeOf(func))) {
+                .@"fn" => ctx_index + @sizeOf(CT),
+                .pointer => fn_address_index + @sizeOf(usize),
+                else => unreachable,
+            };
+            const max_align = @max(@alignOf(Header), @alignOf(CT));
+            const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
+            const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
+            const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
+            const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
+            const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
+            protect(false);
+            defer protect(true);
+            header_ptr.* = .{
+                .ctx_offset = @intCast(ctx_index - instr_index),
+                .len = @intCast(binding_len),
+                .alignment = @intCast(max_align),
+            };
+            const actual_instr_len = try encodeInstructions(instr_slice, @intFromPtr(ctx_ptr), func);
+            assert(instr_len == actual_instr_len);
+            ctx_ptr.* = vars;
+            if (@typeInfo(@TypeOf(func)) == .pointer) fn_address_ptr.* = @intFromPtr(func);
+            invalidate(new_bytes);
+            return @ptrCast(@alignCast(instr_slice));
         }
 
-        fn encodeInstructionsReturnLength(output: ?[]u8, address: usize) !usize {
-            const trampoline = getTrampoline();
-            const trampoline_address = @intFromPtr(&trampoline);
+        pub fn getComptime(comptime func: anytype, comptime vars: anytype) *const BFT {
+            const ns = struct {
+                inline fn call(bf_args: BFArgsTuple) @typeInfo(BFT).@"fn".return_type.? {
+                    var args: ArgsTuple = undefined;
+                    inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
+                    inline for (ctx_mapping) |m| @field(args, m.dest) = @field(vars, m.src);
+                    return @call(.auto, func, args);
+                }
+            };
+            return fn_transform.spreadArgs(ns.call, calling_convention);
+        }
+
+        fn getTrampoline(func: anytype) *const BFT {
+            const ns = struct {
+                inline fn call(bf_args: BFArgsTuple) @typeInfo(BFT).@"fn".return_type.? {
+                    // disable runtime safety so target isn't written with 0xaa when optimize = Debug
+                    @setRuntimeSafety(false);
+                    // this variable will be set by dynamically generated code before it jumps here;
+                    // a two-element array is used to so the compiler doesn't attempt to keep it in a register
+                    var target: [2]usize = undefined;
+                    // insert nop x 3 so we can find the displacement for target in the instruction stream
+                    insertNOPs(&target);
+                    const ctx_ptr: *const CT = @ptrFromInt(target[0]);
+                    var args: ArgsTuple = undefined;
+                    inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
+                    inline for (ctx_mapping) |m| @field(args, m.dest) = @field(ctx_ptr.*, m.src);
+                    switch (@typeInfo(@TypeOf(func))) {
+                        .@"fn" => {
+                            return @call(.never_inline, uninline(func), args);
+                        },
+                        .pointer => {
+                            // expect address of function to be stored immediately after the context
+                            const fn_address_address = std.mem.alignForward(usize, target[0] + @sizeOf(CT), @alignOf(usize));
+                            const fn_address_ptr: *const usize = @ptrFromInt(fn_address_address);
+                            const fn_ptr: *const FT = @ptrFromInt(fn_address_ptr.*);
+                            return @call(.never_inline, fn_ptr, args);
+                        },
+                        else => unreachable,
+                    }
+                }
+            };
+            return fn_transform.spreadArgs(ns.call, calling_convention);
+        }
+
+        inline fn insertNOPs(ptr: *const anyopaque) void {
+            const asm_code =
+                \\ nop
+                \\ nop
+                \\ nop
+            ;
+            switch (builtin.target.cpu.arch) {
+                .x86_64 => asm volatile (asm_code
+                    :
+                    : [arg] "{rax}" (ptr),
+                ),
+                .aarch64 => asm volatile (asm_code
+                    :
+                    : [arg] "{x9}" (ptr),
+                ),
+                .riscv32, .riscv64 => asm volatile (asm_code
+                    :
+                    : [arg] "{x6}" (ptr),
+                ),
+                .powerpc, .powerpcle, .powerpc64, .powerpc64le => asm volatile (
+                // actual nop's would get reordered for some reason despite the use of "volatile"
+                    \\ li %r0, %r0
+                    \\ li %r0, %r0
+                    \\ li %r0, %r0        
+                    :
+                    : [arg] "{r11}" (ptr),
+                ),
+                .x86 => asm volatile (asm_code
+                    :
+                    : [arg] "{eax}" (ptr),
+                ),
+                .arm => asm volatile (asm_code
+                    :
+                    : [arg] "{r4}" (ptr),
+                ),
+                else => unreachable,
+            }
+        }
+
+        fn encodeInstructions(output: ?[]u8, address: usize, func: anytype) !usize {
+            const trampoline = getTrampoline(func);
+            const trampoline_address = @intFromPtr(trampoline);
             // find the offset of target inside the trampoline function
             const pos = address_pos orelse init: {
-                const offset = try findAddressPosition(&trampoline);
+                const offset = try findAddressPosition(trampoline);
                 address_pos = offset;
                 break :init offset;
             };
@@ -220,14 +424,6 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                 },
                 .aarch64 => {
                     if (pos.stack_align_mask) |mask| {
-                        encoder.encode(.{
-                            .sub = .{
-                                .rd = 11,
-                                .rn = 31,
-                                .imm12 = 0,
-                                .shift = 0,
-                            },
-                        });
                         // sub x10, sp, -pos.stack_offset
                         encoder.encode(.{
                             .sub = .{
@@ -320,15 +516,15 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                     encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
-                .powerpc64le => {
-                    const code_address = address + @offsetOf(@This(), "code");
+                .powerpc64, .powerpc64le => {
+                    const code_address: usize = if (output) |slice| @intFromPtr(slice.ptr) else 0;
                     const code_addr_63_48: u16 = @truncate((code_address >> 48) & 0xffff);
                     const code_addr_47_32: u16 = @truncate((code_address >> 32) & 0xffff);
                     const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
                     const code_addr_15_0: u16 = @truncate((code_address >> 0) & 0xffff);
                     // lis r11, code_addr_63_48
                     encoder.encode(.{
-                        .addi = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_63_48) },
+                        .addis = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_63_48) },
                     });
                     // ori r11, r11, code_addr_47_32
                     encoder.encode(.{
@@ -348,7 +544,7 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                     });
                     // ld r12, [r11 + 40] (address)
                     encoder.encode(.{
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 10 },
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 40 >> 2 },
                     });
                     // std [sp + pos.offset], r12
                     encoder.encode(.{
@@ -356,7 +552,7 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                     });
                     // ld r12, [r11 + 48] (trampoline_address)
                     encoder.encode(.{
-                        .ld = .{ .rt = 12, .ra = 11, .ds = 12 },
+                        .ld = .{ .rt = 12, .ra = 11, .ds = 48 >> 2 },
                     });
                     // mtctr r12
                     encoder.encode(.{
@@ -514,94 +710,44 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                     encoder.encode(.{ .literal = address });
                     encoder.encode(.{ .literal = trampoline_address });
                 },
+                .powerpc, .powerpcle => {
+                    const code_address: usize = if (output) |slice| @intFromPtr(slice.ptr) else 0;
+                    const code_addr_31_16: u16 = @truncate((code_address >> 16) & 0xffff);
+                    const code_addr_15_0: u16 = @truncate((code_address >> 0) & 0xffff);
+                    // lis r11, code_addr_31_16
+                    encoder.encode(.{
+                        .addis = .{ .rt = 11, .ra = 0, .imm16 = @bitCast(code_addr_31_16) },
+                    });
+                    // ori r11, r11, code_addr_15_0
+                    encoder.encode(.{
+                        .ori = .{ .ra = 11, .rs = 11, .imm16 = @bitCast(code_addr_15_0) },
+                    });
+                    // lw r12, [r11 + 28] (address)
+                    encoder.encode(.{
+                        .lw = .{ .rt = 12, .ra = 11, .ds = 28 },
+                    });
+                    // stw [sp + pos.offset], r12
+                    encoder.encode(.{
+                        .stw = .{ .ra = 1, .rs = 12, .ds = @intCast(pos.offset) },
+                    });
+                    // lw r12, [r11 + 32] (trampoline_address)
+                    encoder.encode(.{
+                        .lw = .{ .rt = 12, .ra = 11, .ds = 32 },
+                    });
+                    // mtctr r12
+                    encoder.encode(.{
+                        .mtctr = .{ .rs = 12 },
+                    });
+                    // bctrl
+                    encoder.encode(.{
+                        .bctrl = .{},
+                    });
+                    encoder.encode(.{ .literal = address });
+                    encoder.encode(.{ .literal = trampoline_address });
+                },
                 else => @compileError("No support for '" ++ @tagName(builtin.target.cpu.arch) ++ "'"),
             }
             return encoder.len;
-        }
-
-        const bf = @typeInfo(BFT).@"fn";
-        const RT = bf.return_type.?;
-        const cc = bf.calling_convention;
-
-        fn getTrampoline() BFT {
-            const ns = struct {
-                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
-                    // disable runtime safety so target isn't written with 0xaa when optimize = Debug
-                    @setRuntimeSafety(false);
-                    // this variable will be set by dynamically generated code before the jump
-                    // using a two-element array to ensure the compiler doesn't attempt to keep it in register
-                    var target: [2]usize = undefined;
-                    // insert nop x 3 so we can find the displacement for target in the instruction stream
-                    insertNOPs(&target);
-                    const fn_address_ptr: *const usize = @ptrFromInt(target[0]);
-                    const ctx_ptr: *const CT = @ptrFromInt(target[0] + @sizeOf(usize));
-                    var args: std.meta.ArgsTuple(FT) = undefined;
-                    inline for (arg_mapping) |m| {
-                        @field(args, m.dest) = @field(bf_args, m.src);
-                    }
-                    inline for (ctx_mapping) |m| {
-                        @field(args, m.dest) = @field(ctx_ptr.*, m.src);
-                    }
-                    const fn_ptr: *const FT = @ptrFromInt(fn_address_ptr.*);
-                    return @call(.never_inline, fn_ptr, args);
-                }
-            };
-            return fn_transform.spreadArgs(ns.call, cc);
-        }
-
-        fn getComptime(comptime func: anytype, comptime vars: anytype) BFT {
-            const ns = struct {
-                inline fn call(bf_args: std.meta.ArgsTuple(BFT)) RT {
-                    var args: std.meta.ArgsTuple(FT) = undefined;
-                    inline for (arg_mapping) |m| {
-                        @field(args, m.dest) = @field(bf_args, m.src);
-                    }
-                    inline for (ctx_mapping) |m| {
-                        @field(args, m.dest) = @field(vars, m.src);
-                    }
-                    return @call(.auto, func, args);
-                }
-            };
-            return fn_transform.spreadArgs(ns.call, cc);
-        }
-
-        inline fn insertNOPs(ptr: *const anyopaque) void {
-            const asm_code =
-                \\ nop
-                \\ nop
-                \\ nop
-            ;
-            switch (builtin.target.cpu.arch) {
-                .x86_64 => asm volatile (asm_code
-                    :
-                    : [arg] "{rax}" (ptr),
-                ),
-                .aarch64 => asm volatile (asm_code
-                    :
-                    : [arg] "{x9}" (ptr),
-                ),
-                .riscv32, .riscv64 => asm volatile (asm_code
-                    :
-                    : [arg] "{x6}" (ptr),
-                ),
-                .powerpc64le => asm volatile (
-                // actual nop's would get reordered for some reason despite the use of "volatile"
-                    \\ li %r0, %r0
-                    \\ li %r0, %r0
-                    \\ li %r0, %r0        
-                    :
-                    : [arg] "{r11}" (ptr),
-                ),
-                .x86 => asm volatile (asm_code
-                    :
-                    : [arg] "{eax}" (ptr),
-                ),
-                .arm => asm volatile (asm_code
-                    :
-                    : [arg] "{r4}" (ptr),
-                ),
-                else => unreachable,
-            }
         }
 
         fn findAddressPosition(ptr: *const anyopaque) !AddressPosition {
@@ -613,7 +759,11 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                     const instrs: [*]const u8 = @ptrCast(ptr);
                     const nop = @intFromEnum(Instruction.Opcode.nop);
                     const sp = 4;
-                    var registers = [1]isize{0} ** 16;
+                    var registers = [1]isize{0} ** switch (@bitSizeOf(usize)) {
+                        32 => 8,
+                        64 => 16,
+                        else => unreachable,
+                    };
                     var i: usize = 0;
                     while (i < 262144) {
                         if (instrs[i] == nop and instrs[i + 1] == nop and instrs[i + 2] == nop) {
@@ -655,12 +805,11 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                                     else => {},
                                 }
                             }
-                            const size_one: isize = @sizeOf(usize);
-                            const size_all: isize = size_one * size_one * 2;
+                            const change: isize = if (attrs.affects_all) @sizeOf(usize) * registers.len else @sizeOf(usize);
                             if (attrs.pushes) {
-                                registers[sp] -= if (attrs.affects_all) size_all else size_one;
+                                registers[sp] -= change;
                             } else if (attrs.pops) {
-                                registers[sp] += if (attrs.affects_all) size_all else size_one;
+                                registers[sp] += change;
                             }
                         }
                     }
@@ -808,7 +957,7 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                         }
                     }
                 },
-                .powerpc64le => {
+                .powerpc, .powerpcle, .powerpc64, .powerpc64le => {
                     const instrs: [*]const u32 = @ptrCast(@alignCast(ptr));
                     // li 0, 0 is used as nop instead of regular nop
                     const nop: u32 = @bitCast(Instruction.ADDI{ .ra = 0, .rt = 0, .imm16 = 0 });
@@ -821,11 +970,23 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
                             const instr = instrs[i];
                             if (match(Instruction.ADDI, instr)) |addi| {
                                 registers[addi.rt] = registers[addi.ra] + addi.imm16;
-                            } else if (match(Instruction.STDU, instr)) |stdu| {
-                                registers[stdu.ra] += @as(isize, stdu.ds) << 2;
+                            } else if (match(Instruction.SUBFIC, instr)) |subfic| {
+                                registers[subfic.rt] = registers[subfic.ra] + subfic.imm16;
                             } else if (match(Instruction.OR, instr)) |@"or"| {
                                 if (@"or".rb == @"or".rs) { // => mr ra rs
                                     registers[@"or".ra] = registers[@"or".rs];
+                                }
+                            } else if (@bitSizeOf(usize) == 64) {
+                                if (match(Instruction.STDU, instr)) |stdu| {
+                                    registers[stdu.ra] += @as(isize, stdu.ds) << 2;
+                                } else if (match(Instruction.STDUX, instr)) |stdux| {
+                                    registers[stdux.rs] = registers[stdux.ra] + registers[stdux.rb];
+                                }
+                            } else if (@bitSizeOf(usize) == 32) {
+                                if (match(Instruction.STWU, instr)) |stwu| {
+                                    registers[stwu.ra] += stwu.ds;
+                                } else if (match(Instruction.STWUX, instr)) |stwux| {
+                                    registers[stwux.rs] = registers[stwux.ra] + registers[stwux.rb];
                                 }
                             }
                         }
@@ -869,7 +1030,8 @@ pub fn Binding(comptime T: type, comptime CT: type) type {
     };
 }
 
-pub fn BoundFunction(comptime T: type, comptime CT: type) type {
+/// Return type of bindWithCallConv(), createWithCallConv(), etc.
+pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin.CallingConvention) type {
     const FT = FnType(T);
     const f = @typeInfo(FT).@"fn";
     const params = @typeInfo(FT).@"fn".params;
@@ -880,22 +1042,32 @@ pub fn BoundFunction(comptime T: type, comptime CT: type) type {
     for (params, 0..) |param, number| {
         const name = std.fmt.comptimePrint("{d}", .{number});
         if (!isMapped(&context_mapping, name)) {
+            if (param.type == null) {
+                @compileError("A variable must be bound to an 'anytype' parameter");
+            }
             new_params[index] = param;
             index += 1;
         }
     }
     var new_f = f;
     new_f.params = &new_params;
+    new_f.is_generic = false;
+    if (cc) |c| new_f.calling_convention = c;
     return @Type(.{ .@"fn" = new_f });
 }
 
-test "BoundFunction" {
+/// Return type of bind(), create(), etc.
+pub fn BoundFn(comptime T: type, comptime CT: type) type {
+    return BoundFnWithCallConv(T, CT, null);
+}
+
+test "BoundFn" {
     const FT = fn (i8, i16, i32, i64) i64;
     const CT = struct {
         @"2": i32,
     };
-    const BFT = BoundFunction(FT, CT);
-    try expect(BFT == fn (i8, i16, i64) i64);
+    const BFT = BoundFn(FT, CT);
+    try expectEqual(fn (i8, i16, i64) i64, BFT);
 }
 
 const Mapping = struct {
@@ -932,12 +1104,12 @@ test "getArgumentMapping" {
         .@"1" = @as(i32, 123),
     });
     const mapping = comptime getArgumentMapping(FT, CT);
-    try expect(mapping[0].src[0] == '0');
-    try expect(mapping[0].dest[0] == '0');
-    try expect(mapping[1].src[0] == '1');
-    try expect(mapping[1].dest[0] == '2');
-    try expect(mapping[2].src[0] == '2');
-    try expect(mapping[2].dest[0] == '3');
+    try expectEqualSlices(u8, "0", mapping[0].src);
+    try expectEqualSlices(u8, "0", mapping[0].dest);
+    try expectEqualSlices(u8, "1", mapping[1].src);
+    try expectEqualSlices(u8, "2", mapping[1].dest);
+    try expectEqualSlices(u8, "2", mapping[2].src);
+    try expectEqualSlices(u8, "3", mapping[2].dest);
 }
 
 fn getContextMapping(comptime FT: type, comptime CT: type) return_type: {
@@ -970,10 +1142,10 @@ test "getContextMapping" {
     });
     const FT = fn (i32, i32, i32, i32) i32;
     const mapping = comptime getContextMapping(FT, CT);
-    try expect(mapping[0].src[0] == '1');
-    try expect(mapping[0].dest[0] == '1');
-    try expect(mapping[1].src[0] == '-');
-    try expect(mapping[1].dest[0] == '3');
+    try expectEqualSlices(u8, "1", mapping[0].src);
+    try expectEqualSlices(u8, "1", mapping[0].dest);
+    try expectEqualSlices(u8, "-1", mapping[1].src);
+    try expectEqualSlices(u8, "3", mapping[1].dest);
 }
 
 fn isMapped(mapping: []const Mapping, name: [:0]const u8) bool {
@@ -991,9 +1163,9 @@ test "isMapped" {
     });
     const FT = fn (i32, i32, i32, i32) i32;
     const mapping = comptime getContextMapping(FT, CT);
-    try expect(isMapped(&mapping, "1") == true);
-    try expect(isMapped(&mapping, "3") == true);
-    try expect(isMapped(&mapping, "2") == false);
+    try expectEqual(true, isMapped(&mapping, "1"));
+    try expectEqual(true, isMapped(&mapping, "3"));
+    try expectEqual(false, isMapped(&mapping, "2"));
 }
 
 fn FnType(comptime T: type) type {
@@ -1013,8 +1185,34 @@ test "FnType" {
             return arg;
         }
     };
-    try expect(FnType(@TypeOf(ns.foo)) == fn (i32) i32);
-    try expect(FnType(@TypeOf(&ns.foo)) == fn (i32) i32);
+    try expectEqual(fn (i32) i32, FnType(@TypeOf(ns.foo)));
+    try expectEqual(fn (i32) i32, FnType(@TypeOf(&ns.foo)));
+}
+
+fn Uninlined(comptime FT: type) type {
+    const f = @typeInfo(FT).@"fn";
+    if (f.calling_convention != .@"inline") return FT;
+    return @Type(.{
+        .@"fn" = .{
+            .calling_convention = .auto,
+            .is_generic = f.is_generic,
+            .is_var_args = f.is_var_args,
+            .return_type = f.return_type,
+            .params = f.params,
+        },
+    });
+}
+
+fn uninline(func: anytype) Uninlined(@TypeOf(func)) {
+    const FT = @TypeOf(func);
+    const f = @typeInfo(FT).@"fn";
+    if (f.calling_convention != .@"inline") return func;
+    const ns = struct {
+        inline fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
+            return @call(.auto, func, args);
+        }
+    };
+    return fn_transform.spreadArgs(ns.call, .auto);
 }
 
 const Instruction = switch (builtin.target.cpu.arch) {
@@ -1564,10 +1762,10 @@ const Instruction = switch (builtin.target.cpu.arch) {
                 }
                 if (std.mem.startsWith(u8, name, "push ")) {
                     attrs.pushes = true;
-                    attrs.affects_all = std.mem.startsWith(u8, name, " all");
+                    attrs.affects_all = std.mem.endsWith(u8, name, " all");
                 } else if (std.mem.startsWith(u8, name, "pop ")) {
                     attrs.pops = true;
-                    attrs.affects_all = std.mem.startsWith(u8, name, " all");
+                    attrs.affects_all = std.mem.endsWith(u8, name, " all");
                 }
                 const index: usize = field.value;
                 table[index] = attrs;
@@ -1924,12 +2122,18 @@ const Instruction = switch (builtin.target.cpu.arch) {
         jalr: JALR,
         literal: usize,
     },
-    .powerpc64le => union(enum) {
+    .powerpc, .powerpcle, .powerpc64, .powerpc64le => union(enum) {
         pub const ADDI = packed struct(u32) {
             imm16: i16,
             ra: u5,
             rt: u5,
             @"31:26": u6 = 14,
+        };
+        pub const ADDIS = packed struct(u32) {
+            imm16: i16,
+            ra: u5,
+            rt: u5,
+            @"31:26": u6 = 15,
         };
         pub const ORI = packed struct(u32) {
             imm16: u16,
@@ -1960,12 +2164,24 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rt: u5,
             @"31:26": u6 = 58,
         };
+        pub const LW = packed struct {
+            ds: i16,
+            ra: u5,
+            rt: u5,
+            @"31:26": u6 = 32,
+        };
         pub const STD = packed struct {
             @"1:0": u2 = 0,
             ds: i14,
             ra: u5,
             rs: u5,
             @"31:26": u6 = 62,
+        };
+        pub const STW = packed struct {
+            ds: i16,
+            ra: u5,
+            rs: u5,
+            @"31:26": u6 = 36,
         };
         pub const STDU = packed struct {
             @"1:0": u2 = 1,
@@ -1974,6 +2190,28 @@ const Instruction = switch (builtin.target.cpu.arch) {
             rs: u5,
             @"31:26": u6 = 62,
         };
+        pub const STWU = packed struct {
+            ds: i16,
+            ra: u5,
+            rs: u5,
+            @"31:26": u6 = 37,
+        };
+        pub const STDUX = packed struct {
+            @"0": u1 = 0,
+            @"10:1": i10 = 181,
+            rb: u5,
+            ra: u5,
+            rs: u5,
+            @"31:26": u6 = 31,
+        };
+        pub const STWUX = packed struct {
+            @"0": u1,
+            @"10:1": i10 = 183,
+            rb: u5,
+            ra: u5,
+            rs: u5,
+            @"31:26": u6 = 31,
+        };
         pub const OR = packed struct(u32) {
             @"0": u1 = 0,
             @"9:1": u10 = 444,
@@ -1981,6 +2219,12 @@ const Instruction = switch (builtin.target.cpu.arch) {
             ra: u5,
             rs: u5,
             @"31:26": u6 = 31,
+        };
+        pub const SUBFIC = packed struct(u32) {
+            imm16: i16,
+            ra: u5,
+            rt: u5,
+            @"31:26": u6 = 8,
         };
         pub const MTCTR = packed struct(u32) {
             @"0": u1 = 0,
@@ -2000,11 +2244,20 @@ const Instruction = switch (builtin.target.cpu.arch) {
         };
 
         addi: ADDI,
+        addis: ADDIS,
         ori: ORI,
         oris: ORIS,
         rldic: RLDIC,
         ld: LD,
+        lw: LW,
         std: STD,
+        stw: STW,
+        stdu: STDU,
+        stwu: STWU,
+        stdux: STDUX,
+        stwux: STWUX,
+        @"or": OR,
+        subfic: SUBFIC,
         mtctr: MTCTR,
         bctrl: BCTRL,
         literal: usize,
@@ -2144,12 +2397,10 @@ const InstructionEncoder = struct {
         encoder.add(o);
         const s: packed struct {
             a: u32 = 456,
-            b: u32 = 789,
         } = .{};
         encoder.add(s);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
+        try expectEqual(123, @as(*align(1) u32, @ptrCast(&bytes[0])).*);
+        try expectEqual(456, @as(*align(1) u32, @ptrCast(&bytes[4])).*);
     }
 
     fn write(self: *@This(), instr: anytype) void {
@@ -2171,12 +2422,10 @@ const InstructionEncoder = struct {
         encoder.write(u);
         const s: packed struct {
             a: u32 = 456,
-            b: u32 = 789,
         } = .{};
         encoder.write(s);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[0])).* == 123);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[4])).* == 456);
-        try expect(@as(*align(1) u32, @ptrCast(&bytes[8])).* == 789);
+        try expectEqual(123, @as(*align(1) u32, @ptrCast(&bytes[0])).*);
+        try expectEqual(456, @as(*align(1) u32, @ptrCast(&bytes[4])).*);
     }
 };
 
@@ -2192,6 +2441,7 @@ const windows = std.os.windows;
 const posix = std.posix;
 const page_size_min = std.heap.page_size_min;
 
+/// Duplicate of std.heap.PageAllocator that allocates pages with EXEC flag set.
 pub const ExecutablePageAllocator = struct {
     const vtable: std.mem.Allocator.VTable = .{
         .alloc = alloc,
@@ -2319,7 +2569,7 @@ test "bind (i64 x 3 + *i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     bf(1, 2, 3);
-    try expect(number == 1 + 2 + 3);
+    try expectEqual(1 + 2 + 3, number);
 }
 
 test "bind ([no args] + i64 x 4)" {
@@ -2338,10 +2588,10 @@ test "bind ([no args] + i64 x 4)" {
     _ = &number4;
     const vars = .{ number1, number2, number3, number4 };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn () i64);
+    try expectEqual(*const fn () i64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf();
-    try expect(sum == 1 + 2 + 3 + 4);
+    try expectEqual(1 + 2 + 3 + 4, sum);
 }
 
 test "bind (i64 x 1 + i64 x 1)" {
@@ -2354,10 +2604,10 @@ test "bind (i64 x 1 + i64 x 1)" {
     _ = &number;
     const vars = .{ .@"-1" = number };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    try expectEqual(*const fn (i64) i64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(1);
-    try expect(sum == 1 + 1234);
+    try expectEqual(1 + 1234, sum);
 }
 
 test "bind (i64 x 2 + i64 x 1)" {
@@ -2370,10 +2620,10 @@ test "bind (i64 x 2 + i64 x 1)" {
     _ = &number;
     const vars = .{ .@"-1" = number };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64, i64) i64);
+    try expectEqual(*const fn (i64, i64) i64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(1, 2);
-    try expect(sum == 1 + 2 + 1234);
+    try expectEqual(1 + 2 + 1234, sum);
 }
 
 test "bind (i64 x 3 + i64 x 1)" {
@@ -2386,10 +2636,10 @@ test "bind (i64 x 3 + i64 x 1)" {
     _ = &number;
     const vars = .{ .@"-1" = number };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64, i64, i64) i64);
+    try expectEqual(*const fn (i64, i64, i64) i64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(1, 2, 3);
-    try expect(sum == 1 + 2 + 3 + 1234);
+    try expectEqual(1 + 2 + 3 + 1234, sum);
 }
 
 test "bind (i64 x 4 + i64 x 1)" {
@@ -2404,7 +2654,7 @@ test "bind (i64 x 4 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4);
-    try expect(sum == 1 + 2 + 3 + 4 + 5);
+    try expectEqual(1 + 2 + 3 + 4 + 5, sum);
 }
 
 test "bind (i64 x 5 + i64 x 1)" {
@@ -2419,7 +2669,7 @@ test "bind (i64 x 5 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6, sum);
 }
 
 test "bind (i64 x 6 + i64 x 1)" {
@@ -2434,7 +2684,7 @@ test "bind (i64 x 6 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7, sum);
 }
 
 test "bind (i64 x 7 + i64 x 1)" {
@@ -2449,7 +2699,7 @@ test "bind (i64 x 7 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8, sum);
 }
 
 test "bind (i64 x 8 + i64 x 1)" {
@@ -2464,7 +2714,7 @@ test "bind (i64 x 8 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9, sum);
 }
 
 test "bind (i64 x 9 + i64 x 1)" {
@@ -2479,7 +2729,7 @@ test "bind (i64 x 9 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10, sum);
 }
 
 test "bind (i64 x 10 + i64 x 1)" {
@@ -2494,7 +2744,7 @@ test "bind (i64 x 10 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11, sum);
 }
 
 test "bind (i64 x 11 + i64 x 1)" {
@@ -2509,7 +2759,7 @@ test "bind (i64 x 11 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12, sum);
 }
 
 test "bind (i64 x 12 + i64 x 1)" {
@@ -2524,7 +2774,7 @@ test "bind (i64 x 12 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13, sum);
 }
 
 test "bind (i64 x 13 + i64 x 1)" {
@@ -2539,7 +2789,7 @@ test "bind (i64 x 13 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14, sum);
 }
 
 test "bind (i64 x 14 + i64 x 1)" {
@@ -2554,7 +2804,7 @@ test "bind (i64 x 14 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15, sum);
 }
 
 test "bind (i64 x 15 + i64 x 1)" {
@@ -2569,7 +2819,7 @@ test "bind (i64 x 15 + i64 x 1)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16, sum);
 }
 
 test "bind ([no args] + i64 x 16)" {
@@ -2601,7 +2851,7 @@ test "bind ([no args] + i64 x 16)" {
     const bf = try bind(ns.add, vars);
     defer unbind(bf);
     const sum = bf();
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16, sum);
 }
 
 test "bind (f64 x 3 + f64 x 1)" {
@@ -2614,10 +2864,10 @@ test "bind (f64 x 3 + f64 x 1)" {
     _ = &number;
     const vars = .{ .@"-1" = number };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (f64, f64, f64) f64);
+    try expectEqual(*const fn (f64, f64, f64) f64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(1, 2, 3);
-    try expect(sum == 1 + 2 + 3 + 1234);
+    try expectEqual(1 + 2 + 3 + 1234, sum);
 }
 
 test "bind ([]const u8 x 1 + []const u8 x 1)" {
@@ -2630,7 +2880,7 @@ test "bind ([]const u8 x 1 + []const u8 x 1)" {
     _ = &string;
     const vars = .{ .@"-1" = string };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (a1: []const u8) [2][]const u8);
+    try expectEqual(*const fn (a1: []const u8) [2][]const u8, @TypeOf(bf));
     defer unbind(bf);
     const array = bf("Agnieszka");
     try expect(std.mem.eql(u8, array[0], "Agnieszka"));
@@ -2647,7 +2897,7 @@ test "bind ([]const u8 x 3 + []const u8 x 1)" {
     _ = &string;
     const vars = .{ .@"-1" = string };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (a1: []const u8, a2: []const u8, a3: []const u8) [4][]const u8);
+    try expectEqual(*const fn (a1: []const u8, a2: []const u8, a3: []const u8) [4][]const u8, @TypeOf(bf));
     defer unbind(bf);
     const array = bf("Agnieszka", "Basia", "Czcibora");
     try expect(std.mem.eql(u8, array[0], "Agnieszka"));
@@ -2672,7 +2922,7 @@ test "bind (@Vector(4, f64) x 3 + @Vector(4, f64) x 1)" {
         .{ 0.1, 0.2, 0.3, 0.4 },
         .{ 1, 2, 3, 4 },
     );
-    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }));
+    try expectEqual(@Vector(4, f64){ 1.111e1, 2.222e1, 3.333e1, 4.444e1 }, sum);
 }
 
 test "bind (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
@@ -2697,7 +2947,7 @@ test "bind (@Vector(4, f64) x 9 + @Vector(4, f64) x 1)" {
         .{ 1000, 2000, 3000, 4000 },
         .{ 10000, 2000, 30000, 40000 },
     );
-    try expect(@reduce(.And, sum == @Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }));
+    try expectEqual(@Vector(4, f64){ 1.111111111e5, 2.042222222e5, 3.333333333e5, 4.444444444e5 }, sum);
 }
 
 test "bind ([12]f64 x 1 + [3]i32 x 1)" {
@@ -2714,10 +2964,10 @@ test "bind ([12]f64 x 1 + [3]i32 x 1)" {
     _ = &array;
     const vars = .{array};
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn ([12]f64) f64);
+    try expectEqual(*const fn ([12]f64) f64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30, sum);
 }
 
 test "bind ([3]i32 x 1 + [12]f64 x 1)" {
@@ -2734,10 +2984,10 @@ test "bind ([3]i32 x 1 + [12]f64 x 1)" {
     _ = &array;
     const vars = .{ .@"1" = array };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn ([3]i32) f64);
+    try expectEqual(*const fn ([3]i32) f64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(.{ 10, 20, 30 });
-    try expect(sum == 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30);
+    try expectEqual(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 10 + 20 + 30, sum);
 }
 
 test "bind (*i8 x 3 + *i8 x 1)" {
@@ -2758,10 +3008,10 @@ test "bind (*i8 x 3 + *i8 x 1)" {
     const bf = try bind(ns.set, vars);
     defer unbind(bf);
     bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
+    try expectEqual(123, number1);
+    try expectEqual(123, number2);
+    try expectEqual(123, number3);
+    try expectEqual(123, number4);
 }
 
 test "bind (*i16 x 3 + *i16 x 1)" {
@@ -2782,10 +3032,10 @@ test "bind (*i16 x 3 + *i16 x 1)" {
     const bf = try bind(ns.set, vars);
     defer unbind(bf);
     bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
+    try expectEqual(123, number1);
+    try expectEqual(123, number2);
+    try expectEqual(123, number3);
+    try expectEqual(123, number4);
 }
 
 test "bind (*i32 x 3 + *i32 x 1)" {
@@ -2806,10 +3056,10 @@ test "bind (*i32 x 3 + *i32 x 1)" {
     const bf = try bind(ns.set, vars);
     defer unbind(bf);
     bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
+    try expectEqual(123, number1);
+    try expectEqual(123, number2);
+    try expectEqual(123, number3);
+    try expectEqual(123, number4);
 }
 
 test "bind (*i64 x 3 + *i64 x 1)" {
@@ -2830,10 +3080,10 @@ test "bind (*i64 x 3 + *i64 x 1)" {
     const bf = try bind(ns.set, vars);
     defer unbind(bf);
     bf(&number1, &number2, &number3);
-    try expect(number1 == 123);
-    try expect(number2 == 123);
-    try expect(number3 == 123);
-    try expect(number4 == 123);
+    try expectEqual(123, number1);
+    try expectEqual(123, number2);
+    try expectEqual(123, number3);
+    try expectEqual(123, number4);
 }
 
 test "bind (i64 x 1 + i64 x 1, comptime)" {
@@ -2845,10 +3095,28 @@ test "bind (i64 x 1 + i64 x 1, comptime)" {
     const number: i64 = 1234;
     const vars = .{ .@"-1" = number };
     const bf = comptime try bind(&ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    try expectEqual(*const fn (i64) i64, @TypeOf(bf));
     defer unbind(bf);
     const sum = bf(1);
-    try expect(sum == 1 + 1234);
+    try expectEqual(1 + 1234, sum);
+}
+
+test "bind (i64 x 1 + i64 x 1, pointer)" {
+    const ns = struct {
+        fn add(a1: i64, a2: i64) i64 {
+            return a1 + a2;
+        }
+    };
+    var number: i64 = 1234;
+    _ = &number;
+    const vars = .{ .@"-1" = number };
+    var fn_ptr = &ns.add;
+    _ = &fn_ptr;
+    const bf = try bind(fn_ptr, vars);
+    try expectEqual(*const fn (i64) i64, @TypeOf(bf));
+    defer unbind(bf);
+    const sum = bf(1);
+    try expectEqual(1 + 1234, sum);
 }
 
 test "bound" {
@@ -2861,14 +3129,14 @@ test "bound" {
     _ = &number;
     const vars = .{ .@"-1" = number };
     const bf = try bind(ns.add, vars);
-    try expect(@TypeOf(bf) == *const fn (i64) i64);
+    try expectEqual(*const fn (i64) i64, @TypeOf(bf));
     defer unbind(bf);
     const sum1 = bf(1);
-    try expect(sum1 == 1 + 1234);
+    try expectEqual(1 + 1234, sum1);
     const ctx_ptr = bound(@TypeOf(vars), bf) orelse return error.NotFound;
     protect(false);
     ctx_ptr.@"-1" = 4567;
     protect(true);
     const sum2 = bf(1);
-    try expect(sum2 == 1 + 4567);
+    try expectEqual(1 + 4567, sum2);
 }
