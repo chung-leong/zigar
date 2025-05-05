@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const meta = @import("meta.zig");
 
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
@@ -530,6 +531,7 @@ pub const TypeAttributes = packed struct {
 
 pub const TypeData = struct {
     type: type,
+    modifier: ?type = null,
     slot: ?usize = null,
     attrs: TypeAttributes = .{},
     signature: u64 = 0,
@@ -987,7 +989,7 @@ pub const TypeDataCollector = struct {
 
     pub fn scan(comptime self: *@This(), comptime T: type) void {
         // add all types first
-        self.add(T);
+        self.add(T, null);
         inline for (self.types.slice()) |*td| {
             // set attributes like is_supported and has_pointer
             self.setAttributes(td);
@@ -1000,8 +1002,8 @@ pub const TypeDataCollector = struct {
         }
     }
 
-    pub fn add(comptime self: *@This(), comptime T: type) void {
-        self.append(.{ .type = T });
+    pub fn add(comptime self: *@This(), comptime T: type, comptime modifier: ?type) void {
+        self.append(.{ .type = T, .modifier = modifier });
     }
 
     pub fn createDatabase(comptime self: *const @This()) TypeDatabase(self.types.len) {
@@ -1063,7 +1065,8 @@ pub const TypeDataCollector = struct {
 
     fn append(comptime self: *@This(), comptime td: TypeData) void {
         const T = td.type;
-        if (self.indexOf(T)) |index| {
+        const modifier = td.modifier;
+        if (self.indexOf(T, modifier)) |index| {
             if (td.attrs.is_in_use) {
                 const existing_td = self.at(index);
                 if (!existing_td.attrs.is_in_use) {
@@ -1085,23 +1088,26 @@ pub const TypeDataCollector = struct {
                     inline for (f.params) |param| {
                         if (param.type) |PT| {
                             if (PT != std.mem.Allocator) {
-                                self.add(PT);
+                                self.add(PT, null);
                             }
                         }
                     }
-                    if (f.return_type) |RT| self.add(RT);
+                    if (f.return_type) |RT| self.add(RT, null);
                 }
             },
-            inline .array, .vector, .optional, .pointer => |ar| {
-                self.add(ar.child);
+            .pointer => |pt| {
+                self.add(pt.child, modifier);
+            },
+            inline .array, .vector, .optional => |ar| {
+                self.add(ar.child, null);
             },
             inline .@"struct", .@"union" => |st, Tag| {
                 inline for (st.fields) |field| {
-                    self.add(field.type);
+                    self.add(field.type, null);
                     if (Tag == .@"struct" and field.is_comptime) {
                         // deal with comptime fields
                         const def_value_ptr: *const field.type = @ptrCast(@alignCast(field.default_value_ptr.?));
-                        self.addTypeOf(def_value_ptr.*);
+                        self.addTypeOf(def_value_ptr.*, null);
                     }
                 }
             },
@@ -1113,17 +1119,36 @@ pub const TypeDataCollector = struct {
                 inline for (st.decls) |decl| {
                     // decls are accessed through pointers
                     const PT = @TypeOf(&@field(T, decl.name));
-                    _ = self.append(.{ .type = PT, .attrs = .{ .is_in_use = false } });
+                    var decl_modifier: ?type = null;
                     if (@typeInfo(PT).pointer.is_const) {
-                        self.addTypeOf(@field(T, decl.name));
+                        // get modifier for container type, function pointer type, and function
+                        const decl_value = @field(T, decl.name);
+                        decl_modifier = switch (@typeInfo(@TypeOf(decl_value))) {
+                            .@"fn" => getFunctionModifier(decl_value),
+                            .type => switch (@typeInfo(decl_value)) {
+                                .pointer => |pt| switch (@typeInfo(pt.child)) {
+                                    .@"fn" => getFunctionPointerModifier(decl_value),
+                                    else => null,
+                                },
+                                .@"struct", .@"union" => getContainerModifier(decl_value),
+                                else => null,
+                            },
+                            else => null,
+                        };
+                        self.addTypeOf(decl_value, decl_modifier);
                     }
+                    _ = self.append(.{
+                        .type = PT,
+                        .modifier = decl_modifier,
+                        .attrs = .{ .is_in_use = false },
+                    });
                 }
             },
             else => {},
         }
         // add other implicit types
         switch (@typeInfo(T)) {
-            .noreturn => self.add(void),
+            .noreturn => self.add(void, null),
             .pointer => |pt| {
                 const TT = TypeData.getTargetType(.{ .type = T });
                 if (TT != pt.child) {
@@ -1132,10 +1157,10 @@ pub const TypeDataCollector = struct {
                         .attrs = .{ .is_slice = true },
                     });
                 }
-                self.add(usize);
+                self.add(usize, null);
             },
             .error_set => self.add(ErrorInt),
-            .@"struct" => |st| if (st.backing_integer) |IT| self.add(IT),
+            .@"struct" => |st| if (st.backing_integer) |IT| self.add(IT, null),
             .@"fn" => |f| if (!f.is_generic) {
                 const ArgT = ArgumentStruct(T);
                 self.append(.{
@@ -1146,37 +1171,121 @@ pub const TypeDataCollector = struct {
                     },
                 });
                 if (f.calling_convention == .@"inline") {
-                    self.add(Uninlined(T));
+                    self.add(Uninlined(T), modifier);
                 }
             },
             inline .@"union", .optional => if (self.at(index).getSelectorType()) |ST| {
-                self.add(ST);
+                self.add(ST, null);
             },
             else => {},
         }
     }
 
-    fn addTypeOf(comptime self: *@This(), comptime value: anytype) void {
+    fn canBeString(comptime T: type) bool {
+        return switch (@typeInfo(T)) {
+            inline .pointer, .array => |pt| pt.child == u8 or pt.child == u16,
+            .optional => |op| canBeString(op.child),
+            .error_union => |eu| canBeString(eu.payload),
+            else => false,
+        };
+    }
+
+    pub fn getContainerModifier(comptime T: type) ?type {
+        const fields = std.meta.fields(T);
+        var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+        var true_count: usize = 0;
+        inline for (fields, 0..) |field, i| {
+            const can_be_string = canBeString(field.type);
+            const is_string = can_be_string and meta.call("isFieldString", .{ T, field.name });
+            new_fields[i] = .{
+                .name = std.fmt.comptimePrint("{d}", .{i}),
+                .type = bool,
+                .default_value_ptr = &is_string,
+                .is_comptime = true,
+                .alignment = @alignOf(bool),
+            };
+            if (is_string) true_count += 1;
+        }
+        return if (true_count > 0) @Type(.{
+            .@"struct" = .{
+                .layout = .auto,
+                .fields = &new_fields,
+                .decls = &.{},
+                .is_tuple = true,
+            },
+        }) else null;
+    }
+
+    pub fn getFunctionModifier(comptime func: anytype) ?type {
+        const f = @typeInfo(@TypeOf(func)).@"fn";
+        const can_be_string = canBeString(f.return_type orelse return null);
+        const is_retval_string = can_be_string and meta.call("isRetvalString", .{func});
+        if (!is_retval_string) return null;
+        var new_fields: [1]std.builtin.Type.StructField = undefined;
+        new_fields[0] = .{
+            .name = "retval",
+            .type = bool,
+            .default_value_ptr = &true,
+            .is_comptime = true,
+            .alignment = @alignOf(bool),
+        };
+        return @Type(.{
+            .@"struct" = .{
+                .layout = .auto,
+                .fields = &new_fields,
+                .decls = &.{},
+                .is_tuple = true,
+            },
+        });
+    }
+
+    pub fn getFunctionPointerModifier(comptime FT: type) ?type {
+        const params = @typeInfo(FT).@"fn".params;
+        var new_fields: [params.len]std.builtin.Type.StructField = undefined;
+        var true_count: usize = 0;
+        inline for (params, 0..) |param, i| {
+            const can_be_string = canBeString(param.type orelse return null);
+            const is_string = can_be_string and meta.call("isArgumentString", .{ FT, i });
+            new_fields[i] = .{
+                .name = std.fmt.comptimePrint("{d}", .{i}),
+                .type = bool,
+                .default_value_ptr = &is_string,
+                .is_comptime = true,
+                .alignment = @alignOf(bool),
+            };
+            if (is_string) true_count += 1;
+        }
+        return if (true_count > 0) @Type(.{
+            .@"struct" = .{
+                .layout = .auto,
+                .fields = &new_fields,
+                .decls = &.{},
+                .is_tuple = true,
+            },
+        }) else null;
+    }
+
+    fn addTypeOf(comptime self: *@This(), comptime value: anytype, comptime modifier: ?type) void {
         const T = @TypeOf(value);
         switch (@typeInfo(T)) {
-            .type => self.add(value),
-            .comptime_float => self.add(*const f64),
-            .comptime_int => self.add(*const IntFor(value)),
-            .enum_literal => self.add(@TypeOf(removeSentinel(@tagName(value)))),
-            .optional => if (value) |v| self.addTypeOf(v),
-            .error_union => if (value) |v| self.addTypeOf(v) else |_| {},
+            .type => self.add(value, modifier),
+            .comptime_float => self.add(*const f64, null),
+            .comptime_int => self.add(*const IntFor(value), null),
+            .enum_literal => self.add(@TypeOf(removeSentinel(@tagName(value))), null),
+            .optional => if (value) |v| self.addTypeOf(v, modifier),
+            .error_union => if (value) |v| self.addTypeOf(v, modifier) else |_| {},
             .@"union" => |un| {
                 if (un.tag_type) |TT| {
                     const active_tag: TT = value;
                     inline for (un.fields) |field| {
                         if (active_tag == @field(TT, field.name)) {
-                            self.addTypeOf(@field(value, field.name));
+                            self.addTypeOf(@field(value, field.name), null);
                             break;
                         }
                     }
                 }
             },
-            .@"struct" => |st| inline for (st.fields) |field| self.addTypeOf(@field(value, field.name)),
+            .@"struct" => |st| inline for (st.fields) |field| self.addTypeOf(@field(value, field.name), null),
             .array => inline for (value) |element| self.addTypeOf(element),
             // add function to the list so we can create its arg struct later
             .@"fn" => self.functions = self.functions.concat(T),
@@ -1184,8 +1293,8 @@ pub const TypeDataCollector = struct {
         }
     }
 
-    fn get(comptime self: *@This(), comptime T: type) *TypeData {
-        const index = self.indexOf(T) orelse @compileError("No type data: " ++ @typeName(T));
+    fn get(comptime self: *@This(), comptime T: type, comptime modifier: ?type) *TypeData {
+        const index = self.indexOf(T, modifier) orelse @compileError("No type data: " ++ @typeName(T));
         return self.at(index);
     }
 
@@ -1193,9 +1302,9 @@ pub const TypeDataCollector = struct {
         return &self.types.entries[index];
     }
 
-    fn indexOf(comptime self: *@This(), comptime T: type) ?usize {
+    fn indexOf(comptime self: *@This(), comptime T: type, comptime modifier: ?type) ?usize {
         return inline for (self.types.slice(), 0..) |td, index| {
-            if (td.type == T) {
+            if (td.type == T and td.modifier == modifier) {
                 break index;
             }
         } else null;
@@ -1214,8 +1323,8 @@ pub const TypeDataCollector = struct {
         self.next_slot += 1;
     }
 
-    fn getAttributes(comptime self: *@This(), comptime T: type) TypeAttributes {
-        const td = self.get(T);
+    fn getAttributes(comptime self: *@This(), comptime T: type, comptime modifier: ?type) TypeAttributes {
+        const td = self.get(T, modifier);
         self.setAttributes(td);
         return td.attrs;
     }
@@ -1247,19 +1356,19 @@ pub const TypeDataCollector = struct {
                 td.attrs.is_comptime_only = true;
             },
             .error_union => |eu| {
-                const payload_attrs = self.getAttributes(eu.payload);
+                const payload_attrs = self.getAttributes(eu.payload, td.modifier);
                 td.attrs.is_supported = payload_attrs.is_supported;
                 td.attrs.is_comptime_only = payload_attrs.is_comptime_only;
                 td.attrs.has_pointer = payload_attrs.has_pointer;
             },
             .pointer => |pt| {
-                const child_attrs = self.getAttributes(pt.child);
+                const child_attrs = self.getAttributes(pt.child, td.modifier);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = true;
             },
             inline .array, .vector, .optional => |ar| {
-                const child_attrs = self.getAttributes(ar.child);
+                const child_attrs = self.getAttributes(ar.child, td.modifier);
                 td.attrs.is_supported = child_attrs.is_supported;
                 td.attrs.is_comptime_only = child_attrs.is_comptime_only;
                 td.attrs.has_pointer = child_attrs.has_pointer;
@@ -1268,7 +1377,7 @@ pub const TypeDataCollector = struct {
                 td.attrs.is_supported = true;
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
-                        const field_attrs = self.getAttributes(field.type);
+                        const field_attrs = self.getAttributes(field.type, td.modifier);
                         if (!field_attrs.is_supported or field_attrs.has_unsupported) {
                             td.attrs.has_unsupported = true;
                         }
@@ -1284,7 +1393,7 @@ pub const TypeDataCollector = struct {
             .@"union" => |un| {
                 td.attrs.is_supported = true;
                 inline for (un.fields) |field| {
-                    const field_attrs = self.getAttributes(field.type);
+                    const field_attrs = self.getAttributes(field.type, td.modifier);
                     if (field_attrs.is_comptime_only) {
                         td.attrs.is_comptime_only = true;
                     }
@@ -1300,7 +1409,7 @@ pub const TypeDataCollector = struct {
                 } else inline for (.{1}) |_| {
                     if (f.is_generic) break false;
                     const RT = f.return_type orelse break false;
-                    const retval_attrs = self.getAttributes(RT);
+                    const retval_attrs = self.getAttributes(RT, td.modifier);
                     if (retval_attrs.is_comptime_only) break false;
                 } else true;
             },
@@ -1308,8 +1417,8 @@ pub const TypeDataCollector = struct {
         }
     }
 
-    fn getSignature(comptime self: *@This(), comptime T: type) u64 {
-        const td = self.get(T);
+    fn getSignature(comptime self: *@This(), comptime T: type, comptime modifier: ?type) u64 {
+        const td = self.get(T, modifier);
         self.setSignature(td);
         return td.signature;
     }
@@ -1329,7 +1438,7 @@ pub const TypeDataCollector = struct {
                 });
                 if (st.backing_integer) |BIT| {
                     md5.update("(");
-                    md5.update(std.mem.asBytes(&self.getSignature(BIT)));
+                    md5.update(std.mem.asBytes(&self.getSignature(BIT, null)));
                     md5.update(")");
                 }
                 md5.update(" {");
@@ -1337,7 +1446,7 @@ pub const TypeDataCollector = struct {
                     if (!field.is_comptime) {
                         md5.update(field.name);
                         md5.update(": ");
-                        md5.update(std.mem.asBytes(&self.getSignature(field.type)));
+                        md5.update(std.mem.asBytes(&self.getSignature(field.type, null)));
                         if (field.alignment != @alignOf(field.type)) {
                             md5.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
                         }
@@ -1353,14 +1462,14 @@ pub const TypeDataCollector = struct {
                 });
                 if (un.tag_type) |TT| {
                     md5.update("(");
-                    md5.update(std.mem.asBytes(&self.getSignature(TT)));
+                    md5.update(std.mem.asBytes(&self.getSignature(TT, null)));
                     md5.update(")");
                 }
                 md5.update(" {");
                 for (un.fields) |field| {
                     md5.update(field.name);
                     md5.update(": ");
-                    md5.update(std.mem.asBytes(&self.getSignature(field.type)));
+                    md5.update(std.mem.asBytes(&self.getSignature(field.type, null)));
                     if (field.alignment != @alignOf(field.type)) {
                         md5.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
                     }
@@ -1370,21 +1479,21 @@ pub const TypeDataCollector = struct {
             },
             .array => |ar| {
                 md5.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
+                md5.update(std.mem.asBytes(&self.getSignature(ar.child, null)));
             },
             .vector => |ar| {
                 md5.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
+                md5.update(std.mem.asBytes(&self.getSignature(ar.child, null)));
                 md5.update(")");
             },
             .optional => |op| {
                 md5.update("?");
-                md5.update(std.mem.asBytes(&self.getSignature(op.child)));
+                md5.update(std.mem.asBytes(&self.getSignature(op.child, td.modifier)));
             },
             .error_union => |eu| {
-                md5.update(std.mem.asBytes(&self.getSignature(eu.error_set)));
+                md5.update(std.mem.asBytes(&self.getSignature(eu.error_set, null)));
                 md5.update("!");
-                md5.update(std.mem.asBytes(&self.getSignature(eu.payload)));
+                md5.update(std.mem.asBytes(&self.getSignature(eu.payload, td.modifier)));
             },
             .error_set => |es| {
                 if (td.type == anyerror) {
@@ -1421,7 +1530,7 @@ pub const TypeDataCollector = struct {
                 if (pt.is_allowzero) {
                     md5.update("allowzero ");
                 }
-                md5.update(std.mem.asBytes(&self.getSignature(pt.child)));
+                md5.update(std.mem.asBytes(&self.getSignature(pt.child, td.modifier)));
             },
             .@"fn" => |f| {
                 md5.update("fn (");
@@ -1433,7 +1542,7 @@ pub const TypeDataCollector = struct {
                         md5.update("noalias ");
                     }
                     if (param.type) |PT| {
-                        md5.update(std.mem.asBytes(&self.getSignature(PT)));
+                        md5.update(std.mem.asBytes(&self.getSignature(PT, null)));
                     } else {
                         md5.update("anytype");
                     }
@@ -1446,7 +1555,7 @@ pub const TypeDataCollector = struct {
                     md5.update(") ");
                 }
                 if (f.return_type) |RT| {
-                    md5.update(std.mem.asBytes(&self.getSignature(RT)));
+                    md5.update(std.mem.asBytes(&self.getSignature(RT, null)));
                 }
             },
             else => md5.update(@typeName(td.type)),
@@ -1466,7 +1575,7 @@ pub const TypeDataCollector = struct {
         };
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
-        try expect(comptime tdc.indexOf(ns.StructA) != null);
+        try expect(comptime tdc.indexOf(ns.StructA, null) != null);
     }
 
     test "setAttributes" {
@@ -1546,40 +1655,40 @@ pub const TypeDataCollector = struct {
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
         // is_supported
-        try expectEqual(true, tdc.get(ns.StructA).attrs.is_supported);
-        try expectEqual(true, tdc.get(ns.StructB).attrs.is_supported);
-        try expectEqual(true, tdc.get(@TypeOf(ns.normal)).attrs.is_supported);
-        try expectEqual(false, tdc.get(@TypeOf(ns.generic1)).attrs.is_supported);
-        try expectEqual(false, tdc.get(@TypeOf(ns.generic2)).attrs.is_supported);
-        try expectEqual(true, tdc.get(*ns.StructA).attrs.is_supported);
-        try expectEqual(true, tdc.get(*ns.StructB).attrs.is_supported);
-        try expectEqual(true, tdc.get(ns.StructC).attrs.is_supported);
-        try expectEqual(true, tdc.get(ns.StructD).attrs.is_supported);
-        try expectEqual(true, tdc.get(ns.UnionA).attrs.is_supported);
-        try expectEqual(true, tdc.get(@TypeOf(null)).attrs.is_supported);
-        try expectEqual(true, tdc.get(@TypeOf(undefined)).attrs.is_supported);
-        try expectEqual(true, tdc.get(noreturn).attrs.is_supported);
-        try expectEqual(true, tdc.get(u17).attrs.is_supported);
-        try expectEqual(true, tdc.get(i18).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructA, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructB, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(ns.normal), null).attrs.is_supported);
+        try expectEqual(false, tdc.get(@TypeOf(ns.generic1), null).attrs.is_supported);
+        try expectEqual(false, tdc.get(@TypeOf(ns.generic2), null).attrs.is_supported);
+        try expectEqual(true, tdc.get(*ns.StructA, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(*ns.StructB, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructC, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructD, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.UnionA, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(null), null).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(undefined), null).attrs.is_supported);
+        try expectEqual(true, tdc.get(noreturn, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(u17, null).attrs.is_supported);
+        try expectEqual(true, tdc.get(i18, null).attrs.is_supported);
         // pointer should include this
-        try expectEqual(true, tdc.get(usize).attrs.is_supported);
+        try expectEqual(true, tdc.get(usize, null).attrs.is_supported);
 
         // is_comptime_only
-        try expectEqual(true, tdc.get(type).attrs.is_comptime_only);
-        try expectEqual(true, tdc.get(*const type).attrs.is_comptime_only);
-        try expectEqual(true, tdc.get(?type).attrs.is_comptime_only);
+        try expectEqual(true, tdc.get(type, null).attrs.is_comptime_only);
+        try expectEqual(true, tdc.get(*const type, null).attrs.is_comptime_only);
+        try expectEqual(true, tdc.get(?type, null).attrs.is_comptime_only);
         // has_pointer
-        try expectEqual(false, tdc.get(i32).attrs.has_pointer);
-        try expectEqual(true, tdc.get([*]i32).attrs.has_pointer);
-        try expectEqual(true, tdc.get([]const u8).attrs.has_pointer);
-        try expectEqual(true, tdc.get([5]*u8).attrs.has_pointer);
-        try expectEqual(true, tdc.get([][]u8).attrs.has_pointer);
-        try expectEqual(false, tdc.get(ns.A).attrs.has_pointer);
-        try expectEqual(false, tdc.get(ns.B).attrs.has_pointer);
-        try expectEqual(true, tdc.get(ns.C).attrs.has_pointer);
-        try expectEqual(true, tdc.get(ns.D).attrs.has_pointer);
+        try expectEqual(false, tdc.get(i32, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get([*]i32, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get([]const u8, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get([5]*u8, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get([][]u8, null).attrs.has_pointer);
+        try expectEqual(false, tdc.get(ns.A, null).attrs.has_pointer);
+        try expectEqual(false, tdc.get(ns.B, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get(ns.C, null).attrs.has_pointer);
+        try expectEqual(true, tdc.get(ns.D, null).attrs.has_pointer);
         // comptime fields should be ignored
-        try expectEqual(false, tdc.get(ns.E).attrs.has_pointer);
+        try expectEqual(false, tdc.get(ns.E, null).attrs.has_pointer);
     }
 
     test "setSignature" {
@@ -1605,23 +1714,23 @@ pub const TypeDataCollector = struct {
         };
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
-        const sig1 = comptime tdc.get(ns.Uint32).signature;
-        const sig2 = comptime tdc.get(ns.Uint64).signature;
+        const sig1 = comptime tdc.get(ns.Uint32, null).signature;
+        const sig2 = comptime tdc.get(ns.Uint64, null).signature;
         try expect(sig1 != sig2);
-        const sig3 = comptime tdc.get(ns.StructA).signature;
-        const sig4 = comptime tdc.get(ns.StructB).signature;
+        const sig3 = comptime tdc.get(ns.StructA, null).signature;
+        const sig4 = comptime tdc.get(ns.StructB, null).signature;
         try expect(sig3 != sig4);
-        const sig5 = comptime tdc.get(ns.StructC).signature;
+        const sig5 = comptime tdc.get(ns.StructC, null).signature;
         try expect(sig4 != sig5);
-        const sig6 = comptime tdc.get(ns.PtrA).signature;
-        const sig7 = comptime tdc.get(ns.PtrB).signature;
+        const sig6 = comptime tdc.get(ns.PtrA, null).signature;
+        const sig7 = comptime tdc.get(ns.PtrB, null).signature;
         try expect(sig6 != sig7);
-        const sig8 = comptime tdc.get(ns.FnA).signature;
-        const sig9 = comptime tdc.get(ns.FnB).signature;
+        const sig8 = comptime tdc.get(ns.FnA, null).signature;
+        const sig9 = comptime tdc.get(ns.FnB, null).signature;
         try expect(sig8 != sig9);
-        const sig10 = comptime tdc.get(ns.FnC).signature;
+        const sig10 = comptime tdc.get(ns.FnC, null).signature;
         try expect(sig9 != sig10);
-        const sig11 = comptime tdc.get(ns.FnD).signature;
+        const sig11 = comptime tdc.get(ns.FnD, null).signature;
         try expect(sig9 != sig11);
     }
 };

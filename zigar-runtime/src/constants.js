@@ -114,6 +114,7 @@ export const MemberFlag = {
   IsMethod:         0x0010,
   IsSentinel:       0x0020,
   IsBackingInt:     0x0040,
+  IsString:         0x0080,
 };
 
 export const CallResult = {

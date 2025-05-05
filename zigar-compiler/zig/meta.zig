@@ -23,4 +23,10 @@ const default = struct {
         _ = func;
         return false;
     }
+
+    fn isArgumentString(comptime FT: type, comptime arg_index: usize) bool {
+        _ = FT;
+        _ = arg_index;
+        return false;
+    }
 };
