@@ -4,7 +4,6 @@ const exporter = @import("exporter.zig");
 const types = @import("types.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
-const expect = std.testing.expect;
 
 const Value = types.Value;
 const Result = types.Result;
@@ -18,6 +17,8 @@ pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
+
+const expect = std.testing.expectEqual;
 
 pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {
@@ -468,6 +469,6 @@ test "createModule" {
         }
     };
     const module = createModule(Test);
-    try expect(module.version == 4);
-    try expect(module.attributes.little_endian == (builtin.target.cpu.arch.endian() == .little));
+    try expectEqual(4, module.version);
+    try expectEqual((builtin.target.cpu.arch.endian() == .little), module.attributes.little_endian);
 }

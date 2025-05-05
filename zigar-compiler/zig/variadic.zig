@@ -1,8 +1,10 @@
 const std = @import("std");
-const expect = std.testing.expect;
 const builtin = @import("builtin");
-
 const types = @import("types.zig");
+
+const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
+const expectEqualSlices = std.testing.expectEqualSlices;
 
 pub const Error = error{
     TooManyArguments,
@@ -1370,9 +1372,9 @@ test "Abi.extend" {
         .sign_extender = .caller,
     };
     const a = abi1.extend(u64, @as(u8, 233));
-    try expect(a == 233);
+    try expectEqual(233, a);
     const b = abi1.extend(i64, @as(i8, -1));
-    try expect(b == -1);
+    try expectEqual(-1, b);
     const abi2: Abi = .{
         .int = .{
             .type = i64,
@@ -1383,15 +1385,15 @@ test "Abi.extend" {
         .sign_extender = .callee,
     };
     const c = abi2.extend(u64, @as(u8, 0xFF));
-    try expect(c == 0xFF);
+    try expectEqual(0xFF, c);
     const d = abi2.extend(i64, @as(i8, -1));
-    try expect(d == 0xFF);
+    try expectEqual(0xFF, d);
     const e = abi2.extend(f64, @as(f32, -1));
     const ei: u64 = @bitCast(e);
-    try expect(ei & 0xFFFF_FFFF_0000_0000 == 0);
+    try expectEqual(0, ei & 0xFFFF_FFFF_0000_0000);
     const f = abi1.extend(f64, @as(f32, -2));
     const fi: u64 = @bitCast(f);
-    try expect(fi & 0xFFFF_FFFF_0000_0000 == 0xFFFF_FFFF_0000_0000);
+    try expectEqual(0xFFFF_FFFF_0000_0000, fi & 0xFFFF_FFFF_0000_0000);
 }
 
 test "Abi.toWords" {
@@ -1405,8 +1407,8 @@ test "Abi.toWords" {
         .sign_extender = .caller,
     };
     const a = abi1.toWords(i64, @as(i8, -2));
-    try expect(a.len == 1);
-    try expect(a[0] == -2);
+    try expectEqual(1, a.len);
+    try expectEqual(-2, a[0]);
     const abi2: Abi = .{
         .int = .{
             .type = i32,
@@ -1417,17 +1419,17 @@ test "Abi.toWords" {
         .sign_extender = .caller,
     };
     const b = abi2.toWords(i32, @as(i64, -2));
-    try expect(b.len == 2);
+    try expectEqual(2, b.len);
     // assuming little endian
-    try expect(b[0] == -2);
-    try expect(b[1] == -1);
+    try expectEqual(-2, b[0]);
+    try expectEqual(-1, b[1]);
     const c = abi1.toWords(f64, @as(f64, -2));
-    try expect(c.len == 1);
-    try expect(c[0] == -2);
+    try expectEqual(1, c.len);
+    try expectEqual(-2, c[0]);
     const d = abi2.toWords(f64, @as(f128, -2));
-    try expect(d.len == 2);
+    try expectEqual(2, d.len);
     const e = abi2.toWords(f64, @as(f80, -2));
-    try expect(e.len == 2);
+    try expectEqual(2, e.len);
 }
 
 fn callWithArgs(
@@ -1575,7 +1577,7 @@ test "callWithArgs (i64...i64, f64)" {
         false => variadic_floats,
     };
     const variadic_ints_plus_garbage = variadic_ints ++ abi.toWords(Int, @as(i64, 1213)) ++ abi.toWords(Int, @as(i64, 324));
-    try expect(result1 == result2);
+    try expectEqual(result1, result2);
     // call with extra args
     const result3 = callWithArgs(
         f.return_type.?,
@@ -1586,7 +1588,7 @@ test "callWithArgs (i64...i64, f64)" {
         variadic_floats_plus_garbage,
         variadic_ints_plus_garbage,
     );
-    try expect(result1 == result3);
+    try expectEqual(result3, result1);
 }
 
 test "callWithArgs (i64...i64, i32, i32)" {
@@ -1620,7 +1622,7 @@ test "callWithArgs (i64...i64, i32, i32)" {
         variadic_floats,
         variadic_ints,
     );
-    try expect(result1 == result2);
+    try expectEqual(result2, result1);
 }
 
 test "callWithArgs (i64...i32, i32, i32)" {
@@ -1654,7 +1656,7 @@ test "callWithArgs (i64...i32, i32, i32)" {
         variadic_floats,
         variadic_ints,
     );
-    try expect(result1 == result2);
+    try expectEqual(result2, result1);
 }
 
 test "callWithArgs (i64...i32, f32, f32)" {
@@ -1697,9 +1699,9 @@ test "callWithArgs (i64...i32, f32, f32)" {
         variadic_floats,
         variadic_ints,
     );
-    //try expect(result1 == 1000);
+    //try expectEqual(1000, result1);
     _ = result1;
-    try expect(result2 == 1000);
+    try expectEqual(1000, result2);
 }
 
 test "callWithArgs (i64...i16, i16)" {
@@ -1735,9 +1737,9 @@ test "callWithArgs (i64...i16, i16)" {
         variadic_floats,
         variadic_ints,
     );
-    //try expect(result1 == 1002);
+    //try expectEqual(1002, result1);
     _ = result1;
-    try expect(result2 == 1002);
+    try expectEqual(1002, result2);
 }
 
 test "callWithArgs (i64...i8, i8)" {
@@ -1773,9 +1775,9 @@ test "callWithArgs (i64...i8, i8)" {
         variadic_floats,
         variadic_ints,
     );
-    //try expect(result1 == 1002);
+    //try expectEqual(1002, result1);
     _ = result1;
-    try expect(result2 == 1002);
+    try expectEqual(1002, result2);
 }
 
 test "callWithArgs (i64...i128)" {
@@ -1811,7 +1813,7 @@ test "callWithArgs (i64...i128)" {
         variadic_floats,
         variadic_ints,
     );
-    try expect(result1 == result2);
+    try expectEqual(result2, result1);
 }
 
 const ArgKind = enum { fixed, variadic };
@@ -2065,10 +2067,10 @@ test "ArgAllocation(x86) (i8...i8)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 1);
-    try expect(fixed_ints[0] == 256 - 88); // unsigned here, as callee extends sign
+    try expectEqual(1, fixed_ints.len);
+    try expectEqual(256 - 88, fixed_ints[0]); // unsigned here, as callee extends sign
     const variadic_ints = alloc.getVariadicInts(1);
-    try expect(variadic_ints[0] == 123);
+    try expectEqual(123, variadic_ints[0]);
 }
 
 test "ArgAllocation(x86) (i8...i8, i8, i8)" {
@@ -2088,14 +2090,14 @@ test "ArgAllocation(x86) (i8...i8, i8, i8)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 1);
-    try expect(fixed_ints[0] == 256 - 88);
+    try expectEqual(1, fixed_ints.len);
+    try expectEqual(256 - 88, fixed_ints[0]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 3);
+    try expectEqual(3, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(3);
-    try expect(variadic_ints[0] == 123);
-    try expect(variadic_ints[1] == 124);
-    try expect(variadic_ints[2] == 125);
+    try expectEqual(123, variadic_ints[0]);
+    try expectEqual(124, variadic_ints[1]);
+    try expectEqual(125, variadic_ints[2]);
 }
 
 test "ArgAllocation(x86) (i64...i64)" {
@@ -2113,14 +2115,14 @@ test "ArgAllocation(x86) (i64...i64)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 2);
-    try expect(fixed_ints[0] == -88);
-    try expect(fixed_ints[1] == -1);
+    try expectEqual(2, fixed_ints.len);
+    try expectEqual(-88, fixed_ints[0]);
+    try expectEqual(-1, fixed_ints[1]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 2);
+    try expectEqual(2, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(2);
-    try expect(variadic_ints[0] == 123);
-    try expect(variadic_ints[1] == 0);
+    try expectEqual(123, variadic_ints[0]);
+    try expectEqual(0, variadic_ints[1]);
 }
 
 test "ArgAllocation(riscv64) (i64, i64...i8, i8)" {
@@ -2140,14 +2142,14 @@ test "ArgAllocation(riscv64) (i64, i64...i8, i8)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 2);
-    try expect(fixed_ints[0] == 1000);
-    try expect(fixed_ints[1] == 2000);
+    try expectEqual(2, fixed_ints.len);
+    try expectEqual(1000, fixed_ints[0]);
+    try expectEqual(2000, fixed_ints[1]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 2);
+    try expectEqual(2, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(2);
-    try expect(variadic_ints[0] == 256 - 8);
-    try expect(variadic_ints[1] == 256 - 1);
+    try expectEqual(256 - 8, variadic_ints[0]);
+    try expectEqual(256 - 1, variadic_ints[1]);
 }
 
 test "ArgAllocation(riscv64) (i64, i64...i16, i16)" {
@@ -2167,14 +2169,14 @@ test "ArgAllocation(riscv64) (i64, i64...i16, i16)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 2);
-    try expect(fixed_ints[0] == 1000);
-    try expect(fixed_ints[1] == 2000);
+    try expectEqual(2, fixed_ints.len);
+    try expectEqual(1000, fixed_ints[0]);
+    try expectEqual(2000, fixed_ints[1]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 2);
+    try expectEqual(2, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(2);
-    try expect(variadic_ints[0] == 65536 - 8);
-    try expect(variadic_ints[1] == 65536 - 1);
+    try expectEqual(65536 - 8, variadic_ints[0]);
+    try expectEqual(65536 - 1, variadic_ints[1]);
 }
 
 test "ArgAllocation(powerpc64le) (i8...i8)" {
@@ -2193,9 +2195,9 @@ test "ArgAllocation(powerpc64le) (i8...i8)" {
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
     const variadic_ints = alloc.getVariadicInts(1);
-    try expect(fixed_ints.len == 1);
-    try expect(fixed_ints[0] == -88);
-    try expect(variadic_ints[0] == 123);
+    try expectEqual(1, fixed_ints.len);
+    try expectEqual(-88, fixed_ints[0]);
+    try expectEqual(123, variadic_ints[0]);
 }
 
 test "ArgAllocation(arm) (i32, i32...i64, i32, f64)" {
@@ -2216,21 +2218,21 @@ test "ArgAllocation(arm) (i32, i32...i64, i32, f64)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 2);
-    try expect(fixed_ints[0] == 1000);
-    try expect(fixed_ints[1] == 2000);
+    try expectEqual(2, fixed_ints.len);
+    try expectEqual(1000, fixed_ints[0]);
+    try expectEqual(2000, fixed_ints[1]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 6);
+    try expectEqual(6, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(6);
-    try expect(variadic_ints[0] == 3000);
-    try expect(variadic_ints[1] == 0);
-    try expect(variadic_ints[2] == 4000);
-    try expect(variadic_ints[3] == 0);
+    try expectEqual(3000, variadic_ints[0]);
+    try expectEqual(0, variadic_ints[1]);
+    try expectEqual(4000, variadic_ints[2]);
+    try expectEqual(0, variadic_ints[3]);
     const float_bytes1 = std.mem.toBytes(variadic_ints[4]);
     const float_bytes2 = std.mem.toBytes(variadic_ints[5]);
     const float_bytes3 = std.mem.toBytes(args.arg4);
-    try expect(std.mem.eql(u8, &float_bytes1, float_bytes3[0..4]));
-    try expect(std.mem.eql(u8, &float_bytes2, float_bytes3[4..8]));
+    try expectEqualSlices(u8, &float_bytes1, float_bytes3[0..4]);
+    try expectEqualSlices(u8, &float_bytes2, float_bytes3[4..8]);
 }
 
 test "ArgAllocation(arm) (i32, i32...i32, f64)" {
@@ -2250,15 +2252,15 @@ test "ArgAllocation(arm) (i32, i32...i32, f64)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_ints = alloc.getFixedInts();
-    try expect(fixed_ints.len == 2);
-    try expect(fixed_ints[0] == 1000);
-    try expect(fixed_ints[1] == 2000);
+    try expectEqual(2, fixed_ints.len);
+    try expectEqual(1000, fixed_ints[0]);
+    try expectEqual(2000, fixed_ints[1]);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 4);
+    try expectEqual(4, variadic_int_count);
     const variadic_ints = alloc.getVariadicInts(4);
-    try expect(variadic_ints[0] == 3000);
-    try expect(variadic_ints[2] == 0);
-    try expect(variadic_ints[3] == 0x4070_0800);
+    try expectEqual(3000, variadic_ints[0]);
+    try expectEqual(0, variadic_ints[2]);
+    try expectEqual(0x4070_0800, variadic_ints[3]);
 }
 
 test "ArgAllocation(x86_64) (f64...f64)" {
@@ -2276,16 +2278,16 @@ test "ArgAllocation(x86_64) (f64...f64)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
-    try expect(fixed_floats.len == 1);
+    try expectEqual(1, fixed_floats.len);
     const float_bytes1 = std.mem.toBytes(fixed_floats[0]);
     const float_bytes2 = std.mem.toBytes(args.arg0) ++ [8]u8{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    try expect(std.mem.eql(u8, &float_bytes1, &float_bytes2));
+    try expectEqualSlices(u8, &float_bytes1, &float_bytes2);
     const variadic_float_count = alloc.getVariadicFloatCount();
-    try expect(variadic_float_count == 1);
+    try expectEqual(1, variadic_float_count);
     const variadic_floats = alloc.getVariadicFloats(1);
     const float_bytes3 = std.mem.toBytes(variadic_floats[0]);
     const float_bytes4 = std.mem.toBytes(args.arg1) ++ [8]u8{ 0, 0, 0, 0, 0, 0, 0, 0 };
-    try expect(std.mem.eql(u8, &float_bytes3, &float_bytes4));
+    try expectEqualSlices(u8, &float_bytes3, &float_bytes4);
 }
 
 test "ArgAllocation(x86_64) (f80...f80)" {
@@ -2303,16 +2305,16 @@ test "ArgAllocation(x86_64) (f80...f80)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
-    try expect(fixed_floats.len == 1);
+    try expectEqual(1, fixed_floats.len);
     const float_bytes1 = std.mem.toBytes(fixed_floats[0]);
     const float_bytes2 = std.mem.toBytes(args.arg0);
-    try expect(std.mem.eql(u8, &float_bytes1, &float_bytes2));
+    try expectEqualSlices(u8, &float_bytes1, &float_bytes2);
     const variadic_float_count = alloc.getVariadicFloatCount();
-    try expect(variadic_float_count == 1);
+    try expectEqual(1, variadic_float_count);
     const variadic_floats = alloc.getVariadicFloats(1);
     const float_bytes3 = std.mem.toBytes(variadic_floats[0]);
     const float_bytes4 = std.mem.toBytes(args.arg1);
-    try expect(std.mem.eql(u8, &float_bytes3, &float_bytes4));
+    try expectEqualSlices(u8, &float_bytes3, &float_bytes4);
 }
 
 test "ArgAllocation(x86_64) (f64...f64, f64, f64, f64, f64, f64, f64, i64)" {
@@ -2338,15 +2340,15 @@ test "ArgAllocation(x86_64) (f64...f64, f64, f64, f64, f64, f64, f64, i64)" {
     const attrs = ArgAttributes.init(Args);
     const alloc = try ArgAllocation(abi, @TypeOf(ns.f)).init(&bytes, &attrs);
     const fixed_floats = alloc.getFixedFloats();
-    try expect(fixed_floats.len == 1);
+    try expectEqual(1, fixed_floats.len);
     const variadic_float_count = alloc.getVariadicFloatCount();
-    try expect(variadic_float_count == 7);
+    try expectEqual(7, variadic_float_count);
     const variadic_int_count = alloc.getVariadicIntCount();
-    try expect(variadic_int_count == 7); // 5 registers containing garbage push 2 variables in the stack
+    try expectEqual(7, variadic_int_count); // 5 registers containing garbage plus 2 variables in the stack
     const variadic_ints = alloc.getVariadicInts(7);
     std.debug.print("{any}\n", .{variadic_ints});
-    try expect(variadic_ints[0] == 1000); // first integer registers
+    try expectEqual(1000, variadic_ints[0]); // first integer registers
     const float_bytes1 = std.mem.toBytes(variadic_ints[6]);
     const float_bytes2 = std.mem.toBytes(args.arg8);
-    try expect(std.mem.eql(u8, &float_bytes1, &float_bytes2));
+    try expectEqualSlices(u8, &float_bytes1, &float_bytes2);
 }

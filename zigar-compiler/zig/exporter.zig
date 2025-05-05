@@ -5,7 +5,7 @@ const fn_transform = @import("fn-transform.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const export_options = @import("export-options.zig");
-const expect = std.testing.expect;
+const meta = @import("meta");
 
 const Value = types.Value;
 const Memory = types.Memory;
@@ -493,10 +493,15 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn addStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
             const st = @typeInfo(td.type).@"struct";
             inline for (st.fields, 0..) |field, index| {
+                if (std.mem.eql(u8, field.name, "_")) continue;
                 const field_td = tdb.get(field.type);
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
                 const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
+                const is_string = switch (td.isArguments()) {
+                    true => td.isRetvalString() and index == 0,
+                    false => meta.call("isFieldString", .{ td.type, field.name }),
+                };
                 const supported = comptime field_td.isSupported();
                 try host.attachMember(structure, .{
                     .name = field.name,
@@ -504,6 +509,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .flags = .{
                         .is_read_only = !is_actual,
                         .is_required = is_actual and field.default_value_ptr == null,
+                        .is_string = is_string,
                     },
                     .bit_offset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
                     .bit_size = if (is_actual) field_td.getBitSize() else null,

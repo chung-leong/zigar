@@ -2,10 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const types = @import("types.zig");
 const fn_transform = @import("fn-transform.zig");
-const expect = std.testing.expect;
 
 const Memory = types.Memory;
 const Result = types.Result;
+
+const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
+const expectError = std.testing.expectError;
 
 pub const Action = enum(u32) {
     create,
@@ -91,7 +94,7 @@ const native = struct {
         const thunk_address = try tc(module_ptr, .create, 1234);
         const thunk: *const BFT = @ptrFromInt(thunk_address);
         const result = thunk(777, 3.14);
-        try expect(result == 1234);
+        try expectEqual(1234, result);
     }
 };
 
@@ -176,7 +179,7 @@ const wasm = struct {
         const thunk_address = try tc(null, .create, 1234);
         const thunk: *const BFT = @ptrFromInt(thunk_address);
         const result = thunk(777, 3.14);
-        try expect(result == 1234);
+        try expectEqual(1234, result);
     }
 };
 
@@ -260,7 +263,7 @@ test "getJsCallHandler" {
     };
     const ch = getJsCallHandler(host, BFT);
     const result = ch(777, 3.14, null, 1);
-    try expect(result == 1234);
+    try expectEqual(1234, result);
 }
 
 test "getJsCallHandler (error handling)" {
@@ -277,16 +280,16 @@ test "getJsCallHandler (error handling)" {
     const BFT1 = fn (i32, f64) ES1!usize;
     const ch1 = getJsCallHandler(host, BFT1);
     const result1 = ch1(777, 3.14, null, 1);
-    try expect(result1 == ES1.Unexpected);
+    try expectError(ES1.Unexpected, result1);
     const ES2 = error{ Unexpected, cow };
     const BFT2 = fn (i32, f64) ES2!usize;
     const ch2 = getJsCallHandler(host, BFT2);
     const result2 = ch2(777, 3.14, null, 2);
-    try expect(result2 == ES2.Unexpected);
+    try expectError(ES2.Unexpected, result2);
     const BFT3 = fn (i32, f64) anyerror!usize;
     const ch3 = getJsCallHandler(host, BFT3);
     const result3 = ch3(777, 3.14, null, 3);
-    try expect(result3 == ES2.Unexpected);
+    try expectError(ES2.Unexpected, result3);
 }
 
 fn findError(comptime T: type, comptime errors: anytype) ?anyerror {

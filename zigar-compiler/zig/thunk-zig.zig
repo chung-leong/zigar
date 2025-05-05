@@ -2,7 +2,9 @@ const std = @import("std");
 const types = @import("types.zig");
 const variadic = @import("variadic.zig");
 const fn_transform = @import("fn-transform.zig");
+
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 const Memory = types.Memory;
 
@@ -17,8 +19,8 @@ pub fn ThunkType(comptime FT: type) type {
 }
 
 test "ThunkType" {
-    try expect(ThunkType(fn (usize) void) == Thunk);
-    try expect(ThunkType(fn (usize, ...) callconv(.C) void) == VariadicThunk);
+    try expectEqual(Thunk, ThunkType(fn (usize) void));
+    try expectEqual(VariadicThunk, ThunkType(fn (usize, ...) callconv(.C) void));
 }
 
 pub fn createThunk(comptime FT: type) ThunkType(FT) {
@@ -58,12 +60,10 @@ test "createThunk" {
         .pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .@"fn" => |f| {
-                    try expect(f.params.len == 3);
-                    try expect(f.calling_convention == .C);
+                    try expectEqual(3, f.params.len);
+                    try expectEqual(std.builtin.CallingConvention.c, f.calling_convention);
                 },
-                else => {
-                    try expect(false);
-                },
+                else => try expect(false),
             }
         },
         else => {
@@ -75,16 +75,12 @@ test "createThunk" {
         .pointer => |pt| {
             switch (@typeInfo(pt.child)) {
                 .@"fn" => |f| {
-                    try expect(f.params.len == 5);
-                    try expect(f.calling_convention == .C);
+                    try expectEqual(5, f.params.len);
+                    try expectEqual(std.builtin.CallingConvention.c, f.calling_convention);
                 },
-                else => {
-                    try expect(false);
-                },
+                else => try expect(false),
             }
         },
-        else => {
-            try expect(false);
-        },
+        else => try expect(false),
     }
 }

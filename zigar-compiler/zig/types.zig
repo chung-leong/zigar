@@ -1,6 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const expect = std.testing.expect;
+const expectEqualSlices = std.testing.expectEqualSlices;
+const expectEqual = std.testing.expectEqual;
+const expectError = std.testing.expectError;
 
 pub const Result = enum(u32) {
     ok,
@@ -249,6 +253,7 @@ pub const MemberFlags = packed struct(u32) {
     is_method: bool = false,
     is_sentinel: bool = false,
     is_backing_int: bool = false,
+    is_string: bool = false,
 
     _: u25 = 0,
 };
@@ -362,16 +367,16 @@ pub const Memory = struct {
         const memE = from(e, false);
         const f: [*:0]const u8 = "Hello";
         const memF = from(f, false);
-        try expect(memA.len == 4);
-        try expect(memA.attributes.is_const == false);
-        try expect(memB.len == 5);
-        try expect(memB.attributes.is_const == true);
-        try expect(memC.len == 1);
-        try expect(memC.attributes.is_comptime == true);
-        try expect(memD.len == 1);
-        try expect(memD.attributes.is_const == true);
-        try expect(memE.len == @sizeOf(@TypeOf(b)));
-        try expect(memF.len == 6);
+        try expectEqual(4, memA.len);
+        try expectEqual(false, memA.attributes.is_const);
+        try expectEqual(5, memB.len);
+        try expectEqual(true, memB.attributes.is_const);
+        try expectEqual(1, memC.len);
+        try expectEqual(true, memC.attributes.is_comptime);
+        try expectEqual(1, memD.len);
+        try expectEqual(true, memD.attributes.is_const);
+        try expectEqual(@sizeOf(@TypeOf(b)), memE.len);
+        try expectEqual(6, memF.len);
     }
 
     pub fn to(self: Memory, comptime PtrT: type) PtrT {
@@ -425,11 +430,11 @@ pub fn IntFor(comptime n: comptime_int) type {
 }
 
 test "IntFor" {
-    try expectCT(IntFor(0) == u8);
-    try expectCT(IntFor(0xFFFFFFFF) == u32);
-    try expectCT(IntFor(-0xFFFFFFFF) == i64);
-    try expectCT(IntFor(123) == u8);
-    try expectCT(IntFor(-123) == i8);
+    try expectEqual(u8, IntFor(0));
+    try expectEqual(u32, IntFor(0xFFFFFFFF));
+    try expectEqual(i64, IntFor(-0xFFFFFFFF));
+    try expectEqual(u8, IntFor(123));
+    try expectEqual(i8, IntFor(-123));
 }
 
 pub const ErrorInt = @Type(.{
@@ -458,8 +463,8 @@ pub fn Uninlined(comptime FT: type) type {
 }
 
 test "Uninlined" {
-    try expect(Uninlined(fn () callconv(.@"inline") void) == fn () void);
-    try expect(Uninlined(fn () void) == fn () void);
+    try expectEqual(fn () void, Uninlined(fn () callconv(.@"inline") void));
+    try expectEqual(fn () void, Uninlined(fn () void));
 }
 
 fn ComptimeList(comptime T: type) type {
@@ -500,14 +505,14 @@ test "ComptimeList.concat" {
     inline for (0..17) |index| {
         list = list.concat(index + 1000);
     }
-    try expectCT(list.entries[4] == 1004);
+    try expectEqual(1004, list.entries[4]);
     inline for (0..17) |index| {
         list = list.concat(index + 2000);
     }
-    try expectCT(list.entries[0] == 1000);
-    try expectCT(list.entries[16] == 1016);
-    try expectCT(list.entries[17] == 2000);
-    try expectCT(list.entries[33] == 2016);
+    try expectEqual(1000, list.entries[0]);
+    try expectEqual(1016, list.entries[16]);
+    try expectEqual(2000, list.entries[17]);
+    try expectEqual(2016, list.entries[33]);
 }
 
 pub const TypeAttributes = packed struct {
@@ -543,7 +548,8 @@ pub const TypeData = struct {
     }
 
     test "getElementType" {
-        try expectCT(getElementType(.{ .type = Slice(u8, null), .attrs = .{ .is_slice = true } }) == u8);
+        const ET = getElementType(.{ .type = Slice(u8, null), .attrs = .{ .is_slice = true } });
+        try expectEqual(u8, ET);
     }
 
     pub fn getTargetType(comptime self: @This()) type {
@@ -566,9 +572,9 @@ pub const TypeData = struct {
     }
 
     test "getTargetType" {
-        try expectCT(getTargetType(.{ .type = []i32 }) == Slice(i32, null));
-        try expectCT(getTargetType(.{ .type = *const anyopaque }) == Slice(anyopaque, null));
-        try expectCT(getTargetType(.{ .type = *i32 }) == i32);
+        try expectEqual(Slice(i32, null), getTargetType(.{ .type = []i32 }));
+        try expectEqual(Slice(anyopaque, null), getTargetType(.{ .type = *const anyopaque }));
+        try expectEqual(i32, getTargetType(.{ .type = *i32 }));
     }
 
     pub fn getByteSize(comptime self: @This()) ?usize {
@@ -585,9 +591,9 @@ pub const TypeData = struct {
     }
 
     test "getByteSize" {
-        try expectCT(getByteSize(.{ .type = void }) == 0);
-        try expectCT(getByteSize(.{ .type = @TypeOf(null) }) == 0);
-        try expectCT(getByteSize(.{ .type = u8 }) == 1);
+        try expectEqual(0, getByteSize(.{ .type = void }));
+        try expectEqual(0, getByteSize(.{ .type = @TypeOf(null) }));
+        try expectEqual(1, getByteSize(.{ .type = u8 }));
     }
 
     pub fn getBitSize(comptime self: @This()) ?usize {
@@ -600,9 +606,9 @@ pub const TypeData = struct {
     }
 
     test "getBitSize" {
-        try expectCT(getBitSize(.{ .type = void }) == 0);
-        try expectCT(getBitSize(.{ .type = @TypeOf(null) }) == 0);
-        try expectCT(getBitSize(.{ .type = u8 }) == 8);
+        try expectEqual(0, getBitSize(.{ .type = void }));
+        try expectEqual(0, getBitSize(.{ .type = @TypeOf(null) }));
+        try expectEqual(8, getBitSize(.{ .type = u8 }));
     }
 
     pub fn getAlignment(comptime self: @This()) ?u16 {
@@ -619,9 +625,9 @@ pub const TypeData = struct {
     }
 
     test "getAlignment" {
-        try expectCT(getAlignment(.{ .type = void }) == 1);
-        try expectCT(getAlignment(.{ .type = u8 }) == 1);
-        try expectCT(getAlignment(.{ .type = u32 }) == 4);
+        try expectEqual(1, getAlignment(.{ .type = void }));
+        try expectEqual(1, getAlignment(.{ .type = u8 }));
+        try expectEqual(4, getAlignment(.{ .type = u32 }));
     }
 
     pub fn getSentinel(comptime self: @This()) ?Sentinel(self.getElementType()) {
@@ -637,10 +643,10 @@ pub const TypeData = struct {
     }
 
     test "getSentinel" {
-        try expectCT(getSentinel(.{ .type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value == 0);
-        try expectCT(getSentinel(.{ .type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value == 7);
-        try expectCT(getSentinel(.{ .type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value == -2);
-        try expectCT(getSentinel(.{ .type = Slice(i32, null), .attrs = .{ .is_slice = true } }) == null);
+        try expectEqual(0, getSentinel(.{ .type = Slice(u8, .{ .value = 0 }), .attrs = .{ .is_slice = true } }).?.value);
+        try expectEqual(7, getSentinel(.{ .type = Slice(i32, .{ .value = 7 }), .attrs = .{ .is_slice = true } }).?.value);
+        try expectEqual(-2, getSentinel(.{ .type = Slice(i32, .{ .value = -2 }), .attrs = .{ .is_slice = true } }).?.value);
+        try expectEqual(null, getSentinel(.{ .type = Slice(i32, null), .attrs = .{ .is_slice = true } }));
     }
 
     pub fn hasSelector(comptime self: @This()) bool {
@@ -675,13 +681,13 @@ pub const TypeData = struct {
             cat: u32,
             dog: u32,
         };
-        try expectCT(getSelectorType(.{ .type = Union }) == Tag);
+        try expectEqual(Tag, getSelectorType(.{ .type = Union }));
         if (runtime_safety) {
             const BareUnion = union {
                 cat: u32,
                 dog: u32,
             };
-            try expectCT(getSelectorType(.{ .type = BareUnion }) == u8);
+            try expectEqual(u8, getSelectorType(.{ .type = BareUnion }));
         }
     }
 
@@ -715,7 +721,7 @@ pub const TypeData = struct {
             cat: i32,
             dog: i32,
         };
-        try expectCT(getSelectorBitOffset(.{ .type = Union }) == 32);
+        try expectEqual(32, getSelectorBitOffset(.{ .type = Union }));
     }
 
     pub fn getErrorBitOffset(comptime self: @This()) comptime_int {
@@ -746,7 +752,7 @@ pub const TypeData = struct {
             cat: i32,
             dog: i32,
         };
-        try expectCT(getContentBitOffset(.{ .type = Union }) == 0);
+        try expectEqual(0, getContentBitOffset(.{ .type = Union }));
     }
 
     pub fn getSignature(comptime self: @This()) u64 {
@@ -761,9 +767,9 @@ pub const TypeData = struct {
     }
 
     test "isConst" {
-        try expectCT(isConst(.{ .type = i32 }) == false);
-        try expectCT(isConst(.{ .type = *i32 }) == false);
-        try expectCT(isConst(.{ .type = *const i32 }) == true);
+        try expectEqual(false, isConst(.{ .type = i32 }));
+        try expectEqual(false, isConst(.{ .type = *i32 }));
+        try expectEqual(true, isConst(.{ .type = *const i32 }));
     }
 
     pub fn isPacked(comptime self: @This()) bool {
@@ -783,8 +789,8 @@ pub const TypeData = struct {
             flag1: bool,
             flag2: bool,
         };
-        try expectCT(isPacked(.{ .type = A }) == false);
-        try expectCT(isPacked(.{ .type = B }) == true);
+        try expectEqual(false, isPacked(.{ .type = A }));
+        try expectEqual(true, isPacked(.{ .type = B }));
     }
 
     pub fn isBitVector(comptime self: @This()) bool {
@@ -797,8 +803,8 @@ pub const TypeData = struct {
     test "isBitVector" {
         const A = @Vector(8, bool);
         const B = @Vector(4, f32);
-        try expectCT(isBitVector(.{ .type = A }) == true);
-        try expectCT(isBitVector(.{ .type = B }) == false);
+        try expectEqual(true, isBitVector(.{ .type = A }));
+        try expectEqual(false, isBitVector(.{ .type = B }));
     }
 
     pub fn isIterator(comptime self: @This()) bool {
@@ -806,9 +812,9 @@ pub const TypeData = struct {
     }
 
     test "isIterator" {
-        try expect(isIterator(.{ .type = std.mem.SplitIterator(u8, .sequence) }));
-        try expect(isIterator(.{ .type = std.fs.path.ComponentIterator(.posix, u8) }));
-        try expect(isIterator(.{ .type = std.fs.path }) == false);
+        try expectEqual(true, isIterator(.{ .type = std.mem.SplitIterator(u8, .sequence) }));
+        try expectEqual(true, isIterator(.{ .type = std.fs.path.ComponentIterator(.posix, u8) }));
+        try expectEqual(false, isIterator(.{ .type = std.fs.path }));
     }
 
     pub fn isMethodOf(comptime self: @This(), comptime T: type) bool {
@@ -839,13 +845,13 @@ pub const TypeData = struct {
             fn e(_: *const @This()) void {}
         };
         const B = struct {};
-        try expect(isMethodOf(.{ .type = @TypeOf(A.a) }, A) == false);
-        try expect(isMethodOf(.{ .type = @TypeOf(A.b) }, A) == false);
-        try expect(isMethodOf(.{ .type = @TypeOf(A.c) }, A) == true);
-        try expect(isMethodOf(.{ .type = @TypeOf(A.d) }, A) == true);
-        try expect(isMethodOf(.{ .type = @TypeOf(A.e) }, A) == true);
-        try expect(isMethodOf(.{ .type = @TypeOf(A.e) }, B) == false);
-        try expect(isMethodOf(.{ .type = u32 }, B) == false);
+        try expectEqual(false, isMethodOf(.{ .type = @TypeOf(A.a) }, A));
+        try expectEqual(false, isMethodOf(.{ .type = @TypeOf(A.b) }, A));
+        try expectEqual(true, isMethodOf(.{ .type = @TypeOf(A.c) }, A));
+        try expectEqual(true, isMethodOf(.{ .type = @TypeOf(A.d) }, A));
+        try expectEqual(true, isMethodOf(.{ .type = @TypeOf(A.e) }, A));
+        try expectEqual(false, isMethodOf(.{ .type = @TypeOf(A.e) }, B));
+        try expectEqual(false, isMethodOf(.{ .type = u32 }, B));
     }
 
     pub fn hasPointer(comptime self: @This()) bool {
@@ -960,10 +966,10 @@ pub const TypeData = struct {
     }
 
     test "isInternal" {
-        try expectCT(isInternal(.{ .type = AbortSignal }) == true);
-        try expectCT(isInternal(.{ .type = struct {} }) == false);
-        try expectCT(isInternal(.{ .type = Promise(f64) }) == true);
-        try expectCT(isInternal(.{ .type = Promise(anyerror!u32) }) == true);
+        try expectEqual(true, isInternal(.{ .type = AbortSignal }));
+        try expectEqual(false, isInternal(.{ .type = struct {} }));
+        try expectEqual(true, isInternal(.{ .type = Promise(f64) }));
+        try expectEqual(true, isInternal(.{ .type = Promise(anyerror!u32) }));
     }
 };
 
@@ -1043,16 +1049,16 @@ pub const TypeDataCollector = struct {
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
         const tdb = comptime tdc.createDatabase();
-        try expectCT(tdb.get(ns.StructA).attrs.is_supported == true);
-        try expectCT(tdb.get(ns.StructB).attrs.is_supported == true);
-        try expectCT(tdb.get(@TypeOf(ns.normal)).attrs.is_supported == true);
-        try expectCT(tdb.get(@TypeOf(ns.generic1)).attrs.is_supported == false);
-        try expectCT(tdb.get(@TypeOf(ns.generic2)).attrs.is_supported == false);
-        try expectCT(tdb.get(*ns.StructA).attrs.is_supported == true);
-        try expectCT(tdb.get(*const ns.StructA).attrs.is_supported == true);
-        try expectCT(tdb.get(ns.StructC).attrs.is_supported == true);
-        try expectCT(tdb.get(ns.StructD).attrs.is_supported == true);
-        try expectCT(tdb.get(ns.UnionA).attrs.is_supported == true);
+        try expectEqual(true, tdb.get(ns.StructA).attrs.is_supported);
+        try expectEqual(true, tdb.get(ns.StructB).attrs.is_supported);
+        try expectEqual(true, tdb.get(@TypeOf(ns.normal)).attrs.is_supported);
+        try expectEqual(false, tdb.get(@TypeOf(ns.generic1)).attrs.is_supported);
+        try expectEqual(false, tdb.get(@TypeOf(ns.generic2)).attrs.is_supported);
+        try expectEqual(true, tdb.get(*ns.StructA).attrs.is_supported);
+        try expectEqual(true, tdb.get(*const ns.StructA).attrs.is_supported);
+        try expectEqual(true, tdb.get(ns.StructC).attrs.is_supported);
+        try expectEqual(true, tdb.get(ns.StructD).attrs.is_supported);
+        try expectEqual(true, tdb.get(ns.UnionA).attrs.is_supported);
     }
 
     fn append(comptime self: *@This(), comptime td: TypeData) void {
@@ -1460,7 +1466,7 @@ pub const TypeDataCollector = struct {
         };
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
-        try expectCT(tdc.indexOf(ns.StructA) != null);
+        try expect(comptime tdc.indexOf(ns.StructA) != null);
     }
 
     test "setAttributes" {
@@ -1540,40 +1546,40 @@ pub const TypeDataCollector = struct {
         comptime var tdc = init(0);
         comptime tdc.scan(ns);
         // is_supported
-        try expectCT(tdc.get(ns.StructA).attrs.is_supported == true);
-        try expectCT(tdc.get(ns.StructB).attrs.is_supported == true);
-        try expectCT(tdc.get(@TypeOf(ns.normal)).attrs.is_supported == true);
-        try expectCT(tdc.get(@TypeOf(ns.generic1)).attrs.is_supported == false);
-        try expectCT(tdc.get(@TypeOf(ns.generic2)).attrs.is_supported == false);
-        try expectCT(tdc.get(*ns.StructA).attrs.is_supported == true);
-        try expectCT(tdc.get(*ns.StructB).attrs.is_supported == true);
-        try expectCT(tdc.get(ns.StructC).attrs.is_supported == true);
-        try expectCT(tdc.get(ns.StructD).attrs.is_supported == true);
-        try expectCT(tdc.get(ns.UnionA).attrs.is_supported == true);
-        try expectCT(tdc.get(@TypeOf(null)).attrs.is_supported == true);
-        try expectCT(tdc.get(@TypeOf(undefined)).attrs.is_supported == true);
-        try expectCT(tdc.get(noreturn).attrs.is_supported == true);
-        try expectCT(tdc.get(u17).attrs.is_supported == true);
-        try expectCT(tdc.get(i18).attrs.is_supported == true);
+        try expectEqual(true, tdc.get(ns.StructA).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructB).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(ns.normal)).attrs.is_supported);
+        try expectEqual(false, tdc.get(@TypeOf(ns.generic1)).attrs.is_supported);
+        try expectEqual(false, tdc.get(@TypeOf(ns.generic2)).attrs.is_supported);
+        try expectEqual(true, tdc.get(*ns.StructA).attrs.is_supported);
+        try expectEqual(true, tdc.get(*ns.StructB).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructC).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.StructD).attrs.is_supported);
+        try expectEqual(true, tdc.get(ns.UnionA).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(null)).attrs.is_supported);
+        try expectEqual(true, tdc.get(@TypeOf(undefined)).attrs.is_supported);
+        try expectEqual(true, tdc.get(noreturn).attrs.is_supported);
+        try expectEqual(true, tdc.get(u17).attrs.is_supported);
+        try expectEqual(true, tdc.get(i18).attrs.is_supported);
         // pointer should include this
-        try expectCT(tdc.get(usize).attrs.is_supported == true);
+        try expectEqual(true, tdc.get(usize).attrs.is_supported);
 
         // is_comptime_only
-        try expectCT(tdc.get(type).attrs.is_comptime_only == true);
-        try expectCT(tdc.get(*const type).attrs.is_comptime_only == true);
-        try expectCT(tdc.get(?type).attrs.is_comptime_only == true);
+        try expectEqual(true, tdc.get(type).attrs.is_comptime_only);
+        try expectEqual(true, tdc.get(*const type).attrs.is_comptime_only);
+        try expectEqual(true, tdc.get(?type).attrs.is_comptime_only);
         // has_pointer
-        try expectCT(tdc.get(i32).attrs.has_pointer == false);
-        try expectCT(tdc.get([*]i32).attrs.has_pointer == true);
-        try expectCT(tdc.get([]const u8).attrs.has_pointer == true);
-        try expectCT(tdc.get([5]*u8).attrs.has_pointer == true);
-        try expectCT(tdc.get([][]u8).attrs.has_pointer == true);
-        try expectCT(tdc.get(ns.A).attrs.has_pointer == false);
-        try expectCT(tdc.get(ns.B).attrs.has_pointer == false);
-        try expectCT(tdc.get(ns.C).attrs.has_pointer == true);
-        try expectCT(tdc.get(ns.D).attrs.has_pointer == true);
+        try expectEqual(false, tdc.get(i32).attrs.has_pointer);
+        try expectEqual(true, tdc.get([*]i32).attrs.has_pointer);
+        try expectEqual(true, tdc.get([]const u8).attrs.has_pointer);
+        try expectEqual(true, tdc.get([5]*u8).attrs.has_pointer);
+        try expectEqual(true, tdc.get([][]u8).attrs.has_pointer);
+        try expectEqual(false, tdc.get(ns.A).attrs.has_pointer);
+        try expectEqual(false, tdc.get(ns.B).attrs.has_pointer);
+        try expectEqual(true, tdc.get(ns.C).attrs.has_pointer);
+        try expectEqual(true, tdc.get(ns.D).attrs.has_pointer);
         // comptime fields should be ignored
-        try expectCT(tdc.get(ns.E).attrs.has_pointer == false);
+        try expectEqual(false, tdc.get(ns.E).attrs.has_pointer);
     }
 
     test "setSignature" {
@@ -1739,18 +1745,18 @@ test "ArgumentStruct" {
     };
     const ArgA = ArgumentStruct(@TypeOf(ns.A));
     const fieldsA = std.meta.fields(ArgA);
-    try expect(fieldsA.len == 3);
-    try expect(fieldsA[0].name[0] == 'r');
-    try expect(fieldsA[1].name[0] == '0');
-    try expect(fieldsA[2].name[0] == '1');
+    try expectEqual(3, fieldsA.len);
+    try expectEqualSlices(u8, "retval", fieldsA[0].name);
+    try expectEqualSlices(u8, "0", fieldsA[1].name);
+    try expectEqualSlices(u8, "1", fieldsA[2].name);
     const ArgB = ArgumentStruct(@TypeOf(ns.B));
     const fieldsB = std.meta.fields(ArgB);
-    try expect(fieldsB.len == 2);
-    try expect(fieldsB[0].name[0] == 'r');
-    try expect(fieldsB[1].name[0] == '0');
+    try expectEqual(2, fieldsB.len);
+    try expectEqualSlices(u8, "retval", fieldsB[0].name);
+    try expectEqualSlices(u8, "0", fieldsB[1].name);
     const ArgC = ArgumentStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
-    try expect(fieldsC.len == 4);
+    try expectEqual(4, fieldsC.len);
 }
 
 pub fn FnPointerTarget(comptime T: type) type {
@@ -1765,7 +1771,7 @@ pub fn FnPointerTarget(comptime T: type) type {
 
 test "FnPointerTarget" {
     const FT = FnPointerTarget(*const fn () void);
-    try expect(FT == fn () void);
+    try expectEqual(fn () void, FT);
 }
 
 pub fn removeSentinel(comptime ptr: anytype) retval_type: {
@@ -1787,7 +1793,7 @@ fn ReturnValue(comptime arg: anytype) type {
 
 test "ReturnValue" {
     const T = ReturnValue(fn () void);
-    try expect(T == void);
+    try expectEqual(void, T);
 }
 
 fn IteratorPayload(comptime T: type) ?type {
@@ -1803,15 +1809,15 @@ fn IteratorPayload(comptime T: type) ?type {
 
 test "IteratorPayload" {
     const T1 = IteratorPayload(?i32);
-    try expect(T1 == i32);
+    try expectEqual(i32, T1);
     const T2 = IteratorPayload(anyerror!?i32);
-    try expect(T2 == i32);
+    try expectEqual(i32, T2);
     const T3 = IteratorPayload(i32);
-    try expect(T3 == null);
+    try expectEqual(null, T3);
     const T4 = IteratorPayload(anyerror!i32);
-    try expect(T4 == null);
+    try expectEqual(null, T4);
     const T5 = IteratorPayload(?anyerror!i32);
-    try expect(T5 == i32);
+    try expectEqual(i32, T5);
 }
 
 fn hasDefaultFields(comptime T: type) bool {
@@ -1828,17 +1834,17 @@ test "hasDefaultFields" {
         number1: i32,
         number2: i32,
     };
-    try expect(hasDefaultFields(S1) == false);
+    try expectEqual(false, hasDefaultFields(S1));
     const S2 = struct {
         number1: i32 = 1,
         number2: i32,
     };
-    try expect(hasDefaultFields(S2) == false);
+    try expectEqual(false, hasDefaultFields(S2));
     const S3 = struct {
         number1: i32 = 1,
         number2: i32 = 2,
     };
-    try expect(hasDefaultFields(S3) == true);
+    try expectEqual(true, hasDefaultFields(S3));
 }
 
 fn NextMethodReturnValue(comptime FT: type, comptime T: type) ?type {
@@ -1901,19 +1907,19 @@ test "NextMethodReturnValue" {
         }
     };
     const T1 = NextMethodReturnValue(@TypeOf(S.next1), S);
-    try expect(T1 orelse unreachable == ?i32);
+    try expectEqual(?i32, T1);
     const T2 = NextMethodReturnValue(@TypeOf(S.next2), S);
-    try expect(T2 orelse unreachable == error{OutOfMemory}!?i32);
+    try expectEqual(error{OutOfMemory}!?i32, T2);
     const T3 = NextMethodReturnValue(@TypeOf(S.next3), S);
-    try expect(T3 == null);
+    try expectEqual(null, T3);
     const T4 = NextMethodReturnValue(@TypeOf(S.next4), S);
-    try expect(T4 == null);
+    try expectEqual(null, T4);
     const T5 = NextMethodReturnValue(@TypeOf(S.next5), S);
-    try expect(T5 == null);
+    try expectEqual(null, T5);
     const T6 = NextMethodReturnValue(@TypeOf(S.next6), S);
-    try expect(T6 orelse unreachable == ?i32);
+    try expectEqual(?i32, T6);
     const T7 = NextMethodReturnValue(@TypeOf(S.next7), S);
-    try expect(T7 == null);
+    try expectEqual(null, T7);
 }
 
 pub fn IteratorReturnValue(comptime T: type) ?type {
@@ -1935,7 +1941,8 @@ pub fn IteratorReturnValue(comptime T: type) ?type {
 
 test "IteratorReturnValue" {
     const T1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
-    try expect(T1 != null and IteratorPayload(T1.?) == []const u8);
+    try expect(T1 != null);
+    try expectEqual([]const u8, IteratorPayload(T1.?));
     const T2 = IteratorReturnValue(error{Doh}!std.fs.path.ComponentIterator(.posix, u8));
     try expect(T2 != null);
     const T3 = IteratorReturnValue(std.fs.path);
@@ -1960,9 +1967,9 @@ pub fn getInternalType(comptime OT: ?type) ?InternalType {
 }
 
 test "getInternalType" {
-    try expect(getInternalType(Promise(i32)) == .promise);
-    try expect(getInternalType(Generator(?i32)) == .generator);
-    try expect(getInternalType(AbortSignal) == .abort_signal);
+    try expectEqual(.promise, getInternalType(Promise(i32)));
+    try expectEqual(.generator, getInternalType(Generator(?i32)));
+    try expectEqual(.abort_signal, getInternalType(AbortSignal));
 }
 
 fn Any(comptime T: type) type {
@@ -2050,13 +2057,13 @@ pub fn Promise(comptime T: type) type {
                 const multipart_promise1 = try promise1.partition(gpa.allocator(), 3);
                 multipart_promise1.resolve(1);
                 multipart_promise1.resolve(2);
-                try expect(ns.test_value catch unreachable == 0);
+                try expectEqual(0, ns.test_value);
                 multipart_promise1.resolve(3);
-                try expect(ns.test_value catch unreachable == 3);
+                try expectEqual(3, ns.test_value);
                 const promise2: @This() = @This().init(null, ns.resolve);
                 const multipart_promise2 = try promise2.partition(gpa.allocator(), 3);
                 multipart_promise2.resolve(error.OutOfMemory);
-                try expect(ns.test_value catch 777 == 777);
+                try expectError(error.OutOfMemory, ns.test_value);
             }
         }
     };
@@ -2296,14 +2303,14 @@ test "Queue" {
     try queue.push(123);
     try queue.push(456);
     const value1 = queue.pull();
-    try expect(value1 == 123);
+    try expectEqual(123, value1);
     const value2 = queue.pull();
-    try expect(value2 == 456);
+    try expectEqual(456, value2);
     const value3 = queue.pull();
-    try expect(value3 == null);
+    try expectEqual(null, value3);
     try queue.push(888);
     const value4 = queue.pull();
-    try expect(value4 == 888);
+    try expectEqual(888, value4);
     queue.deinit();
 }
 
@@ -2628,10 +2635,6 @@ test "WorkQueue" {
     std.Thread.Futex.wait(&futex, 0);
 }
 
-fn expectCT(comptime value: bool) !void {
-    try expect(value);
-}
-
 fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool {
     switch (@typeInfo(FT)) {
         .@"fn" => |f| {
@@ -2654,15 +2657,15 @@ fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool
 }
 
 test "isValidCallback" {
-    try expect(isValidCallback(void, u32, void) == false);
-    try expect(isValidCallback(*anyopaque, u32, void) == false);
-    try expect(isValidCallback(*fn (*anyopaque, u32) void, u32, void) == true);
-    try expect(isValidCallback(*fn (?*anyopaque, u32) void, u32, void) == true);
-    try expect(isValidCallback(*fn (*anyopaque, u32) bool, u32, void) == false);
-    try expect(isValidCallback(*fn (*usize, u32) void, u32, void) == true);
-    try expect(isValidCallback(*fn (*usize, u32) i32, u32, void) == false);
-    try expect(isValidCallback(*fn ([*]usize, u32) void, u32, void) == false);
-    try expect(isValidCallback(**fn (*usize, u32) void, u32, void) == false);
+    try expectEqual(false, isValidCallback(void, u32, void));
+    try expectEqual(false, isValidCallback(*anyopaque, u32, void));
+    try expectEqual(true, isValidCallback(*fn (*anyopaque, u32) void, u32, void));
+    try expectEqual(true, isValidCallback(*fn (?*anyopaque, u32) void, u32, void));
+    try expectEqual(false, isValidCallback(*fn (*anyopaque, u32) bool, u32, void));
+    try expectEqual(true, isValidCallback(*fn (*usize, u32) void, u32, void));
+    try expectEqual(false, isValidCallback(*fn (*usize, u32) i32, u32, void));
+    try expectEqual(false, isValidCallback(*fn ([*]usize, u32) void, u32, void));
+    try expectEqual(false, isValidCallback(**fn (*usize, u32) void, u32, void));
 }
 
 fn getCallback(comptime FT: type, cb: anytype) *const FT {
@@ -2684,7 +2687,7 @@ test "getCallback" {
         fn hello(_: *const u32, _: i32) void {}
     };
     const cb = getCallback(fn (?*anyopaque, i32) void, ns.hello);
-    try expect(@intFromPtr(cb) == @intFromPtr(&ns.hello));
+    try expectEqual(@intFromPtr(&ns.hello), @intFromPtr(cb));
 }
 
 test {
