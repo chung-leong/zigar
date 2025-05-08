@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FINALIZE, MEMORY, PROMISE, RETURN, ZIG } from '../symbols.js';
+import { FINALIZE, MEMORY, PROMISE, RETURN, STRING_RETVAL, ZIG } from '../symbols.js';
 
 export default mixin({
   // create promise struct for outbound call
@@ -20,6 +20,9 @@ export default mixin({
           if (result instanceof Error) {
             reject(result);
           } else {
+            if (args[STRING_RETVAL] && result) {
+              result = result.string;
+            }
             resolve(result);
           };
         };

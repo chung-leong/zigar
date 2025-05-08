@@ -493,11 +493,22 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
-            var RT = f.return_type orelse false;
-            if (types.getInternalType(RT) == .promise) {
-                RT = RT.payload;
+            if (f.return_type) |RT| {
+                if (canBeString(RT)) return true;
             }
-            return canBeString(RT);
+            inline for (f.params) |param| {
+                if (param.type) |PT| {
+                    if (types.getInternalType(PT)) |internal_type| {
+                        switch (internal_type) {
+                            .promise, .generator => {
+                                if (canBeString(PT.payload)) return true;
+                            },
+                            else => {},
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         fn addArgStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {

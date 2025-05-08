@@ -1167,7 +1167,8 @@
                 } catch (e) {
                     t = new ZigError(e, 1);
                 }
-                return null != t && (e[qt] && t && (t = t.string), n[ee](t)), n[Pt] ?? n[Lt];
+                return null != t ? (e[qt] && t && (t = t.string), n[ee](t)) : e[qt] && (n[qt] = !0), 
+                n[Pt] ?? n[Lt];
             }
             f();
             try {
@@ -1327,6 +1328,7 @@
             }
             const n = async (r, i) => {
                 const s = i instanceof Error;
+                !s && t[qt] && i && (i = i.string);
                 if (!1 === await (2 === e.length ? e(s ? i : null, s ? null : i) : e(i)) || s || null === i) {
                     t[Qt]();
                     const e = this.getFunctionId(n);
@@ -1739,9 +1741,10 @@
         createPromise(t, e) {
             if (e) {
                 if ("function" != typeof e) throw new TypeMismatch("function", e);
-            } else t[Pt] = new Promise(((t, n) => {
+            } else t[Pt] = new Promise(((n, r) => {
                 e = e => {
-                    e?.[st]?.[at] && (e = new e.constructor(e)), e instanceof Error ? n(e) : t(e);
+                    e?.[st]?.[at] && (e = new e.constructor(e)), e instanceof Error ? r(e) : (t[qt] && e && (e = e.string), 
+                    n(e));
                 };
             }));
             const n = (r, i) => {

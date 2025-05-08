@@ -152,6 +152,9 @@ export default mixin({
           retval = retval.string;
         }
         argStruct[RETURN](retval);
+      } else if (fn[STRING_RETVAL]) {
+        // so the promise or generator knows that a string is wanted 
+        argStruct[STRING_RETVAL] = true;
       }
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];

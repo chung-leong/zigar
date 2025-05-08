@@ -91,6 +91,44 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should receive string from promise', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-string-promise', { multithreaded: true });
+      startup();
+      try {
+        const promise = spawn();
+        expect(promise).to.be.a('promise');
+        const result = await promise;
+        expect(result).to.equal('Hello world');
+      } finally {
+        shutdown();
+      }
+    })
+    it('should receive string from generator', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-string-generator', { multithreaded: true });
+      startup();
+      try {
+        const generator = spawn();
+        expect(generator[Symbol.asyncIterator]).to.be.a('function');
+        const list = [];
+        for await (const s of generator) {
+          list.push(s);
+          expect(s).to.equal('Hello world');
+        }
+        expect(list).to.have.lengthOf(5);
+      } finally {
+        shutdown();
+      }
+    })
     it('should create thread or immediately provide a value', async function() {
       this.timeout(0);
       const {
