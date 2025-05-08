@@ -1,10 +1,16 @@
-const root = @import("root");
+const module = @import("module");
 
 pub fn call(comptime name: []const u8, comptime args: anytype) bool {
     const ns = find: {
-        if (@hasDecl(root, "meta(zigar)")) {
-            const meta = @field(root, "meta(zigar)");
+        if (@hasDecl(module, "meta(zigar)")) {
+            const meta = @field(module, "meta(zigar)");
             if (@hasDecl(meta, name)) break :find meta;
+            switch (@typeInfo(meta)) {
+                inline .@"struct", .@"union", .@"opaque", .@"enum" => |st| {
+                    if (st.decls.len == 0) @compileError("meta(zigar) has no public declarations");
+                },
+                else => {},
+            }
         }
         break :find default;
     };
@@ -13,8 +19,8 @@ pub fn call(comptime name: []const u8, comptime args: anytype) bool {
 }
 
 const default = struct {
-    fn isFieldString(comptime container: type, comptime field_name: []const u8) bool {
-        _ = container;
+    fn isFieldString(comptime CT: type, comptime field_name: []const u8) bool {
+        _ = CT;
         _ = field_name;
         return false;
     }

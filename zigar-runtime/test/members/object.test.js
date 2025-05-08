@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
@@ -61,6 +61,31 @@ describe('Member: object', function() {
         }
       };
       expect(get.call(object)).to.equal(1);
+    })
+    it('should return descriptor for string', function() {
+      const env = new Env();
+      const member = {
+        type: MemberType.Object,
+        flags: MemberFlag.IsString,
+        slot: 1,
+        structure: {
+          type: StructureType.Array,
+        },
+      };
+      const { get, set } = env.defineMemberObject(member);
+      const array = defineProperties({}, {
+        $: {
+          get() {
+            return { string: 'Hello' };
+          },
+        }
+      });
+      const object = {
+        [SLOTS]: {
+          1: array,
+        }
+      };
+      expect(get.call(object)).to.equal('Hello');
     })
     it('should be invokable through defineMember', function() {
       const env = new Env();

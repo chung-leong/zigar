@@ -2,7 +2,7 @@ import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, VISIT,
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, STRING_RETVAL, VISIT,
 } from '../symbols.js';
 
 export default mixin({
@@ -154,7 +154,8 @@ export default mixin({
     } else {
       finalize();
       try {
-        return argStruct.retval;
+        const { retval } = argStruct;
+        return fn[STRING_RETVAL] ? retval.string : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

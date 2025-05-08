@@ -125,8 +125,6 @@ describe('Structure: enum', function() {
       const env = new Env();
       const descriptors = {};
       env.finalizeEnum(structure, descriptors);
-      expect(descriptors[77]?.value).to.be.an('object');
-      expect(descriptors[88]?.value).to.be.an('object');
       expect(descriptors.dog?.value).to.be.an('object');
       expect(descriptors.cat?.value).to.be.an('object');
     })

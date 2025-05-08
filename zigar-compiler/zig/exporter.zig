@@ -5,7 +5,7 @@ const fn_transform = @import("fn-transform.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const thunk_js = @import("thunk-js.zig");
 const export_options = @import("export-options.zig");
-const meta = @import("meta");
+const meta = @import("meta.zig");
 
 const Value = types.Value;
 const Memory = types.Memory;
@@ -490,18 +490,24 @@ fn Factory(comptime host: type, comptime module: type) type {
             }, false);
         }
 
+        fn canBeString(comptime T: type) bool {
+            return switch (@typeInfo(T)) {
+                inline .pointer, .array => |pt| pt.child == u8 or pt.child == u16,
+                .optional => |op| canBeString(op.child),
+                .error_union => |eu| canBeString(eu.payload),
+                else => false,
+            };
+        }
+
         fn addStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
             const st = @typeInfo(td.type).@"struct";
             inline for (st.fields, 0..) |field, index| {
-                if (std.mem.eql(u8, field.name, "_")) continue;
+                if (comptime std.mem.eql(u8, field.name, "_")) continue;
                 const field_td = tdb.get(field.type);
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
                 const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
-                const is_string = switch (td.isArguments()) {
-                    true => td.isRetvalString() and index == 0,
-                    false => meta.call("isFieldString", .{ td.type, field.name }),
-                };
+                const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
                 try host.attachMember(structure, .{
                     .name = field.name,
@@ -573,12 +579,14 @@ fn Factory(comptime host: type, comptime module: type) type {
             const fields = @typeInfo(td.type).@"union".fields;
             inline for (fields, 0..) |field, index| {
                 const field_td = tdb.get(field.type);
+                const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
                 try host.attachMember(structure, .{
                     .name = field.name,
                     .type = getMemberType(field_td, false),
                     .flags = .{
                         .is_read_only = field_td.isComptimeOnly(),
+                        .is_string = is_string,
                     },
                     .bit_offset = td.getContentBitOffset(),
                     .bit_size = field_td.getBitSize(),
@@ -696,12 +704,17 @@ fn Factory(comptime host: type, comptime module: type) type {
                             if (should_export) {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
+                                const is_string = switch (@typeInfo(DT)) {
+                                    .@"fn" => |f| comptime canBeString(f.return_type.?) and meta.call("isRetvalString", .{decl_value}),
+                                    else => comptime canBeString(DT) and meta.call("isFieldString", .{ td.type, decl.name }),
+                                };
                                 try host.attachMember(structure, .{
                                     .name = decl.name,
                                     .type = .object,
                                     .flags = .{
                                         .is_read_only = decl_ptr_td.isConst(),
                                         .is_method = decl_td.isMethodOf(td.type),
+                                        .is_string = is_string,
                                     },
                                     .slot = index,
                                     .structure = try self.getStructure(DT),
@@ -1027,4 +1040,14 @@ fn uninline(comptime func: anytype) types.Uninlined(@TypeOf(func)) {
         }
     };
     return fn_transform.spreadArgs(ns.call, .auto);
+}
+
+fn readModifier(comptime modifier: ?type, comptime key: []const u8, comptime def: anytype) @TypeOf(def) {
+    if (modifier) |T| {
+        if (@hasField(T, key)) {
+            const m: T = .{};
+            return @field(m, key);
+        }
+    }
+    return def;
 }

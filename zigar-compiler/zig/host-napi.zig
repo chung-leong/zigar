@@ -18,7 +18,7 @@ pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
 
-const expect = std.testing.expectEqual;
+const expectEqual = std.testing.expectEqual;
 
 pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {

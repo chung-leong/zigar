@@ -60,8 +60,9 @@ export function addTests(importModule, options) {
     })
     it('should return array', async function() {
       this.timeout(0);
-      const { default: module } = await importTest('as-return-value');
-      expect([ ...module.getArray() ]).to.eql([ 1, 2, 3, 4 ]);
+      const { getArray, getString } = await importTest('as-return-value');
+      expect([ ...getArray() ]).to.eql([ 1, 2, 3, 4 ]);
+      expect(getString()).to.equal('Hello');
     })
     it('should handle array in array', async function() {
       this.timeout(0);
@@ -79,7 +80,7 @@ export function addTests(importModule, options) {
     })
     it('should handle array in struct', async function() {
       this.timeout(0);
-      const { default: module, StructA, print } = await importTest('in-struct');
+      const { default: module, StructA, StructC, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({
         array1: [ 10, 20, 30, 40 ],
         array2: [ 11, 21, 31, 41 ],
@@ -94,6 +95,10 @@ export function addTests(importModule, options) {
       module.struct_a = b;
       const [ after ] = await capture(() => print());
       expect(after).to.equal('in-struct.StructA{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
+      expect(module.struct_b.foo).to.equal('Hello');
+      expect(module.struct_b.bar.string).to.equal('Hello');
+      expect(StructC.foo).to.equal('Hello');
+      expect(StructC.bar.string).to.equal('Hello');
     })
     it('should should not compile code with array in packed struct', async function() {
       this.timeout(0);

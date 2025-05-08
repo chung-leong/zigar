@@ -1,7 +1,7 @@
 import { StructureType, MemberType, MemberFlag, structureNames, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
+import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, STRING_RETVAL, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
 import { ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
 
 var all = mixin({
@@ -73,9 +73,12 @@ var all = mixin({
       [Symbol.toStringTag]: defineValue(name),
     };
     for (const member of members) {
-      const { name, slot } = member;
+      const { name, slot, flags } = member;
       if (member.structure.type === StructureType.Function) {
-        const fn = template[SLOTS][slot];
+        let fn = template[SLOTS][slot];
+        if (flags & MemberFlag.IsString) {
+          fn[STRING_RETVAL] = true;
+        }
         staticDescriptors[name] = defineValue(fn);
         // provide a name if one isn't assigned yet
         if (!fn.name) {
