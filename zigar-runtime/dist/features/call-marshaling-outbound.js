@@ -1,7 +1,7 @@
 import { StructureType, StructFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ZigError, UndefinedArgument, adjustArgumentError, Exit } from '../errors.js';
-import { ATTRIBUTES, MEMORY, FINALIZE, COPY, RETURN, PROMISE, GENERATOR, STRING_RETVAL, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
+import { ATTRIBUTES, MEMORY, FINALIZE, COPY, STRING_RETVAL, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -127,6 +127,9 @@ var callMarshalingOutbound = mixin({
         retval = new ZigError(err, 1);
       }
       if (retval != null) {
+        if (fn[STRING_RETVAL] && retval) {
+          retval = retval.string;
+        }
         argStruct[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
@@ -135,7 +138,7 @@ var callMarshalingOutbound = mixin({
       finalize();
       try {
         const { retval } = argStruct;
-        return fn[STRING_RETVAL] ? retval.string : retval;
+        return (fn[STRING_RETVAL] && retval) ? retval.string : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

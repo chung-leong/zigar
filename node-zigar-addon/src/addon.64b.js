@@ -1167,12 +1167,12 @@
                 } catch (e) {
                     t = new ZigError(e, 1);
                 }
-                return null != t && n[ee](t), n[Pt] ?? n[Lt];
+                return null != t && (e[qt] && t && (t = t.string), n[ee](t)), n[Pt] ?? n[Lt];
             }
             f();
             try {
                 const {retval: t} = n;
-                return e[qt] ? t.string : t;
+                return e[qt] && t ? t.string : t;
             } catch (t) {
                 throw new ZigError(t, 1);
             }
@@ -2376,7 +2376,8 @@
         return this[ot][t] ?? this[_t](t);
     }
     function dn(t) {
-        return hn.call(this, t).$.string;
+        const e = hn.call(this, t).$;
+        return e ? e.string : e;
     }
     function gn(t, e, n) {
         hn.call(this, t)[Yt](e, n);

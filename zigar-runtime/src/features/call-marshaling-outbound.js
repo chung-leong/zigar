@@ -2,7 +2,8 @@ import { MemberType, StructFlag, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, STRING_RETVAL, VISIT,
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, 
+  STRING_RETVAL, VISIT
 } from '../symbols.js';
 
 export default mixin({
@@ -147,6 +148,9 @@ export default mixin({
         retval = new ZigError(err, 1);
       }
       if (retval != null) {
+        if (fn[STRING_RETVAL] && retval) {
+          retval = retval.string;
+        }
         argStruct[RETURN](retval);
       }
       // this would be undefined if a callback function is used instead
@@ -155,7 +159,7 @@ export default mixin({
       finalize();
       try {
         const { retval } = argStruct;
-        return fn[STRING_RETVAL] ? retval.string : retval;
+        return (fn[STRING_RETVAL] && retval) ? retval.string : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

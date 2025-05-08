@@ -111,8 +111,9 @@ export function addTests(importModule, options) {
     })
     it('should return pointer', async function() {
       this.timeout(0);
-      const { getText } = await importTest('as-return-value');
-      expect(getText().string).to.equal('Hello');
+      const { getBytes, getText } = await importTest('as-return-value');
+      expect(getBytes().string).to.equal('Hello');
+      expect(getText()).to.equal('Hello');
     })
     it('should handle pointer in array', async function() {
       this.timeout(0);
@@ -130,7 +131,7 @@ export function addTests(importModule, options) {
     })
     it('should handle pointer in struct', async function() {
       this.timeout(0);
-      const { default: module, StructA, print } = await importTest('in-struct');
+      const { default: module, StructA, struct_b, StructC, print } = await importTest('in-struct');
       expect(module.struct_a.text1.string).to.equal('dog');
       expect(module.struct_a.text2.string).to.equal('cat');
       const b = new StructA({});
@@ -141,6 +142,8 @@ export function addTests(importModule, options) {
       module.struct_a = b;
       const [ after ] = await capture(() => print());
       expect(after).to.equal('in-struct.StructA{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
+      expect(JSON.stringify(struct_b)).to.equal('{"text1":"apple","text2":"orange"}');
+      expect(StructC.valueOf()).to.eql({ text1: 'apple', text2: 'orange' });
     })
     it('should not compile code with pointer in packed struct', async function() {
       this.timeout(0);
@@ -191,7 +194,7 @@ export function addTests(importModule, options) {
     it('should handle pointer in optional', async function() {
       this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
-      expect(module.optional.string).to.equal('Hello');
+      expect(module.optional).to.equal('Hello');
       const [ before ] = await capture(() => print());
       expect(before).to.equal('{ 72, 101, 108, 108, 111 }');
       module.optional = null;
@@ -199,7 +202,7 @@ export function addTests(importModule, options) {
       const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('null');
       module.optional = module.alt_text;
-      expect(module.optional.string).to.equal('World');
+      expect(module.optional).to.equal('World');
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
     })

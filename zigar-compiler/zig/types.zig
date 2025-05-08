@@ -530,6 +530,7 @@ pub const TypeAttributes = packed struct {
 
 pub const TypeData = struct {
     type: type,
+    parent_type: ?type = null,
     slot: ?usize = null,
     attrs: TypeAttributes = .{},
     signature: u64 = 0,
@@ -1120,7 +1121,7 @@ pub const TypeDataCollector = struct {
                         const decl_value = @field(T, decl.name);
                         self.addTypeOf(decl_value);
                     }
-                    _ = self.append(.{
+                    self.append(.{
                         .type = PT,
                         .attrs = .{ .is_in_use = false },
                     });
@@ -1147,6 +1148,7 @@ pub const TypeDataCollector = struct {
                 const ArgT = ArgumentStruct(T);
                 self.append(.{
                     .type = ArgT,
+                    .parent_type = T,
                     .attrs = .{
                         .is_arguments = true,
                         .is_variadic = f.is_var_args,

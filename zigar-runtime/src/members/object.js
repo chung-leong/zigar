@@ -24,7 +24,8 @@ function getObject(slot) {
 }
 
 function getString(slot) {
-  return getObject.call(this, slot).$.string;
+  const retval = getObject.call(this, slot).$;
+  return (retval) ? retval.string : retval;
 }
 
 function setValue(slot, value, allocator) {

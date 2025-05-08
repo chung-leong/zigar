@@ -390,18 +390,11 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn addMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
             switch (comptime getStructureType(td)) {
-                .primitive,
-                .error_set,
-                .@"enum",
-                => try self.addPrimitiveMember(structure, td),
-                .@"struct",
-                .arg_struct,
-                .variadic_struct,
-                => try self.addStructMembers(structure, td),
-                .@"union",
-                => try self.addUnionMembers(structure, td),
-                .pointer,
-                => try self.addPointerMember(structure, td),
+                .primitive, .error_set, .@"enum" => try self.addPrimitiveMember(structure, td),
+                .arg_struct, .variadic_struct => try self.addArgStructMembers(structure, td),
+                .@"struct" => try self.addStructMembers(structure, td),
+                .@"union" => try self.addUnionMembers(structure, td),
+                .pointer => try self.addPointerMember(structure, td),
                 .array => try self.addArrayMember(structure, td),
                 .slice => try self.addSliceMember(structure, td),
                 .error_union => try self.addErrorUnionMembers(structure, td),
@@ -499,10 +492,39 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
+        fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
+            var RT = f.return_type orelse false;
+            if (types.getInternalType(RT) == .promise) {
+                RT = RT.payload;
+            }
+            return canBeString(RT);
+        }
+
+        fn addArgStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
+            const st = @typeInfo(td.type).@"struct";
+            const FT = td.parent_type.?;
+            inline for (st.fields, 0..) |field, index| {
+                const field_td = tdb.get(field.type);
+                const is_string = comptime canBeString(field.type) and meta.call("isArgumentString", .{ FT, index });
+                try host.attachMember(structure, .{
+                    .name = field.name,
+                    .type = getMemberType(field_td, field.is_comptime),
+                    .flags = .{
+                        .is_required = true,
+                        .is_string = is_string,
+                    },
+                    .bit_offset = @bitOffsetOf(td.type, field.name),
+                    .bit_size = field_td.getBitSize(),
+                    .byte_size = field_td.getByteSize(),
+                    .slot = index,
+                    .structure = try self.getStructure(field.type),
+                }, false);
+            }
+        }
+
         fn addStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
             const st = @typeInfo(td.type).@"struct";
             inline for (st.fields, 0..) |field, index| {
-                if (comptime std.mem.eql(u8, field.name, "_")) continue;
                 const field_td = tdb.get(field.type);
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
@@ -536,42 +558,40 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .structure = try self.getStructure(IT),
                 }, false);
             }
-            if (!td.isArguments()) {
-                // add default values
-                var template_maybe: ?Value = null;
-                if (@sizeOf(td.type) > 0) {
-                    const default_values = comptime init: {
-                        var values: td.type = undefined;
-                        for (st.fields) |field| {
-                            if (!field.is_comptime) {
-                                if (field.default_value_ptr) |opaque_ptr| {
-                                    const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                                    @field(values, field.name) = default_value_ptr.*;
-                                }
+            // add default values
+            var template_maybe: ?Value = null;
+            if (@sizeOf(td.type) > 0) {
+                const default_values = comptime init: {
+                    var values: td.type = undefined;
+                    for (st.fields) |field| {
+                        if (!field.is_comptime) {
+                            if (field.default_value_ptr) |opaque_ptr| {
+                                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                                @field(values, field.name) = default_value_ptr.*;
                             }
                         }
-                        break :init values;
-                    };
-                    const dv = try self.exportPointerTarget(&default_values, false);
-                    template_maybe = try host.createTemplate(dv);
-                }
-                inline for (st.fields, 0..) |field, index| {
-                    if (field.default_value_ptr) |opaque_ptr| {
-                        const field_td = tdb.get(field.type);
-                        const comptime_only = field.is_comptime or field_td.isComptimeOnly();
-                        if (comptime_only and comptime field_td.isSupported()) {
-                            // comptime members aren't stored in the struct's memory
-                            // they're separate objects in the slots of the struct template
-                            const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                            const value_obj = try self.exportPointerTarget(default_value_ptr, true);
-                            template_maybe = template_maybe orelse try host.createTemplate(null);
-                            try host.writeSlot(template_maybe.?, index, value_obj);
-                        }
+                    }
+                    break :init values;
+                };
+                const dv = try self.exportPointerTarget(&default_values, false);
+                template_maybe = try host.createTemplate(dv);
+            }
+            inline for (st.fields, 0..) |field, index| {
+                if (field.default_value_ptr) |opaque_ptr| {
+                    const field_td = tdb.get(field.type);
+                    const comptime_only = field.is_comptime or field_td.isComptimeOnly();
+                    if (comptime_only and comptime field_td.isSupported()) {
+                        // comptime members aren't stored in the struct's memory
+                        // they're separate objects in the slots of the struct template
+                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                        const value_obj = try self.exportPointerTarget(default_value_ptr, true);
+                        template_maybe = template_maybe orelse try host.createTemplate(null);
+                        try host.writeSlot(template_maybe.?, index, value_obj);
                     }
                 }
-                if (template_maybe) |template| {
-                    try host.attachTemplate(structure, template, false);
-                }
+            }
+            if (template_maybe) |template| {
+                try host.attachTemplate(structure, template, false);
             }
         }
 
@@ -705,7 +725,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
                                 const is_string = switch (@typeInfo(DT)) {
-                                    .@"fn" => |f| comptime canBeString(f.return_type.?) and meta.call("isRetvalString", .{decl_value}),
+                                    .@"fn" => |f| comptime canReturnString(f) and meta.call("isRetvalString", .{decl_value}),
                                     else => comptime canBeString(DT) and meta.call("isFieldString", .{ td.type, decl.name }),
                                 };
                                 try host.attachMember(structure, .{

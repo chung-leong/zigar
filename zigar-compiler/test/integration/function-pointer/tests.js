@@ -54,6 +54,16 @@ export function addTests(importModule, options) {
       call(f);
       expect(array).to.eql([ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2 ]);
     })
+    it('should correctly pass string arguments', async function() {
+      this.timeout(0);
+      const { call } = await importTest('string-arguments');
+      let string;
+      const f = (s) => {
+        string = s;
+      };
+      call(f);
+      expect(string).to.equal('Hello world');
+    })
     it('should correctly pass allocator as argument and return a new slice', async function() {
       this.timeout(0);
       const { printString, printArray } = await importTest('returning-slice');
