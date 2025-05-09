@@ -806,7 +806,7 @@ async function compile(srcPath, modPath, options) {
       config.packageConfigPath = path;
     } catch (err) {
     }
-    const { zigPath, zigArgs, moduleBuildDir } = config;
+    const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
     await acquireLock(pidPath);
@@ -837,6 +837,9 @@ async function compile(srcPath, modPath, options) {
     } finally {
       if (config.clean) {
         await deleteDirectory(moduleBuildDir);
+      }
+      if (optimize != 'Debug' && pdbPath) {
+        await deleteFile(pdbPath);
       }
       await releaseLock(pidPath);
       cleanBuildDirectory(config).catch(() => {});
@@ -896,8 +899,9 @@ class MissingModule extends Error {
 function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
-    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
+    'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions',
+    'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -980,6 +984,10 @@ function createConfig(srcPath, modPath, options = {}) {
       return path.join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
+  let pdbPath;
+  if (platform === 'win32') {
+    pdbPath = path.join(modPath, `${platform}.${arch}.pdb`);
+  }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
     zigArgs.unshift('build');
@@ -1038,6 +1046,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
+    pdbPath,
     clean,
     zigPath,
     zigArgs,

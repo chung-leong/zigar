@@ -6,7 +6,7 @@ import { basename, isAbsolute, join, parse, sep } from 'path';
 import { fileURLToPath, URL } from 'url';
 import { promisify } from 'util';
 import {
-  acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, getArch, 
+  acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, deleteFile, getArch, 
   getDirectoryStats, getPlatform, releaseLock, sha1
 } from './utility-functions.js';
 
@@ -36,7 +36,7 @@ export async function compile(srcPath, modPath, options) {
       config.packageConfigPath = path;
     } catch (err) {
     }
-    const { zigPath, zigArgs, moduleBuildDir } = config;
+    const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
     await acquireLock(pidPath);
@@ -67,6 +67,9 @@ export async function compile(srcPath, modPath, options) {
     } finally {
       if (config.clean) {
         await deleteDirectory(moduleBuildDir);
+      }
+      if (optimize != 'Debug' && pdbPath) {
+        await deleteFile(pdbPath);
       }
       await releaseLock(pidPath);
       cleanBuildDirectory(config).catch(() => {});
@@ -126,8 +129,9 @@ class MissingModule extends Error {
 export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
-    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'zigarSrcPath', 'useLibc', 'isWASM',
-    'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
+    'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions',
+    'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -210,6 +214,10 @@ export function createConfig(srcPath, modPath, options = {}) {
       return join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
+  let pdbPath;
+  if (platform === 'win32') {
+    pdbPath = join(modPath, `${platform}.${arch}.pdb`);
+  }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
     zigArgs.unshift('build');
@@ -268,6 +276,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     buildFilePath,
     packageConfigPath: undefined,
     outputPath,
+    pdbPath,
     clean,
     zigPath,
     zigArgs,
