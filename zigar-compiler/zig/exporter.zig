@@ -718,6 +718,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             switch (@typeInfo(td.type)) {
                 inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
                     inline for (st.decls, 0..) |decl, index| {
+                        if (comptime std.mem.startsWith(u8, decl.name, "@meta(")) continue;
                         const decl_ptr = &@field(td.type, decl.name);
                         const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
                         if (comptime decl_ptr_td.isSupported()) {
