@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
         false => b.addWriteFiles(),
     };
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
-    if (target.result.os.tag == .windows and optimize == .Debug) {
+    if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .Debug) {
         wf.addCopyFileToSource(lib.getEmittedPdb(), cfg.pdb_path);
     }
     wf.step.dependOn(&lib.step);
