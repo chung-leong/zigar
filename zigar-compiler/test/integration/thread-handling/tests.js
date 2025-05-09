@@ -256,6 +256,27 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should call functions through work queue', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        shutdown,
+        returnString,
+        returnInt,
+        returnPoint
+      } = await importTest('use-work-queue', { multithreaded: true });
+      startup(1);
+      try {
+        const str = await returnString();
+        expect(str).to.equal('Hello world!');
+        const int = await returnInt();
+        expect(int).to.equal(1234);
+        const point = await returnPoint();
+        expect(point.valueOf()).to.eql({ x: 0.1234, y: 0.4567 });
+      } finally {
+        await shutdown();
+      }
+    })
     it('should not compile when a function accepts an AbortSignal without Promise', async function() {
       this.timeout(0);
       const promise = importTest('abort-signal-without-promise');
