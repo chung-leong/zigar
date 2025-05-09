@@ -1,10 +1,17 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { FINALIZE, MEMORY, PROMISE, RETURN, STRING_RETVAL, ZIG } from '../symbols.js';
+import { usize } from '../utils.js';
 
 export default mixin({
+  init() {
+    this.promiseCallbackMap = new Map();
+    this.promiseInstanceMap = new Map();
+    this.nextPromiseInstanceId = usize(0x1000);
+  },
   // create promise struct for outbound call
-  createPromise(args, func) {
+  createPromise(structure, args, func) {
+    const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -28,19 +35,45 @@ export default mixin({
         };
       });
     }
-    const callback = (ptr, result) => {
-      if (func.length === 2) {
-        const isError = result instanceof Error;
-        func(isError ? result : null, isError ? null : result);
-      } else {
-        func(result);
-      }
-      args[FINALIZE]();
-      const id = this.getFunctionId(callback);
-      this.releaseFunction(id);
-    };
-    args[RETURN] = result => callback(null, result);
-    return { ptr: null, callback };
+    // create a handle referencing the function 
+    const instanceId = this.nextPromiseInstanceId++;
+    const ptr = this.obtainZigView(instanceId, 0, false);
+    this.promiseInstanceMap.set(instanceId, { func, args });
+    // use the same callback for all promises of a given type
+    let callback = this.promiseCallbackMap.get(constructor);
+    if (!callback) {
+      callback = (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const instanceId = this.getViewAddress(dv);
+        const instance = this.promiseInstanceMap.get(instanceId);
+        if (instance) {
+          const { func, args } = instance;
+          if (func.length === 2) {
+            const isError = result instanceof Error;
+            func(isError ? result : null, isError ? null : result);
+          } else {
+            func(result);
+          }
+          args[FINALIZE]();
+          this.promiseInstanceMap.delete(instanceId);  
+        }
+      };
+      this.promiseCallbackMap.set(constructor, callback);
+    }
+    args[RETURN] = result => callback(ptr, result);
+    return { ptr, callback };
+  },
+  releasePromiseCallbacks() {
+    for (const [ instanceId, callback ] of this.promiseCallbackMap) {
+      const fnId = this.getFunctionId(callback);
+      if (fnId) {
+        this.releaseFunction(fnId);
+      }  
+    }
+    this.promiseCallbackMap.clear();
+    this.promiseInstanceMap.clear();
   },
   // create callback for inbound call
   createPromiseCallback(args, promise) {

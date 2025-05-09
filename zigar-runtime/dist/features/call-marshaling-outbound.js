@@ -47,10 +47,10 @@ var callMarshalingOutbound = mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(argStruct, options?.['callback']);
+          promise ||= this.createPromise(structure, argStruct, options?.['callback']);
           arg = promise;
         } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(argStruct, options?.['callback']);
+          generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
           arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied

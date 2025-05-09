@@ -358,6 +358,11 @@ const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
+const usize = function(arg) {
+    return Number(arg);
+  }
+;
+
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
@@ -3333,10 +3338,10 @@ var callMarshalingOutbound = mixin({
           // otherwise use default allocator which allocates relocatable memory from JS engine
           arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
         } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(argStruct, options?.['callback']);
+          promise ||= this.createPromise(structure, argStruct, options?.['callback']);
           arg = promise;
         } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(argStruct, options?.['callback']);
+          generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
           arg = generator;
         } else if (structure.flags & StructFlag.IsAbortSignal) {
           // create an Int32Array with one element, hooking it up to the programmer-supplied
@@ -3671,7 +3676,23 @@ var defaultAllocator = mixin({
 });
 
 var generator = mixin({
-  createGenerator(args, func) {
+  init() {
+    this.generatorCallbackMap = new Map();
+    this.generatorInstanceMap = new Map();
+    this.nextGeneratorInstanceId = usize(0x2000);
+  },
+  releaseGeneratorCallbacks() {
+    for (const [ instanceId, callback ] of this.generatorCallbackMap) {
+      const fnId = this.getFunctionId(callback);
+      if (fnId) {
+        this.releaseFunction(fnId);
+      }  
+    }
+    this.generatorCallbackMap.clear();
+    this.generatorInstanceMap.clear();
+  },
+  createGenerator(structure, args, func) {
+    const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -3680,25 +3701,41 @@ var generator = mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const callback = async (ptr, result) => {
-      const isError = result instanceof Error;
-      if (!isError && args[STRING_RETVAL] && result) {
-        result = result.string;
-      }
-      const retval = await ((func.length === 2)
-      ? func(isError ? result : null, isError ? null : result)
-      : func(result));
-      if (retval === false || isError || result === null) {
-        args[FINALIZE]();
-        const id = this.getFunctionId(callback);
-        this.releaseFunction(id);
-        return false;
-      } else {
-        return true;
-      }
-    };
-    args[RETURN] = result => callback(null, result);
-    return { ptr: null, callback };
+    // create a handle referencing the function 
+    const instanceId = this.nextGeneratorInstanceId++;
+    const ptr = this.obtainZigView(instanceId, 0, false);
+    this.generatorInstanceMap.set(instanceId, { func, args });
+    // use the same callback for all generators of a given type
+    let callback = this.generatorCallbackMap.get(constructor);
+    if (!callback) {
+      callback = async (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const instanceId = this.getViewAddress(dv);
+        const instance = this.generatorInstanceMap.get(instanceId);
+        if (instance) {
+          const { func, args } = instance;
+          const isError = result instanceof Error;
+          if (!isError && args[STRING_RETVAL] && result) {
+            result = result.string;
+          }
+          const retval = await ((func.length === 2)
+          ? func(isError ? result : null, isError ? null : result)
+          : func(result));
+          if (retval === false || isError || result === null) {
+            args[FINALIZE]();
+            this.generatorInstanceMap.delete(instanceId);
+            return false;
+          } else {
+            return true;
+          }
+        }
+      };
+      this.generatorCallbackMap.set(constructor, callback);
+    }
+    args[RETURN] = result => callback(ptr, result);
+    return { ptr, callback };
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
@@ -4120,6 +4157,8 @@ var moduleLoading = mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
+      this.releasePromiseCallbacks?.();
+      this.releaseGeneratorCallbacks?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;
@@ -4474,8 +4513,14 @@ var pointerSynchronization = mixin({
 });
 
 var promise = mixin({
+  init() {
+    this.promiseCallbackMap = new Map();
+    this.promiseInstanceMap = new Map();
+    this.nextPromiseInstanceId = usize(0x1000);
+  },
   // create promise struct for outbound call
-  createPromise(args, func) {
+  createPromise(structure, args, func) {
+    const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -4498,19 +4543,45 @@ var promise = mixin({
           }        };
       });
     }
-    const callback = (ptr, result) => {
-      if (func.length === 2) {
-        const isError = result instanceof Error;
-        func(isError ? result : null, isError ? null : result);
-      } else {
-        func(result);
-      }
-      args[FINALIZE]();
-      const id = this.getFunctionId(callback);
-      this.releaseFunction(id);
-    };
-    args[RETURN] = result => callback(null, result);
-    return { ptr: null, callback };
+    // create a handle referencing the function 
+    const instanceId = this.nextPromiseInstanceId++;
+    const ptr = this.obtainZigView(instanceId, 0, false);
+    this.promiseInstanceMap.set(instanceId, { func, args });
+    // use the same callback for all promises of a given type
+    let callback = this.promiseCallbackMap.get(constructor);
+    if (!callback) {
+      callback = (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const instanceId = this.getViewAddress(dv);
+        const instance = this.promiseInstanceMap.get(instanceId);
+        if (instance) {
+          const { func, args } = instance;
+          if (func.length === 2) {
+            const isError = result instanceof Error;
+            func(isError ? result : null, isError ? null : result);
+          } else {
+            func(result);
+          }
+          args[FINALIZE]();
+          this.promiseInstanceMap.delete(instanceId);  
+        }
+      };
+      this.promiseCallbackMap.set(constructor, callback);
+    }
+    args[RETURN] = result => callback(ptr, result);
+    return { ptr, callback };
+  },
+  releasePromiseCallbacks() {
+    for (const [ instanceId, callback ] of this.promiseCallbackMap) {
+      const fnId = this.getFunctionId(callback);
+      if (fnId) {
+        this.releaseFunction(fnId);
+      }  
+    }
+    this.promiseCallbackMap.clear();
+    this.promiseInstanceMap.clear();
   },
   // create callback for inbound call
   createPromiseCallback(args, promise) {

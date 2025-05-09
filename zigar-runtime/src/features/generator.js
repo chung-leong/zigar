@@ -1,9 +1,26 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { FINALIZE, GENERATOR, RETURN, STRING_RETVAL, THROWING, YIELD } from '../symbols.js';
+import { FINALIZE, GENERATOR, MEMORY, RETURN, STRING_RETVAL, THROWING, YIELD } from '../symbols.js';
+import { usize } from '../utils.js';
 
 export default mixin({
-  createGenerator(args, func) {
+  init() {
+    this.generatorCallbackMap = new Map();
+    this.generatorInstanceMap = new Map();
+    this.nextGeneratorInstanceId = usize(0x2000);
+  },
+  releaseGeneratorCallbacks() {
+    for (const [ instanceId, callback ] of this.generatorCallbackMap) {
+      const fnId = this.getFunctionId(callback);
+      if (fnId) {
+        this.releaseFunction(fnId);
+      }  
+    }
+    this.generatorCallbackMap.clear();
+    this.generatorInstanceMap.clear();
+  },
+  createGenerator(structure, args, func) {
+    const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -12,25 +29,41 @@ export default mixin({
       const generator = args[GENERATOR] = new AsyncGenerator();
       func = generator.push.bind(generator);
     }
-    const callback = async (ptr, result) => {
-      const isError = result instanceof Error;
-      if (!isError && args[STRING_RETVAL] && result) {
-        result = result.string;
-      }
-      const retval = await ((func.length === 2)
-      ? func(isError ? result : null, isError ? null : result)
-      : func(result));
-      if (retval === false || isError || result === null) {
-        args[FINALIZE]();
-        const id = this.getFunctionId(callback);
-        this.releaseFunction(id);
-        return false;
-      } else {
-        return true;
-      }
-    };
-    args[RETURN] = result => callback(null, result);
-    return { ptr: null, callback };
+    // create a handle referencing the function 
+    const instanceId = this.nextGeneratorInstanceId++;
+    const ptr = this.obtainZigView(instanceId, 0, false);
+    this.generatorInstanceMap.set(instanceId, { func, args });
+    // use the same callback for all generators of a given type
+    let callback = this.generatorCallbackMap.get(constructor);
+    if (!callback) {
+      callback = async (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const instanceId = this.getViewAddress(dv);
+        const instance = this.generatorInstanceMap.get(instanceId);
+        if (instance) {
+          const { func, args } = instance;
+          const isError = result instanceof Error;
+          if (!isError && args[STRING_RETVAL] && result) {
+            result = result.string;
+          }
+          const retval = await ((func.length === 2)
+          ? func(isError ? result : null, isError ? null : result)
+          : func(result));
+          if (retval === false || isError || result === null) {
+            args[FINALIZE]();
+            this.generatorInstanceMap.delete(instanceId);
+            return false;
+          } else {
+            return true;
+          }
+        }
+      };
+      this.generatorCallbackMap.set(constructor, callback);
+    }
+    args[RETURN] = result => callback(ptr, result);
+    return { ptr, callback };
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;

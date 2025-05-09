@@ -26,6 +26,8 @@ export default mixin({
   },
   abandonModule() {
     if (!this.abandoned) {
+      this.releasePromiseCallbacks?.();
+      this.releaseGeneratorCallbacks?.();
       this.releaseFunctions();
       this.unlinkVariables?.();
       this.abandoned = true;

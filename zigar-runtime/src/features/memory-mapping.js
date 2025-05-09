@@ -295,7 +295,7 @@ export default mixin({
           offset = 0;
         }
       } else {
-        buffer = this.obtainExternBuffer(address, len, FALLBACK);
+        buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
         offset = 0;
       }
       buffer[ZIG] = { address, len };
