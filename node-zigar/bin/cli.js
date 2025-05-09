@@ -23,6 +23,7 @@ async function buildModules() {
     throw new Error('Unable to find node-zigar.config.json');
   }
   const config = await loadConfigFile(configPath, optionsForCompile);
+  config.recompile = true;
   if (!Array.isArray(config.targets)) {
     throw new Error('Unable to find array "targets" in node-zigar.config.json');
   }

@@ -816,13 +816,13 @@ async function compile(srcPath, modPath, options) {
     };
     const outputMTimeBefore = await getOutputMTime();
     try {
-      const { onStart, onEnd } = options;
-      // create config file
-      await createProject(config, moduleBuildDir);
-      // then run the compiler
-      await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
-      // get list of files involved in build
-      sourcePaths = await findSourcePaths(moduleBuildDir);
+      if (!outputMTimeBefore || options.recompile !== false) {
+        const { onStart, onEnd } = options;
+        // create config file
+        await createProject(config, moduleBuildDir);
+        // then run the compiler
+        await runCompiler(zigPath, zigArgs, { cwd: moduleBuildDir, onStart, onEnd });
+      }
     } catch(err) {
       if (err.code === 'ENOENT') {
         if (!outputMTimeBefore) {
@@ -832,6 +832,8 @@ async function compile(srcPath, modPath, options) {
         throw err;
       }
     } finally {
+      // get list of files involved in build
+      sourcePaths = await findSourcePaths(moduleBuildDir);
       if (config.clean) {
         await deleteDirectory(moduleBuildDir);
       }
@@ -842,7 +844,7 @@ async function compile(srcPath, modPath, options) {
       cleanBuildDirectory(config).catch(() => {});
     }
     const outputMTimeAfter = await getOutputMTime();
-    changed = outputMTimeBefore !== outputMTimeAfter;
+    changed = outputMTimeBefore !== outputMTimeAfter;  
     sourcePaths.push(config.buildFilePath);
     if (config.packageConfigPath) {
       sourcePaths.push(config.packageConfigPath);
@@ -1209,6 +1211,10 @@ const optionsForCompile = {
   quiet: {
     type: 'boolean',
     title: 'Disable compilation indicator',
+  },
+  recompile: {
+    type: 'boolean',
+    title: 'Recompile module when source file have been changed',
   },
   clean: {
     type: 'boolean',

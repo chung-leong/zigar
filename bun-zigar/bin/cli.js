@@ -23,6 +23,7 @@ async function buildModules() {
     throw new Error('Unable to find bun-zigar.toml');
   }
   const config = await loadConfigFile(configPath, optionsForCompile);
+  config.recompile = true;
   if (!Array.isArray(config.targets)) {
     throw new Error('Unable to find array "targets" in bun-zigar.toml');
   }

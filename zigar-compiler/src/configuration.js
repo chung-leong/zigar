@@ -60,6 +60,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Disable compilation indicator',
   },
+  recompile: {
+    type: 'boolean',
+    title: 'Recompile module when source file have been changed',
+  },
   clean: {
     type: 'boolean',
     title: 'Remove temporary build directory after compilation finishes',

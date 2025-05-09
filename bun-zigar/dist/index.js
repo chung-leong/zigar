@@ -41,7 +41,7 @@ await plugin({
       const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
       const addonDir = join(addonParentDir, 'node-zigar-addon');
       // build the Node-API addon if necessary
-      const addonOptions = { recompile: true };
+      const addonOptions = { recompile: options.recompile !== false };
       if (!options.quiet) {
         const modName = parse(path).name;
         Object.assign(options, {

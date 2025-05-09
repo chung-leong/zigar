@@ -40,7 +40,7 @@
     const addonDir = join(addonParentDir, 'node-zigar-addon');
     // try recompiling the Node-API addon only if app is not stored in an archive
     // and we're loading a .zig or if there's a config file
-    const recompile = !archive && (useCode || !!configPath);
+    const recompile = !archive && (useCode || !!configPath) && options.recompile != false;
     const addonOptions = { recompile };
     if (!options.quiet) {
       const modName = parse(path).name;
