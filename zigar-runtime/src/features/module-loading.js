@@ -152,7 +152,7 @@ export default mixin({
         shared: multithreaded,
       });
       this.initialTableLength = tableInitial;
-      return new w.Instance(executable, exports);
+      return w.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
