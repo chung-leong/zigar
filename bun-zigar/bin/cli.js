@@ -32,19 +32,30 @@ async function buildModules() {
   }
   // make sure targets are valid
   for (const { arch, platform } of config.targets) {
+    let msg;
     if (!possibleArchs.includes(arch)) {
       if (typeof(arch) !== 'string') {
-        throw new Error(`Invalid value for arch: ${arch}`);
+        msg = `Invalid value for arch: ${arch}`;
       } else {
-        console.warn(`Unrecognized archecture: ${arch}`);
+        msg = `Unrecognized archecture: ${arch}`;
       }
     }
     if (!possiblePlatforms.includes(platform)) {
       if (typeof(platform) !== 'string') {
-        throw new Error(`Invalid value for platform: ${platform}`);
+        msg = `Invalid value for platform: ${platform}`;
       } else {
-        console.warn(`Unrecognized platform: ${platform}`);
+        msg = `Unrecognized platform: ${platform}`;
+        let possible;
+        switch (platform) {
+          case 'windows': possible = 'win32'; break;
+          case 'macosx': 
+          case 'macos': possible = 'darwin'; break;
+        }
+        if (possible) msg += ` (do you mean '${possible}'?)`;
       }
+    }
+    if (msg) {
+      throw new Error(msg);
     }
   }
   const parentDirs = [];
