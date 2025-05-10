@@ -1,6 +1,7 @@
 import NodeResolve from '@rollup/plugin-node-resolve';
 import Replace from '@rollup/plugin-replace';
 import Terser from '@rollup/plugin-terser';
+import Gzip from 'rollup-plugin-gzip'
 
 const replacements1 = {
   'process.env.DEV': 'false',
@@ -41,6 +42,7 @@ export default [
       plugins: [
         Terser(terserOptions),
         ExtractIIFE(),
+        Gzip(),
       ]
     },
   },
@@ -68,6 +70,7 @@ export default [
       plugins: [
         Terser(terserOptions),
         ExtractIIFE(),
+        Gzip(),
       ]
     },
   }

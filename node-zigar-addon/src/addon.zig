@@ -80,11 +80,23 @@ const ModuleHost = struct {
 
     fn compileJavaScript(env: Env) !Value {
         const js_file_name = switch (@bitSizeOf(usize)) {
-            64 => "addon.64b.js",
-            32 => "addon.32b.js",
+            64 => "addon.64b.js.gz",
+            32 => "addon.32b.js.gz",
             else => unreachable,
         };
-        const js_bytes = @embedFile(js_file_name);
+        // decompress JS
+        var input: std.io.FixedBufferStream([]const u8) = .{
+            .buffer = @embedFile(js_file_name),
+            .pos = 0,
+        };
+        var buffer: [512 * 1024]u8 = undefined;
+        var output: std.io.FixedBufferStream([]u8) = .{
+            .buffer = &buffer,
+            .pos = 0,
+        };
+        try std.compress.gzip.decompress(input.reader(), output.writer());
+        const end_index: usize = @truncate(try output.getPos());
+        const js_bytes = buffer[0..end_index];
         const js_str = try env.createStringUtf8(js_bytes);
         return try env.runScript(js_str);
     }
