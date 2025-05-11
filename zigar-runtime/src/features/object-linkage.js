@@ -18,11 +18,18 @@ export default mixin({
       // for native code module, locations of objects in memory can change depending on
       // where the shared library is loaded
       const address = (process.env.TARGET === 'wasm') ? handle : this.recreateAddress(handle);
-      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
       if (writeBack) {
         copy(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
+      this.destructors.push(() => {
+        if (process.env.TARGET === 'wasm') {
+          zigDV = this.restoreView(object[MEMORY]);
+        }
+        object[MEMORY] = jsDV;
+        copy(jsDV, zigDV);
+      });
       const linkChildren = (object) => {
         const slots = object[SLOTS];
         if (slots) {
@@ -43,17 +50,6 @@ export default mixin({
       linkChildren(object);
       // update pointer targets
       object[VISIT]?.(function() { this[UPDATE]() }, VisitorFlag.IgnoreInactive);
-    }
-  },
-  unlinkVariables() {
-    const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
-      const zigDV = (process.env.TARGET === 'wasm') ? this.restoreView(object[MEMORY]) : object[MEMORY];
-      const zig = zigDV[ZIG];
-      if (zig) {
-        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
-        copy(jsDV, zigDV);
-      }
     }
   },
   ...(process.env.TARGET === 'wasm' ? {
