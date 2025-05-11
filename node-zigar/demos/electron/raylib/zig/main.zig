@@ -29,8 +29,9 @@ var settings: Settings = .{};
 const KeyReporter = *const fn (c_int) void;
 var key_reporter: ?KeyReporter = null;
 
-pub fn getText(a: std.mem.Allocator) ![]const u8 {
-    return try a.dupe(u8, text);
+pub fn getText() []const u8 {
+    std.debug.print("getText()\n", .{});
+    return text;
 }
 
 pub fn getSettings() Settings {
