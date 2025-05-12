@@ -61,6 +61,8 @@ export async function transpile(path, options) {
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
+  usage.FeatureReader = env.usingReader;
+  usage.FeatureWriter = env.usingWriter;
   usage.FeatureObjectLinkage = env.usingVariables;
   usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();

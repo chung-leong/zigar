@@ -65,6 +65,10 @@ export default mixin({
           // AbortSignal object if found
           signal ||= this.createSignal(structure, options?.['signal']);
           arg = signal;
+        } else if (structure.flags & StructFlag.IsReader) {
+          arg = this.createReader(argList[srcIndex++]);
+        } else if (structure.flags & StructFlag.IsWriter) {
+          arg = this.createWriter(argList[srcIndex++]);
         }
       }
       if (arg === undefined) {
@@ -188,6 +192,8 @@ export default mixin({
     usingAbortSignal: false,
     usingDefaultAllocator: false,
     usingVariables: false,
+    usingReader: false,
+    usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
@@ -199,6 +205,10 @@ export default mixin({
           this.usingGenerator = true;
         } else if (flags & StructFlag.IsAbortSignal) {
           this.usingAbortSignal = true;
+        } else if (flags & StructFlag.IsReader) {
+          this.usingReader = true;
+        } else if (flags & StructFlag.IsWriter) {
+          this.usingWriter = true;
         }
       }
     }

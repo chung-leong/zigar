@@ -9,16 +9,6 @@ var generator = mixin({
     this.generatorInstanceMap = new Map();
     this.nextGeneratorInstanceId = usize(0x2000);
   },
-  releaseGeneratorCallbacks() {
-    for (const [ instanceId, callback ] of this.generatorCallbackMap) {
-      const fnId = this.getFunctionId(callback);
-      if (fnId) {
-        this.releaseFunction(fnId);
-      }  
-    }
-    this.generatorCallbackMap.clear();
-    this.generatorInstanceMap.clear();
-  },
   createGenerator(structure, args, func) {
     const { constructor } = structure;
     if (func) {
@@ -61,6 +51,7 @@ var generator = mixin({
         }
       };
       this.generatorCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };

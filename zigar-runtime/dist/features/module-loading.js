@@ -4,6 +4,7 @@ import { decodeText, empty, defineProperty } from '../utils.js';
 var moduleLoading = mixin({
   init() {
     this.abandoned = false;
+    this.destructors = [];
     {
       this.nextValueIndex = 1;
       this.valueMap = new Map();
@@ -16,20 +17,11 @@ var moduleLoading = mixin({
       this.exportedFunctions = null;
     }
   },
-  releaseFunctions() {
-    const throwError = () => { throw new Error(`Module was abandoned`) };
-    for (const name of Object.keys(this.imports)) {
-      if (this[name]) {
-        this[name] = throwError;
-      }
-    }
-  },
   abandonModule() {
     if (!this.abandoned) {
-      this.releasePromiseCallbacks?.();
-      this.releaseGeneratorCallbacks?.();
-      this.releaseFunctions();
-      this.unlinkVariables?.();
+      for (const destructor of this.destructors.reverse()) {
+        destructor();
+      }
       this.abandoned = true;
     }
   },
@@ -103,10 +95,12 @@ var moduleLoading = mixin({
       return imports;
     },
     importFunctions(exports) {
+      const throwError = () => { throw new Error(`Module was abandoned`) };
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
           defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
+          this.destructors.push(() => this[name] = throwError);
         }
       }
     },

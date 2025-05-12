@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, ZIG, CACHE, VISIT, UPDATE, SLOTS } from '../symbols.js';
+import { MEMORY, CACHE, VISIT, UPDATE, SLOTS } from '../symbols.js';
 
 var objectLinkage = mixin({
   linkVariables(writeBack) {
@@ -18,11 +18,18 @@ var objectLinkage = mixin({
       // for native code module, locations of objects in memory can change depending on
       // where the shared library is loaded
       const address = handle ;
-      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
       if (writeBack) {
         copy(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
+      this.destructors.push(() => {
+        {
+          zigDV = this.restoreView(object[MEMORY]);
+        }
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.bytelength);
+        copy(jsDV, zigDV);
+      });
       const linkChildren = (object) => {
         const slots = object[SLOTS];
         if (slots) {
@@ -43,17 +50,6 @@ var objectLinkage = mixin({
       linkChildren(object);
       // update pointer targets
       object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
-    }
-  },
-  unlinkVariables() {
-    const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
-      const zigDV = this.restoreView(object[MEMORY]) ;
-      const zig = zigDV[ZIG];
-      if (zig) {
-        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
-        copy(jsDV, zigDV);
-      }
     }
   },
   ...({

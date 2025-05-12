@@ -43,6 +43,8 @@ export const StructFlag = {
   IsAbortSignal:    0x0800,
 
   IsOptional:       0x1000,
+  IsReader:         0x2000,
+  IsWriter:         0x4000,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,

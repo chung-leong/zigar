@@ -57,6 +57,10 @@ var callMarshalingOutbound = mixin({
           // AbortSignal object if found
           signal ||= this.createSignal(structure, options?.['signal']);
           arg = signal;
+        } else if (structure.flags & StructFlag.IsReader) {
+          arg = this.createReader(argList[srcIndex++]);
+        } else if (structure.flags & StructFlag.IsWriter) {
+          arg = this.createWriter(argList[srcIndex++]);
         }
       }
       if (arg === undefined) {

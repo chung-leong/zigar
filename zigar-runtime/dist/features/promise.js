@@ -60,19 +60,10 @@ var promise = mixin({
         }
       };
       this.promiseCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };
-  },
-  releasePromiseCallbacks() {
-    for (const [ instanceId, callback ] of this.promiseCallbackMap) {
-      const fnId = this.getFunctionId(callback);
-      if (fnId) {
-        this.releaseFunction(fnId);
-      }  
-    }
-    this.promiseCallbackMap.clear();
-    this.promiseInstanceMap.clear();
   },
   // create callback for inbound call
   createPromiseCallback(args, promise) {

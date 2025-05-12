@@ -126,6 +126,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_generator = td.isGenerator(),
                             .is_abort_signal = td.isAbortSignal(),
                             .is_optional = td.isOptionalStruct(),
+                            .is_readable_stream = td.isReadableStream(),
+                            .is_writable_stream = td.isWritableStream(),
                         },
                     };
                 },
@@ -379,8 +381,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try self.addMembers(structure, td);
                 // finalize the shape so that static members can be instances of the structure
                 _ = try host.defineStructure(structure);
-                // add static variables and functions, excluding internal types
-                if (comptime !td.isInternal()) {
+                // add static variables and functions, excluding internal types and problematic
+                // namespaces
+                if (comptime !td.shouldIgnoreDecls()) {
                     try self.addStaticMembers(structure, td);
                 }
                 try host.endStructure(structure);
@@ -718,7 +721,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             switch (@typeInfo(td.type)) {
                 inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
                     inline for (st.decls, 0..) |decl, index| {
-                        if (comptime std.mem.startsWith(u8, decl.name, "@meta(")) continue;
+                        if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
                         const decl_ptr = &@field(td.type, decl.name);
                         const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
                         if (comptime decl_ptr_td.isSupported()) {

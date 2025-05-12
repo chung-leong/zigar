@@ -27,7 +27,7 @@ export default mixin({
         if (process.env.TARGET === 'wasm') {
           zigDV = this.restoreView(object[MEMORY]);
         }
-        object[MEMORY] = jsDV;
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.bytelength);
         copy(jsDV, zigDV);
       });
       const linkChildren = (object) => {

@@ -28,6 +28,7 @@ export { default as FeatureModuleLoading } from './features/module-loading.js';
 export { default as FeatureObjectLinkage } from './features/object-linkage.js';
 export { default as FeaturePointerSynchronization } from './features/pointer-synchronization.js';
 export { default as FeaturePromise } from './features/promise.js';
+export { default as FeatureReader } from './features/reader.js';
 export { default as FeatureRuntimeSafety } from './features/runtime-safety.js';
 export { default as FeatureStreamRedirection } from './features/stream-redirection.js';
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';
@@ -35,6 +36,7 @@ export { default as FeatureThunkAllocation } from './features/thunk-allocation.j
 export { default as FeatureViewManagement } from './features/view-management.js';
 export { default as FeatureWasiSupport } from './features/wasi-support.js';
 export { default as FeatureWriteProtection } from './features/write-protection.js';
+export { default as FeatureWriter } from './features/writer.js';
 export { default as IteratorForArray } from './iterators/for-array.js';
 export { default as IteratorForStruct } from './iterators/for-struct.js';
 export { default as IteratorForUnion } from './iterators/for-union.js';

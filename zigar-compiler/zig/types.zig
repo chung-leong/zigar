@@ -98,7 +98,9 @@ pub const StructureFlags = extern union {
         is_abort_signal: bool = false,
 
         is_optional: bool = false,
-        _: u19 = 0,
+        is_readable_stream: bool = false,
+        is_writable_stream: bool = false,
+        _: u17 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
@@ -916,35 +918,36 @@ pub const TypeData = struct {
         return self.attrs.is_slice;
     }
 
-    fn BaseType(comptime self: @This()) type {
-        return switch (@typeInfo(self.type)) {
-            .optional => |op| op.child,
-            else => self.type,
-        };
-    }
-
     pub fn isOptional(comptime self: @This()) bool {
-        return self.isAllocator() or getInternalType(self.BaseType()) != null;
+        return self.isAllocator() or getInternalType(self.type) != null;
     }
 
     pub fn isAllocator(comptime self: @This()) bool {
-        return self.BaseType() == std.mem.Allocator;
+        return self.type == std.mem.Allocator;
     }
 
     pub fn isPromise(comptime self: @This()) bool {
-        return getInternalType(self.BaseType()) == .promise;
+        return getInternalType(self.type) == .promise;
     }
 
     pub fn isGenerator(comptime self: @This()) bool {
-        return getInternalType(self.BaseType()) == .generator;
+        return getInternalType(self.type) == .generator;
     }
 
     pub fn isAbortSignal(comptime self: @This()) bool {
-        return getInternalType(self.BaseType()) == .abort_signal;
+        return getInternalType(self.type) == .abort_signal;
     }
 
     pub fn isOptionalStruct(comptime self: @This()) bool {
         return hasDefaultFields(self.type);
+    }
+
+    pub fn isReadableStream(comptime self: @This()) bool {
+        return self.type == std.io.AnyReader;
+    }
+
+    pub fn isWritableStream(comptime self: @This()) bool {
+        return self.type == std.io.AnyWriter;
     }
 
     pub fn isSupported(comptime self: @This()) bool {
@@ -971,6 +974,16 @@ pub const TypeData = struct {
         try expectEqual(false, isInternal(.{ .type = struct {} }));
         try expectEqual(true, isInternal(.{ .type = Promise(f64) }));
         try expectEqual(true, isInternal(.{ .type = Promise(anyerror!u32) }));
+    }
+
+    pub fn shouldIgnoreDecls(comptime self: @This()) bool {
+        if (self.isInternal()) return true;
+        return switch (self.type) {
+            std.io.AnyReader,
+            std.io.AnyWriter,
+            => true,
+            else => false,
+        };
     }
 };
 
@@ -1111,23 +1124,25 @@ pub const TypeDataCollector = struct {
             },
             else => {},
         }
-        // add decls
-        switch (@typeInfo(T)) {
-            inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
-                inline for (st.decls) |decl| {
-                    // decls are accessed through pointers
-                    const PT = @TypeOf(&@field(T, decl.name));
-                    if (@typeInfo(PT).pointer.is_const) {
-                        const decl_value = @field(T, decl.name);
-                        self.addTypeOf(decl_value);
+        if (comptime !td.shouldIgnoreDecls()) {
+            // add decls
+            switch (@typeInfo(T)) {
+                inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
+                    inline for (st.decls) |decl| {
+                        // decls are accessed through pointers
+                        const PT = @TypeOf(&@field(T, decl.name));
+                        if (@typeInfo(PT).pointer.is_const) {
+                            const decl_value = @field(T, decl.name);
+                            self.addTypeOf(decl_value);
+                        }
+                        self.append(.{
+                            .type = PT,
+                            .attrs = .{ .is_in_use = false },
+                        });
                     }
-                    self.append(.{
-                        .type = PT,
-                        .attrs = .{ .is_in_use = false },
-                    });
-                }
-            },
-            else => {},
+                },
+                else => {},
+            }
         }
         // add other implicit types
         switch (@typeInfo(T)) {
