@@ -28,7 +28,7 @@
         Null: 8,
         Undefined: 9,
         Unsupported: 10
-    }, G = Object.keys(Z), q = 1, J = 2, _ = 4, W = 16, H = 64, Y = 128, X = 0, K = 1, Q = 2, tt = 1, et = 2, nt = 4, rt = {
+    }, G = Object.keys(Z), q = 1, J = 2, _ = 4, W = 16, Y = 64, H = 128, X = 0, K = 1, Q = 2, tt = 1, et = 2, nt = 4, rt = {
         IsInactive: 1,
         IsImmutable: 2,
         IgnoreUncreated: 4,
@@ -42,7 +42,7 @@
     function ot(t) {
         return st(t);
     }
-    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), bt = ot("props"), yt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), Mt = ot("address"), Vt = ot("length"), xt = ot("last address"), Et = ot("last length"), Ot = ot("proxy"), $t = ot("cache"), Tt = ot("size"), Ut = ot("bit size"), zt = ot("align"), Ct = ot("const target"), Ft = ot("environment"), Bt = ot("attributes"), jt = ot("primitive"), kt = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), Gt = ot("fallback"), qt = ot("signature"), Jt = ot("string retval"), _t = ot("update"), Wt = ot("reset"), Ht = ot("vivificate"), Yt = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
+    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), bt = ot("props"), yt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), Mt = ot("address"), Vt = ot("length"), xt = ot("last address"), Et = ot("last length"), Ot = ot("proxy"), $t = ot("cache"), Tt = ot("size"), Ut = ot("bit size"), zt = ot("align"), Ct = ot("const target"), Ft = ot("environment"), Bt = ot("attributes"), jt = ot("primitive"), kt = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), Gt = ot("fallback"), qt = ot("signature"), Jt = ot("string retval"), _t = ot("update"), Wt = ot("reset"), Yt = ot("vivificate"), Ht = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
     function se(t, e, n) {
         if (n) {
             const {set: r, get: i, value: s, enumerable: o, configurable: c = !0, writable: a = !0} = n;
@@ -1045,8 +1045,8 @@
                 let i = X, s = !1;
                 try {
                     const o = e(n);
-                    if (Yt in o) {
-                        o[Yt]("reset");
+                    if (Ht in o) {
+                        o[Ht]("reset");
                         const t = this.startContext();
                         this.updatePointerTargets(t, o, !0), this.updateShadowTargets(t), this.endContext();
                     }
@@ -1151,7 +1151,7 @@
             }
         },
         invokeThunk(t, e, n) {
-            const r = this.startContext(), i = n[Bt], s = this.getViewAddress(t[ct]), o = this.getViewAddress(e[ct]), c = ee in n, a = Yt in n;
+            const r = this.startContext(), i = n[Bt], s = this.getViewAddress(t[ct]), o = this.getViewAddress(e[ct]), c = ee in n, a = Ht in n;
             a && this.updatePointerAddresses(r, n);
             const l = this.getViewAddress(n[ct]), u = i ? this.getViewAddress(i[ct]) : 0;
             this.updateShadows(r);
@@ -1670,7 +1670,7 @@
                         }
                     }
                 };
-                c(n), n[Yt]?.((function() {
+                c(n), n[Ht]?.((function() {
                     this[_t]();
                 }), rt.IgnoreInactive);
             }
@@ -1696,12 +1696,12 @@
                                 const t = Array.isArray(a) ? a : [ a ], e = ge(t, c.byteOffset, (t => t.target[ct].byteOffset));
                                 t.splice(e, 0, o), Array.isArray(a) || (r.set(c.buffer, t), i.push(t));
                             } else r.set(c.buffer, o);
-                            t[Yt]?.(s, 0);
+                            t[Ht]?.(s, 0);
                         }
                     }
                 }
             }, o = rt.IgnoreRetval | rt.IgnoreInactive;
-            e[Yt](s, o);
+            e[Ht](s, o);
             const c = this.findTargetClusters(i), a = new Map;
             for (const t of c) for (const e of t.targets) a.set(e, t);
             for (const [e, r] of n) if (r) {
@@ -1715,10 +1715,10 @@
                 if (!r.get(n)) {
                     r.set(n, !0);
                     const s = n[at][0], o = s && e & rt.IsImmutable ? s : n[_t](t, !0, !(e & rt.IsInactive)), c = n.constructor.const ? rt.IsImmutable : 0;
-                    c & rt.IsImmutable || s && !s[ct][ut] && s[Yt]?.(i, c), o !== s && o && !o[ct][ut] && o?.[Yt]?.(i, c);
+                    c & rt.IsImmutable || s && !s[ct][ut] && s[Ht]?.(i, c), o !== s && o && !o[ct][ut] && o?.[Ht]?.(i, c);
                 }
             }, s = n ? rt.IgnoreRetval : 0;
-            e[Yt](i, s);
+            e[Ht](i, s);
         },
         findTargetClusters(t) {
             const e = [];
@@ -1788,13 +1788,11 @@
             this.readerCallback = null, this.readerMap = new Map, this.nextReaderId = we(4096);
         },
         createReader(t) {
-            if (t instanceof ReadableStream) {
-                const e = t.getReader({
-                    mode: t.supportsBYOB ? "byob" : void 0
-                }), n = this.nextReaderId++, r = this.obtainZigView(n, 0, !1);
-                this.readerMap.set(n, e);
-                let i = this.readerCallback;
-                return i || (i = this.readerCallback = async (t, e) => {
+            if (t instanceof ReadableStreamDefaultReader || t instanceof ReadableStreamBYOBReader) {
+                const e = this.nextReaderId++, n = this.obtainZigView(e, 0, !1);
+                this.readerMap.set(e, t);
+                let r = this.readerCallback;
+                return r || (r = this.readerCallback = async (t, e) => {
                     const n = this.getViewAddress(t["*"][ct]), r = this.readerMap.get(n);
                     if (!r) return 0;
                     try {
@@ -1802,11 +1800,11 @@
                         let s = !1, o = 0;
                         if (r instanceof ReadableStreamBYOBReader) {
                             const {done: t, value: e} = await r.read(i);
-                            return s = t, void (o = e.byteLength);
+                            return o = e.byteLength, void (s = t);
                         }
                         {
                             let t = r.leftover;
-                            for (;o < i.length; ) {
+                            for (;o < i.length && !s; ) {
                                 if (!t) {
                                     const {done: e, value: n} = await r.read();
                                     r.finished = e, t = new Uint8Array(n);
@@ -1815,20 +1813,20 @@
                                 for (let n = 0; n < e; n++) i[o + n] = t[n];
                                 if (o += e, t.length > e) t = t.slice(e); else if (t = null, r.finished) break;
                             }
-                            r.leftover = t, s = r.finished && !t;
+                            r.leftover = t;
                         }
                         return s && this.readerMap.delete(n), o;
                     } catch (t) {
                         throw this.readMap.delete(n), t;
                     }
-                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(i))))), 
+                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(r))))), 
                 {
-                    context: r,
-                    readFn: i
+                    context: n,
+                    readFn: r
                 };
             }
             if ("object" == typeof t && "context" in t && "readFn" in t) return t;
-            throw new TypeMismatch("ReadableStream", t);
+            throw new TypeMismatch("ReadableStreamDefaultReader or ReadableStreamBYOBReader", t);
         }
     }), ze({
         addRuntimeCheck: t => function(e, n) {
@@ -2250,17 +2248,17 @@
             Xe(t);
         }
     });
-    const He = Object.getOwnPropertyDescriptors, Ye = Object.defineProperty;
+    const Ye = Object.getOwnPropertyDescriptors, He = Object.defineProperty;
     function Xe(t) {
         const e = t[yt];
         if (e) Ke(e, [ "length" ]); else {
             const e = t[wt];
             e ? (Ke(e), function(t) {
-                Ye(t, "set", {
+                He(t, "set", {
                     value: ke
                 });
                 const e = t.get;
-                Ye(t, "get", {
+                He(t, "get", {
                     value: function(t) {
                         const n = e.call(this, t);
                         return null === n?.[Ct] && Xe(n), n;
@@ -2270,10 +2268,10 @@
         }
     }
     function Ke(t, e = []) {
-        const n = He(t.constructor.prototype);
+        const n = Ye(t.constructor.prototype);
         for (const [r, i] of Object.entries(n)) i.set && !e.includes(r) && (i.set = ke, 
-        Ye(t, r, i));
-        Ye(t, Ct, {
+        He(t, r, i));
+        He(t, Ct, {
             value: t
         });
     }
@@ -2438,7 +2436,7 @@
         return pn.call(this, t).$;
     }
     function pn(t) {
-        return this[at][t] ?? this[Ht](t);
+        return this[at][t] ?? this[Yt](t);
     }
     function bn(t) {
         const e = pn.call(this, t).$;
@@ -2452,25 +2450,23 @@
             this.writerCallback = null, this.writerMap = new Map, this.nextWriterId = we(4096);
         },
         createWriter(t) {
-            if (t instanceof WritableStream) {
-                const e = t.getWriter(), n = this.nextWriterId++, r = this.obtainZigView(n, 0, !1);
-                this.writerMap.set(n, e);
-                const i = () => this.writeMap.delete(n);
-                e.closed.then(i, i);
-                let s = this.writerCallback;
-                return s || (s = this.writerCallback = async (t, e) => {
+            if (t instanceof WritableStreamDefaultWriter) {
+                const e = this.nextWriterId++, n = this.obtainZigView(e, 0, !1);
+                this.writerMap.set(e, t), t.closed.catch(Te).then((() => this.writeMap.delete(e)));
+                let r = this.writerCallback;
+                return r || (r = this.writerCallback = async (t, e) => {
                     const n = this.getViewAddress(t["*"][ct]), r = this.writerMap.get(n);
                     if (!r) return 0;
                     const i = e["*"][ct], s = new Uint8Array(i.buffer, i.byteOffset, i.byteLength);
                     return await r.write(s), s.length;
-                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(s))))), 
+                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(r))))), 
                 {
-                    context: r,
-                    writeFn: s
+                    context: n,
+                    writeFn: r
                 };
             }
             if ("context" in t && "writeFn" in t) return t;
-            throw new TypeMismatch("WritableStream", t);
+            throw new TypeMismatch("WritableStreamDefaultWriter", t);
         }
     }), ze({
         defineArrayEntries: () => ce(en),
@@ -2591,7 +2587,7 @@
         })
     }), ze({
         defineMemberObject: t => dn(t.slot, {
-            get: t.flags & Y ? bn : t.structure.flags & r ? gn : pn,
+            get: t.flags & H ? bn : t.structure.flags & r ? gn : pn,
             set: t.flags & J ? ke : yn
         })
     }), ze({
@@ -2846,7 +2842,7 @@
                 const {name: n, slot: r, flags: i} = t;
                 if (t.structure.type === e.Function) {
                     let e = f[at][r];
-                    i & Y && (e[Jt] = !0), d[n] = ce(e), e.name || se(e, "name", ce(n));
+                    i & H && (e[Jt] = !0), d[n] = ce(e), e.name || se(e, "name", ce(n));
                     const [s, o] = /^(get|set)\s+([\s\S]+)/.exec(n)?.slice(1) ?? [], c = "get" === s ? 0 : 1;
                     if (s && e.length === c) {
                         d[o] ||= {};
@@ -2957,8 +2953,8 @@
             };
             for (const t of l) e[t.name] = this.defineMember(t);
             const d = e.retval.set;
-            return e.length = ce(f.length), e[Ht] = n & i && this.defineVivificatorStruct(t), 
-            e[Yt] = n & s && this.defineVisitorArgStruct(l), e[re] = ce((function(t) {
+            return e.length = ce(f.length), e[Yt] = n & i && this.defineVivificatorStruct(t), 
+            e[Ht] = n & s && this.defineVisitorArgStruct(l), e[re] = ce((function(t) {
                 d.call(this, t, this[Zt]);
             })), e[Symbol.iterator] = this.defineArgIterator?.(f), h;
         },
@@ -3028,7 +3024,7 @@
     ze({
         defineArray(t, e) {
             const {length: n, instance: {members: [r]}, flags: o} = t, c = this.createApplier(t), a = this.defineMember(r), {set: h} = a, d = this.createConstructor(t), g = function(e, r) {
-                if (Ve(e, d)) this[Xt](e), o & s && this[Yt]("copy", rt.Vivificate, e); else if ("string" == typeof e && o & l && (e = {
+                if (Ve(e, d)) this[Xt](e), o & s && this[Ht]("copy", rt.Vivificate, e); else if ("string" == typeof e && o & l && (e = {
                     string: e
                 }), e?.[Symbol.iterator]) {
                     if ((e = Se(e)).length !== n) throw new ArrayLengthMismatch(t, this, e);
@@ -3044,7 +3040,7 @@
             }, e.length = ce(n), e.entries = e[St] = this.defineArrayEntries(), o & u && (e.typedArray = this.defineTypedArray(t), 
             o & l && (e.string = this.defineString(t)), o & f && (e.clampedArray = this.defineClampedArray(t))), 
             e[Symbol.iterator] = this.defineArrayIterator(), e[Qt] = ce(g), e[ee] = this.defineFinalizerArray(a), 
-            e[Ht] = o & i && this.defineVivificatorArray(t), e[Yt] = o & s && this.defineVisitorArray(), 
+            e[Yt] = o & i && this.defineVivificatorArray(t), e[Ht] = o & s && this.defineVisitorArray(), 
             d;
         },
         finalizeArray(t, e) {
@@ -3247,9 +3243,9 @@
     ze({
         defineErrorUnion(t, e) {
             const {instance: {members: [n, r]}, flags: o} = t, {get: c, set: a} = this.defineMember(n), {get: l, set: u} = this.defineMember(r), {get: f, set: h} = this.defineMember(r, !1), d = n.type === Z.Void, g = r.structure.constructor, p = function() {
-                this[Wt](), this[Yt]?.("clear");
+                this[Wt](), this[Ht]?.("clear");
             }, b = this.createApplier(t), y = function(e, n) {
-                if (Ve(e, v)) this[Xt](e), o & s && (f.call(this) || this[Yt]("copy", 0, e)); else if (e instanceof g[gt] && g(e)) u.call(this, e), 
+                if (Ve(e, v)) this[Xt](e), o & s && (f.call(this) || this[Ht]("copy", 0, e)); else if (e instanceof g[gt] && g(e)) u.call(this, e), 
                 p.call(this); else if (void 0 !== e || d) try {
                     a.call(this, e, n), h.call(this, 0);
                 } catch (n) {
@@ -3269,8 +3265,8 @@
                     return c.call(this);
                 },
                 set: y
-            }, e[Qt] = ce(y), e[Ht] = o & i && this.defineVivificatorStruct(t), e[Wt] = this.defineResetter(m / 8, w), 
-            e[Yt] = o & s && this.defineVisitorErrorUnion(n, f), v;
+            }, e[Qt] = ce(y), e[Yt] = o & i && this.defineVivificatorStruct(t), e[Wt] = this.defineResetter(m / 8, w), 
+            e[Ht] = o & s && this.defineVisitorErrorUnion(n, f), v;
         }
     }), ze({
         defineFunction(t, n) {
@@ -3319,17 +3315,17 @@
     }), ze({
         defineOptional(t, e) {
             const {instance: {members: [n, r]}, flags: o} = t, {get: c, set: a} = this.defineMember(n), {get: l, set: u} = this.defineMember(r), f = n.type === Z.Void, h = function(t, e) {
-                Ve(t, d) ? (this[Xt](t), o & s && l.call(this) && this[Yt]("copy", rt.Vivificate, t)) : null === t ? (u.call(this, 0), 
-                this[Wt]?.(), this[Yt]?.("clear")) : (void 0 !== t || f) && (a.call(this, t, e), 
+                Ve(t, d) ? (this[Xt](t), o & s && l.call(this) && this[Ht]("copy", rt.Vivificate, t)) : null === t ? (u.call(this, 0), 
+                this[Wt]?.(), this[Ht]?.("clear")) : (void 0 !== t || f) && (a.call(this, t, e), 
                 o & V ? u.call(this, 1) : o & s && (l.call(this) || u.call(this, 13)));
             }, d = t.constructor = this.createConstructor(t), {bitOffset: g, byteSize: p} = n;
             return e.$ = {
                 get: function() {
-                    return l.call(this) ? c.call(this) : (this[Yt]?.("clear"), null);
+                    return l.call(this) ? c.call(this) : (this[Ht]?.("clear"), null);
                 },
                 set: h
-            }, e[Qt] = ce(h), e[Wt] = o & V && this.defineResetter(g / 8, p), e[Ht] = o & i && this.defineVivificatorStruct(t), 
-            e[Yt] = o & s && this.defineVisitorOptional(n, l), d;
+            }, e[Qt] = ce(h), e[Wt] = o & V && this.defineResetter(g / 8, p), e[Yt] = o & i && this.defineVivificatorStruct(t), 
+            e[Ht] = o & s && this.defineVisitorOptional(n, l), d;
         }
     }), ze({
         definePointer(t, n) {
@@ -3507,7 +3503,7 @@
                 set: m
             }, n[Vt] = {
                 set: v
-            }, n[Yt] = this.defineVisitor(), n[xt] = ce(0), n[Et] = ce(0), n[At] = i & x && ce(null), 
+            }, n[Ht] = this.defineVisitor(), n[xt] = ce(0), n[Et] = ce(0), n[At] = i & x && ce(null), 
             n.dataView = n.base64 = void 0, z;
         },
         finalizePointer(t, n) {
@@ -3602,9 +3598,9 @@
         let i, s = this[at][t];
         if (!s) {
             if (n & rt.IgnoreUncreated) return;
-            s = this[Ht](t);
+            s = this[Yt](t);
         }
-        r && (i = r[at][t], !i) || s[Yt](e, n, i);
+        r && (i = r[at][t], !i) || s[Ht](e, n, i);
     }
     ze({
         definePrimitive(t, e) {
@@ -3633,7 +3629,7 @@
                 if (n !== this[Vt]) throw new ArrayLengthMismatch(t, this, e);
             }, g = this.defineMember(a), {set: p} = g, b = this.createApplier(t), y = function(e, n) {
                 if (Ve(e, w)) this[ct] ? d.call(this, e, e.length) : h.call(this, null, e.length, n), 
-                this[Xt](e), r & s && this[Yt]("copy", rt.Vivificate, e); else if ("string" == typeof e && r & z) y.call(this, {
+                this[Xt](e), r & s && this[Ht]("copy", rt.Vivificate, e); else if ("string" == typeof e && r & z) y.call(this, {
                     string: e
                 }, n); else if (e?.[Symbol.iterator]) {
                     e = Se(e), this[ct] ? d.call(this, e, e.length) : h.call(this, null, e.length, n);
@@ -3671,8 +3667,8 @@
                     }), c;
                 }
             }, e[Symbol.iterator] = this.defineArrayIterator(), e[Kt] = ce(h), e[Xt] = this.defineCopier(o, !0), 
-            e[Qt] = ce(y), e[ee] = this.defineFinalizerArray(g), e[Ht] = r & i && this.defineVivificatorArray(t), 
-            e[Yt] = r & s && this.defineVisitorArray(), w;
+            e[Qt] = ce(y), e[ee] = this.defineFinalizerArray(g), e[Yt] = r & i && this.defineVivificatorArray(t), 
+            e[Ht] = r & s && this.defineVisitorArray(), w;
         },
         finalizeSlice(t, e) {
             const {flags: n, instance: {members: [r]}} = t;
@@ -3698,8 +3694,8 @@
         }
     }), ze({
         defineStruct(t, e) {
-            const {flags: n, length: r, instance: {members: o}} = t, c = o.find((t => t.flags & H)), a = c && this.defineMember(c), l = this.createApplier(t), u = function(e, r) {
-                if (Ve(e, f)) this[Xt](e), n & s && this[Yt]("copy", 0, e); else if (e && "object" == typeof e) l.call(this, e, r); else if ("number" != typeof e && "bigint" != typeof e || !a) {
+            const {flags: n, length: r, instance: {members: o}} = t, c = o.find((t => t.flags & Y)), a = c && this.defineMember(c), l = this.createApplier(t), u = function(e, r) {
+                if (Ve(e, f)) this[Xt](e), n & s && this[Ht]("copy", 0, e); else if (e && "object" == typeof e) l.call(this, e, r); else if ("number" != typeof e && "bigint" != typeof e || !a) {
                     if (void 0 !== e) throw new InvalidInitializer(t, "object", e);
                 } else a.set.call(this, e);
             }, f = this.createConstructor(t), p = e[Nt].value, b = e[It].value, y = [];
@@ -3715,7 +3711,7 @@
                     return "string" === t ? Object.prototype.toString.call(this) : a.get.call(this);
                 }
             }, e[Symbol.iterator] = n & h ? this.defineZigIterator() : n & d ? this.defineVectorIterator() : this.defineStructIterator(), 
-            e[Qt] = ce(u), e[Ht] = n & i && this.defineVivificatorStruct(t), e[Yt] = n & s && this.defineVisitorStruct(o), 
+            e[Qt] = ce(u), e[Yt] = n & i && this.defineVivificatorStruct(t), e[Ht] = n & s && this.defineVisitorStruct(o), 
             e[St] = n & d ? this.defineVectorEntries() : this.defineStructEntries(), e[bt] = ce(y), 
             n & g && (e.alloc = this.defineAlloc(), e.free = this.defineFree(), e.dupe = this.defineDupe()), 
             f;
@@ -3734,7 +3730,7 @@
                 const e = c.findIndex((e => e.name === t));
                 u.call(this, e);
             }, g = this.createApplier(t), p = function(e, r) {
-                if (Ve(e, b)) this[Xt](e), n & s && this[Yt]("copy", rt.Vivificate, e); else if (e && "object" == typeof e) {
+                if (Ve(e, b)) this[Xt](e), n & s && this[Ht]("copy", rt.Vivificate, e); else if (e && "object" == typeof e) {
                     let n = 0;
                     for (const t of M) t in e && n++;
                     if (n > 1) throw new MultipleUnionInitializers(t);
@@ -3748,13 +3744,13 @@
                         if (n & S) return null;
                         throw new InactiveUnionProperty(t, i, e);
                     }
-                    return this[Yt]?.("clear"), s.call(this);
+                    return this[Ht]?.("clear"), s.call(this);
                 } : s, l = o && c ? function(e) {
                     const n = h.call(this);
                     if (i !== n) throw new InactiveUnionProperty(t, i, n);
                     c.call(this, e);
                 } : c, u = o && c ? function(t) {
-                    d.call(this, i), c.call(this, t), this[Yt]?.("clear");
+                    d.call(this, i), c.call(this, t), this[Ht]?.("clear");
                 } : c;
                 e[i] = {
                     get: a,
@@ -3782,12 +3778,12 @@
             const {comptime: V} = this;
             return e[te] = n & A && {
                 value() {
-                    return V || this[Yt](zn), this[Yt] = Te, this;
+                    return V || this[Ht](zn), this[Ht] = Te, this;
                 }
             }, e[Qt] = ce(p), e[pt] = n & S && {
                 get: l,
                 set: u
-            }, e[Ht] = n & i && this.defineVivificatorStruct(t), e[Yt] = n & s && this.defineVisitorUnion(c, n & S ? f : null), 
+            }, e[Yt] = n & i && this.defineVivificatorStruct(t), e[Ht] = n & s && this.defineVisitorUnion(c, n & S ? f : null), 
             e[St] = this.defineUnionEntries(), e[bt] = n & S ? {
                 get() {
                     return [ h.call(this) ];
@@ -3815,7 +3811,7 @@
                     s.setUint16(8 * t, e, o), s.setUint16(8 * t + 2, n, o), s.setUint16(8 * t + 4, r, o), 
                     s.setUint8(8 * t + 6, i == Z.Float), s.setUint8(8 * t + 7, i == Z.Int || i == Z.Float);
                 }))
-            }), e[Ht] = s & i && this.defineVivificatorStruct(t), e[Yt] = this.defineVisitorVariadicStruct(c), 
+            }), e[Yt] = s & i && this.defineVivificatorStruct(t), e[Ht] = this.defineVisitorVariadicStruct(c), 
             e[re] = ce((function(t) {
                 u.call(this, t, this[Zt]);
             })), function(t) {
@@ -3849,7 +3845,7 @@
     }), ze({
         defineVector(t, e) {
             const {flags: n, length: r, instance: {members: [o]}} = t, c = this.createApplier(t), a = function(e) {
-                if (Ve(e, l)) this[Xt](e), n & s && this[Yt]("copy", rt.Vivificate, e); else if (e?.[Symbol.iterator]) {
+                if (Ve(e, l)) this[Xt](e), n & s && this[Ht]("copy", rt.Vivificate, e); else if (e?.[Symbol.iterator]) {
                     let n = e.length;
                     if ("number" != typeof n && (n = (e = [ ...e ]).length), n !== r) throw new ArrayLengthMismatch(t, this, e);
                     let i = 0;
@@ -3872,7 +3868,7 @@
                 set: a
             }, e.length = ce(r), n & N && (e.typedArray = this.defineTypedArray(t), n & P && (e.clampedArray = this.defineClampedArray(t))), 
             e.entries = e[St] = this.defineVectorEntries(), e[Symbol.iterator] = this.defineVectorIterator(), 
-            e[Qt] = ce(a), e[Ht] = n & i && this.defineVivificatorArray(t), e[Yt] = n & s && this.defineVisitorArray(), 
+            e[Qt] = ce(a), e[Yt] = n & i && this.defineVivificatorArray(t), e[Ht] = n & s && this.defineVisitorArray(), 
             l;
         },
         finalizeVector(t, e) {
@@ -3967,7 +3963,7 @@
             const e = t[0], n = e.structure.flags & s ? e.slot : void 0;
             return {
                 value(t, e, r) {
-                    if (!(e & rt.IgnoreArguments)) for (const [i, s] of Object.entries(this[at])) i !== n && Yt in s && Cn.call(this, i, t, e | rt.IsImmutable, r);
+                    if (!(e & rt.IgnoreArguments)) for (const [i, s] of Object.entries(this[at])) i !== n && Ht in s && Cn.call(this, i, t, e | rt.IsImmutable, r);
                     e & rt.IgnoreRetval || void 0 === n || Cn.call(this, n, t, e, r);
                 }
             };

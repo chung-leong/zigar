@@ -10,9 +10,8 @@ var reader = mixin({
     this.nextReaderId = usize(0x1000);
   },
   // create AnyReader struct for outbound call
-  createReader(stream) {
-    if (stream instanceof ReadableStream) {
-      const reader = stream.getReader({ mode: (stream.supportsBYOB) ? 'byob' : undefined });
+  createReader(reader) {
+    if (reader instanceof ReadableStreamDefaultReader || reader instanceof ReadableStreamBYOBReader) {
       // create a handle referencing the reader 
       const readerId = this.nextReaderId++;
       const context = this.obtainZigView(readerId, 0, false);
@@ -30,12 +29,12 @@ var reader = mixin({
             let finished = false, read = 0;
             if (reader instanceof ReadableStreamBYOBReader) {
               const { done, value } = await reader.read(dest);
-              finished = done;
               read = value.byteLength;
+              finished = done;
               return ;
             } else {
               let leftover = reader.leftover;
-              while (read < dest.length) {
+              while (read < dest.length && !finished) {
                 if (!leftover) {
                   const { done, value } = await reader.read();
                   reader.finished = done;
@@ -52,7 +51,6 @@ var reader = mixin({
                 }
               }
               reader.leftover = leftover;
-              finished = reader.finished && !leftover;
             }
             if (finished) {
               this.readerMap.delete(readerId);
@@ -67,10 +65,10 @@ var reader = mixin({
       }
       return { context, readFn };
     } else {
-      if (typeof(stream) === 'object' && 'context' in stream && 'readFn' in stream) {
-        return stream;
+      if (typeof(reader) === 'object' && 'context' in reader && 'readFn' in reader) {
+        return reader;
       }      
-      throw new TypeMismatch('ReadableStream', stream);
+      throw new TypeMismatch('ReadableStreamDefaultReader or ReadableStreamBYOBReader', reader);
     }
   },
 });

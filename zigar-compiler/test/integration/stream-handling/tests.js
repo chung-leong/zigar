@@ -26,7 +26,7 @@ export function addTests(importModule, options) {
       try {
         const fd = await open(absolute('./data/test.txt'));
         const stream = fd.readableWebStream();
-        const lines = await capture (() => output(stream));
+        const lines = await capture (() => output(stream.getReader()));
         fd.close();
         expect(lines[0]).to.contain('Four score and seven years');
         expect(lines[4]).to.contain('shall not perish');
@@ -49,9 +49,35 @@ export function addTests(importModule, options) {
             fd.write(chunk);
           },
         });
-        const len = await save('This is a test', stream);
+        const len = await save('This is a test', stream.getWriter());
         fd.close();
         expect(len).to.equal(14);
+      } finally {
+        await shutdown();
+      }
+    })
+    it('should decompress xz file', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        shutdown,
+        decompress,
+      } = await importTest('decompress', { multithreaded: true });
+      startup(1);
+      try {
+        const input = await open(absolute('./data/test.txt.xz'));
+        const inStream = input.readableWebStream();
+        const reader = inStream.getReader();
+        const output = await open(absolute('./data/decompressed.txt'), 'w');
+        const outStream = new WritableStream({
+          write(chunk) {
+            output.write(chunk);
+          },
+        });
+        const writer = outStream.getWriter();
+        await decompress(reader, writer);
+        input.close();
+        output.close();
       } finally {
         await shutdown();
       }

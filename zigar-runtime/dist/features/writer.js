@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { MEMORY } from '../symbols.js';
-import { usize } from '../utils.js';
+import { empty, usize } from '../utils.js';
 
 var writer = mixin({
   init() {
@@ -10,15 +10,13 @@ var writer = mixin({
     this.nextWriterId = usize(0x1000);
   },
   // create AnyWriter struct for outbound call
-  createWriter(stream) {
-    if (stream instanceof WritableStream) {
-      const writer = stream.getWriter();
+  createWriter(writer) {
+    if (writer instanceof WritableStreamDefaultWriter) {
       // create a handle referencing the writer 
       const writerId = this.nextWriterId++;
       const context = this.obtainZigView(writerId, 0, false);
       this.writerMap.set(writerId, writer);
-      const clear = () => this.writeMap.delete(writerId);
-      writer.closed.then(clear, clear);
+      writer.closed.catch(empty).then(() => this.writeMap.delete(writerId));
       // use the same callback for all writers
       let writeFn = this.writerCallback;
       if (!writeFn) {
@@ -35,10 +33,10 @@ var writer = mixin({
       }
       return { context, writeFn };
     } else {
-      if ('context' in stream && 'writeFn' in stream) {
-        return stream;
+      if ('context' in writer && 'writeFn' in writer) {
+        return writer;
       }      
-      throw new TypeMismatch('WritableStream', stream);
+      throw new TypeMismatch('WritableStreamDefaultWriter', writer);
     }
   },
 });
