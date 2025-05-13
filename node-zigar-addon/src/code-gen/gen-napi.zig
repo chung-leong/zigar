@@ -102,9 +102,14 @@ const optional_params = .{
     .{ .fn_name = "napi_get_value_string_latin1", .arg_indices = .{2} },
     .{ .fn_name = "napi_get_value_string_utf8", .arg_indices = .{2} },
     .{ .fn_name = "napi_get_value_string_utf16", .arg_indices = .{2} },
+    .{ .fn_name = "napi_add_env_cleanup_hook", .arg_indices = .{2} },
+    .{ .fn_name = "napi_remove_env_cleanup_hook", .arg_indices = .{2} },
+    .{ .fn_name = "napi_add_async_cleanup_hook", .arg_indices = .{2} },
     // function pointers
     .{ .fn_name = "napi_finalize", .arg_indices = .{2} },
     .{ .fn_name = "napi_threadsafe_function_call_js", .arg_indices = .{ 2, 3 } },
+    .{ .fn_name = "napi_cleanup_hook", .arg_indices = .{0} },
+    .{ .fn_name = "napi_async_cleanup_hook", .arg_indices = .{1} },
 };
 const inout_params = .{
     .{ .fn_name = "napi_module_register", .arg_indices = .{0} },

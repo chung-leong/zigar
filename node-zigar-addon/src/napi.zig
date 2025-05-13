@@ -957,7 +957,7 @@ pub const AsyncContext = *opaque {};
 pub const AsyncWork = *opaque {};
 /// https://nodejs.org/api/n-api.html#napi_cleanup_hook
 pub const CleanupHook = *const fn (
-    *anyopaque,
+    ?*anyopaque,
 ) callconv(.c) void;
 /// https://nodejs.org/api/n-api.html#napi_threadsafe_function
 pub const ThreadsafeFunction = *opaque {};
@@ -1003,7 +1003,7 @@ pub const AsyncCleanupHookHandle = *opaque {};
 /// https://nodejs.org/api/n-api.html#napi_async_cleanup_hook
 pub const AsyncCleanupHook = *const fn (
     AsyncCleanupHookHandle,
-    *anyopaque,
+    ?*anyopaque,
 ) callconv(.c) void;
 /// https://nodejs.org/api/n-api.html#napi_addon_register_func
 pub const AddonRegisterFunc = *const fn (
@@ -1145,15 +1145,15 @@ pub const fatalException: fn (
 pub const addEnvCleanupHook: fn (
     env: BasicEnv,
     fun: CleanupHook,
-    arg: *anyopaque,
-) Error!void = c_to_zig.translate("napi_add_env_cleanup_hook", true, false, .{});
+    arg: ?*anyopaque,
+) Error!void = c_to_zig.translate("napi_add_env_cleanup_hook", true, false, .{ .@"2" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_remove_env_cleanup_hook
 pub const removeEnvCleanupHook: fn (
     env: BasicEnv,
     fun: CleanupHook,
-    arg: *anyopaque,
-) Error!void = c_to_zig.translate("napi_remove_env_cleanup_hook", true, false, .{});
+    arg: ?*anyopaque,
+) Error!void = c_to_zig.translate("napi_remove_env_cleanup_hook", true, false, .{ .@"2" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_open_callback_scope
 pub const openCallbackScope: fn (
@@ -1221,8 +1221,8 @@ pub const refThreadsafeFunction: fn (
 pub const addAsyncCleanupHook: fn (
     env: BasicEnv,
     hook: AsyncCleanupHook,
-    arg: *anyopaque,
-) Error!AsyncCleanupHookHandle = c_to_zig.translate("napi_add_async_cleanup_hook", true, false, .{});
+    arg: ?*anyopaque,
+) Error!AsyncCleanupHookHandle = c_to_zig.translate("napi_add_async_cleanup_hook", true, false, .{ .@"2" = ?*anyopaque });
 
 /// https://nodejs.org/api/n-api.html#napi_remove_async_cleanup_hook
 pub const removeAsyncCleanupHook: fn (
