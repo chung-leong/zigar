@@ -1,7 +1,8 @@
 import Fastify from 'fastify';
-import { availableParallelism } from 'os';
+import { availableParallelism } from 'node:os';
 import Sharp from 'sharp';
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'node:url';
+import { Buffer } from 'node:buffer';
 
 const fastify = Fastify();
 
@@ -47,7 +48,7 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
     createOutputAsync, 
     startThreadPool, 
     stopThreadPoolAsync,
-  } = await import(`../lib/${filter}.zigar`);
+  } = await import(`./${filter}.js`);
   if (!deinitThreadPool) {
     startThreadPool(availableParallelism());
     deinitThreadPool = stopThreadPoolAsync;

@@ -1,7 +1,10 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/sepia.zigar": "zig/sepia.zig"
+  "modules": {
+    "lib/sepia.zigar": {
+      "source": "zig/sepia.zig",
+      "loader": "src/sepia.js"
+    }
   },
   "targets": [
     { "platform": "linux", "arch": "x64" },
