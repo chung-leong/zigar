@@ -11,7 +11,11 @@ describe('Feature: generator', function() {
     it('should return a function that feeds an async generator', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       expect(args[GENERATOR]).to.be.an('object');
       setTimeout(() => callback(ptr, 123), 10);
@@ -26,7 +30,11 @@ describe('Feature: generator', function() {
     it('should cause generator to throw when callback is given an error', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       expect(args[GENERATOR]).to.be.an('object');
       setTimeout(() => callback(ptr, 123), 10);
@@ -47,7 +55,11 @@ describe('Feature: generator', function() {
     it('should cause generator to throw when error is passed to the return function', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       args[RETURN](new Error('Doh!'));
       const result = [];
@@ -66,8 +78,12 @@ describe('Feature: generator', function() {
     it('should return false when a break occurs during iteration of generator', async function() {
       const env = new Env();
       const args = {};
+      const structure = {};
       const retvals = [];
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       expect(args[GENERATOR]).to.be.an('object');
       setTimeout(() => retvals.push(callback(ptr, 123)), 10);
@@ -82,8 +98,12 @@ describe('Feature: generator', function() {
     it('should return false when the generator\'s throw method is called', async function() {
       const env = new Env();
       const args = {};
+      const structure = {};
       const retvals = [];
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       args[GENERATOR].throw(new Error('Duh'));
       setTimeout(() => retvals.push(callback(ptr, 123)), 10);
@@ -97,7 +117,11 @@ describe('Feature: generator', function() {
     it('should wait for value to be retrieved', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createGenerator(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
       expect(args[GENERATOR]).to.be.an('object');
       setTimeout(async () => {
@@ -119,10 +143,14 @@ describe('Feature: generator', function() {
     it('should pass item received to given callback function', function() {
       const env = new Env();
       const args = {};
+      const structure = {};
       const result = [];
       const fn = (value) => { result.push(value) };
       args[FINALIZE] = () => {};
-      const { ptr, callback } = env.createGenerator(args, fn);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, fn);
       callback(ptr, 123);
       callback(ptr, 456);
       callback(ptr, null);
@@ -131,6 +159,7 @@ describe('Feature: generator', function() {
     it('should pass item received to function accepting two arguments', function() {
       const env = new Env();
       const args = {};
+      const structure = {};
       const result = [];
       const fn = (error, value) => {
         if (!error) {
@@ -138,7 +167,10 @@ describe('Feature: generator', function() {
         }
       };
       args[FINALIZE] = () => {};
-      const { ptr, callback } = env.createGenerator(args, fn);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, fn);
       callback(ptr, 123);
       callback(ptr, 456);
       callback(ptr, new Error('Dog'));

@@ -11,7 +11,11 @@ describe('Feature: promise', function() {
     it('should return a function that fulfills a promise attached to the argument struct', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createPromise(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createPromise(structure, args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
       callback(ptr, 123);
@@ -21,7 +25,11 @@ describe('Feature: promise', function() {
     it('should create copy of the result when it uses Zig memory', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createPromise(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createPromise(structure, args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
       const copy = env.getCopyFunction();
@@ -42,7 +50,11 @@ describe('Feature: promise', function() {
     it('should reject a promise when the callback function is given an error', async function() {
       const env = new Env();
       const args = {};
-      const { ptr, callback } = env.createPromise(args, undefined);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createPromise(structure, args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       let error;
       args[FINALIZE] = () => {};
@@ -56,40 +68,67 @@ describe('Feature: promise', function() {
     })
     it('should return a function that calls the given callback', function() {
       const env = new Env();
-      const args = {};
+      const args1 = {};
       let result;
-      const { ptr, callback } = env.createPromise(args, arg => result = arg);
-      expect(args[PROMISE]).to.be.undefined;
-      args[FINALIZE] = () => {};
-      callback(ptr, 123);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const promise1 = env.createPromise(structure, args1, arg => result = arg);
+      expect(args1[PROMISE]).to.be.undefined;
+      args1[FINALIZE] = () => {};
+      promise1.callback(promise1.ptr, 123);
       expect(result).to.equal(123);
-      args[RETURN](456);
+      const args2 = {};
+      const promise2 = env.createPromise(structure, args2, arg => result = arg);
+      args2[FINALIZE] = () => {};
+      args2[RETURN](456);
       expect(result).to.equal(456);
     })
     it('should correctly handle callback with two arguments', function() {
       const env = new Env();
-      const args = {};
       let error, result;
-      const { ptr, callback } = env.createPromise(args, (err, value) => {
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const args1 = {};
+      const promise1 = env.createPromise(structure, args1, (err, value) => {
         error = err;
         result = value;
       });
-      expect(args[PROMISE]).to.be.undefined;
-      args[FINALIZE] = () => {};
-      callback(ptr, 123);
+      args1[FINALIZE] = () => {};
+      expect(args1[PROMISE]).to.be.undefined;
+      promise1.callback(promise1.ptr, 123);      
       expect(result).to.equal(123);
       expect(error).to.be.null;
-      callback(ptr, new Error('Doh!'));
+      const args2 = {};
+      const promise2 = env.createPromise(structure, args2, (err, value) => {
+        error = err;
+        result = value;
+      });
+      args2[FINALIZE] = () => {};
+      promise2.callback(promise2.ptr, new Error('Doh!'));
       expect(result).to.be.null;
       expect(error).to.be.an('error');
-      args[RETURN](456);
+      const args3 = {};
+      const promise3 = env.createPromise(structure, args3, (err, value) => {
+        error = err;
+        result = value;
+      });
+      args3[FINALIZE] = () => {};
+      args3[RETURN](456);
       expect(result).to.equal(456);
       expect(error).to.be.null;
     })
     it('should throw when given a non-function', function() {
       const env = new Env();
       const args = {};
-      expect(() => env.createPromise(args, 'Dingo')).to.throw(TypeError);
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      expect(() => env.createPromise(structure, args, 'Dingo')).to.throw(TypeError);
     })
   })
   describe('createPromiseCallback', function() {

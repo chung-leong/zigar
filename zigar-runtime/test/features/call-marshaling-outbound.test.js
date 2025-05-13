@@ -703,6 +703,9 @@ describe('Feature: call-marshaling-outbound', function() {
       const dest = new ArgStruct();
       const callback = () => {};
       const options = { callback };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
       env.copyArguments(dest, src, members, options);
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('callback').that.is.a('function');
@@ -834,6 +837,9 @@ describe('Feature: call-marshaling-outbound', function() {
       const dest = new ArgStruct();
       const callback = () => {};
       const options = { callback };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
       env.copyArguments(dest, src, members, options);
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('callback').that.is.a('function');
