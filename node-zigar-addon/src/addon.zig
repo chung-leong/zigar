@@ -254,10 +254,13 @@ const ModuleHost = struct {
     fn canCreateExternalBuffer(env: Env) bool {
         const ns = struct {
             var supported: ?bool = null;
+
+            // Deno doesn't like null function reference for finalizer
+            fn dummy(_: Env, _: *anyopaque, _: ?*anyopaque) callconv(.c) void {}
         };
         return ns.supported orelse check: {
             var bytes = [1]u8{0} ** 4;
-            const created = if (env.createExternalArraybuffer(&bytes, null, null)) |_| true else |_| false;
+            const created = if (env.createExternalArraybuffer(&bytes, ns.dummy, null)) |_| true else |_| false;
             ns.supported = created;
             break :check created;
         };
