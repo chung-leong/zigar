@@ -1,12 +1,16 @@
 #!/usr/bin/env bun
 
-import { readFile, writeFile } from 'fs/promises';
+import { copyFile, readFile, writeFile } from 'fs/promises';
+import { createRequire } from 'module';
 import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
-import { dirname, join, parse } from 'path';
-import { compile, findConfigFile, optionsForCompile } from 'zigar-compiler';
-import { loadConfigFile } from '../dist/config.js';
+import { dirname, extname, join, parse, relative, resolve } from 'path';
+import { 
+  compile, findConfigFile, generateCode, getArch, getPlatform, optionsForCompile, processConfig,
+} from 'zigar-compiler';
 import { hideStatus, showResult, showStatus } from '../dist/status.js';
+
+const require = createRequire(import.meta.url);
 
 const possiblePlatforms = [
   'aix', 'darwin', 'freebsd', 'linux', 'linux-musl', 'openbsd', 'sunos', 'win32'
@@ -22,13 +26,14 @@ async function buildModules() {
   if (!configPath) {
     throw new Error('Unable to find bun-zigar.toml');
   }
-  const config = await loadConfigFile(configPath, optionsForCompile);
+  const cfgModule = await import(configPath);
+  const config = processConfig(cfgModule.default, configPath, optionsForCompile);
   config.recompile = true;
   if (!Array.isArray(config.targets)) {
     throw new Error('Unable to find array "targets" in bun-zigar.toml');
   }
-  if (!config.sourceFiles) {
-    throw new Error('Unable to find "sourceFiles" in bun-zigar.toml');
+  if (!config.modules) {
+    throw new Error('Unable to find "modules" in bun-zigar.toml');
   }
   // make sure targets are valid
   for (const { arch, platform } of config.targets) {
@@ -59,15 +64,17 @@ async function buildModules() {
     }
   }
   const parentDirs = [];
-  const currentIndex = config.targets.findIndex(({ platform, arch }) => platform === os.platform() && arch === os.arch());
+  const current = { platform: getPlatform(), arch: getArch() };
+  const currentIndex = config.targets.findIndex(t => t.platform === current.platform && t.arch === current.arch);
   if (currentIndex !== -1) {
     const [ current ] = config.targets.splice(currentIndex, 1);
     config.targets.push(current);
   }
-  for (const [ modPath, srcPath ] of Object.entries(config.sourceFiles)) {
+  const nativeModulePaths = {};
+  for (const [ modPath, module ] of Object.entries(config.modules)) {
     const modName = parse(modPath).name;
     for (const { platform, arch } of config.targets) {
-      const { changed } = await compile(srcPath, modPath, {
+      const { outputPath, changed } = await compile(module.source, modPath, {
         ...config,
         platform,
         arch,
@@ -77,16 +84,20 @@ async function buildModules() {
       });
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} module "${modName}" (${platform}/${arch})`);
+      if (platform === current.platform && arch === current.arch) {
+        nativeModulePaths[modPath] = outputPath;
+      }
     }
     const parentDir = dirname(modPath);
     if (!parentDirs.includes(parentDir)) {
       parentDirs.push(parentDir);
     }
   }
+  const nativeAddonPaths = {};
   for (const parentDir of parentDirs) {
     const addonDir = join(parentDir, 'node-zigar-addon');
     for (const { platform, arch } of config.targets) {
-      const { changed } = await buildAddon(addonDir, {
+      const { outputPath, changed } = await buildAddon(addonDir, {
         platform,
         arch,
         onStart: () => showStatus(`Building Bun.js addon (${platform}/${arch})`),
@@ -94,7 +105,33 @@ async function buildModules() {
       });
       const action = (changed) ? 'Built' : 'Found';
       showResult(`${action} Bun.js addon (${platform}/${arch})`);
+      if (platform === current.platform && arch === current.arch) {
+        nativeAddonPaths[parentDir] = outputPath;
+      }
     }
+  }
+  // generate standalone loaders
+  for (const [ modPath, module ] of Object.entries(config.modules)) {
+    if (!module.loader) continue;
+    const parentDir = dirname(modPath);
+    const addonPath = nativeAddonPaths[parentDir];
+    const modulePath = nativeModulePaths[modPath];
+    if (!addonPath || !modulePath) {
+      throw new Error(`Unable to generate loader as there is no support for current platform: ${current.platform}/${current.arch}`);
+    }
+    const { createEnvironment } = require(addonPath);
+    const env = createEnvironment();
+    env.loadModule(modulePath);
+    env.acquireStructures(config);
+    const definition = env.exportStructures();
+    const loaderDir = dirname(module.loader);
+    const standaloneLoader = {
+      addonDir: relative(loaderDir, dirname(addonPath)),
+      moduleDir: relative(loaderDir, dirname(modulePath)),
+      type: (extname(module.loader) === '.cjs') ? 'cjs' : 'esm',
+    };
+    const { code } = generateCode(definition, { standaloneLoader });
+    await writeFile(module.loader, code);
   }
 }
 
@@ -195,6 +232,7 @@ try {
   }
 } catch (err) {
   console.log(err.message);
+  throw err;
   process.exit(1);
 }
 

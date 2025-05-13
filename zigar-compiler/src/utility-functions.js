@@ -1,14 +1,15 @@
-import childProcess from 'child_process';
-import { createHash } from 'crypto';
-import { closeSync, openSync, readSync } from 'fs';
+import childProcess from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import {
   chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
-} from 'fs/promises';
-import os from 'os';
-import { dirname, join, relative, resolve, sep } from 'path';
-import { fileURLToPath } from 'url';
-import { promisify } from 'util';
+} from 'node:fs/promises';
+import os from 'node:os';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
+const require = createRequire(import.meta.url);
 const execFile = promisify(childProcess.execFile);
 
 export async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
@@ -141,101 +142,108 @@ export function sha1(text) {
   return hash.digest('hex');
 }
 
-let isGNU;
-
+// this function (along with getArch() and getLibraryExt()) need to be self-contained 
+// such that we'd have functional code if we use toString() on it; it can only depend
+// on the variable 'os' being available
 export function getPlatform() {
   let platform = os.platform();
   if (platform === 'linux') {
     // differentiate glibc from musl
-    if (isGNU === undefined) {
+    if (process.__gnu === undefined) {
       /* c8 ignore next 3 */
       if (process.versions?.electron || process.__nwjs) {
-        isGNU = true;
+        process.__gnu = true;
       } else {
-        const libs = findElfDependencies(process.argv[0]);
-        isGNU = libs.indexOf('libc.so.6') != -1;
+        const list = [];
+        try {
+          // scan ELF executable for imported shared libraries
+          const { closeSync, openSync, readSync } = require('fs');
+          const fd = openSync(process.execPath, 'r');
+          const sig = new Uint8Array(8);
+          readSync(fd, sig);
+          for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
+            if (sig[index] !== value.charCodeAt(0)) {
+              throw new Error('Incorrect magic number');
+            }
+          }
+          const bits = sig[4] * 32;
+          const le = sig[5] === 1;
+          const Ehdr = (bits === 64)
+          ? { size: 64, e_shoff: 40, e_shnum: 60 }
+          : { size: 52, e_shoff: 32, e_shnum: 48 };
+          const Shdr = (bits === 64)
+          ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
+          : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
+          const Dyn = (bits === 64)
+          ? { size: 16, d_tag: 0, d_val: 8 }
+          : { size: 8, d_tag: 0, d_val: 4 };
+          const Usize = (bits === 64) ? BigInt : Number;
+          const read = (position, size) => {
+            const buf = new DataView(new ArrayBuffer(Number(size)));
+            // deno can't handle bigint position
+            readSync(fd, buf, { position: Number(position) });
+            buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
+            return buf;
+          };
+          const SHT_DYNAMIC = 6;
+          const DT_NEEDED = 1;
+          const ehdr = read(0, Ehdr.size);
+          let position = ehdr.getUsize(Ehdr.e_shoff, le);
+          const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
+          const shdrs = [];
+          for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
+            shdrs.push(read(position, Shdr.size));
+          }
+          const decoder = new TextDecoder();
+          for (const shdr of shdrs) {
+            const sectionType = shdr.getUint32(Shdr.sh_type, le)
+            if (sectionType == SHT_DYNAMIC) {
+              const link = shdr.getUint32(Shdr.sh_link, le);
+              const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
+              const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
+              const strTable = read(strTableOffset, strTableSize);
+              const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
+              const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
+              const entryCount = Number(dynamicSize / Usize(Dyn.size));
+              position = dynamicOffset;
+              for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
+                const entry = read(position, Dyn.size);
+                const tag = entry.getUsize(Dyn.d_tag, le);
+                if (tag === Usize(DT_NEEDED)) {
+                  let offset = entry.getUsize(Dyn.d_val, le);
+                  let name = '', c;
+                  while (c = strTable.getUint8(Number(offset++))) {
+                    name += String.fromCharCode(c);
+                  }
+                  list.push(name);
+                }
+              }
+            }
+          }
+          closeSync(fd);
+        } catch (err) {
+        }
+        process.__gnu = (list.length > 0) ? list.indexOf('libc.so.6') != -1 : true;
       }
     }
     /* c8 ignore next 3 */
-    if (!isGNU) {
+    if (!process.__gnu) {
       platform += '-musl';
     }
   }
   return platform;
 }
 
-function findElfDependencies(path) {
-  const list = [];
-  try {
-    const fd = openSync(path, 'r');
-    const sig = new Uint8Array(8);
-    readSync(fd, sig);
-    for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
-      if (sig[index] !== value.charCodeAt(0)) {
-        throw new Error('Incorrect magic number');
-      }
-    }
-    const bits = sig[4] * 32;
-    const le = sig[5] === 1;
-    const Ehdr = (bits === 64)
-    ? { size: 64, e_shoff: 40, e_shnum: 60 }
-    : { size: 52, e_shoff: 32, e_shnum: 48 };
-    const Shdr = (bits === 64)
-    ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
-    : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
-    const Dyn = (bits === 64)
-    ? { size: 16, d_tag: 0, d_val: 8 }
-    : { size: 8, d_tag: 0, d_val: 4 };
-    const Usize = (bits === 64) ? BigInt : Number;
-    const read = (position, size) => {
-      const buf = new DataView(new ArrayBuffer(Number(size)));
-      readSync(fd, buf, { position });
-      buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
-      return buf;
-    };
-    const SHT_DYNAMIC = 6;
-    const DT_NEEDED = 1;
-    const ehdr = read(0, Ehdr.size);
-    let position = ehdr.getUsize(Ehdr.e_shoff, le);
-    const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
-    const shdrs = [];
-    for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
-      shdrs.push(read(position, Shdr.size));
-    }
-    const decoder = new TextDecoder();
-    for (const shdr of shdrs) {
-      const sectionType = shdr.getUint32(Shdr.sh_type, le)
-      if (sectionType == SHT_DYNAMIC) {
-        const link = shdr.getUint32(Shdr.sh_link, le);
-        const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
-        const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
-        const strTable = read(strTableOffset, strTableSize);
-        const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
-        const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
-        const entryCount = Number(dynamicSize / Usize(Shdr.size));
-        position = dynamicOffset;
-        for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
-          const entry = read(position, Dyn.size);
-          const tag = entry.getUsize(Dyn.d_tag, le);
-          if (tag === Usize(DT_NEEDED)) {
-            let offset = entry.getUsize(Dyn.d_val, le);
-            let name = '', c;
-            while (c = strTable.getUint8(Number(offset++))) {
-              name += String.fromCharCode(c);
-            }
-            list.push(name);
-          }
-        }
-      }
-    }
-    closeSync(fd);
-  } catch (err) {
-  }
-  return list;
-}
-
 export function getArch() {
   return os.arch();
+}
+
+export function getLibraryExt(platform) {
+  switch (platform) {
+    case 'win32': return 'dll';
+    case 'darwin': return 'dylib';
+    default: return 'so';
+  }
 }
 
 export function normalizePath(url) {

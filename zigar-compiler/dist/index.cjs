@@ -1,13 +1,14 @@
 'use strict';
 
-var childProcess = require('child_process');
-var fs$1 = require('fs');
-var fs = require('fs/promises');
-var os = require('os');
-var path = require('path');
-var url = require('url');
-var util = require('util');
-var crypto = require('crypto');
+var childProcess = require('node:child_process');
+var node_crypto = require('node:crypto');
+var node_module = require('node:module');
+var fs = require('node:fs/promises');
+var os = require('node:os');
+var node_path = require('node:path');
+var node_url = require('node:url');
+var node_util = require('node:util');
+var node_fs = require('node:fs');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const StructureType = {
@@ -113,6 +114,287 @@ function findObjects(structures, SLOTS) {
   return list;
 }
 
+const require$1 = node_module.createRequire((typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href)));
+const execFile$1 = node_util.promisify(childProcess.execFile);
+
+async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
+  while (true)   {
+    try {
+      await createDirectory(node_path.dirname(pidPath));
+      const handle = await fs.open(pidPath, 'wx');
+      handle.write(`${process.pid}`);
+      handle.close();
+      break;
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        if (await checkPidFile(pidPath, staleTime)) {
+          if (!wait) {
+            throw err;
+          }
+          await delay(250);
+          continue;
+        }
+        /* c8 ignore next 3 */
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+async function releaseLock(pidPath) {
+  await deleteFile(pidPath);
+}
+
+async function checkPidFile(pidPath, staleTime) {
+  let stale = false;
+  try {
+    const pid = await loadFile(pidPath);
+    if (pid) {
+      /* c8 ignore start */
+      const win32 = os.platform() === 'win32';
+      const program = (win32) ? 'tasklist' : 'ps';
+      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      if (win32 && !stdout.includes(pid)) {
+        throw new Error('Process not found');
+      }
+      /* c8 ignore end */
+    }
+    const stats = await fs.stat(pidPath);
+    const diff = new Date() - stats.mtime;
+    if (diff > staleTime) {
+      stale = true;
+    }
+  } catch (err) {
+    stale = true;
+  }
+  if (stale) {
+    await deleteFile(pidPath);
+  }
+  return !stale;
+}
+
+async function copyFile(srcPath, dstPath) {
+  const info = await fs.stat(srcPath);
+  const data = await fs.readFile(srcPath);
+  await fs.writeFile(dstPath, data);
+  await fs.chmod(dstPath, info.mode);
+}
+
+async function loadFile(path, def) {
+  try {
+    return await fs.readFile(path, 'utf8');
+  } catch (err) {
+    return def;
+  }
+}
+
+async function deleteFile(path) {
+  try {
+    await fs.unlink(path);
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      throw err;
+    }
+  }
+}
+
+async function createDirectory(path) {
+  try {
+    await fs.stat(path);
+  } catch (err) {
+    const dir = node_path.dirname(path);
+    await createDirectory(dir);
+    try {
+      await fs.mkdir(path);
+      /* c8 ignore next 5 */
+    } catch (err) {
+      if (err.code != 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+}
+
+async function deleteDirectory(dir) {
+  try {
+    const list = await fs.readdir(dir);
+    for (const name of list) {
+      const path = node_path.join(dir, name);
+      const info = await fs.lstat(path);
+      if (info.isDirectory()) {
+        await deleteDirectory(path);
+      } else if (info) {
+        await deleteFile(path);
+      }
+    }
+    await fs.rmdir(dir);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
+
+async function delay(ms) {
+  await new Promise(r => setTimeout(r, ms));
+}
+
+function sha1(text) {
+  const hash = node_crypto.createHash('sha1');
+  hash.update(text);
+  return hash.digest('hex');
+}
+
+// this function (along with getArch() and getLibraryExt()) need to be self-contained 
+// such that we'd have functional code if we use toString() on it; it can only depend
+// on the variable 'os' being available
+function getPlatform() {
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (process.__gnu === undefined) {
+      /* c8 ignore next 3 */
+      if (process.versions?.electron || process.__nwjs) {
+        process.__gnu = true;
+      } else {
+        const list = [];
+        try {
+          // scan ELF executable for imported shared libraries
+          const { closeSync, openSync, readSync } = require$1('fs');
+          const fd = openSync(process.execPath, 'r');
+          const sig = new Uint8Array(8);
+          readSync(fd, sig);
+          for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
+            if (sig[index] !== value.charCodeAt(0)) {
+              throw new Error('Incorrect magic number');
+            }
+          }
+          const bits = sig[4] * 32;
+          const le = sig[5] === 1;
+          const Ehdr = (bits === 64)
+          ? { size: 64, e_shoff: 40, e_shnum: 60 }
+          : { size: 52, e_shoff: 32, e_shnum: 48 };
+          const Shdr = (bits === 64)
+          ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
+          : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
+          const Dyn = (bits === 64)
+          ? { size: 16, d_tag: 0, d_val: 8 }
+          : { size: 8, d_tag: 0, d_val: 4 };
+          const Usize = (bits === 64) ? BigInt : Number;
+          const read = (position, size) => {
+            const buf = new DataView(new ArrayBuffer(Number(size)));
+            // deno can't handle bigint position
+            readSync(fd, buf, { position: Number(position) });
+            buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
+            return buf;
+          };
+          const SHT_DYNAMIC = 6;
+          const DT_NEEDED = 1;
+          const ehdr = read(0, Ehdr.size);
+          let position = ehdr.getUsize(Ehdr.e_shoff, le);
+          const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
+          const shdrs = [];
+          for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
+            shdrs.push(read(position, Shdr.size));
+          }
+          const decoder = new TextDecoder();
+          for (const shdr of shdrs) {
+            const sectionType = shdr.getUint32(Shdr.sh_type, le);
+            if (sectionType == SHT_DYNAMIC) {
+              const link = shdr.getUint32(Shdr.sh_link, le);
+              const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
+              const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
+              const strTable = read(strTableOffset, strTableSize);
+              const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
+              const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
+              const entryCount = Number(dynamicSize / Usize(Dyn.size));
+              position = dynamicOffset;
+              for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
+                const entry = read(position, Dyn.size);
+                const tag = entry.getUsize(Dyn.d_tag, le);
+                if (tag === Usize(DT_NEEDED)) {
+                  let offset = entry.getUsize(Dyn.d_val, le);
+                  let name = '', c;
+                  while (c = strTable.getUint8(Number(offset++))) {
+                    name += String.fromCharCode(c);
+                  }
+                  list.push(name);
+                }
+              }
+            }
+          }
+          closeSync(fd);
+        } catch (err) {
+        }
+        process.__gnu = (list.length > 0) ? list.indexOf('libc.so.6') != -1 : true;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!process.__gnu) {
+      platform += '-musl';
+    }
+  }
+  return platform;
+}
+
+function getArch() {
+  return os.arch();
+}
+
+function getLibraryExt(platform) {
+  switch (platform) {
+    case 'win32': return 'dll';
+    case 'darwin': return 'dylib';
+    default: return 'so';
+  }
+}
+
+function normalizePath(url) {
+  let archive;
+  const parts = node_url.fileURLToPath(url).split(node_path.sep).map((part) => {
+    if (part === 'app.asar') {
+      archive = 'asar';
+      return part + '.unpacked';
+    }
+    return part;
+  });
+  const path = parts.join(node_path.sep);
+  return { path, archive }
+}
+
+async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await fs.readdir(dirPath);
+  for (const name of names) {
+    const path = node_path.join(dirPath, name);
+    let info = await fs.stat(path);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
+}
+
+async function copyZonFile(srcPath, dstPath) {
+  const srcDir = node_path.dirname(srcPath);
+  const dstDir = node_path.dirname(dstPath);
+  const srcCode = await fs.readFile(srcPath, 'utf-8');
+  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+    const srcModulePath = node_path.resolve(srcDir, path);
+    const dstModulePath = node_path.relative(dstDir, srcModulePath);
+    return pre + dstModulePath + post;
+  });
+  await fs.writeFile(dstPath, dstCode);
+}
+
 function generateCode(definition, params) {
   const { structures } = definition;
   const {
@@ -123,11 +405,37 @@ function generateCode(definition, params) {
     mixinPaths = [],
     moduleOptions,
     envVariables = {},
+    standaloneLoader,
   } = params;
   const exports = getExports(structures);
   const lines = [];
+  const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
-  add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  if (standaloneLoader) {
+    const { addonDir } = standaloneLoader;
+    if (type === 'esm') {
+      add(`import { createRequire } from 'node:module';`);
+      add(`import os from 'node:os';`);
+      add(`import { dirname, resolve } from 'node:path';`);
+      add(`import { fileURLToPath } from 'node:url';`);
+      add(``);
+      add(`const require = createRequire(import.meta.url);`);
+      add(`const __dirname = dirname(fileURLToPath(import.meta.url));`);
+    } else {
+      add(`const os = require('os');`);
+      add(`const { resolve } = require('path');`);
+      add(``);
+    }
+    add(`const platform = getPlatform();`);
+    add(`const arch = getArch();`);
+    add(`const ext = getLibraryExt(platform);`);
+    add(`const moduleName = \`\${platform}.\${arch}.\${ext}\`;`);
+    add(`const addonName = \`\${platform}.\${arch}.node\`;`);
+    add(`const { createEnvironment } = require(resolve(__dirname, ${JSON.stringify(addonDir)}, addonName));`);
+  } else {
+    // loading through node-zigar/bun-zigar
+    add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  }
   for (const mixinPath of mixinPaths) {
     add(`import '${runtimeURL}/${mixinPath}';`);
   }
@@ -150,9 +458,14 @@ function generateCode(definition, params) {
       add(`\n// load shared library`);
     }
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
+    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null});`);
     // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
+  } else if (standaloneLoader?.moduleDir) {
+    const { moduleDir } = standaloneLoader;
+    add(`env.loadModule(resolve(__dirname, ${JSON.stringify(moduleDir)}, moduleName));`);
+    // write-back is never necessary in Node/Bun/Deno since loadModule() is synchronous
+    add(`env.linkVariables(false);`);
   }
   add(`\n// export root namespace and its methods and constants`);
   let specialVarName;
@@ -170,18 +483,31 @@ function generateCode(definition, params) {
       }
       add(`} = v0;`);
     }
-    add(`export {`);
-    for (const [ index, name ] of exports.entries()) {
-      add(`v${index} as ${name},`);
+    if (type == 'esm') {
+      add(`export {`);
+      for (const [ index, name ] of exports.entries()) {
+        add(`v${index} as ${name},`);
+      }
+      add(`};`);
+    } else {
+      add(`module.exports = {`);
+      for (const [ index, name ] of exports.entries()) {
+        add(`${name}: v${index},`);
+      }
+      add(`};`);
     }
-    add(`};`);
   } else {
     add(`const { constructor } = root;`);
     add(`const __zigar = env.getSpecialExports();`);
     specialVarName = '__zigar';
   }
-  if (topLevelAwait && binarySource) {
+  if (moduleOptions && topLevelAwait && binarySource) {
     add(`await ${specialVarName}.init();`);
+  }
+  if (standaloneLoader) {
+    add(`\n${getPlatform}`);
+    add(`\n${getArch}`);
+    add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };
@@ -507,285 +833,12 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile$1 = util.promisify(childProcess.execFile);
-
-async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
-  while (true)   {
-    try {
-      await createDirectory(path.dirname(pidPath));
-      const handle = await fs.open(pidPath, 'wx');
-      handle.write(`${process.pid}`);
-      handle.close();
-      break;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        if (await checkPidFile(pidPath, staleTime)) {
-          if (!wait) {
-            throw err;
-          }
-          await delay(250);
-          continue;
-        }
-        /* c8 ignore next 3 */
-      } else {
-        throw err;
-      }
-    }
-  }
-}
-
-async function releaseLock(pidPath) {
-  await deleteFile(pidPath);
-}
-
-async function checkPidFile(pidPath, staleTime) {
-  let stale = false;
-  try {
-    const pid = await loadFile(pidPath);
-    if (pid) {
-      /* c8 ignore start */
-      const win32 = os.platform() === 'win32';
-      const program = (win32) ? 'tasklist' : 'ps';
-      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
-      if (win32 && !stdout.includes(pid)) {
-        throw new Error('Process not found');
-      }
-      /* c8 ignore end */
-    }
-    const stats = await fs.stat(pidPath);
-    const diff = new Date() - stats.mtime;
-    if (diff > staleTime) {
-      stale = true;
-    }
-  } catch (err) {
-    stale = true;
-  }
-  if (stale) {
-    await deleteFile(pidPath);
-  }
-  return !stale;
-}
-
-async function copyFile(srcPath, dstPath) {
-  const info = await fs.stat(srcPath);
-  const data = await fs.readFile(srcPath);
-  await fs.writeFile(dstPath, data);
-  await fs.chmod(dstPath, info.mode);
-}
-
-async function loadFile(path, def) {
-  try {
-    return await fs.readFile(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
-async function deleteFile(path) {
-  try {
-    await fs.unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-async function createDirectory(path$1) {
-  try {
-    await fs.stat(path$1);
-  } catch (err) {
-    const dir = path.dirname(path$1);
-    await createDirectory(dir);
-    try {
-      await fs.mkdir(path$1);
-      /* c8 ignore next 5 */
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
-async function deleteDirectory(dir) {
-  try {
-    const list = await fs.readdir(dir);
-    for (const name of list) {
-      const path$1 = path.join(dir, name);
-      const info = await fs.lstat(path$1);
-      if (info.isDirectory()) {
-        await deleteDirectory(path$1);
-      } else if (info) {
-        await deleteFile(path$1);
-      }
-    }
-    await fs.rmdir(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
-async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
-}
-
-function sha1(text) {
-  const hash = crypto.createHash('sha1');
-  hash.update(text);
-  return hash.digest('hex');
-}
-
-let isGNU;
-
-function getPlatform() {
-  let platform = os.platform();
-  if (platform === 'linux') {
-    // differentiate glibc from musl
-    if (isGNU === undefined) {
-      /* c8 ignore next 3 */
-      if (process.versions?.electron || process.__nwjs) {
-        isGNU = true;
-      } else {
-        const libs = findElfDependencies(process.argv[0]);
-        isGNU = libs.indexOf('libc.so.6') != -1;
-      }
-    }
-    /* c8 ignore next 3 */
-    if (!isGNU) {
-      platform += '-musl';
-    }
-  }
-  return platform;
-}
-
-function findElfDependencies(path) {
-  const list = [];
-  try {
-    const fd = fs$1.openSync(path, 'r');
-    const sig = new Uint8Array(8);
-    fs$1.readSync(fd, sig);
-    for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
-      if (sig[index] !== value.charCodeAt(0)) {
-        throw new Error('Incorrect magic number');
-      }
-    }
-    const bits = sig[4] * 32;
-    const le = sig[5] === 1;
-    const Ehdr = (bits === 64)
-    ? { size: 64, e_shoff: 40, e_shnum: 60 }
-    : { size: 52, e_shoff: 32, e_shnum: 48 };
-    const Shdr = (bits === 64)
-    ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
-    : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
-    const Dyn = (bits === 64)
-    ? { size: 16, d_tag: 0, d_val: 8 }
-    : { size: 8, d_tag: 0, d_val: 4 };
-    const Usize = (bits === 64) ? BigInt : Number;
-    const read = (position, size) => {
-      const buf = new DataView(new ArrayBuffer(Number(size)));
-      fs$1.readSync(fd, buf, { position });
-      buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
-      return buf;
-    };
-    const SHT_DYNAMIC = 6;
-    const DT_NEEDED = 1;
-    const ehdr = read(0, Ehdr.size);
-    let position = ehdr.getUsize(Ehdr.e_shoff, le);
-    const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
-    const shdrs = [];
-    for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
-      shdrs.push(read(position, Shdr.size));
-    }
-    const decoder = new TextDecoder();
-    for (const shdr of shdrs) {
-      const sectionType = shdr.getUint32(Shdr.sh_type, le);
-      if (sectionType == SHT_DYNAMIC) {
-        const link = shdr.getUint32(Shdr.sh_link, le);
-        const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
-        const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
-        const strTable = read(strTableOffset, strTableSize);
-        const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
-        const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
-        const entryCount = Number(dynamicSize / Usize(Shdr.size));
-        position = dynamicOffset;
-        for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
-          const entry = read(position, Dyn.size);
-          const tag = entry.getUsize(Dyn.d_tag, le);
-          if (tag === Usize(DT_NEEDED)) {
-            let offset = entry.getUsize(Dyn.d_val, le);
-            let name = '', c;
-            while (c = strTable.getUint8(Number(offset++))) {
-              name += String.fromCharCode(c);
-            }
-            list.push(name);
-          }
-        }
-      }
-    }
-    fs$1.closeSync(fd);
-  } catch (err) {
-  }
-  return list;
-}
-
-function getArch() {
-  return os.arch();
-}
-
-function normalizePath(url$1) {
-  let archive;
-  const parts = url.fileURLToPath(url$1).split(path.sep).map((part) => {
-    if (part === 'app.asar') {
-      archive = 'asar';
-      return part + '.unpacked';
-    }
-    return part;
-  });
-  const path$1 = parts.join(path.sep);
-  return { path: path$1, archive }
-}
-
-async function getDirectoryStats(dirPath) {
-  let size = 0, mtimeMs = 0;
-  const names = await fs.readdir(dirPath);
-  for (const name of names) {
-    const path$1 = path.join(dirPath, name);
-    let info = await fs.stat(path$1);
-    if(info.isDirectory()) {
-      info = await getDirectoryStats(path$1);
-    } else if (!info.isFile()) {
-      continue;
-    }
-    size += info.size;
-    if (mtimeMs < info.mtimeMs) {
-      mtimeMs = info.mtimeMs;
-    }
-  }
-  return { size, mtimeMs };
-}
-
-async function copyZonFile(srcPath, dstPath) {
-  const srcDir = path.dirname(srcPath);
-  const dstDir = path.dirname(dstPath);
-  const srcCode = await fs.readFile(srcPath, 'utf-8');
-  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path$1, post) => {
-    const srcModulePath = path.resolve(srcDir, path$1);
-    const dstModulePath = path.relative(dstDir, srcModulePath);
-    return pre + dstModulePath + post;
-  });
-  await fs.writeFile(dstPath, dstCode);
-}
-
-const execFile = util.promisify(childProcess.execFile);
+const execFile = node_util.promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await fs.stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
-    srcPath = path.join(srcPath, '?');
+    srcPath = node_path.join(srcPath, '?');
   }
   const config = createConfig(srcPath, modPath, options);
   const { moduleDir, outputPath } = config;
@@ -874,16 +927,16 @@ async function runCompiler(path, args, options) {
 }
 
 class CompilationError extends Error {
-  constructor(path$1, args, cwd, err) {
+  constructor(path, args, cwd, err) {
     super([ `Zig compilation failed`, err.stderr ].filter(s => !!s).join('\n\n'));
-    this.path = path$1;
+    this.path = path;
     this.args = args;
     this.errno = err.errno;
     this.code = err.code;
     if (err.stderr) {
       try {
-        const logPath = path.join(cwd, 'log');
-        fs$1.writeFileSync(logPath, err.stderr);
+        const logPath = node_path.join(cwd, 'log');
+        node_fs.writeFileSync(logPath, err.stderr);
         this.log = logPath;
         /* c8 ignore next 2 */
       } catch (err) {
@@ -917,12 +970,12 @@ function formatProjectConfig(config) {
 async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
-  const cfgFilePath = path.join(dir, 'build-cfg.zig');
+  const cfgFilePath = node_path.join(dir, 'build-cfg.zig');
   await fs.writeFile(cfgFilePath, content);
-  const buildFilePath = path.join(dir, 'build.zig');
+  const buildFilePath = node_path.join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
   if (config.packageConfigPath) {
-    const packageConfigPath = path.join(dir, 'build.zig.zon');
+    const packageConfigPath = node_path.join(dir, 'build.zig.zon');
     await copyZonFile(config.packageConfigPath, packageConfigPath);
   }
 }
@@ -931,7 +984,7 @@ const cwd = process.cwd();
 
 function getCachePath(options) {
   const {
-    cacheDir = path.join(cwd, '.zigar-cache'),
+    cacheDir = node_path.join(cwd, '.zigar-cache'),
   } = options;
   return cacheDir;
 }
@@ -940,10 +993,10 @@ function getModuleCachePath(srcPath, options) {
   const {
     optimize,
   } = options;
-  const src = path.parse(srcPath);
-  const folder = path.basename(src.dir).slice(0, 16).trim() + '-' + sha1(src.dir).slice(0, 8);
+  const src = node_path.parse(srcPath);
+  const folder = node_path.basename(src.dir).slice(0, 16).trim() + '-' + sha1(src.dir).slice(0, 8);
   const cacheDir = getCachePath(options);
-  return path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
+  return node_path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
 function createConfig(srcPath, modPath, options = {}) {
@@ -954,7 +1007,7 @@ function createConfig(srcPath, modPath, options = {}) {
     isWASM = false,
     useLibc = isWASM ? false : true,
     clean = false,
-    buildDir = path.join(os.tmpdir(), 'zigar-build'),
+    buildDir = node_path.join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 4294967296,
     zigPath = 'zig',
     zigArgs: zigArgsStr = '',
@@ -965,30 +1018,26 @@ function createConfig(srcPath, modPath, options = {}) {
     omitFunctions = false,
     omitVariables = false,
   } = options;
-  const src = path.parse(srcPath ?? '');
-  const mod = path.parse(modPath ?? '');
+  const src = node_path.parse(srcPath ?? '');
+  const mod = node_path.parse(modPath ?? '');
   const moduleName = mod.name || src.name;
   const modulePath = (src.name !== '?') ? srcPath : undefined;
-  const moduleDir = src.dir + path.sep;
-  const modulePrefix = path.basename(moduleName).slice(0, 16);
+  const moduleDir = src.dir + node_path.sep;
+  const modulePrefix = node_path.basename(moduleName).slice(0, 16);
   const moduleHash = sha1(moduleDir).slice(0, 8);
-  const moduleBuildDir = path.join(buildDir, modulePrefix + '-' + moduleHash);
+  const moduleBuildDir = node_path.join(buildDir, modulePrefix + '-' + moduleHash);
   const outputPath = (() => {
     if (!modPath && isWASM) {
       // save output in build folder
-      return path.join(moduleBuildDir, optimize, `${src.name}.wasm`);
+      return node_path.join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
-      const extensions = {
-        darwin: 'dylib',
-        win32: 'dll',
-      };
-      const ext = extensions[platform] || 'so';
-      return path.join(modPath, `${platform}.${arch}.${ext}`);
+      const ext = getLibraryExt(platform);
+      return node_path.join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
   let pdbPath;
   if (platform === 'win32') {
-    pdbPath = path.join(modPath, `${platform}.${arch}.pdb`);
+    pdbPath = node_path.join(modPath, `${platform}.${arch}.pdb`);
   }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -1032,8 +1081,8 @@ function createConfig(srcPath, modPath, options = {}) {
       zigArgs.push(`-Dcpu=generic+atomics+bulk_memory`);
     }
   }
-  const zigarSrcPath = url.fileURLToPath(new url.URL('../zig/', (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
-  const buildFilePath = path.join(zigarSrcPath, `build.zig`);
+  const zigarSrcPath = node_url.fileURLToPath(new node_url.URL('../zig/', (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
+  const buildFilePath = node_path.join(zigarSrcPath, `build.zig`);
   return {
     platform,
     arch,
@@ -1067,18 +1116,18 @@ async function getManifestLists(buildPath) {
   let dirPath;
   let names;
   try {
-    dirPath = path.join(buildPath, '.zig-cache', 'h');
+    dirPath = node_path.join(buildPath, '.zig-cache', 'h');
     names = await fs.readdir(dirPath);
     /* c8 ignore next 8 */
   } catch (err) {
     try {
-      dirPath = path.join(buildPath, 'zig-cache', 'h');
+      dirPath = node_path.join(buildPath, 'zig-cache', 'h');
       names = await fs.readdir(dirPath);
     } catch (err) {
       names = [];
     }
   }
-  return names.filter(n => /\.txt$/.test(n)).map(n => path.join(dirPath, n));
+  return names.filter(n => /\.txt$/.test(n)).map(n => node_path.join(dirPath, n));
 }
 
 async function findSourcePaths(buildPath) {
@@ -1096,7 +1145,7 @@ async function findSourcePaths(buildPath) {
           const m = re.exec(line);
           if (m) {
             const srcPath = m[1];
-            if(path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+            if(node_path.isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
               try {
                 await fs.stat(srcPath);
                 involved[srcPath] = true;
@@ -1120,12 +1169,12 @@ async function cleanBuildDirectory(config) {
     const list = [];
     let total = 0;
     for (const name of names) {
-      const path$1 = path.join(buildDir, name);
-      const info = await fs.stat(path$1);
+      const path = node_path.join(buildDir, name);
+      const info = await fs.stat(path);
       if (info.isDirectory()) {
-        const { size, mtimeMs } = await getDirectoryStats(path$1);
+        const { size, mtimeMs } = await getDirectoryStats(path);
         total += size;
-        list.push({ path: path$1, size, mtimeMs });
+        list.push({ path, size, mtimeMs });
       }
     }
     list.sort((a, b) => a.mtimeMs - b.mtimeMs);
@@ -1207,9 +1256,13 @@ const optionsForCompile = {
     type: 'string',
     title: 'Addition command-line passed to the Zig compiler',
   },
+  modules: {
+    type: 'object',
+    title: 'Information concerning individual modules, including source file and loader',
+  },
   sourceFiles: {
     type: 'object',
-    title: 'Map of modules to source files/directories',
+    title: 'Map of modules to source files/directories (legacy)',
   },
   quiet: {
     type: 'boolean',
@@ -1307,12 +1360,12 @@ class UnknownOption extends Error {
 }
 
 async function findConfigFile(name, dir) {
-  const path$1 = path.join(dir, name);
+  const path = node_path.join(dir, name);
   try {
-    await fs.stat(path$1);
-    return path$1;
+    await fs.stat(path);
+    return path;
   } catch (err) {
-    const parent = path.dirname(dir);
+    const parent = node_path.dirname(dir);
     if (parent !== dir) {
       return findConfigFile(name, parent);
     }
@@ -1321,12 +1374,13 @@ async function findConfigFile(name, dir) {
 
 async function loadConfigFile(cfgPath, availableOptions) {
   const text = await loadFile(cfgPath);
-  return processConfigFile(text, cfgPath, availableOptions);
+  const json = JSON.parse(text);
+  return processConfig(json, cfgPath, availableOptions);
 }
 
-function processConfigFile(text, cfgPath, availableOptions) {
-  const options = JSON.parse(text);
-  for (const [ key, value ] of Object.entries(options)) {
+function processConfig(object, cfgPath, availableOptions) {
+  const options = {};
+  for (let [ key, value ] of Object.entries(object)) {
     const option = availableOptions[key];
     if (!option) {
       throw new UnknownOption(key);
@@ -1334,26 +1388,36 @@ function processConfigFile(text, cfgPath, availableOptions) {
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
+    if (key === 'sourceFiles') {
+      const modules = {};
+      for (const [ modulePath, source ] of Object.entries(value)) {
+        modules[modulePath] = { source };
+      }
+      value = modules;
+      key = 'modules';
+    }
+    if (key === 'modules') {
+      // expand to absolute paths
+      const cfgDir = node_path.dirname(cfgPath);
+      const modules = {};
+      for (let [ modulePath, module ] of Object.entries(value)) {
+        modulePath = node_path.resolve(cfgDir, modulePath);
+        module.source = node_path.resolve(cfgDir, module.source);
+        if (module.loader) {
+          module.loader = node_path.resolve(cfgDir, module.loader);
+        }
+        modules[modulePath] = module;
+      }
+      value = modules;
+    }
+    options[key] = value;
   }
-  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, path.dirname(cfgPath));
   return options;
 }
 
-function getAbsoluteMapping(sourceFiles, cfgDir) {
-  const map = {};
-  if (sourceFiles) {
-    for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = path.resolve(cfgDir, module);
-      const sourcePath = path.resolve(cfgDir, source);
-      map[modulePath] = sourcePath;
-    }
-  }
-  return map;
-}
-
 function findSourceFile(modulePath, options) {
-  const { sourceFiles } = options;
-  return sourceFiles?.[modulePath];
+  const { modules } = options;
+  return modules?.[modulePath]?.source;
 }
 
 exports.compile = compile;
@@ -1363,9 +1427,11 @@ exports.findSourceFile = findSourceFile;
 exports.generateCode = generateCode;
 exports.getArch = getArch;
 exports.getCachePath = getCachePath;
+exports.getLibraryExt = getLibraryExt;
 exports.getModuleCachePath = getModuleCachePath;
 exports.getPlatform = getPlatform;
 exports.loadConfigFile = loadConfigFile;
 exports.normalizePath = normalizePath;
 exports.optionsForCompile = optionsForCompile;
 exports.optionsForTranspile = optionsForTranspile;
+exports.processConfig = processConfig;

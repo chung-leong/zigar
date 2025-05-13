@@ -1,9 +1,8 @@
-const { execFileSync, execFile: execFileAsync } = require('child_process');
+const { execFile: execFileAsync } = require('child_process');
 const { promisify } = require('util');
 const execFile = promisify(execFileAsync);
-const { stat, readdir } = require('fs/promises');
+const { stat } = require('fs/promises');
 const { writeFileSync } = require('fs');
-const os = require('os');
 const { join, resolve } = require('path');
 
 function createEnvironment() {
@@ -30,8 +29,8 @@ function getLibraryPath() {
 async function buildAddon(addonDir, options) {
   const {
     recompile = true,
-    arch = getArch(),
-    platform = getPlatform(),
+    arch,
+    platform,
     zigPath = 'zig',
     onStart,
     onEnd,
@@ -66,7 +65,7 @@ async function buildAddon(addonDir, options) {
         sunos: 'solaris',
         win32: 'windows',
       };
-        const cpuArch = cpuArchs[arch] ?? arch;
+      const cpuArch = cpuArchs[arch] ?? arch;
       const osTag = osTags[platform] ?? platform;
       args.push(`-Dtarget=${cpuArch}-${osTag}`);
     }
@@ -97,57 +96,8 @@ async function buildAddon(addonDir, options) {
 
 function loadAddon() {
   const addonPath = process.env.ADDON_PATH;
+  console.log({ addonPath });
   return require(addonPath);
-}
-
-let isGNU;
-
-function getPlatform() {
-  let platform = os.platform();
-  /* c8 ignore start */
-  if (platform === 'linux') {
-    // differentiate glibc from musl
-    if (isGNU === undefined) {
-      if (process.versions?.electron || process.__nwjs) {
-        isGNU = true;
-      } else {
-        try {
-          execFileSync('getconf', [ 'GNU_LIBC_VERSION' ], { stdio: 'pipe' });
-          isGNU = true;
-        } catch (err) {
-          isGNU = false;
-        }
-      }
-    }
-    if (!isGNU) {
-      platform += '-musl';
-    }
-  }
-  /* c8 ignore end */
-  return platform;
-}
-
-function getArch() {
-  return os.arch();
-}
-
-async function getDirectoryStats(dirPath) {
-  let size = 0, mtimeMs = 0;
-  const names = await readdir(dirPath);
-  for (const name of names) {
-    const path = join(dirPath, name);
-    let info = await stat(path);
-    if(info.isDirectory()) {
-      info = await getDirectoryStats(path);
-    } else if (!info.isFile()) {
-      continue;
-    }
-    size += info.size;
-    if (mtimeMs < info.mtimeMs) {
-      mtimeMs = info.mtimeMs;
-    }
-  }
-  return { size, mtimeMs };
 }
 
 async function runCompiler(path, args, options) {

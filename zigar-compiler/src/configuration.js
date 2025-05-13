@@ -1,5 +1,5 @@
-import { stat } from 'fs/promises';
-import { dirname, join, resolve } from 'path';
+import { stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { loadFile } from './utility-functions.js';
 
 export const optionsForCompile = {
@@ -52,9 +52,13 @@ export const optionsForCompile = {
     type: 'string',
     title: 'Addition command-line passed to the Zig compiler',
   },
+  modules: {
+    type: 'object',
+    title: 'Information concerning individual modules, including source file and loader',
+  },
   sourceFiles: {
     type: 'object',
-    title: 'Map of modules to source files/directories',
+    title: 'Map of modules to source files/directories (legacy)',
   },
   quiet: {
     type: 'boolean',
@@ -166,12 +170,13 @@ export async function findConfigFile(name, dir) {
 
 export async function loadConfigFile(cfgPath, availableOptions) {
   const text = await loadFile(cfgPath);
-  return processConfigFile(text, cfgPath, availableOptions);
+  const json = JSON.parse(text);
+  return processConfig(json, cfgPath, availableOptions);
 }
 
-function processConfigFile(text, cfgPath, availableOptions) {
-  const options = JSON.parse(text);
-  for (const [ key, value ] of Object.entries(options)) {
+export function processConfig(object, cfgPath, availableOptions) {
+  const options = {};
+  for (let [ key, value ] of Object.entries(object)) {
     const option = availableOptions[key];
     if (!option) {
       throw new UnknownOption(key);
@@ -179,24 +184,34 @@ function processConfigFile(text, cfgPath, availableOptions) {
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
+    if (key === 'sourceFiles') {
+      const modules = {};
+      for (const [ modulePath, source ] of Object.entries(value)) {
+        modules[modulePath] = { source };
+      }
+      value = modules;
+      key = 'modules';
+    }
+    if (key === 'modules') {
+      // expand to absolute paths
+      const cfgDir = dirname(cfgPath);
+      const modules = {};
+      for (let [ modulePath, module ] of Object.entries(value)) {
+        modulePath = resolve(cfgDir, modulePath);
+        module.source = resolve(cfgDir, module.source);
+        if (module.loader) {
+          module.loader = resolve(cfgDir, module.loader);
+        }
+        modules[modulePath] = module;
+      }
+      value = modules;
+    }
+    options[key] = value;
   }
-  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, dirname(cfgPath));
   return options;
 }
 
-export function getAbsoluteMapping(sourceFiles, cfgDir) {
-  const map = {};
-  if (sourceFiles) {
-    for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = resolve(cfgDir, module);
-      const sourcePath = resolve(cfgDir, source);
-      map[modulePath] = sourcePath;
-    }
-  }
-  return map;
-}
-
 export function findSourceFile(modulePath, options) {
-  const { sourceFiles } = options;
-  return sourceFiles?.[modulePath];
+  const { modules } = options;
+  return modules?.[modulePath]?.source;
 }

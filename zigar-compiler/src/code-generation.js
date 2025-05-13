@@ -1,6 +1,7 @@
 import { MemberFlag, MemberType, StructureType } from '../../zigar-runtime/src/constants.js';
 import { CONST_TARGET, MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
 import { findObjects } from '../../zigar-runtime/src/utils.js';
+import { getArch, getLibraryExt, getPlatform } from './utility-functions.js';
 
 export function generateCode(definition, params) {
   const { structures } = definition;
@@ -12,11 +13,37 @@ export function generateCode(definition, params) {
     mixinPaths = [],
     moduleOptions,
     envVariables = {},
+    standaloneLoader,
   } = params;
   const exports = getExports(structures);
   const lines = [];
+  const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
-  add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  if (standaloneLoader) {
+    const { addonDir } = standaloneLoader;
+    if (type === 'esm') {
+      add(`import { createRequire } from 'node:module';`);
+      add(`import os from 'node:os';`);
+      add(`import { dirname, resolve } from 'node:path';`);
+      add(`import { fileURLToPath } from 'node:url';`);
+      add(``);
+      add(`const require = createRequire(import.meta.url);`);
+      add(`const __dirname = dirname(fileURLToPath(import.meta.url));`);
+    } else {
+      add(`const os = require('os');`);
+      add(`const { resolve } = require('path');`);
+      add(``);
+    }
+    add(`const platform = getPlatform();`);
+    add(`const arch = getArch();`);
+    add(`const ext = getLibraryExt(platform);`);
+    add(`const moduleName = \`\${platform}.\${arch}.\${ext}\`;`);
+    add(`const addonName = \`\${platform}.\${arch}.node\`;`);
+    add(`const { createEnvironment } = require(resolve(__dirname, ${JSON.stringify(addonDir)}, addonName));`);
+  } else {
+    // loading through node-zigar/bun-zigar
+    add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  }
   for (const mixinPath of mixinPaths) {
     add(`import '${runtimeURL}/${mixinPath}';`);
   }
@@ -39,9 +66,14 @@ export function generateCode(definition, params) {
       add(`\n// load shared library`);
     }
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
+    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null});`);
     // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
+  } else if (standaloneLoader?.moduleDir) {
+    const { moduleDir } = standaloneLoader;
+    add(`env.loadModule(resolve(__dirname, ${JSON.stringify(moduleDir)}, moduleName));`);
+    // write-back is never necessary in Node/Bun/Deno since loadModule() is synchronous
+    add(`env.linkVariables(false);`);
   }
   add(`\n// export root namespace and its methods and constants`);
   let specialVarName;
@@ -59,18 +91,31 @@ export function generateCode(definition, params) {
       }
       add(`} = v0;`);
     }
-    add(`export {`);
-    for (const [ index, name ] of exports.entries()) {
-      add(`v${index} as ${name},`);
+    if (type == 'esm') {
+      add(`export {`);
+      for (const [ index, name ] of exports.entries()) {
+        add(`v${index} as ${name},`);
+      }
+      add(`};`)
+    } else {
+      add(`module.exports = {`)
+      for (const [ index, name ] of exports.entries()) {
+        add(`${name}: v${index},`);
+      }
+      add(`};`)
     }
-    add(`};`)
   } else {
     add(`const { constructor } = root;`);
     add(`const __zigar = env.getSpecialExports();`);
     specialVarName = '__zigar'
   }
-  if (topLevelAwait && binarySource) {
+  if (moduleOptions && topLevelAwait && binarySource) {
     add(`await ${specialVarName}.init();`);
+  }
+  if (standaloneLoader) {
+    add(`\n${getPlatform}`);
+    add(`\n${getArch}`);
+    add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };

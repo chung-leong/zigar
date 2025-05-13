@@ -4,9 +4,8 @@ import { dirname, extname, join, parse } from 'path';
 import { pathToFileURL } from 'url';
 import {
   compile, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath,
-  getPlatform, normalizePath, optionsForCompile
+  getPlatform, normalizePath, optionsForCompile, processConfig,
 } from 'zigar-compiler';
-import { loadConfigFile } from './config.js';
 import { hideStatus, showStatus } from './status.js';
 
 await plugin({
@@ -33,7 +32,8 @@ await plugin({
       const configPath = await findConfigFile('bun-zigar.toml', dirname(path));
       if (configPath) {
         // add options from config file
-        Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
+        const cfgModule = await import(configPath);
+        Object.assign(options, processConfig(cfgModule.default, cfgPath, optionsForCompile));
       }
       const ext = extname(path);
       const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);

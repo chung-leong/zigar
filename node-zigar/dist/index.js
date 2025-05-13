@@ -52,7 +52,11 @@ export async function load(url, context, nextLoad) {
   const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
   const addonDir = join(addonParentDir, 'node-zigar-addon');
   // build the Node-API addon if necessary
-  const addonOptions = { recompile: !archive };
+  const addonOptions = { 
+    recompile: !archive, 
+    platform,
+    arch,
+  };
   if (!options.quiet) {
     const modName = parse(path).name;
     Object.assign(options, {
@@ -79,6 +83,7 @@ export async function load(url, context, nextLoad) {
   const binarySource = env.hasMethods() ? JSON.stringify(outputPath) : undefined;
   const envVariables = { ADDON_PATH: addonPath };
   const { code } = generateCode(definition, { runtimeURL, binarySource, envVariables });
+  console.log(code);
   return {
     format: 'module',
     shortCircuit: true,

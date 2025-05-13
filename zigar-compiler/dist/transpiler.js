@@ -1,11 +1,12 @@
-import childProcess from 'child_process';
-import { openSync, readSync, closeSync, writeFileSync } from 'fs';
-import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod } from 'fs/promises';
-import os from 'os';
-import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'path';
-import { fileURLToPath, URL } from 'url';
-import { promisify } from 'util';
-import { createHash } from 'crypto';
+import childProcess from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod } from 'node:fs/promises';
+import os from 'node:os';
+import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
+import { promisify } from 'node:util';
+import { writeFileSync } from 'node:fs';
 
 const StructureType = {
   Primitive: 0,
@@ -52,6 +53,8 @@ const StructFlag = {
   IsAbortSignal:    0x0800,
 
   IsOptional:       0x1000,
+  IsReader:         0x2000,
+  IsWriter:         0x4000,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
@@ -475,6 +478,285 @@ class ObjectCache {
   }
 }
 
+const require = createRequire(import.meta.url);
+const execFile$1 = promisify(childProcess.execFile);
+
+async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
+  while (true)   {
+    try {
+      await createDirectory(dirname(pidPath));
+      const handle = await open(pidPath, 'wx');
+      handle.write(`${process.pid}`);
+      handle.close();
+      break;
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        if (await checkPidFile(pidPath, staleTime)) {
+          if (!wait) {
+            throw err;
+          }
+          await delay(250);
+          continue;
+        }
+        /* c8 ignore next 3 */
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
+async function releaseLock(pidPath) {
+  await deleteFile(pidPath);
+}
+
+async function checkPidFile(pidPath, staleTime) {
+  let stale = false;
+  try {
+    const pid = await loadFile(pidPath);
+    if (pid) {
+      const win32 = os.platform() === 'win32';
+      const program = (win32) ? 'tasklist' : 'ps';
+      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
+      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      if (win32 && !stdout.includes(pid)) {
+        throw new Error('Process not found');
+      }
+    }
+    const stats = await stat(pidPath);
+    const diff = new Date() - stats.mtime;
+    if (diff > staleTime) {
+      stale = true;
+    }
+  } catch (err) {
+    stale = true;
+  }
+  if (stale) {
+    await deleteFile(pidPath);
+  }
+  return !stale;
+}
+
+async function copyFile(srcPath, dstPath) {
+  const info = await stat(srcPath);
+  const data = await readFile(srcPath);
+  await writeFile(dstPath, data);
+  await chmod(dstPath, info.mode);
+}
+
+async function loadFile(path, def) {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (err) {
+    return def;
+  }
+}
+
+async function deleteFile(path) {
+  try {
+    await unlink(path);
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      throw err;
+    }
+  }
+}
+
+async function createDirectory(path) {
+  try {
+    await stat(path);
+  } catch (err) {
+    const dir = dirname(path);
+    await createDirectory(dir);
+    try {
+      await mkdir(path);
+      /* c8 ignore next 5 */
+    } catch (err) {
+      if (err.code != 'EEXIST') {
+        throw err;
+      }
+    }
+  }
+}
+
+async function deleteDirectory(dir) {
+  try {
+    const list = await readdir(dir);
+    for (const name of list) {
+      const path = join(dir, name);
+      const info = await lstat(path);
+      if (info.isDirectory()) {
+        await deleteDirectory(path);
+      } else if (info) {
+        await deleteFile(path);
+      }
+    }
+    await rmdir(dir);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+}
+
+async function delay(ms) {
+  await new Promise(r => setTimeout(r, ms));
+}
+
+function sha1(text) {
+  const hash = createHash('sha1');
+  hash.update(text);
+  return hash.digest('hex');
+}
+
+// this function (along with getArch() and getLibraryExt()) need to be self-contained 
+// such that we'd have functional code if we use toString() on it; it can only depend
+// on the variable 'os' being available
+function getPlatform() {
+  let platform = os.platform();
+  if (platform === 'linux') {
+    // differentiate glibc from musl
+    if (process.__gnu === undefined) {
+      /* c8 ignore next 3 */
+      if (process.versions?.electron || process.__nwjs) {
+        process.__gnu = true;
+      } else {
+        const list = [];
+        try {
+          // scan ELF executable for imported shared libraries
+          const { closeSync, openSync, readSync } = require('fs');
+          const fd = openSync(process.execPath, 'r');
+          const sig = new Uint8Array(8);
+          readSync(fd, sig);
+          for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
+            if (sig[index] !== value.charCodeAt(0)) {
+              throw new Error('Incorrect magic number');
+            }
+          }
+          const bits = sig[4] * 32;
+          const le = sig[5] === 1;
+          const Ehdr = (bits === 64)
+          ? { size: 64, e_shoff: 40, e_shnum: 60 }
+          : { size: 52, e_shoff: 32, e_shnum: 48 };
+          const Shdr = (bits === 64)
+          ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
+          : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
+          const Dyn = (bits === 64)
+          ? { size: 16, d_tag: 0, d_val: 8 }
+          : { size: 8, d_tag: 0, d_val: 4 };
+          const Usize = (bits === 64) ? BigInt : Number;
+          const read = (position, size) => {
+            const buf = new DataView(new ArrayBuffer(Number(size)));
+            // deno can't handle bigint position
+            readSync(fd, buf, { position: Number(position) });
+            buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
+            return buf;
+          };
+          const SHT_DYNAMIC = 6;
+          const DT_NEEDED = 1;
+          const ehdr = read(0, Ehdr.size);
+          let position = ehdr.getUsize(Ehdr.e_shoff, le);
+          const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
+          const shdrs = [];
+          for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
+            shdrs.push(read(position, Shdr.size));
+          }
+          const decoder = new TextDecoder();
+          for (const shdr of shdrs) {
+            const sectionType = shdr.getUint32(Shdr.sh_type, le);
+            if (sectionType == SHT_DYNAMIC) {
+              const link = shdr.getUint32(Shdr.sh_link, le);
+              const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
+              const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
+              const strTable = read(strTableOffset, strTableSize);
+              const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
+              const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
+              const entryCount = Number(dynamicSize / Usize(Dyn.size));
+              position = dynamicOffset;
+              for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
+                const entry = read(position, Dyn.size);
+                const tag = entry.getUsize(Dyn.d_tag, le);
+                if (tag === Usize(DT_NEEDED)) {
+                  let offset = entry.getUsize(Dyn.d_val, le);
+                  let name = '', c;
+                  while (c = strTable.getUint8(Number(offset++))) {
+                    name += String.fromCharCode(c);
+                  }
+                  list.push(name);
+                }
+              }
+            }
+          }
+          closeSync(fd);
+        } catch (err) {
+        }
+        process.__gnu = (list.length > 0) ? list.indexOf('libc.so.6') != -1 : true;
+      }
+    }
+    /* c8 ignore next 3 */
+    if (!process.__gnu) {
+      platform += '-musl';
+    }
+  }
+  return platform;
+}
+
+function getArch() {
+  return os.arch();
+}
+
+function getLibraryExt(platform) {
+  switch (platform) {
+    case 'win32': return 'dll';
+    case 'darwin': return 'dylib';
+    default: return 'so';
+  }
+}
+
+function normalizePath(url) {
+  let archive;
+  const parts = fileURLToPath(url).split(sep).map((part) => {
+    if (part === 'app.asar') {
+      archive = 'asar';
+      return part + '.unpacked';
+    }
+    return part;
+  });
+  const path = parts.join(sep);
+  return { path, archive }
+}
+
+async function getDirectoryStats(dirPath) {
+  let size = 0, mtimeMs = 0;
+  const names = await readdir(dirPath);
+  for (const name of names) {
+    const path = join(dirPath, name);
+    let info = await stat(path);
+    if(info.isDirectory()) {
+      info = await getDirectoryStats(path);
+    } else if (!info.isFile()) {
+      continue;
+    }
+    size += info.size;
+    if (mtimeMs < info.mtimeMs) {
+      mtimeMs = info.mtimeMs;
+    }
+  }
+  return { size, mtimeMs };
+}
+
+async function copyZonFile(srcPath, dstPath) {
+  const srcDir = dirname(srcPath);
+  const dstDir = dirname(dstPath);
+  const srcCode = await readFile(srcPath, 'utf-8');
+  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+    const srcModulePath = resolve(srcDir, path);
+    const dstModulePath = relative(dstDir, srcModulePath);
+    return pre + dstModulePath + post;
+  });
+  await writeFile(dstPath, dstCode);
+}
+
 function generateCode(definition, params) {
   const { structures } = definition;
   const {
@@ -485,11 +767,37 @@ function generateCode(definition, params) {
     mixinPaths = [],
     moduleOptions,
     envVariables = {},
+    standaloneLoader,
   } = params;
   const exports = getExports(structures);
   const lines = [];
+  const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
-  add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  if (standaloneLoader) {
+    const { addonDir } = standaloneLoader;
+    if (type === 'esm') {
+      add(`import { createRequire } from 'node:module';`);
+      add(`import os from 'node:os';`);
+      add(`import { dirname, resolve } from 'node:path';`);
+      add(`import { fileURLToPath } from 'node:url';`);
+      add(``);
+      add(`const require = createRequire(import.meta.url);`);
+      add(`const __dirname = dirname(fileURLToPath(import.meta.url));`);
+    } else {
+      add(`const os = require('os');`);
+      add(`const { resolve } = require('path');`);
+      add(``);
+    }
+    add(`const platform = getPlatform();`);
+    add(`const arch = getArch();`);
+    add(`const ext = getLibraryExt(platform);`);
+    add(`const moduleName = \`\${platform}.\${arch}.\${ext}\`;`);
+    add(`const addonName = \`\${platform}.\${arch}.node\`;`);
+    add(`const { createEnvironment } = require(resolve(__dirname, ${JSON.stringify(addonDir)}, addonName));`);
+  } else {
+    // loading through node-zigar/bun-zigar
+    add(`import { createEnvironment } from ${JSON.stringify(runtimeURL)};`);
+  }
   for (const mixinPath of mixinPaths) {
     add(`import '${runtimeURL}/${mixinPath}';`);
   }
@@ -512,9 +820,14 @@ function generateCode(definition, params) {
       add(`\n// load shared library`);
     }
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null})`);
+    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null});`);
     // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
+  } else if (standaloneLoader?.moduleDir) {
+    const { moduleDir } = standaloneLoader;
+    add(`env.loadModule(resolve(__dirname, ${JSON.stringify(moduleDir)}, moduleName));`);
+    // write-back is never necessary in Node/Bun/Deno since loadModule() is synchronous
+    add(`env.linkVariables(false);`);
   }
   add(`\n// export root namespace and its methods and constants`);
   let specialVarName;
@@ -532,18 +845,31 @@ function generateCode(definition, params) {
       }
       add(`} = v0;`);
     }
-    add(`export {`);
-    for (const [ index, name ] of exports.entries()) {
-      add(`v${index} as ${name},`);
+    if (type == 'esm') {
+      add(`export {`);
+      for (const [ index, name ] of exports.entries()) {
+        add(`v${index} as ${name},`);
+      }
+      add(`};`);
+    } else {
+      add(`module.exports = {`);
+      for (const [ index, name ] of exports.entries()) {
+        add(`${name}: v${index},`);
+      }
+      add(`};`);
     }
-    add(`};`);
   } else {
     add(`const { constructor } = root;`);
     add(`const __zigar = env.getSpecialExports();`);
     specialVarName = '__zigar';
   }
-  if (topLevelAwait && binarySource) {
+  if (moduleOptions && topLevelAwait && binarySource) {
     add(`await ${specialVarName}.init();`);
+  }
+  if (standaloneLoader) {
+    add(`\n${getPlatform}`);
+    add(`\n${getArch}`);
+    add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
   return { code, exports, structures };
@@ -869,277 +1195,6 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile$1 = promisify(childProcess.execFile);
-
-async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
-  while (true)   {
-    try {
-      await createDirectory(dirname(pidPath));
-      const handle = await open(pidPath, 'wx');
-      handle.write(`${process.pid}`);
-      handle.close();
-      break;
-    } catch (err) {
-      if (err.code === 'EEXIST') {
-        if (await checkPidFile(pidPath, staleTime)) {
-          if (!wait) {
-            throw err;
-          }
-          await delay(250);
-          continue;
-        }
-        /* c8 ignore next 3 */
-      } else {
-        throw err;
-      }
-    }
-  }
-}
-
-async function releaseLock(pidPath) {
-  await deleteFile(pidPath);
-}
-
-async function checkPidFile(pidPath, staleTime) {
-  let stale = false;
-  try {
-    const pid = await loadFile(pidPath);
-    if (pid) {
-      const win32 = os.platform() === 'win32';
-      const program = (win32) ? 'tasklist' : 'ps';
-      const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
-      if (win32 && !stdout.includes(pid)) {
-        throw new Error('Process not found');
-      }
-    }
-    const stats = await stat(pidPath);
-    const diff = new Date() - stats.mtime;
-    if (diff > staleTime) {
-      stale = true;
-    }
-  } catch (err) {
-    stale = true;
-  }
-  if (stale) {
-    await deleteFile(pidPath);
-  }
-  return !stale;
-}
-
-async function copyFile(srcPath, dstPath) {
-  const info = await stat(srcPath);
-  const data = await readFile(srcPath);
-  await writeFile(dstPath, data);
-  await chmod(dstPath, info.mode);
-}
-
-async function loadFile(path, def) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    return def;
-  }
-}
-
-async function deleteFile(path) {
-  try {
-    await unlink(path);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
-      throw err;
-    }
-  }
-}
-
-async function createDirectory(path) {
-  try {
-    await stat(path);
-  } catch (err) {
-    const dir = dirname(path);
-    await createDirectory(dir);
-    try {
-      await mkdir(path);
-      /* c8 ignore next 5 */
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
-    }
-  }
-}
-
-async function deleteDirectory(dir) {
-  try {
-    const list = await readdir(dir);
-    for (const name of list) {
-      const path = join(dir, name);
-      const info = await lstat(path);
-      if (info.isDirectory()) {
-        await deleteDirectory(path);
-      } else if (info) {
-        await deleteFile(path);
-      }
-    }
-    await rmdir(dir);
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-}
-
-async function delay(ms) {
-  await new Promise(r => setTimeout(r, ms));
-}
-
-function sha1(text) {
-  const hash = createHash('sha1');
-  hash.update(text);
-  return hash.digest('hex');
-}
-
-let isGNU;
-
-function getPlatform() {
-  let platform = os.platform();
-  if (platform === 'linux') {
-    // differentiate glibc from musl
-    if (isGNU === undefined) {
-      /* c8 ignore next 3 */
-      if (process.versions?.electron || process.__nwjs) {
-        isGNU = true;
-      } else {
-        const libs = findElfDependencies(process.argv[0]);
-        isGNU = libs.indexOf('libc.so.6') != -1;
-      }
-    }
-    /* c8 ignore next 3 */
-    if (!isGNU) {
-      platform += '-musl';
-    }
-  }
-  return platform;
-}
-
-function findElfDependencies(path) {
-  const list = [];
-  try {
-    const fd = openSync(path, 'r');
-    const sig = new Uint8Array(8);
-    readSync(fd, sig);
-    for (const [ index, value ] of [ '\x7f', 'E', 'L', 'F' ].entries()) {
-      if (sig[index] !== value.charCodeAt(0)) {
-        throw new Error('Incorrect magic number');
-      }
-    }
-    const bits = sig[4] * 32;
-    const le = sig[5] === 1;
-    const Ehdr = (bits === 64)
-    ? { size: 64, e_shoff: 40, e_shnum: 60 }
-    : { size: 52, e_shoff: 32, e_shnum: 48 };
-    const Shdr = (bits === 64)
-    ? { size: 64, sh_type: 4, sh_offset: 24, sh_size: 32, sh_link: 40 }
-    : { size: 40, sh_type: 4, sh_offset: 16, sh_size: 20, sh_link: 24 };
-    const Dyn = (bits === 64)
-    ? { size: 16, d_tag: 0, d_val: 8 }
-    : { size: 8, d_tag: 0, d_val: 4 };
-    const Usize = (bits === 64) ? BigInt : Number;
-    const read = (position, size) => {
-      const buf = new DataView(new ArrayBuffer(Number(size)));
-      readSync(fd, buf, { position });
-      buf.getUsize = (bits === 64) ? buf.getBigUint64 : buf.getUint32;
-      return buf;
-    };
-    const SHT_DYNAMIC = 6;
-    const DT_NEEDED = 1;
-    const ehdr = read(0, Ehdr.size);
-    let position = ehdr.getUsize(Ehdr.e_shoff, le);
-    const sectionCount = ehdr.getUint16(Ehdr.e_shnum, le);
-    const shdrs = [];
-    for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
-      shdrs.push(read(position, Shdr.size));
-    }
-    const decoder = new TextDecoder();
-    for (const shdr of shdrs) {
-      const sectionType = shdr.getUint32(Shdr.sh_type, le);
-      if (sectionType == SHT_DYNAMIC) {
-        const link = shdr.getUint32(Shdr.sh_link, le);
-        const strTableOffset = shdrs[link].getUsize(Shdr.sh_offset, le);
-        const strTableSize = shdrs[link].getUsize(Shdr.sh_size, le);
-        const strTable = read(strTableOffset, strTableSize);
-        const dynamicOffset = shdr.getUsize(Shdr.sh_offset, le);
-        const dynamicSize = shdr.getUsize(Shdr.sh_size, le);
-        const entryCount = Number(dynamicSize / Usize(Shdr.size));
-        position = dynamicOffset;
-        for (let i = 0; i < entryCount; i++, position += Usize(Dyn.size)) {
-          const entry = read(position, Dyn.size);
-          const tag = entry.getUsize(Dyn.d_tag, le);
-          if (tag === Usize(DT_NEEDED)) {
-            let offset = entry.getUsize(Dyn.d_val, le);
-            let name = '', c;
-            while (c = strTable.getUint8(Number(offset++))) {
-              name += String.fromCharCode(c);
-            }
-            list.push(name);
-          }
-        }
-      }
-    }
-    closeSync(fd);
-  } catch (err) {
-  }
-  return list;
-}
-
-function getArch() {
-  return os.arch();
-}
-
-function normalizePath(url) {
-  let archive;
-  const parts = fileURLToPath(url).split(sep).map((part) => {
-    if (part === 'app.asar') {
-      archive = 'asar';
-      return part + '.unpacked';
-    }
-    return part;
-  });
-  const path = parts.join(sep);
-  return { path, archive }
-}
-
-async function getDirectoryStats(dirPath) {
-  let size = 0, mtimeMs = 0;
-  const names = await readdir(dirPath);
-  for (const name of names) {
-    const path = join(dirPath, name);
-    let info = await stat(path);
-    if(info.isDirectory()) {
-      info = await getDirectoryStats(path);
-    } else if (!info.isFile()) {
-      continue;
-    }
-    size += info.size;
-    if (mtimeMs < info.mtimeMs) {
-      mtimeMs = info.mtimeMs;
-    }
-  }
-  return { size, mtimeMs };
-}
-
-async function copyZonFile(srcPath, dstPath) {
-  const srcDir = dirname(srcPath);
-  const dstDir = dirname(dstPath);
-  const srcCode = await readFile(srcPath, 'utf-8');
-  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
-    const srcModulePath = resolve(srcDir, path);
-    const dstModulePath = relative(dstDir, srcModulePath);
-    return pre + dstModulePath + post;
-  });
-  await writeFile(dstPath, dstCode);
-}
-
 const execFile = promisify(childProcess.execFile);
 
 async function compile(srcPath, modPath, options) {
@@ -1337,11 +1392,7 @@ function createConfig(srcPath, modPath, options = {}) {
       // save output in build folder
       return join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
-      const extensions = {
-        darwin: 'dylib',
-        win32: 'dll',
-      };
-      const ext = extensions[platform] || 'so';
+      const ext = getLibraryExt(platform);
       return join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();
@@ -1565,9 +1616,13 @@ const optionsForCompile = {
     type: 'string',
     title: 'Addition command-line passed to the Zig compiler',
   },
+  modules: {
+    type: 'object',
+    title: 'Information concerning individual modules, including source file and loader',
+  },
   sourceFiles: {
     type: 'object',
-    title: 'Map of modules to source files/directories',
+    title: 'Map of modules to source files/directories (legacy)',
   },
   quiet: {
     type: 'boolean',
@@ -1679,12 +1734,13 @@ async function findConfigFile(name, dir) {
 
 async function loadConfigFile(cfgPath, availableOptions) {
   const text = await loadFile(cfgPath);
-  return processConfigFile(text, cfgPath, availableOptions);
+  const json = JSON.parse(text);
+  return processConfig(json, cfgPath, availableOptions);
 }
 
-function processConfigFile(text, cfgPath, availableOptions) {
-  const options = JSON.parse(text);
-  for (const [ key, value ] of Object.entries(options)) {
+function processConfig(object, cfgPath, availableOptions) {
+  const options = {};
+  for (let [ key, value ] of Object.entries(object)) {
     const option = availableOptions[key];
     if (!option) {
       throw new UnknownOption(key);
@@ -1692,26 +1748,36 @@ function processConfigFile(text, cfgPath, availableOptions) {
     if (typeof(value) !== option.type) {
       throw new Error(`${key} is expected to be a ${option.type}, received: ${value}`);
     }
+    if (key === 'sourceFiles') {
+      const modules = {};
+      for (const [ modulePath, source ] of Object.entries(value)) {
+        modules[modulePath] = { source };
+      }
+      value = modules;
+      key = 'modules';
+    }
+    if (key === 'modules') {
+      // expand to absolute paths
+      const cfgDir = dirname(cfgPath);
+      const modules = {};
+      for (let [ modulePath, module ] of Object.entries(value)) {
+        modulePath = resolve(cfgDir, modulePath);
+        module.source = resolve(cfgDir, module.source);
+        if (module.loader) {
+          module.loader = resolve(cfgDir, module.loader);
+        }
+        modules[modulePath] = module;
+      }
+      value = modules;
+    }
+    options[key] = value;
   }
-  options.sourceFiles = getAbsoluteMapping(options.sourceFiles, dirname(cfgPath));
   return options;
 }
 
-function getAbsoluteMapping(sourceFiles, cfgDir) {
-  const map = {};
-  if (sourceFiles) {
-    for (const [ module, source ] of Object.entries(sourceFiles)) {
-      const modulePath = resolve(cfgDir, module);
-      const sourcePath = resolve(cfgDir, source);
-      map[modulePath] = sourcePath;
-    }
-  }
-  return map;
-}
-
 function findSourceFile(modulePath, options) {
-  const { sourceFiles } = options;
-  return sourceFiles?.[modulePath];
+  const { modules } = options;
+  return modules?.[modulePath]?.source;
 }
 
 const cls = {
@@ -3354,6 +3420,10 @@ var callMarshalingOutbound = mixin({
           // AbortSignal object if found
           signal ||= this.createSignal(structure, options?.['signal']);
           arg = signal;
+        } else if (structure.flags & StructFlag.IsReader) {
+          arg = this.createReader(argList[srcIndex++]);
+        } else if (structure.flags & StructFlag.IsWriter) {
+          arg = this.createWriter(argList[srcIndex++]);
         }
       }
       if (arg === undefined) {
@@ -3465,6 +3535,8 @@ var callMarshalingOutbound = mixin({
     usingAbortSignal: false,
     usingDefaultAllocator: false,
     usingVariables: false,
+    usingReader: false,
+    usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
@@ -3476,6 +3548,10 @@ var callMarshalingOutbound = mixin({
           this.usingGenerator = true;
         } else if (flags & StructFlag.IsAbortSignal) {
           this.usingAbortSignal = true;
+        } else if (flags & StructFlag.IsReader) {
+          this.usingReader = true;
+        } else if (flags & StructFlag.IsWriter) {
+          this.usingWriter = true;
         }
       }
     }
@@ -3687,16 +3763,6 @@ var generator = mixin({
     this.generatorInstanceMap = new Map();
     this.nextGeneratorInstanceId = usize(0x2000);
   },
-  releaseGeneratorCallbacks() {
-    for (const [ instanceId, callback ] of this.generatorCallbackMap) {
-      const fnId = this.getFunctionId(callback);
-      if (fnId) {
-        this.releaseFunction(fnId);
-      }  
-    }
-    this.generatorCallbackMap.clear();
-    this.generatorInstanceMap.clear();
-  },
   createGenerator(structure, args, func) {
     const { constructor } = structure;
     if (func) {
@@ -3739,6 +3805,7 @@ var generator = mixin({
         }
       };
       this.generatorCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };
@@ -4141,6 +4208,7 @@ const MemoryType = {
 var moduleLoading = mixin({
   init() {
     this.abandoned = false;
+    this.destructors = [];
     {
       this.nextValueIndex = 1;
       this.valueMap = new Map();
@@ -4153,20 +4221,11 @@ var moduleLoading = mixin({
       this.exportedFunctions = null;
     }
   },
-  releaseFunctions() {
-    const throwError = () => { throw new Error(`Module was abandoned`) };
-    for (const name of Object.keys(this.imports)) {
-      if (this[name]) {
-        this[name] = throwError;
-      }
-    }
-  },
   abandonModule() {
     if (!this.abandoned) {
-      this.releasePromiseCallbacks?.();
-      this.releaseGeneratorCallbacks?.();
-      this.releaseFunctions();
-      this.unlinkVariables?.();
+      for (const destructor of this.destructors.reverse()) {
+        destructor();
+      }
       this.abandoned = true;
     }
   },
@@ -4240,10 +4299,12 @@ var moduleLoading = mixin({
       return imports;
     },
     importFunctions(exports) {
+      const throwError = () => { throw new Error(`Module was abandoned`) };
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
           defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
+          this.destructors.push(() => this[name] = throwError);
         }
       }
     },
@@ -4287,7 +4348,7 @@ var moduleLoading = mixin({
         shared: multithreaded,
       });
       this.initialTableLength = tableInitial;
-      return new w.Instance(executable, exports);
+      return w.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -4331,11 +4392,18 @@ var objectLinkage = mixin({
       // for native code module, locations of objects in memory can change depending on
       // where the shared library is loaded
       const address = handle ;
-      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
       if (writeBack) {
         copy(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
+      this.destructors.push(() => {
+        {
+          zigDV = this.restoreView(object[MEMORY]);
+        }
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.bytelength);
+        copy(jsDV, zigDV);
+      });
       const linkChildren = (object) => {
         const slots = object[SLOTS];
         if (slots) {
@@ -4356,17 +4424,6 @@ var objectLinkage = mixin({
       linkChildren(object);
       // update pointer targets
       object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
-    }
-  },
-  unlinkVariables() {
-    const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
-      const zigDV = this.restoreView(object[MEMORY]) ;
-      const zig = zigDV[ZIG];
-      if (zig) {
-        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
-        copy(jsDV, zigDV);
-      }
     }
   },
   ...({
@@ -4575,19 +4632,10 @@ var promise = mixin({
         }
       };
       this.promiseCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };
-  },
-  releasePromiseCallbacks() {
-    for (const [ instanceId, callback ] of this.promiseCallbackMap) {
-      const fnId = this.getFunctionId(callback);
-      if (fnId) {
-        this.releaseFunction(fnId);
-      }  
-    }
-    this.promiseCallbackMap.clear();
-    this.promiseInstanceMap.clear();
   },
   // create callback for inbound call
   createPromiseCallback(args, promise) {
@@ -4598,6 +4646,76 @@ var promise = mixin({
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[RETURN](result);
     };
+  },
+});
+
+var reader = mixin({
+  init() {
+    this.readerCallback = null;
+    this.readerMap = new Map();
+    this.nextReaderId = usize(0x1000);
+  },
+  // create AnyReader struct for outbound call
+  createReader(reader) {
+    if (reader instanceof ReadableStreamDefaultReader || reader instanceof ReadableStreamBYOBReader) {
+      // create a handle referencing the reader 
+      const readerId = this.nextReaderId++;
+      const context = this.obtainZigView(readerId, 0, false);
+      this.readerMap.set(readerId, reader);
+      // use the same callback for all readers
+      let readFn = this.readerCallback;
+      if (!readFn) {
+        readFn = this.readerCallback = async (context, buffer) => {
+          const readerId = this.getViewAddress(context['*'][MEMORY]);
+          const reader = this.readerMap.get(readerId);
+          if (!reader) return 0;
+          try {
+            const view = buffer['*'][MEMORY];
+            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+            let finished = false, read = 0;
+            if (reader instanceof ReadableStreamBYOBReader) {
+              const { done, value } = await reader.read(dest);
+              read = value.byteLength;
+              finished = done;
+              return ;
+            } else {
+              let leftover = reader.leftover;
+              while (read < dest.length && !finished) {
+                if (!leftover) {
+                  const { done, value } = await reader.read();
+                  reader.finished = done;
+                  leftover = new Uint8Array(value);
+                } 
+                const len = Math.min(leftover.length, dest.length);
+                for (let i = 0; i < len; i++) dest[read + i] = leftover[i]; 
+                read += len;
+                if (leftover.length > len) {
+                  leftover = leftover.slice(len);
+                } else {
+                  leftover = null;
+                  if (reader.finished) break;
+                }
+              }
+              reader.leftover = leftover;
+            }
+            if (finished) {
+              this.readerMap.delete(readerId);
+            }
+            return read;
+          } catch (err) {
+            this.readMap.delete(readerId);
+            throw err;
+          }
+        };
+        this.destructors.push(() => this.releaseFunction(this.getFunctionId(readFn)));
+      }
+      return { context, readFn };
+    } else {
+      if (typeof(reader) === 'object' && 'context' in reader && 'readFn' in reader) {
+        return reader;
+      }      
+      throw new TypeMismatch('ReadableStreamDefaultReader or ReadableStreamBYOBReader', reader);
+    }
   },
 });
 
@@ -5464,6 +5582,44 @@ function protectElements(array) {
   };
   df(array, 'get', { value: getReadOnly });
 }
+
+var writer = mixin({
+  init() {
+    this.writerCallback = null;
+    this.writerMap = new Map();
+    this.nextWriterId = usize(0x1000);
+  },
+  // create AnyWriter struct for outbound call
+  createWriter(writer) {
+    if (writer instanceof WritableStreamDefaultWriter) {
+      // create a handle referencing the writer 
+      const writerId = this.nextWriterId++;
+      const context = this.obtainZigView(writerId, 0, false);
+      this.writerMap.set(writerId, writer);
+      writer.closed.catch(empty).then(() => this.writeMap.delete(writerId));
+      // use the same callback for all writers
+      let writeFn = this.writerCallback;
+      if (!writeFn) {
+        writeFn = this.writerCallback = async (context, buffer) => {
+          const writerId = this.getViewAddress(context['*'][MEMORY]);
+          const writer = this.writerMap.get(writerId);
+          if (!writer) return 0;
+          const view = buffer['*'][MEMORY];
+          const array = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+          await writer.write(array);
+          return array.length;
+        };
+        this.destructors.push(() => this.releaseFunction(this.getFunctionId(writeFn)));
+      }
+      return { context, writeFn };
+    } else {
+      if ('context' in writer && 'writeFn' in writer) {
+        return writer;
+      }      
+      throw new TypeMismatch('WritableStreamDefaultWriter', writer);
+    }
+  },
+});
 
 var forArray = mixin({
   defineArrayEntries() {
@@ -8605,6 +8761,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureObjectLinkage: objectLinkage,
   FeaturePointerSynchronization: pointerSynchronization,
   FeaturePromise: promise,
+  FeatureReader: reader,
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
@@ -8612,6 +8769,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureViewManagement: viewManagement,
   FeatureWasiSupport: wasiSupport,
   FeatureWriteProtection: writeProtection,
+  FeatureWriter: writer,
   IteratorForArray: forArray,
   IteratorForStruct: forStruct,
   IteratorForUnion: forUnion,
@@ -10048,7 +10206,7 @@ function repackNames({ moduleName, functionNames, localNames, size }) {
   return finalize();
 }
 
-async function transpile(path, options) {
+async function transpile(srcPath, options) {
   const {
     nodeCompat = false,
     embedWASM = true,
@@ -10058,7 +10216,6 @@ async function transpile(path, options) {
     keepNames = false,
     moduleResolver = (name) => name,
     wasmLoader,
-    sourceFiles,
     ...compileOptions
   } = options;
   if (typeof(wasmLoader) !== 'function') {
@@ -10067,9 +10224,6 @@ async function transpile(path, options) {
     }
   }
   Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi', isWASM: true });
-  const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, {
-    sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
-  });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
@@ -10102,6 +10256,8 @@ async function transpile(path, options) {
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
+  usage.FeatureReader = env.usingReader;
+  usage.FeatureWriter = env.usingWriter;
   usage.FeatureObjectLinkage = env.usingVariables;
   usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();

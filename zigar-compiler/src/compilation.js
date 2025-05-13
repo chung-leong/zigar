@@ -1,13 +1,13 @@
-import ChildProcess from 'child_process';
-import { writeFileSync } from 'fs';
-import fs, { readdir, readFile, stat, writeFile } from 'fs/promises';
-import os from 'os';
-import { basename, isAbsolute, join, parse, sep } from 'path';
-import { fileURLToPath, URL } from 'url';
-import { promisify } from 'util';
+import ChildProcess from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import fs, { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import { basename, isAbsolute, join, parse, sep } from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
+import { promisify } from 'node:util';
 import {
   acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, deleteFile, getArch, 
-  getDirectoryStats, getPlatform, releaseLock, sha1
+  getDirectoryStats, getLibraryExt, getPlatform, releaseLock, sha1
 } from './utility-functions.js';
 
 const execFile = promisify(ChildProcess.execFile);
@@ -208,11 +208,7 @@ export function createConfig(srcPath, modPath, options = {}) {
       // save output in build folder
       return join(moduleBuildDir, optimize, `${src.name}.wasm`);
     } else {
-      const extensions = {
-        darwin: 'dylib',
-        win32: 'dll',
-      };
-      const ext = extensions[platform] || 'so';
+      const ext = getLibraryExt(platform);
       return join(modPath, `${platform}.${arch}.${ext}`);
     }
   })();

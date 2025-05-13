@@ -1,13 +1,12 @@
-import { readFile } from 'fs/promises';
-import { basename } from 'path';
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { defineEnvironment } from '../../zigar-runtime/src/environment.js';
 import * as mixins from '../../zigar-runtime/src/mixins.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
-import { findSourceFile, getAbsoluteMapping } from './configuration.js';
 import { extractLimits, stripUnused } from './wasm-decoding.js';
 
-export async function transpile(path, options) {
+export async function transpile(srcPath, options) {
   const {
     nodeCompat = false,
     embedWASM = true,
@@ -17,7 +16,6 @@ export async function transpile(path, options) {
     keepNames = false,
     moduleResolver = (name) => name,
     wasmLoader,
-    sourceFiles,
     ...compileOptions
   } = options;
   if (typeof(wasmLoader) !== 'function') {
@@ -26,9 +24,6 @@ export async function transpile(path, options) {
     }
   }
   Object.assign(compileOptions, { arch: 'wasm32', platform: 'wasi', isWASM: true });
-  const srcPath = path.endsWith('.zig') ? path : findSourceFile(path, {
-    sourceFiles: getAbsoluteMapping(sourceFiles, process.cwd()),
-  });
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
