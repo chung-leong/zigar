@@ -29,7 +29,7 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     if (!handle2) {
         handle2 = GetStdHandle(STD_ERROR_HANDLE);
     }
-    if (handle == handle1 || handle == handle2) {
+    if ((handle == handle1 || handle == handle2) && override) {
         // return value of zero means success
         if (override(buffer, len) == 0) {
             *written = len;
@@ -47,7 +47,7 @@ ssize_t write_hook(int fd,
                    const void* buffer,
                    size_t len) {
     // 1 = stdout, 2 = stderr
-    if (fd == 1 || fd == 2) {
+    if ((fd == 1 || fd == 2) && override) {
         // return value of zero means success
         if (override(buffer, len) == 0) {
             return len;
@@ -60,7 +60,7 @@ size_t fwrite_hook(const void *ptr,
                    size_t size,
 		           size_t n,
                    FILE* s) {
-    if (s == stdout || s == stderr) {
+    if ((s == stdout || s == stderr) && override) {
         if (override(ptr, size * n) == 0) {
             return n;
         }
@@ -70,7 +70,7 @@ size_t fwrite_hook(const void *ptr,
 
 int fputs_hook(const char *t,
                FILE* s) {
-    if (s == stdout || s == stderr) {
+    if ((s == stdout || s == stderr) && override) {
         size_t len = strlen(t);
         if (override(t, len) == 0) {
             return len;
@@ -81,7 +81,7 @@ int fputs_hook(const char *t,
 
 int puts_hook(const char *t) {
     size_t len = strlen(t);
-    if (override(t, len) == 0) {
+    if (override && override(t, len) == 0) {
         override("\n", 1);
         return 1;
     }
@@ -90,7 +90,7 @@ int puts_hook(const char *t) {
 
 int fputc_hook(int c,
                FILE* s) {
-    if (s == stdout || s == stderr) {
+    if ((s == stdout || s == stderr) && override) {
         unsigned char b = c;
         if (override(&b, 1) == 0) {
             return 1;
@@ -106,7 +106,7 @@ int putchar_hook(int c) {
 int vfprintf_hook_impl(FILE* s,
                        const char* f,
                        va_list arg) {
-    if (s == stdout || s == stderr) {
+    if ((s == stdout || s == stderr) && override) {
         // attempt with fixed-size buffer, using a copy of arg
         va_list arg_copy;
         va_copy(arg_copy, arg);

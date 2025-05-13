@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 pub const Callback = *const fn ([*]const u8, usize) callconv(.c) u32;
 
 extern fn find_hook([*:0]const u8) callconv(.c) ?*const anyopaque;
-extern fn set_override(Callback) void;
+extern fn set_override(?Callback) void;
 
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
@@ -13,6 +13,10 @@ const ns = switch (builtin.target.os.tag) {
     else => unknown,
 };
 pub const redirectIO = ns.redirectIO;
+
+pub fn stop() void {
+    set_override(null);
+}
 
 const linux = struct {
     const elf = std.elf;
