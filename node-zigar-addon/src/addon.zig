@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const napi = @import("napi.zig");
 const redirect = @import("redirect.zig");
 const fn_transform = @import("code-gen/fn-transform.zig");
@@ -188,6 +189,26 @@ const ModuleHost = struct {
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != 5) return error.IncorrectVersion;
         self.module = module;
+        self.base_address = get: {
+            switch (builtin.target.os.tag) {
+                .windows => {
+                    const MBI = std.os.windows.MEMORY_BASIC_INFORMATION;
+                    var mbi: MBI = undefined;
+                    _ = try std.os.windows.VirtualQuery(module, &mbi, @sizeOf(MBI));
+                    break :get @intFromPtr(mbi.AllocationBase);
+                },
+                else => {
+                    const c = @cImport({
+                        @cDefine("_GNU_SOURCE", {});
+                        @cDefine("_BSD_SOURCE", {});
+                        @cInclude("dlfcn.h");
+                    });
+                    var dl_info: c.Dl_info = undefined;
+                    if (c.dladdr(module, &dl_info) == 0) return error.Unexpected;
+                    break :get @intFromPtr(dl_info.dli_fbase.?);
+                },
+            }
+        };
         try self.exportFunctionsToModule();
         if (module.exports.initialize(self) != .ok) return error.Unexpected;
         try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_write));
