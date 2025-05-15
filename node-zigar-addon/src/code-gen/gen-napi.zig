@@ -105,6 +105,7 @@ const optional_params = .{
     .{ .fn_name = "napi_add_env_cleanup_hook", .arg_indices = .{2} },
     .{ .fn_name = "napi_remove_env_cleanup_hook", .arg_indices = .{2} },
     .{ .fn_name = "napi_add_async_cleanup_hook", .arg_indices = .{2} },
+    .{ .fn_name = "napi_add_finalizer", .arg_indices = .{2} },
     // function pointers
     .{ .fn_name = "napi_finalize", .arg_indices = .{2} },
     .{ .fn_name = "napi_threadsafe_function_call_js", .arg_indices = .{ 2, 3 } },

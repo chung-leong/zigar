@@ -241,6 +241,8 @@ const ModuleHost = struct {
                 @memcpy(copy_bytes[0..src_len], src_bytes[0..src_len]);
                 // attach address as fallback property
                 try env.setProperty(buffer, fallback_symbol, address);
+                // add finalizer
+                try env.addFinalizer(buffer, null, finalizeExternalBuffer, self, null);
                 break :create buffer;
             },
         };

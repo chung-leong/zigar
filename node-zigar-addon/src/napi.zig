@@ -845,11 +845,11 @@ pub const getDateValue: fn (
 pub const addFinalizer: fn (
     env: *@This(),
     js_object: Value,
-    finalize_data: *anyopaque,
+    finalize_data: ?*anyopaque,
     finalize_cb: BasicFinalize,
     finalize_hint: ?*anyopaque,
     result: ?*Ref,
-) Error!void = c_to_zig.translate("napi_add_finalizer", true, false, .{ .@"4" = ?*anyopaque, .@"5" = inout(?*Ref) });
+) Error!void = c_to_zig.translate("napi_add_finalizer", true, false, .{ .@"2" = ?*anyopaque, .@"4" = ?*anyopaque, .@"5" = inout(?*Ref) });
 
 /// https://nodejs.org/api/n-api.html#napi_create_bigint_int64
 pub const createBigintInt64: fn (

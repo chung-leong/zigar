@@ -86,3 +86,7 @@ const test3 = require('../zig/test3.zig');
 const array = test3.floatToString(Math.PI);
 console.log(array.string);
 test3.freeString(array);
+
+const test4 = require('../zig/test4.zig');
+console.log(test4.returnSlice().string);
+
