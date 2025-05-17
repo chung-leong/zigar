@@ -218,7 +218,15 @@ var memoryMapping = mixin({
         address = usizeMin;
         len = 0;
       }
-      return (cache) ? this.obtainView(buffer, address, len) : new DataView(buffer, address, len);
+      let dv;
+      if (cache) {
+        dv = this.obtainView(buffer, address, len);
+      } else {
+        // don't attach the view to the buffer so that it'd get garbage-collected
+        dv = new DataView(buffer, address, len);
+        dv[ZIG] = { address, len };
+      }
+      return dv;
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];

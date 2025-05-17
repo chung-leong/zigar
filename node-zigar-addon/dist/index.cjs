@@ -95,9 +95,7 @@ async function buildAddon(addonDir, options) {
 }
 
 function loadAddon() {
-  const addonPath = process.env.ADDON_PATH;
-  console.log({ addonPath });
-  return require(addonPath);
+  return require(process.env.ADDON_PATH);
 }
 
 async function runCompiler(path, args, options) {
