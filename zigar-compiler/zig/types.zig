@@ -2621,7 +2621,14 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     const call = @field(item, field.name);
                     const result = @call(.auto, func, call.args);
                     switch (@hasField(@TypeOf(call), "generator")) {
-                        true => if (call.generator) |g| g.pipe(result),
+                        true => if (call.generator) |g| {
+                            defer {
+                                if (@hasDecl(@TypeOf(result), "deinit")) {
+                                    result.deinit();
+                                }
+                            }
+                            g.pipe(result);
+                        },
                         false => if (call.promise) |p| p.resolve(result),
                     }
                 }
