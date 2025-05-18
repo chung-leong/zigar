@@ -200,6 +200,9 @@ export default mixin({
       }
     }
   },
+  freeFunction(func) {
+    this.releaseFunction(this.getFunctionId(func));
+  },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
       handleJsCall: { argType: 'iiii', returnType: 'i' },

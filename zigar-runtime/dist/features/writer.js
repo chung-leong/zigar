@@ -29,7 +29,7 @@ var writer = mixin({
           await writer.write(array);
           return array.length;
         };
-        this.destructors.push(() => this.releaseFunction(this.getFunctionId(writeFn)));
+        this.destructors.push(() => this.freeFunction(writeFn));
       }
       return { context, writeFn };
     } else {

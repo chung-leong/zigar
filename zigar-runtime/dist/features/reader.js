@@ -40,7 +40,7 @@ var reader = mixin({
                   reader.finished = done;
                   leftover = new Uint8Array(value);
                 } 
-                const len = Math.min(leftover.length, dest.length);
+                const len = Math.min(leftover.length, dest.length - read);
                 for (let i = 0; i < len; i++) dest[read + i] = leftover[i]; 
                 read += len;
                 if (leftover.length > len) {
@@ -61,7 +61,7 @@ var reader = mixin({
             throw err;
           }
         };
-        this.destructors.push(() => this.releaseFunction(this.getFunctionId(readFn)));
+        this.destructors.push(() => this.freeFunction(readFn));
       }
       return { context, readFn };
     } else {

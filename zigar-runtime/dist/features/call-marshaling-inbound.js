@@ -197,6 +197,9 @@ var callMarshalingInbound = mixin({
       }
     }
   },
+  freeFunction(func) {
+    this.releaseFunction(this.getFunctionId(func));
+  },
   ...({
     exports: {
       handleJsCall: { argType: 'iiii', returnType: 'i' },

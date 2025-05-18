@@ -4,8 +4,6 @@ import { usizeMax } from '../utils.js';
 
 var defaultAllocator = mixin({
   init() {
-    this.defaultAllocator = null;
-    this.vtableFnIds = null;
   },
   createDefaultAllocator(args, structure) {
     let allocator = this.defaultAllocator;
@@ -26,18 +24,10 @@ var defaultAllocator = mixin({
       }
       const ptr = this.obtainZigView(usizeMax, 0);
       allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
-      this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
+      this.destructors.push(() => this.freeFunction(vtable.alloc));
+      this.destructors.push(() => this.freeFunction(vtable.free));
     }
     return allocator;
-  },
-  freeDefaultAllocator() {
-    if (this.vtableFnIds) {
-      for (const id of this.vtableFnIds) {
-        this.releaseFunction(id);
-      }
-      this.defaultAllocator = null;
-      this.vtableFnIds = null;
-    }
   },
   allocateHostMemory(len, align) {
     const targetDV = this.allocateJSMemory(len, align);

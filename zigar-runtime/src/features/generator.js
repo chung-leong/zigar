@@ -51,7 +51,7 @@ export default mixin({
         }
       };
       this.generatorCallbackMap.set(constructor, callback);
-      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
+      this.destructors.push(() => this.freeFunction(callback));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };

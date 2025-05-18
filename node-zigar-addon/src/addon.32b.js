@@ -16,7 +16,7 @@
         ArgStruct: 12,
         VariadicStruct: 13,
         Function: 14
-    }, n = Object.keys(e), r = 1, i = 2, s = 4, o = 8, c = 16, a = 16, l = 32, u = 64, f = 128, h = 64, d = 128, g = 256, p = 512, b = 1024, y = 2048, m = 8192, w = 16384, v = 16, S = 32, A = 64, I = 512, M = 16, V = 16, E = 16, x = 32, O = 64, $ = 128, T = 256, U = 16, z = 32, C = 64, B = 128, F = 256, j = 16, k = 16, N = 16, P = 32, L = 16, D = 32, R = 64, Z = {
+    }, n = Object.keys(e), r = 1, i = 2, s = 4, o = 8, c = 16, a = 16, l = 32, u = 64, f = 128, h = 64, d = 128, g = 256, p = 512, b = 1024, y = 2048, m = 8192, w = 16384, v = 16, S = 32, A = 64, I = 512, M = 16, V = 16, E = 16, x = 32, O = 64, $ = 128, T = 256, U = 16, z = 32, C = 64, B = 128, j = 256, k = 16, F = 16, N = 16, P = 32, L = 16, D = 32, R = 64, Z = {
         Void: 0,
         Bool: 1,
         Int: 2,
@@ -42,7 +42,7 @@
     function ot(t) {
         return st(t);
     }
-    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), bt = ot("props"), yt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), Mt = ot("address"), Vt = ot("length"), Et = ot("last address"), xt = ot("last length"), Ot = ot("proxy"), $t = ot("cache"), Tt = ot("size"), Ut = ot("bit size"), zt = ot("align"), Ct = ot("const target"), Bt = ot("environment"), Ft = ot("attributes"), jt = ot("primitive"), kt = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), Gt = ot("fallback"), qt = ot("signature"), Jt = ot("string retval"), _t = ot("update"), Wt = ot("reset"), Yt = ot("vivificate"), Ht = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
+    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), bt = ot("props"), yt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), Mt = ot("address"), Vt = ot("length"), Et = ot("last address"), xt = ot("last length"), Ot = ot("proxy"), $t = ot("cache"), Tt = ot("size"), Ut = ot("bit size"), zt = ot("align"), Ct = ot("const target"), Bt = ot("environment"), jt = ot("attributes"), kt = ot("primitive"), Ft = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), Gt = ot("fallback"), qt = ot("signature"), Jt = ot("string retval"), _t = ot("update"), Wt = ot("reset"), Yt = ot("vivificate"), Ht = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
     function se(t, e, n) {
         if (n) {
             const {set: r, get: i, value: s, enumerable: o, configurable: c = !0, writable: a = !0} = n;
@@ -629,7 +629,7 @@
         constructor(t, e) {
             const {name: n} = t, r = typeof e;
             let i;
-            "string" === r || "number" === r || ke(e) ? (ke(e) && (e = `{ error: ${JSON.stringify(e.error)} }`), 
+            "string" === r || "number" === r || Fe(e) ? (Fe(e) && (e = `{ error: ${JSON.stringify(e.error)} }`), 
             i = `Error ${r} does not corresponds to any error in error set ${n}: ${e}`) : i = `Error of the type ${n} expected, received ${e}`, 
             super(i);
         }
@@ -720,7 +720,7 @@
             const r = r => {
                 e -= r;
                 const i = 1 !== (t -= r) ? "s" : "", s = n ? "at least " : "";
-                this.message = `Expecting ${s}${t} argument${i}, received ${e}`, this.stack = Fe(this.stack, "new Arg(");
+                this.message = `Expecting ${s}${t} argument${i}, received ${e}`, this.stack = je(this.stack, "new Arg(");
             };
             r(0), se(this, _t, {
                 value: r,
@@ -862,30 +862,30 @@
     }
     class ZigError extends Error {
         constructor(t, e = 0) {
-            if (t instanceof Error) return super(t.message), t.stack = Fe(this.stack, e), t;
+            if (t instanceof Error) return super(t.message), t.stack = je(this.stack, e), t;
             super(t ?? "Error encountered in Zig code");
         }
     }
     function Be(t, e) {
         const n = n => {
-            e -= n, t.message = `args[${e}]: ${t.message}`, t.stack = Fe(t.stack, "new Arg(");
+            e -= n, t.message = `args[${e}]: ${t.message}`, t.stack = je(t.stack, "new Arg(");
         };
         return n(0), se(t, _t, {
             value: n,
             enumerable: !1
         }), t;
     }
-    function Fe(t, e) {
+    function je(t, e) {
         if ("string" == typeof t) {
             const n = t.split("\n"), r = n.findIndex((t => t.includes(e)));
             -1 !== r && (n.splice(1, r), t = n.join("\n"));
         }
         return t;
     }
-    function je() {
+    function ke() {
         throw new ReadOnly;
     }
-    function ke(t) {
+    function Fe(t) {
         return "object" == typeof t && "string" == typeof t.error && 1 === Object.keys(t).length;
     }
     function Ne(t) {
@@ -1116,6 +1116,9 @@
                 this.jsFunctionCallerMap.delete(t), this.jsFunctionControllerMap.delete(t));
             }
         },
+        freeFunction(t) {
+            this.releaseFunction(this.getFunctionId(t));
+        },
         exports: {
             handleJsCall: null,
             releaseFunction: null
@@ -1151,7 +1154,7 @@
             }
         },
         invokeThunk(t, e, n) {
-            const r = this.startContext(), i = n[Ft], s = this.getViewAddress(t[ct]), o = this.getViewAddress(e[ct]), c = ee in n, a = Ht in n;
+            const r = this.startContext(), i = n[jt], s = this.getViewAddress(t[ct]), o = this.getViewAddress(e[ct]), c = ee in n, a = Ht in n;
             a && this.updatePointerAddresses(r, n);
             const l = this.getViewAddress(n[ct]), u = i ? this.getViewAddress(i[ct]) : 0;
             this.updateShadows(r);
@@ -1274,9 +1277,7 @@
             copyExternBytes: null
         }
     }), Ue({
-        init() {
-            this.defaultAllocator = null, this.vtableFnIds = null;
-        },
+        init() {},
         createDefaultAllocator(t, e) {
             let n = this.defaultAllocator;
             if (!n) {
@@ -1293,15 +1294,9 @@
                 n = this.defaultAllocator = new t({
                     ptr: o,
                     vtable: s
-                }), this.vtableFnIds = [ s.alloc, s.free ].map((t => this.getFunctionId(t)));
+                }), this.destructors.push((() => this.freeFunction(s.alloc))), this.destructors.push((() => this.freeFunction(s.free)));
             }
             return n;
-        },
-        freeDefaultAllocator() {
-            if (this.vtableFnIds) {
-                for (const t of this.vtableFnIds) this.releaseFunction(t);
-                this.defaultAllocator = null, this.vtableFnIds = null;
-            }
         },
         allocateHostMemory(t, e) {
             const n = this.allocateJSMemory(t, e);
@@ -1346,7 +1341,7 @@
                     return !1 !== await (2 === t.length ? t(s ? e : null, s ? null : e) : t(e)) && !s && null !== e || (n[ee](), 
                     this.generatorInstanceMap.delete(r), !1);
                 }
-            }, this.generatorCallbackMap.set(r, o), this.destructors.push((() => this.releaseFunction(this.getFunctionId(o))))), 
+            }, this.generatorCallbackMap.set(r, o), this.destructors.push((() => this.freeFunction(o)))), 
             e[re] = t => o(s, t), {
                 ptr: s,
                 callback: o
@@ -1770,7 +1765,7 @@
                     } else t(e);
                     n[ee](), this.promiseInstanceMap.delete(r);
                 }
-            }, this.promiseCallbackMap.set(r, o), this.destructors.push((() => this.releaseFunction(this.getFunctionId(o))))), 
+            }, this.promiseCallbackMap.set(r, o), this.destructors.push((() => this.freeFunction(o)))), 
             e[re] = t => o(s, t), {
                 ptr: s,
                 callback: o
@@ -1809,7 +1804,7 @@
                                     const {done: e, value: n} = await r.read();
                                     r.finished = e, t = new Uint8Array(n);
                                 }
-                                const e = Math.min(t.length, i.length);
+                                const e = Math.min(t.length, i.length - o);
                                 for (let n = 0; n < e; n++) i[o + n] = t[n];
                                 if (o += e, t.length > e) t = t.slice(e); else if (t = null, r.finished) break;
                             }
@@ -1819,8 +1814,7 @@
                     } catch (t) {
                         throw this.readMap.delete(n), t;
                     }
-                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(r))))), 
-                {
+                }, this.destructors.push((() => this.freeFunction(r)))), {
                     context: n,
                     readFn: r
                 };
@@ -2078,7 +2072,7 @@
             return `${n.structure.name}!${e.structure.name}`;
         },
         getErrorSetName(t) {
-            return t.flags & j ? "anyerror" : "ES" + this.structureCounters.errorSet++;
+            return t.flags & k ? "anyerror" : "ES" + this.structureCounters.errorSet++;
         },
         getEnumName(t) {
             return "EN" + this.structureCounters.enum++;
@@ -2099,7 +2093,7 @@
         },
         getSliceName(t) {
             const {instance: {members: [e]}, flags: n} = t;
-            return n & F ? "anyopaque" : `[_]${e.structure.name}`;
+            return n & j ? "anyopaque" : `[_]${e.structure.name}`;
         },
         getVectorName(t) {
             const {instance: {members: [e]}, length: n} = t;
@@ -2255,7 +2249,7 @@
             const e = t[wt];
             e ? (Xe(e), function(t) {
                 Ye(t, "set", {
-                    value: je
+                    value: ke
                 });
                 const e = t.get;
                 Ye(t, "get", {
@@ -2269,7 +2263,7 @@
     }
     function Xe(t, e = []) {
         const n = We(t.constructor.prototype);
-        for (const [r, i] of Object.entries(n)) i.set && !e.includes(r) && (i.set = je, 
+        for (const [r, i] of Object.entries(n)) i.set && !e.includes(r) && (i.set = ke, 
         Ye(t, r, i));
         Ye(t, Ct, {
             value: t
@@ -2351,7 +2345,7 @@
         return sn.call(this, t)[Symbol.iterator]();
     }
     function cn(t) {
-        const e = ae(t), n = this, r = this[bt], i = this[kt];
+        const e = ae(t), n = this, r = this[bt], i = this[Ft];
         let s = 0;
         return {
             next() {
@@ -2459,8 +2453,7 @@
                     if (!r) return 0;
                     const i = e["*"][ct], s = new Uint8Array(i.buffer, i.byteOffset, i.byteLength);
                     return await r.write(s), s.length;
-                }, this.destructors.push((() => this.releaseFunction(this.getFunctionId(r))))), 
-                {
+                }, this.destructors.push((() => this.freeFunction(r)))), {
                     context: n,
                     writeFn: r
                 };
@@ -2575,7 +2568,7 @@
                 get(t) {
                     return this[at][t].string;
                 },
-                set: je
+                set: ke
             });
         }
     }), Ue({
@@ -2583,12 +2576,12 @@
             get: function() {
                 return null;
             },
-            set: je
+            set: ke
         })
     }), Ue({
         defineMemberObject: t => hn(t.slot, {
             get: t.flags & H ? pn : t.structure.flags & r ? dn : gn,
-            set: t.flags & J ? je : bn
+            set: t.flags & J ? ke : bn
         })
     }), Ue({
         ...{
@@ -2747,7 +2740,7 @@
                     const e = this[at][t];
                     return e?.constructor;
                 },
-                set: je
+                set: ke
             });
         }
     }), Ue({
@@ -2774,7 +2767,7 @@
     }), Ue({
         defineMemberUndefined: t => ({
             get: function() {},
-            set: je
+            set: ke
         })
     }), Ue({
         defineMemberUnsupported(t) {
@@ -3144,21 +3137,21 @@
                 };
                 this.currentGlobalSet = this.defineStructure(t), this.finalizeStructure(t);
             }
-            if (this.currentGlobalSet && i & j) return this.currentGlobalSet;
+            if (this.currentGlobalSet && i & k) return this.currentGlobalSet;
             const s = this.defineMember(r), {set: o} = s, c = [ "string", "number" ], a = this.createApplier(t), l = this.createConstructor(t, {
                 onCastError(t, e) {
                     throw new InvalidInitializer(t, c, e);
                 }
             });
             return n.$ = s, n[Qt] = ce((function(e) {
-                if (e instanceof l[gt]) o.call(this, e); else if (e && "object" == typeof e && !ke(e)) {
+                if (e instanceof l[gt]) o.call(this, e); else if (e && "object" == typeof e && !Fe(e)) {
                     if (0 === a.call(this, e)) throw new InvalidInitializer(t, c, e);
                 } else void 0 !== e && o.call(this, e);
             })), l;
         },
         finalizeErrorSet(t, e) {
             const {constructor: n, flags: r, instance: {members: [i]}, static: {members: s, template: o}} = t;
-            if (this.currentGlobalSet && r & j) return !1;
+            if (this.currentGlobalSet && r & k) return !1;
             const c = o?.[at] ?? {}, {get: a} = this.defineMember(i, !1);
             for (const {name: t, slot: n} of s) {
                 const r = c[n], i = a.call(r);
@@ -3172,7 +3165,7 @@
                 }), this.currentGlobalSet[bt].push(t));
             }
             e[ne] = {
-                value: t => "number" == typeof t || "string" == typeof t ? n[t] : t instanceof n[gt] ? n[Number(t)] : ke(t) ? n[`Error: ${t.error}`] : t instanceof Error && void 0
+                value: t => "number" == typeof t || "string" == typeof t ? n[t] : t instanceof n[gt] ? n[Number(t)] : Fe(t) ? n[`Error: ${t.error}`] : t instanceof Error && void 0
             }, e[gt] = ce(this.currentErrorClass);
         },
         transformDescriptorErrorSet(t, e) {
@@ -3253,7 +3246,7 @@
                         const n = g[e] ?? g.Unexpected;
                         if (!n) throw new NotInErrorSet(t);
                         u.call(this, n), p.call(this);
-                    } else if (ke(e)) u.call(this, e), p.call(this); else {
+                    } else if (Fe(e)) u.call(this, e), p.call(this); else {
                         if (!e || "object" != typeof e) throw n;
                         if (0 === b.call(this, e)) throw n;
                     }
@@ -3303,7 +3296,7 @@
             return e.$ = {
                 get: r,
                 set: r
-            }, e[Symbol.iterator] = n & k && this.defineZigIterator(), e[Symbol.toPrimitive] = {
+            }, e[Symbol.iterator] = n & F && this.defineZigIterator(), e[Symbol.toPrimitive] = {
                 value(e) {
                     const {name: n} = t;
                     return `[opaque ${n}]`;
@@ -3372,14 +3365,14 @@
                 return i & $ ? Mn(n) : n;
             }, A = u & r ? function() {
                 return S.call(this).$;
-            } : S, I = i & $ ? je : function(t) {
+            } : S, I = i & $ ? ke : function(t) {
                 return S.call(this).$ = t;
             }, M = this, V = function(n, r) {
                 const s = a.constructor;
                 if (Sn(n, s)) {
                     if (!(i & $) && n.constructor.const) throw new ConstantConstraint(t, n);
                     n = n[at][0];
-                } else if (i & x) An(n, s, i) && (n = s(n[at][0][ct])); else if (l === e.Slice && u & F && n) if (n.constructor[ht] === e.Pointer) n = n[vt]?.[ct]; else if (n[ct]) n = n[ct]; else if (n?.buffer instanceof ArrayBuffer && !(n instanceof Uint8Array || n instanceof DataView)) {
+                } else if (i & x) An(n, s, i) && (n = s(n[at][0][ct])); else if (l === e.Slice && u & j && n) if (n.constructor[ht] === e.Pointer) n = n[vt]?.[ct]; else if (n[ct]) n = n[ct]; else if (n?.buffer instanceof ArrayBuffer && !(n instanceof Uint8Array || n instanceof DataView)) {
                     const {byteOffset: t, byteLength: e} = n;
                     void 0 !== t && void 0 !== e && (n = new DataView(n.buffer, t, e));
                 }
@@ -3556,7 +3549,7 @@
     }, En = {
         ...Vn,
         set(t, e, n) {
-            if (e in t) je(); else {
+            if (e in t) ke(); else {
                 t[vt][e] = n;
             }
             return !0;
@@ -3570,7 +3563,7 @@
             }
         },
         set(t, e, n) {
-            je();
+            ke();
         }
     };
     function On() {
@@ -3619,7 +3612,7 @@
         },
         finalizePrimitive(t, e) {
             const {instance: {members: [n]}} = t;
-            e[Ut] = ce(n.bitSize), e[jt] = ce(n.type);
+            e[Ut] = ce(n.bitSize), e[kt] = ce(n.type);
         }
     }), Ue({
         defineSlice(t, e) {
@@ -3788,7 +3781,7 @@
                 get() {
                     return [ h.call(this) ];
                 }
-            } : ce(M), e[kt] = ce(y), b;
+            } : ce(M), e[Ft] = ce(y), b;
         },
         finalizeUnion(t, e) {
             const {flags: n, instance: {members: r}} = t;
@@ -3832,10 +3825,10 @@
                 for (const [t, {bitOffset: e, bitSize: n, type: r, slot: i, structure: {align: s}}] of l.entries()) u.set(t, e / 8, n, s, r), 
                 i > d && (d = i);
                 for (const [t, e] of s.entries()) {
-                    const n = d + t + 1, {byteLength: r} = e[ct], i = c[t], s = a.obtainView(h.buffer, i, r), l = this[at][n] = e.constructor.call(lt, s), f = e.constructor[Ut] ?? 8 * r, g = e.constructor[zt], p = e.constructor[jt];
+                    const n = d + t + 1, {byteLength: r} = e[ct], i = c[t], s = a.obtainView(h.buffer, i, r), l = this[at][n] = e.constructor.call(lt, s), f = e.constructor[Ut] ?? 8 * r, g = e.constructor[zt], p = e.constructor[kt];
                     l.$ = e, u.set(o + t, i, f, g, p);
                 }
-                this[Ft] = u;
+                this[jt] = u;
             };
         },
         finalizeVariadicStruct(t, e) {
