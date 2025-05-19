@@ -131,7 +131,7 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
-        is_global: bool = false,
+        is_open_ended: bool = false,
         _: u27 = 0,
     },
     @"enum": packed struct(u32) {

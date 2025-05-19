@@ -16,7 +16,7 @@
         ArgStruct: 12,
         VariadicStruct: 13,
         Function: 14
-    }, n = Object.keys(e), r = 1, i = 2, s = 4, o = 8, c = 16, a = 16, l = 32, u = 64, f = 128, h = 64, d = 128, g = 256, p = 512, b = 1024, y = 2048, m = 8192, w = 16384, v = 16, S = 32, A = 64, I = 512, x = 16, M = 16, V = 16, E = 32, O = 64, C = 128, $ = 256, T = 16, U = 32, z = 64, B = 128, F = 256, j = 16, k = 16, N = 16, P = 32, L = 16, D = 32, R = 64, Z = {
+    }, n = Object.keys(e), r = 1, i = 2, s = 4, o = 8, c = 16, a = 16, l = 32, u = 64, f = 128, h = 64, d = 128, g = 256, p = 512, y = 1024, b = 2048, m = 8192, w = 16384, v = 16, S = 32, A = 64, I = 512, x = 16, M = 16, V = 16, E = 32, O = 64, $ = 128, C = 256, T = 16, U = 32, z = 64, B = 128, F = 256, j = 16, k = 16, N = 16, P = 32, L = 16, D = 32, R = 64, Z = {
         Void: 0,
         Bool: 1,
         Int: 2,
@@ -28,7 +28,7 @@
         Null: 8,
         Undefined: 9,
         Unsupported: 10
-    }, G = Object.keys(Z), q = 1, J = 2, _ = 4, W = 16, Y = 64, H = 128, X = 0, K = 1, Q = 2, tt = 1, et = 2, nt = 4, rt = {
+    }, q = Object.keys(Z), J = 1, _ = 2, G = 4, W = 16, Y = 64, H = 128, X = 0, K = 1, Q = 2, tt = 1, et = 2, nt = 4, rt = {
         IsInactive: 1,
         IsImmutable: 2,
         IgnoreUncreated: 4,
@@ -42,7 +42,7 @@
     function ot(t) {
         return st(t);
     }
-    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), bt = ot("props"), yt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), xt = ot("address"), Mt = ot("length"), Vt = ot("last address"), Et = ot("last length"), Ot = ot("proxy"), Ct = ot("cache"), $t = ot("size"), Tt = ot("bit size"), Ut = ot("align"), zt = ot("const target"), Bt = ot("environment"), Ft = ot("attributes"), jt = ot("primitive"), kt = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), Gt = ot("fallback"), qt = ot("signature"), Jt = ot("string retval"), _t = ot("update"), Wt = ot("reset"), Yt = ot("vivificate"), Ht = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
+    const ct = ot("memory"), at = ot("slots"), lt = ot("parent"), ut = ot("zig"), ft = ot("name"), ht = ot("type"), dt = ot("flags"), gt = ot("class"), pt = ot("tag"), yt = ot("props"), bt = ot("pointer"), mt = ot("sentinel"), wt = ot("array"), vt = ot("target"), St = ot("entries"), At = ot("max length"), It = ot("keys"), xt = ot("address"), Mt = ot("length"), Vt = ot("last address"), Et = ot("last length"), Ot = ot("proxy"), $t = ot("cache"), Ct = ot("size"), Tt = ot("bit size"), Ut = ot("align"), zt = ot("const target"), Bt = ot("environment"), Ft = ot("attributes"), jt = ot("primitive"), kt = ot("getters"), Nt = ot("setters"), Pt = ot("typed array"), Lt = ot("throwing"), Dt = ot("promise"), Rt = ot("generator"), Zt = ot("allocator"), qt = ot("fallback"), Jt = ot("signature"), _t = ot("string retval"), Gt = ot("update"), Wt = ot("reset"), Yt = ot("vivificate"), Ht = ot("visit"), Xt = ot("copy"), Kt = ot("shape"), Qt = ot("initialize"), te = ot("restrict"), ee = ot("finalize"), ne = ot("cast"), re = ot("return"), ie = ot("yield");
     function se(t, e, n) {
         if (n) {
             const {set: r, get: i, value: s, enumerable: o, configurable: c = !0, writable: a = !0} = n;
@@ -128,9 +128,9 @@
     }
     const pe = function(t, e) {
         return !!e && !!(t & BigInt(e - 1));
-    }, be = function(t, e) {
+    }, ye = function(t, e) {
         return t + BigInt(e - 1) & ~BigInt(e - 1);
-    }, ye = 0xFFFFFFFFFFFFFFFFn, me = -1n, we = function(t) {
+    }, be = 0xFFFFFFFFFFFFFFFFn, me = -1n, we = function(t) {
         return BigInt(t);
     }, ve = function(t, e) {
         return t + BigInt(e);
@@ -163,7 +163,7 @@
         return n;
     }
     function xe(t, e) {
-        return t === e || t?.[qt] === e[qt] && t?.[Bt] !== e?.[Bt];
+        return t === e || t?.[Jt] === e[Jt] && t?.[Bt] !== e?.[Bt];
     }
     function Me(t, e) {
         return t instanceof e || xe(t?.constructor, e);
@@ -180,10 +180,10 @@
     function Oe() {
         return this[Ot];
     }
-    function Ce() {
+    function $e() {
         return String(this);
     }
-    function $e() {}
+    function Ce() {}
     class ObjectCache {
         map=new WeakMap;
         find(t) {
@@ -265,14 +265,14 @@
         getAccessor(t, e) {
             const {type: n, bitSize: r, bitOffset: i, byteSize: s} = e, o = [], c = void 0 === s && (7 & r || 7 & i);
             c && o.push("Unaligned");
-            let a = G[n];
+            let a = q[n];
             r > 32 && (n === Z.Int || n === Z.Uint) && (a = r <= 64 ? `Big${a}` : `Jumbo${a}`), 
             o.push(a, `${n === Z.Bool && s ? 8 * s : r}`), c && o.push(`@${i}`);
             const l = t + o.join("");
             let u = DataView.prototype[l];
             if (u && this.usingBufferFallback()) {
                 const e = this, i = u, s = function(t) {
-                    const {buffer: e, byteOffset: n, byteLength: i} = this, s = e[Gt];
+                    const {buffer: e, byteOffset: n, byteLength: i} = this, s = e[qt];
                     if (s) {
                         if (t < 0 || t + r / 8 > i) throw new RangeError("Offset is outside the bounds of the DataView");
                         return s + we(n + t);
@@ -722,7 +722,7 @@
                 const i = 1 !== (t -= r) ? "s" : "", s = n ? "at least " : "";
                 this.message = `Expecting ${s}${t} argument${i}, received ${e}`, this.stack = je(this.stack, "new Arg(");
             };
-            r(0), se(this, _t, {
+            r(0), se(this, Gt, {
                 value: r,
                 enumerable: !1
             });
@@ -806,7 +806,7 @@
     class Overflow extends TypeError {
         constructor(t, e) {
             const {type: n, bitSize: r} = t;
-            super(`${(r > 32 ? "Big" : "") + G[n] + r} cannot represent the value given: ${e}`);
+            super(`${(r > 32 ? "Big" : "") + q[n] + r} cannot represent the value given: ${e}`);
         }
     }
     class OutOfBound extends RangeError {
@@ -870,7 +870,7 @@
         const n = n => {
             e -= n, t.message = `args[${e}]: ${t.message}`, t.stack = je(t.stack, "new Arg(");
         };
-        return n(0), se(t, _t, {
+        return n(0), se(t, Gt, {
             value: n,
             enumerable: !1
         }), t;
@@ -912,7 +912,7 @@
         const n = ` ${e} `;
         return t.length > 2 ? t.slice(0, -1).join(", ") + n + t[t.length - 1] : t.join(n);
     }
-    function Ge(t) {
+    function qe(t) {
         let n, r = 1, i = null;
         if (t instanceof DataView) {
             n = t;
@@ -946,7 +946,7 @@
             const t = this;
             return {
                 value(e) {
-                    const {dv: n, align: r} = Ge(e), i = n?.[ut];
+                    const {dv: n, align: r} = qe(e), i = n?.[ut];
                     if (!i) throw new TypeMismatch("object containing allocated Zig memory", e);
                     const {address: s} = i;
                     if (s === me) throw new PreviouslyFreed(e);
@@ -959,7 +959,7 @@
             const t = this.getCopyFunction();
             return {
                 value(e) {
-                    const {dv: n, align: r, constructor: i} = Ge(e);
+                    const {dv: n, align: r, constructor: i} = qe(e);
                     if (!n) throw new TypeMismatch("string, DataView, typed array, or Zig object", e);
                     const s = this.alloc(n.byteLength, r);
                     return t(s, n), i ? i(s) : s;
@@ -979,9 +979,9 @@
                 init: (...t) => this.initialize?.(...t),
                 abandon: () => this.abandonModule?.(),
                 connect: t => this.consoleObject = t,
-                sizeOf: e => t(e?.[$t]),
+                sizeOf: e => t(e?.[Ct]),
                 alignOf: e => t(e?.[Ut]),
-                typeOf: e => qe[t(e?.[ht])]
+                typeOf: e => Je[t(e?.[ht])]
             };
         },
         recreateStructures(t, e) {
@@ -1002,9 +1002,7 @@
                     }
                 }
                 return i;
-            };
-            this.resetGlobalErrorSet?.();
-            const s = new Map;
+            }, s = new Map;
             for (const e of t) {
                 for (const t of [ e.instance, e.static ]) if (t.template) {
                     const {slots: e, memory: n, handle: i} = t.template, o = t.template = {};
@@ -1026,7 +1024,7 @@
             for (const e of t) this.finalizeStructure(e);
         }
     });
-    const qe = n.map((t => t.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()));
+    const Je = n.map((t => t.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()));
     Ue({
         init() {
             this.jsFunctionThunkMap = new Map, this.jsFunctionCallerMap = new Map, this.jsFunctionControllerMap = new Map, 
@@ -1101,8 +1099,8 @@
                     for (const [l, {structure: u, type: f}] of t.entries()) try {
                         let t, h, d = this[l];
                         f === Z.Object && d?.[ct]?.[ut] && (d = new d.constructor(d)), u.type === e.Struct && (u.flags & g ? (t = 1 === r ? "allocator" : "allocator" + ++s, 
-                        h = this[Zt] = d) : u.flags & p ? (t = "callback", 1 == ++o && (h = n.createPromiseCallback(this, d))) : u.flags & b ? (t = "callback", 
-                        1 == ++o && (h = n.createGeneratorCallback(this, d))) : u.flags & y && (t = "signal", 
+                        h = this[Zt] = d) : u.flags & p ? (t = "callback", 1 == ++o && (h = n.createPromiseCallback(this, d))) : u.flags & y ? (t = "callback", 
+                        1 == ++o && (h = n.createGeneratorCallback(this, d))) : u.flags & b && (t = "signal", 
                         1 == ++c && (h = n.createInboundSignal(d)))), void 0 !== t ? void 0 !== h && (i ||= {}, 
                         i[t] = h) : a.push(d);
                     } catch (t) {
@@ -1151,8 +1149,8 @@
                 let r, h, d, v;
                 if (f.type === e.Struct) if (f.flags & g) {
                     r = (1 == ++a ? i?.allocator ?? i?.allocator1 : i?.[`allocator${a}`]) ?? this.createDefaultAllocator(t, f);
-                } else f.flags & p ? (h ||= this.createPromise(f, t, i?.callback), r = h) : f.flags & b ? (d ||= this.createGenerator(f, t, i?.callback), 
-                r = d) : f.flags & y ? (v ||= this.createSignal(f, i?.signal), r = v) : f.flags & m ? r = this.createReader(n[c++]) : f.flags & w && (r = this.createWriter(n[c++]));
+                } else f.flags & p ? (h ||= this.createPromise(f, t, i?.callback), r = h) : f.flags & y ? (d ||= this.createGenerator(f, t, i?.callback), 
+                r = d) : f.flags & b ? (v ||= this.createSignal(f, i?.signal), r = v) : f.flags & m ? r = this.createReader(n[c++]) : f.flags & w && (r = this.createWriter(n[c++]));
                 if (void 0 === r && (r = n[c++], void 0 === r && u !== Z.Void)) throw new UndefinedArgument;
                 try {
                     l[o++].call(t, r, s);
@@ -1180,13 +1178,13 @@
                 } catch (e) {
                     t = new ZigError(e, 1);
                 }
-                return null != t ? (e[Jt] && t && (t = t.string), n[re](t)) : e[Jt] && (n[Jt] = !0), 
+                return null != t ? (e[_t] && t && (t = t.string), n[re](t)) : e[_t] && (n[_t] = !0), 
                 n[Dt] ?? n[Rt];
             }
             f();
             try {
                 const {retval: t} = n;
-                return e[Jt] && t ? t.string : t;
+                return e[_t] && t ? t.string : t;
             } catch (t) {
                 throw new ZigError(t, 1);
             }
@@ -1211,7 +1209,7 @@
                 byteSize: 4
             }, r = this.getAccessor("get", t), i = this.getAccessor("set", t), s = this.getAccessor("get", e), o = this.getAccessor("set", e), c = this.getAccessor("get", n), a = this.getAccessor("set", n);
             this.copiers = {
-                0: $e,
+                0: Ce,
                 1: function(t, e) {
                     i.call(t, 0, r.call(e, 0));
                 },
@@ -1234,7 +1232,7 @@
                     for (;n + 1 <= s; ) i.call(t, n, r.call(e, n)), n++;
                 }
             }, this.resetters = {
-                0: $e,
+                0: Ce,
                 1: function(t, e) {
                     i.call(t, e, 0);
                 },
@@ -1298,7 +1296,7 @@
                     resize: r
                 };
                 i && (s.remap = i);
-                const o = this.obtainZigView(ye, 0);
+                const o = this.obtainZigView(be, 0);
                 n = this.defaultAllocator = new t({
                     ptr: o,
                     vtable: s
@@ -1345,7 +1343,7 @@
                 const n = t instanceof DataView ? t : t["*"][ct], r = this.getViewAddress(n), i = this.generatorContextMap.get(r);
                 if (i) {
                     const {func: t, args: n} = i, s = e instanceof Error;
-                    !s && n[Jt] && e && (e = e.string);
+                    !s && n[_t] && e && (e = e.string);
                     return !1 !== await (2 === t.length ? t(s ? e : null, s ? null : e) : t(e)) && !s && null !== e || (n[ee](), 
                     this.generatorContextMap.delete(r), !1);
                 }
@@ -1429,10 +1427,10 @@
             return this;
         }
     }
-    function Je(t, e) {
+    function _e(t, e) {
         return ge(t, e, (t => t.address));
     }
-    function _e(t, n) {
+    function Ge(t, n) {
         const {byteSize: r, type: i} = n;
         if (!(i === e.Slice ? t.byteLength % r == 0 : t.byteLength === r)) throw new BufferSizeMismatch(n, t);
     }
@@ -1486,7 +1484,7 @@
                         const e = t[ct], n = e.byteOffset, r = t.constructor[Ut] ?? e[Ut];
                         (void 0 === a || r > a) && (a = r, c = n);
                     }
-                    const l = s - e, u = this.allocateShadowMemory(l + a, 1), f = this.getViewAddress(u), h = be(ve(f, c - e), a), d = ve(h, e - c);
+                    const l = s - e, u = this.allocateShadowMemory(l + a, 1), f = this.getViewAddress(u), h = ye(ve(f, c - e), a), d = ve(h, e - c);
                     for (const t of o) {
                         const n = t[ct], r = n.byteOffset;
                         if (r !== c) {
@@ -1494,8 +1492,8 @@
                             if (pe(ve(d, r - e), i)) throw new AlignmentConflict(i, a);
                         }
                     }
-                    const g = u.byteOffset + Number(d - f), p = new DataView(u.buffer, g, l), b = new DataView(i.buffer, Number(e), l), y = this.registerMemory(d, l, 1, r, b, p);
-                    t.shadowList.push(y), n.address = d;
+                    const g = u.byteOffset + Number(d - f), p = new DataView(u.buffer, g, l), y = new DataView(i.buffer, Number(e), l), b = this.registerMemory(d, l, 1, r, y, p);
+                    t.shadowList.push(b), n.address = d;
                 }
                 return ve(n.address, i.byteOffset - n.start);
             }
@@ -1513,7 +1511,7 @@
             for (let {targetDV: n, shadowDV: r, writable: i} of t.shadowList) i && e(n, r);
         },
         registerMemory(t, e, n, r, i, s) {
-            const o = Je(this.memoryList, t);
+            const o = _e(this.memoryList, t);
             let c = this.memoryList[o - 1];
             return c?.address === t && c.len === e ? c.writable ||= r : (c = {
                 address: t,
@@ -1525,12 +1523,12 @@
             }, this.memoryList.splice(o, 0, c)), c;
         },
         unregisterMemory(t, e) {
-            const n = Je(this.memoryList, t), r = this.memoryList[n - 1];
+            const n = _e(this.memoryList, t), r = this.memoryList[n - 1];
             if (r?.address === t && r.len === e) return this.memoryList.splice(n - 1, 1), r;
         },
         findMemory(t, e, n, r) {
             let i = n * (r ?? 0);
-            const s = Je(this.memoryList, e), o = this.memoryList[s - 1];
+            const s = _e(this.memoryList, e), o = this.memoryList[s - 1];
             let c;
             if (o?.address === e && o.len === i) c = o.targetDV; else if (o?.address <= e && ve(e, i) <= ve(o.address, o.len)) {
                 const t = Number(e - o.address), n = void 0 === r, {targetDV: s} = o;
@@ -1575,24 +1573,24 @@
             obtainZigView(t, e, n = !0) {
                 if (function(t) {
                     return 0xaaaaaaaaaaaaaaaan === t;
-                }(t) && (t = e > 0 ? 0 : ye), !t && e) return null;
+                }(t) && (t = e > 0 ? 0 : be), !t && e) return null;
                 let r, i;
                 if (n) {
-                    const n = Je(this.externBufferList, t), s = this.externBufferList[n - 1];
-                    s?.address <= t && ve(t, e) <= ve(s.address, s.len) ? (r = s.buffer, i = Number(t - s.address)) : (r = e > 0 ? this.obtainExternBuffer(t, e, Gt) : new ArrayBuffer(0), 
+                    const n = _e(this.externBufferList, t), s = this.externBufferList[n - 1];
+                    s?.address <= t && ve(t, e) <= ve(s.address, s.len) ? (r = s.buffer, i = Number(t - s.address)) : (r = e > 0 ? this.obtainExternBuffer(t, e, qt) : new ArrayBuffer(0), 
                     this.externBufferList.splice(n, 0, {
                         address: t,
                         len: e,
                         buffer: r
                     }), i = 0);
-                } else r = e > 0 ? this.obtainExternBuffer(t, e, Gt) : new ArrayBuffer(0), i = 0;
+                } else r = e > 0 ? this.obtainExternBuffer(t, e, qt) : new ArrayBuffer(0), i = 0;
                 return r[ut] = {
                     address: t,
                     len: e
                 }, this.obtainView(r, i, e);
             },
             unregisterBuffer(t) {
-                const e = Je(this.externBufferList, t), n = this.externBufferList[e - 1];
+                const e = _e(this.externBufferList, t), n = this.externBufferList[e - 1];
                 n?.address === t && this.externBufferList.splice(e - 1, 1);
             },
             getTargetAddress(t, e, n, r) {
@@ -1655,7 +1653,7 @@
             for (const {object: n, handle: r} of this.variables) {
                 const i = n[ct], s = this.recreateAddress(r);
                 let o = n[ct] = this.obtainZigView(s, i.byteLength);
-                t && e(o, i), n.constructor[Ct]?.save?.(o, n), this.destructors.push((() => {
+                t && e(o, i), n.constructor[$t]?.save?.(o, n), this.destructors.push((() => {
                     const t = n[ct] = this.allocateMemory(o.bytelength);
                     e(t, o);
                 }));
@@ -1667,14 +1665,14 @@
                             const e = n[ct];
                             if (e.buffer === i.buffer) {
                                 const r = t + e.byteOffset - i.byteOffset;
-                                n[ct] = this.obtainView(o.buffer, r, e.byteLength), n.constructor[Ct]?.save?.(o, n), 
+                                n[ct] = this.obtainView(o.buffer, r, e.byteLength), n.constructor[$t]?.save?.(o, n), 
                                 c(n);
                             }
                         }
                     }
                 };
                 c(n), n[Ht]?.((function() {
-                    this[_t]();
+                    this[Gt]();
                 }), rt.IgnoreInactive);
             }
         },
@@ -1684,7 +1682,7 @@
     }), Ue({
         updatePointerAddresses(t, e) {
             const n = new Map, r = new Map, i = [], s = function(t) {
-                const e = this[yt];
+                const e = this[bt];
                 if (void 0 === n.get(e)) {
                     const t = e[at][0];
                     if (t) {
@@ -1714,10 +1712,10 @@
         },
         updatePointerTargets(t, e, n = !1) {
             const r = new Map, i = function(e) {
-                const n = this[yt];
+                const n = this[bt];
                 if (!r.get(n)) {
                     r.set(n, !0);
-                    const s = n[at][0], o = s && e & rt.IsImmutable ? s : n[_t](t, !0, !(e & rt.IsInactive)), c = n.constructor.const ? rt.IsImmutable : 0;
+                    const s = n[at][0], o = s && e & rt.IsImmutable ? s : n[Gt](t, !0, !(e & rt.IsInactive)), c = n.constructor.const ? rt.IsImmutable : 0;
                     c & rt.IsImmutable || s && !s[ct][ut] && s[Ht]?.(i, c), o !== s && o && !o[ct][ut] && o?.[Ht]?.(i, c);
                 }
             }, s = n ? rt.IgnoreRetval : 0;
@@ -1753,7 +1751,7 @@
                 if ("function" != typeof n) throw new TypeMismatch("function", n);
             } else e[Dt] = new Promise(((t, r) => {
                 n = n => {
-                    n?.[ct]?.[ut] && (n = new n.constructor(n)), n instanceof Error ? r(n) : (e[Jt] && n && (n = n.string), 
+                    n?.[ct]?.[ut] && (n = new n.constructor(n)), n instanceof Error ? r(n) : (e[_t] && n && (n = n.string), 
                     t(n));
                 };
             }));
@@ -1823,7 +1821,7 @@
                         }
                         return o && this.readerContextMap.delete(n), a;
                     } catch (t) {
-                        throw console.error(t), this.readerContextMap.delete(n), t;
+                        throw this.readerContextMap.delete(n), t;
                     }
                 }, this.destructors.push((() => this.freeFunction(r)))), {
                     context: n,
@@ -2100,7 +2098,7 @@
                 const t = n.structure.constructor?.[mt];
                 t && (i = i.slice(0, -1) + `:${t.value}` + i.slice(-1));
             }
-            return r & C && (i = `${i}const `), i + s;
+            return r & $ && (i = `${i}const `), i + s;
         },
         getSliceName(t) {
             const {instance: {members: [e]}, flags: n} = t;
@@ -2166,7 +2164,7 @@
                     }
                 }
             }
-            return c ? void 0 !== s && _e(c, t) : r?.(t, n), c;
+            return c ? void 0 !== s && Ge(c, t) : r?.(t, n), c;
         },
         assignView(t, n, r, i, s) {
             const {byteSize: o, type: c} = r, a = o ?? 1;
@@ -2178,7 +2176,7 @@
                 };
                 t.constructor[mt]?.validateData?.(s, t.length), t[Xt](s);
             } else {
-                void 0 !== o && _e(n, r);
+                void 0 !== o && Ge(n, r);
                 const e = n.byteLength / a, c = {
                     [ct]: n
                 };
@@ -2186,7 +2184,7 @@
                 i && t[Xt](c);
             }
             if (this.usingBufferFallback()) {
-                const e = t[ct], n = e.buffer[Gt];
+                const e = t[ct], n = e.buffer[qt];
                 void 0 !== n && this.syncExternalBuffer(e.buffer, n, !0);
             }
         },
@@ -2241,7 +2239,7 @@
                 let i = 0;
                 if (n) {
                     const t = this.getBufferAddress(r);
-                    i = be(t, e) - t;
+                    i = ye(t, e) - t;
                 }
                 return this.obtainView(r, Number(i), t);
             }
@@ -2255,7 +2253,7 @@
     });
     const He = Object.getOwnPropertyDescriptors, Xe = Object.defineProperty;
     function Ke(t) {
-        const e = t[yt];
+        const e = t[bt];
         if (e) Qe(e, [ "length" ]); else {
             const e = t[wt];
             e ? (Qe(e), function(t) {
@@ -2323,14 +2321,14 @@
     function rn(t) {
         return {
             [Symbol.iterator]: on.bind(this, t),
-            length: this[bt].length
+            length: this[yt].length
         };
     }
     function sn(t) {
         return rn.call(this, t)[Symbol.iterator]();
     }
     function on(t) {
-        const e = ae(t), n = this, r = this[bt];
+        const e = ae(t), n = this, r = this[yt];
         let i = 0;
         return {
             next() {
@@ -2349,14 +2347,14 @@
     function cn(t) {
         return {
             [Symbol.iterator]: ln.bind(this, t),
-            length: this[bt].length
+            length: this[yt].length
         };
     }
     function an(t) {
         return cn.call(this, t)[Symbol.iterator]();
     }
     function ln(t) {
-        const e = ae(t), n = this, r = this[bt], i = this[kt];
+        const e = ae(t), n = this, r = this[yt], i = this[kt];
         let s = 0;
         return {
             next() {
@@ -2438,17 +2436,17 @@
         };
     }
     function pn(t) {
-        return bn.call(this, t).$;
-    }
-    function bn(t) {
-        return this[at][t] ?? this[Yt](t);
+        return yn.call(this, t).$;
     }
     function yn(t) {
-        const e = bn.call(this, t).$;
+        return this[at][t] ?? this[Yt](t);
+    }
+    function bn(t) {
+        const e = yn.call(this, t).$;
         return e ? e.string : e;
     }
     function mn(t, e, n) {
-        bn.call(this, t)[Qt](e, n);
+        yn.call(this, t)[Qt](e, n);
     }
     Ue({
         init() {
@@ -2459,7 +2457,7 @@
                 const e = this.nextWriterContextId++, n = this.obtainZigView(e, 0, !1);
                 this.writerContextMap.set(e, {
                     writer: t
-                }), t.closed.catch($e).then((() => this.writeMap.delete(e)));
+                }), t.closed.catch(Ce).then((() => this.writeMap.delete(e)));
                 let r = this.writerCallback;
                 return r || (r = this.writerCallback = async (t, e) => {
                     const n = this.getViewAddress(t["*"][ct]), r = this.writerContextMap.get(n);
@@ -2470,7 +2468,7 @@
                         const {writer: i} = r;
                         return await i.write(n), n.length;
                     } catch (t) {
-                        throw console.error(t), this.writeMap.delete(n), t;
+                        throw this.writerContextMap.delete(n), t;
                     }
                 }, this.destructors.push((() => this.freeFunction(r)))), {
                     context: n,
@@ -2497,7 +2495,7 @@
     }), Ue({
         defineMember(t, e = !0) {
             if (!t) return {};
-            const {type: r, structure: i} = t, s = this[`defineMember${G[r]}`].call(this, t);
+            const {type: r, structure: i} = t, s = this[`defineMember${q[r]}`].call(this, t);
             if (e && i) {
                 const {type: e} = i, r = this[`transformDescriptor${n[e]}`];
                 if (r) return r.call(this, s, t);
@@ -2556,7 +2554,7 @@
                 get() {
                     const t = this[ct];
                     if (e.usingBufferFallback()) {
-                        const n = t.buffer[Gt];
+                        const n = t.buffer[qt];
                         void 0 !== n && e.syncExternalBuffer(t.buffer, n, !1);
                     }
                     return t;
@@ -2599,8 +2597,8 @@
         })
     }), Ue({
         defineMemberObject: t => gn(t.slot, {
-            get: t.flags & H ? yn : t.structure.flags & r ? pn : bn,
-            set: t.flags & J ? ke : mn
+            get: t.flags & H ? bn : t.structure.flags & r ? pn : yn,
+            set: t.flags & _ ? ke : mn
         })
     }), Ue({
         ...{
@@ -2636,7 +2634,7 @@
         }
     }), Ue({
         defineSentinel(t) {
-            const {byteSize: e, instance: {members: [n, r], template: i}} = t, {get: s} = this.defineMember(r), {get: o} = this.defineMember(n), c = s.call(i, 0), a = !!(r.flags & q), {runtimeSafety: l} = this;
+            const {byteSize: e, instance: {members: [n, r], template: i}} = t, {get: s} = this.defineMember(r), {get: o} = this.defineMember(n), c = s.call(i, 0), a = !!(r.flags & J), {runtimeSafety: l} = this;
             return ce({
                 value: c,
                 bytes: i[ct],
@@ -2836,17 +2834,17 @@
                 name: ce(r),
                 toJSON: this.defineToJSON(),
                 valueOf: this.defineValueOf(),
-                [qt]: ce(l),
+                [Jt]: ce(l),
                 [Bt]: ce(this),
                 [Ut]: ce(o),
-                [$t]: ce(c),
+                [Ct]: ce(c),
                 [ht]: ce(i),
                 [dt]: ce(a),
-                [bt]: ce(h),
+                [yt]: ce(h),
                 [Pt]: ce(this.getTypedArray(t)),
                 [Symbol.iterator]: this.defineStructIterator(),
                 [St]: this.defineStructEntries(),
-                [bt]: ce(h)
+                [yt]: ce(h)
             }, g = {
                 [Symbol.toStringTag]: ce(r)
             };
@@ -2854,7 +2852,7 @@
                 const {name: n, slot: r, flags: i} = t;
                 if (t.structure.type === e.Function) {
                     let e = f[at][r];
-                    i & H && (e[Jt] = !0), d[n] = ce(e), e.name || se(e, "name", ce(n));
+                    i & H && (e[_t] = !0), d[n] = ce(e), e.name || se(e, "name", ce(n));
                     const [s, o] = /^(get|set)\s+([\s\S]+)/.exec(n)?.slice(1) ?? [], c = "get" === s ? 0 : 1;
                     if (s && e.length === c) {
                         d[o] ||= {};
@@ -2865,7 +2863,7 @@
                             try {
                                 return e(this, ...t);
                             } catch (t) {
-                                throw t[_t]?.(1), t;
+                                throw t[Gt]?.(1), t;
                             }
                         };
                         if (oe(t, {
@@ -2885,28 +2883,28 @@
             const {type: r, byteSize: i, align: s, flags: c, instance: {members: a, template: l}} = t, {onCastError: u} = n;
             let f;
             if (l?.[at]) {
-                const t = a.filter((t => t.flags & J));
+                const t = a.filter((t => t.flags & _));
                 t.length > 0 && (f = t.map((t => t.slot)));
             }
             const h = new ObjectCache, d = this, g = function(n, a = {}) {
-                const {allocator: p} = a, b = this instanceof g;
-                let y, m;
-                if (b) {
+                const {allocator: p} = a, y = this instanceof g;
+                let b, m;
+                if (y) {
                     if (0 === arguments.length) throw new NoInitializer(t);
-                    if (y = this, c & o && (y[at] = {}), Kt in y) y[Qt](n, p), m = y[ct]; else {
+                    if (b = this, c & o && (b[at] = {}), Kt in b) b[Qt](n, p), m = b[ct]; else {
                         const t = r !== e.Pointer ? p : null;
-                        y[ct] = m = d.allocateMemory(i, s, t);
+                        b[ct] = m = d.allocateMemory(i, s, t);
                     }
                 } else {
-                    if (ne in g && (y = g[ne].call(this, n, a), !1 !== y)) return y;
-                    if (m = d.extractView(t, n, u), y = h.find(m)) return y;
-                    y = Object.create(g.prototype), Kt in y ? d.assignView(y, m, t, !1, !1) : y[ct] = m, 
-                    c & o && (y[at] = {});
+                    if (ne in g && (b = g[ne].call(this, n, a), !1 !== b)) return b;
+                    if (m = d.extractView(t, n, u), b = h.find(m)) return b;
+                    b = Object.create(g.prototype), Kt in b ? d.assignView(b, m, t, !1, !1) : b[ct] = m, 
+                    c & o && (b[at] = {});
                 }
-                if (f) for (const t of f) y[at][t] = l[at][t];
-                return y[te]?.(), b && (Kt in y || y[Qt](n, p)), ee in y && (y = y[ee]()), h.save(m, y);
+                if (f) for (const t of f) b[at][t] = l[at][t];
+                return b[te]?.(), y && (Kt in b || b[Qt](n, p)), ee in b && (b = b[ee]()), h.save(m, b);
             };
-            return se(g, Ct, ce(h)), g;
+            return se(g, $t, ce(h)), g;
         },
         createApplier(t) {
             const {instance: {template: e}} = t;
@@ -3066,7 +3064,7 @@
                     throw new InvalidInitializer(t, a, e);
                 }
             });
-            return e.$ = r, e.toString = ce(Ce), e[Symbol.toPrimitive] = {
+            return e.$ = r, e.toString = ce($e), e[Symbol.toPrimitive] = {
                 value(t) {
                     switch (t) {
                       case "string":
@@ -3085,7 +3083,7 @@
         },
         finalizeEnum(t, e) {
             const {flags: n, constructor: r, instance: {members: [i]}, static: {members: s, template: o}} = t, c = o[at], {get: a, set: l} = this.defineMember(i, !1), u = {};
-            for (const {name: t, flags: n, slot: r} of s) if (n & _) {
+            for (const {name: t, flags: n, slot: r} of s) if (n & G) {
                 const n = c[r];
                 se(n, ft, ce(t));
                 const i = a.call(n);
@@ -3135,65 +3133,53 @@
             };
         }
     }), Ue({
-        currentGlobalSet: void 0,
-        currentErrorClass: void 0,
-        defineErrorSet(t, n) {
-            const {instance: {members: [r]}, flags: i} = t;
-            if (!this.currentErrorClass) {
-                this.currentErrorClass = class Error extends ZigErrorBase {};
-                const t = {
-                    type: e.ErrorSet,
-                    name: "anyerror",
-                    instance: {
-                        members: [ r ]
-                    },
-                    static: {
-                        members: [],
-                        template: {
-                            SLOTS: {}
-                        }
-                    }
-                };
-                this.currentGlobalSet = this.defineStructure(t), this.finalizeStructure(t);
-            }
-            if (this.currentGlobalSet && i & j) return this.currentGlobalSet;
-            const s = this.defineMember(r), {set: o} = s, c = [ "string", "number" ], a = this.createApplier(t), l = this.createConstructor(t, {
+        init() {
+            this.ZigError = class ZigError extends ZigErrorBase {}, this.globalItemsByIndex = {};
+        },
+        defineErrorSet(t, e) {
+            const {instance: {members: [n]}, flags: r, name: i} = t, s = this.defineMember(n), {set: o} = s, c = [ "string", "number" ], a = this.createApplier(t), l = this.createConstructor(t, {
                 onCastError(t, e) {
                     throw new InvalidInitializer(t, c, e);
                 }
             });
-            return n.$ = s, n[Qt] = ce((function(e) {
+            return e.$ = s, e[Qt] = ce((function(e) {
                 if (e instanceof l[gt]) o.call(this, e); else if (e && "object" == typeof e && !Pe(e)) {
                     if (0 === a.call(this, e)) throw new InvalidInitializer(t, c, e);
                 } else void 0 !== e && o.call(this, e);
             })), l;
         },
         finalizeErrorSet(t, e) {
-            const {constructor: n, flags: r, instance: {members: [i]}, static: {members: s, template: o}} = t;
-            if (this.currentGlobalSet && r & j) return !1;
-            const c = o?.[at] ?? {}, {get: a} = this.defineMember(i, !1);
+            const {constructor: n, flags: r, instance: {members: [i]}, static: {members: s, template: o}} = t, c = o?.[at] ?? {}, a = r & j ? this.globalItemsByIndex : {}, {get: l} = this.defineMember(i, !1);
             for (const {name: t, slot: n} of s) {
-                const r = c[n], i = a.call(r);
-                let s = this.currentGlobalSet[i], o = !0;
-                s || (s = new this.currentErrorClass(t, i), o = !1);
-                const l = ce(s), u = String(s);
-                e[t] = e[u] = e[i] = l, o || (oe(this.currentGlobalSet, {
-                    [i]: l,
-                    [u]: l,
-                    [t]: l
-                }), this.currentGlobalSet[bt].push(t));
+                const r = c[n], i = l.call(r);
+                let s = this.globalItemsByIndex[i];
+                const o = !!s;
+                s || (s = new this.ZigError(t, i));
+                const u = ce(s);
+                e[t] = u;
+                const f = `${s}`;
+                e[f] = u, a[i] = s, o || (oe(this.ZigError, {
+                    [t]: u,
+                    [f]: u
+                }), this.globalItemsByIndex[i] = s);
             }
             e[ne] = {
-                value: t => "number" == typeof t || "string" == typeof t ? n[t] : t instanceof n[gt] ? n[Number(t)] : Pe(t) ? n[`Error: ${t.error}`] : t instanceof Error && void 0
-            }, e[gt] = ce(this.currentErrorClass);
+                value: t => "number" == typeof t ? a[t] : "string" == typeof t ? n[t] : t instanceof n[gt] ? a[Number(t)] : Pe(t) ? n[`Error: ${t.error}`] : t instanceof Error && n[`${t}`]
+            }, e[gt] = ce(this.ZigError);
         },
         transformDescriptorErrorSet(t, e) {
             const {type: n, structure: r} = e;
             if (n === Z.Object) return t;
             const i = function(t) {
-                const {constructor: e} = r, n = e(t);
-                if (!n) throw t instanceof Error ? new NotInErrorSet(r) : new ErrorExpected(r, t);
-                return n;
+                const {constructor: e, flags: n} = r, i = e(t);
+                if (!i) {
+                    if (n & j && "number" == typeof t) {
+                        const e = this.ZigError(t, `Unknown error: ${t}`);
+                        return this.globalItemsByIndex[number] = e;
+                    }
+                    throw t instanceof Error ? new NotInErrorSet(r) : new ErrorExpected(r, t);
+                }
+                return i;
             }, {get: s, set: o} = t;
             return {
                 get: 0 === s.length ? function() {
@@ -3211,9 +3197,6 @@
                     e = Number(n), o.call(this, t, e);
                 }
             };
-        },
-        resetGlobalErrorSet() {
-            this.currentErrorClass = this.currentGlobalSet = void 0;
         }
     });
     class ZigErrorBase extends Error {
@@ -3256,7 +3239,7 @@
         defineErrorUnion(t, e) {
             const {instance: {members: [n, r]}, flags: o} = t, {get: c, set: a} = this.defineMember(n), {get: l, set: u} = this.defineMember(r), {get: f, set: h} = this.defineMember(r, !1), d = n.type === Z.Void, g = r.structure.constructor, p = function() {
                 this[Wt](), this[Ht]?.("clear");
-            }, b = this.createApplier(t), y = function(e, n) {
+            }, y = this.createApplier(t), b = function(e, n) {
                 if (Me(e, v)) this[Xt](e), o & s && (f.call(this) || this[Ht]("copy", 0, e)); else if (e instanceof g[gt] && g(e)) u.call(this, e), 
                 p.call(this); else if (void 0 !== e || d) try {
                     a.call(this, e, n), h.call(this, 0);
@@ -3267,7 +3250,7 @@
                         u.call(this, n), p.call(this);
                     } else if (Pe(e)) u.call(this, e), p.call(this); else {
                         if (!e || "object" != typeof e) throw n;
-                        if (0 === b.call(this, e)) throw n;
+                        if (0 === y.call(this, e)) throw n;
                     }
                 }
             }, {bitOffset: m, byteSize: w} = n, v = this.createConstructor(t);
@@ -3276,8 +3259,8 @@
                     if (f.call(this)) throw l.call(this);
                     return c.call(this);
                 },
-                set: y
-            }, e[Qt] = ce(y), e[Yt] = o & i && this.defineVivificatorStruct(t), e[Wt] = this.defineResetter(m / 8, w), 
+                set: b
+            }, e[Qt] = ce(b), e[Yt] = o & i && this.defineVivificatorStruct(t), e[Wt] = this.defineResetter(m / 8, w), 
             e[Ht] = o & s && this.defineVisitorErrorUnion(n, f), v;
         }
     }), Ue({
@@ -3349,7 +3332,7 @@
                 structure: {
                     byteSize: h
                 }
-            }), {get: p, set: b} = i & V ? this.defineMember({
+            }), {get: p, set: y} = i & V ? this.defineMember({
                 type: Z.Uint,
                 bitOffset: 8 * h,
                 bitSize: 8 * h,
@@ -3358,13 +3341,13 @@
                     flags: c,
                     byteSize: h
                 }
-            }) : {}, y = function(t, n = !0, r = !0) {
+            }) : {}, b = function(t, n = !0, r = !0) {
                 if (n || this[ct][ut]) {
                     if (!r) return this[at][0] = void 0;
                     {
                         const n = U.child, r = d.call(this), s = i & V ? p.call(this) : l === e.Slice && u & T ? x.findSentinel(r, n[mt].bytes) + 1 : 1;
                         if (r !== this[Vt] || s !== this[Et]) {
-                            const e = x.findMemory(t, r, s, n[$t]), o = e ? n.call(Bt, e) : null;
+                            const e = x.findMemory(t, r, s, n[Ct]), o = e ? n.call(Bt, e) : null;
                             return this[at][0] = o, this[Vt] = r, this[Et] = s, i & V && (this[At] = null), 
                             o;
                         }
@@ -3374,22 +3357,22 @@
             }, m = function(t) {
                 g.call(this, t), this[Vt] = t;
             }, w = u & T ? 1 : 0, v = i & V || u & T ? function(t) {
-                b?.call?.(this, t - w), this[Et] = t;
+                y?.call?.(this, t - w), this[Et] = t;
             } : null, S = function() {
-                const t = this[yt] ?? this, e = !t[at][0], n = y.call(t, null, e);
+                const t = this[bt] ?? this, e = !t[at][0], n = b.call(t, null, e);
                 if (!n) {
-                    if (i & $) return null;
+                    if (i & C) return null;
                     throw new NullPointer;
                 }
-                return i & C ? Vn(n) : n;
+                return i & $ ? Vn(n) : n;
             }, A = u & r ? function() {
                 return S.call(this).$;
-            } : S, I = i & C ? ke : function(t) {
+            } : S, I = i & $ ? ke : function(t) {
                 return S.call(this).$ = t;
             }, x = this, M = function(n, r) {
                 const s = a.constructor;
                 if (In(n, s)) {
-                    if (!(i & C) && n.constructor.const) throw new ConstantConstraint(t, n);
+                    if (!(i & $) && n.constructor.const) throw new ConstantConstraint(t, n);
                     n = n[at][0];
                 } else if (i & E) xn(n, s, i) && (n = s(n[at][0][ct])); else if (l === e.Slice && u & F && n) if (n.constructor[ht] === e.Pointer) n = n[vt]?.[ct]; else if (n[ct]) n = n[ct]; else if (n?.buffer instanceof ArrayBuffer && !(n instanceof Uint8Array || n instanceof DataView)) {
                     const {byteOffset: t, byteLength: e} = n;
@@ -3398,7 +3381,7 @@
                 if (n instanceof s) {
                     const e = n[zt];
                     if (e) {
-                        if (!(i & C)) throw new ReadOnlyTarget(t);
+                        if (!(i & $)) throw new ReadOnlyTarget(t);
                         n = e;
                     }
                 } else if (Me(n, s)) n = s.call(Bt, n[ct]); else if (i & O && i & E && n instanceof s.child) n = s(n[ct]); else if (function(t, e) {
@@ -3422,7 +3405,7 @@
                 }(n, s)) {
                     n = s(x.extractView(a, n));
                 } else if (null == n || n[ct]) {
-                    if (!(void 0 === n || i & $ && null === n)) throw new InvalidPointerTarget(t, n);
+                    if (!(void 0 === n || i & C && null === n)) throw new InvalidPointerTarget(t, n);
                 } else {
                     if (i & O && i & E && "object" == typeof n && !n[Symbol.iterator]) {
                         let t = !0;
@@ -3501,7 +3484,7 @@
                 get: S,
                 set: function(t) {
                     if (void 0 === t) return;
-                    const e = this[yt] ?? this;
+                    const e = this[bt] ?? this;
                     if (t) {
                         const n = t[ct][ut];
                         if (n) {
@@ -3511,7 +3494,7 @@
                     } else e[ct][ut] && (m.call(this, 0), v?.call?.(this, 0));
                     e[at][0] = t ?? null, i & V && (e[At] = null);
                 }
-            }, n[_t] = ce(y), n[xt] = {
+            }, n[Gt] = ce(b), n[xt] = {
                 set: m
             }, n[Mt] = {
                 set: v
@@ -3522,7 +3505,7 @@
             const {flags: r, constructor: i, instance: {members: [s]}} = t, {structure: o} = s, {type: c, constructor: a} = o;
             n.child = a ? ce(a) : {
                 get: () => o.constructor
-            }, n.const = ce(!!(r & C)), n[ne] = {
+            }, n.const = ce(!!(r & $)), n[ne] = {
                 value(n, s) {
                     if (this === Bt || this === lt || n instanceof i) return !1;
                     if (In(n, a)) return new i(a(n["*"]), s);
@@ -3537,14 +3520,14 @@
     function Vn(t) {
         let e = Mn.get(t);
         if (!e) {
-            const n = t[yt];
-            e = n ? new Proxy(n, On) : new Proxy(t, Cn), Mn.set(t, e);
+            const n = t[bt];
+            e = n ? new Proxy(n, On) : new Proxy(t, $n), Mn.set(t, e);
         }
         return e;
     }
     const En = {
         get(t, e) {
-            if (e === yt) return t;
+            if (e === bt) return t;
             if (e in t) return t[e];
             return t[vt][e];
         },
@@ -3573,7 +3556,7 @@
             }
             return !0;
         }
-    }, Cn = {
+    }, $n = {
         get(t, e) {
             if (e === zt) return t;
             {
@@ -3585,7 +3568,7 @@
             ke();
         }
     };
-    function $n() {
+    function Cn() {
         return this[Mt];
     }
     function Tn(t, e) {
@@ -3599,10 +3582,10 @@
             get: Un,
             set: Un
         };
-        oe(this[yt], {
+        oe(this[bt], {
             "*": t,
             $: t,
-            [yt]: t,
+            [bt]: t,
             [vt]: t
         });
     }
@@ -3639,9 +3622,9 @@
                 t || (t = f.allocateMemory(e * l, n, r)), this[ct] = t, this[Mt] = e;
             }, d = function(e, n) {
                 if (n !== this[Mt]) throw new ArrayLengthMismatch(t, this, e);
-            }, g = this.defineMember(a), {set: p} = g, b = this.createApplier(t), y = function(e, n) {
+            }, g = this.defineMember(a), {set: p} = g, y = this.createApplier(t), b = function(e, n) {
                 if (Me(e, w)) this[ct] ? d.call(this, e, e.length) : h.call(this, null, e.length, n), 
-                this[Xt](e), r & s && this[Ht]("copy", rt.Vivificate, e); else if ("string" == typeof e && r & U) y.call(this, {
+                this[Xt](e), r & s && this[Ht]("copy", rt.Vivificate, e); else if ("string" == typeof e && r & U) b.call(this, {
                     string: e
                 }, n); else if (e?.[Symbol.iterator]) {
                     e = Se(e), this[ct] ? d.call(this, e, e.length) : h.call(this, null, e.length, n);
@@ -3651,7 +3634,7 @@
                     if (!(!this[ct] && e >= 0 && isFinite(e))) throw new InvalidArrayInitializer(t, e, !this[ct]);
                     h.call(this, null, e, n);
                 } else if (e && "object" == typeof e) {
-                    if (0 === b.call(this, e, n)) throw new InvalidArrayInitializer(t, e);
+                    if (0 === y.call(this, e, n)) throw new InvalidArrayInitializer(t, e);
                 } else if (void 0 !== e) throw new InvalidArrayInitializer(t, e);
             }, m = function(t, e) {
                 const n = this[Mt], r = this[ct];
@@ -3661,9 +3644,9 @@
             }, w = this.createConstructor(t);
             return e.$ = {
                 get: Oe,
-                set: y
+                set: b
             }, e.length = {
-                get: $n
+                get: Cn
             }, r & z && (e.typedArray = this.defineTypedArray(t), r & U && (e.string = this.defineString(t)), 
             r & B && (e.clampedArray = this.defineClampedArray(t))), e.entries = e[St] = this.defineArrayEntries(), 
             e.subarray = {
@@ -3679,7 +3662,7 @@
                     }), c;
                 }
             }, e[Symbol.iterator] = this.defineArrayIterator(), e[Kt] = ce(h), e[Xt] = this.defineCopier(o, !0), 
-            e[Qt] = ce(y), e[ee] = this.defineFinalizerArray(g), e[Yt] = r & i && this.defineVivificatorArray(t), 
+            e[Qt] = ce(b), e[ee] = this.defineFinalizerArray(g), e[Yt] = r & i && this.defineVivificatorArray(t), 
             e[Ht] = r & s && this.defineVisitorArray(), w;
         },
         finalizeSlice(t, e) {
@@ -3710,10 +3693,10 @@
                 if (Me(e, f)) this[Xt](e), n & s && this[Ht]("copy", 0, e); else if (e && "object" == typeof e) l.call(this, e, r); else if ("number" != typeof e && "bigint" != typeof e || !a) {
                     if (void 0 !== e) throw new InvalidInitializer(t, "object", e);
                 } else a.set.call(this, e);
-            }, f = this.createConstructor(t), p = e[Nt].value, b = e[It].value, y = [];
+            }, f = this.createConstructor(t), p = e[Nt].value, y = e[It].value, b = [];
             for (const t of o.filter((t => !!t.name))) {
                 const {name: n, flags: r} = t, {set: i} = e[n] = this.defineMember(t);
-                i && (r & q && (i.required = !0), p[n] = i, b.push(n)), y.push(n);
+                i && (r & J && (i.required = !0), p[n] = i, y.push(n)), b.push(n);
             }
             return e.$ = {
                 get: Ee,
@@ -3724,7 +3707,7 @@
                 }
             }, e[Symbol.iterator] = n & h ? this.defineZigIterator() : n & d ? this.defineVectorIterator() : this.defineStructIterator(), 
             e[Qt] = ce(u), e[Yt] = n & i && this.defineVivificatorStruct(t), e[Ht] = n & s && this.defineVisitorStruct(o), 
-            e[St] = n & d ? this.defineVectorEntries() : this.defineStructEntries(), e[bt] = ce(y), 
+            e[St] = n & d ? this.defineVectorEntries() : this.defineStructEntries(), e[yt] = ce(b), 
             n & g && (e.alloc = this.defineAlloc(), e.free = this.defineFree(), e.dupe = this.defineDupe()), 
             f;
         }
@@ -3742,13 +3725,13 @@
                 const e = c.findIndex((e => e.name === t));
                 u.call(this, e);
             }, g = this.createApplier(t), p = function(e, r) {
-                if (Me(e, b)) this[Xt](e), n & s && this[Ht]("copy", rt.Vivificate, e); else if (e && "object" == typeof e) {
+                if (Me(e, y)) this[Xt](e), n & s && this[Ht]("copy", rt.Vivificate, e); else if (e && "object" == typeof e) {
                     let n = 0;
                     for (const t of x) t in e && n++;
                     if (n > 1) throw new MultipleUnionInitializers(t);
                     if (0 === g.call(this, e, r)) throw new MissingUnionInitializer(t, e, o);
                 } else if (void 0 !== e) throw new InvalidInitializer(t, "object with a single property", e);
-            }, b = this.createConstructor(t), y = {}, m = e[Nt].value, w = e[It].value, x = [];
+            }, y = this.createConstructor(t), b = {}, m = e[Nt].value, w = e[It].value, x = [];
             for (const r of c) {
                 const {name: i} = r, {get: s, set: c} = this.defineMember(r), a = o ? function() {
                     const e = h.call(this);
@@ -3767,7 +3750,7 @@
                 e[i] = {
                     get: a,
                     set: l
-                }, m[i] = u, y[i] = s, w.push(i), x.push(i);
+                }, m[i] = u, b[i] = s, w.push(i), x.push(i);
             }
             e.$ = {
                 get: function() {
@@ -3790,17 +3773,17 @@
             const {comptime: M} = this;
             return e[te] = n & A && {
                 value() {
-                    return M || this[Ht](zn), this[Ht] = $e, this;
+                    return M || this[Ht](zn), this[Ht] = Ce, this;
                 }
             }, e[Qt] = ce(p), e[pt] = n & S && {
                 get: l,
                 set: u
             }, e[Yt] = n & i && this.defineVivificatorStruct(t), e[Ht] = n & s && this.defineVisitorUnion(c, n & S ? f : null), 
-            e[St] = this.defineUnionEntries(), e[bt] = n & S ? {
+            e[St] = this.defineUnionEntries(), e[yt] = n & S ? {
                 get() {
                     return [ h.call(this) ];
                 }
-            } : ce(x), e[kt] = ce(y), b;
+            } : ce(x), e[kt] = ce(b), y;
         },
         finalizeUnion(t, e) {
             const {flags: n, instance: {members: r}} = t;

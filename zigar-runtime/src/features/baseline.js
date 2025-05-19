@@ -58,7 +58,6 @@ export default mixin({
         return structure;
       }
     };
-    this.resetGlobalErrorSet?.();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder

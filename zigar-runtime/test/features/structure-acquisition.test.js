@@ -875,7 +875,7 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       const name = env.getErrorSetName({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsGlobal,
+        flags: ErrorSetFlag.IsOpenEnded,
       });
       expect(name).to.equal('anyerror');
     })

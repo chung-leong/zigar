@@ -181,9 +181,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_iterator = td.isIterator(),
                     },
                 },
-                .error_set => .{
+                .error_set => |es| .{
                     .error_set = .{
-                        .is_global = td.type == anyerror,
+                        .is_open_ended = es == null,
                     },
                 },
                 .array => |ar| init: {

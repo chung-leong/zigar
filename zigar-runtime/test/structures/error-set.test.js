@@ -138,11 +138,7 @@ describe('Structure: error-set', function() {
       };
       const env = new Env();
       const descriptors = {};
-      // need to call defineErrorSet(), since that function creates the global error set
-      env.defineErrorSet(structure, {});
       env.finalizeErrorSet(structure, descriptors);
-      expect(descriptors[77]?.value).to.be.an('error');
-      expect(descriptors[88]?.value).to.be.an('error');
       expect(descriptors.dog_ate_homework?.value).to.be.an('error');
       expect(descriptors.cat_fell_in_love?.value).to.be.an('error');
     })

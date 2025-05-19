@@ -1,33 +1,20 @@
-import { MemberType, ErrorSetFlag, StructureType } from '../constants.js';
+import { MemberType, ErrorSetFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { isErrorJSON, InvalidInitializer, deanimalizeErrorName, NotInErrorSet, ErrorExpected } from '../errors.js';
-import { SLOTS, PROPS, CAST, CLASS, INITIALIZE } from '../symbols.js';
+import { SLOTS, CAST, CLASS, INITIALIZE } from '../symbols.js';
 import { defineValue, defineProperties } from '../utils.js';
 
 var errorSet = mixin({
-  currentGlobalSet: undefined,
-  currentErrorClass: undefined,
-
+  init() {
+    this.ZigError = class ZigError extends ZigErrorBase {},
+    this.globalItemsByIndex = {};
+  },
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
       flags,
+      name,
     } = structure;
-    if (!this.currentErrorClass) {
-      // create anyerror set
-      this.currentErrorClass = class Error extends ZigErrorBase {};
-      const ae = {
-        type: StructureType.ErrorSet,
-        name: 'anyerror',
-        instance: { members: [ member ] },
-        static: { members: [], template: { SLOTS: {} } },
-      };
-      this.currentGlobalSet = this.defineStructure(ae);
-      this.finalizeStructure(ae);
-    }
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
-      return this.currentGlobalSet;
-    }
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const expected = [ 'string', 'number' ];
@@ -59,11 +46,8 @@ var errorSet = mixin({
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
-      // already finalized
-      return false;
-    }
     const items = template?.[SLOTS] ?? {};
+    const itemsByIndex = (flags & ErrorSetFlag.IsOpenEnded) ? this.globalItemsByIndex : {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);
     for (const { name, slot } of members) {
@@ -73,44 +57,48 @@ var errorSet = mixin({
       // error number from the error-set instance and create the error object, if hasn't been
       // created already for an earlier set
       const number = get.call(item);
-      let error = this.currentGlobalSet[number], inGlobalSet = true;
+      let error = this.globalItemsByIndex[number];
+      const inGlobalSet = !!error;
       if (!error) {
-        error = new this.currentErrorClass(name, number);
-        inGlobalSet = false;
+        error = new this.ZigError(name, number);
       }
-      // make the error object available by errno, by name, and by error message
+      // make the error object available by name
       const descriptor = defineValue(error);
-      const string = String(error);
-      staticDescriptors[name] =
-      staticDescriptors[string] =
-      staticDescriptors[number] = descriptor;
+      staticDescriptors[name] = descriptor;
+      // make it available by error.toString() as well, so that the in operator can be used
+      // to see if an error is in a set; note that the text will be prefixed with "Error: "
+      // so it's not the same as error.message
+      const stringified = `${error}`;
+      staticDescriptors[stringified] = descriptor;
+      itemsByIndex[number] = error;
+      // add to global set
       if (!inGlobalSet) {
-        // add to global error set as well
-        defineProperties(this.currentGlobalSet, {
-          [number]: descriptor,
-          [string]: descriptor,
+        defineProperties(this.ZigError, {
           [name]: descriptor,
+          [stringified]: descriptor,
         });
-        this.currentGlobalSet[PROPS].push(name);
+        this.globalItemsByIndex[number] = error;       
       }
     }
     // add cast handler allowing strings, numbers, and JSON object to be casted into error set
     staticDescriptors[CAST] = {
       value(arg) {
-        if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+        if (typeof(arg) === 'number') {
+          return itemsByIndex[arg];
+        } else if (typeof(arg) === 'string') {
           return constructor[arg];
         } else if (arg instanceof constructor[CLASS]) {
-          return constructor[Number(arg)];
+          return itemsByIndex[Number(arg)];
         } else if (isErrorJSON(arg)) {
           return constructor[`Error: ${arg.error}`];
         } else if (arg instanceof Error) {
-          return undefined;
+          return constructor[`${arg}`];
         } else {
           return false;
         }
       }
     };
-    staticDescriptors[CLASS] = defineValue(this.currentErrorClass);
+    staticDescriptors[CLASS] = defineValue(this.ZigError);
   },
   transformDescriptorErrorSet(descriptor, member) {
     const { type, structure } = member;
@@ -118,9 +106,15 @@ var errorSet = mixin({
       return descriptor;
     }
     const findError = function(value) {
-      const { constructor } = structure;
+      const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
+        if (flags & ErrorSetFlag.IsOpenEnded) {
+          if (typeof(value) === 'number') {
+            const newItem = this.ZigError(value, `Unknown error: ${value}`);
+            return this.globalItemsByIndex[number] = newItem;
+          }
+        }
         if (value instanceof Error) {
           throw new NotInErrorSet(structure);
         } else {
@@ -152,9 +146,6 @@ var errorSet = mixin({
           set.call(this, index, value);
         },
     };
-  },
-  resetGlobalErrorSet() {
-    this.currentErrorClass = this.currentGlobalSet = undefined;
   },
 });
 

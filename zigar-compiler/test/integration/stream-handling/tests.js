@@ -70,8 +70,8 @@ export function addTests(importModule, options) {
         const reader = inStream.getReader();
         const output = await open(absolute('./data/decompressed.txt'), 'w');
         const outStream = new WritableStream({
-          write(chunk) {
-            output.write(chunk);
+          async write(chunk) {
+            await output.write(chunk);
           },
         });
         const writer = outStream.getWriter();

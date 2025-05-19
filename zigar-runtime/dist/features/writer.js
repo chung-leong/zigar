@@ -34,8 +34,7 @@ var writer = mixin({
             await writer.write(src);
             return src.length;
           } catch (err) {
-            console.error(err);
-            this.writeMap.delete(writerId);
+            this.writerContextMap.delete(writerId);
             throw err;
           }
         };

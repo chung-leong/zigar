@@ -60,7 +60,6 @@ var reader = mixin({
             }
             return read;
           } catch (err) {
-            console.error(err);
             this.readerContextMap.delete(contextId);
             throw err;
           }
