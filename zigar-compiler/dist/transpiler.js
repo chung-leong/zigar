@@ -84,7 +84,7 @@ const SliceFlag = {
   IsOpaque:         0x0100,
 };
 const ErrorSetFlag = {
-  IsGlobal:         0x0010,
+  IsOpenEnded:      0x0010,
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,
@@ -2922,6 +2922,21 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
+function checkInefficientAccess(context, type, len) {
+  if (context.bytes === undefined) {
+    context.bytes = context.calls = 0;
+  }
+  context.bytes += len;
+  context.calls++;
+  if (context.calls === 100) {
+    const bytesPerCall = context.bytes / context.calls;
+    if (bytesPerCall < 8) {
+      const s = bytesPerCall > 1 ? 's' : '';
+      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+    }
+  }
+}
+
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -3122,7 +3137,6 @@ var baseline = mixin({
         return structure;
       }
     };
-    this.resetGlobalErrorSet?.();
     const objectPlaceholders = new Map();
     for (const structure of structures) {
       // recreate the actual template using the provided placeholder
@@ -3353,6 +3367,9 @@ var callMarshalingInbound = mixin({
       }
     }
   },
+  freeFunction(func) {
+    this.releaseFunction(this.getFunctionId(func));
+  },
   ...({
     exports: {
       handleJsCall: { argType: 'iiii', returnType: 'i' },
@@ -3533,7 +3550,7 @@ var callMarshalingOutbound = mixin({
     usingPromise: false,
     usingGenerator: false,
     usingAbortSignal: false,
-    usingDefaultAllocator: false,
+    usingJsAllocator: false,
     usingVariables: false,
     usingReader: false,
     usingWriter: false,
@@ -3541,7 +3558,7 @@ var callMarshalingOutbound = mixin({
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
         if (flags & StructFlag.IsAllocator) {
-          this.usingDefaultAllocator = true;
+          this.usingJsAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
         } else if (flags & StructFlag.IsGenerator) {
@@ -3697,74 +3714,14 @@ var dataCopying = mixin({
   } )
 });
 
-var defaultAllocator = mixin({
-  init() {
-    this.defaultAllocator = null;
-    this.vtableFnIds = null;
-  },
-  createDefaultAllocator(args, structure) {
-    let allocator = this.defaultAllocator;
-    if (!allocator) {
-      const { constructor: Allocator } = structure;
-      const { noResize, noRemap } = Allocator;
-      const vtable = {
-        alloc: (ptr, len, ptrAlign) => this.allocateHostMemory(len, 1 << ptrAlign),
-        free: (ptr, buf, ptrAlign) => {
-          const address = this.getViewAddress(buf['*'][MEMORY]);
-          const len = buf.length;
-          this.freeHostMemory(address, len, 1 << ptrAlign);
-        },
-        resize: noResize,
-      };
-      if (noRemap) {
-        vtable.remap = noRemap;
-      }
-      const ptr = this.obtainZigView(usizeMax, 0);
-      allocator = this.defaultAllocator = new Allocator({ ptr, vtable });
-      this.vtableFnIds = [ vtable.alloc, vtable.free ].map((fn) => this.getFunctionId(fn));
-    }
-    return allocator;
-  },
-  freeDefaultAllocator() {
-    if (this.vtableFnIds) {
-      for (const id of this.vtableFnIds) {
-        this.releaseFunction(id);
-      }
-      this.defaultAllocator = null;
-      this.vtableFnIds = null;
-    }
-  },
-  allocateHostMemory(len, align) {
-    const targetDV = this.allocateJSMemory(len, align);
-    {
-      try {
-        const shadowDV = this.allocateShadowMemory(len, align);
-        const address = this.getViewAddress(shadowDV);
-        this.registerMemory(address, len, align, true, targetDV, shadowDV);
-        return shadowDV;
-      } catch (err) {
-        return null;
-      }
-    }
-  },
-  freeHostMemory(address, len, align) {
-    const entry = this.unregisterMemory(address, len);
-    {
-      if (entry) {
-        this.freeShadowMemory(entry.shadowDV);
-      }
-    }
-  },
-});
-
 var generator = mixin({
   init() {
     this.generatorCallbackMap = new Map();
-    this.generatorInstanceMap = new Map();
-    this.nextGeneratorInstanceId = usize(0x2000);
+    this.generatorContextMap = new Map();
+    this.nextGeneratorContextId = usize(0x2000);
   },
   createGenerator(structure, args, func) {
-    const { constructor } = structure;
+    const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -3774,9 +3731,9 @@ var generator = mixin({
       func = generator.push.bind(generator);
     }
     // create a handle referencing the function 
-    const instanceId = this.nextGeneratorInstanceId++;
-    const ptr = this.obtainZigView(instanceId, 0, false);
-    this.generatorInstanceMap.set(instanceId, { func, args });
+    const contextId = this.nextGeneratorContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.generatorContextMap.set(contextId, { func, args });
     // use the same callback for all generators of a given type
     let callback = this.generatorCallbackMap.get(constructor);
     if (!callback) {
@@ -3784,8 +3741,8 @@ var generator = mixin({
         // the function assigned to args[RETURN] down below calls this function
         // with a DataView instead of an actual pointer
         const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const instanceId = this.getViewAddress(dv);
-        const instance = this.generatorInstanceMap.get(instanceId);
+        const contextId = this.getViewAddress(dv);
+        const instance = this.generatorContextMap.get(contextId);
         if (instance) {
           const { func, args } = instance;
           const isError = result instanceof Error;
@@ -3795,9 +3752,12 @@ var generator = mixin({
           const retval = await ((func.length === 2)
           ? func(isError ? result : null, isError ? null : result)
           : func(result));
-          if (retval === false || isError || result === null) {
+          const done = retval === false || isError || result === null;
+          // reset allocator
+          args[RESET]?.(done);
+          if (done) {
             args[FINALIZE]();
-            this.generatorInstanceMap.delete(instanceId);
+            this.generatorContextMap.delete(contextId);
             return false;
           } else {
             return true;
@@ -3805,10 +3765,16 @@ var generator = mixin({
         }
       };
       this.generatorCallbackMap.set(constructor, callback);
-      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
+      this.destructors.push(() => this.freeFunction(callback));
     }
     args[RETURN] = result => callback(ptr, result);
-    return { ptr, callback };
+    const generator = { ptr, callback };
+    const allocatorMember = members.find(m => m.name === 'allocator');
+    if (allocatorMember) {
+      const { structure } = allocatorMember;     
+      generator.allocator = this.createJsAllocator(args, structure, true);
+    }
+    return generator;
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
@@ -3960,6 +3926,91 @@ var intConversion = mixin({
       }
       return accessor;
     };
+  },
+});
+
+var jsAllocator = mixin({
+  init() {
+    this.defaultAllocator = null;
+    this.allocatorVtable =  null;
+    this.allocatorContextMap = new Map();
+    this.nextAllocatorContextId = usize(0x1000);
+  },
+  createDefaultAllocator(args, structure) {
+    let allocator = this.defaultAllocator;
+    if (!allocator) {
+      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
+    }
+    return allocator;
+  },
+  createJsAllocator(args, structure, resettable) {
+    const { constructor: Allocator } = structure;
+    let vtable = this.allocatorVtable;
+    if (!vtable) {      
+      const { noResize, noRemap } = Allocator;
+      vtable = this.allocatorVtable = {
+        alloc: this.allocateHostMemory.bind(this),
+        free: this.freeHostMemory.bind(this),
+        resize: noResize,
+      };
+      if (noRemap) {
+        vtable.remap = noRemap;
+      }
+      this.destructors.push(() => this.freeFunction(vtable.alloc));
+      this.destructors.push(() => this.freeFunction(vtable.free));
+    }
+    let contextId = usizeMax;
+    if (resettable) {
+      // create list used to clean memory allocated for generator
+      const list = [];
+      contextId = this.nextAllocatorContextId++;
+      this.allocatorContextMap.set(contextId, list);
+      args[RESET] = (done) => {
+        for (const { address, len } of list) {
+          const entry = this.unregisterMemory(address, len);
+          {
+            if (entry) {
+              this.freeShadowMemory(entry.shadowDV);
+            }
+          }
+          if (done) {
+            this.allocatorContextMap.delete(contextId);
+          }
+        }
+        list.splice(0);
+      };
+    }
+    const ptr = this.obtainZigView(contextId, 0);
+    return new Allocator({ ptr, vtable });
+  },
+  allocateHostMemory(ptr, len, ptrAlign) {
+    // see if we're dealing with a resettable allocator
+    const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+    const list = (contextId != usizeMax) ? this.allocatorContextMap.get(contextId) : null;
+    const align = 1 << ptrAlign;
+    const targetDV = this.allocateJSMemory(len, align);
+    {
+      try {
+        const shadowDV = this.allocateShadowMemory(len, align);
+        const address = this.getViewAddress(shadowDV);
+        this.registerMemory(address, len, align, true, targetDV, shadowDV);
+        // save address and len if resettable
+        list?.push({ address, len });
+        return shadowDV;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  freeHostMemory(ptr, buf, ptrAlign) {
+    const address = this.getViewAddress(buf['*'][MEMORY]);
+    const len = buf.length;
+    const entry = this.unregisterMemory(address, len);
+    {
+      if (entry) {
+        this.freeShadowMemory(entry.shadowDV);
+      }
+    }
   },
 });
 
@@ -4178,7 +4229,15 @@ var memoryMapping = mixin({
         address = usizeMin;
         len = 0;
       }
-      return (cache) ? this.obtainView(buffer, address, len) : new DataView(buffer, address, len);
+      let dv;
+      if (cache) {
+        dv = this.obtainView(buffer, address, len);
+      } else {
+        // don't attach the view to the buffer so that it'd get garbage-collected
+        dv = new DataView(buffer, address, len);
+        dv[ZIG] = { address, len };
+      }
+      return dv;
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -4578,8 +4637,8 @@ var pointerSynchronization = mixin({
 var promise = mixin({
   init() {
     this.promiseCallbackMap = new Map();
-    this.promiseInstanceMap = new Map();
-    this.nextPromiseInstanceId = usize(0x1000);
+    this.promiseContextMap = new Map();
+    this.nextPromiseContextId = usize(0x1000);
   },
   // create promise struct for outbound call
   createPromise(structure, args, func) {
@@ -4607,9 +4666,9 @@ var promise = mixin({
       });
     }
     // create a handle referencing the function 
-    const instanceId = this.nextPromiseInstanceId++;
-    const ptr = this.obtainZigView(instanceId, 0, false);
-    this.promiseInstanceMap.set(instanceId, { func, args });
+    const contextId = this.nextPromiseContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.promiseContextMap.set(contextId, { func, args });
     // use the same callback for all promises of a given type
     let callback = this.promiseCallbackMap.get(constructor);
     if (!callback) {
@@ -4617,8 +4676,8 @@ var promise = mixin({
         // the function assigned to args[RETURN] down below calls this function
         // with a DataView instead of an actual pointer
         const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const instanceId = this.getViewAddress(dv);
-        const instance = this.promiseInstanceMap.get(instanceId);
+        const contextId = this.getViewAddress(dv);
+        const instance = this.promiseContextMap.get(contextId);
         if (instance) {
           const { func, args } = instance;
           if (func.length === 2) {
@@ -4628,11 +4687,11 @@ var promise = mixin({
             func(result);
           }
           args[FINALIZE]();
-          this.promiseInstanceMap.delete(instanceId);  
+          this.promiseContextMap.delete(contextId);  
         }
       };
       this.promiseCallbackMap.set(constructor, callback);
-      this.destructors.push(() => this.releaseFunction(this.getFunctionId(callback)));
+      this.destructors.push(() => this.freeFunction(callback));
     }
     args[RETURN] = result => callback(ptr, result);
     return { ptr, callback };
@@ -4652,64 +4711,67 @@ var promise = mixin({
 var reader = mixin({
   init() {
     this.readerCallback = null;
-    this.readerMap = new Map();
-    this.nextReaderId = usize(0x1000);
+    this.readerContextMap = new Map();
+    this.nextReaderContextId = usize(0x1000);
   },
   // create AnyReader struct for outbound call
   createReader(reader) {
     if (reader instanceof ReadableStreamDefaultReader || reader instanceof ReadableStreamBYOBReader) {
       // create a handle referencing the reader 
-      const readerId = this.nextReaderId++;
-      const context = this.obtainZigView(readerId, 0, false);
-      this.readerMap.set(readerId, reader);
+      const contextId = this.nextReaderContextId++;
+      const ptr = this.obtainZigView(contextId, 0, false);
+      this.readerContextMap.set(contextId, { reader, leftover: null, finished: false });
       // use the same callback for all readers
       let readFn = this.readerCallback;
       if (!readFn) {
-        readFn = this.readerCallback = async (context, buffer) => {
-          const readerId = this.getViewAddress(context['*'][MEMORY]);
-          const reader = this.readerMap.get(readerId);
-          if (!reader) return 0;
+        readFn = this.readerCallback = async (ptr, buffer) => {
+          const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+          const context = this.readerContextMap.get(contextId);
+          if (!context) return 0;    
           try {
             const view = buffer['*'][MEMORY];
-            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-            let finished = false, read = 0;
+            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
+            if (!import.meta.env.PROD) {
+              checkInefficientAccess(context, 'reader', dest.length);
+            }
+            let { reader, finished, leftover } = context;
+            let read = 0;
             if (reader instanceof ReadableStreamBYOBReader) {
               const { done, value } = await reader.read(dest);
               read = value.byteLength;
               finished = done;
-              return ;
             } else {
-              let leftover = reader.leftover;
               while (read < dest.length && !finished) {
                 if (!leftover) {
                   const { done, value } = await reader.read();
-                  reader.finished = done;
+                  finished = done;
                   leftover = new Uint8Array(value);
                 } 
-                const len = Math.min(leftover.length, dest.length);
+                const len = Math.min(leftover.length, dest.length - read);
                 for (let i = 0; i < len; i++) dest[read + i] = leftover[i]; 
                 read += len;
                 if (leftover.length > len) {
                   leftover = leftover.slice(len);
                 } else {
                   leftover = null;
-                  if (reader.finished) break;
+                  if (finished) break;
                 }
               }
-              reader.leftover = leftover;
+              context.leftover = leftover;
+              context.finished = finished;
             }
             if (finished) {
-              this.readerMap.delete(readerId);
+              this.readerContextMap.delete(contextId);
             }
             return read;
           } catch (err) {
-            this.readMap.delete(readerId);
+            this.readerContextMap.delete(contextId);
             throw err;
           }
         };
-        this.destructors.push(() => this.releaseFunction(this.getFunctionId(readFn)));
+        this.destructors.push(() => this.freeFunction(readFn));
       }
-      return { context, readFn };
+      return { context: ptr, readFn };
     } else {
       if (typeof(reader) === 'object' && 'context' in reader && 'readFn' in reader) {
         return reader;
@@ -5045,6 +5107,9 @@ var structureAcquisition = mixin({
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
+    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+      if (s.flags & StructFlag[`Is${name}`]) return name;
+    }
     return `S${this.structureCounters.struct++}`;
   },
   getUnionName(s) {
@@ -5055,7 +5120,7 @@ var structureAcquisition = mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsOpenEnded) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `EN${this.structureCounters.enum++}`;
@@ -5586,32 +5651,41 @@ function protectElements(array) {
 var writer = mixin({
   init() {
     this.writerCallback = null;
-    this.writerMap = new Map();
-    this.nextWriterId = usize(0x1000);
+    this.writerContextMap = new Map();
+    this.nextWriterContextId = usize(0x2000);
   },
   // create AnyWriter struct for outbound call
   createWriter(writer) {
     if (writer instanceof WritableStreamDefaultWriter) {
       // create a handle referencing the writer 
-      const writerId = this.nextWriterId++;
-      const context = this.obtainZigView(writerId, 0, false);
-      this.writerMap.set(writerId, writer);
+      const writerId = this.nextWriterContextId++;
+      const ptr = this.obtainZigView(writerId, 0, false);
+      this.writerContextMap.set(writerId, { writer });
       writer.closed.catch(empty).then(() => this.writeMap.delete(writerId));
       // use the same callback for all writers
       let writeFn = this.writerCallback;
       if (!writeFn) {
-        writeFn = this.writerCallback = async (context, buffer) => {
-          const writerId = this.getViewAddress(context['*'][MEMORY]);
-          const writer = this.writerMap.get(writerId);
-          if (!writer) return 0;
-          const view = buffer['*'][MEMORY];
-          const array = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-          await writer.write(array);
-          return array.length;
+        writeFn = this.writerCallback = async (ptr, buffer) => {
+          const writerId = this.getViewAddress(ptr['*'][MEMORY]);
+          const context = this.writerContextMap.get(writerId);
+          if (!context) return 0;
+          try {
+            const view = buffer['*'][MEMORY];
+            const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+            if (!import.meta.env.PROD) {
+              checkInefficientAccess(context, 'writer', src.length);
+            }
+            const { writer } = context;
+            await writer.write(src);
+            return src.length;
+          } catch (err) {
+            this.writerContextMap.delete(writerId);
+            throw err;
+          }
         };
-        this.destructors.push(() => this.releaseFunction(this.getFunctionId(writeFn)));
+        this.destructors.push(() => this.freeFunction(writeFn));
       }
-      return { context, writeFn };
+      return { context: ptr, writeFn };
     } else {
       if ('context' in writer && 'writeFn' in writer) {
         return writer;
@@ -7022,29 +7096,16 @@ var _enum = mixin({
 });
 
 var errorSet = mixin({
-  currentGlobalSet: undefined,
-  currentErrorClass: undefined,
-
+  init() {
+    this.ZigError = class ZigError extends ZigErrorBase {},
+    this.globalItemsByIndex = {};
+  },
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
       flags,
+      name,
     } = structure;
-    if (!this.currentErrorClass) {
-      // create anyerror set
-      this.currentErrorClass = class Error extends ZigErrorBase {};
-      const ae = {
-        type: StructureType.ErrorSet,
-        name: 'anyerror',
-        instance: { members: [ member ] },
-        static: { members: [], template: { SLOTS: {} } },
-      };
-      this.currentGlobalSet = this.defineStructure(ae);
-      this.finalizeStructure(ae);
-    }
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
-      return this.currentGlobalSet;
-    }
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const expected = [ 'string', 'number' ];
@@ -7076,11 +7137,8 @@ var errorSet = mixin({
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
-    if (this.currentGlobalSet && (flags & ErrorSetFlag.IsGlobal)) {
-      // already finalized
-      return false;
-    }
     const items = template?.[SLOTS] ?? {};
+    const itemsByIndex = (flags & ErrorSetFlag.IsOpenEnded) ? this.globalItemsByIndex : {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);
     for (const { name, slot } of members) {
@@ -7090,44 +7148,48 @@ var errorSet = mixin({
       // error number from the error-set instance and create the error object, if hasn't been
       // created already for an earlier set
       const number = get.call(item);
-      let error = this.currentGlobalSet[number], inGlobalSet = true;
+      let error = this.globalItemsByIndex[number];
+      const inGlobalSet = !!error;
       if (!error) {
-        error = new this.currentErrorClass(name, number);
-        inGlobalSet = false;
+        error = new this.ZigError(name, number);
       }
-      // make the error object available by errno, by name, and by error message
+      // make the error object available by name
       const descriptor = defineValue(error);
-      const string = String(error);
-      staticDescriptors[name] =
-      staticDescriptors[string] =
-      staticDescriptors[number] = descriptor;
+      staticDescriptors[name] = descriptor;
+      // make it available by error.toString() as well, so that the in operator can be used
+      // to see if an error is in a set; note that the text will be prefixed with "Error: "
+      // so it's not the same as error.message
+      const stringified = `${error}`;
+      staticDescriptors[stringified] = descriptor;
+      itemsByIndex[number] = error;
+      // add to global set
       if (!inGlobalSet) {
-        // add to global error set as well
-        defineProperties(this.currentGlobalSet, {
-          [number]: descriptor,
-          [string]: descriptor,
+        defineProperties(this.ZigError, {
           [name]: descriptor,
+          [stringified]: descriptor,
         });
-        this.currentGlobalSet[PROPS].push(name);
+        this.globalItemsByIndex[number] = error;       
       }
     }
     // add cast handler allowing strings, numbers, and JSON object to be casted into error set
     staticDescriptors[CAST] = {
       value(arg) {
-        if (typeof(arg) === 'number' || typeof(arg) === 'string') {
+        if (typeof(arg) === 'number') {
+          return itemsByIndex[arg];
+        } else if (typeof(arg) === 'string') {
           return constructor[arg];
         } else if (arg instanceof constructor[CLASS]) {
-          return constructor[Number(arg)];
+          return itemsByIndex[Number(arg)];
         } else if (isErrorJSON(arg)) {
           return constructor[`Error: ${arg.error}`];
         } else if (arg instanceof Error) {
-          return undefined;
+          return constructor[`${arg}`];
         } else {
           return false;
         }
       }
     };
-    staticDescriptors[CLASS] = defineValue(this.currentErrorClass);
+    staticDescriptors[CLASS] = defineValue(this.ZigError);
   },
   transformDescriptorErrorSet(descriptor, member) {
     const { type, structure } = member;
@@ -7135,9 +7197,15 @@ var errorSet = mixin({
       return descriptor;
     }
     const findError = function(value) {
-      const { constructor } = structure;
+      const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
+        if (flags & ErrorSetFlag.IsOpenEnded) {
+          if (typeof(value) === 'number') {
+            const newItem = this.ZigError(value, `Unknown error: ${value}`);
+            return this.globalItemsByIndex[number] = newItem;
+          }
+        }
         if (value instanceof Error) {
           throw new NotInErrorSet(structure);
         } else {
@@ -7169,9 +7237,6 @@ var errorSet = mixin({
           set.call(this, index, value);
         },
     };
-  },
-  resetGlobalErrorSet() {
-    this.currentErrorClass = this.currentGlobalSet = undefined;
   },
 });
 
@@ -8753,9 +8818,9 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
-  FeatureDefaultAllocator: defaultAllocator,
   FeatureGenerator: generator,
   FeatureIntConversion: intConversion,
+  FeatureJsAllocator: jsAllocator,
   FeatureMemoryMapping: memoryMapping,
   FeatureModuleLoading: moduleLoading,
   FeatureObjectLinkage: objectLinkage,
@@ -10252,7 +10317,7 @@ async function transpile(srcPath, options) {
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
-  usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
+  usage.FeatureJsAllocator = env.usingJsAllocator;
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;

@@ -52,7 +52,7 @@ export async function transpile(srcPath, options) {
   usage.FeatureCallMarshalingOutbound = env.usingFunction;
   usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
   usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
-  usage.FeatureDefaultAllocator = env.usingDefaultAllocator;
+  usage.FeatureJsAllocator = env.usingJsAllocator;
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
