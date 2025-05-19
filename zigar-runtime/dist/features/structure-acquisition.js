@@ -1,5 +1,5 @@
 import { SENTINEL, SLOTS, MEMORY, ZIG, ENVIRONMENT } from '../symbols.js';
-import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
+import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, StructFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, findObjects, adjustAddress } from '../utils.js';
 
@@ -231,6 +231,9 @@ var structureAcquisition = mixin({
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
+    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+      if (s.flags & StructFlag[`Is${name}`]) return name;
+    }
     return `S${this.structureCounters.struct++}`;
   },
   getUnionName(s) {

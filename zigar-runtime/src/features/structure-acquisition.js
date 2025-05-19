@@ -2,7 +2,7 @@ import {
   ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
 import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, 
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, 
   structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
@@ -246,6 +246,9 @@ export default mixin({
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
+    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+      if (s.flags & StructFlag[`Is${name}`]) return name;
+    }
     return `S${this.structureCounters.struct++}`;
   },
   getUnionName(s) {

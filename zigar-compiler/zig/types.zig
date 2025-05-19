@@ -1973,6 +1973,26 @@ test "IteratorReturnValue" {
     try expect(T3 == null);
 }
 
+pub fn isIteratorAllocating(comptime T: type) bool {
+    switch (@typeInfo(T)) {
+        .@"struct", .@"union", .@"opaque" => if (@hasDecl(T, "next")) {
+            const next = @field(T, "next");
+            const FT = @TypeOf(next);
+            return inline for (@typeInfo(FT).@"fn".params) |param| {
+                if (param.type == std.mem.Allocator) break true;
+            } else false;
+        },
+        .error_union => |eu| return isIteratorAllocating(eu.payload),
+        else => {},
+    }
+    return false;
+}
+
+test "isIteratorAllocating" {
+    const result1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
+    try expectEqual(false, result1);
+}
+
 const InternalType = enum {
     promise,
     generator,
@@ -1992,7 +2012,7 @@ pub fn getInternalType(comptime OT: ?type) ?InternalType {
 
 test "getInternalType" {
     try expectEqual(.promise, getInternalType(Promise(i32)));
-    try expectEqual(.generator, getInternalType(Generator(?i32)));
+    try expectEqual(.generator, getInternalType(Generator(?i32, false)));
     try expectEqual(.abort_signal, getInternalType(AbortSignal));
 }
 
@@ -2120,72 +2140,138 @@ pub fn PromiseArgOf(comptime arg: anytype) type {
     } else @compileError("No promise argument: " ++ @typeName(FT));
 }
 
-pub fn Generator(comptime T: type) type {
+pub fn Generator(comptime T: type, comptime need_allocator: bool) type {
     if (IteratorPayload(T) == null) {
         @compileError("Expecting optional type, received: " ++ @typeName(T));
     }
-    return struct {
-        ptr: ?*anyopaque = null,
-        callback: *const fn (?*anyopaque, T) bool,
+    return if (need_allocator)
+        struct {
+            allocator: std.mem.Allocator,
+            ptr: ?*anyopaque = null,
+            callback: *const fn (allocator: std.mem.Allocator, ?*anyopaque, T) bool,
 
-        pub const payload = T;
+            pub const payload = T;
 
-        const internal_type: InternalType = .generator;
+            const internal_type: InternalType = .generator;
 
-        pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
-            return .{
-                .ptr = @constCast(ptr),
-                .callback = getCallback(fn (?*anyopaque, T) bool, cb),
-            };
-        }
-
-        pub fn yield(self: @This(), value: T) bool {
-            return self.callback(self.ptr, value);
-        }
-
-        pub fn end(self: @This()) void {
-            _ = self.yield(null);
-        }
-
-        pub fn pipe(self: @This(), arg: anytype) void {
-            const AT = @TypeOf(arg);
-            if (IteratorReturnValue(AT) == null) {
-                @compileError("Expecting an iterator, received: " ++ @typeName(AT));
+            pub fn init(allocator: std.mem.Allocator, ptr: ?*const anyopaque, cb: anytype) @This() {
+                return .{
+                    .allocator = allocator,
+                    .ptr = @constCast(ptr),
+                    .callback = getCallback(fn (?*anyopaque, T) bool, cb),
+                };
             }
-            var iter = switch (@typeInfo(AT)) {
-                .error_union => arg catch |err| {
-                    _ = self.yield(err);
-                    return;
-                },
-                else => arg,
-            };
-            defer if (@hasDecl(@TypeOf(iter), "deinit")) iter.deinit();
-            while (true) {
-                const result = iter.next();
-                // break if callback returns false
-                if (!self.yield(result)) break;
-                // break if result is an error or null
-                switch (@typeInfo(@TypeOf(result))) {
-                    .error_union => if (result) |value| {
-                        if (value == null) break;
-                    } else |_| break,
-                    .optional => if (result == null) break,
-                    else => {},
+
+            pub fn yield(self: @This(), value: T) bool {
+                return self.callback(self.allocator, self.ptr, value);
+            }
+
+            pub fn end(self: anytype) void {
+                _ = self.yield(null);
+            }
+
+            pub fn pipe(self: anytype, arg: anytype) void {
+                const AT = @TypeOf(arg);
+                if (IteratorReturnValue(AT) == null) {
+                    @compileError("Expecting an iterator, received: " ++ @typeName(AT));
+                }
+                var iter = switch (@typeInfo(AT)) {
+                    .error_union => arg catch |err| {
+                        _ = self.yield(err);
+                        return;
+                    },
+                    else => arg,
+                };
+                defer if (@hasDecl(@TypeOf(iter), "deinit")) iter.deinit();
+                while (true) {
+                    const result = iter.next(self.allocator);
+                    // break if callback returns false
+                    if (!self.yield(result)) break;
+                    // break if result is an error or null
+                    switch (@typeInfo(@TypeOf(result))) {
+                        .error_union => if (result) |value| {
+                            if (value == null) break;
+                        } else |_| break,
+                        .optional => if (result == null) break,
+                        else => {},
+                    }
                 }
             }
-        }
 
-        pub fn any(self: @This()) Generator(Any(T)) {
-            return .{ .ptr = self.ptr, .callback = @ptrCast(self.callback) };
+            pub fn any(self: @This()) Generator(Any(T), need_allocator) {
+                return .{
+                    .allocator = self.allocator,
+                    .ptr = self.ptr,
+                    .callback = @ptrCast(self.callback),
+                };
+            }
         }
-    };
+    else
+        struct {
+            ptr: ?*anyopaque = null,
+            callback: *const fn (?*anyopaque, T) bool,
+
+            pub const payload = T;
+
+            const internal_type: InternalType = .generator;
+
+            pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
+                return .{
+                    .ptr = @constCast(ptr),
+                    .callback = getCallback(fn (?*anyopaque, T) bool, cb),
+                };
+            }
+
+            pub fn yield(self: @This(), value: T) bool {
+                return self.callback(self.ptr, value);
+            }
+
+            pub fn end(self: anytype) void {
+                _ = self.yield(null);
+            }
+
+            pub fn pipe(self: anytype, arg: anytype) void {
+                const AT = @TypeOf(arg);
+                if (IteratorReturnValue(AT) == null) {
+                    @compileError("Expecting an iterator, received: " ++ @typeName(AT));
+                }
+                var iter = switch (@typeInfo(AT)) {
+                    .error_union => arg catch |err| {
+                        _ = self.yield(err);
+                        return;
+                    },
+                    else => arg,
+                };
+                defer if (@hasDecl(@TypeOf(iter), "deinit")) iter.deinit();
+                while (true) {
+                    const result = iter.next();
+                    // break if callback returns false
+                    if (!self.yield(result)) break;
+                    // break if result is an error or null
+                    switch (@typeInfo(@TypeOf(result))) {
+                        .error_union => if (result) |value| {
+                            if (value == null) break;
+                        } else |_| break,
+                        .optional => if (result == null) break,
+                        else => {},
+                    }
+                }
+            }
+
+            pub fn any(self: @This()) Generator(Any(T), need_allocator) {
+                return .{
+                    .ptr = self.ptr,
+                    .callback = @ptrCast(self.callback),
+                };
+            }
+        };
 }
 
 pub fn GeneratorOf(comptime arg: anytype) type {
     const FT = Function(arg);
     const f = @typeInfo(FT).@"fn";
     return if (IteratorReturnValue(f.return_type.?)) |T|
-        Generator(T)
+        Generator(T, isIteratorAllocating(f.return_type.?))
     else
         @compileError("Function does not return an iterator: " ++ @typeName(FT));
 }
@@ -2559,7 +2645,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
 
         fn PromiseOrGenerator(comptime func: anytype) type {
             const RT = ReturnValue(func);
-            return if (IteratorReturnValue(RT)) |IT| Generator(IT) else Promise(RT);
+            return if (IteratorReturnValue(RT)) |IT|
+                Generator(IT, isIteratorAllocating(RT))
+            else
+                Promise(RT);
         }
 
         fn handleWorkItems(

@@ -190,7 +190,7 @@ export default mixin({
     usingPromise: false,
     usingGenerator: false,
     usingAbortSignal: false,
-    usingDefaultAllocator: false,
+    usingJsAllocator: false,
     usingVariables: false,
     usingReader: false,
     usingWriter: false,
@@ -198,7 +198,7 @@ export default mixin({
     detectArgumentFeatures(argMembers) {
       for (const { structure: { flags } } of argMembers) {
         if (flags & StructFlag.IsAllocator) {
-          this.usingDefaultAllocator = true;
+          this.usingJsAllocator = true;
         } else if (flags & StructFlag.IsPromise) {
           this.usingPromise = true;
         } else if (flags & StructFlag.IsGenerator) {

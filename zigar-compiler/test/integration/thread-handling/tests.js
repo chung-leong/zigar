@@ -129,6 +129,26 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should receive string from allocating generator', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-allocating-generator', { multithreaded: true });
+      startup();
+      try {
+        const generator = spawn();
+        const list = [];
+        for await (const s of generator) {
+          list.push(s);
+          expect(s).to.equal('Hello world');
+        }
+        expect(list).to.have.lengthOf(5);
+      } finally {
+        shutdown();
+      }
+    })
     it('should create thread or immediately provide a value', async function() {
       this.timeout(0);
       const {

@@ -31,7 +31,10 @@ pub fn decompress(
 
 const ns = struct {
     pub fn decompress(reader: std.io.AnyReader, writer: std.io.AnyWriter) !void {
-        var dc = try std.compress.xz.decompress(gpa.allocator(), reader);
+        var buffer: std.io.BufferedReader(4096, std.io.AnyReader) = .{
+            .unbuffered_reader = reader,
+        };
+        var dc = try std.compress.xz.decompress(gpa.allocator(), buffer.reader());
         defer dc.deinit();
         var fifo: std.fifo.LinearFifo(u8, .{ .Static = 128 }) = .init();
         try fifo.pump(dc.reader(), writer);

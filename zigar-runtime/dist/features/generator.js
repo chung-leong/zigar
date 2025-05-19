@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { YIELD, THROWING, GENERATOR, MEMORY, STRING_RETVAL, FINALIZE, RETURN } from '../symbols.js';
+import { YIELD, THROWING, GENERATOR, MEMORY, STRING_RETVAL, RESET, FINALIZE, RETURN } from '../symbols.js';
 import { usize } from '../utils.js';
 
 var generator = mixin({
@@ -10,7 +10,7 @@ var generator = mixin({
     this.nextGeneratorContextId = usize(0x2000);
   },
   createGenerator(structure, args, func) {
-    const { constructor } = structure;
+    const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
         throw new TypeMismatch('function', func);
@@ -41,7 +41,10 @@ var generator = mixin({
           const retval = await ((func.length === 2)
           ? func(isError ? result : null, isError ? null : result)
           : func(result));
-          if (retval === false || isError || result === null) {
+          const done = retval === false || isError || result === null;
+          // reset allocator
+          args[RESET]?.(done);
+          if (done) {
             args[FINALIZE]();
             this.generatorContextMap.delete(contextId);
             return false;
@@ -54,7 +57,13 @@ var generator = mixin({
       this.destructors.push(() => this.freeFunction(callback));
     }
     args[RETURN] = result => callback(ptr, result);
-    return { ptr, callback };
+    const generator = { ptr, callback };
+    const allocatorMember = members.find(m => m.name === 'allocator');
+    if (allocatorMember) {
+      const { structure } = allocatorMember;     
+      generator.allocator = this.createJsAllocator(args, structure, true);
+    }
+    return generator;
   },
   createGeneratorCallback(args, generator) {
     const { ptr, callback } = generator;
