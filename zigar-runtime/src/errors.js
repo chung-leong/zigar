@@ -456,6 +456,21 @@ export function throwReadOnly() {
   throw new ReadOnly();
 }
 
+export function checkInefficientAccess(context, type, len) {
+  if (context.bytes === undefined) {
+    context.bytes = context.calls = 0;
+  }
+  context.bytes += len;
+  context.calls++;
+  if (context.calls === 100) {
+    const bytesPerCall = context.bytes / context.calls;
+    if (bytesPerCall < 8) {
+      const s = bytesPerCall > 1 ? 's' : '';
+      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+    }
+  }
+}
+
 export function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');

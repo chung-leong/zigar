@@ -8,6 +8,7 @@ const replacements1 = {
   'process.env.BITS': '"64"',
   'process.env.TARGET': '"node"',
   'process.env.MIXIN': '""',
+  'import.meta.env.PROD': false,
 };
 const replacements2 = {
   '...(undefined),': '',

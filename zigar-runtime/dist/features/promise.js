@@ -6,8 +6,8 @@ import { usize } from '../utils.js';
 var promise = mixin({
   init() {
     this.promiseCallbackMap = new Map();
-    this.promiseInstanceMap = new Map();
-    this.nextPromiseInstanceId = usize(0x1000);
+    this.promiseContextMap = new Map();
+    this.nextPromiseContextId = usize(0x1000);
   },
   // create promise struct for outbound call
   createPromise(structure, args, func) {
@@ -35,9 +35,9 @@ var promise = mixin({
       });
     }
     // create a handle referencing the function 
-    const instanceId = this.nextPromiseInstanceId++;
-    const ptr = this.obtainZigView(instanceId, 0, false);
-    this.promiseInstanceMap.set(instanceId, { func, args });
+    const contextId = this.nextPromiseContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.promiseContextMap.set(contextId, { func, args });
     // use the same callback for all promises of a given type
     let callback = this.promiseCallbackMap.get(constructor);
     if (!callback) {
@@ -45,8 +45,8 @@ var promise = mixin({
         // the function assigned to args[RETURN] down below calls this function
         // with a DataView instead of an actual pointer
         const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const instanceId = this.getViewAddress(dv);
-        const instance = this.promiseInstanceMap.get(instanceId);
+        const contextId = this.getViewAddress(dv);
+        const instance = this.promiseContextMap.get(contextId);
         if (instance) {
           const { func, args } = instance;
           if (func.length === 2) {
@@ -56,7 +56,7 @@ var promise = mixin({
             func(result);
           }
           args[FINALIZE]();
-          this.promiseInstanceMap.delete(instanceId);  
+          this.promiseContextMap.delete(contextId);  
         }
       };
       this.promiseCallbackMap.set(constructor, callback);

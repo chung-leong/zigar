@@ -456,6 +456,21 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
+function checkInefficientAccess(context, type, len) {
+  if (context.bytes === undefined) {
+    context.bytes = context.calls = 0;
+  }
+  context.bytes += len;
+  context.calls++;
+  if (context.calls === 100) {
+    const bytesPerCall = context.bytes / context.calls;
+    if (bytesPerCall < 8) {
+      const s = bytesPerCall > 1 ? 's' : '';
+      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+    }
+  }
+}
+
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -509,4 +524,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, EnumExpected, ErrorExpected, Exit, InaccessiblePointer, InactiveUnionProperty, InvalidArrayInitializer, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, EnumExpected, ErrorExpected, Exit, InaccessiblePointer, InactiveUnionProperty, InvalidArrayInitializer, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };

@@ -6,8 +6,8 @@ import { usize } from '../utils.js';
 var generator = mixin({
   init() {
     this.generatorCallbackMap = new Map();
-    this.generatorInstanceMap = new Map();
-    this.nextGeneratorInstanceId = usize(0x2000);
+    this.generatorContextMap = new Map();
+    this.nextGeneratorContextId = usize(0x2000);
   },
   createGenerator(structure, args, func) {
     const { constructor } = structure;
@@ -20,9 +20,9 @@ var generator = mixin({
       func = generator.push.bind(generator);
     }
     // create a handle referencing the function 
-    const instanceId = this.nextGeneratorInstanceId++;
-    const ptr = this.obtainZigView(instanceId, 0, false);
-    this.generatorInstanceMap.set(instanceId, { func, args });
+    const contextId = this.nextGeneratorContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.generatorContextMap.set(contextId, { func, args });
     // use the same callback for all generators of a given type
     let callback = this.generatorCallbackMap.get(constructor);
     if (!callback) {
@@ -30,8 +30,8 @@ var generator = mixin({
         // the function assigned to args[RETURN] down below calls this function
         // with a DataView instead of an actual pointer
         const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const instanceId = this.getViewAddress(dv);
-        const instance = this.generatorInstanceMap.get(instanceId);
+        const contextId = this.getViewAddress(dv);
+        const instance = this.generatorContextMap.get(contextId);
         if (instance) {
           const { func, args } = instance;
           const isError = result instanceof Error;
@@ -43,7 +43,7 @@ var generator = mixin({
           : func(result));
           if (retval === false || isError || result === null) {
             args[FINALIZE]();
-            this.generatorInstanceMap.delete(instanceId);
+            this.generatorContextMap.delete(contextId);
             return false;
           } else {
             return true;
