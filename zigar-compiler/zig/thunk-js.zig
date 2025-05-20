@@ -224,7 +224,9 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             // the last two arguments are the context pointer and the function id
             const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
-            switch (host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct))) {
+            const result = host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct));
+            switch (result) {
+                .ok => {},
                 .failure_deadlock => {
                     if (comptime findError(RT, .{ error.Deadlock, error.Unexpected })) |err| {
                         return err;
@@ -240,7 +242,6 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
                         return err;
                     } else @panic("JavaScript function failed");
                 },
-                else => {},
             }
             return arg_struct.retval;
         }
@@ -296,7 +297,7 @@ fn findError(comptime T: type, comptime errors: anytype) ?anyerror {
     switch (@typeInfo(T)) {
         .error_union => |eu| {
             inline for (errors) |err| {
-                if (eu.error_set == anyerror) {
+                if (@typeInfo(eu.error_set).error_set == null) {
                     return err;
                 }
                 const name = @errorName(err);

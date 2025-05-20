@@ -3,7 +3,7 @@ const zigar = @import("zigar");
 
 pub const JSError = error{Unexpected};
 
-pub const Callback = *const fn (generator: zigar.function.Generator(JSError!?i32)) void;
+pub const Callback = *const fn (generator: zigar.function.Generator(JSError!?i32, false)) void;
 
 pub fn receive(ptr: ?*anyopaque, arg: JSError!?i32) bool {
     const number_ptr: *const u32 = @ptrCast(@alignCast(ptr));

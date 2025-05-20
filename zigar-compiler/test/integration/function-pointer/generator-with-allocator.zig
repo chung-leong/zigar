@@ -10,7 +10,7 @@ pub const Avenger = struct {
 
 pub const Callback = *const fn (
     allocator: std.mem.Allocator,
-    generator: zigar.function.Generator(JSError!?Avenger),
+    generator: zigar.function.Generator(JSError!?Avenger, false),
 ) void;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};

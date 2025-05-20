@@ -2595,7 +2595,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                             // otherwise an optional promise can be provided
                             const Task = if (IteratorReturnValue(RT)) |IT| struct {
                                 args: std.meta.ArgsTuple(DT),
-                                generator: ?Generator(IT),
+                                generator: ?Generator(IT, isIteratorAllocating(RT)),
                             } else struct {
                                 args: std.meta.ArgsTuple(DT),
                                 promise: ?Promise(RT),
