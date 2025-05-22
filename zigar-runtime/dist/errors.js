@@ -456,7 +456,7 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function checkInefficientAccess(context, type, len) {
+function checkInefficientAccess(context, access, len) {
   if (context.bytes === undefined) {
     context.bytes = context.calls = 0;
   }
@@ -466,7 +466,9 @@ function checkInefficientAccess(context, type, len) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall > 1 ? 's' : '';
-      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+      const action = (access === 'read') ? 'reading' : 'writing';
+      const name = (access === 'read') ? 'Reader' : 'Writer';
+      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
     }
   }
 }

@@ -27,7 +27,7 @@ var reader = mixin({
             const view = buffer['*'][MEMORY];
             const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
             if (!import.meta.env.PROD) {
-              checkInefficientAccess(context, 'reader', dest.length);
+              checkInefficientAccess(context, 'read', dest.length);
             }
             let { reader, finished, leftover } = context;
             let read = 0;

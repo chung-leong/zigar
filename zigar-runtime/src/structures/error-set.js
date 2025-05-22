@@ -1,9 +1,9 @@
-import { ErrorSetFlag, MemberType, StructureType } from '../constants.js';
+import { ErrorSetFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   deanimalizeErrorName, ErrorExpected, InvalidInitializer, isErrorJSON, NotInErrorSet
 } from '../errors.js';
-import { CAST, CLASS, INITIALIZE, PROPS, SLOTS } from '../symbols.js';
+import { CAST, CLASS, INITIALIZE, SLOTS } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue } from '../utils.js';
 
 export default mixin({

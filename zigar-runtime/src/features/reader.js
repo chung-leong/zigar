@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { checkInefficientAccess, TypeMismatch } from '../errors.js';
 import { MEMORY } from '../symbols.js';
-import { empty, usize } from '../utils.js';
+import { usize } from '../utils.js';
 
 export default mixin({
   init() {
@@ -27,7 +27,7 @@ export default mixin({
             const view = buffer['*'][MEMORY];
             const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
             if (!import.meta.env.PROD) {
-              checkInefficientAccess(context, 'reader', dest.length);
+              checkInefficientAccess(context, 'read', dest.length);
             }
             let { reader, finished, leftover } = context;
             let read = 0;

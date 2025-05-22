@@ -16,7 +16,7 @@ var writer = mixin({
       const writerId = this.nextWriterContextId++;
       const ptr = this.obtainZigView(writerId, 0, false);
       this.writerContextMap.set(writerId, { writer });
-      writer.closed.catch(empty).then(() => this.writeMap.delete(writerId));
+      writer.closed.catch(empty).then(() => this.writerContextMap.delete(writerId));
       // use the same callback for all writers
       let writeFn = this.writerCallback;
       if (!writeFn) {
@@ -28,10 +28,10 @@ var writer = mixin({
             const view = buffer['*'][MEMORY];
             const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
             if (!import.meta.env.PROD) {
-              checkInefficientAccess(context, 'writer', src.length);
+              checkInefficientAccess(context, 'write', src.length);
             }
             const { writer } = context;
-            await writer.write(src);
+            await writer.write(new Uint8Array(src));
             return src.length;
           } catch (err) {
             this.writerContextMap.delete(writerId);

@@ -901,7 +901,7 @@
         if (void 0 === t.bytes && (t.bytes = t.calls = 0), t.bytes += n, t.calls++, 100 === t.calls) {
             const n = t.bytes / t.calls;
             if (n < 8) {
-                throw new Error(`Inefficient ${e} access. Each call is only reading ${n} byte${n > 1 ? "s" : ""}. Please use std.io.BufferedReader.`);
+                throw new Error(`Inefficient ${e} access. Each call is only ${"read" === e ? "reading" : "writing"} ${n} byte${n > 1 ? "s" : ""}. Please use std.io.Buffered${"read" === e ? "Reader" : "Writer"}.`);
             }
         }
     }
@@ -1836,7 +1836,7 @@
                     if (!r) return 0;
                     try {
                         const t = e["*"][tt], i = new Uint8Array(t.buffer, t.byteOffset, t.byteLength);
-                        $e(r, "reader", i.length);
+                        $e(r, "read", i.length);
                         let {reader: s, finished: o, leftover: c} = r, a = 0;
                         if (s instanceof ReadableStreamBYOBReader) {
                             const {done: t, value: e} = await s.read(i);
@@ -2492,16 +2492,16 @@
                 const e = this.nextWriterContextId++, n = this.obtainZigView(e, 0, !1);
                 this.writerContextMap.set(e, {
                     writer: t
-                }), t.closed.catch(Ie).then((() => this.writeMap.delete(e)));
+                }), t.closed.catch(Ie).then((() => this.writerContextMap.delete(e)));
                 let r = this.writerCallback;
                 return r || (r = this.writerCallback = async (t, e) => {
                     const n = this.getViewAddress(t["*"][tt]), r = this.writerContextMap.get(n);
                     if (!r) return 0;
                     try {
                         const t = e["*"][tt], n = new Uint8Array(t.buffer, t.byteOffset, t.byteLength);
-                        $e(r, "writer", n.length);
+                        $e(r, "write", n.length);
                         const {writer: i} = r;
-                        return await i.write(n), n.length;
+                        return await i.write(new Uint8Array(n)), n.length;
                     } catch (t) {
                         throw this.writerContextMap.delete(n), t;
                     }
@@ -3172,16 +3172,16 @@
             this.ZigError = class ZigError extends ZigErrorBase {}, this.globalItemsByIndex = {};
         },
         defineErrorSet(t, e) {
-            const {instance: {members: [n]}, flags: r, name: i} = t, s = this.defineMember(n), {set: o} = s, c = [ "string", "number" ], a = this.createApplier(t), l = this.createConstructor(t, {
+            const {instance: {members: [n]}} = t, r = this.defineMember(n), {set: i} = r, s = [ "string", "number" ], o = this.createApplier(t), c = this.createConstructor(t, {
                 onCastError(t, e) {
-                    throw new InvalidInitializer(t, c, e);
+                    throw new InvalidInitializer(t, s, e);
                 }
             });
-            return e.$ = s, e[Gt] = te((function(e) {
-                if (e instanceof l[ct]) o.call(this, e); else if (e && "object" == typeof e && !Te(e)) {
-                    if (0 === a.call(this, e)) throw new InvalidInitializer(t, c, e);
-                } else void 0 !== e && o.call(this, e);
-            })), l;
+            return e.$ = r, e[Gt] = te((function(e) {
+                if (e instanceof c[ct]) i.call(this, e); else if (e && "object" == typeof e && !Te(e)) {
+                    if (0 === o.call(this, e)) throw new InvalidInitializer(t, s, e);
+                } else void 0 !== e && i.call(this, e);
+            })), c;
         },
         finalizeErrorSet(t, e) {
             const {constructor: n, flags: r, instance: {members: [i]}, static: {members: s, template: o}} = t, c = o?.[et] ?? {}, a = r & C ? this.globalItemsByIndex : {}, {get: l} = this.defineMember(i, !1);
@@ -3205,12 +3205,12 @@
         transformDescriptorErrorSet(t, e) {
             const {type: n, structure: r} = e;
             if (n === k.Object) return t;
-            const i = function(t) {
+            const i = t => {
                 const {constructor: e, flags: n} = r, i = e(t);
                 if (!i) {
                     if (n & C && "number" == typeof t) {
-                        const e = this.ZigError(t, `Unknown error: ${t}`);
-                        return this.globalItemsByIndex[number] = e;
+                        const e = new this.ZigError(`Unknown error: ${t}`, t);
+                        return this.globalItemsByIndex[t] = e, Kt(this.ZigError, `${e}`, te(e)), e;
                     }
                     throw t instanceof Error ? new NotInErrorSet(r) : new ErrorExpected(r, t);
                 }

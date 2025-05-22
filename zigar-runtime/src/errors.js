@@ -1,6 +1,6 @@
 import { memberNames, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { defineProperty,  getPrimitiveName } from './utils.js';
+import { defineProperty, getPrimitiveName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -456,7 +456,7 @@ export function throwReadOnly() {
   throw new ReadOnly();
 }
 
-export function checkInefficientAccess(context, type, len) {
+export function checkInefficientAccess(context, access, len) {
   if (context.bytes === undefined) {
     context.bytes = context.calls = 0;
   }
@@ -466,7 +466,9 @@ export function checkInefficientAccess(context, type, len) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall > 1 ? 's' : '';
-      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+      const action = (access === 'read') ? 'reading' : 'writing';
+      const name = (access === 'read') ? 'Reader' : 'Writer';
+      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
     }
   }
 }

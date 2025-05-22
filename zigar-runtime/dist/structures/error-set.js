@@ -2,7 +2,7 @@ import { MemberType, ErrorSetFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { isErrorJSON, InvalidInitializer, deanimalizeErrorName, NotInErrorSet, ErrorExpected } from '../errors.js';
 import { SLOTS, CAST, CLASS, INITIALIZE } from '../symbols.js';
-import { defineValue, defineProperties } from '../utils.js';
+import { defineValue, defineProperties, defineProperty } from '../utils.js';
 
 var errorSet = mixin({
   init() {
@@ -12,8 +12,6 @@ var errorSet = mixin({
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
-      flags,
-      name,
     } = structure;
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
@@ -105,14 +103,16 @@ var errorSet = mixin({
     if (type === MemberType.Object) {
       return descriptor;
     }
-    const findError = function(value) {
+    const findError = (value) => {
       const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
         if (flags & ErrorSetFlag.IsOpenEnded) {
           if (typeof(value) === 'number') {
-            const newItem = this.ZigError(value, `Unknown error: ${value}`);
-            return this.globalItemsByIndex[number] = newItem;
+            const newItem = new this.ZigError(`Unknown error: ${value}`, value);
+            this.globalItemsByIndex[value] = newItem;
+            defineProperty(this.ZigError, `${newItem}`, defineValue(newItem));
+            return newItem;
           }
         }
         if (value instanceof Error) {
