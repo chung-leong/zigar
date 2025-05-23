@@ -2,8 +2,8 @@ import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { open } from 'fs/promises';
 import 'mocha-skip-if';
-import { capture, delay } from '../test-utils.js';
 import { fileURLToPath } from 'url';
+import { capture } from '../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -69,11 +69,7 @@ export function addTests(importModule, options) {
         const inStream = input.readableWebStream();
         const reader = inStream.getReader();
         const output = await open(absolute('./data/decompressed.txt'), 'w');
-        const outStream = new WritableStream({
-          async write(chunk) {
-            await output.write(chunk);
-          },
-        });
+        const outStream = new WritableStream(output);
         const writer = outStream.getWriter();
         await decompress(reader, writer);
         input.close();
