@@ -21,24 +21,23 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn output(
+pub fn hash(
     reader: std.io.AnyReader,
-    promise: zigar.function.PromiseOf(ns.output),
+    promise: zigar.function.PromiseOf(ns.hash),
 ) !void {
-    try work_queue.push(ns.output, .{reader}, promise);
+    try work_queue.push(ns.hash, .{reader}, promise);
 }
 
 const ns = struct {
-    pub fn output(reader: std.io.AnyReader) !void {
-        const stdout = std.io.getStdOut();
+    pub fn hash(reader: std.io.AnyReader) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
         var buffer: [128]u8 = undefined;
+        var sha1: std.crypto.hash.Sha1 = .init(.{});
         while (true) {
-            const read = reader.read(&buffer) catch |err| show: {
-                std.debug.print("error: {s}", .{@errorName(err)});
-                break :show 0;
-            };
+            const read = try reader.read(&buffer);
             if (read == 0) break;
-            _ = try stdout.write(buffer[0..read]);
+            sha1.update(buffer[0..read]);
         }
+        const digest = sha1.finalResult();
+        return std.fmt.bytesToHex(digest, .lower);
     }
 };

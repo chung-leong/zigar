@@ -3,7 +3,6 @@ import chaiAsPromised from 'chai-as-promised';
 import { open } from 'fs/promises';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
-import { capture } from '../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -20,16 +19,14 @@ export function addTests(importModule, options) {
       const {
         startup,
         shutdown,
-        output,
+        hash,
       } = await importTest('read-from-reader', { multithreaded: true });
       startup(1);
       try {
         const fd = await open(absolute('./data/test.txt'));
         const stream = fd.readableWebStream();
-        const lines = await capture (() => output(stream.getReader()));
-        fd.close();
-        expect(lines[0]).to.contain('Four score and seven years');
-        expect(lines[4]).to.contain('shall not perish');
+        const digest = await hash(stream.getReader());
+        expect(digest.string).to.equal('bbfdc0a41a89def805b19b4f90bb1ce4302b4aef');
       } finally {
         await shutdown();
       }
