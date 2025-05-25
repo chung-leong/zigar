@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/code-viewer"
   },
   "dependencies": {
     "@sinm/react-file-tree": "^1.1.1",
