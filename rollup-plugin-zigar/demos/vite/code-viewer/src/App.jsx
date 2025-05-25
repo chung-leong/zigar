@@ -25,20 +25,18 @@ function App() {
     tree,
     itemRenderer: (treeNode) => <FileItemWithFileIcon treeNode={treeNode} />,
     onItemClick: useCallback(({ uri, type, data, expanded }) => {
-      if (type === 'directory') {
-        startTransition(() => {
-          setTree((tree) =>
-            utils.assignTreeNode(tree, uri, { expanded: !expanded })
-          );
-        });
-      } else {
-        const code = decoder.decode(data);
-        const slashIndex = uri.lastIndexOf('/');
-        const dotIndex = uri.lastIndexOf('.');
-        const ext = (dotIndex > slashIndex) ? uri.slice(dotIndex + 1) : '';
-        setCodeString(code);
-        setLanguage(ext2lang[ext] ?? ext);
-      }
+      startTransition(() => {
+        if (type === 'directory') {
+          setTree(tree => utils.assignTreeNode(tree, uri, { expanded: !expanded }));
+        } else {
+          const code = decoder.decode(data);
+          const slashIndex = uri.lastIndexOf('/');
+          const dotIndex = uri.lastIndexOf('.');
+          const ext = (dotIndex > slashIndex) ? uri.slice(dotIndex + 1) : '';
+          setCodeString(code);
+          setLanguage(ext2lang[ext] ?? ext);
+        }
+      });
     }, []),
   };
   const highlightProps = {
@@ -62,9 +60,9 @@ function App() {
       try {
         for await (const file of await extract(reader)) {
           if (unmounted) break;
-          const uri = file.name.string.replace(/\/$/, '');
           startTransition(() => {
             setTree((tree) => {
+              const uri = file.name.string.replace(/\/$/, '');
               const slashIndex = uri.lastIndexOf('/');
               if (slashIndex === -1) {
                 return { uri, expanded: true };
