@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/raylib.zigar": "zig/raylib.zig"
+  "modules": {
+    "lib/raylib.zigar": {
+      "source": "zig/raylib.zig"
+    }
   },
   "targets": [
     { "platform": "windows", "arch": "x64" },

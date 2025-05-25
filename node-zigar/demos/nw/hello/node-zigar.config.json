@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/hello.zigar": "zig/hello.zig"
+  "modules": {
+    "lib/hello.zigar": {
+      "source": "zig/hello.zig"
+    }
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },

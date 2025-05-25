@@ -1,7 +1,9 @@
 {
   "clean": "yes",
   "optimize": "Debug",
-  "sourceFiles": {
-    "./hello.zigar": "./src/hello.zig"
+  "modules": {
+    "./hello.zigar": {
+      "source": "./src/hello.zig"
+    }
   }
 }

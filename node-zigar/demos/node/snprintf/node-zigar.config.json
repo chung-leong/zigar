@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/functions.zigar": "zig/functions.zig"
+  "modules": {
+    "lib/functions.zigar": {
+      "source": "zig/functions.zig"
+    }
   },
   "targets": [
     { "platform": "linux", "arch": "x64" },

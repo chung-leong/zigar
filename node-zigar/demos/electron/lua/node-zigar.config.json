@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "out/lib/lua.zigar": "zig/lua.zig"
+  "modules": {
+    "out/lib/lua.zigar": {
+      "source": "zig/lua.zig"
+    }
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },

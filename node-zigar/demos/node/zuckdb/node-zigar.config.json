@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/zuckdb.zigar": "zig/zuckdb.zig"
+  "modules": {
+    "lib/zuckdb.zigar": {
+      "source": "zig/zuckdb.zig"
+    }
   },
   "targets": [
     { "platform": "linux", "arch": "x64" },

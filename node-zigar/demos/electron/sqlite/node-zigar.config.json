@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "out/lib/sqlite.zigar": "zig/sqlite.zig"
+  "modules": {
+    "out/lib/sqlite.zigar": {
+      "source": "zig/sqlite.zig"
+    }
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },

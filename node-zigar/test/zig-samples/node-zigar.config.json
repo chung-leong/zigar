@@ -1,8 +1,12 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "./lib/simple.zigar": "./simple.zig",
-    "./lib/integers.zigar": "./integers.zig"
+  "modules": {
+    "./lib/simple.zigar": {
+      "source": "./simple.zig"
+    },
+    "./lib/integers.zigar": {
+      "source": "./integers.zig"
+    }
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },

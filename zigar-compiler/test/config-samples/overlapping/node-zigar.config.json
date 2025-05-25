@@ -1,7 +1,11 @@
 {
   "optimize": "Debug",
-  "sourceFiles": {
-    "./lib/world.zigar": "./src/world.zig",
-    "./lib/hello/world.zigar": "./src/hello-world.zig"
+  "modules": {
+    "./lib/world.zigar": {
+      "source": "./src/world.zig"
+    },
+    "./lib/hello/world.zigar": {
+      "source": "./src/hello-world.zig"
+    }
   }
 }

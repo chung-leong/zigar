@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseSmall",
-  "sourceFiles": {
-    "lib/mysql.zigar": "zig/mysql.zig"
+  "modules": {
+    "lib/mysql.zigar": {
+      "source": "zig/mysql.zig"
+    }
   },
   "targets": [
     { "platform": "linux", "arch": "x64" },

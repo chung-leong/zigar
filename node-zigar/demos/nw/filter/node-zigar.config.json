@@ -1,7 +1,9 @@
 {
   "optimize": "ReleaseFast",
-  "sourceFiles": {
-    "lib/sepia.zigar": "zig/sepia.zig"
+  "modules": {
+    "lib/sepia.zigar": {
+      "source": "zig/sepia.zig"
+    }
   },
   "targets": [
     { "platform": "win32", "arch": "x64" },
