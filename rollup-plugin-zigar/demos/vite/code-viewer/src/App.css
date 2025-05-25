@@ -1,0 +1,27 @@
+#root {
+  margin: 0 auto;
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+}
+
+#left-pane {
+  flex: 0 0 24em;
+  display: flex;
+  border-right: 1px solid #333333;
+  padding-left: 0.5em;
+}
+
+#left-pane span {
+  cursor: pointer;
+}
+
+#right-pane {
+  flex: 1 1 auto;
+  display: flex;
+  overflow: auto;
+}
+
+#right-pane pre {
+  flex: 1 1 100%;
+}
