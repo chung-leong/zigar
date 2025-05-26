@@ -282,10 +282,10 @@ export async function copyZonFile(srcPath, dstPath) {
   const srcDir = dirname(srcPath);
   const dstDir = dirname(dstPath);
   const srcCode = await readFile(srcPath, 'utf-8');
-  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+  const dstCode = srcCode.replace(/(\.path\s+=\s+)"(.*?)"/g, (m0, pre, path) => {
     const srcModulePath = resolve(srcDir, path);
     const dstModulePath = relative(dstDir, srcModulePath);
-    return pre + dstModulePath + post;
+    return pre + JSON.stringify(dstModulePath);
   });
   await writeFile(dstPath, dstCode);
 }

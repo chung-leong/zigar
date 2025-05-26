@@ -350,11 +350,13 @@ function findSortedIndex(array, value, cb) {
 const isMisaligned = function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
+
 ;
 
 const alignForward = function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
+
 ;
 
 const usizeMin = 0;
@@ -364,16 +366,19 @@ const usizeInvalid = -1;
 const usize = function(arg) {
     return Number(arg);
   }
+
 ;
 
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
+
 ;
 
 const adjustAddress = function(address, addend) {
     return address + addend;
   }
+
 ;
 
 function transformIterable(arg) {
@@ -515,6 +520,7 @@ async function checkPidFile(pidPath, staleTime) {
   try {
     const pid = await loadFile(pidPath);
     if (pid) {
+
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
@@ -522,6 +528,7 @@ async function checkPidFile(pidPath, staleTime) {
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
+
     }
     const stats = await stat(pidPath);
     const diff = new Date() - stats.mtime;
@@ -749,10 +756,10 @@ async function copyZonFile(srcPath, dstPath) {
   const srcDir = dirname(srcPath);
   const dstDir = dirname(dstPath);
   const srcCode = await readFile(srcPath, 'utf-8');
-  const dstCode = srcCode.replace(/(\.path\s+=\s+")(.*?)(")/g, (m0, pre, path, post) => {
+  const dstCode = srcCode.replace(/(\.path\s+=\s+)"(.*?)"/g, (m0, pre, path) => {
     const srcModulePath = resolve(srcDir, path);
     const dstModulePath = relative(dstDir, srcModulePath);
-    return pre + dstModulePath + post;
+    return pre + JSON.stringify(dstModulePath);
   });
   await writeFile(dstPath, dstCode);
 }
@@ -1282,6 +1289,7 @@ async function runCompiler(path, args, options) {
     return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
+
   } finally {
     onEnd?.();
   }
@@ -1510,6 +1518,7 @@ async function findSourcePaths(buildPath) {
               try {
                 await stat(srcPath);
                 involved[srcPath] = true;
+
               } catch {};
             }
           }
@@ -1884,13 +1893,16 @@ var all$3 = mixin({
       }
       names.pop();
     }
+
     if (!accessor) {
       throw new Error(`No accessor available: ${accessorName}`);
     }
+
     defineProperty(accessor, 'name', defineValue(accessorName));
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
+
 });
 
 var bigInt = mixin({
@@ -2922,7 +2934,7 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function checkInefficientAccess(context, type, len) {
+function checkInefficientAccess(context, access, len) {
   if (context.bytes === undefined) {
     context.bytes = context.calls = 0;
   }
@@ -2932,7 +2944,9 @@ function checkInefficientAccess(context, type, len) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall > 1 ? 's' : '';
-      throw new Error(`Inefficient ${type} access. Each call is only reading ${bytesPerCall} byte${s}. Please use std.io.BufferedReader.`);
+      const action = (access === 'read') ? 'reading' : 'writing';
+      const name = (access === 'read') ? 'Reader' : 'Writer';
+      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
     }
   }
 }
@@ -2953,8 +2967,10 @@ function deanimalizeErrorName(name) {
         }
       }
     }).trimStart();
+
   } catch (err) {
   }
+
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
@@ -3169,6 +3185,9 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
+
+
+
 });
 
 const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
@@ -3381,6 +3400,9 @@ var callMarshalingInbound = mixin({
       finalizeAsyncCall: { argType: 'ii' },
     },
   } ),
+
+
+
 });
 
 var callMarshalingOutbound = mixin({
@@ -3476,6 +3498,7 @@ var callMarshalingOutbound = mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
+
     {
       this.mixinUsageCapturing = new Map();
     }
@@ -3494,13 +3517,16 @@ var callMarshalingOutbound = mixin({
     if (isAsync) {
       argStruct[FINALIZE] = finalize;
     }
+
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
+
     {
       this.mixinUsage = this.mixinUsageCapturing;
       this.mixinUsageCapturing = null;
     }
+
     if (!success) {
       finalize();
       throw new ZigError();
@@ -3573,6 +3599,10 @@ var callMarshalingOutbound = mixin({
       }
     }
   } ),
+
+
+
+
 });
 
 var dataCopying = mixin({
@@ -4012,6 +4042,9 @@ var jsAllocator = mixin({
       }
     }
   },
+
+
+
 });
 
 var memoryMapping = mixin({
@@ -4254,6 +4287,9 @@ var memoryMapping = mixin({
       return 0;
     },
   } ),
+
+
+
 });
 
 function findMemoryIndex(array, address) {
@@ -4387,9 +4423,11 @@ var moduleLoading = mixin({
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
+
             {
               this.usingStream = true;
             }
+
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? empty;
@@ -4433,6 +4471,9 @@ var moduleLoading = mixin({
       console.error(`Zig panic: ${msg}`);
     },
   } ),
+
+
+
 });
 
 var objectLinkage = mixin({
@@ -4732,7 +4773,7 @@ var reader = mixin({
             const view = buffer['*'][MEMORY];
             const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
             if (!import.meta.env.PROD) {
-              checkInefficientAccess(context, 'reader', dest.length);
+              checkInefficientAccess(context, 'read', dest.length);
             }
             let { reader, finished, leftover } = context;
             let read = 0;
@@ -4847,10 +4888,12 @@ var streamRedirection = mixin({
         }, 250);
       }
       return true;
+
     } catch (err) {
       console.error(err);
       return false;
     }
+
   },
   writeToConsoleNow(array) {
     const c = this.consoleObject ?? globalThis.console;
@@ -4871,6 +4914,7 @@ var streamRedirection = mixin({
   ...({
     usingStream: false,
   } ),
+
 });
 
 var structureAcquisition = mixin({
@@ -5048,12 +5092,14 @@ var structureAcquisition = mixin({
         }
       }
     }
+
     {
       if (list.length > 0) {
         // mixin "features/object-linkage" is used when there are objects linked to Zig memory
         this.usingVariables = true;
       }
     }
+
   },
   useStructures() {
     const module = this.getRootModule();
@@ -5520,6 +5566,9 @@ var viewManagement = mixin({
       }
     },
   } ),
+
+
+
 });
 
 function checkDataViewSize(dv, structure) {
@@ -5598,6 +5647,9 @@ var wasiSupport = mixin({
       }
     },
   } ),
+
+
+
 });
 
 var writeProtection = mixin({
@@ -5661,7 +5713,7 @@ var writer = mixin({
       const writerId = this.nextWriterContextId++;
       const ptr = this.obtainZigView(writerId, 0, false);
       this.writerContextMap.set(writerId, { writer });
-      writer.closed.catch(empty).then(() => this.writeMap.delete(writerId));
+      writer.closed.catch(empty).then(() => this.writerContextMap.delete(writerId));
       // use the same callback for all writers
       let writeFn = this.writerCallback;
       if (!writeFn) {
@@ -5673,10 +5725,10 @@ var writer = mixin({
             const view = buffer['*'][MEMORY];
             const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
             if (!import.meta.env.PROD) {
-              checkInefficientAccess(context, 'writer', src.length);
+              checkInefficientAccess(context, 'write', src.length);
             }
             const { writer } = context;
-            await writer.write(src);
+            await writer.write(new Uint8Array(src));
             return src.length;
           } catch (err) {
             this.writerContextMap.delete(writerId);
@@ -5914,6 +5966,7 @@ var all$2 = mixin({
     const { type, structure } = member;
     const handleName = `defineMember${memberNames[type]}`;
     const f = this[handleName];
+
     const descriptor = f.call(this, member);
     if (applyTransform) {
       if (structure) {
@@ -6013,6 +6066,7 @@ var dataView = mixin({
       },
     });
   },
+
 });
 
 var float = mixin({
@@ -6092,6 +6146,7 @@ var primitive$1 = mixin({
       const { bitOffset, byteSize } = member;
       const getter = getAccessor.call(this, 'get', member);
       const setter = getAccessor.call(this, 'set', member);
+
       if (bitOffset !== undefined) {
         const offset = bitOffset >> 3;
         return {
@@ -6154,6 +6209,7 @@ var sentinel = mixin({
       byteSize,
       instance: { members: [ member, sentinel ], template },
     } = structure;
+
     const { get: getSentinelValue } = this.defineMember(sentinel);
     const { get } = this.defineMember(member);
     const value = getSentinelValue.call(template, 0);
@@ -7103,8 +7159,6 @@ var errorSet = mixin({
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
-      flags,
-      name,
     } = structure;
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
@@ -7196,14 +7250,16 @@ var errorSet = mixin({
     if (type === MemberType.Object) {
       return descriptor;
     }
-    const findError = function(value) {
+    const findError = (value) => {
       const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
         if (flags & ErrorSetFlag.IsOpenEnded) {
           if (typeof(value) === 'number') {
-            const newItem = this.ZigError(value, `Unknown error: ${value}`);
-            return this.globalItemsByIndex[number] = newItem;
+            const newItem = new this.ZigError(`Unknown error: ${value}`, value);
+            this.globalItemsByIndex[value] = newItem;
+            defineProperty(this.ZigError, `${newItem}`, defineValue(newItem));
+            return newItem;
           }
         }
         if (value instanceof Error) {
@@ -7412,10 +7468,12 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
+
   ...({
     usingFunction: false,
     usingFunctionPointer: false,
   } ),
+
 });
 
 var opaque = mixin({
@@ -8020,6 +8078,7 @@ var slice = mixin({
         members: [ member ],
       },
     } = structure;
+
     const { byteSize: elementSize, structure: elementStructure } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {
