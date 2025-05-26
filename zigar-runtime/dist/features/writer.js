@@ -27,7 +27,7 @@ var writer = mixin({
           try {
             const view = buffer['*'][MEMORY];
             const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-            if (!import.meta.env.PROD) {
+            if (import.meta.env?.PROD !== true) {
               checkInefficientAccess(context, 'write', src.length);
             }
             const { writer } = context;
