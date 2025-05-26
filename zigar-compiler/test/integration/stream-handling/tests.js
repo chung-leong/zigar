@@ -2,6 +2,7 @@ import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { open } from 'fs/promises';
 import 'mocha-skip-if';
+import { platform } from 'os';
 import { fileURLToPath } from 'url';
 
 use(chaiAsPromised);
@@ -26,7 +27,10 @@ export function addTests(importModule, options) {
         const fd = await open(absolute('./data/test.txt'));
         const stream = fd.readableWebStream();
         const digest = await hash(stream.getReader());
-        expect(digest.string).to.equal('bbfdc0a41a89def805b19b4f90bb1ce4302b4aef');
+        const correct = (platform() === 'win32') 
+        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        expect(digest.string).to.equal(correct);
       } finally {
         await shutdown();
       }
