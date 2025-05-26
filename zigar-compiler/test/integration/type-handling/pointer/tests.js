@@ -112,7 +112,7 @@ export function addTests(importModule, options) {
     it('should return pointer', async function() {
       this.timeout(0);
       const { getBytes, getText } = await importTest('as-return-value');
-      expect(getBytes().string).to.equal('Hello');
+      expect(getBytes().string).to.equal('World');
       expect(getText()).to.equal('Hello');
     })
     it('should handle pointer in array', async function() {

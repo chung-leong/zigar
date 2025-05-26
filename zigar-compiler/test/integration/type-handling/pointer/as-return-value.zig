@@ -1,5 +1,5 @@
 pub fn getBytes() []const u8 {
-    return "Hello";
+    return "World";
 }
 
 pub fn getText() []const u8 {
@@ -8,6 +8,6 @@ pub fn getText() []const u8 {
 
 pub const @"meta(zigar)" = struct {
     pub fn isRetvalString(comptime func: anytype) bool {
-        return func == getText;
+        return @TypeOf(func) == @TypeOf(getText) and func == getText;
     }
 };
