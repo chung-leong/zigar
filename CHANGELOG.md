@@ -1,3 +1,17 @@
+## 0.14.1
+
+* Added support for reader/writer
+* Added support for standalone module loader
+* Added ability to specify string struct field, arguments, and return value
+* Made promises and generator more efficient
+* Implemented the copying of PDB file for Windows build
+* Enable use of local modules
+* Fixed handling of anyerror
+* Fixed issue when WASM is larger than 8MB
+* Fixed memory allocation
+* Fixed access to Zig memory in Electron
+* Migrated addon code from C to Zig
+
 ## 0.14.0
 
 * Added support for function pointer
