@@ -1,10 +1,9 @@
 const std = @import("std");
-const builtin = @import("builtin");
-
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const builtin = @import("builtin");
 
 pub const Result = enum(u32) {
     ok,
@@ -2281,7 +2280,7 @@ pub fn GeneratorArgOf(comptime arg: anytype) type {
     const f = @typeInfo(FT).@"fn";
     return inline for (f.params) |param| {
         if (getInternalType(param.type) == .generator) break param.type.?;
-    } else @compileError("No promise argument: " ++ @typeName(FT));
+    } else @compileError("No generator argument: " ++ @typeName(FT));
 }
 
 pub const AbortSignal = struct {
