@@ -2454,7 +2454,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
-                stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else 1048576,
+                stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else std.Thread.SpawnConfig.default_stack_size,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
