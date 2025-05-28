@@ -10,6 +10,7 @@
 * Fixed issue when WASM is larger than 8MB
 * Fixed memory allocation
 * Fixed access to Zig memory in Electron
+* Made stack size for work queue threads the same as the default
 * Migrated addon code from C to Zig
 
 ## 0.14.0
