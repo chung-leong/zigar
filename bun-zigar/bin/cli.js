@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 import { buildAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, extname, join, parse, relative, resolve } from 'path';
-import { 
+import {
   compile, findConfigFile, generateCode, getArch, getPlatform, optionsForCompile, processConfig,
 } from 'zigar-compiler';
 import { hideStatus, showResult, showStatus } from '../dist/status.js';
@@ -43,6 +43,16 @@ async function buildModules() {
         msg = `Invalid value for arch: ${arch}`;
       } else {
         msg = `Unrecognized archecture: ${arch}`;
+        let possible;
+        switch (arch) {
+          case 'arm32': possible = 'arm'; break;
+          case 'aarch64': possible = 'arm64'; break;
+          case 'x86': possible = 'ia32'; break;
+          case 'x86_64': possible = 'x64'; break;
+          case 'powerpc64':
+          case 'powerpc64le': possible = 'ppc64'; break;
+        }
+        if (possible) msg += ` (do you mean '${possible}'?)`;
       }
     }
     if (!possiblePlatforms.includes(platform)) {
