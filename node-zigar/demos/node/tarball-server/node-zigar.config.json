@@ -1,0 +1,27 @@
+{
+  "optimize": "ReleaseSmall",
+  "modules": {
+    "lib/tar.zigar": {
+      "source": "zig/tar.zig",
+      "loader": "src/tar.js"
+    }
+  },
+  "targets": [
+    {
+      "platform": "linux",
+      "arch": "x64"
+    },
+    {
+      "platform": "linux",
+      "arch": "arm64"
+    },
+    {
+      "platform": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "platform": "win32",
+      "arch": "x64"
+    }
+  ]
+}
