@@ -190,7 +190,7 @@ export function addTests(importModule, options) {
       const f1 = async function*() {
         const avengers = [
           { real_name: 'Tony Stark', superhero_name: 'Ironman', age: 53 },
-          { real_name: 'Peter Park', superhero_name: 'Spiderman', age: 17 },
+          { real_name: 'Peter Parker', superhero_name: 'Spiderman', age: 17 },
           { real_name: 'Natasha Romanoff', superhero_name: 'Black Widow', age: 39 },
         ];
         for (const avenger of avengers) yield avenger;
@@ -201,7 +201,7 @@ export function addTests(importModule, options) {
       });
       expect(lines1).to.eql([
         'real_name = Tony Stark, superhero_name = Ironman, age = 53',
-        'real_name = Peter Park, superhero_name = Spiderman, age = 17',
+        'real_name = Peter Parker, superhero_name = Spiderman, age = 17',
         'real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39'
       ]);
       const f2 = async function*() {
