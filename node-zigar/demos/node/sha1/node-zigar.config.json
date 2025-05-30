@@ -2,8 +2,7 @@
   "optimize": "ReleaseSmall",
   "modules": {
     "lib/sha1.zigar": {
-      "source": "zig/sha1.zig",
-      "loader": "src/sha1.js"
+      "source": "zig/sha1.zig"
     }
   },
   "targets": [

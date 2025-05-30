@@ -1,15 +1,14 @@
 {
   "optimize": "ReleaseSmall",
   "modules": {
-    "lib/hello.zigar": {
-      "source": "zig/hello.zig",
-      "loader": "src/hello.js"
+    "": {
+      "source": ""
     }
   },
   "targets": [
-    { "platform": "linux", "arch": "x64" },
-    { "platform": "linux", "arch": "arm64" },
-    { "platform": "linux-musl", "arch": "x64" },
-    { "platform": "linux-musl", "arch": "arm64" }
+    {
+      "platform": "linux",
+      "arch": "x64"
+    }
   ]
 }

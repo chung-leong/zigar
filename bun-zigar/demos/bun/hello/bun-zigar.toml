@@ -2,7 +2,6 @@ optimize = "ReleaseSmall"
 
 [modules."lib/hello.zigar"]
 source = "zig/hello.zig"
-loader = "src/hello.js"
 
 [[targets]]
 platform = "linux"

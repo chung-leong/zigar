@@ -1,3 +1,3 @@
-import { hello } from './hello.js';
+import { hello } from '../lib/hello.zigar';
 
 hello();

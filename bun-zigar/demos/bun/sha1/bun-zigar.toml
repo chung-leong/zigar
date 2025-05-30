@@ -1,7 +1,7 @@
 optimize = "ReleaseSmall"
 
-[sourceFiles]
-"lib/sha1.zigar" = "zig/sha1.zig"
+[modules."lib/sha1.zigar"]
+source = "zig/sha1.zig"
 
 [[targets]]
 platform = "linux"
