@@ -152,7 +152,8 @@ async function createConfig() {
   const toml = `
 optimize = "ReleaseSmall"
 
-[sourceFiles]
+[modules."lib/???.zigar"]
+source = "zig/???.zig"
 
 [[targets]]
 arch = "${arch}"

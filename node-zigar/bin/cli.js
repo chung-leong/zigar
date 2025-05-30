@@ -148,7 +148,11 @@ async function createConfig() {
   const path = join(process.cwd(), 'node-zigar.config.json');
   const config = {
     optimize: 'ReleaseSmall',
-    modules: {},
+    modules: {
+      "lib/???.zigar": {
+        source: "zig/???.zig",
+      }
+    },
     targets: [
       {
         platform: os.platform(),
