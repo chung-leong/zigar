@@ -11,6 +11,7 @@
 * Fixed memory allocation
 * Fixed access to Zig memory in Electron
 * Made stack size for work queue threads the same as the default
+* Expanded "sourceFiles" option to "modules"
 * Migrated addon code from C to Zig
 
 ## 0.14.0
