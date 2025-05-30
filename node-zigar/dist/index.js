@@ -53,7 +53,7 @@ export async function load(url, context, nextLoad) {
   const addonDir = join(addonParentDir, 'node-zigar-addon');
   // build the Node-API addon if necessary
   const addonOptions = { 
-    recompile: !archive, 
+    recompile: !archive && options.recompile !== false, 
     platform,
     arch,
   };

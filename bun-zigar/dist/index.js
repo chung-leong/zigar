@@ -33,7 +33,7 @@ await plugin({
       if (configPath) {
         // add options from config file
         const cfgModule = await import(configPath);
-        Object.assign(options, processConfig(cfgModule.default, cfgPath, optionsForCompile));
+        Object.assign(options, processConfig(cfgModule.default, configPath, optionsForCompile));
       }
       const ext = extname(path);
       const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
@@ -41,7 +41,11 @@ await plugin({
       const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
       const addonDir = join(addonParentDir, 'node-zigar-addon');
       // build the Node-API addon if necessary
-      const addonOptions = { recompile: options.recompile !== false };
+      const addonOptions = { 
+        recompile: options.recompile !== false,
+        platform,
+        arch,
+      };
       if (!options.quiet) {
         const modName = parse(path).name;
         Object.assign(options, {
