@@ -6,7 +6,7 @@ async function sendData() {
   try {
     startup();
     const url = 'https://localhost:8080/uploads/test2.txt';
-    const transform = new TransformStream(undefined, {}, { highWaterMark: 1024 * 16 });
+    const transform = new TransformStream(undefined, { highWaterMark: 1024 * 16 });
     const writer = transform.writable.getWriter();
     save(writer).then(() => writer.close());
     const response = await fetch(url, {
