@@ -1,17 +1,17 @@
 const std = @import("std");
+const allocator = std.heap.wasm_allocator;
 const builtin = @import("builtin");
-const exporter = @import("exporter.zig");
-const thunk_zig = @import("thunk-zig.zig");
-const thunk_js = @import("thunk-js.zig");
-const types = @import("types.zig");
 
+const exporter = @import("exporter.zig");
+const thunk_js = @import("thunk-js.zig");
+const ActionType = thunk_js.ActionType;
+const ActionResult = thunk_js.ActionResult;
+const thunk_zig = @import("thunk-zig.zig");
+const types = @import("types.zig");
 const Value = types.Value;
 const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
-const ActionType = thunk_js.ActionType;
-const ActionResult = thunk_js.ActionResult;
-
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const PromiseArgOf = types.PromiseArgOf;
@@ -309,7 +309,8 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
     var result = _handleJsCall(fn_id, arg_ptr, arg_size, futex_handle);
     if (!in_main_thread and result == .ok) {
         if (comptime builtin.single_threaded) unreachable;
-        std.Thread.Futex.wait(&futex.value, initial_value);
+        // inlining of wait() causes problem in ReleaseFast when target is WASM
+        @call(.never_inline, std.Thread.Futex.wait, .{ &futex.value, initial_value });
         result = @enumFromInt(futex.value.load(.acquire));
     }
     return result;
@@ -328,8 +329,6 @@ pub fn startMultithread() !void {}
 pub fn stopMultithread() void {}
 
 pub fn setParentThreadId(_: std.Thread.Id) void {}
-
-const allocator = std.heap.wasm_allocator;
 
 const ScratchAllocator = struct {
     const Self = @This();
