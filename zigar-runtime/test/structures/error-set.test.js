@@ -246,7 +246,7 @@ describe('Structure: error-set', function() {
       // define anyerror
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsGlobal,
+        flags: ErrorSetFlag.IsOpenEnded,
         byteSize: 2,
       });
       env.attachMember(structure, {

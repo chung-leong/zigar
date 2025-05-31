@@ -4,7 +4,9 @@ import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError } from '../test-utils.js';
+import { COPY, MEMORY, RESTORE, ZIG } from '../../src/symbols.js';
+import { defineProperties } from '../../src/utils.js';
+import { captureError, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -20,6 +22,53 @@ describe('Feature: module-loading', function() {
       env.abandonModule();
       expect(() => env.runThunk()).to.throw();
       expect(env.abandoned).to.be.true;
+    })
+    it('should replace buffer in Zig memory with ones in JS memory', function() {
+      const env = new Env();
+      const viewMap = new Map(), addressMap = new Map();
+      let nextAddress = usize(0x1000);
+      const allocator = {
+        alloc(len, align) {
+          const address = nextAddress;
+          nextAddress += usize(0x1000);
+          const dv = new DataView(new ArrayBuffer(len));
+          dv[ZIG] = { address, len, allocator: this };
+          viewMap.set(address, dv);
+          addressMap.set(dv, address);
+          return dv;
+        },
+        free(dv) {
+        },
+      };
+      const Test = function(dv) {
+        this[MEMORY] = dv;
+      };
+      defineProperties(Test.prototype, {
+        [COPY]: env.defineCopier(16),
+        [RESTORE]: {
+          value: function() {},
+        }
+      });
+      const object = new Test(env.allocateMemory(16, 8, allocator));
+      const dv = object[MEMORY];
+      expect(dv[ZIG]).to.be.an('object');
+      dv.setUint32(12, 1234, true);
+      env.variables.push({ object, handle: 128 });
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 128 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          return new ArrayBuffer(len);
+        };
+        env.recreateAddress = function(handle) {
+          return usize(handle);
+        };
+      }
+      env.linkVariables(false);
+      env.abandonModule();
+      expect(object[MEMORY]).to.not.equal(dv);
+      expect(dv.getUint32(12, true)).to.equal(1234);
+      expect(object[MEMORY][ZIG]).to.be.undefined;
     })
   })
   if (process.env.TARGET === 'wasm') {

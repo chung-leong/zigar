@@ -1,13 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import {
-  CACHE,
-  COPY,
-  MEMORY, RESTORE, SLOTS,
-  VISIT,
-  ZIG
-} from '../../src/symbols.js';
+import { CACHE, COPY, MEMORY, RESTORE, SLOTS, VISIT } from '../../src/symbols.js';
 import { defineProperties, ObjectCache } from '../../src/utils.js';
 import { delay, usize } from '../test-utils.js';
 
@@ -171,46 +165,5 @@ describe('Feature: object-linkage', function() {
         expect(object[MEMORY].getUint32(0, true)).to.equal(1234);
       });
     }
-  })
-  describe('unlinkVariables', function() {
-    it('should replace buffer in Zig memory with ones in JS memory', function() {
-      const env = new Env();
-      const viewMap = new Map(), addressMap = new Map();
-      let nextAddress = usize(0x1000);
-      const allocator = {
-        alloc(len, align) {
-          const address = nextAddress;
-          nextAddress += usize(0x1000);
-          const dv = new DataView(new ArrayBuffer(len));
-          dv[ZIG] = { address, len, allocator: this };
-          viewMap.set(address, dv);
-          addressMap.set(dv, address);
-          return dv;
-        },
-        free(dv) {
-        },
-      };
-      const Test = function(dv) {
-        this[MEMORY] = dv;
-      };
-      defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(16),
-        [RESTORE]: {
-          value: function() {},
-        }
-      });
-      const object = new Test(env.allocateMemory(16, 8, allocator));
-      const dv = object[MEMORY];
-      expect(dv[ZIG]).to.be.an('object');
-      dv.setUint32(12, 1234, true);
-      env.variables.push({ object, handle: 128 });
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      }
-      env.unlinkVariables();
-      expect(object[MEMORY]).to.not.equal(dv);
-      expect(dv.getUint32(12, true)).to.equal(1234);
-      expect(object[MEMORY][ZIG]).to.be.undefined;
-    })
   })
 })
