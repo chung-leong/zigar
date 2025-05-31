@@ -46,14 +46,14 @@ export default mixin({
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            const match = ErrorSet[arg] ?? ErrorSet.Unexpected;
+            const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
             if (match) {
               setError.call(this, match);
               clearValue.call(this);
             } else {
               // we gave setValue a chance to see if the error is actually an acceptable value
               // now is time to throw an error
-              throw new NotInErrorSet(structure);
+              throw new NotInErrorSet(errorMember.structure);
             }
           } else if (isErrorJSON(arg)) {
             // setValue() failed because the argument actually is an error as JSON

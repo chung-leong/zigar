@@ -10,6 +10,7 @@ export default mixin({
   init() {
     this.ZigError = class ZigError extends ZigErrorBase {},
     this.globalItemsByIndex = {};
+    this.globalItemsByName = {};
   },
   defineErrorSet(structure, descriptors) {
     const {
@@ -48,6 +49,7 @@ export default mixin({
     } = structure;
     const items = template?.[SLOTS] ?? {};
     const itemsByIndex = (flags & ErrorSetFlag.IsOpenEnded) ? this.globalItemsByIndex : {};
+    const itemsByName = (flags & ErrorSetFlag.IsOpenEnded) ? this.globalItemsByName : {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);
     for (const { name, slot } of members) {
@@ -71,6 +73,8 @@ export default mixin({
       const stringified = `${error}`;
       staticDescriptors[stringified] = descriptor;
       itemsByIndex[number] = error;
+      itemsByName[name] = error;
+      itemsByName[stringified] = error;
       // add to global set
       if (!inGlobalSet) {
         defineProperties(this.ZigError, {
@@ -78,6 +82,8 @@ export default mixin({
           [stringified]: descriptor,
         });
         this.globalItemsByIndex[number] = error;       
+        this.globalItemsByName[name] = error;
+        this.globalItemsByName[stringified] = error;
       }
     }
     // add cast handler allowing strings, numbers, and JSON object to be casted into error set
@@ -86,13 +92,13 @@ export default mixin({
         if (typeof(arg) === 'number') {
           return itemsByIndex[arg];
         } else if (typeof(arg) === 'string') {
-          return constructor[arg];
+          return itemsByName[arg];
         } else if (arg instanceof constructor[CLASS]) {
           return itemsByIndex[Number(arg)];
         } else if (isErrorJSON(arg)) {
-          return constructor[`Error: ${arg.error}`];
+          return itemsByName[`Error: ${arg.error}`];
         } else if (arg instanceof Error) {
-          return constructor[`${arg}`];
+          return itemsByName[`${arg}`];
         } else {
           return false;
         }

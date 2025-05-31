@@ -206,7 +206,8 @@ describe('Structure: error-union', function() {
       const env = new Env();
       const anyErrorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsGlobal,
+        flags: ErrorSetFlag.IsOpenEnded,
+        name: 'anyerror',
         byteSize: 2,
       });
       env.attachMember(anyErrorStructure, {
@@ -216,8 +217,10 @@ describe('Structure: error-union', function() {
         byteSize: 2,
         structure: anyErrorStructure,
       });
-      env.defineStructure(anyErrorStructure);
+      const AnyError = env.defineStructure(anyErrorStructure);
+      env.endStructure(anyErrorStructure);
       const errorStructure = env.beginStructure({
+        name: 'MyError',
         type: StructureType.ErrorSet,
         byteSize: 2,
       });
@@ -260,7 +263,9 @@ describe('Structure: error-union', function() {
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
-        structure: {},
+        structure: {
+          name: 'int',
+        },
       });
       env.attachMember(structure, {
         name: 'error',

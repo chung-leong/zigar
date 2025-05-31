@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, YIELD, GENERATOR, THROWING, RETURN } from '../../src/symbols.js';
+import { FINALIZE, GENERATOR, RETURN, THROWING, YIELD } from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -11,7 +11,9 @@ describe('Feature: generator', function() {
     it('should return a function that feeds an async generator', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }      
@@ -30,7 +32,9 @@ describe('Feature: generator', function() {
     it('should cause generator to throw when callback is given an error', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }      
@@ -55,7 +59,9 @@ describe('Feature: generator', function() {
     it('should cause generator to throw when error is passed to the return function', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }      
@@ -78,7 +84,9 @@ describe('Feature: generator', function() {
     it('should return false when a break occurs during iteration of generator', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       const retvals = [];
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -98,7 +106,9 @@ describe('Feature: generator', function() {
     it('should return false when the generator\'s throw method is called', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       const retvals = [];
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -117,7 +127,9 @@ describe('Feature: generator', function() {
     it('should wait for value to be retrieved', async function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }      
@@ -143,7 +155,9 @@ describe('Feature: generator', function() {
     it('should pass item received to given callback function', function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       const result = [];
       const fn = (value) => { result.push(value) };
       args[FINALIZE] = () => {};
@@ -159,7 +173,9 @@ describe('Feature: generator', function() {
     it('should pass item received to function accepting two arguments', function() {
       const env = new Env();
       const args = {};
-      const structure = {};
+      const structure = {
+        instance: { members: [] }
+      };
       const result = [];
       const fn = (error, value) => {
         if (!error) {

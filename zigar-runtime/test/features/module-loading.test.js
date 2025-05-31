@@ -9,29 +9,13 @@ import { captureError } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: module-loading', function() {
-  describe('releaseFunctions', function() {
-    it('should make all imported functions throw', function() {
-      const env = new Env();
-      env.imports = {
-        runThunk: function() {},
-      };
-      for (const [ name, f ] of Object.entries(env.imports)) {
-        env[name] = f;
-      }
-      expect(() => env.runThunk()).to.not.throw();
-      env.releaseFunctions();
-      expect(() => env.runThunk()).to.throw();
-    })
-  })
   describe('abandonModule', function() {
     it('should release imported functions and variables', function() {
       const env = new Env();
-      env.imports = {
+      const exports = {
         runThunk: function() {},
       };
-      for (const [ name, f ] of Object.entries(env.imports)) {
-        env[name] = f;
-      }
+      env.importFunctions(exports);
       expect(() => env.runThunk()).to.not.throw();
       env.abandonModule();
       expect(() => env.runThunk()).to.throw();
