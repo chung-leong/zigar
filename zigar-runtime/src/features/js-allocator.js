@@ -93,11 +93,12 @@ export default mixin({
     }
   },
   freeHostMemory(ptr, buf, ptrAlign) {
+    const dv = buf['*'][MEMORY];
+    const address = this.getViewAddress(dv);
+    const len = dv.byteLength;
     if (process.env.DEV) {
       this.freedBytes += len;
     }
-    const address = this.getViewAddress(buf['*'][MEMORY]);
-    const len = buf.length;
     const entry = this.unregisterMemory(address, len);
     if (process.env.TARGET === 'wasm') {
       if (entry) {

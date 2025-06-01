@@ -1201,7 +1201,7 @@ describe('Feature: call-marshaling-outbound', function() {
     })
   })
   describe('detectArgumentFeatures', function() {
-    it('should set usingDefaultAllocator when a function argument is an allocator', function() {
+    it('should set usingJsAllocator when a function argument is an allocator', function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1251,7 +1251,7 @@ describe('Feature: call-marshaling-outbound', function() {
         },
       ];
       env.detectArgumentFeatures(members);
-      expect(env.usingDefaultAllocator).to.be.true;
+      expect(env.usingJsAllocator).to.be.true;
     })
     it('should set usingPromise when a function argument is a promise', function() {
       const env = new Env();

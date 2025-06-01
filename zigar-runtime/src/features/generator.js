@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { 
+import {
   FINALIZE, GENERATOR, MEMORY, RESET, RETURN, STRING_RETVAL, THROWING, YIELD,
 } from '../symbols.js';
 import { usize } from '../utils.js';
@@ -46,14 +46,11 @@ export default mixin({
           const done = retval === false || isError || result === null;
           // reset allocator
           args[RESET]?.(done);
-          if (done) {
-            args[FINALIZE]();
-            this.generatorContextMap.delete(contextId);
-            return false;
-          } else {
-            return true;
-          }
+          if (!done) return true;
+          args[FINALIZE]();
+          this.generatorContextMap.delete(contextId);
         }
+        return false
       };
       this.generatorCallbackMap.set(constructor, callback);
       this.destructors.push(() => this.freeFunction(callback));

@@ -1,14 +1,13 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
-import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
 import { ALIGN, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
-describe('Feature: default-allocator', function() {
+describe('Feature: js-allocator', function() {
   describe('createDefaultAllocator', function() {
     it('should create an allocator that allocates memory from JavaScript', async function() {
       const env = new Env();
@@ -60,8 +59,8 @@ describe('Feature: default-allocator', function() {
       allocator.vtable.free(allocator.ptr, buf, 3);
     })
   })
-  describe('freeDefaultAllocator', function() {
-    it('should free default allocator', function() {
+  describe('allocateHostMemory', function() {
+    it('should allocate JS memory', function() {
       const env = new Env();
       const args = {};
       const constructor = function({ vtable, ptr }) {
@@ -77,30 +76,10 @@ describe('Feature: default-allocator', function() {
         self[MEMORY] = dv;
         return self;
       };
+      constructor.noRemap = function() {};
       VTable[SIZE] = 3 * 8;
-      VTable[ALIGN] = 8;     
+      VTable[ALIGN] = 8;
       const structure = { constructor };
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 1 });
-      } else {
-        env.obtainExternBuffer = function(address, len) {
-          const buffer = new ArrayBuffer(len);
-          buffer[ZIG] = { address, len };
-          return buffer;
-        };
-        env.getBufferAddress = function(buffer) {
-          return buffer[ZIG]?.address ?? usize(0xf_0000);
-        };
-      }
-      env.createDefaultAllocator(args, structure);
-      env.freeDefaultAllocator();
-      expect(env.defaultAllocator).to.be.null;
-      expect(env.vtableFnIds).to.be.null;
-    })
-  })
-  describe('allocateHostMemory', function() {
-    it('should allocate JS memory', function() {
-      const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
         env.allocateScratchMemory = function(len, align) {
@@ -111,17 +90,37 @@ describe('Feature: default-allocator', function() {
           return usize(0x1000);
         };
       }
-      const dv = env.allocateHostMemory(40, 4);
+      const { ptr } = env.createDefaultAllocator(args, structure);
+      const dv = env.allocateHostMemory(ptr, 40, 2);
       expect(dv).to.be.a('DataView');
     })
     if (process.env.TARGET === 'wasm') {
       it('should return null when shadow memory cannot be allocated', function() {
         const env = new Env();
+        const args = {};
+        const constructor = function({ vtable, ptr }) {
+          this.vtable = vtable;
+          this.ptr = {
+            ['*']: {
+              [MEMORY]: ptr
+            },
+          };
+        };
+        const VTable = constructor.VTable = function(dv) {
+          const self = {};
+          self[MEMORY] = dv;
+          return self;
+        };
+        constructor.noRemap = function() {};
+        VTable[SIZE] = 3 * 8;
+        VTable[ALIGN] = 8;
+        const structure = { constructor };
         env.memory = new WebAssembly.Memory({ initial: 1 });
         env.allocateScratchMemory = function(len, align) {
           throw new Error('Out of memory');
         };
-        const dv = env.allocateHostMemory(40, 4);
+        const { ptr } = env.createDefaultAllocator(args, structure);
+        const dv = env.allocateHostMemory(ptr, 40, 2);
         expect(dv).to.be.null;
       })
     }
@@ -129,12 +128,33 @@ describe('Feature: default-allocator', function() {
   describe('freeHostMemory', function() {
     it('should release JS memory', function() {
       const env = new Env();
+      const args = {};
+      const constructor = function({ vtable, ptr }) {
+        this.vtable = vtable;
+        this.ptr = {
+          ['*']: {
+            [MEMORY]: ptr
+          },
+        };
+      };
+      const VTable = constructor.VTable = function(dv) {
+        const self = {};
+        self[MEMORY] = dv;
+        return self;
+      };
+      constructor.noRemap = function() {};
+      VTable[SIZE] = 3 * 8;
+      VTable[ALIGN] = 8;
+      const structure = { constructor };
+      let scratchAllocations = 0, scratchDeallocations = 0;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
         env.allocateScratchMemory = function(len, align) {
+          scratchAllocations++;
           return usize(0x1000);
         };
         env.freeScratchMemory = function(address, len, align) {
+          scratchDeallocations++;
           expect(address).to.equal(usize(0x1000));
         };
       } else {
@@ -142,11 +162,20 @@ describe('Feature: default-allocator', function() {
           return usize(0x1000);
         };
       }
-      const dv = env.allocateHostMemory(40, 4);
+      const { ptr } = env.createDefaultAllocator(args, structure);
+      const dv = env.allocateHostMemory(ptr, 40, 2);
       expect(env.memoryList).to.have.lengthOf(1);
-      const address = env.getViewAddress(dv);
-      env.freeHostMemory(address, 40, 4);
+      const buf = {
+        '*': {
+          [MEMORY]: dv,
+        }
+      };
+      env.freeHostMemory(ptr, buf, 2);
       expect(env.memoryList).to.have.lengthOf(0);
+      if (process.env.TARGET === 'wasm') {
+        expect(scratchAllocations).to.equal(1);
+        expect(scratchDeallocations).to.equal(1);
+      }
     })
   })
 })

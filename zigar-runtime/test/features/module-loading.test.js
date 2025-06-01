@@ -4,7 +4,7 @@ import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, MEMORY, RESTORE, ZIG } from '../../src/symbols.js';
+import { ALIGN, COPY, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { captureError, usize } from '../test-utils.js';
 
@@ -69,6 +69,43 @@ describe('Feature: module-loading', function() {
       expect(object[MEMORY]).to.not.equal(dv);
       expect(dv.getUint32(12, true)).to.equal(1234);
       expect(object[MEMORY][ZIG]).to.be.undefined;
+    })
+    it('should free allocator vtable', function() {
+      const env = new Env();
+      const args = {};
+      const constructor = function({ vtable, ptr }) {
+        this.vtable = vtable;
+        this.ptr = {
+          ['*']: {
+            [MEMORY]: ptr
+          },
+        };
+      };
+      const VTable = constructor.VTable = function(dv) {
+        const self = {};
+        self[MEMORY] = dv;
+        return self;
+      };
+      VTable[SIZE] = 3 * 8;
+      VTable[ALIGN] = 8;     
+      const structure = { constructor };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        env.obtainExternBuffer = function(address, len) {
+          const buffer = new ArrayBuffer(len);
+          buffer[ZIG] = { address, len };
+          return buffer;
+        };
+        env.getBufferAddress = function(buffer) {
+          return buffer[ZIG]?.address ?? usize(0xf_0000);
+        };
+      }
+      let releaseCount = 0;
+      env.releaseFunction = () => releaseCount++;
+      env.createDefaultAllocator(args, structure);
+      env.abandonModule();
+      expect(releaseCount).to.be.at.least(2);
     })
   })
   if (process.env.TARGET === 'wasm') {
