@@ -76,8 +76,9 @@ var jsAllocator = mixin({
     }
   },
   freeHostMemory(ptr, buf, ptrAlign) {
-    const address = this.getViewAddress(buf['*'][MEMORY]);
-    const len = buf.length;
+    const dv = buf['*'][MEMORY];
+    const address = this.getViewAddress(dv);
+    const len = dv.byteLength;
     const entry = this.unregisterMemory(address, len);
     {
       if (entry) {

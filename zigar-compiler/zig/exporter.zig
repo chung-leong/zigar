@@ -1,12 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const types = @import("types.zig");
-const fn_transform = @import("fn-transform.zig");
-const thunk_zig = @import("thunk-zig.zig");
-const thunk_js = @import("thunk-js.zig");
-const export_options = @import("export-options.zig");
-const meta = @import("meta.zig");
 
+const export_options = @import("export-options.zig");
+const fn_transform = @import("fn-transform.zig");
+const meta = @import("meta.zig");
+const thunk_js = @import("thunk-js.zig");
+const thunk_zig = @import("thunk-zig.zig");
+const types = @import("types.zig");
 const Value = types.Value;
 const Memory = types.Memory;
 const TypeData = types.TypeData;
@@ -183,7 +183,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .error_set => |es| .{
                     .error_set = .{
-                        .is_open_ended = es == null,
+                        .is_global = es == null,
                     },
                 },
                 .array => |ar| init: {
@@ -677,7 +677,12 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .slot = 0,
                 .structure = try self.getStructure(payload_td.type),
             }, false);
-            const error_td = tdb.get(@typeInfo(td.type).error_union.error_set);
+            // don't export inferred error sets that are essentially anyerror as separate sets
+            comptime var ES = @typeInfo(td.type).error_union.error_set;
+            if (@typeInfo(ES).error_set == null) {
+                ES = anyerror;
+            }
+            const error_td = tdb.get(ES);
             try host.attachMember(structure, .{
                 .type = getMemberType(error_td, false),
                 .flags = .{ .is_selector = true },

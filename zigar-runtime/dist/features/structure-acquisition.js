@@ -244,7 +244,7 @@ var structureAcquisition = mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsOpenEnded) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `EN${this.structureCounters.enum++}`;

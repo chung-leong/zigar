@@ -2,7 +2,7 @@ import {
   ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
 import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, 
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag,
   structureNames, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
@@ -259,7 +259,7 @@ export default mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsOpenEnded) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `EN${this.structureCounters.enum++}`;

@@ -138,6 +138,7 @@ describe('Structure: error-set', function() {
       };
       const env = new Env();
       const descriptors = {};
+      env.defineStructure(structure);
       env.finalizeErrorSet(structure, descriptors);
       expect(descriptors.dog_ate_homework?.value).to.be.an('error');
       expect(descriptors.cat_fell_in_love?.value).to.be.an('error');
@@ -246,7 +247,7 @@ describe('Structure: error-set', function() {
       // define anyerror
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsOpenEnded,
+        flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
       });
       env.attachMember(structure, {

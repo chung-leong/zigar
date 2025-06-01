@@ -44,14 +44,11 @@ var generator = mixin({
           const done = retval === false || isError || result === null;
           // reset allocator
           args[RESET]?.(done);
-          if (done) {
-            args[FINALIZE]();
-            this.generatorContextMap.delete(contextId);
-            return false;
-          } else {
-            return true;
-          }
+          if (!done) return true;
+          args[FINALIZE]();
+          this.generatorContextMap.delete(contextId);
         }
+        return false
       };
       this.generatorCallbackMap.set(constructor, callback);
       this.destructors.push(() => this.freeFunction(callback));

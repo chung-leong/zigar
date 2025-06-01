@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag, 
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
   StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
@@ -875,7 +875,7 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       const name = env.getErrorSetName({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsOpenEnded,
+        flags: ErrorSetFlag.IsGlobal,
       });
       expect(name).to.equal('anyerror');
     })

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { decodeText, empty, defineProperty } from '../utils.js';
+import { decodeText, empty, defineProperty, defineValue } from '../utils.js';
 
 var moduleLoading = mixin({
   init() {
@@ -95,11 +95,10 @@ var moduleLoading = mixin({
       return imports;
     },
     importFunctions(exports) {
-      const throwError = () => { throw new Error(`Module was abandoned`) };
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
+          defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError);
         }
       }
@@ -168,5 +167,7 @@ var moduleLoading = mixin({
     },
   } ),
 });
+
+const throwError = () => { throw new Error(`Module was abandoned`) };
 
 export { moduleLoading as default };

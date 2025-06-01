@@ -79,7 +79,7 @@ const SliceFlag = {
   IsOpaque:         0x0100,
 };
 const ErrorSetFlag = {
-  IsOpenEnded:      0x0010,
+  IsGlobal:         0x0010,
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,

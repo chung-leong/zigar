@@ -206,7 +206,7 @@ describe('Structure: error-union', function() {
       const env = new Env();
       const anyErrorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
-        flags: ErrorSetFlag.IsOpenEnded,
+        flags: ErrorSetFlag.IsGlobal,
         name: 'anyerror',
         byteSize: 2,
       });
