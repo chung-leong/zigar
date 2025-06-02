@@ -1,0 +1,6 @@
+{
+  "optimize": "Debug",
+  "sourceFiles": {
+    "./hello.zigar": "./src/hello.zig"
+  }
+}

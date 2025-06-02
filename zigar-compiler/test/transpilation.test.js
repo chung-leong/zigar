@@ -90,18 +90,6 @@ describe('Transpilation', function() {
       const options = { optimize: 'Debug', embedWASM: false };
       await expect(transpile(path, options)).to.eventually.be.rejected;
     })
-    it('should obtain path to zig file from sourceFiles', async function() {
-      this.timeout(0);
-      const sourceFiles = {
-        'lib/integers.zigar': 'test/zig-samples/basic/integers.zig'
-      };
-      const url = new URL(`../lib/integers.zigar`, import.meta.url);
-      const path = fileURLToPath(url);
-      const options = { optimize: 'Debug', sourceFiles };
-      const { code } = await transpile(path, options);
-      expect(code).to.be.a('string');
-      expect(code).to.contain('integers');
-    })
     it('should transpile zig source code involving function pointer', async function() {
       this.timeout(0);
       const path = getSamplePath('fn-pointer');

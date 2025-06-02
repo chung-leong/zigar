@@ -88,7 +88,15 @@ describe('Configuration', function() {
       const cfgPath = absolute('./config-samples/correct');
       const soPath = join(cfgPath, 'hello.zigar');
       const srcPath = join(cfgPath, 'src', 'hello.zig');
-      expect(options).to.eql({ optimize: 'Debug', sourceFiles: { [soPath]: srcPath } });
+      expect(options).to.eql({ optimize: 'Debug', modules: { [soPath]: { source: srcPath } } });
+    })
+    it('should load legacy config file', async function() {
+      const path = await findConfigFile('node-zigar.config.json', absolute('./config-samples/legacy/hello/world'));
+      const options = await loadConfigFile(path, optionsForCompile);
+      const cfgPath = absolute('./config-samples/legacy');
+      const soPath = join(cfgPath, 'hello.zigar');
+      const srcPath = join(cfgPath, 'src', 'hello.zig');
+      expect(options).to.eql({ optimize: 'Debug', modules: { [soPath]: { source: srcPath } } });
     })
     it('should throw when config file is malformed', async function() {
       const path = await findConfigFile('node-zigar.config.json', absolute('./config-samples/malformed/hello/world'));
