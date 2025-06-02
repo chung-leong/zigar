@@ -25,7 +25,8 @@ export default mixin({
           if (!context) return 0;    
           try {
             const view = buffer['*'][MEMORY];
-            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
+            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+            /* c8 ignore next */
             if (import.meta.env?.PROD !== true) {
               checkInefficientAccess(context, 'read', dest.length);
             }
@@ -68,9 +69,9 @@ export default mixin({
       }
       return { context: ptr, readFn };
     } else {
-      if (typeof(reader) === 'object' && 'context' in reader && 'readFn' in reader) {
-        return reader;
-      }      
+      if (typeof(reader) === 'object' && reader) {
+        if('context' in reader && 'readFn' in reader) return reader;
+      }
       throw new TypeMismatch('ReadableStreamDefaultReader or ReadableStreamBYOBReader', reader);
     }
   },

@@ -97,7 +97,7 @@ describe('Feature: writer', function() {
       }
       await expect(writeFn(ptr, buffer)).to.eventually.be.rejected;
     })
-    it('should create a writer from an object with the expected properties', async function() {
+    it('should return an object if it has the properties of a writer', async function() {
       const env = new Env();
       const writer = {
         context: {},
