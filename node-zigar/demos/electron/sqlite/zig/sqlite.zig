@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const sqlite = @import("sqlite");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -127,3 +128,9 @@ const GetTracksIterator = Iterator(Track,
 pub fn getTracks(db_op: SqliteOpaquePtr, album_id: u32) !GetTracksIterator {
     return try GetTracksIterator.init(db_op, .{album_id});
 }
+
+pub const @"meta(zigar)" = struct {
+    pub fn isFieldString(_: type, _: []const u8) bool {
+        return true;
+    }
+};

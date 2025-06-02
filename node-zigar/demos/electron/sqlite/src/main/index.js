@@ -85,11 +85,5 @@ app.on('quit', () => closeDb(db))
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
 function toArray(iterator) {
-  return [ ...iterator ].map(row => {
-    const object = {};
-    for (const [ name, value ] of row) {
-      object[name] = (typeof(value) === 'object') ? value.string : value;
-    }
-    return object;
-  })
+  return [ ...iterator ].map(r => r.valueOf());
 }
