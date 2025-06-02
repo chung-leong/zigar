@@ -29,7 +29,12 @@ describe('Addon functionalities', function() {
     })
     it('should build addon for Linux', async function() {
       this.timeout(0);
-      await buildAddon(addonDir, { platform: 'linux', arch: 'x64' });
+      let onStartCalled = false, onEndCalled = false;
+      const onStart = () => onStartCalled = true;
+      const onEnd = () => onEndCalled = true;
+      await buildAddon(addonDir, { platform: 'linux', arch: 'x64', onStart, onEnd });
+      expect(onStartCalled).to.equal(true);
+      expect(onEndCalled).to.equal(true);
     })
     it('should build addon for Linux-musl', async function() {
       this.timeout(0);
