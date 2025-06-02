@@ -27,6 +27,7 @@ export default mixin({
           try {
             const view = buffer['*'][MEMORY];
             const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+            /* c8 ignore next */
             if (import.meta.env?.PROD !== true) {
               checkInefficientAccess(context, 'write', src.length);
             }
@@ -42,9 +43,9 @@ export default mixin({
       }
       return { context: ptr, writeFn };
     } else {
-      if ('context' in writer && 'writeFn' in writer) {
-        return writer;
-      }      
+      if (typeof(writer) === 'object' && writer) {
+        if('context' in writer && 'writeFn' in writer) return writer;
+      }
       throw new TypeMismatch('WritableStreamDefaultWriter', writer);
     }
   },
