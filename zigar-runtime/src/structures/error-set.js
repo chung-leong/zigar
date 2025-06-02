@@ -15,6 +15,7 @@ export default mixin({
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
+      byteSize,
       flags,
     } = structure;
     if (!this.ZigError) {
@@ -23,6 +24,7 @@ export default mixin({
       const ae = {
         type: StructureType.ErrorSet,
         flags: ErrorSetFlag.IsGlobal,
+        byteSize,
         name: 'anyerror',
         instance: { members: [ member ] },
         static: { members: [], template: { SLOTS: {} } },
@@ -133,11 +135,11 @@ export default mixin({
       const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
-        if (flags & ErrorSetFlag.IsOpenEnded) {
+        if (flags & ErrorSetFlag.IsGlobal) {
           if (typeof(value) === 'number') {
             const newItem = new this.ZigError(`Unknown error: ${value}`, value);
             this.globalItemsByIndex[value] = newItem;
-            defineProperty(this.ZigError, `${newItem}`, defineValue(newItem));
+            defineProperty(this.globalErrorSet, `${newItem}`, defineValue(newItem));
             return newItem;
           }
         }

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, GENERATOR, RETURN, THROWING, YIELD } from '../../src/symbols.js';
+import { FINALIZE, GENERATOR, MEMORY, RESET, RETURN, STRING_RETVAL, THROWING, YIELD } from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -28,6 +28,51 @@ describe('Feature: generator', function() {
         result.push(value);
       }
       expect(result).to.eql([ 123, 456 ]);
+    })
+    it('should return a generator that generates strings', async function() {
+      const env = new Env();
+      const args = {};
+      const structure = {
+        instance: { members: [] }
+      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createGenerator(structure, args, undefined);
+      args[FINALIZE] = () => {};
+      args[STRING_RETVAL] = true;
+      setTimeout(() => callback(ptr, { string: 'Hello' }), 10);
+      setTimeout(() => callback(ptr, { string: 'world' }), 20);
+      setTimeout(() => callback({ '*': { [MEMORY]: ptr } }, null), 30);
+      const result = [];
+      for await (const value of args[GENERATOR]) {
+        result.push(value);
+      }
+      expect(result).to.eql([ 'Hello', 'world' ]);
+    })
+
+    it('should return a generator with an allocator attached', async function() {
+      const env = new Env();
+      const args = {};
+      const structure = {
+        instance: { 
+          members: [
+            { 
+              name: 'allocator',
+              structure: {} 
+            },
+          ] 
+        }
+      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback, allocator } = env.createGenerator(structure, args, undefined);
+      args[FINALIZE] = () => {};
+      expect(args[GENERATOR]).to.be.an('object');
+      expect(args[RESET]).to.be.a('function');
+      expect(allocator).to.be.an('object');
+      callback(ptr, null);
     })
     it('should cause generator to throw when callback is given an error', async function() {
       const env = new Env();
@@ -80,7 +125,6 @@ describe('Feature: generator', function() {
       expect(result).to.eql([]);
       expect(error).to.be.an('error');
     })
-
     it('should return false when a break occurs during iteration of generator', async function() {
       const env = new Env();
       const args = {};
@@ -151,7 +195,6 @@ describe('Feature: generator', function() {
       }
       expect(result).to.eql([ 0, 1, 2, 3, 4 ]);
     })
-
     it('should pass item received to given callback function', function() {
       const env = new Env();
       const args = {};
@@ -195,7 +238,10 @@ describe('Feature: generator', function() {
     it('should throw when given a non-function', function() {
       const env = new Env();
       const args = {};
-      expect(() => env.createGenerator(args, 'Dingo')).to.throw(TypeError);
+      const structure = {
+        instance: { members: [] }
+      };
+      expect(() => env.createGenerator(structure, args, 'Dingo')).to.throw(TypeError);
     })
   })
   describe('createGeneratorCallback', function() {

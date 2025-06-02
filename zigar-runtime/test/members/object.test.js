@@ -73,10 +73,11 @@ describe('Member: object', function() {
         },
       };
       const { get, set } = env.defineMemberObject(member);
+      let returnNull = false;
       const array = defineProperties({}, {
         $: {
           get() {
-            return { string: 'Hello' };
+            return (returnNull) ? null : { string: 'Hello' };
           },
         }
       });
@@ -86,6 +87,8 @@ describe('Member: object', function() {
         }
       };
       expect(get.call(object)).to.equal('Hello');
+      returnNull = true;
+      expect(get.call(object)).to.equal(null);
     })
     it('should be invokable through defineMember', function() {
       const env = new Env();

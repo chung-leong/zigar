@@ -350,6 +350,27 @@ describe('Structure: error-set', function() {
       error.dataView.setUint16(0, 0xffff, true);
       expect(() => error.$).to.throw(TypeError)
     })
+    it('should create an object for storing anyerror', function() {
+      const env = new Env();
+      const structure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        flags: ErrorSetFlag.IsGlobal,
+        byteSize: 2,
+      });
+      env.attachMember(structure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+        structure,
+      });
+      const AnyError = env.defineStructure(structure);
+      env.endStructure(structure);
+      const error = new AnyError(5);
+      const int = error.dataView.getUint16(0, true);
+      expect(error.$.number).to.equal(5);
+      expect(error.$.message).to.equal('Unknown error: 5');
+    })
     it('should work correctly in an array', function() {
       const env = new Env();
       const structure = env.beginStructure({
