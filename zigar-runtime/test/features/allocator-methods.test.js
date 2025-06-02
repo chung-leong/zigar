@@ -50,6 +50,23 @@ describe('Feature: allocator-methods', function() {
       });
       expect(() => struct.alloc(16, 4)).to.throw(Error);
     })
+    it('should throw an error when alignment is impossible', function() {
+      const env = new Env();
+      const struct = {
+        ptr: {},
+        vtable: {
+          alloc(ptr, len, ptrAlign) {
+            return null;
+          },
+          free() {},
+        }
+      };
+      defineProperties(struct, {
+        alloc: env.defineAlloc(),
+      });
+      expect(() => struct.alloc(16, 5)).to.throw(Error).with.property('message').to.contain('5');
+    })
+
   })
   describe('defineFree', function() {
     it('should return descriptor for the free method', function() {

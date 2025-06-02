@@ -39,15 +39,16 @@ import {
   PreviouslyFreed,
   TypeMismatch,
   UndefinedArgument,
+  UnexpectedGenerator,
   Unsupported,
   ZigMemoryTargetRequired,
   adjustArgumentError,
   article,
+  checkInefficientAccess,
   deanimalizeErrorName,
   formatList,
   getDescription,
   replaceRangeError,
-  UnexpectedGenerator,
 } from '../src/errors.js';
 
 describe('Error functions', function() {
@@ -721,5 +722,15 @@ describe('Error functions', function() {
       expect(getDescription({})).to.equal('an [object Object]');
       expect(getDescription(null)).to.equal('a null');
     })
+  })
+  describe('checkInefficientAccess', function() {
+    it('should throw when byte per call is less than 8', function() {
+      expect(() => checkInefficientAccess({ calls: 99, bytes: 99 }, 'read', 1)).to.throw(Error)
+        .with.property('message').that.contains('1 byte.');
+    }) 
+    it('should use plural when byte per call is not one', function() {
+      expect(() => checkInefficientAccess({ calls: 99, bytes: 199 }, 'read', 1)).to.throw(Error)
+        .with.property('message').that.contains('2 bytes.');
+    }) 
   })
 })

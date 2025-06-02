@@ -465,7 +465,7 @@ export function checkInefficientAccess(context, access, len) {
   if (context.calls === 100) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
-      const s = bytesPerCall > 1 ? 's' : '';
+      const s = bytesPerCall !== 1 ? 's' : '';
       const action = (access === 'read') ? 'reading' : 'writing';
       const name = (access === 'read') ? 'Reader' : 'Writer';
       throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);

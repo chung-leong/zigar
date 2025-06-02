@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, MEMORY, PROMISE, RETURN, ZIG } from '../../src/symbols.js';
+import { FINALIZE, MEMORY, PROMISE, RETURN, STRING_RETVAL, ZIG } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -22,6 +22,22 @@ describe('Feature: promise', function() {
       const result = await args[PROMISE];
       expect(result).to.equal(123);
     })
+    it('should return a function that fulfills a promise with a string', async function() {
+      const env = new Env();
+      const args = {};
+      const structure = {};
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      const { ptr, callback } = env.createPromise(structure, args, undefined);
+      expect(args[PROMISE]).to.be.a('promise');
+      args[FINALIZE] = () => {};
+      args[STRING_RETVAL] = true;
+      callback(ptr, { string: 'Hello' });
+      const result = await args[PROMISE];
+      expect(result).to.equal('Hello');
+    })
+
     it('should create copy of the result when it uses Zig memory', async function() {
       const env = new Env();
       const args = {};
@@ -42,7 +58,7 @@ describe('Feature: promise', function() {
       const resultFixed = new Result();
       resultFixed[MEMORY].setInt32(0, 1234);
       resultFixed[MEMORY][ZIG] = { address: usize(0x1000), len: 4 };
-      callback(ptr, resultFixed);
+      callback({ '*': { [MEMORY]: ptr } }, resultFixed);
       const result = await args[PROMISE];
       expect(result[MEMORY]).to.not.equal(resultFixed[MEMORY]);
       expect(result[MEMORY][ZIG]).to.be.undefined;

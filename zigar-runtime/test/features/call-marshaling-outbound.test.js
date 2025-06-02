@@ -1,7 +1,8 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
-  MemberType, PointerFlag, StructFlag, StructureFlag, StructureType,
+  ErrorSetFlag,
+  MemberType, PointerFlag, SliceFlag, StructFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
@@ -10,7 +11,7 @@ import {
   ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { addressByteSize, addressSize, usize } from '../test-utils.js';
 
 use (ChaiAsPromised);
 
@@ -921,6 +922,503 @@ describe('Feature: call-marshaling-outbound', function() {
       env.copyArguments(dest, src, members, options);
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('ptr');
+    })
+    it('should convert web stream reader to AnyReader struct', function() {
+      const env = new Env();
+      const usizeStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: addressByteSize,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(usizeStructure, {
+        type: MemberType.Int,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.defineStructure(usizeStructure);
+      env.endStructure(usizeStructure);
+      const anyErrorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        flags: ErrorSetFlag.IsGlobal,
+        name: 'anyerror',
+        byteSize: 2,
+      });
+      env.attachMember(anyErrorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+        structure: anyErrorStructure,
+      });
+      env.defineStructure(anyErrorStructure);
+      const retvalStructure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        byteSize: addressByteSize + 2,
+      });
+      env.attachMember(retvalStructure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: addressSize,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.attachMember(retvalStructure, {
+        name: 'error',
+        type: MemberType.Uint,
+        bitOffset: addressSize,
+        bitSize: 16,
+        byteSize: 2,
+        structure: anyErrorStructure,
+      });
+      env.defineStructure(retvalStructure);
+      const u8Structure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 1,
+      });
+      env.attachMember(u8Structure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(u8Structure);
+      env.finalizeStructure(u8Structure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsTypedArray,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const slicePtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
+        name: '[]const u8',
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(slicePtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.defineStructure(slicePtrStructure);
+      env.endStructure(slicePtrStructure);
+      const opaqueSliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsOpaque,
+        byteSize: 1,
+      });
+      env.attachMember(opaqueSliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(opaqueSliceStructure);
+      env.endStructure(opaqueSliceStructure);
+      const opaquePtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(opaquePtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: opaqueSliceStructure,
+      });
+      env.defineStructure(opaquePtrStructure);
+      env.endStructure(opaquePtrStructure);
+      const readArgStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        byteSize: retvalStructure.byteSize + addressByteSize * 3,
+        length: 2,
+      });
+      env.attachMember(readArgStructure, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: retvalStructure.byteSize * 8,
+        bitOffset: 0,
+        byteSize: retvalStructure.byteSize,
+        structure: retvalStructure,
+      });
+      env.attachMember(readArgStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: retvalStructure.byteSize * 8,
+        byteSize: addressByteSize,
+        structure: opaquePtrStructure,
+      });
+      env.attachMember(readArgStructure, {
+        name: '1',
+        type: MemberType.Object,
+        bitSize: addressSize * 2,
+        bitOffset: retvalStructure.byteSize * 8 + addressSize,
+        byteSize: addressByteSize * 2,
+        structure: slicePtrStructure,
+      });
+      env.defineStructure(readArgStructure);
+      env.endStructure(readArgStructure);
+      const readStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(readStructure, {
+        type: MemberType.Object,
+        structure: readArgStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(readStructure, thunk, false);
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(readStructure, jsThunkController, true);
+      env.defineStructure(readStructure);
+      env.endStructure(readStructure);
+      const readPtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
+      });
+      env.attachMember(readPtrStructure, {
+        type: MemberType.Object,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: readStructure,
+        slot: 0,
+      });
+      env.defineStructure(readPtrStructure);
+      env.endStructure(readPtrStructure);
+      const readerStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: addressByteSize * 2,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsReader,
+      });
+      env.attachMember(readerStructure, {
+        name: 'context',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: opaquePtrStructure,
+        slot: 0,
+      });
+      env.attachMember(readerStructure, {
+        name: 'readFn',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
+        structure: readPtrStructure,
+        slot: 1,
+      });
+      env.defineStructure(readerStructure);
+      env.endStructure(readerStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 32,
+          byteSize: 1,
+          structure: u8Structure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: readerStructure.byteSize * 8,
+          bitOffset: 64,
+          byteSize: readerStructure.byteSize,
+          structure: readerStructure,
+        },
+      ];
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
+      let count = 0;
+      const stream = new ReadableStream({
+        async pull(controller) {
+          if (count++ < 4) {
+            controller.enqueue(new Uint8Array(8));
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = stream.getReader();
+      const src = [ 1, reader ];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      env.copyArguments(dest, src, members, {});
+      expect(dest[0]).to.equal(1);
+      expect(dest[1]).to.have.property('context').that.is.an.instanceOf(DataView);
+      expect(dest[1]).to.have.property('readFn').that.is.a('function');
+    })
+    it('should convert web stream reader to AnyWriter struct', function() {
+      const env = new Env();
+      const usizeStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: addressByteSize,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(usizeStructure, {
+        type: MemberType.Int,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.defineStructure(usizeStructure);
+      env.endStructure(usizeStructure);
+      const anyErrorStructure = env.beginStructure({
+        type: StructureType.ErrorSet,
+        flags: ErrorSetFlag.IsGlobal,
+        name: 'anyerror',
+        byteSize: 2,
+      });
+      env.attachMember(anyErrorStructure, {
+        type: MemberType.Uint,
+        bitSize: 16,
+        bitOffset: 0,
+        byteSize: 2,
+        structure: anyErrorStructure,
+      });
+      env.defineStructure(anyErrorStructure);
+      const retvalStructure = env.beginStructure({
+        type: StructureType.ErrorUnion,
+        byteSize: addressByteSize + 2,
+      });
+      env.attachMember(retvalStructure, {
+        name: 'value',
+        type: MemberType.Int,
+        bitOffset: 0,
+        bitSize: addressSize,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.attachMember(retvalStructure, {
+        name: 'error',
+        type: MemberType.Uint,
+        bitOffset: addressSize,
+        bitSize: 16,
+        byteSize: 2,
+        structure: anyErrorStructure,
+      });
+      env.defineStructure(retvalStructure);
+      const u8Structure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: 1,
+      });
+      env.attachMember(u8Structure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        bitOffset: 0,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(u8Structure);
+      env.finalizeStructure(u8Structure);
+      const sliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsTypedArray,
+        name: '[_]u8',
+        byteSize: 1,
+      });
+      env.attachMember(sliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(sliceStructure);
+      env.finalizeStructure(sliceStructure);
+      const slicePtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
+        name: '[]const u8',
+        byteSize: addressByteSize * 2,
+      });
+      env.attachMember(slicePtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: sliceStructure,
+      });
+      env.defineStructure(slicePtrStructure);
+      env.endStructure(slicePtrStructure);
+      const opaqueSliceStructure = env.beginStructure({
+        type: StructureType.Slice,
+        flags: SliceFlag.IsOpaque,
+        byteSize: 1,
+      });
+      env.attachMember(opaqueSliceStructure, {
+        type: MemberType.Uint,
+        bitSize: 8,
+        byteSize: 1,
+        structure: u8Structure,
+      });
+      env.defineStructure(opaqueSliceStructure);
+      env.endStructure(opaqueSliceStructure);
+      const opaquePtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        byteSize: addressByteSize,
+      });
+      env.attachMember(opaquePtrStructure, {
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        slot: 0,
+        structure: opaqueSliceStructure,
+      });
+      env.defineStructure(opaquePtrStructure);
+      env.endStructure(opaquePtrStructure);
+      const writeArgStructure = env.beginStructure({
+        type: StructureType.ArgStruct,
+        byteSize: retvalStructure.byteSize + addressByteSize * 3,
+        length: 2,
+      });
+      env.attachMember(writeArgStructure, {
+        name: 'retval',
+        type: MemberType.Object,
+        bitSize: retvalStructure.byteSize * 8,
+        bitOffset: 0,
+        byteSize: retvalStructure.byteSize,
+        structure: retvalStructure,
+      });
+      env.attachMember(writeArgStructure, {
+        name: '0',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: retvalStructure.byteSize * 8,
+        byteSize: addressByteSize,
+        structure: opaquePtrStructure,
+      });
+      env.attachMember(writeArgStructure, {
+        name: '1',
+        type: MemberType.Object,
+        bitSize: addressSize * 2,
+        bitOffset: retvalStructure.byteSize * 8 + addressSize,
+        byteSize: addressByteSize * 2,
+        structure: slicePtrStructure,
+      });
+      env.defineStructure(writeArgStructure);
+      env.endStructure(writeArgStructure);
+      const writeStructure = env.beginStructure({
+        type: StructureType.Function,
+        byteSize: 0,
+      });
+      env.attachMember(writeStructure, {
+        type: MemberType.Object,
+        structure: writeArgStructure,
+      });
+      const thunk = { [MEMORY]: zig(0x1004) };
+      env.attachTemplate(writeStructure, thunk, false);
+      const jsThunkController = { [MEMORY]: zig(0x2004) };
+      env.attachTemplate(writeStructure, jsThunkController, true);
+      env.defineStructure(writeStructure);
+      env.endStructure(writeStructure);
+      const writePtrStructure = env.beginStructure({
+        type: StructureType.Pointer,
+        byteSize: 8,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
+      });
+      env.attachMember(writePtrStructure, {
+        type: MemberType.Object,
+        bitSize: 0,
+        bitOffset: 0,
+        byteSize: 0,
+        structure: writeStructure,
+        slot: 0,
+      });
+      env.defineStructure(writePtrStructure);
+      env.endStructure(writePtrStructure);
+      const writerStructure = env.beginStructure({
+        type: StructureType.Struct,
+        byteSize: addressByteSize * 2,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsWriter,
+      });
+      env.attachMember(writerStructure, {
+        name: 'context',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: opaquePtrStructure,
+        slot: 0,
+      });
+      env.attachMember(writerStructure, {
+        name: 'writeFn',
+        type: MemberType.Object,
+        bitSize: addressSize,
+        bitOffset: addressSize,
+        byteSize: addressByteSize,
+        structure: writePtrStructure,
+        slot: 1,
+      });
+      env.defineStructure(writerStructure);
+      env.endStructure(writerStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: 8,
+          bitOffset: 32,
+          byteSize: 1,
+          structure: u8Structure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: writerStructure.byteSize * 8,
+          bitOffset: 64,
+          byteSize: writerStructure.byteSize,
+          structure: writerStructure,
+        },
+      ];
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
+      let count = 0;
+      const stream = new WritableStream({
+        async write(buf) {
+        }
+      });
+      const writer = stream.getWriter();
+      const src = [ 1, writer ];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      env.copyArguments(dest, src, members, {});
+      expect(dest[0]).to.equal(1);
+      expect(dest[1]).to.have.property('context').that.is.an.instanceOf(DataView);
+      expect(dest[1]).to.have.property('writeFn').that.is.a('function');
     })
   })
   describe('invokeThunk', function() {
