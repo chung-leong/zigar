@@ -48,6 +48,80 @@ describe('Code generation', function() {
       expect(code).to.contain('i32');
       expect(code).to.not.contain('const source =');
     })
+    it('should generate standalone module loader', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: 'i32',
+        signature: 0xdead_beefn,
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const def = { structures: [ structure ], settings };
+      const standaloneLoader = {
+        type: 'esm',
+        addonDir: '../lib/node-zigar-addon',
+        moduleDir: '../lib/module.zigar',
+      };
+      const { code } = generateCode(def, { ...params, standaloneLoader, binarySource: null });
+      expect(code).to.contain('const moduleName');
+      expect(code).to.contain('const addonName');
+    })
+    it('should generate CommonJS standalone module loader', function() {
+      const structure = {
+        constructor: null,
+        type: StructureType.Primitive,
+        name: 'i32',
+        signature: 0xdead_beefn,
+        byteSize: 4,
+        isConst: false,
+        hasPointer: false,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+            }
+          ],
+          methods: [],
+          template: null,
+        },
+        static: {
+          members: [],
+          methods: [],
+          template: null,
+        },
+      };
+      const def = { structures: [ structure ], settings };
+      const standaloneLoader = {
+        type: 'cjs',
+        addonDir: '../lib/node-zigar-addon',
+        moduleDir: '../lib/module.zigar',
+      };
+      const { code } = generateCode(def, { ...params, standaloneLoader, binarySource: null });
+      expect(code).to.contain('const moduleName');
+      expect(code).to.contain('const addonName');
+    })
     it('should omit exports when omitExports is true', function() {
       const structStructure = {
         constructor: null,

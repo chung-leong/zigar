@@ -2,7 +2,8 @@
   "optimize": "Debug",
   "modules": {
     "./hello.zigar": {
-      "source": "./src/hello.zig"
+      "source": "./src/hello.zig",
+      "loader": "./src/hello.js"
     }
   }
 }
