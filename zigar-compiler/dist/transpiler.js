@@ -1492,7 +1492,8 @@ async function getManifestLists(buildPath) {
 }
 
 async function findSourcePaths(buildPath) {
-  const manifestPaths = await getManifestLists(buildPath);
+  const realBuildPath = await realpath(buildPath);
+  const manifestPaths = await getManifestLists(realBuildPath);
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
@@ -1506,7 +1507,7 @@ async function findSourcePaths(buildPath) {
           const m = re.exec(line);
           if (m) {
             const srcPath = m[1];
-            if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+            if(isAbsolute(srcPath) && !srcPath.startsWith(realBuildPath) && !srcPath.includes('/.cache/zig/')) {
               try {
                 await stat(srcPath);
                 involved[srcPath] = true;

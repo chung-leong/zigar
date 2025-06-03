@@ -1,12 +1,12 @@
 import ChildProcess from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import fs, { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import fs, { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { basename, isAbsolute, join, parse, sep } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { promisify } from 'node:util';
 import {
-  acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, deleteFile, getArch, 
+  acquireLock, copyFile, copyZonFile, createDirectory, deleteDirectory, deleteFile, getArch,
   getDirectoryStats, getLibraryExt, getPlatform, releaseLock, sha1
 } from './utility-functions.js';
 
@@ -308,7 +308,8 @@ async function getManifestLists(buildPath) {
 }
 
 async function findSourcePaths(buildPath) {
-  const manifestPaths = await getManifestLists(buildPath);
+  const realBuildPath = await realpath(buildPath);
+  const manifestPaths = await getManifestLists(realBuildPath);
   const involved = {};
   for (const manifestPath of manifestPaths) {
     try {
@@ -322,7 +323,7 @@ async function findSourcePaths(buildPath) {
           const m = re.exec(line);
           if (m) {
             const srcPath = m[1];
-            if(isAbsolute(srcPath) && !srcPath.startsWith(buildPath) && !srcPath.includes('/.cache/zig/')) {
+            if(isAbsolute(srcPath) && !srcPath.startsWith(realBuildPath) && !srcPath.includes('/.cache/zig/')) {
               try {
                 await stat(srcPath);
                 involved[srcPath] = true;
