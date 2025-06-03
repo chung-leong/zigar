@@ -2,8 +2,8 @@
 
 var childProcess = require('node:child_process');
 var node_crypto = require('node:crypto');
-var node_module = require('node:module');
 var fs = require('node:fs/promises');
+var node_module = require('node:module');
 var os = require('node:os');
 var node_path = require('node:path');
 var node_url = require('node:url');
@@ -384,8 +384,8 @@ async function getDirectoryStats(dirPath) {
 }
 
 async function copyZonFile(srcPath, dstPath) {
-  const srcDir = node_path.dirname(srcPath);
-  const dstDir = node_path.dirname(dstPath);
+  const srcDir = await fs.realpath(node_path.dirname(srcPath));
+  const dstDir = await fs.realpath(node_path.dirname(dstPath));
   const srcCode = await fs.readFile(srcPath, 'utf-8');
   const dstCode = srcCode.replace(/(\.path\s+=\s+)"(.*?)"/g, (m0, pre, path) => {
     const srcModulePath = node_path.resolve(srcDir, path);

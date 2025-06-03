@@ -1,9 +1,9 @@
 import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import {
-  chmod, lstat, mkdir, open, readFile, readdir, rmdir, stat, unlink, writeFile
+  chmod, lstat, mkdir, open, readFile, readdir, realpath, rmdir, stat, unlink, writeFile
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -279,8 +279,8 @@ export async function getDirectoryStats(dirPath) {
 }
 
 export async function copyZonFile(srcPath, dstPath) {
-  const srcDir = dirname(srcPath);
-  const dstDir = dirname(dstPath);
+  const srcDir = await realpath(dirname(srcPath));
+  const dstDir = await realpath(dirname(dstPath));
   const srcCode = await readFile(srcPath, 'utf-8');
   const dstCode = srcCode.replace(/(\.path\s+=\s+)"(.*?)"/g, (m0, pre, path) => {
     const srcModulePath = resolve(srcDir, path);
