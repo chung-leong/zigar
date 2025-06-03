@@ -84,7 +84,7 @@ const SliceFlag = {
   IsOpaque:         0x0100,
 };
 const ErrorSetFlag = {
-  IsOpenEnded:      0x0010,
+  IsGlobal:         0x0010,
 };
 const OpaqueFlag = {
   IsIterator:       0x0010,
@@ -2931,7 +2931,7 @@ function checkInefficientAccess(context, access, len) {
   if (context.calls === 100) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
-      const s = bytesPerCall > 1 ? 's' : '';
+      const s = bytesPerCall !== 1 ? 's' : '';
       const action = (access === 'read') ? 'reading' : 'writing';
       const name = (access === 'read') ? 'Reader' : 'Writer';
       throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
@@ -3757,14 +3757,11 @@ var generator = mixin({
           const done = retval === false || isError || result === null;
           // reset allocator
           args[RESET]?.(done);
-          if (done) {
-            args[FINALIZE]();
-            this.generatorContextMap.delete(contextId);
-            return false;
-          } else {
-            return true;
-          }
+          if (!done) return true;
+          args[FINALIZE]();
+          this.generatorContextMap.delete(contextId);
         }
+        return false
       };
       this.generatorCallbackMap.set(constructor, callback);
       this.destructors.push(() => this.freeFunction(callback));
@@ -4005,8 +4002,9 @@ var jsAllocator = mixin({
     }
   },
   freeHostMemory(ptr, buf, ptrAlign) {
-    const address = this.getViewAddress(buf['*'][MEMORY]);
-    const len = buf.length;
+    const dv = buf['*'][MEMORY];
+    const address = this.getViewAddress(dv);
+    const len = dv.byteLength;
     const entry = this.unregisterMemory(address, len);
     {
       if (entry) {
@@ -4360,12 +4358,11 @@ var moduleLoading = mixin({
       return imports;
     },
     importFunctions(exports) {
-      const throwError = () => { throw new Error(`Module was abandoned`) };
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
-          this.destructors.push(() => this[name] = throwError);
+          defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
+          this.destructors.push(() => this[name] = throwError$1);
         }
       }
     },
@@ -4436,6 +4433,8 @@ var moduleLoading = mixin({
     },
   } ),
 });
+
+const throwError$1 = () => { throw new Error(`Module was abandoned`) };
 
 var objectLinkage = mixin({
   linkVariables(writeBack) {
@@ -4732,7 +4731,7 @@ var reader = mixin({
           if (!context) return 0;    
           try {
             const view = buffer['*'][MEMORY];
-            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);            
+            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
             if (import.meta.env?.PROD !== true) {
               checkInefficientAccess(context, 'read', dest.length);
             }
@@ -4775,9 +4774,9 @@ var reader = mixin({
       }
       return { context: ptr, readFn };
     } else {
-      if (typeof(reader) === 'object' && 'context' in reader && 'readFn' in reader) {
-        return reader;
-      }      
+      if (typeof(reader) === 'object' && reader) {
+        if('context' in reader && 'readFn' in reader) return reader;
+      }
       throw new TypeMismatch('ReadableStreamDefaultReader or ReadableStreamBYOBReader', reader);
     }
   },
@@ -5122,7 +5121,7 @@ var structureAcquisition = mixin({
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
-    return (s.flags & ErrorSetFlag.IsOpenEnded) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
+    return (s.flags & ErrorSetFlag.IsGlobal) ? 'anyerror' : `ES${this.structureCounters.errorSet++}`;
   },
   getEnumName(s) {
     return `EN${this.structureCounters.enum++}`;
@@ -5689,9 +5688,9 @@ var writer = mixin({
       }
       return { context: ptr, writeFn };
     } else {
-      if ('context' in writer && 'writeFn' in writer) {
-        return writer;
-      }      
+      if (typeof(writer) === 'object' && writer) {
+        if('context' in writer && 'writeFn' in writer) return writer;
+      }
       throw new TypeMismatch('WritableStreamDefaultWriter', writer);
     }
   },
@@ -7099,13 +7098,34 @@ var _enum = mixin({
 
 var errorSet = mixin({
   init() {
-    this.ZigError = class ZigError extends ZigErrorBase {},
+    this.ZigError = null,
     this.globalItemsByIndex = {};
+    this.globalErrorSet = null;
   },
   defineErrorSet(structure, descriptors) {
     const {
       instance: { members: [ member ] },
+      byteSize,
+      flags,
     } = structure;
+    if (!this.ZigError) {
+      // create anyerror set
+      this.ZigError = class Error extends ZigErrorBase {};
+      const ae = {
+        type: StructureType.ErrorSet,
+        flags: ErrorSetFlag.IsGlobal,
+        byteSize,
+        name: 'anyerror',
+        instance: { members: [ member ] },
+        static: { members: [], template: { SLOTS: {} } },
+      };
+      const es = this.defineStructure(ae);
+      this.finalizeStructure(ae);
+      this.globalErrorSet = es;
+    }
+    if (this.globalErrorSet && (flags & ErrorSetFlag.IsGlobal)) {
+      return this.globalErrorSet;
+    }
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const expected = [ 'string', 'number' ];
@@ -7137,8 +7157,12 @@ var errorSet = mixin({
       instance: { members: [ member ] },
       static: { members, template },
     } = structure;
+    if (this.globalErrorSet && (flags & ErrorSetFlag.IsGlobal)) {
+      // already finalized
+      return false;
+    }
     const items = template?.[SLOTS] ?? {};
-    const itemsByIndex = (flags & ErrorSetFlag.IsOpenEnded) ? this.globalItemsByIndex : {};
+    const itemsByIndex = (flags & ErrorSetFlag.IsGlobal) ? this.globalItemsByIndex : {};
     // obtain getter/setter for accessing int values directly
     const { get } = this.defineMember(member, false);
     for (const { name, slot } of members) {
@@ -7163,12 +7187,13 @@ var errorSet = mixin({
       staticDescriptors[stringified] = descriptor;
       itemsByIndex[number] = error;
       // add to global set
-      if (!inGlobalSet) {
-        defineProperties(this.ZigError, {
+      if (!inGlobalSet) {        
+        defineProperties(this.globalErrorSet, {
           [name]: descriptor,
           [stringified]: descriptor,
         });
-        this.globalItemsByIndex[number] = error;       
+        this.globalErrorSet[PROPS].push(name);
+        this.globalItemsByIndex[number] = error;
       }
     }
     // add cast handler allowing strings, numbers, and JSON object to be casted into error set
@@ -7200,11 +7225,11 @@ var errorSet = mixin({
       const { constructor, flags } = structure;
       const item = constructor(value);
       if (!item) {
-        if (flags & ErrorSetFlag.IsOpenEnded) {
+        if (flags & ErrorSetFlag.IsGlobal) {
           if (typeof(value) === 'number') {
             const newItem = new this.ZigError(`Unknown error: ${value}`, value);
             this.globalItemsByIndex[value] = newItem;
-            defineProperty(this.ZigError, `${newItem}`, defineValue(newItem));
+            defineProperty(this.globalErrorSet, `${newItem}`, defineValue(newItem));
             return newItem;
           }
         }
@@ -7306,14 +7331,14 @@ var errorUnion = mixin({
           setErrorNumber.call(this, 0);
         } catch (err) {
           if (arg instanceof Error) {
-            const match = ErrorSet[arg] ?? ErrorSet.Unexpected;
+            const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
             if (match) {
               setError.call(this, match);
               clearValue.call(this);
             } else {
               // we gave setValue a chance to see if the error is actually an acceptable value
               // now is time to throw an error
-              throw new NotInErrorSet(structure);
+              throw new NotInErrorSet(errorMember.structure);
             }
           } else if (isErrorJSON(arg)) {
             // setValue() failed because the argument actually is an error as JSON

@@ -42,9 +42,9 @@ var writer = mixin({
       }
       return { context: ptr, writeFn };
     } else {
-      if ('context' in writer && 'writeFn' in writer) {
-        return writer;
-      }      
+      if (typeof(writer) === 'object' && writer) {
+        if('context' in writer && 'writeFn' in writer) return writer;
+      }
       throw new TypeMismatch('WritableStreamDefaultWriter', writer);
     }
   },

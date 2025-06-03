@@ -1,15 +1,14 @@
 const std = @import("std");
+const allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
-const napi = @import("napi.zig");
-const redirect = @import("redirect.zig");
-const fn_transform = @import("code-gen/fn-transform.zig");
 
+const fn_transform = @import("code-gen/fn-transform.zig");
+const napi = @import("napi.zig");
 const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
-
-const allocator = std.heap.c_allocator;
+const redirect = @import("redirect.zig");
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);
@@ -478,7 +477,7 @@ const ModuleHost = struct {
 
     fn requireBufferFallback(self: *@This()) !Value {
         const env = self.env;
-        return try env.getBoolean(canCreateExternalBuffer(env));
+        return try env.getBoolean(!canCreateExternalBuffer(env));
     }
 
     fn syncExternalBuffer(self: *@This(), buffer: Value, address: Value, to: Value) !void {
