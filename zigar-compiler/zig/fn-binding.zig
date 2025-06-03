@@ -1,10 +1,17 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const fn_transform = @import("fn-transform.zig");
-
 const expect = std.testing.expect;
 const expectEqualSlices = std.testing.expectEqualSlices;
 const expectEqual = std.testing.expectEqual;
+const assert = std.debug.assert;
+const maxInt = std.math.maxInt;
+const mem = std.mem;
+const windows = std.os.windows;
+const posix = std.posix;
+const page_size_min = std.heap.page_size_min;
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
+
+const fn_transform = @import("fn-transform.zig");
 
 /// Create a binding using an user-provided allocator instead of the default.
 ///
@@ -225,6 +232,8 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
         var address_pos: ?AddressPosition = null;
 
         pub fn createRuntime(allocator: std.mem.Allocator, func: anytype, vars: anytype) !*const BFT {
+            protect(false);
+            defer protect(true);
             // binding structure: [header][instructions][context][?fn_address]
             const instr_index = std.mem.alignForward(usize, @sizeOf(Header), @alignOf(fn () void));
             const instr_len = instr_encoded_len orelse init: {
@@ -245,8 +254,6 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
             const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
             const ctx_ptr: *CT = @ptrCast(@alignCast(new_bytes.ptr + ctx_index));
             const fn_address_ptr: *usize = @ptrCast(@alignCast(new_bytes.ptr + fn_address_index));
-            protect(false);
-            defer protect(true);
             header_ptr.* = .{
                 .ctx_offset = @intCast(ctx_index - instr_index),
                 .len = @intCast(binding_len),
@@ -2432,14 +2439,6 @@ const InstructionEncoder = struct {
 test "InstructionEncoder" {
     _ = InstructionEncoder;
 }
-
-const assert = std.debug.assert;
-const maxInt = std.math.maxInt;
-const mem = std.mem;
-const native_os = builtin.os.tag;
-const windows = std.os.windows;
-const posix = std.posix;
-const page_size_min = std.heap.page_size_min;
 
 /// Duplicate of std.heap.PageAllocator that allocates pages with EXEC flag set.
 pub const ExecutablePageAllocator = struct {
