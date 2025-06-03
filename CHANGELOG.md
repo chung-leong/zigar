@@ -6,6 +6,7 @@
 * Made promises and generator more efficient
 * Implemented the copying of PDB file for Windows build
 * Enable use of local modules
+* Fixed infinite rebuild bug affecting rollup-plugin-zigar and zigar-loader on Mac
 * Fixed handling of anyerror
 * Fixed issue when WASM is larger than 8MB
 * Fixed memory allocation
