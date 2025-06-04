@@ -3,12 +3,10 @@ import { defineProperty, defineValue } from './utils.js';
 const cls = {
   name: '',
   mixins: [],
-  constructor: null,
 };
 
 export function reset() {
   cls.name = '';
-  cls.constructor = null;
   cls.mixins = [];
 }
 
@@ -17,19 +15,14 @@ export function name(s) {
 }
 
 export function mixin(object) {
-  if (!cls.constructor) {
+  if (!cls.mixins.includes(object)) {
     cls.mixins.push(object);
   }
   return object;
 }
 
 export function defineEnvironment() {
-  if (!cls.constructor) {
-    cls.constructor = defineClass(cls.name, cls.mixins);
-    cls.name = '';
-    cls.mixins = [];
-  }
-  return cls.constructor;
+  return defineClass(cls.name, cls.mixins);
 }
 
 export function defineClass(name, mixins) {
