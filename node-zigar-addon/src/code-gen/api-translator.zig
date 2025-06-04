@@ -1,4 +1,8 @@
 const std = @import("std");
+const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
+const expectEqualSlices = std.testing.expectEqualSlices;
+
 const fn_transform = @import("./fn-transform.zig");
 
 pub const CodeGeneratorOptions = struct {
@@ -364,7 +368,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                         if (bind_ns.func_ptr) |ptr| {
                             break :bind ptr;
                         } else {
-                            const ptr: *const OldFn = @ptrCast(get(fn_name));
+                            const ptr: *const OldFn = @alignCast(@ptrCast(get(fn_name)));
                             bind_ns.func_ptr = ptr;
                             break :bind ptr;
                         }
@@ -2699,10 +2703,6 @@ pub fn camelize(allocator: std.mem.Allocator, name: []const u8, start_index: usi
     }
     return buffer;
 }
-
-const expect = std.testing.expect;
-const expectEqual = std.testing.expectEqual;
-const expectEqualSlices = std.testing.expectEqualSlices;
 
 test "camelize" {
     var gpa: std.heap.DebugAllocator(.{}) = .init;
