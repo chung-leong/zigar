@@ -29,7 +29,10 @@ module.exports = {
       {
         test: /\.zig$/,
         exclude: /node_modules/,
-        use: 'zigar-loader',
+        use: {
+          loader: 'zigar-loader',
+          options: { multithreaded: true },
+        },
       },
       {
         test: /\.(png|jpe?g|gif)$/i,
