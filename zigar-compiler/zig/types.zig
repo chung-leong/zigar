@@ -664,9 +664,13 @@ pub const TypeData = struct {
 
     pub fn getSelectorType(comptime self: @This()) ?type {
         return switch (@typeInfo(self.type)) {
-            .@"union" => |un| un.tag_type orelse switch (runtime_safety and un.layout != .@"extern") {
-                true => IntFor(un.fields.len),
-                false => null,
+            .@"union" => |un| un.tag_type orelse debug_tag: {
+                if (runtime_safety) {
+                    if (un.layout != .@"extern" and un.layout != .@"packed") {
+                        break :debug_tag IntFor(un.fields.len);
+                    }
+                }
+                break :debug_tag null;
             },
             .optional => |op| switch (@typeInfo(op.child)) {
                 .pointer => usize, // size of the pointer itself

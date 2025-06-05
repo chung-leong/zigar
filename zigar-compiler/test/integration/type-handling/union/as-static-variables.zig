@@ -53,3 +53,13 @@ pub fn usePig() void {
 pub fn useMonkey() void {
     bare_union = BareUnion{ .monkey = 777 };
 }
+
+const PackedUnion = packed union {
+    one_bit: bool,
+    four_bits: u4,
+    eight_bits: u8,
+};
+
+pub var packed_union: PackedUnion = .{
+    .eight_bits = 0xFF,
+};

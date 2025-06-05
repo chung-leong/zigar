@@ -51,6 +51,17 @@ export function addTests(importModule, options) {
         pig: 4.94e-322,
       });
       expect(JSON.stringify(module.extern_union)).to.equal('{"dog":100,"cat":100,"pig":4.94e-322}');
+      expect(module.packed_union.valueOf()).to.eql({
+        one_bit: true,
+        four_bits: 15,
+        eight_bits: 255,
+      });
+      module.packed_union.one_bit = 0;
+      expect(module.packed_union.one_bit).to.equal(false);
+      expect(module.packed_union.eight_bits).to.equal(0);
+      expect(module.packed_union.four_bits).to.equal(0);
+      module.packed_union.four_bits = 15;
+      expect(module.packed_union.eight_bits).to.equal(15);
     })
     it('should print union arguments', async function() {
       this.timeout(0);
