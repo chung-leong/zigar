@@ -57,6 +57,24 @@ pub const StructureType = enum(u32) {
     function,
 };
 
+pub const StructurePurpose = enum(u32) {
+    unknown,
+    promise,
+    generator,
+    abort_signal,
+    allocator,
+    iterator,
+    reader,
+    writer,
+
+    pub fn isOptional(self: @This()) bool {
+        return switch (self) {
+            .promise, .generator, .abort_signal, .allocator => true,
+            else => false,
+        };
+    }
+};
+
 pub const StructureFlags = extern union {
     primitive: packed struct(u32) {
         has_value: bool = true,
@@ -88,18 +106,10 @@ pub const StructureFlags = extern union {
 
         is_extern: bool = false,
         is_packed: bool = false,
-        is_iterator: bool = false,
         is_tuple: bool = false,
-
-        is_allocator: bool = false,
-        is_promise: bool = false,
-        is_generator: bool = false,
-        is_abort_signal: bool = false,
-
         is_optional: bool = false,
-        is_readable_stream: bool = false,
-        is_writable_stream: bool = false,
-        _: u17 = 0,
+
+        _: u24 = 0,
     },
     @"union": packed struct(u32) {
         has_value: bool = false,
@@ -113,8 +123,7 @@ pub const StructureFlags = extern union {
         is_extern: bool = false,
 
         is_packed: bool = false,
-        is_iterator: bool = false,
-        _: u22 = 0,
+        _: u23 = 0,
     },
     error_union: packed struct(u32) {
         has_value: bool = true,
@@ -140,8 +149,7 @@ pub const StructureFlags = extern union {
         has_slot: bool = false,
 
         is_open_ended: bool = false,
-        is_iterator: bool = false,
-        _: u26 = 0,
+        _: u27 = 0,
     },
     optional: packed struct(u32) {
         has_value: bool = true,
@@ -196,8 +204,7 @@ pub const StructureFlags = extern union {
         has_pointer: bool = false,
         has_slot: bool = false,
 
-        is_iterator: bool = false,
-        _: u27 = 0,
+        _: u28 = 0,
     },
     arg_struct: packed struct(u32) {
         has_value: bool = false,
@@ -264,6 +271,7 @@ pub const Value = *opaque {};
 pub const Structure = struct {
     name: ?[]const u8 = null,
     type: StructureType,
+    purpose: StructurePurpose,
     flags: StructureFlags,
     signature: u64,
     length: ?usize,
@@ -921,38 +929,6 @@ pub const TypeData = struct {
         return self.attrs.is_slice;
     }
 
-    pub fn isOptional(comptime self: @This()) bool {
-        return self.isAllocator() or getInternalType(self.type) != null;
-    }
-
-    pub fn isAllocator(comptime self: @This()) bool {
-        return self.type == std.mem.Allocator;
-    }
-
-    pub fn isPromise(comptime self: @This()) bool {
-        return getInternalType(self.type) == .promise;
-    }
-
-    pub fn isGenerator(comptime self: @This()) bool {
-        return getInternalType(self.type) == .generator;
-    }
-
-    pub fn isAbortSignal(comptime self: @This()) bool {
-        return getInternalType(self.type) == .abort_signal;
-    }
-
-    pub fn isOptionalStruct(comptime self: @This()) bool {
-        return hasDefaultFields(self.type);
-    }
-
-    pub fn isReadableStream(comptime self: @This()) bool {
-        return self.type == std.io.AnyReader;
-    }
-
-    pub fn isWritableStream(comptime self: @This()) bool {
-        return self.type == std.io.AnyWriter;
-    }
-
     pub fn isSupported(comptime self: @This()) bool {
         return self.attrs.is_supported;
     }
@@ -965,27 +941,10 @@ pub const TypeData = struct {
         return self.attrs.is_in_use;
     }
 
-    pub fn isInternal(comptime self: @This()) bool {
-        return switch (@typeInfo(self.type)) {
-            .@"struct" => @hasDecl(self.type, "internal_type") and @TypeOf(self.type.internal_type) == InternalType,
-            else => false,
-        };
-    }
-
-    test "isInternal" {
-        try expectEqual(true, isInternal(.{ .type = AbortSignal }));
-        try expectEqual(false, isInternal(.{ .type = struct {} }));
-        try expectEqual(true, isInternal(.{ .type = Promise(f64) }));
-        try expectEqual(true, isInternal(.{ .type = Promise(anyerror!u32) }));
-    }
-
     pub fn shouldIgnoreDecls(comptime self: @This()) bool {
-        if (self.isInternal()) return true;
         return switch (self.type) {
-            std.io.AnyReader,
-            std.io.AnyWriter,
-            => true,
-            else => false,
+            std.io.AnyReader, std.io.AnyWriter => true,
+            else => getInternalType(self.type) != null,
         };
     }
 };
@@ -1847,7 +1806,7 @@ test "IteratorPayload" {
     try expectEqual(i32, T5);
 }
 
-fn hasDefaultFields(comptime T: type) bool {
+pub fn hasDefaultFields(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct" => |st| inline for (st.fields) |field| {
             if (field.default_value_ptr == null) break false;
@@ -1992,7 +1951,7 @@ pub fn isIteratorAllocating(comptime T: type) bool {
 }
 
 test "isIteratorAllocating" {
-    const result1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
+    const result1 = isIteratorAllocating(std.mem.SplitIterator(u8, .sequence));
     try expectEqual(false, result1);
 }
 

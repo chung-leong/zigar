@@ -626,8 +626,9 @@ const ModuleHost = struct {
     fn beginStructure(self: *@This(), structure: *const Structure) !Value {
         const env = self.env;
         const object = try env.createObject();
-        try env.setNamedProperty(object, "type", try env.createUint32(@intFromEnum(structure.type)));
-        try env.setNamedProperty(object, "flags", try env.createUint32(@as(u32, @bitCast(structure.flags))));
+        try env.setNamedProperty(object, "type", try env.createUint32(structure.type));
+        try env.setNamedProperty(object, "purpose", try env.createUint32(structure.purpose));
+        try env.setNamedProperty(object, "flags", try env.createUint32(structure.flags));
         try env.setNamedProperty(object, "signature", try env.createBigintUint64(structure.signature));
         if (structure.length != missing(usize))
             try env.setNamedProperty(object, "length", try env.createUint32(@as(u32, @truncate(structure.length))));
@@ -649,8 +650,8 @@ const ModuleHost = struct {
     fn attachMember(self: *@This(), structure: Value, member: *const Member, is_static: bool) !void {
         const env = self.env;
         const object = try env.createObject();
-        try env.setNamedProperty(object, "type", try env.createUint32(@intFromEnum(member.type)));
-        try env.setNamedProperty(object, "flags", try env.createUint32(@as(u32, @bitCast(member.flags))));
+        try env.setNamedProperty(object, "type", try env.createUint32(member.type));
+        try env.setNamedProperty(object, "flags", try env.createUint32(member.flags));
         if (member.bit_size != missing(usize))
             try env.setNamedProperty(object, "bitSize", try env.createUint32(@as(u32, @truncate(member.bit_size))));
         if (member.bit_offset != missing(usize))
@@ -859,8 +860,9 @@ const ModuleHost = struct {
 };
 const Structure = extern struct {
     name: ?[*:0]const u8,
-    type: StructureType,
-    flags: StructureFlags,
+    type: u32,
+    purpose: u32,
+    flags: u32,
     signature: u64,
     length: usize,
     byte_size: usize,
@@ -868,201 +870,13 @@ const Structure = extern struct {
 };
 const Member = extern struct {
     name: ?[*:0]const u8,
-    type: MemberType,
-    flags: MemberFlags,
+    type: u32,
+    flags: u32,
     bit_offset: usize,
     bit_size: usize,
     byte_size: usize,
     slot: usize,
     structure: ?Value,
-};
-const StructureType = enum(u32) {
-    primitive = 0,
-    array,
-    @"struct",
-    @"union",
-    error_union,
-    error_set,
-    @"enum",
-    optional,
-    pointer,
-    slice,
-    vector,
-    @"opaque",
-    arg_struct,
-    variadic_struct,
-    function,
-};
-const StructureFlags = extern union {
-    primitive: packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_size: bool = false,
-        _: u27 = 0,
-    },
-    array: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        has_sentinel: bool = false,
-        is_string: bool = false,
-        is_typed_array: bool = false,
-        is_clamped_array: bool = false,
-
-        _: u24 = 0,
-    },
-    @"struct": packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_extern: bool = false,
-        is_packed: bool = false,
-        is_iterator: bool = false,
-        is_tuple: bool = false,
-
-        is_allocator: bool = false,
-        is_promise: bool = false,
-        is_generator: bool = false,
-        is_abort_signal: bool = false,
-
-        is_optional: bool = false,
-        _: u19 = 0,
-    },
-    @"union": packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        has_selector: bool = false,
-        has_tag: bool = false,
-        has_inaccessible: bool = false,
-        is_extern: bool = false,
-
-        is_packed: bool = false,
-        is_iterator: bool = false,
-        _: u22 = 0,
-    },
-    error_union: packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        _: u28 = 0,
-    },
-    error_set: packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_global: bool = false,
-        _: u27 = 0,
-    },
-    @"enum": packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_open_ended: bool = false,
-        is_iterator: bool = false,
-        _: u26 = 0,
-    },
-    optional: packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        has_selector: bool = false,
-        _: u27 = 0,
-    },
-    pointer: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = true,
-        has_slot: bool = true,
-
-        has_length: bool = false,
-        is_multiple: bool = false,
-        is_single: bool = false,
-        is_const: bool = false,
-
-        is_nullable: bool = false,
-        _: u23 = 0,
-    },
-    slice: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        has_sentinel: bool = false,
-        is_string: bool = false,
-        is_typed_array: bool = false,
-        is_clamped_array: bool = false,
-
-        is_opaque: bool = false,
-        _: u23 = 0,
-    },
-    vector: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_typed_array: bool = false,
-        is_clamped_array: bool = false,
-        _: u26 = 0,
-    },
-    @"opaque": packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        is_iterator: bool = false,
-        _: u27 = 0,
-    },
-    arg_struct: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = true,
-        has_slot: bool = true,
-
-        has_options: bool = false,
-        is_throwing: bool = false,
-        is_async: bool = false,
-        _: u25 = 0,
-    },
-    variadic_struct: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = true,
-        has_slot: bool = true,
-
-        has_options: bool = false,
-        is_throwing: bool = false,
-        is_async: bool = false,
-        _: u25 = 0,
-    },
-    function: packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-
-        _: u28 = 0,
-    },
 };
 const MemberType = enum(u32) {
     void = 0,
@@ -1076,18 +890,6 @@ const MemberType = enum(u32) {
     null,
     undefined,
     unsupported,
-};
-const MemberFlags = packed struct(u32) {
-    is_required: bool = false,
-    is_read_only: bool = false,
-    is_part_of_set: bool = false,
-    is_selector: bool = false,
-
-    is_method: bool = false,
-    is_sentinel: bool = false,
-    is_backing_int: bool = false,
-
-    _: u25 = 0,
 };
 const JsCall = struct {
     fn_id: usize,

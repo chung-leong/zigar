@@ -38,6 +38,7 @@ var structureAcquisition = mixin({
   beginStructure(def) {
     const {
       type,
+      purpose,
       name,
       length,
       signature = -1n,
@@ -48,6 +49,7 @@ var structureAcquisition = mixin({
     return {
       constructor: null,
       type,
+      purpose,
       flags,
       signature,
       name,

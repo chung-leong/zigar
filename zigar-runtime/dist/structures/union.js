@@ -1,4 +1,4 @@
-import { UnionFlag, StructureFlag, VisitorFlag } from '../constants.js';
+import { UnionFlag, StructurePurpose, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InactiveUnionProperty, MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InaccessiblePointer } from '../errors.js';
 import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
@@ -7,6 +7,7 @@ import { defineValue, empty, defineProperties, isCompatibleInstanceOf } from '..
 var union = mixin({
   defineUnion(structure, descriptors) {
     const {
+      purpose,
       flags,
       instance: { members },
     } = structure;
@@ -105,7 +106,7 @@ var union = mixin({
       props.push(name);
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
-    descriptors[Symbol.iterator] = (flags & UnionFlag.IsIterator)
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator)
     ? this.defineZigIterator()
     : this.defineUnionIterator();
     descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {

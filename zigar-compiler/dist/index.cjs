@@ -13,6 +13,8 @@ var node_fs = require('node:fs');
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const StructureType = {
   Primitive: 0};
+const StructurePurpose = {
+  Unknown: 0};
 
 const MemberType = {
   Void: 0};
@@ -519,6 +521,7 @@ function addStructureDefinitions(lines, definition) {
   const defaultStructure = {
     constructor: null,
     type: StructureType.Primitive,
+    purpose: StructurePurpose.Unknown,
     flags: 0,
     signature: undefined,
     name: undefined,

@@ -1,4 +1,4 @@
-import { StructureType, StructFlag, MemberType } from '../constants.js';
+import { StructureType, StructurePurpose, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ZigError, UndefinedArgument, adjustArgumentError, Exit } from '../errors.js';
 import { ATTRIBUTES, MEMORY, FINALIZE, COPY, STRING_RETVAL, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
@@ -38,29 +38,36 @@ var callMarshalingOutbound = mixin({
     for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
-        if (structure.flags & StructFlag.IsAllocator) {
-          // use programmer-supplied allocator if found in options object, handling rare scenarios
-          // where a function uses multiple allocators
-          const allocator = (++allocatorCount === 1)
-          ? options?.['allocator'] ?? options?.['allocator1']
-          : options?.[`allocator${allocatorCount}`];
-          // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
-        } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(structure, argStruct, options?.['callback']);
-          arg = promise;
-        } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
-          arg = generator;
-        } else if (structure.flags & StructFlag.IsAbortSignal) {
-          // create an Int32Array with one element, hooking it up to the programmer-supplied
-          // AbortSignal object if found
-          signal ||= this.createSignal(structure, options?.['signal']);
-          arg = signal;
-        } else if (structure.flags & StructFlag.IsReader) {
-          arg = this.createReader(argList[srcIndex++]);
-        } else if (structure.flags & StructFlag.IsWriter) {
-          arg = this.createWriter(argList[srcIndex++]);
+        switch (structure.purpose) {
+          case StructurePurpose.Allocator:
+            // use programmer-supplied allocator if found in options object, handling rare scenarios
+            // where a function uses multiple allocators
+            const allocator = (++allocatorCount === 1)
+            ? options?.['allocator'] ?? options?.['allocator1']
+            : options?.[`allocator${allocatorCount}`];
+            // otherwise use default allocator which allocates relocatable memory from JS engine
+            arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
+            break;
+          case StructurePurpose.Promise:
+            promise ||= this.createPromise(structure, argStruct, options?.['callback']);
+            arg = promise;
+            break;
+          case StructurePurpose.Generator:
+            generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
+            arg = generator;
+            break;
+          case StructurePurpose.AbortSignal:
+            // create an Int32Array with one element, hooking it up to the programmer-supplied
+            // AbortSignal object if found
+            signal ||= this.createSignal(structure, options?.['signal']);
+            arg = signal;
+            break;
+          case StructurePurpose.Reader:
+            arg = this.createReader(argList[srcIndex++]);
+            break;
+          case StructurePurpose.Writer:
+            arg = this.createWriter(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {

@@ -25,6 +25,16 @@ const StructureType = {
   VariadicStruct: 13,
   Function: 14,
 };
+const StructurePurpose = {
+  Unknown: 0,
+  Promise: 1,
+  Generator: 2,
+  AbortSignal: 3,
+  Allocator: 4,
+  Iterator: 5,
+  Reader: 6,
+  Writer: 7,
+};
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
   HasValue:         0x0001,
@@ -44,26 +54,16 @@ const ArrayFlag = {
 const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
-  IsIterator:       0x0040,
-  IsTuple:          0x0080,
-
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsGenerator:      0x0400,
-  IsAbortSignal:    0x0800,
-
-  IsOptional:       0x1000,
-  IsReader:         0x2000,
-  IsWriter:         0x4000,
+  IsTuple:          0x0040,
+  IsOptional:       0x0080,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
   HasTag:           0x0020,
-  HasInaccessible:  0x0040,
-  IsIterator:       0x0200,
-};
+  HasInaccessible:  0x0040};
 const EnumFlag = {
-  IsOpenEnded:      0x0010};
+  IsOpenEnded:      0x0010,
+};
 const OptionalFlag = {
   HasSelector:      0x0010,
 };
@@ -85,9 +85,6 @@ const SliceFlag = {
 };
 const ErrorSetFlag = {
   IsGlobal:         0x0010,
-};
-const OpaqueFlag = {
-  IsIterator:       0x0010,
 };
 const VectorFlag = {
   IsTypedArray:     0x0010,
@@ -881,6 +878,7 @@ function addStructureDefinitions(lines, definition) {
   const defaultStructure = {
     constructor: null,
     type: StructureType.Primitive,
+    purpose: StructurePurpose.Unknown,
     flags: 0,
     signature: undefined,
     name: undefined,
@@ -3287,7 +3285,7 @@ var callMarshalingInbound = mixin({
   defineArgIterator(members) {
     const thisEnv = this;
     const allocatorTotal = members.filter(({ structure: s }) => {
-      return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
+      return (s.type === StructureType.Struct) && (s.purpose === StructurePurpose.Allocator);
     }).length;
     return {
       value() {
@@ -3304,24 +3302,29 @@ var callMarshalingInbound = mixin({
             }
             let optName, opt;
             if (structure.type === StructureType.Struct) {
-              if (structure.flags & StructFlag.IsAllocator) {
-                optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = this[ALLOCATOR] = arg;
-              } else if (structure.flags & StructFlag.IsPromise) {
-                optName = 'callback';
-                if (++callbackCount === 1) {
-                  opt = thisEnv.createPromiseCallback(this, arg);
-                }
-              } else if (structure.flags & StructFlag.IsGenerator) {
-                optName = 'callback';
-                if (++callbackCount === 1) {
-                  opt = thisEnv.createGeneratorCallback(this, arg);
-                }
-              } else if (structure.flags & StructFlag.IsAbortSignal) {
-                optName = 'signal';
-                if (++signalCount === 1) {
-                  opt = thisEnv.createInboundSignal(arg);
-                }
+              switch (structure.purpose) {
+                case StructurePurpose.Allocator: 
+                  optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
+                  opt = this[ALLOCATOR] = arg;
+                  break;
+                case StructurePurpose.Promise:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createPromiseCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.Generator:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createGeneratorCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.AbortSignal:
+                  optName = 'signal';
+                  if (++signalCount === 1) {
+                    opt = thisEnv.createInboundSignal(arg);
+                  }
+                  break;
               }
             }
             if (optName !== undefined) {
@@ -3415,29 +3418,36 @@ var callMarshalingOutbound = mixin({
     for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
-        if (structure.flags & StructFlag.IsAllocator) {
-          // use programmer-supplied allocator if found in options object, handling rare scenarios
-          // where a function uses multiple allocators
-          const allocator = (++allocatorCount === 1)
-          ? options?.['allocator'] ?? options?.['allocator1']
-          : options?.[`allocator${allocatorCount}`];
-          // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
-        } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(structure, argStruct, options?.['callback']);
-          arg = promise;
-        } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
-          arg = generator;
-        } else if (structure.flags & StructFlag.IsAbortSignal) {
-          // create an Int32Array with one element, hooking it up to the programmer-supplied
-          // AbortSignal object if found
-          signal ||= this.createSignal(structure, options?.['signal']);
-          arg = signal;
-        } else if (structure.flags & StructFlag.IsReader) {
-          arg = this.createReader(argList[srcIndex++]);
-        } else if (structure.flags & StructFlag.IsWriter) {
-          arg = this.createWriter(argList[srcIndex++]);
+        switch (structure.purpose) {
+          case StructurePurpose.Allocator:
+            // use programmer-supplied allocator if found in options object, handling rare scenarios
+            // where a function uses multiple allocators
+            const allocator = (++allocatorCount === 1)
+            ? options?.['allocator'] ?? options?.['allocator1']
+            : options?.[`allocator${allocatorCount}`];
+            // otherwise use default allocator which allocates relocatable memory from JS engine
+            arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
+            break;
+          case StructurePurpose.Promise:
+            promise ||= this.createPromise(structure, argStruct, options?.['callback']);
+            arg = promise;
+            break;
+          case StructurePurpose.Generator:
+            generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
+            arg = generator;
+            break;
+          case StructurePurpose.AbortSignal:
+            // create an Int32Array with one element, hooking it up to the programmer-supplied
+            // AbortSignal object if found
+            signal ||= this.createSignal(structure, options?.['signal']);
+            arg = signal;
+            break;
+          case StructurePurpose.Reader:
+            arg = this.createReader(argList[srcIndex++]);
+            break;
+          case StructurePurpose.Writer:
+            arg = this.createWriter(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {
@@ -3553,19 +3563,26 @@ var callMarshalingOutbound = mixin({
     usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
-      for (const { structure: { flags } } of argMembers) {
-        if (flags & StructFlag.IsAllocator) {
-          this.usingJsAllocator = true;
-        } else if (flags & StructFlag.IsPromise) {
-          this.usingPromise = true;
-        } else if (flags & StructFlag.IsGenerator) {
-          this.usingGenerator = true;
-        } else if (flags & StructFlag.IsAbortSignal) {
-          this.usingAbortSignal = true;
-        } else if (flags & StructFlag.IsReader) {
-          this.usingReader = true;
-        } else if (flags & StructFlag.IsWriter) {
-          this.usingWriter = true;
+      for (const { structure: { purpose } } of argMembers) {
+        switch (purpose) {
+          case StructurePurpose.Allocator:
+            this.usingJsAllocator = true;
+            break;
+          case StructurePurpose.Promise:
+            this.usingPromise = true;
+            break;
+          case StructurePurpose.Generator:
+            this.usingGenerator = true;
+            break;
+          case StructurePurpose.AbortSignal:
+            this.usingAbortSignal = true;
+            break;
+          case StructurePurpose.Reader:
+            this.usingReader = true;
+            break;
+          case StructurePurpose.Writer:
+            this.usingWriter = true;
+            break;
         }
       }
     }
@@ -4904,6 +4921,7 @@ var structureAcquisition = mixin({
   beginStructure(def) {
     const {
       type,
+      purpose,
       name,
       length,
       signature = -1n,
@@ -4914,6 +4932,7 @@ var structureAcquisition = mixin({
     return {
       constructor: null,
       type,
+      purpose,
       flags,
       signature,
       name,
@@ -7443,13 +7462,13 @@ var _function = mixin({
 var opaque = mixin({
   defineOpaque(structure, descriptors) {
     const {
-      flags,
+      purpose,
     } = structure;
     const initializer = () => { throw new CreatingOpaque(structure) };
     const valueAccessor = () => { throw new AccessingOpaque(structure) };
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get: valueAccessor, set: valueAccessor };
-    descriptors[Symbol.iterator] = (flags & OpaqueFlag.IsIterator) && this.defineZigIterator();
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator) && this.defineZigIterator();
     descriptors[Symbol.toPrimitive] = {
       value(hint) {
         const { name } = structure;
@@ -8214,6 +8233,7 @@ var structLike = mixin({
 var struct = mixin({
   defineStruct(structure, descriptors) {
     const {
+      purpose,
       flags,
       length,
       instance: { members },
@@ -8265,7 +8285,7 @@ var struct = mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator)
     ? this.defineZigIterator()
     : (flags & StructFlag.IsTuple)
       ? this.defineVectorIterator()
@@ -8277,7 +8297,7 @@ var struct = mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
     descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
-    if (flags & StructFlag.IsAllocator) {
+    if (purpose === StructurePurpose.Allocator) {
       descriptors.alloc = this.defineAlloc();
       descriptors.free = this.defineFree();
       descriptors.dupe = this.defineDupe();
@@ -8289,6 +8309,7 @@ var struct = mixin({
 var union = mixin({
   defineUnion(structure, descriptors) {
     const {
+      purpose,
       flags,
       instance: { members },
     } = structure;
@@ -8387,7 +8408,7 @@ var union = mixin({
       props.push(name);
     }
     descriptors.$ = { get: function() { return this }, set: initializer };
-    descriptors[Symbol.iterator] = (flags & UnionFlag.IsIterator)
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator)
     ? this.defineZigIterator()
     : this.defineUnionIterator();
     descriptors[Symbol.toPrimitive] = (flags & UnionFlag.HasTag) && {

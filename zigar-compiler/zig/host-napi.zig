@@ -1,15 +1,15 @@
 const std = @import("std");
+const expectEqual = std.testing.expectEqual;
 const builtin = @import("builtin");
-const exporter = @import("exporter.zig");
-const types = @import("types.zig");
-const thunk_zig = @import("thunk-zig.zig");
-const thunk_js = @import("thunk-js.zig");
 
+const exporter = @import("exporter.zig");
+const thunk_js = @import("thunk-js.zig");
+const thunk_zig = @import("thunk-zig.zig");
+const types = @import("types.zig");
 const Value = types.Value;
 const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
-
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const PromiseArgOf = types.PromiseArgOf;
@@ -17,8 +17,6 @@ pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
-
-const expectEqual = std.testing.expectEqual;
 
 pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {
@@ -37,8 +35,9 @@ const ModuleData = opaque {};
 // struct for C
 const StructureC = extern struct {
     name: ?[*:0]const u8,
-    type: types.StructureType,
-    flags: types.StructureFlags,
+    type: u32,
+    purpose: u32,
+    flags: u32,
     signature: u64,
     length: usize,
     byte_size: usize,
@@ -46,8 +45,8 @@ const StructureC = extern struct {
 };
 const MemberC = extern struct {
     name: ?[*:0]const u8,
-    type: types.MemberType,
-    flags: types.MemberFlags,
+    type: u32,
+    flags: u32,
     bit_offset: usize,
     bit_size: usize,
     byte_size: usize,
@@ -164,8 +163,9 @@ pub fn beginStructure(def: types.Structure) !Value {
     const md = try getModuleData();
     const def_c: StructureC = .{
         .name = if (def.name) |p| @ptrCast(p) else null,
-        .type = def.type,
-        .flags = def.flags,
+        .type = @intFromEnum(def.type),
+        .purpose = @intFromEnum(def.purpose),
+        .flags = @bitCast(def.flags),
         .signature = def.signature,
         .length = def.length orelse missing(usize),
         .byte_size = def.byte_size orelse missing(usize),
@@ -182,8 +182,8 @@ pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !vo
     const md = try getModuleData();
     const member_c: MemberC = .{
         .name = if (member.name) |p| @ptrCast(p) else null,
-        .type = member.type,
-        .flags = member.flags,
+        .type = @intFromEnum(member.type),
+        .flags = @bitCast(member.flags),
         .bit_offset = member.bit_offset orelse missing(usize),
         .bit_size = member.bit_size orelse missing(usize),
         .byte_size = member.byte_size orelse missing(usize),

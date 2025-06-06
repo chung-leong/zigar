@@ -15,6 +15,16 @@ const StructureType = {
   VariadicStruct: 13,
   Function: 14,
 };
+const StructurePurpose = {
+  Unknown: 0,
+  Promise: 1,
+  Generator: 2,
+  AbortSignal: 3,
+  Allocator: 4,
+  Iterator: 5,
+  Reader: 6,
+  Writer: 7,
+};
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
   HasValue:         0x0001,
@@ -34,17 +44,8 @@ const ArrayFlag = {
 const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
-  IsIterator:       0x0040,
-  IsTuple:          0x0080,
-
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsGenerator:      0x0400,
-  IsAbortSignal:    0x0800,
-
-  IsOptional:       0x1000,
-  IsReader:         0x2000,
-  IsWriter:         0x4000,
+  IsTuple:          0x0040,
+  IsOptional:       0x0080,
 };
 const UnionFlag = {
   HasSelector:      0x0010,
@@ -53,11 +54,9 @@ const UnionFlag = {
   IsExtern:         0x0080,
 
   IsPacked:         0x0100,
-  IsIterator:       0x0200,
 };
 const EnumFlag = {
   IsOpenEnded:      0x0010,
-  IsIterator:       0x0020,
 };
 const OptionalFlag = {
   HasSelector:      0x0010,
@@ -82,7 +81,6 @@ const ErrorSetFlag = {
   IsGlobal:         0x0010,
 };
 const OpaqueFlag = {
-  IsIterator:       0x0010,
 };
 const VectorFlag = {
   IsTypedArray:     0x0010,
@@ -142,4 +140,4 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

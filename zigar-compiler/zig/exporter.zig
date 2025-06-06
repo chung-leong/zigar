@@ -57,6 +57,21 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
+        pub fn getStructurePurpose(comptime td: TypeData) types.StructurePurpose {
+            return switch (td.type) {
+                std.mem.Allocator => .allocator,
+                std.io.AnyReader => .reader,
+                std.io.AnyWriter => .writer,
+                else => if (td.isIterator())
+                    .iterator
+                else if (types.getInternalType(td.type)) |internal_type| switch (internal_type) {
+                    .promise => .promise,
+                    .generator => .generator,
+                    .abort_signal => .abort_signal,
+                } else .unknown,
+            };
+        }
+
         pub fn getStructureFlags(comptime td: TypeData) types.StructureFlags {
             return switch (@typeInfo(td.type)) {
                 .bool,
@@ -91,14 +106,15 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_pointer = td.hasPointer(),
                             .has_options = inline for (st.fields) |field| {
                                 const field_td = tdb.get(field.type);
-                                if (field_td.isOptional()) {
-                                    break true;
-                                }
+                                if (getStructurePurpose(field_td).isOptional()) break true;
                             } else false,
                             .is_throwing = td.isThrowing(),
                             .is_async = inline for (st.fields) |field| {
                                 const field_td = tdb.get(field.type);
-                                if (field_td.isPromise() or field_td.isGenerator()) break true;
+                                switch (getStructurePurpose(field_td)) {
+                                    .promise, .generator => break true,
+                                    else => {},
+                                }
                             } else false,
                         },
                     } else if (comptime td.isSlice()) .{
@@ -108,7 +124,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_pointer = td.hasPointer(),
                             .has_sentinel = td.type.sentinel != null,
                             .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                            .is_typed_array = isTypedArray(td),
+                            .is_typed_array = getTypedArrayBits(td) != null,
                             .is_clamped_array = getTypedArrayBits(td) == 8,
                             .is_opaque = td.type.is_opaque,
                         },
@@ -120,14 +136,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .is_extern = st.layout == .@"extern",
                             .is_packed = st.layout == .@"packed",
                             .is_tuple = st.is_tuple,
-                            .is_iterator = td.isIterator(),
-                            .is_allocator = td.isAllocator(),
-                            .is_promise = td.isPromise(),
-                            .is_generator = td.isGenerator(),
-                            .is_abort_signal = td.isAbortSignal(),
-                            .is_optional = td.isOptionalStruct(),
-                            .is_readable_stream = td.isReadableStream(),
-                            .is_writable_stream = td.isWritableStream(),
+                            .is_optional = types.hasDefaultFields(td.type),
                         },
                     };
                 },
@@ -150,7 +159,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_selector = td.hasSelector(),
                             .is_extern = un.layout == .@"extern",
                             .is_packed = un.layout == .@"packed",
-                            .is_iterator = td.isIterator(),
                         },
                     };
                 },
@@ -178,7 +186,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"enum" => |en| .{
                     .@"enum" = .{
                         .is_open_ended = !en.is_exhaustive,
-                        .is_iterator = td.isIterator(),
                     },
                 },
                 .error_set => |es| .{
@@ -195,7 +202,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_pointer = child_td.hasPointer(),
                             .has_sentinel = td.getSentinel() != null,
                             .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                            .is_typed_array = isTypedArray(td),
+                            .is_typed_array = getTypedArrayBits(td) != null,
                             .is_clamped_array = getTypedArrayBits(td) == 8,
                         },
                     };
@@ -207,7 +214,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             .has_object = child_td.isObject(),
                             .has_slot = child_td.isObject(),
                             .has_pointer = child_td.hasPointer(),
-                            .is_typed_array = isTypedArray(td),
+                            .is_typed_array = getTypedArrayBits(td) != null,
                         },
                     };
                 },
@@ -220,11 +227,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_nullable = pt.is_allowzero or pt.child == anyopaque,
                     },
                 },
-                .@"opaque" => .{
-                    .@"opaque" = .{
-                        .is_iterator = td.isIterator(),
-                    },
-                },
+                .@"opaque" => .{ .@"opaque" = .{} },
                 .@"fn" => .{ .function = .{} },
                 else => @compileError("Unknown structure: " ++ @typeName(td.type)),
             };
@@ -238,10 +241,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                     true => comptime req_arg_count: {
                         var len = 0;
                         for (st.fields, 0..) |field, index| {
-                            if (index == 0 or tdb.get(field.type).isOptional()) {
-                                len += 0;
-                            } else {
-                                len += 1;
+                            // first field is retval
+                            if (index > 0) {
+                                const field_td = tdb.get(field.type);
+                                const purpose = getStructurePurpose(field_td);
+                                if (!purpose.isOptional()) len += 1;
                             }
                         }
                         break :req_arg_count len;
@@ -354,10 +358,6 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        fn isTypedArray(comptime td: TypeData) bool {
-            return getTypedArrayBits(td) != null;
-        }
-
         // NOTE: error type has to be specified here since the function is called recursively
         // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
         fn getStructure(self: @This(), comptime T: type) types.Error!Value {
@@ -367,6 +367,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const def: types.Structure = .{
                     .name = comptime getStructureName(td),
                     .type = getStructureType(td),
+                    .purpose = getStructurePurpose(td),
                     .flags = getStructureFlags(td),
                     .signature = td.getSignature(),
                     .length = getStructureLength(td),
@@ -829,10 +830,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                         var has_promise = false;
                         for (f.params) |param| {
                             const param_td = tdb.get(param.type.?);
-                            if (param_td.isAbortSignal()) {
-                                has_abort_signal = true;
-                            } else if (param_td.isPromise()) {
-                                has_promise = true;
+                            switch (getStructurePurpose((param_td))) {
+                                .abort_signal => has_abort_signal = true,
+                                .promise => has_promise = true,
+                                else => {},
                             }
                         }
                         if (has_abort_signal and !has_promise) {
