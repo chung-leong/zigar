@@ -1,4 +1,4 @@
-import { CallResult, MemberType, StructFlag, StructureType } from '../constants.js';
+import { CallResult, MemberType, StructurePurpose, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UnexpectedGenerator } from '../errors.js';
 import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';
@@ -123,7 +123,7 @@ export default mixin({
   defineArgIterator(members) {
     const thisEnv = this;
     const allocatorTotal = members.filter(({ structure: s }) => {
-      return (s.type === StructureType.Struct) && (s.flags & StructFlag.IsAllocator);
+      return (s.type === StructureType.Struct) && (s.purpose === StructurePurpose.Allocator);
     }).length;
     return {
       value() {
@@ -140,24 +140,29 @@ export default mixin({
             }
             let optName, opt;
             if (structure.type === StructureType.Struct) {
-              if (structure.flags & StructFlag.IsAllocator) {
-                optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
-                opt = this[ALLOCATOR] = arg;
-              } else if (structure.flags & StructFlag.IsPromise) {
-                optName = 'callback';
-                if (++callbackCount === 1) {
-                  opt = thisEnv.createPromiseCallback(this, arg);
-                }
-              } else if (structure.flags & StructFlag.IsGenerator) {
-                optName = 'callback';
-                if (++callbackCount === 1) {
-                  opt = thisEnv.createGeneratorCallback(this, arg);
-                }
-              } else if (structure.flags & StructFlag.IsAbortSignal) {
-                optName = 'signal';
-                if (++signalCount === 1) {
-                  opt = thisEnv.createInboundSignal(arg);
-                }
+              switch (structure.purpose) {
+                case StructurePurpose.Allocator: 
+                  optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
+                  opt = this[ALLOCATOR] = arg;
+                  break;
+                case StructurePurpose.Promise:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createPromiseCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.Generator:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createGeneratorCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.AbortSignal:
+                  optName = 'signal';
+                  if (++signalCount === 1) {
+                    opt = thisEnv.createInboundSignal(arg);
+                  }
+                  break;
               }
             }
             if (optName !== undefined) {

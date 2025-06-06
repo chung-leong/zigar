@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag,
+  MemberFlag, MemberType, PointerFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag,
   VisitorFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
@@ -1603,7 +1603,8 @@ describe('Structure: union', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Union,
-        flags: UnionFlag.IsExtern | UnionFlag.IsIterator,
+        purpose: StructurePurpose.Iterator,
+        flags: UnionFlag.IsExtern,
         byteSize: 4,
       });
       env.attachMember(structure, {

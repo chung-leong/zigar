@@ -1,4 +1,6 @@
-import { MemberFlag, MemberType, StructureType } from '../../zigar-runtime/src/constants.js';
+import {
+  MemberFlag, MemberType, StructurePurpose, StructureType
+} from '../../zigar-runtime/src/constants.js';
 import { CONST_TARGET, MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
 import { findObjects } from '../../zigar-runtime/src/utils.js';
 import { getArch, getLibraryExt, getPlatform } from './utility-functions.js';
@@ -127,6 +129,7 @@ function addStructureDefinitions(lines, definition) {
   const defaultStructure = {
     constructor: null,
     type: StructureType.Primitive,
+    purpose: StructurePurpose.Unknown,
     flags: 0,
     signature: undefined,
     name: undefined,

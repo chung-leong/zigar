@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, OpaqueFlag, OptionalFlag, PointerFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType,
+  OptionalFlag, PointerFlag, StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -70,7 +71,8 @@ describe('Structure: opaque', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Opaque,
-        flags: OpaqueFlag.IsIterator,
+        purpose: StructurePurpose.Iterator,
+        flags: 0,
         byteSize: 4,
       });
       const Hello = env.defineStructure(structure);

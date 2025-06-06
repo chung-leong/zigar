@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  MemberType, PointerFlag, StructFlag, StructureFlag, StructureType
+  MemberType, PointerFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -46,9 +47,10 @@ describe('Feature: abort-signal', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.AbortSignal,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -98,9 +100,10 @@ describe('Feature: abort-signal', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.AbortSignal,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -171,9 +174,10 @@ describe('Feature: abort-signal', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.AbortSignal,
         name: 'AbortSignal',
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',

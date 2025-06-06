@@ -2,7 +2,8 @@ import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
   ErrorSetFlag,
-  MemberType, PointerFlag, SliceFlag, StructFlag, StructureFlag, StructureType,
+  MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
@@ -408,7 +409,8 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -469,7 +471,8 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -531,7 +534,8 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -663,8 +667,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolvePtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Promise,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(promiseStructure, {
         name: 'callback',
@@ -797,8 +802,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(yieldPtrStructure);
       const generatorStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Generator,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsGenerator,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(generatorStructure, {
         name: 'callback',
@@ -878,8 +884,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.AbortSignal,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',
@@ -1107,8 +1114,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(readPtrStructure);
       const readerStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Reader,
         byteSize: addressByteSize * 2,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsReader,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(readerStructure, {
         name: 'context',
@@ -1358,8 +1366,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(writePtrStructure);
       const writerStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Writer,
         byteSize: addressByteSize * 2,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsWriter,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(writerStructure, {
         name: 'context',
@@ -1717,7 +1726,8 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -1837,8 +1847,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(resolvePtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Promise,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(promiseStructure, {
         name: 'callback',
@@ -1957,8 +1968,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(yieldPtrStructure);
       const generatorStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.Generator,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsGenerator,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(generatorStructure, {
         name: 'callback',
@@ -2025,8 +2037,9 @@ describe('Feature: call-marshaling-outbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
+        purpose: StructurePurpose.AbortSignal,
         byteSize: 8,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsAbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
       });
       env.attachMember(signalStructure, {
         name: 'ptr',

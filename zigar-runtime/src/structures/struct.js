@@ -1,4 +1,4 @@
-import { MemberFlag, StructFlag, StructureFlag } from '../constants.js';
+import { MemberFlag, StructFlag, StructureFlag, StructurePurpose } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
 import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
@@ -7,6 +7,7 @@ import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 export default mixin({
   defineStruct(structure, descriptors) {
     const {
+      purpose,
       flags,
       length,
       instance: { members },
@@ -58,7 +59,7 @@ export default mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator)
     ? this.defineZigIterator()
     : (flags & StructFlag.IsTuple)
       ? this.defineVectorIterator()
@@ -70,7 +71,7 @@ export default mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
     descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
-    if (flags & StructFlag.IsAllocator) {
+    if (purpose === StructurePurpose.Allocator) {
       descriptors.alloc = this.defineAlloc();
       descriptors.free = this.defineFree();
       descriptors.dupe = this.defineDupe();

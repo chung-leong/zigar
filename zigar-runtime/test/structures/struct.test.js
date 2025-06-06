@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, OptionalFlag, PointerFlag, StructFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType, OptionalFlag, PointerFlag, StructFlag, StructureFlag, StructurePurpose, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -1450,7 +1450,8 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsIterator,
+        purpose: StructurePurpose.Iterator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(structure, {
@@ -1607,7 +1608,8 @@ describe('Structure: struct', function() {
       const env = new Env();
       const structure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(structure, {

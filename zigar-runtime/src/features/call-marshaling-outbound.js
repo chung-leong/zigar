@@ -1,8 +1,8 @@
-import { MemberType, StructFlag, StructureType } from '../constants.js';
+import { MemberType, StructurePurpose, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, 
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS,
   STRING_RETVAL, VISIT
 } from '../symbols.js';
 
@@ -46,29 +46,36 @@ export default mixin({
     for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
-        if (structure.flags & StructFlag.IsAllocator) {
-          // use programmer-supplied allocator if found in options object, handling rare scenarios
-          // where a function uses multiple allocators
-          const allocator = (++allocatorCount === 1)
-          ? options?.['allocator'] ?? options?.['allocator1']
-          : options?.[`allocator${allocatorCount}`];
-          // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
-        } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(structure, argStruct, options?.['callback']);
-          arg = promise;
-        } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
-          arg = generator;
-        } else if (structure.flags & StructFlag.IsAbortSignal) {
-          // create an Int32Array with one element, hooking it up to the programmer-supplied
-          // AbortSignal object if found
-          signal ||= this.createSignal(structure, options?.['signal']);
-          arg = signal;
-        } else if (structure.flags & StructFlag.IsReader) {
-          arg = this.createReader(argList[srcIndex++]);
-        } else if (structure.flags & StructFlag.IsWriter) {
-          arg = this.createWriter(argList[srcIndex++]);
+        switch (structure.purpose) {
+          case StructurePurpose.Allocator:
+            // use programmer-supplied allocator if found in options object, handling rare scenarios
+            // where a function uses multiple allocators
+            const allocator = (++allocatorCount === 1)
+            ? options?.['allocator'] ?? options?.['allocator1']
+            : options?.[`allocator${allocatorCount}`];
+            // otherwise use default allocator which allocates relocatable memory from JS engine
+            arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
+            break;
+          case StructurePurpose.Promise:
+            promise ||= this.createPromise(structure, argStruct, options?.['callback']);
+            arg = promise;
+            break;
+          case StructurePurpose.Generator:
+            generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
+            arg = generator;
+            break;
+          case StructurePurpose.AbortSignal:
+            // create an Int32Array with one element, hooking it up to the programmer-supplied
+            // AbortSignal object if found
+            signal ||= this.createSignal(structure, options?.['signal']);
+            arg = signal;
+            break;
+          case StructurePurpose.Reader:
+            arg = this.createReader(argList[srcIndex++]);
+            break;
+          case StructurePurpose.Writer:
+            arg = this.createWriter(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {
@@ -196,19 +203,26 @@ export default mixin({
     usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
-      for (const { structure: { flags } } of argMembers) {
-        if (flags & StructFlag.IsAllocator) {
-          this.usingJsAllocator = true;
-        } else if (flags & StructFlag.IsPromise) {
-          this.usingPromise = true;
-        } else if (flags & StructFlag.IsGenerator) {
-          this.usingGenerator = true;
-        } else if (flags & StructFlag.IsAbortSignal) {
-          this.usingAbortSignal = true;
-        } else if (flags & StructFlag.IsReader) {
-          this.usingReader = true;
-        } else if (flags & StructFlag.IsWriter) {
-          this.usingWriter = true;
+      for (const { structure: { purpose } } of argMembers) {
+        switch (purpose) {
+          case StructurePurpose.Allocator:
+            this.usingJsAllocator = true;
+            break;
+          case StructurePurpose.Promise:
+            this.usingPromise = true;
+            break;
+          case StructurePurpose.Generator:
+            this.usingGenerator = true;
+            break;
+          case StructurePurpose.AbortSignal:
+            this.usingAbortSignal = true;
+            break;
+          case StructurePurpose.Reader:
+            this.usingReader = true;
+            break;
+          case StructurePurpose.Writer:
+            this.usingWriter = true;
+            break;
         }
       }
     }

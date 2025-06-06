@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructFlag, StructureFlag, StructureType,
-  VisitorFlag,
+  ArgStructFlag, MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType,
+  VisitorFlag
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
@@ -578,7 +579,8 @@ describe('Structure: arg-struct', function() {
       env.endStructure(optionalPtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | StructFlag.IsPromise,
+        purpose: StructurePurpose.Promise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
         name: 'Promise',
         byteSize: addressByteSize * 2,
       });

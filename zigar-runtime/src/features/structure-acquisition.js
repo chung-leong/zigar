@@ -43,6 +43,7 @@ export default mixin({
   beginStructure(def) {
     const {
       type,
+      purpose,
       name,
       length,
       signature = -1n,
@@ -53,6 +54,7 @@ export default mixin({
     return {
       constructor: null,
       type,
+      purpose,
       flags,
       signature,
       name,

@@ -15,6 +15,16 @@ export const StructureType = {
   VariadicStruct: 13,
   Function: 14,
 };
+export const StructurePurpose = {
+  Unknown: 0,
+  Promise: 1,
+  Generator: 2,
+  AbortSignal: 3,
+  Allocator: 4,
+  Iterator: 5,
+  Reader: 6,
+  Writer: 7,
+};
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {
   HasValue:         0x0001,
@@ -34,17 +44,8 @@ export const ArrayFlag = {
 export const StructFlag = {
   IsExtern:         0x0010,
   IsPacked:         0x0020,
-  IsIterator:       0x0040,
-  IsTuple:          0x0080,
-
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsGenerator:      0x0400,
-  IsAbortSignal:    0x0800,
-
-  IsOptional:       0x1000,
-  IsReader:         0x2000,
-  IsWriter:         0x4000,
+  IsTuple:          0x0040,
+  IsOptional:       0x0080,
 };
 export const UnionFlag = {
   HasSelector:      0x0010,
@@ -53,11 +54,9 @@ export const UnionFlag = {
   IsExtern:         0x0080,
 
   IsPacked:         0x0100,
-  IsIterator:       0x0200,
 };
 export const EnumFlag = {
   IsOpenEnded:      0x0010,
-  IsIterator:       0x0020,
 };
 export const OptionalFlag = {
   HasSelector:      0x0010,
@@ -82,7 +81,6 @@ export const ErrorSetFlag = {
   IsGlobal:         0x0010,
 };
 export const OpaqueFlag = {
-  IsIterator:       0x0010,
 };
 export const VectorFlag = {
   IsTypedArray:     0x0010,

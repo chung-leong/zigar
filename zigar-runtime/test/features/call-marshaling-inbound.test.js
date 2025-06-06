@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag, StructFlag, 
-  StructureFlag, StructureType,
+  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -594,7 +594,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -665,7 +666,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructFlag.IsAllocator,
+        purpose: StructurePurpose.Allocator,
+        flags: 0,
         byteSize: 4,
       });
       env.attachMember(allocatorStructure, {
@@ -889,7 +891,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(cbPtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsPromise,
+        purpose: StructurePurpose.Promise,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize * 2,
       });
       env.attachMember(promiseStructure, {
@@ -1145,7 +1148,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(cbPtrStructure);
       const generatorStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsGenerator,
+        purpose: StructurePurpose.Generator,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize * 2,
       });
       env.attachMember(generatorStructure, {
@@ -1273,7 +1277,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
+        purpose: StructurePurpose.AbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize,
       });
       env.attachMember(signalStructure, {
@@ -1398,7 +1403,8 @@ describe('Feature: call-marshaling-inbound', function() {
       env.endStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructFlag.IsAbortSignal,
+        purpose: StructurePurpose.AbortSignal,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize,
       });
       env.attachMember(signalStructure, {
