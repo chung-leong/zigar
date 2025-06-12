@@ -62,6 +62,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 std.mem.Allocator => .allocator,
                 std.io.AnyReader => .reader,
                 std.io.AnyWriter => .writer,
+                std.fs.File => .file,
                 else => if (td.isIterator())
                     .iterator
                 else if (types.getInternalType(td.type)) |internal_type| switch (internal_type) {

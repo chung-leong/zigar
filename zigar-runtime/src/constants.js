@@ -24,6 +24,7 @@ export const StructurePurpose = {
   Iterator: 5,
   Reader: 6,
   Writer: 7,
+  File: 8,
 };
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {

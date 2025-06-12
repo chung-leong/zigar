@@ -126,7 +126,7 @@ export default mixin({
       if (this.libc) {
         this.flushStdout?.();
       }
-      this.flushConsole?.();
+      this.console?.flush?.();
       this.endContext();
     };
     if (isAsync) {

@@ -279,6 +279,10 @@ export function isCompatibleInstanceOf(object, Type) {
   return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
 }
 
+export function isPromise(object) {
+  return typeof(object?.then) === 'function';
+}
+
 export function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };

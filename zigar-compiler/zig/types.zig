@@ -66,6 +66,7 @@ pub const StructurePurpose = enum(u32) {
     iterator,
     reader,
     writer,
+    file,
 
     pub fn isOptional(self: @This()) bool {
         return switch (self) {
@@ -943,7 +944,7 @@ pub const TypeData = struct {
 
     pub fn shouldIgnoreDecls(comptime self: @This()) bool {
         return switch (self.type) {
-            std.io.AnyReader, std.io.AnyWriter => true,
+            std.io.AnyReader, std.io.AnyWriter, std.fs.File => true,
             else => getInternalType(self.type) != null,
         };
     }

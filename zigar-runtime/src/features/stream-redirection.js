@@ -4,53 +4,84 @@ import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
-    this.consoleObject = null;
-    this.consolePending = [];
-    this.consoleTimeout = 0;
-  },
-  writeToConsole(dv) {
-    try {
-      // make copy of array, in case incoming buffer is pointing to stack memory
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.consolePending.push(array);
-      } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.subarray(index + 1);
-        this.writeToConsoleNow([ ...this.consolePending, beginning ]);
-        this.consolePending.splice(0);
-        if (remaining.length > 0) {
-          this.consolePending.push(remaining);
+    this.nextStreamHandle = 0x10000;
+    const c = this.console = {
+      dest: null,
+      pending: [],
+      timeout: 0,
+      use(console) {
+        this.dest = console;
+      },
+      write(chunk) {
+        try {
+          // make copy of array, in case incoming buffer is pointing to stack memory
+          const array = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength).slice();
+          // send text up to the last newline character
+          const index = array.lastIndexOf(0x0a);
+          if (index === -1) {
+            this.pending.push(array);
+          } else {
+            const beginning = array.subarray(0, index);
+            const remaining = array.subarray(index + 1);
+            this.writeNow([ ...this.pending, beginning ]);
+            this.pending.splice(0);
+            if (remaining.length > 0) {
+              this.pending.push(remaining);
+            }
+          }
+          clearTimeout(this.timeout);
+          this.timeout = 0;
+          if (this.pending.length > 0) {
+            this.timeout = setTimeout(() => {
+              this.writeNow(this.pending);
+              this.pending.splice(0);
+            }, 250);
+          }
+          return true;
+        /* c8 ignore start */
+        } catch (err) {
+          console.error(err);
+          return false;
+        }
+        /* c8 ignore end */
+      },
+      writeNow(array) {
+        const c = this.dest ?? globalThis.console;
+        c.log?.call?.(c, decodeText(array));
+      },
+      flush() {
+        if (this.pending.length > 0) {
+          this.writeNow(this.pending);
+          this.pending.splice(0);
+          clearTimeout(this.timeout);
         }
       }
-      clearTimeout(this.consoleTimeout);
-      this.consoleTimeout = 0;
-      if (this.consolePending.length > 0) {
-        this.consoleTimeout = setTimeout(() => {
-          this.writeToConsoleNow(this.consolePending);
-          this.consolePending.splice(0);
-        }, 250);
+    };
+    this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
+  },
+  async writeBytes(fd, address, len) {
+    const dv = this.obtainZigView(address, len, false);
+    const writer = this.streamMap.get(fd)
+    if (dv && typeof(writer?.write) == 'function') {
+      await writer.write(dv);
+      return CallResult.OK;
+    }
+    return CallResult.Failure;
+  },
+  async readBytes(fd, address, len) {
+    const dv = this.obtainZigView(address, len, false);
+    const reader = this.streamMap.get(fd)
+    if (dv && reader) {
+      if (reader instanceof ReableStreamDefaultReader) {
+        await writer.write(dv);
+        return CallResult.OK;
+      } else if (read instanceof ReadableStreamBYOBReader) {
+
+      } else if (read instanceof Blob) {
+
       }
-      return true;
-    /* c8 ignore start */
-    } catch (err) {
-      console.error(err);
-      return false;
     }
-    /* c8 ignore end */
-  },
-  writeToConsoleNow(array) {
-    const c = this.consoleObject ?? globalThis.console;
-    c.log?.call?.(c, decodeText(array));
-  },
-  flushConsole() {
-    if (this.consolePending.length > 0) {
-      this.writeToConsoleNow(this.consolePending);
-      this.consolePending.splice(0);
-      clearTimeout(this.consoleTimeout);
-    }
+    return CallResult.Failure;
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
@@ -59,15 +90,11 @@ export default mixin({
   } : process.env.TARGET === 'node' ? {
     exports: {
       writeBytes: null,
+      readBytes: null,
     },
     imports: {
       flushStdout: null,
     },
-
-    writeBytes(address, len) {
-      const dv = this.obtainZigView(address, len, false);
-      return (dv && this.writeToConsole(dv)) ? CallResult.OK : CallResult.Failure;
-    },      
     /* c8 ignore start */
   } : undefined),
   ...(process.env.MIXIN === 'track' ? {

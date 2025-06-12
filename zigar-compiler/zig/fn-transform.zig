@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const expectEqual = std.testing.expectEqual;
 
 /// Take a function that accepts a tuple as its only argument and create a new one with the tuple

@@ -14,7 +14,7 @@ export default mixin({
     return {
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
-      connect: (console) => this.consoleObject = console,
+      connect: (console) => this.console?.use?.(console),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
@@ -93,7 +93,7 @@ export default mixin({
   /* c8 ignore start */
   ...(process.env.DEV ? {
     log(...args) {
-      const c = this.consoleObject ?? globalThis.console;
+      const c = this.console.source ?? globalThis.console;
       c?.log?.(...args);
     },
     showDiagnostics(title, lines) {

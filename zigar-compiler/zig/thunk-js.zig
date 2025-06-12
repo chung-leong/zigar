@@ -1,14 +1,13 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const types = @import("types.zig");
-const fn_transform = @import("fn-transform.zig");
-
-const Memory = types.Memory;
-const Result = types.Result;
-
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const builtin = @import("builtin");
+
+const fn_transform = @import("fn-transform.zig");
+const types = @import("types.zig");
+const Memory = types.Memory;
+const Result = types.Result;
 
 pub const Action = enum(u32) {
     create,
