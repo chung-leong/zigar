@@ -318,10 +318,25 @@ describe('Feature: baseline', function() {
     })
     it('should allow redirection of console output', async function() {
       const env = new Env();
-      const dv = new DataView(new ArrayBuffer(2));
+      const address = usize(0x1000);
+      const len = 2;
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dv = env.obtainZigView(address, len, false);
       dv.setUint8(0, '?'.charCodeAt(0));
       dv.setUint8(1, '\n'.charCodeAt(0));
-      const [ before ] = await capture(() => env.writeToConsole(dv));
+      const [ before ] = await capture(() => env.writeBytes(1, address, len));
       expect(before).to.equal('?');
       const object = env.getSpecialExports();
       let content;
@@ -330,7 +345,7 @@ describe('Feature: baseline', function() {
           content = s;
         }
       });
-      const [ after ] = await capture(() => env.writeToConsole(dv));
+      const [ after ] = await capture(() => env.writeBytes(1, address, len));
       expect(after).to.be.undefined;
       expect(content).to.equal('?');
     })

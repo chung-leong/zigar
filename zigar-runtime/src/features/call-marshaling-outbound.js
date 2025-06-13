@@ -194,13 +194,6 @@ export default mixin({
   ...(process.env.MIXIN === 'track' ? {
     mixinUsage: null,
     mixinUsageCapturing: null,
-    usingPromise: false,
-    usingGenerator: false,
-    usingAbortSignal: false,
-    usingJsAllocator: false,
-    usingVariables: false,
-    usingReader: false,
-    usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { purpose } } of argMembers) {
@@ -218,11 +211,18 @@ export default mixin({
             this.usingAbortSignal = true;
             break;
           case StructurePurpose.Reader:
-            this.usingReader = true;
+            this.usingReader = 
+            this.usingReaderConversion = true;
             break;
           case StructurePurpose.Writer:
-            this.usingWriter = true;
+            this.usingWriter = 
+            this.usingWriterConversion = true;
             break;
+          case StructurePurpose.File:
+            this.usingFile =
+            this.usingStreamRedirection =
+            this.usingReaderConversion = 
+            this.usingWriterConversion = true;
         }
       }
     }

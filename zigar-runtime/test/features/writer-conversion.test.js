@@ -1,0 +1,64 @@
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
+import 'mocha-skip-if';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
+import { delay } from '../test-utils.js';
+
+use(ChaiAsPromised);
+
+const Env = defineEnvironment();
+
+describe('Feature: writer-conversion', function() {
+  describe('convertWriter', function() {
+    it('should convert WritableStreamDefaultWriter to a writer', async function() {
+      const env = new Env();
+      const chunks = [];
+      const stream = new WritableStream({
+        async write(chunk) {
+          chunks.push(chunk);
+        }
+      });
+      const streamWriter = stream.getWriter()
+      const writer = env.convertWriter(streamWriter);
+      const bytes = new Uint8Array([ 0, 1, 2, 3 ]);
+      await writer.write(bytes);
+      expect(chunks).to.have.lengthOf(1);
+      let called = false;
+      writer.onClose = () => called = true;
+      streamWriter.close();
+      await delay(0);
+      expect(called).to.be.true;
+    })
+    it('should convert an array to a writer', async function() {
+      const env = new Env();
+      const chunks = [];
+      const writer = env.convertWriter(chunks);
+      const bytes = new Uint8Array([ 0, 1, 2, 3 ]);
+      await writer.write(bytes);
+      expect(chunks).to.have.lengthOf(1);
+      let called = false;
+      writer.onClose = () => called = true;
+      writer.close();
+      await delay(0);
+      expect(called).to.be.true;
+    })
+    it('should return the same object when it contains a write function', async function() {
+      const env = new Env();
+      const originalWriter = {
+        write() {},
+      };
+      const writer = env.convertWriter(originalWriter);
+      expect(writer).to.equal(originalWriter);
+    })
+    it('should throw when argument cannot be converted to a writer', async function() {
+      const env = new Env();
+      expect(() => env.convertWriter({})).to.throw(Error)
+        .with.property('message').that.contains('WritableStreamDefaultWriter');
+      expect(() => env.convertWriter(undefined)).to.throw(Error)
+        .with.property('message').that.contains('undefined');
+      expect(() => env.convertWriter(null)).to.throw(Error)
+        .with.property('message').that.contains('null');
+    })
+  })
+})
