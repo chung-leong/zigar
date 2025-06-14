@@ -59,70 +59,71 @@ if (process.env.TARGET === 'wasm') {
         }
         expect(sum).to.not.equal(0);
       })
-      it('should provide a function that write to console', async function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const f = env.getWASIHandler('fd_write');
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        const [ line ] = await capture(() => {
-          f(1, bufferAddress, 1, writtenAddress);
-        });
-        expect(line).to.equal(text.trim());
-        const written = dv.getUint32(writtenAddress, true);
-        expect(written).to.equal(4);
+      describe('fd_write', function() {
+        it('should provide a function that write to console', async function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_write');
+          const bufferAddress = 16;
+          const stringAddress = 64;
+          const writtenAddress = 128;
+          const dv = new DataView(memory.buffer);
+          const text = 'ABC\n';
+          for (let i = 0; i < text.length; i++) {
+            dv.setUint8(stringAddress + i, text.charCodeAt(i));
+          }
+          dv.setUint32(bufferAddress, stringAddress, true);
+          dv.setUint32(bufferAddress + 4, text.length, true);
+          const [ line ] = await capture(() => {
+            f(1, bufferAddress, 1, writtenAddress);
+          });
+          expect(line).to.equal(text.trim());
+          const written = dv.getUint32(writtenAddress, true);
+          expect(written).to.equal(4);
+        })
+        it('should write to console when call to fd_write is directed at stderr', async function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_write');
+          const bufferAddress = 16;
+          const stringAddress = 64;
+          const writtenAddress = 128;
+          const dv = new DataView(memory.buffer);
+          const text = 'ABC\n';
+          for (let i = 0; i < text.length; i++) {
+            dv.setUint8(stringAddress + i, text.charCodeAt(i));
+          }
+          dv.setUint32(bufferAddress, stringAddress, true);
+          dv.setUint32(bufferAddress + 4, text.length, true);
+          const [ line ] = await capture(() => {
+            f(2, bufferAddress, 1, writtenAddress);
+          });
+          expect(line).to.equal(text.trim());
+          const written = dv.getUint32(writtenAddress, true);
+          expect(written).to.equal(4);
+        })
+        it('should return error code when file descriptor is not stdout or stderr', async function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_write');
+          const bufferAddress = 16;
+          const stringAddress = 64;
+          const writtenAddress = 128;
+          const dv = new DataView(memory.buffer);
+          const text = 'ABC\n';
+          for (let i = 0; i < text.length; i++) {
+            dv.setUint8(stringAddress + i, text.charCodeAt(i));
+          }
+          dv.setUint32(bufferAddress, stringAddress, true);
+          dv.setUint32(bufferAddress + 4, text.length, true);
+          let result;
+          const [ line ] = await capture(() => {
+            result = f(3, bufferAddress, 1, writtenAddress);
+          });
+          expect(result).to.not.equal(0);
+          expect(line).to.be.undefined;
+        })
       })
-      it('should write to console when call to fd_write is directed at stderr', async function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const f = env.getWASIHandler('fd_write');
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        const [ line ] = await capture(() => {
-          f(2, bufferAddress, 1, writtenAddress);
-        });
-        expect(line).to.equal(text.trim());
-        const written = dv.getUint32(writtenAddress, true);
-        expect(written).to.equal(4);
-      })
-      it('should return error code when file descriptor is not stdout or stderr', async function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const f = env.getWASIHandler('fd_write');
-        const bufferAddress = 16;
-        const stringAddress = 64;
-        const writtenAddress = 128;
-        const dv = new DataView(memory.buffer);
-        const text = 'ABC\n';
-        for (let i = 0; i < text.length; i++) {
-          dv.setUint8(stringAddress + i, text.charCodeAt(i));
-        }
-        dv.setUint32(bufferAddress, stringAddress, true);
-        dv.setUint32(bufferAddress + 4, text.length, true);
-        let result;
-        const [ line ] = await capture(() => {
-          result = f(3, bufferAddress, 1, writtenAddress);
-        });
-        expect(result).to.not.equal(0);
-        expect(line).to.be.undefined;
-      })
-
     })
   })
 }

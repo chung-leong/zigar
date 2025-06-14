@@ -1,6 +1,6 @@
 import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText } from '../utils.js';
+import { decodeText, isPromise } from '../utils.js';
 
 export default mixin({
   init() {
@@ -8,26 +8,34 @@ export default mixin({
     const c = this.console = new ConsoleWriter();
     this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
   },
-  async writeBytes(fd, address, len) {
+  writeBytes(fd, address, len) {
     const dv = this.obtainZigView(address, len, false);
     const writer = this.streamMap.get(fd)
-    if (dv && typeof(writer?.write) == 'function') {
-      await writer.write(dv);
-      return CallResult.OK;
+    if (dv && writer) {
+      try {
+        const result = writer.write(dv);
+        if(isPromise(result)) {
+          return result.then(() => CallResult.OK, () => CallResult.Failure);
+        } 
+        return CallResult.OK;
+      } catch (err) {
+        console.error(err);
+      }
     }
     return CallResult.Failure;
   },
-  async readBytes(fd, address, len) {
+  readBytes(fd, address, len) {
     const dv = this.obtainZigView(address, len, false);
     const reader = this.streamMap.get(fd)
     if (dv && reader) {
-      if (reader instanceof ReableStreamDefaultReader) {
-        await writer.write(dv);
+      try {
+        const result = writer.write(dv);
+        if(isPromise(result)) {
+          return result.then(() => CallResult.OK, () => CallResult.Failure);
+        } 
         return CallResult.OK;
-      } else if (read instanceof ReadableStreamBYOBReader) {
-
-      } else if (read instanceof Blob) {
-
+      } catch {
+        console.error(err);
       }
     }
     return CallResult.Failure;
@@ -86,11 +94,9 @@ class ConsoleWriter {
           this.pending.splice(0);
         }, 250);
       }
-      return true;
     /* c8 ignore start */
     } catch (err) {
       console.error(err);
-      return false;
     }
     /* c8 ignore end */
   }

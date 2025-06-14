@@ -1,7 +1,6 @@
 import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { Exit } from '../errors.js';
-import { isPromise } from '../utils.js';
 
 export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
@@ -30,8 +29,9 @@ export default mixin({
               const buf_ptr = dv.getUint32(p, true);
               const buf_len = dv.getUint32(p + 4, true);
               if (buf_len > 0) {
-                const result = this.writeBytes(fd, buf_ptr, buf_len);
-                if (!isPromise(result) && result !== CallResult.OK) return ENOSYS;
+                if (this.writeBytes(fd, buf_ptr, buf_len) !== CallResult.OK) {
+                  return ENOSYS;
+                }
                 written += buf_len;
               }
             }
@@ -46,9 +46,9 @@ export default mixin({
               const buf_ptr = dv.getUint32(p, true);
               const buf_len = dv.getUint32(p + 4, true);
               if (buf_len > 0) {
-                const result = this.readBytes(fd, buf_ptr, buf_len);
-                if (result !== CallResult.OK) return ENOSYS;
-                read += buf_len;
+                if (this.readBytes(fd, buf_ptr, buf_len) !== CallResult.OK) {
+                  return ENOSYS;
+                }
               }
             }
             dv.setUint32(read_ptr, read, true);
