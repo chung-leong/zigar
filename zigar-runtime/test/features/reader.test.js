@@ -78,6 +78,55 @@ describe('Feature: reader', function() {
       const read2 = await readFn(ptr, buffer2);
       expect(read2).to.equal(40);
     })
+    it('should create a read struct from a Blob', async function() {
+      const env = new Env();
+      const blob = new Blob([
+        new Uint8Array([ 0, 1, 2, 3 ]),
+        new Uint8Array([ 4, 5, 6, 7, 8 ]),
+      ])
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      const { context, readFn } = env.createReader(blob);
+      const ptr = {
+        '*': { [MEMORY]: context }
+      };
+      const buffer1 = {
+        '*': { [MEMORY]: new DataView(new ArrayBuffer(4)) }
+      }
+      const read1 = await readFn(ptr, buffer1);
+      expect(read1).to.equal(4);
+      const buffer2 = {
+        '*': { [MEMORY]: new DataView(new ArrayBuffer(40)) }
+      }
+      const read2 = await readFn(ptr, buffer2);
+      expect(read2).to.equal(5);
+      const read3 = await readFn(ptr, buffer2);
+      expect(read3).to.equal(0);
+    })
+    it('should create a read struct from a Uint8Array', async function() {
+      const env = new Env();
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      const { context, readFn } = env.createReader(array);
+      const ptr = {
+        '*': { [MEMORY]: context }
+      };
+      const buffer1 = {
+        '*': { [MEMORY]: new DataView(new ArrayBuffer(4)) }
+      }
+      const read1 = readFn(ptr, buffer1);
+      expect(read1).to.equal(4);
+      const buffer2 = {
+        '*': { [MEMORY]: new DataView(new ArrayBuffer(40)) }
+      }
+      const read2 = readFn(ptr, buffer2);
+      expect(read2).to.equal(5);
+      const read3 = readFn(ptr, buffer2);
+      expect(read3).to.equal(0);
+    })
     it('should rethrow the error when the stream throws one', async function() {
       const env = new Env();
       const stream = new ReadableStream({
@@ -99,6 +148,26 @@ describe('Feature: reader', function() {
       }
       await expect(readFn(ptr, buffer)).to.eventually.be.rejected;
     })
+    it('should rethrow the error when the stream throws one synchronously', async function() {
+      const env = new Env();
+      const reader = {
+        read() {
+          throw new Error('doh!');
+        }
+      };
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }
+      const { context, readFn } = env.createReader(reader);
+      const ptr = {
+        '*': { [MEMORY]: context }
+      };
+      const dv = new DataView(new ArrayBuffer(8));
+      const buffer = {
+        '*': { [MEMORY]: dv }
+      }
+      expect(() => readFn(ptr, buffer)).to.throw();
+    })
     it('should return an object if it has the properties of a reader', async function() {
       const env = new Env();
       const reader = {
@@ -111,7 +180,7 @@ describe('Feature: reader', function() {
       const env = new Env();
       expect(() => env.createReader({})).to.throw(TypeError)
         .with.property('message').that.contains('ReadableStreamDefaultReader');
-      expect(() => env.createReader(null)).to.throw(TypeError)
+      expect(() => env.createReader(undefined)).to.throw(TypeError)
         .with.property('message').that.contains('ReadableStreamDefaultReader');
       expect(() => env.createReader(5)).to.throw(TypeError)
         .with.property('message').that.contains('ReadableStreamDefaultReader');

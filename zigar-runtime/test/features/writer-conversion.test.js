@@ -3,7 +3,7 @@ import ChaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { delay } from '../test-utils.js';
+import { capture, delay } from '../test-utils.js';
 
 use(ChaiAsPromised);
 
@@ -43,6 +43,21 @@ describe('Feature: writer-conversion', function() {
       await delay(0);
       expect(called).to.be.true;
     })
+    it('should convert null to a writer', async function() {
+      const env = new Env();
+      const writer = env.convertWriter(null);
+      const bytes = new Uint8Array([ 0, 1, 2, 3 ]);
+      writer.write(bytes);
+      writer.close();
+    })
+    it('should convert console to a writer', async function() {
+      const env = new Env();
+      const writer = env.convertWriter(console);
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode('Hello world\n');
+      const [ line ] = await capture(() => writer.write(bytes));
+      expect(line).to.equal('Hello world');
+    })
     it('should return the same object when it contains a write function', async function() {
       const env = new Env();
       const originalWriter = {
@@ -57,8 +72,7 @@ describe('Feature: writer-conversion', function() {
         .with.property('message').that.contains('WritableStreamDefaultWriter');
       expect(() => env.convertWriter(undefined)).to.throw(Error)
         .with.property('message').that.contains('undefined');
-      expect(() => env.convertWriter(null)).to.throw(Error)
-        .with.property('message').that.contains('null');
+      expect(() => env.convertWriter(null)).to.not.throw();
     })
   })
 })

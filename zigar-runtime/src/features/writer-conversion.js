@@ -7,10 +7,14 @@ export default mixin({
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
+    } else if (arg === globalThis.console) {
+      return this.console;
+    } else if (arg === null) {
+      return new NullWriter();
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, or object with writer interface', arg);
+      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
     }
   },
 });
@@ -42,4 +46,10 @@ class ArrayWriter {
   close() {
     this.onClose?.();
   }
+}
+
+class NullWriter {
+  write() {}
+
+  close() {}
 }

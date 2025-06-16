@@ -34,11 +34,42 @@ export default mixin({
           return result.then(() => CallResult.OK, () => CallResult.Failure);
         } 
         return CallResult.OK;
-      } catch {
+      } catch (err) {
         console.error(err);
       }
     }
     return CallResult.Failure;
+  },
+  changeStreamPointer(fd, offset, whence) {
+    const reader = this.streamMap.get(fd)
+    try {
+      return reader?.seek?.(offset, whence);
+    } catch (err) {
+      console.error(err);
+    }
+  },
+  getStreamPointer(fd) {
+    const reader = this.streamMap.get(fd);
+    try {
+      return reader?.tell?.();
+    } catch (err) {
+      console.error(err);
+    }
+  },
+  redirectStream(fd, arg) {
+    let stream;
+    if (fd === 0) {
+      stream = this.convertReader(arg);
+    } else if (fd === 1 || fd === 2) {
+      stream = this.convertWriter(arg);
+    } else {
+      throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+    }
+    if (stream) {
+      this.streamMap.set(fd, stream);
+    } else {
+      this.streamMap.delete(fd);
+    }
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {

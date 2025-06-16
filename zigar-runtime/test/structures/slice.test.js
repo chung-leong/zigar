@@ -1328,7 +1328,7 @@ describe('Structure: slice', function() {
       slice[0] = 123;
       expect(typedArray[123]).to.not.equal(123);
     })
-    it('should allow casting from an Uint8ClampedArray', function() {
+    it('should allow casting from a Uint8ClampedArray', function() {
       const env = new Env();
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,

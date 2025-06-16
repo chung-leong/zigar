@@ -11,6 +11,8 @@ export default mixin({
       return new BlobReader(arg);
     } else if (arg instanceof Uint8Array) {
       return new Uint8ArrayReader(arg);
+    } else if (arg === null) {
+      return new NullReader();
     } else if (typeof(arg?.read) === 'function') {
       return arg;
     } else {
@@ -47,6 +49,10 @@ class WebStreamReader {
     return read;
   }
 
+  close() {
+    this.reader.cancel();
+  }
+
   set onClose(cb) {
     this.reader.closed.then(cb, cb);
   }
@@ -54,10 +60,13 @@ class WebStreamReader {
 
 class WebStreamReaderBYOB extends WebStreamReader {
   async read(dest) {
-    if (this.done) return 0;
-    const { done, value } = await this.reader.read(dest);
-    this.done = done;
-    return value.byteLength;
+    let read = 0;
+    if (!this.done) {
+      const { done, value } = await this.reader.read(dest);
+      this.done = done;
+      read = value.byteLength;
+    }
+    return read;
   }
 }
 
@@ -72,7 +81,9 @@ class BlobReader {
   async read(dest) {
     const len = dest.length;
     const slice = this.blob.slice(this.pos, this.pos + len);
-    return this.copy(dest, await slice.bytes());
+    const response = new Response(slice);
+    const buffer = await response.arrayBuffer();
+    return this.copy(dest, new Uint8Array(buffer));
   }
 
   copy(dest, src) {
@@ -106,5 +117,15 @@ class BlobReader {
 class Uint8ArrayReader extends BlobReader {
   read(dest) {
     return this.copy(dest, this.blob.slice(this.pos, this.pos + dest.length));
+  }
+}
+
+class NullReader {
+  read() {
+    return 0;
+  }
+
+  close() {
+    this.onClose?.();
   }
 }
