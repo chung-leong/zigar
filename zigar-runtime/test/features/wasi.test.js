@@ -1,0 +1,37 @@
+import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
+
+const Env = defineEnvironment();
+
+if (process.env.TARGET === 'wasm') {
+  describe('Feature: wasi', function() {
+    describe('setCustomWASI', function() {
+      it('should accept a custom interface object', function() {
+        const env = new Env();
+        const wasi = {
+          wasiImport: {
+            test: function() {},
+          }
+        };
+        env.setCustomWASI(wasi);
+        expect(env.getWASIHandler('test')).to.equal(wasi.wasiImport.test);
+      })
+      it('should throw if WASM compilation has been initiated already', function() {
+        const env = new Env();
+        env.executable = {};
+        const wasi = { wasiImport: {} };
+        expect(() => env.setCustomWASI(wasi)).to.throw();
+      })
+    })
+    describe('getWASIHandler', function() {
+      it('should provide a function returning ENOSYS when handler is not implemented', function() {
+        const env = new Env();
+        const f = env.getWASIHandler('args_get');
+        expect(f).to.be.a('function');
+        expect(f()).to.equal(PosixError.ENOSYS);
+      })
+    })
+ })
+}

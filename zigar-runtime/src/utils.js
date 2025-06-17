@@ -1,4 +1,5 @@
-import { MemberType } from './constants.js';
+import { MemberType, PosixError } from './constants.js';
+import { Deadlock } from './errors.js';
 import { ENVIRONMENT, LENGTH, PROXY, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
@@ -281,6 +282,16 @@ export function isCompatibleInstanceOf(object, Type) {
 
 export function isPromise(object) {
   return typeof(object?.then) === 'function';
+}
+
+export function notPromise(value) {
+  if (isPromise(value)) throw new Deadlock();
+  return value;
+}
+
+export function showPosixError(err) {
+  console.error(err);
+  return err.code ?? PosixError.EPERM;
 }
 
 export function markAsSpecial({ get, set }) {
