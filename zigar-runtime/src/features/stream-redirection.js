@@ -24,16 +24,16 @@ export default mixin({
     return reader.read(array);
   },
   changeStreamPointer(fd, offset, whence) {
-    const reader = this.streamMap.get(fd);
+    const reader = this.getStream(fd);
     if (typeof(reader.seek) !== 'function') {
-      throw IllegalSeek();
+      throw new IllegalSeek();
     }
     return reader.seek(offset, whence);
   },
   getStreamPointer(fd) {
-    const reader = this.streamMap.get(fd);
+    const reader = this.getStream(fd);
     if (typeof(reader.tell) !== 'function') {
-      throw IllegalSeek();
+      throw new IllegalSeek();
     }
     return reader.tell();
   },

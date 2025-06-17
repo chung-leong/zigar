@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, PointerFlag, StructureFlag, StructureType } from '../src/constants.js';
+import { MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../src/constants.js';
 import {
   AccessingOpaque,
   AlignmentConflict,
@@ -11,11 +11,15 @@ import {
   BufferSizeMismatch,
   ConstantConstraint,
   CreatingOpaque,
+  Deadlock,
   EnumExpected,
   ErrorExpected,
+  IllegalSeek,
   InaccessiblePointer,
   InactiveUnionProperty,
+  InvalidArgument,
   InvalidArrayInitializer,
+  InvalidFileDescriptor,
   InvalidInitializer,
   InvalidPointerTarget,
   InvalidType,
@@ -643,6 +647,31 @@ describe('Error functions', function() {
       expect(err.message).to.contain('Apple');
     })
   })
+  describe('InvalidFileDescriptor', function() {
+    it('should have expected Posix error code', function() {
+      const err = new InvalidFileDescriptor();
+      expect(err.code).to.equal(PosixError.EBADF);
+    })
+  })
+  describe('InvalidArgument', function() {
+    it('should have expected Posix error code', function() {
+      const err = new InvalidArgument();
+      expect(err.code).to.equal(PosixError.EINVAL);
+    })
+  })
+  describe('IllegalSeek', function() {
+    it('should have expected Posix error code', function() {
+      const err = new IllegalSeek();
+      expect(err.code).to.equal(PosixError.ESPIPE);
+    })
+  })
+  describe('Deadlock', function() {
+    it('should have expected Posix error code', function() {
+      const err = new Deadlock();
+      expect(err.code).to.equal(PosixError.EDEADLK);
+    })
+  })
+
   describe('adjustArgumentError', function() {
     it('should add argument number to an error', function() {
       const err1 = adjustArgumentError(new TypeError('Something'), 0);

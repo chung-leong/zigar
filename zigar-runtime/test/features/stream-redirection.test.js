@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
+import { IllegalSeek } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { capture, delay, usize } from '../test-utils.js';
 
@@ -152,6 +153,30 @@ describe('Feature: stream-redirection', function() {
       expect(count).to.equal(1);
       expect(dv.getUint8(0)).to.equal(9);
     })
+    it('should throw when reader is not seekable', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const stream = new ReadableStream({
+        async pull(controller) {
+          controller.close();
+        }
+      });
+      const reader = stream.getReader();
+      env.redirectStream(0, reader);
+      expect(() => env.changeStreamPointer(0, -1, 2)).to.throw(IllegalSeek);
+    })
   })
   describe('getStreamPointer', function() {
     it('should return the position of an array reader', async function() {
@@ -176,6 +201,30 @@ describe('Feature: stream-redirection', function() {
       env.readBytes(0, address, dv.byteLength);
       const pos = env.getStreamPointer(0);
       expect(pos).to.equal(4);
+    })
+    it('should throw when reader is not seekable', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const stream = new ReadableStream({
+        async pull(controller) {
+          controller.close();
+        }
+      });
+      const reader = stream.getReader();
+      env.redirectStream(0, reader);
+      expect(() => env.getStreamPointer(0)).to.throw(IllegalSeek);
     })
   })
   describe('closeStream', function() {

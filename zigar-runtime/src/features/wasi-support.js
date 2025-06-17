@@ -83,7 +83,7 @@ export default mixin({
             }
           };
         case 'fd_prestat_get':
-          return () => PosixError.ENOBADF;
+          return () => PosixError.EBADF;
         case 'proc_exit':
           return (code) => {
             throw new Exit(code);

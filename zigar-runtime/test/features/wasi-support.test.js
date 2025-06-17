@@ -28,19 +28,17 @@ if (process.env.TARGET === 'wasm') {
       })
     })
     describe('getWASIHandler', function() {
-      const ENOSYS = 38;
-      const ENOBADF = 8;
       it('should provide a function returning ENOSYS when handler is not implemented', function() {
         const env = new Env();
         const f = env.getWASIHandler('args_get');
         expect(f).to.be.a('function');
-        expect(f()).to.equal(ENOSYS);
+        expect(f()).to.equal(PosixError.ENOSYS);
       })
-      it('should provide a function returning ENOBADF', function() {
+      it('should provide a function returning EBADF', function() {
         const env = new Env();
         const f = env.getWASIHandler('fd_prestat_get');
         expect(f).to.be.a('function');
-        expect(f()).to.equal(ENOBADF);
+        expect(f()).to.equal(PosixError.EBADF);
       })
       it('should provide a function that throws Exit enception', function() {
         const env = new Env();
@@ -127,7 +125,7 @@ if (process.env.TARGET === 'wasm') {
               result = f(3, bufferAddress, 1, writtenAddress);
             })
           });
-          expect(result).to.not.equal(PosixError.ENOBADF);
+          expect(result).to.equal(PosixError.EBADF);
           expect(line).to.be.undefined;
         })
       })
@@ -197,7 +195,6 @@ if (process.env.TARGET === 'wasm') {
           const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
           const f = env.getWASIHandler('fd_seek');
           const posAddress = 128;
-          const dv = new DataView(memory.buffer);
           env.redirectStream(0, array);
           let result;
           const [ error ] = await captureError(() => { 
@@ -224,6 +221,17 @@ if (process.env.TARGET === 'wasm') {
           expect(result).to.equal(PosixError.NONE);
           const pos = dv.getUint32(posAddress, true);
           expect(pos).to.equal(2);
+        })
+        it('should return an error code when handle is invalid', async function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_tell');
+          let result;
+          const [ error ] = await captureError(() => { 
+            result = f(4)
+          });
+          expect(result).to.equal(PosixError.EBADF);
+          expect(error).to.contains('file descriptor');
         })
       })
     })
