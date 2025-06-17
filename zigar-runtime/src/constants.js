@@ -140,3 +140,13 @@ export const VisitorFlag = {
   IgnoreArguments:  0x0010,
   IgnoreRetval:     0x0020,
 };
+
+export const PosixError = {
+  NONE: 0,
+  EPERM: 1,
+  ENOBADF: 8,
+  EINVAL: 22,
+  ESPIPE: 29,
+  EDEADLK: 35,
+  ENOSYS: 38,
+};

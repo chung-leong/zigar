@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
+import { InvalidArgument, TypeMismatch } from '../errors.js';
 
 export default mixin({
   convertReader(arg) {
@@ -105,7 +105,7 @@ class BlobReader {
       case 1: pos = this.pos + offset; break;
       case 2: pos = size + offset; break;
     }
-    if (!(pos >= 0 && pos <= size)) return;
+    if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
 

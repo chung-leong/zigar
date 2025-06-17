@@ -1,5 +1,6 @@
+import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { Exit } from '../errors.js';
+import { Deadlock, Exit } from '../errors.js';
 import { isPromise } from '../utils.js';
 
 export default mixin({
@@ -28,6 +29,9 @@ export default mixin({
               const buf_len = dv.getUint32(p + 4, true);
               if (buf_len > 0) {
                 try {
+                  // writeBytes() can return promise in the main stream only
+                  // when a call is relayed from a thread, a synchronously wait occurs
+                  // regardless of whether writeBytes() returns a promise or not
                   notPromise(this.writeBytes(fd, buf_ptr, buf_len));
                 } catch (err) {
                   return showError(err);
@@ -36,7 +40,7 @@ export default mixin({
               }
             }
             dv.setUint32(written_ptr, written, true);
-            return WASIStatus.OK;
+            return PosixError.NONE;
           };
         case 'fd_read':
           return (fd, iovs_ptr, iovs_count, read_ptr) => {
@@ -54,7 +58,7 @@ export default mixin({
               }
             }
             dv.setUint32(read_ptr, read, true);
-            return WASIStatus.OK;
+            return PosixError.NONE;
           };
         case 'fd_seek':
           return (fd, offset, whence, newoffset_ptr) => {
@@ -62,9 +66,8 @@ export default mixin({
             try {
               const pos = notPromise(this.changeStreamPointer(fd, offset, whence));
               dv.setUint32(newoffset_ptr, pos, true);
-              return WASIStatus.OK;
+              return PosixError.NONE;
             } catch (err) {
-              console.error(err);
               return showError(err);
             }
           };
@@ -74,13 +77,13 @@ export default mixin({
             try {
               const pos = notPromise(this.getStreamPointer(fd));
               dv.setUint32(newoffset_ptr, pos, true);              
-              return WASIStatus.OK;
+              return PosixError.NONE;
             } catch (err) {
               return showError(err);
             }
           };
         case 'fd_prestat_get':
-          return () => WASIStatus.ENOBADF;
+          return () => PosixError.ENOBADF;
         case 'proc_exit':
           return (code) => {
             throw new Exit(code);
@@ -91,10 +94,10 @@ export default mixin({
             for (let i = 0; i < buf_len; i++) {
               dv.setUint8(i, Math.floor(256 * Math.random()));
             }
-            return WASIStatus.OK;
+            return PosixError.NONE;
           };
         default:
-          return () => WASIStatus.ENOSYS;
+          return () => PosixError.ENOSYS;
       }
     },
   } : undefined),
@@ -109,18 +112,11 @@ export default mixin({
   /* c8 ignore end */
 });
 
-const WASIStatus = {
-  OK: 0,
-  ENOBADF: 8,
-  ENOSYS: 38,
-};
 const notPromise = (value) => {
-  if (isPromise(value)) {
-    throw new Error('Deadlock');
-  }
+  if (isPromise(value)) throw new Deadlock();
   return value;
 };
 const showError = (err) => {
   console.error(err);
-  return WASIStatus.ENOSYS;
+  return err.code ?? PosixError.EPERM;
 };

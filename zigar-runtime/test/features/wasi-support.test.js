@@ -1,8 +1,9 @@
 import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { capture } from '../test-utils.js';
+import { capture, captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -74,9 +75,11 @@ if (process.env.TARGET === 'wasm') {
           }
           dv.setUint32(bufferAddress, stringAddress, true);
           dv.setUint32(bufferAddress + 4, text.length, true);
+          let result;
           const [ line ] = await capture(() => {
-            f(1, bufferAddress, 1, writtenAddress);
+            result = f(1, bufferAddress, 1, writtenAddress);
           });
+          expect(result).to.equal(PosixError.NONE);
           expect(line).to.equal(text.trim());
           const written = dv.getUint32(writtenAddress, true);
           expect(written).to.equal(4);
@@ -95,9 +98,11 @@ if (process.env.TARGET === 'wasm') {
           }
           dv.setUint32(bufferAddress, stringAddress, true);
           dv.setUint32(bufferAddress + 4, text.length, true);
+          let result;
           const [ line ] = await capture(() => {
-            f(2, bufferAddress, 1, writtenAddress);
+            result = f(2, bufferAddress, 1, writtenAddress);
           });
+          expect(result).to.equal(PosixError.NONE);
           expect(line).to.equal(text.trim());
           const written = dv.getUint32(writtenAddress, true);
           expect(written).to.equal(4);
@@ -117,13 +122,110 @@ if (process.env.TARGET === 'wasm') {
           dv.setUint32(bufferAddress, stringAddress, true);
           dv.setUint32(bufferAddress + 4, text.length, true);
           let result;
-          const [ line ] = await capture(() => {
-            result = f(3, bufferAddress, 1, writtenAddress);
+          const [ line ] = await capture(async () => {
+            const [ error ] = await captureError(async () => {
+              result = f(3, bufferAddress, 1, writtenAddress);
+            })
           });
-          expect(result).to.not.equal(0);
+          expect(result).to.not.equal(PosixError.ENOBADF);
           expect(line).to.be.undefined;
         })
       })
+      describe('fd_read', function() {
+        it('should provide a function that read from a Uint8Array', async function() {
+          const env = new Env();
+          const encoder = new TextEncoder();
+          const array = encoder.encode('Hello world');
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_read');
+          const bufferAddress = 16;
+          const stringAddress = 64;
+          const readAddress = 128;
+          const dv = new DataView(memory.buffer);
+          dv.setUint32(bufferAddress, stringAddress, true);
+          dv.setUint32(bufferAddress + 4, array.length, true);
+          env.redirectStream(0, array);
+          const result = f(0, bufferAddress, 1, readAddress)
+          expect(result).to.equal(PosixError.NONE);
+          const string = new Uint8Array(memory.buffer, stringAddress, array.length);
+          expect(string).to.eql(array);
+        })
+        it('should fail when reading from an async source from the main thread', async function() {
+          const env = new Env();
+          const stream = new ReadableStream({
+            async pull(controller) {
+              controller.close();
+            }
+          });
+          const reader = stream.getReader();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_read');
+          const bufferAddress = 16;
+          const stringAddress = 64;
+          const readAddress = 128;
+          const dv = new DataView(memory.buffer);
+          dv.setUint32(bufferAddress, stringAddress, true);
+          dv.setUint32(bufferAddress + 4, 16, true);
+          env.redirectStream(0, reader);
+          let result;
+          const [ error ] = await captureError(() => {
+            result = f(0, bufferAddress, 1, readAddress);
+          });
+          expect(result).to.equal(PosixError.EDEADLK);
+          expect(error).to.contains('promise');
+        })
+      })
+      describe('fd_seek', function() {
+        it('should provide a function that changes the read position', async function() {
+          const env = new Env();
+          const encoder = new TextEncoder();
+          const array = encoder.encode('Hello world');
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_seek');
+          const posAddress = 128;
+          const dv = new DataView(memory.buffer);
+          env.redirectStream(0, array);
+          const result = f(0, -1, 2, posAddress)
+          expect(result).to.equal(PosixError.NONE);
+          const pos = dv.getUint32(posAddress, true);
+          expect(pos).to.equal(10);
+        })
+        it('should return an error code when whence value is invalid', async function() {
+          const env = new Env();
+          const encoder = new TextEncoder();
+          const array = encoder.encode('Hello world');
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const f = env.getWASIHandler('fd_seek');
+          const posAddress = 128;
+          const dv = new DataView(memory.buffer);
+          env.redirectStream(0, array);
+          let result;
+          const [ error ] = await captureError(() => { 
+            result = f(0, -1, 4, posAddress)
+          });
+          expect(result).to.equal(PosixError.EINVAL);
+          expect(error).to.contains('Invalid argument');
+        })
+      })
+      describe('fd_tell', function() {
+        it('should provide a function that returns the read position', async function() {
+          const env = new Env();
+          const encoder = new TextEncoder();
+          const array = encoder.encode('Hello world');
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const seek = env.getWASIHandler('fd_seek');
+          const f = env.getWASIHandler('fd_tell');
+          const posAddress = 128;
+          const dv = new DataView(memory.buffer);
+          env.redirectStream(0, array);
+          seek(0, 1, 1, posAddress)
+          seek(0, 1, 1, posAddress)
+          const result = f(0);
+          expect(result).to.equal(PosixError.NONE);
+          const pos = dv.getUint32(posAddress, true);
+          expect(pos).to.equal(2);
+        })
+      })
     })
-  })
+ })
 }

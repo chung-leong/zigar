@@ -2,6 +2,7 @@ import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
+import { InvalidArgument } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { delay } from '../test-utils.js';
 
@@ -68,8 +69,7 @@ describe('Feature: reader-conversion', function() {
       reader.seek(-1, 2);
       const res7 = reader.tell();
       expect(res7).to.equal(8);
-      const res8 = reader.seek(1000, 0);
-      expect(res8).to.be.undefined;
+      expect(() => reader.seek(1000, 0)).to.throw(InvalidArgument);
       let called = false;
       reader.onClose = () => called = true;
       reader.close();

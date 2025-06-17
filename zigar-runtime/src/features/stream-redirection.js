@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { IllegalSeek, InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
@@ -7,22 +8,33 @@ export default mixin({
     const c = this.console = new ConsoleWriter();
     this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
   },
+  getStream(fd) {
+    const stream = this.streamMap.get(fd);
+    if (!stream) throw new InvalidFileDescriptor();
+    return stream;
+  },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
-    const writer = this.streamMap.get(fd)
+    const writer = this.getStream(fd);
     return writer.write(array);
   },
   readBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
-    const reader = this.streamMap.get(fd)
+    const reader = this.getStream(fd);
     return reader.read(array);
   },
   changeStreamPointer(fd, offset, whence) {
-    const reader = this.streamMap.get(fd)
+    const reader = this.streamMap.get(fd);
+    if (typeof(reader.seek) !== 'function') {
+      throw IllegalSeek();
+    }
     return reader.seek(offset, whence);
   },
   getStreamPointer(fd) {
     const reader = this.streamMap.get(fd);
+    if (typeof(reader.tell) !== 'function') {
+      throw IllegalSeek();
+    }
     return reader.tell();
   },
   closeStream(fd) {
@@ -111,3 +123,4 @@ class ConsoleWriter {
     }
   }
 }
+

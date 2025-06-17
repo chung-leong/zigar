@@ -1,4 +1,4 @@
-import { memberNames, StructureType } from './constants.js';
+import { memberNames, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
 import { defineProperty, getPrimitiveName } from './utils.js';
 
@@ -400,6 +400,38 @@ export class InvalidVariadicArgument extends TypeError {
 export class UnexpectedGenerator extends TypeError {
   constructor() {
     super(`Unexpected async generator`);
+  }
+}
+
+export class InvalidFileDescriptor extends Error {
+  code = PosixError.EBADF;
+
+  constructor() {
+    super(`Invalid file descriptor`);
+  }
+}
+
+export class InvalidArgument extends Error {
+  code = PosixError.EINVAL;
+
+  constructor() {
+    super(`Invalid argument`);
+  }
+}
+
+export class IllegalSeek extends Error {
+  code = PosixError.ESPIPE;
+
+  constructor() {
+    super(`Illegal seek`);
+  }
+}
+
+export class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
+  constructor() {
+    super(`Unable to await promise`);
   }
 }
 
