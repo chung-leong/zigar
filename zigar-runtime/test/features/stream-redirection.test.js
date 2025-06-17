@@ -93,6 +93,156 @@ describe('Feature: stream-redirection', function() {
       expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);
     })
   })
+  describe('readBytes', function() {
+    it('should read data from Uint8Array', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      env.redirectStream(0, array);
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, 4, false);
+      const count1 = env.readBytes(0, address, dv.byteLength);
+      expect(count1).to.equal(4);
+      expect(dv.getUint8(0)).to.equal(0);
+      expect(dv.getUint8(3)).to.equal(3);
+      const count2 = env.readBytes(0, address, dv.byteLength);
+      expect(count2).to.equal(4);
+      expect(dv.getUint8(0)).to.equal(4);
+      expect(dv.getUint8(3)).to.equal(7);
+      const count3 = env.readBytes(0, address, dv.byteLength);
+      expect(count3).to.equal(2);
+      expect(dv.getUint8(0)).to.equal(8);
+    })
+  })
+  describe('changeStreamPointer', function() {
+    it('should change the position of an array reader', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      env.redirectStream(0, array);
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, 4, false);
+      const pos = env.changeStreamPointer(0, -1, 2);
+      expect(pos).to.equal(9);
+      const count = env.readBytes(0, address, dv.byteLength);
+      expect(count).to.equal(1);
+      expect(dv.getUint8(0)).to.equal(9);
+    })
+  })
+  describe('getStreamPointer', function() {
+    it('should return the position of an array reader', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      env.redirectStream(0, array);
+      const address = usize(0x1000);
+      const dv = env.obtainZigView(address, 4, false);
+      env.readBytes(0, address, dv.byteLength);
+      const pos = env.getStreamPointer(0);
+      expect(pos).to.equal(4);
+    })
+  })
+  describe('closeStream', function() {
+    it('should close a stream', async function() {
+      const env = new Env();
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      env.redirectStream(0, array);
+      env.closeStream(0);
+      expect(() => env.getStreamPointer(0)).to.throw();
+    })
+  })
+  describe('redirectStream', function() {
+    it('should redirect stdout to an array', async function() {
+      const env = new Env();
+      const chunks = [];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      env.redirectStream(1, chunks);
+      const address = usize(0x1000);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('Hello world\n');
+      const dv = env.obtainZigView(address, array.length, false);
+      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
+      env.writeBytes(1, address, dv.byteLength);
+      expect(chunks).to.have.lengthOf(1);
+      expect(chunks[0]).to.eql(array);
+    })
+    it('should redirect stdout to null', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      env.redirectStream(1, null);
+      const address = usize(0x1000);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('Hello world\n');
+      const dv = env.obtainZigView(address, array.length, false);
+      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
+      const lines = await capture(() => env.writeBytes(1, address, dv.byteLength));
+      expect(lines).to.have.lengthOf(0);
+    })
+    it('should throw when handle is not 0, 1, or 2', async function() {
+      const env = new Env();
+      expect(() => env.redirectStream(4, null)).to.throw();
+    })
+  })
   describe('console', function() {
     describe('flush', function() {
       const encoder = new TextEncoder();

@@ -1,6 +1,5 @@
-import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, isPromise } from '../utils.js';
+import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
@@ -9,66 +8,33 @@ export default mixin({
     this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
   },
   writeBytes(fd, address, len) {
-    const dv = this.obtainZigView(address, len, false);
+    const array = this.obtainZigArray(address, len, false);
     const writer = this.streamMap.get(fd)
-    if (dv && writer) {
-      try {
-        const result = writer.write(dv);
-        if(isPromise(result)) {
-          return result.then(() => CallResult.OK, () => CallResult.Failure);
-        } 
-        return CallResult.OK;
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    return CallResult.Failure;
+    return writer.write(array);
   },
   readBytes(fd, address, len) {
-    const dv = this.obtainZigView(address, len, false);
+    const array = this.obtainZigArray(address, len, false);
     const reader = this.streamMap.get(fd)
-    if (dv && reader) {
-      try {
-        const result = writer.write(dv);
-        if(isPromise(result)) {
-          return result.then(() => CallResult.OK, () => CallResult.Failure);
-        } 
-        return CallResult.OK;
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    return CallResult.Failure;
+    return reader.read(array);
   },
   changeStreamPointer(fd, offset, whence) {
     const reader = this.streamMap.get(fd)
-    try {
-      return reader?.seek?.(offset, whence);
-    } catch (err) {
-      console.error(err);
-    }
+    return reader.seek(offset, whence);
   },
   getStreamPointer(fd) {
     const reader = this.streamMap.get(fd);
-    try {
-      return reader?.tell?.();
-    } catch (err) {
-      console.error(err);
-    }
+    return reader.tell();
+  },
+  closeStream(fd) {
+    this.streamMap.delete(fd);
   },
   redirectStream(fd, arg) {
-    let stream;
     if (fd === 0) {
-      stream = this.convertReader(arg);
+      this.streamMap.set(fd, this.convertReader(arg));
     } else if (fd === 1 || fd === 2) {
-      stream = this.convertWriter(arg);
+      this.streamMap.set(fd, this.convertWriter(arg));
     } else {
       throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
-    }
-    if (stream) {
-      this.streamMap.set(fd, stream);
-    } else {
-      this.streamMap.delete(fd);
     }
   },
   ...(process.env.TARGET === 'wasm' ? {

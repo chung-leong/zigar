@@ -1,6 +1,6 @@
-import { CallResult } from '../constants.js';
 import { mixin } from '../environment.js';
 import { Exit } from '../errors.js';
+import { isPromise } from '../utils.js';
 
 export default mixin({
   ...(process.env.TARGET === 'wasm' ? {
@@ -18,8 +18,6 @@ export default mixin({
       if (custom) {
         return custom;
       }
-      const ENOSYS = 38;
-      const ENOBADF = 8;
       switch (name) {
         case 'fd_write':
           return (fd, iovs_ptr, iovs_count, written_ptr) => {
@@ -29,14 +27,16 @@ export default mixin({
               const buf_ptr = dv.getUint32(p, true);
               const buf_len = dv.getUint32(p + 4, true);
               if (buf_len > 0) {
-                if (this.writeBytes(fd, buf_ptr, buf_len) !== CallResult.OK) {
-                  return ENOSYS;
+                try {
+                  notPromise(this.writeBytes(fd, buf_ptr, buf_len));
+                } catch (err) {
+                  return showError(err);
                 }
                 written += buf_len;
               }
             }
             dv.setUint32(written_ptr, written, true);
-            return 0;
+            return WASIStatus.OK;
           };
         case 'fd_read':
           return (fd, iovs_ptr, iovs_count, read_ptr) => {
@@ -46,32 +46,41 @@ export default mixin({
               const buf_ptr = dv.getUint32(p, true);
               const buf_len = dv.getUint32(p + 4, true);
               if (buf_len > 0) {
-                if (this.readBytes(fd, buf_ptr, buf_len) !== CallResult.OK) {
-                  return ENOSYS;
+                try {
+                  read += notPromise(this.readBytes(fd, buf_ptr, buf_len));
+                } catch (err) {
+                  return showError(err);
                 }
               }
             }
             dv.setUint32(read_ptr, read, true);
-            return 0;
+            return WASIStatus.OK;
           };
         case 'fd_seek':
           return (fd, offset, whence, newoffset_ptr) => {
             const dv = new DataView(this.memory.buffer);
-            const pos = this.changeStreamPointer(fd, offset, whence);
-            if (pos === undefined) return ENOSYS;
-            dv.setUint32(newoffset_ptr, pos, true);
-            return 0;
+            try {
+              const pos = notPromise(this.changeStreamPointer(fd, offset, whence));
+              dv.setUint32(newoffset_ptr, pos, true);
+              return WASIStatus.OK;
+            } catch (err) {
+              console.error(err);
+              return showError(err);
+            }
           };
         case 'fd_tell':
           return (fd, newoffset_ptr) => {
             const dv = new DataView(this.memory.buffer);
-            const pos = this.getStreamPointer(fd);
-            if (pos === undefined) return ENOSYS;
-            dv.setUint32(newoffset_ptr, pos, true);
-            return 0;
+            try {
+              const pos = notPromise(this.getStreamPointer(fd));
+              dv.setUint32(newoffset_ptr, pos, true);              
+              return WASIStatus.OK;
+            } catch (err) {
+              return showError(err);
+            }
           };
         case 'fd_prestat_get':
-          return () => ENOBADF;
+          return () => WASIStatus.ENOBADF;
         case 'proc_exit':
           return (code) => {
             throw new Exit(code);
@@ -82,10 +91,10 @@ export default mixin({
             for (let i = 0; i < buf_len; i++) {
               dv.setUint8(i, Math.floor(256 * Math.random()));
             }
-            return 0;
+            return WASIStatus.OK;
           };
         default:
-          return () => ENOSYS;
+          return () => WASIStatus.ENOSYS;
       }
     },
   } : undefined),
@@ -99,3 +108,19 @@ export default mixin({
   } : undefined),
   /* c8 ignore end */
 });
+
+const WASIStatus = {
+  OK: 0,
+  ENOBADF: 8,
+  ENOSYS: 38,
+};
+const notPromise = (value) => {
+  if (isPromise(value)) {
+    throw new Error('Deadlock');
+  }
+  return value;
+};
+const showError = (err) => {
+  console.error(err);
+  return WASIStatus.ENOSYS;
+};

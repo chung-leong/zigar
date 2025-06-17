@@ -189,6 +189,10 @@ export default mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
+  obtainZigArray(address, len) {
+    const dv = this.obtainZigView(address, len, false);
+    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
