@@ -300,6 +300,33 @@ describe('Feature: baseline', function() {
       expect(env.variables).to.have.lengthOf(4);
     })
   })
+  describe('addListener', function() {
+    it('should add listener for log event', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const address = usize(0x1000);
+      const encoder = new TextEncoder();
+      const array = encoder.encode('Hello world\n');
+      const dv = env.obtainZigView(address, array.length, false);
+      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
+      let event;
+      env.addListener('log', (evt) => event = evt);
+      env.writeBytes(1, address, dv.byteLength);
+      expect(event).to.eql({ handle: 1, message: 'Hello world' });
+    })
+  })
   describe('getSpecialExports', function() {
     it('should return object for controlling module', async function() {
       const env = new Env();
@@ -311,6 +338,7 @@ describe('Feature: baseline', function() {
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
       expect(object.redirect).to.be.a('function');
+      expect(object.on).to.be.a('function');
       await object.init();
       expect(env.abandoned).to.be.false;
       object.abandon();
@@ -340,10 +368,15 @@ describe('Feature: baseline', function() {
       expect(before).to.equal('?');
       const object = env.getSpecialExports();
       const chunks = [];
-      object.redirect(1, chunks);
+      const original = object.redirect(1, chunks);
       const [ after ] = await capture(() => env.writeBytes(1, address, len));
       expect(after).to.be.undefined;
       expect(chunks).to.have.lengthOf(1);
+      object.redirect(1, original);
+      let event;
+      object.on('log', (evt) => event = evt);
+      env.writeBytes(1, address, len);
+      expect(event).to.eql({ handle: 1, message: '?' });
     })
     it('should provide functions for obtaining type info', async function() {
       const env = new Env();

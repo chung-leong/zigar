@@ -4,8 +4,11 @@ import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
-    const c = this.console = new ConsoleWriter();
-    this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
+    const w1 = this.createLogWriter(1);
+    const w2 = this.createLogWriter(2);
+    this.logWriters = { 1: w1, 2: w2 };
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.flushRequestMap = new Map();
     this.nextStreamHandle = 0x7fff_ffff;
   },
   getStream(fd) {
@@ -42,12 +45,81 @@ export default mixin({
     this.streamMap.delete(fd);
   },
   redirectStream(fd, arg) {
-    if (fd === 0) {
-      this.streamMap.set(fd, this.convertReader(arg));
-    } else if (fd === 1 || fd === 2) {
-      this.streamMap.set(fd, this.convertWriter(arg));
+    const map = this.streamMap;
+    const previous = map.get(fd);
+    if (arg !== undefined) {
+      if (fd === 0) {
+        map.set(fd, this.convertReader(arg));
+      } else if (fd === 1 || fd === 2) {
+        map.set(fd, this.convertWriter(arg));
+      } else {
+        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+      }
     } else {
-      throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+      map.delete(fd);
+    }
+    return previous;
+  },
+  createLogWriter(handle) {
+    const env = this;
+    return {
+      pending: [],
+
+      write(chunk) {
+          // send text up to the last newline character
+          const index = chunk.lastIndexOf(0x0a);
+          if (index === -1) {
+            this.pending.push(chunk);
+          } else {
+            const beginning = chunk.subarray(0, index);
+            const remaining = chunk.subarray(index + 1);
+            this.dispatch([ ...this.pending, beginning ]);
+            this.pending.splice(0);
+            if (remaining.length > 0) {
+              this.pending.push(remaining);
+            }
+          }
+          env.scheduleFlush(this, this.pending.length > 0, 250);
+      },
+
+      dispatch(array) {
+        const message = decodeText(array);
+        env.listeners.log?.({ handle, message });
+      },
+
+      flush() {
+        if (this.pending.length > 0) {
+          this.dispatch(this.pending);
+          this.pending.splice(0);
+        }
+      }
+    };
+  },
+  scheduleFlush(stream, active, delay) {
+    const map = this.flushRequestMap;
+    const timeout = map.get(stream);
+    if (timeout) {
+      clearTimeout(timeout);
+      map.delete(stream);
+    }
+    if (active) {
+      map.set(stream, setTimeout(() => {
+        stream.flush();
+        map.delete(stream);
+      }, delay));
+    }
+  },
+  flushStreams() {
+    if (this.libc) {
+      this.flushStdout?.();
+    }
+    const map = this.flushRequestMap;
+    if (map.size > 0) {
+      for (const [ stream, timeout ] of map) {
+        stream.flush();
+        clearTimeout(timeout);
+      }
+      map.clear();
     }
   },
   ...(process.env.TARGET === 'wasm' ? {
@@ -69,59 +141,3 @@ export default mixin({
   } : undefined),
     /* c8 ignore end */
 });
-
-class ConsoleWriter {
-  dest = null;
-  pending = [];
-  timeout = 0;
-
-  use(console) {
-    this.dest = console;
-  }
-
-  write(chunk) {
-    try {
-      // make copy of array, in case incoming buffer is pointing to stack memory
-      const array = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength).slice();
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.pending.push(array);
-      } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.subarray(index + 1);
-        this.writeNow([ ...this.pending, beginning ]);
-        this.pending.splice(0);
-        if (remaining.length > 0) {
-          this.pending.push(remaining);
-        }
-      }
-      clearTimeout(this.timeout);
-      this.timeout = 0;
-      if (this.pending.length > 0) {
-        this.timeout = setTimeout(() => {
-          this.writeNow(this.pending);
-          this.pending.splice(0);
-        }, 250);
-      }
-    /* c8 ignore start */
-    } catch (err) {
-      console.error(err);
-    }
-    /* c8 ignore end */
-  }
-
-  writeNow(array) {
-    const c = this.dest ?? globalThis.console;
-    c.log?.call?.(c, decodeText(array));
-  }
-
-  flush() {
-    if (this.pending.length > 0) {
-      this.writeNow(this.pending);
-      this.pending.splice(0);
-      clearTimeout(this.timeout);
-    }
-  }
-}
-

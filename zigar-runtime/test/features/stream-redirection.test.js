@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
+import { InvalidFileDescriptor } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { capture, delay, usize } from '../test-utils.js';
 
@@ -59,7 +60,7 @@ describe('Feature: stream-redirection', function() {
         env.writeBytes(2, address2, dv2.byteLength);
       });
       expect(lines).to.eql([ 'Hello world!' ]);
-      env.console.flush();
+      env.flushStreams();
     })
     it('should eventually output text not ending with newline', async function() {
       const env = new Env();
@@ -152,7 +153,7 @@ describe('Feature: stream-redirection', function() {
           return buffer;
         };
       }
-      env.redirectStream(1, chunks);
+      const original = env.redirectStream(1, chunks);
       const address = usize(0x1000);
       const encoder = new TextEncoder();
       const array = encoder.encode('Hello world\n');
@@ -161,6 +162,11 @@ describe('Feature: stream-redirection', function() {
       env.writeBytes(1, address, dv.byteLength);
       expect(chunks).to.have.lengthOf(1);
       expect(chunks[0]).to.eql(array);
+      env.redirectStream(1, original);
+      const [ line ] = await capture(() => {
+        env.writeBytes(1, address, dv.byteLength);
+      });
+      expect(line).to.equal('Hello world');
     })
     it('should redirect stdout to null', async function() {
       const env = new Env();
@@ -185,6 +191,26 @@ describe('Feature: stream-redirection', function() {
       for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
       const lines = await capture(() => env.writeBytes(1, address, dv.byteLength));
       expect(lines).to.have.lengthOf(0);
+    })
+    it('should close a stream when undefined is given', function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      env.redirectStream(1, null);
+      const address = usize(0x1000);
+      env.redirectStream(1, undefined);
+      expect(() => env.writeBytes(1, address, 4)).to.throw(InvalidFileDescriptor);
     })
     it('should throw when handle is not 0, 1, or 2', async function() {
       const env = new Env();
@@ -225,40 +251,46 @@ describe('Feature: stream-redirection', function() {
       expect(() => env.createStreamHandle(1234)).to.throw(TypeError);
     })
   })
-  describe('console', function() {
-    describe('flush', function() {
-      const encoder = new TextEncoder();
-      it('should force pending text to immediately get sent to console', async function() {
-        const env = new Env();
-        if (process.env.TARGET === 'wasm') {
-          env.memory = new WebAssembly.Memory({ initial: 1 });
-        } else {
-          const map = new Map();
-          env.obtainExternBuffer = (address, len) => {
-            let buffer = map.get(address);
-            if (!buffer) {
-              buffer = new ArrayBuffer(len);
-              map.set(address, buffer);
-            }
-            return buffer;
-          };
-        }
-        const address1 = usize(0x1000);
-        const array1 = encoder.encode('Hello world');
-        const dv1 = env.obtainZigView(address1, array1.length, false);
-        for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
-        const address2 = usize(0x2000);
-        const array2 = encoder.encode('!');
-        const dv2 = env.obtainZigView(address2, array2.length, false);
-        for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
-        const lines = await capture(async () => {
-          env.writeBytes(1, address1, dv1.byteLength);
-          await delay(10);
-          env.writeBytes(1, address2, dv2.byteLength);
-          env.console.flush();
-        });
-        expect(lines).to.eql([ 'Hello world!' ]);
-      })
+  describe('flushStreams', function() {
+    const encoder = new TextEncoder();
+    it('should force pending text to immediately get sent to console', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const address1 = usize(0x1000);
+      const array1 = encoder.encode('Hello world');
+      const dv1 = env.obtainZigView(address1, array1.length, false);
+      for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
+      const address2 = usize(0x2000);
+      const array2 = encoder.encode('!');
+      const dv2 = env.obtainZigView(address2, array2.length, false);
+      for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
+      const lines = await capture(async () => {
+        env.writeBytes(1, address1, dv1.byteLength);
+        await delay(10);
+        env.writeBytes(1, address2, dv2.byteLength);
+        env.flushStreams();
+      });
+      expect(lines).to.eql([ 'Hello world!' ]);
+    })
+    it('should trigger flushing of stdout in C', async function() {
+      const env = new Env();
+      let called = false;
+      env.libc = true;
+      env.flushStdout = () => called = true;
+      env.flushStreams();
+      expect(called).to.be.true;
     })
   })
 })

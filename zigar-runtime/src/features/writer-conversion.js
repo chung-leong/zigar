@@ -8,8 +8,6 @@ export default mixin({
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
-    } else if (arg === globalThis.console) {
-      return this.console;
     } else if (arg === null) {
       return new NullStream();
     } else if (typeof(arg?.write) === 'function') {

@@ -5,6 +5,10 @@ import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 export default mixin({
   init() {
     this.variables = [];
+    this.listeners = {
+      open: null,
+      log: (e) => console.log(e.message),
+    };
   },
   getSpecialExports() {
     const check = (v) => {
@@ -18,7 +22,11 @@ export default mixin({
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
+      on: (event, cb) => this.addListener(event, cb),
     };
+  },
+  addListener(event, cb) {
+    this.listeners[event] = cb;
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);

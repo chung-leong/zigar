@@ -123,10 +123,7 @@ export default mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, argStruct);
       }
-      if (this.libc) {
-        this.flushStdout?.();
-      }
-      this.console?.flush?.();
+      this.flushStream?.();
       this.endContext();
     };
     if (isAsync) {
