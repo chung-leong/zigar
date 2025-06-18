@@ -12,7 +12,7 @@ export default mixin({
     } else if (arg instanceof Uint8Array) {
       return new Uint8ArrayReader(arg);
     } else if (arg === null) {
-      return new NullReader();
+      return new NullStream();
     } else if (typeof(arg?.read) === 'function') {
       return arg;
     } else {
@@ -120,10 +120,12 @@ class Uint8ArrayReader extends BlobReader {
   }
 }
 
-class NullReader {
+export class NullStream {
   read() {
     return 0;
   }
+
+  write() {}
 
   close() {
     this.onClose?.();

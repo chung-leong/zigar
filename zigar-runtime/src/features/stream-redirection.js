@@ -1,17 +1,32 @@
 import { mixin } from '../environment.js';
-import { IllegalSeek, InvalidFileDescriptor } from '../errors.js';
+import { IllegalSeek, InvalidFileDescriptor, TypeMismatch } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
-    this.nextStreamHandle = 0x10000;
     const c = this.console = new ConsoleWriter();
     this.streamMap = new Map([ [ 1, c ], [ 2, c ] ]);
+    this.nextStreamHandle = 0x7fff_ffff;
   },
   getStream(fd) {
     const stream = this.streamMap.get(fd);
     if (!stream) throw new InvalidFileDescriptor();
     return stream;
+  },
+  createHandle(arg) {
+    let stream;
+    try {
+      stream = this.convertReader(arg);
+    } catch {
+      try {
+        stream = this.convertWriter(arg);
+      } catch {
+        throw new TypeMismatch('reader or writer', arg);
+      }
+    }
+    const handle = this.nextStreamHandle++;
+    this.streamMap.set(handle, stream);
+    return handle;
   },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);

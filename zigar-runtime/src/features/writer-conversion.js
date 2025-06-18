@@ -1,5 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
+import { NullStream } from './reader-conversion.js';
 
 export default mixin({
   convertWriter(arg) {
@@ -10,7 +11,7 @@ export default mixin({
     } else if (arg === globalThis.console) {
       return this.console;
     } else if (arg === null) {
-      return new NullWriter();
+      return new NullStream();
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
@@ -46,10 +47,4 @@ class ArrayWriter {
   close() {
     this.onClose?.();
   }
-}
-
-class NullWriter {
-  write() {}
-
-  close() {}
 }

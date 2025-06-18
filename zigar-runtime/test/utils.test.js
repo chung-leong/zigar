@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/constants.js';
+import { MemberType, PosixError } from '../src/constants.js';
+import { InvalidFileDescriptor } from '../src/errors.js';
 import { LENGTH, MEMORY, PROXY } from '../src/symbols.js';
 import {
   adjustAddress,
@@ -21,6 +22,7 @@ import {
   isMisaligned,
   never,
   ObjectCache,
+  showPosixError,
   toString,
   transformIterable,
   usize,
@@ -333,6 +335,14 @@ describe('Utility functions', function() {
         },
       };
       expect(toString.call(object)).to.equal('hello');
+    })
+  })
+  describe('showPosixError', function() {
+    it('should return Posix error code of error object', function() {
+      expect(showPosixError(new InvalidFileDescriptor())).to.equal(PosixError.EBADF);
+    })
+    it('should return EPERM when given error without a code', function() {
+      expect(showPosixError(new Error())).to.equal(PosixError.EPERM);
     })
   })
   describe('always', function() {
