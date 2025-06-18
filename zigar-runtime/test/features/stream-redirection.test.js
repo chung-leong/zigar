@@ -191,7 +191,7 @@ describe('Feature: stream-redirection', function() {
       expect(() => env.redirectStream(4, null)).to.throw();
     })
   })
-  describe('createHandle', function() {
+  describe('createStreamHandle', function() {
     it('should create a handle from a reader', async function() {
       const env = new Env();
       const stream = new ReadableStream({
@@ -200,7 +200,7 @@ describe('Feature: stream-redirection', function() {
         }
       });
       const reader = stream.getReader();
-      const handle = env.createHandle(reader);
+      const handle = env.createStreamHandle(reader);
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
@@ -210,19 +210,19 @@ describe('Feature: stream-redirection', function() {
         async write() {}
       });
       const writer = stream.getWriter();
-      const handle = env.createHandle(writer);
+      const handle = env.createStreamHandle(writer);
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
     it('should create a handle from null', async function() {
       const env = new Env();
-      const handle = env.createHandle(null);
+      const handle = env.createStreamHandle(null);
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
     it('should throw when invalid input is given', async function() {
       const env = new Env();
-      expect(() => env.createHandle(1234)).to.throw(TypeError);
+      expect(() => env.createStreamHandle(1234)).to.throw(TypeError);
     })
   })
   describe('console', function() {

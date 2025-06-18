@@ -221,6 +221,7 @@ export default mixin({
           case StructurePurpose.File:
             this.usingFile =
             this.usingStreamRedirection =
+            this.usingStreamReposition =
             this.usingReaderConversion = 
             this.usingWriterConversion = true;
         }

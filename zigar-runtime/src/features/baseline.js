@@ -14,7 +14,6 @@ export default mixin({
     return {
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
-      connect: (console) => this.console?.use?.(console),
       redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),

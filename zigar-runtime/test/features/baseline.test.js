@@ -310,7 +310,7 @@ describe('Feature: baseline', function() {
       const object = env.getSpecialExports();
       expect(object.init).to.be.a('function');
       expect(object.abandon).to.be.a('function');
-      expect(object.connect).to.be.a('function');
+      expect(object.redirect).to.be.a('function');
       await object.init();
       expect(env.abandoned).to.be.false;
       object.abandon();
@@ -339,15 +339,11 @@ describe('Feature: baseline', function() {
       const [ before ] = await capture(() => env.writeBytes(1, address, len));
       expect(before).to.equal('?');
       const object = env.getSpecialExports();
-      let content;
-      object.connect({
-        log(s) {
-          content = s;
-        }
-      });
+      const chunks = [];
+      object.redirect(1, chunks);
       const [ after ] = await capture(() => env.writeBytes(1, address, len));
       expect(after).to.be.undefined;
-      expect(content).to.equal('?');
+      expect(chunks).to.have.lengthOf(1);
     })
     it('should provide functions for obtaining type info', async function() {
       const env = new Env();

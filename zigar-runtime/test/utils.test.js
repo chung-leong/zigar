@@ -27,6 +27,7 @@ import {
   transformIterable,
   usize,
 } from '../src/utils.js';
+import { captureError } from './test-utils.js';
 
 describe('Utility functions', function() {
   describe('decodeText', function() {
@@ -338,11 +339,17 @@ describe('Utility functions', function() {
     })
   })
   describe('showPosixError', function() {
-    it('should return Posix error code of error object', function() {
-      expect(showPosixError(new InvalidFileDescriptor())).to.equal(PosixError.EBADF);
+    it('should return Posix error code of error object', async function() {
+      let result;
+      const [ error ] = await captureError(() => result = showPosixError(new InvalidFileDescriptor()));
+      expect(result).to.equal(PosixError.EBADF);
+      expect(error).to.contain('file descriptor');
     })
-    it('should return EPERM when given error without a code', function() {
-      expect(showPosixError(new Error())).to.equal(PosixError.EPERM);
+    it('should return EPERM when given error without a code', async function() {
+      let result;
+      const [ error ] = await captureError(() => result = showPosixError(new Error('doh!')));
+      expect(result).to.equal(PosixError.EPERM);
+      expect(error).to.contain('doh');
     })
   })
   describe('always', function() {

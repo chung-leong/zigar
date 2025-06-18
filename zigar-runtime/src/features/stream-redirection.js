@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { IllegalSeek, InvalidFileDescriptor, TypeMismatch } from '../errors.js';
+import { InvalidFileDescriptor, TypeMismatch } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
@@ -13,7 +13,7 @@ export default mixin({
     if (!stream) throw new InvalidFileDescriptor();
     return stream;
   },
-  createHandle(arg) {
+  createStreamHandle(arg) {
     let stream;
     try {
       stream = this.convertReader(arg);
@@ -37,20 +37,6 @@ export default mixin({
     const array = this.obtainZigArray(address, len, false);
     const reader = this.getStream(fd);
     return reader.read(array);
-  },
-  changeStreamPointer(fd, offset, whence) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.seek) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.seek(offset, whence);
-  },
-  getStreamPointer(fd) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.tell) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.tell();
   },
   closeStream(fd) {
     this.streamMap.delete(fd);
