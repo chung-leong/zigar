@@ -1,14 +1,25 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { notPromise, showPosixError } from '../errors.js';
+import { Deadlock, showPosixError } from '../errors.js';
+import { isPromise } from '../utils.js';
 
 var wasiSeek = mixin({
-  wasi_fd_seek(fd, offset, whence, newoffset_ptr) {
-    const dv = new DataView(this.memory.buffer);
+  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait = false) {
     try {
-      const pos = notPromise(this.changeStreamPointer(fd, offset, whence));
-      dv.setUint32(newoffset_ptr, pos, true);
-      return PosixError.NONE;
+      const dv = new DataView(this.memory.buffer);
+      const done = (pos) => {
+        dv.setUint32(newoffset_ptr, pos, true);
+        return PosixError.NONE;
+      };
+      const result = this.changeStreamPointer(fd, offset, whence);
+      if (isPromise(result)) {
+        if (!canWait) {
+          throw new Deadlock();
+        }
+        return result.then(done, showPosixError);
+      } else {
+        return done(result);
+      }
     } catch (err) {
       return showPosixError(err);
     }

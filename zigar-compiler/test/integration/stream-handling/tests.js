@@ -44,6 +44,35 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    it('should read from file', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        shutdown,
+        hash,
+      } = await importTest('read-from-file', { multithreaded: true });
+      startup(1);
+      try {
+        const correct = (platform() === 'win32') 
+        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        const path = absolute('./data/test.txt');
+        const fd = await open(path);
+        const stream = fd.readableWebStream();
+        const digest1 = await hash(stream.getReader());
+        expect(digest1.string).to.equal(correct);
+        // Uint8Array as input
+        const content = await readFile(path);
+        const digest2 = await hash(content);
+        expect(digest2.string).to.equal(correct);
+        // Blob as input
+        const blob = new Blob([ content ]);
+        const digest3 = await hash(content);
+        expect(digest3.string).to.equal(correct);
+      } finally {
+        await shutdown();
+      }
+    })
     it('should write to writer', async function() {
       this.timeout(0);
       const {

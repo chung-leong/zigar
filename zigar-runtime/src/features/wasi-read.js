@@ -1,23 +1,38 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { notPromise, showPosixError } from '../errors.js';
+import { Deadlock, showPosixError } from '../errors.js';
+import { isPromise } from '../utils.js';
 
 export default mixin({
-  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr) {
+  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait = false) {
     const dv = new DataView(this.memory.buffer);
-    let read = 0;
-    for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
-      const buf_ptr = dv.getUint32(p, true);
-      const buf_len = dv.getUint32(p + 4, true);
-      if (buf_len > 0) {
-        try {
-          read += notPromise(this.readBytes(fd, buf_ptr, buf_len));
-        } catch (err) {
-          return showPosixError(err);
+    let read = 0, i = 0, p = iovs_ptr;
+    const next = (len) => {
+      try {
+        // add len from previous call
+        read += len;
+        if (i < iovs_count) {
+          const ptr = dv.getUint32(p, true);
+          const len = dv.getUint32(p + 4, true);
+          p += 8;
+          i++;
+          const result = this.readBytes(fd, ptr, len);
+          if (isPromise(result)) {
+            if (!canWait) {
+              throw new Deadlock();
+            }
+            return result.then(next, showPosixError);
+          } else {
+            return next(result);
+          }
+        } else {
+          dv.setUint32(read_ptr, read, true);
+          return PosixError.NONE;
         }
+      } catch (err) {
+        return showPosixError(err);
       }
-    }
-    dv.setUint32(read_ptr, read, true);
-    return PosixError.NONE;
+    };
+    return next(0);
   }
 });
