@@ -27,10 +27,10 @@ export default mixin({
     const workerData = { executable, memory, options, tid, arg };
     const handler = (worker, msg) => {
       if (msg.type === 'call') {
-        const { module, name, args, array } = msg;
+        const { module, name, args, array } = msg;        
         const fn = this.exportedModules[module]?.[name];
-        const result = fn?.(...args);
-        const done = (value) => {
+        const result = fn?.(...args, true);
+        const finish = (value) => {
           if (array) {
             array[1] = value|0;
             array[0] = 1;
@@ -38,9 +38,9 @@ export default mixin({
           }
         };
         if (isPromise(result)) {
-          result.next(done);
+          result.then(finish);
         } else {
-          done(result);
+          finish(result);
         }
       } else if (msg.type === 'exit') {
         const index = this.workers.indexOf(worker);

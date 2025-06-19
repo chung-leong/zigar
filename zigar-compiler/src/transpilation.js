@@ -58,6 +58,9 @@ export async function transpile(srcPath, options) {
   usage.FeatureAbortSignal = env.usingAbortSignal;
   usage.FeatureReader = usage.FeatureReaderConversion = env.usingReader;
   usage.FeatureWriter = usage.FeatureWriterConversion = env.usingWriter;
+  usage.FeatureReaderConversion = env.usingReaderConversion;
+  usage.FeatureWriterConversion = env.usingWriterConversion;
+  usage.FeatureFile = env.usingFile;
   usage.FeatureObjectLinkage = env.usingVariables;
   usage.FeatureModuleLoading = env.hasMethods();
   usage.FeatureStreamRedirection = env.usingStreamRedirection;

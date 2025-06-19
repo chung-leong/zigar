@@ -73,6 +73,35 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    it('should write to file', async function() {
+      this.timeout(0);
+      const {
+        startup,
+        shutdown,
+        save,
+      } = await importTest('write-to-file', { multithreaded: true });
+      startup(1);
+      try {
+        const fd = await open(absolute('./data/output.txt'), 'w');
+        const stream = new WritableStream({
+          write(chunk) {
+            fd.write(chunk);
+          },
+        });
+        const len1 = await save('This is a test', stream.getWriter());
+        fd.close();
+        expect(len1).to.equal(14);
+        const chunks = [];
+        const len2 = await save('This is a test', chunks);
+        expect(len2).to.equal(14);
+        expect(chunks).to.have.lengthOf(1);
+        const blob = new Blob(chunks);
+        const string = await blob.text();
+        expect(string).to.equal('This is a test');
+      } finally {
+        await shutdown();
+      }
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {

@@ -21,14 +21,14 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 
 pub fn save(
     data: []const u8,
-    writer: std.io.AnyWriter,
+    file: std.fs.File,
     promise: zigar.function.PromiseOf(ns.save),
 ) !void {
-    try work_queue.push(ns.save, .{ data, writer }, promise);
+    try work_queue.push(ns.save, .{ data, file }, promise);
 }
 
 const ns = struct {
-    pub fn save(data: []const u8, writer: std.io.AnyWriter) !usize {
-        return try writer.write(data);
+    pub fn save(data: []const u8, file: std.fs.File) !usize {
+        return try file.write(data);
     }
 };

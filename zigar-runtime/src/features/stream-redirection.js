@@ -9,7 +9,7 @@ export default mixin({
     this.logWriters = { 1: w1, 2: w2 };
     this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
     this.flushRequestMap = new Map();
-    this.nextStreamHandle = 0x7fff_ffff;
+    this.nextStreamHandle = 0xffff;
   },
   getStream(fd) {
     const stream = this.streamMap.get(fd);
