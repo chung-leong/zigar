@@ -53,7 +53,9 @@ import {
   formatList,
   getDescription,
   replaceRangeError,
+  showPosixError,
 } from '../src/errors.js';
+import { captureError } from './test-utils.js';
 
 describe('Error functions', function() {
   describe('MustBeOverridden', function() {
@@ -761,5 +763,19 @@ describe('Error functions', function() {
       expect(() => checkInefficientAccess({ calls: 99, bytes: 199 }, 'read', 1)).to.throw(Error)
         .with.property('message').that.contains('2 bytes.');
     }) 
+  })
+  describe('showPosixError', function() {
+    it('should return Posix error code of error object', async function() {
+      let result;
+      const [ error ] = await captureError(() => result = showPosixError(new InvalidFileDescriptor()));
+      expect(result).to.equal(PosixError.EBADF);
+      expect(error).to.contain('file descriptor');
+    })
+    it('should return EPERM when given error without a code', async function() {
+      let result;
+      const [ error ] = await captureError(() => result = showPosixError(new Error('doh!')));
+      expect(result).to.equal(PosixError.EPERM);
+      expect(error).to.contain('doh');
+    })
   })
 })

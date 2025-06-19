@@ -5,6 +5,10 @@ import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 var baseline = mixin({
   init() {
     this.variables = [];
+    this.listeners = {
+      open: null,
+      log: (e) => console.log(e.message),
+    };
   },
   getSpecialExports() {
     const check = (v) => {
@@ -14,11 +18,15 @@ var baseline = mixin({
     return {
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
-      connect: (console) => this.consoleObject = console,
+      redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
+      on: (event, cb) => this.addListener(event, cb),
     };
+  },
+  addListener(event, cb) {
+    this.listeners[event] = cb;
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);

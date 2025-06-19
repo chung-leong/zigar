@@ -1,3 +1,4 @@
+import { isPromise } from 'util/types';
 import { mixin } from '../environment.js';
 
 var workerSupport = mixin({
@@ -27,10 +28,17 @@ var workerSupport = mixin({
         const { module, name, args, array } = msg;
         const fn = this.exportedModules[module]?.[name];
         const result = fn?.(...args);
-        if (array) {
-          array[1] = result|0;
-          array[0] = 1;
-          Atomics.notify(array, 0, 1);
+        const done = (value) => {
+          if (array) {
+            array[1] = value|0;
+            array[0] = 1;
+            Atomics.notify(array, 0, 1);
+          }
+        };
+        if (isPromise(result)) {
+          result.next(done);
+        } else {
+          done(result);
         }
       } else if (msg.type === 'exit') {
         const index = this.workers.indexOf(worker);

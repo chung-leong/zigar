@@ -1,6 +1,6 @@
 import { memberNames, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { defineProperty, getPrimitiveName } from './utils.js';
+import { defineProperty, getPrimitiveName, isPromise } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -488,14 +488,14 @@ export function throwReadOnly() {
   throw new ReadOnly();
 }
 
-export function checkInefficientAccess(context, access, len) {
-  if (context.bytes === undefined) {
-    context.bytes = context.calls = 0;
+export function checkInefficientAccess(progress, access, len) {
+  if (progress.bytes === undefined) {
+    progress.bytes = progress.calls = 0;
   }
-  context.bytes += len;
-  context.calls++;
-  if (context.calls === 100) {
-    const bytesPerCall = context.bytes / context.calls;
+  progress.bytes += len;
+  progress.calls++;
+  if (progress.calls === 100) {
+    const bytesPerCall = progress.bytes / progress.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall !== 1 ? 's' : '';
       const action = (access === 'read') ? 'reading' : 'writing';
@@ -526,6 +526,16 @@ export function deanimalizeErrorName(name) {
   }
   /* c8 ignore end */
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+export function notPromise(value) {
+  if (isPromise(value)) throw new Deadlock();
+  return value;
+}
+
+export function showPosixError(err) {
+  console.error(err);
+  return err.code ?? PosixError.EPERM;
 }
 
 export function isErrorJSON(arg) {

@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
-import { MemberType, PosixError } from '../src/constants.js';
-import { InvalidFileDescriptor } from '../src/errors.js';
+import { MemberType } from '../src/constants.js';
 import { LENGTH, MEMORY, PROXY } from '../src/symbols.js';
 import {
   adjustAddress,
@@ -22,12 +21,10 @@ import {
   isMisaligned,
   never,
   ObjectCache,
-  showPosixError,
   toString,
   transformIterable,
-  usize,
+  usize
 } from '../src/utils.js';
-import { captureError } from './test-utils.js';
 
 describe('Utility functions', function() {
   describe('decodeText', function() {
@@ -336,20 +333,6 @@ describe('Utility functions', function() {
         },
       };
       expect(toString.call(object)).to.equal('hello');
-    })
-  })
-  describe('showPosixError', function() {
-    it('should return Posix error code of error object', async function() {
-      let result;
-      const [ error ] = await captureError(() => result = showPosixError(new InvalidFileDescriptor()));
-      expect(result).to.equal(PosixError.EBADF);
-      expect(error).to.contain('file descriptor');
-    })
-    it('should return EPERM when given error without a code', async function() {
-      let result;
-      const [ error ] = await captureError(() => result = showPosixError(new Error('doh!')));
-      expect(result).to.equal(PosixError.EPERM);
-      expect(error).to.contain('doh');
     })
   })
   describe('always', function() {

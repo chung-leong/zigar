@@ -8,6 +8,9 @@ var writer = mixin({
     this.writerCallback = null;
     this.writerMap = new Map();
     this.nextWriterContextId = usize(0x2000);
+    if (import.meta.env?.PROD !== true) {
+      this.writerProgressMap = new Map();
+    }
   },
   // create AnyWriter struct for outbound call
   createWriter(arg) {
@@ -19,12 +22,21 @@ var writer = mixin({
     // create a handle referencing the writer 
     const writerId = this.nextWriterContextId++;
     const context = this.obtainZigView(writerId, 0, false);
-    const onClose = writer.onClose = () => this.writerMap.delete(writerId);
+    const onClose = writer.onClose = () => {
+      this.writerMap.delete(writerId);
+      if (import.meta.env?.PROD !== true) {
+        this.writerProgressMap.delete(writerId);
+      }
+    };
     this.writerMap.set(writerId, writer);     
+    if (import.meta.env?.PROD !== true) {
+      this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
+    }
     // use the same callback for all writers
     let writeFn = this.writerCallback;
     if (!writeFn) {
       const onError = (err) => {
+        console.error(err);
         onClose();
         throw err;
       };
@@ -35,7 +47,8 @@ var writer = mixin({
         try {
           const dv = buffer['*'][MEMORY];
           if (import.meta.env?.PROD !== true) {
-            checkInefficientAccess(context, 'write', dv.byteLength);
+            const progress = this.writerProgressMap.get(writerId);
+            checkInefficientAccess(progress, 'write', dv.byteLength);
           }
           const len = dv.byteLength;
           const src = new Uint8Array(dv.buffer, dv.byteOffset, len);

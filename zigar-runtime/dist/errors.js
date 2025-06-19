@@ -1,6 +1,6 @@
-import { StructureType, memberNames } from './constants.js';
+import { StructureType, memberNames, PosixError } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { getPrimitiveName, defineProperty } from './utils.js';
+import { getPrimitiveName, defineProperty, isPromise } from './utils.js';
 
 class MustBeOverridden extends Error {
   constructor() {
@@ -403,6 +403,38 @@ class UnexpectedGenerator extends TypeError {
   }
 }
 
+class InvalidFileDescriptor extends Error {
+  code = PosixError.EBADF;
+
+  constructor() {
+    super(`Invalid file descriptor`);
+  }
+}
+
+class InvalidArgument extends Error {
+  code = PosixError.EINVAL;
+
+  constructor() {
+    super(`Invalid argument`);
+  }
+}
+
+class IllegalSeek extends Error {
+  code = PosixError.ESPIPE;
+
+  constructor() {
+    super(`Illegal seek`);
+  }
+}
+
+class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
+  constructor() {
+    super(`Unable to await promise`);
+  }
+}
+
 class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {
@@ -456,14 +488,14 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function checkInefficientAccess(context, access, len) {
-  if (context.bytes === undefined) {
-    context.bytes = context.calls = 0;
+function checkInefficientAccess(progress, access, len) {
+  if (progress.bytes === undefined) {
+    progress.bytes = progress.calls = 0;
   }
-  context.bytes += len;
-  context.calls++;
-  if (context.calls === 100) {
-    const bytesPerCall = context.bytes / context.calls;
+  progress.bytes += len;
+  progress.calls++;
+  if (progress.calls === 100) {
+    const bytesPerCall = progress.bytes / progress.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall !== 1 ? 's' : '';
       const action = (access === 'read') ? 'reading' : 'writing';
@@ -492,6 +524,16 @@ function deanimalizeErrorName(name) {
   } catch (err) {
   }
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+function notPromise(value) {
+  if (isPromise(value)) throw new Deadlock();
+  return value;
+}
+
+function showPosixError(err) {
+  console.error(err);
+  return err.code ?? PosixError.EPERM;
 }
 
 function isErrorJSON(arg) {
@@ -526,4 +568,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, EnumExpected, ErrorExpected, Exit, InaccessiblePointer, InactiveUnionProperty, InvalidArrayInitializer, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, notPromise, replaceRangeError, showPosixError, throwReadOnly };

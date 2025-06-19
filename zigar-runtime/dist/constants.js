@@ -24,6 +24,7 @@ const StructurePurpose = {
   Iterator: 5,
   Reader: 6,
   Writer: 7,
+  File: 8,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -140,4 +141,14 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
-export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+const PosixError = {
+  NONE: 0,
+  EPERM: 1,
+  EBADF: 8,
+  EINVAL: 22,
+  ESPIPE: 29,
+  EDEADLK: 35,
+  ENOSYS: 38,
+};
+
+export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

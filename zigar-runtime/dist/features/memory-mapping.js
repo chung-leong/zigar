@@ -176,6 +176,10 @@ var memoryMapping = mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
+  obtainZigArray(address, len) {
+    const dv = this.obtainZigView(address, len, false);
+    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },

@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { notPromise, showPosixError } from '../utils.js';
+import { notPromise, showPosixError } from '../errors.js';
 
 export default mixin({
   wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr) {

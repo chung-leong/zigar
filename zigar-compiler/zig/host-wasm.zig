@@ -249,6 +249,7 @@ pub fn beginStructure(structure: types.Structure) !Value {
     const def = beginDefinition();
     try insertProperty(def, "name", structure.name);
     try insertProperty(def, "type", structure.type);
+    try insertProperty(def, "purpose", structure.purpose);
     try insertProperty(def, "flags", structure.flags);
     try insertProperty(def, "signature", structure.signature);
     try insertProperty(def, "length", structure.length);

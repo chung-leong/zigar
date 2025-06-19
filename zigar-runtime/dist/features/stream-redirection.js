@@ -1,53 +1,126 @@
-import '../constants.js';
 import { mixin } from '../environment.js';
+import { TypeMismatch, InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 var streamRedirection = mixin({
   init() {
-    this.consoleObject = null;
-    this.consolePending = [];
-    this.consoleTimeout = 0;
+    const w1 = this.createLogWriter(1);
+    const w2 = this.createLogWriter(2);
+    this.logWriters = { 1: w1, 2: w2 };
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.flushRequestMap = new Map();
+    this.nextStreamHandle = 0x7fff_ffff;
   },
-  writeToConsole(dv) {
+  getStream(fd) {
+    const stream = this.streamMap.get(fd);
+    if (!stream) throw new InvalidFileDescriptor();
+    return stream;
+  },
+  createStreamHandle(arg) {
+    let stream;
     try {
-      // make copy of array, in case incoming buffer is pointing to stack memory
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.consolePending.push(array);
+      stream = this.convertReader(arg);
+    } catch {
+      try {
+        stream = this.convertWriter(arg);
+      } catch {
+        throw new TypeMismatch('reader or writer', arg);
+      }
+    }
+    const handle = this.nextStreamHandle++;
+    this.streamMap.set(handle, stream);
+    return handle;
+  },
+  writeBytes(fd, address, len) {
+    const array = this.obtainZigArray(address, len, false);
+    const copy = new Uint8Array(array);
+    const writer = this.getStream(fd);
+    return writer.write(copy);
+  },
+  readBytes(fd, address, len) {
+    const array = this.obtainZigArray(address, len, false);
+    const reader = this.getStream(fd);
+    return reader.read(array);
+  },
+  closeStream(fd) {
+    this.streamMap.delete(fd);
+  },
+  redirectStream(fd, arg) {
+    const map = this.streamMap;
+    const previous = map.get(fd);
+    if (arg !== undefined) {
+      if (fd === 0) {
+        map.set(fd, this.convertReader(arg));
+      } else if (fd === 1 || fd === 2) {
+        map.set(fd, this.convertWriter(arg));
       } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.subarray(index + 1);
-        this.writeToConsoleNow([ ...this.consolePending, beginning ]);
-        this.consolePending.splice(0);
-        if (remaining.length > 0) {
-          this.consolePending.push(remaining);
+        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+      }
+    } else {
+      map.delete(fd);
+    }
+    return previous;
+  },
+  createLogWriter(handle) {
+    const env = this;
+    return {
+      pending: [],
+
+      write(chunk) {
+          // send text up to the last newline character
+          const index = chunk.lastIndexOf(0x0a);
+          if (index === -1) {
+            this.pending.push(chunk);
+          } else {
+            const beginning = chunk.subarray(0, index);
+            const remaining = chunk.subarray(index + 1);
+            this.dispatch([ ...this.pending, beginning ]);
+            this.pending.splice(0);
+            if (remaining.length > 0) {
+              this.pending.push(remaining);
+            }
+          }
+          env.scheduleFlush(this, this.pending.length > 0, 250);
+      },
+
+      dispatch(array) {
+        const message = decodeText(array);
+        env.listeners.log?.({ handle, message });
+      },
+
+      flush() {
+        if (this.pending.length > 0) {
+          this.dispatch(this.pending);
+          this.pending.splice(0);
         }
       }
-      clearTimeout(this.consoleTimeout);
-      this.consoleTimeout = 0;
-      if (this.consolePending.length > 0) {
-        this.consoleTimeout = setTimeout(() => {
-          this.writeToConsoleNow(this.consolePending);
-          this.consolePending.splice(0);
-        }, 250);
-      }
-      return true;
-    } catch (err) {
-      console.error(err);
-      return false;
+    };
+  },
+  scheduleFlush(stream, active, delay) {
+    const map = this.flushRequestMap;
+    const timeout = map.get(stream);
+    if (timeout) {
+      clearTimeout(timeout);
+      map.delete(stream);
+    }
+    if (active) {
+      map.set(stream, setTimeout(() => {
+        stream.flush();
+        map.delete(stream);
+      }, delay));
     }
   },
-  writeToConsoleNow(array) {
-    const c = this.consoleObject ?? globalThis.console;
-    c.log?.call?.(c, decodeText(array));
-  },
-  flushConsole() {
-    if (this.consolePending.length > 0) {
-      this.writeToConsoleNow(this.consolePending);
-      this.consolePending.splice(0);
-      clearTimeout(this.consoleTimeout);
+  flushStreams() {
+    if (this.libc) {
+      this.flushStdout?.();
+    }
+    const map = this.flushRequestMap;
+    if (map.size > 0) {
+      for (const [ stream, timeout ] of map) {
+        stream.flush();
+        clearTimeout(timeout);
+      }
+      map.clear();
     }
   },
   ...({

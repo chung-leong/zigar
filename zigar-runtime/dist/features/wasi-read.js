@@ -2,26 +2,24 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { notPromise, showPosixError } from '../errors.js';
 
-export default mixin({
-  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr) {
+var wasiRead = mixin({
+  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr) {
     const dv = new DataView(this.memory.buffer);
-    let written = 0;
+    let read = 0;
     for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
       const buf_ptr = dv.getUint32(p, true);
       const buf_len = dv.getUint32(p + 4, true);
       if (buf_len > 0) {
         try {
-          // writeBytes() can return promise in the main stream only
-          // when a call is relayed from a thread, a synchronously wait occurs
-          // regardless of whether writeBytes() returns a promise or not
-          notPromise(this.writeBytes(fd, buf_ptr, buf_len));
+          read += notPromise(this.readBytes(fd, buf_ptr, buf_len));
         } catch (err) {
           return showPosixError(err);
         }
-        written += buf_len;
       }
     }
-    dv.setUint32(written_ptr, written, true);
+    dv.setUint32(read_ptr, read, true);
     return PosixError.NONE;
   }
 });
+
+export { wasiRead as default };

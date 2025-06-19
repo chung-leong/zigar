@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
-import { InvalidArgument, TypeMismatch } from '../errors.js';
+import { TypeMismatch, InvalidArgument } from '../errors.js';
 
-export default mixin({
+var readerConversion = mixin({
   convertReader(arg) {
     if (arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
@@ -125,7 +125,7 @@ class Uint8ArrayReader extends BlobReader {
   }
 }
 
-export class NullStream {
+class NullStream {
   read() {
     return 0;
   }
@@ -136,3 +136,5 @@ export class NullStream {
     this.onClose?.();
   }
 }
+
+export { NullStream, readerConversion as default };

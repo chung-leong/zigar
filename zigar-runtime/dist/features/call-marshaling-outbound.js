@@ -109,10 +109,7 @@ var callMarshalingOutbound = mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, argStruct);
       }
-      if (this.libc) {
-        this.flushStdout?.();
-      }
-      this.flushConsole?.();
+      this.flushStreams?.();
       this.endContext();
     };
     if (isAsync) {

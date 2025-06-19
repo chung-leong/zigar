@@ -33,8 +33,9 @@ export default mixin({
   },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
+    const copy = new Uint8Array(array);
     const writer = this.getStream(fd);
-    return writer.write(array);
+    return writer.write(copy);
   },
   readBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);

@@ -34,6 +34,7 @@ const StructurePurpose = {
   Iterator: 5,
   Reader: 6,
   Writer: 7,
+  File: 8,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -140,6 +141,16 @@ const VisitorFlag = {
   IgnoreInactive:   0x0008,
   IgnoreArguments:  0x0010,
   IgnoreRetval:     0x0020,
+};
+
+const PosixError = {
+  NONE: 0,
+  EPERM: 1,
+  EBADF: 8,
+  EINVAL: 22,
+  ESPIPE: 29,
+  EDEADLK: 35,
+  ENOSYS: 38,
 };
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
@@ -441,6 +452,10 @@ function isCompatibleType(TypeA, TypeB) {
 
 function isCompatibleInstanceOf(object, Type) {
   return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
+}
+
+function isPromise(object) {
+  return typeof(object?.then) === 'function';
 }
 
 function markAsSpecial({ get, set }) {
@@ -2862,6 +2877,38 @@ class UnexpectedGenerator extends TypeError {
   }
 }
 
+class InvalidFileDescriptor extends Error {
+  code = PosixError.EBADF;
+
+  constructor() {
+    super(`Invalid file descriptor`);
+  }
+}
+
+class InvalidArgument extends Error {
+  code = PosixError.EINVAL;
+
+  constructor() {
+    super(`Invalid argument`);
+  }
+}
+
+class IllegalSeek extends Error {
+  code = PosixError.ESPIPE;
+
+  constructor() {
+    super(`Illegal seek`);
+  }
+}
+
+class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
+  constructor() {
+    super(`Unable to await promise`);
+  }
+}
+
 class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {
@@ -2925,8 +2972,8 @@ function checkInefficientAccess(context, access, len) {
     const bytesPerCall = context.bytes / context.calls;
     if (bytesPerCall < 8) {
       const s = bytesPerCall !== 1 ? 's' : '';
-      const action = (access === 'read') ? 'reading' : 'writing';
-      const name = (access === 'read') ? 'Reader' : 'Writer';
+      const action = 'writing';
+      const name = 'Writer';
       throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
     }
   }
@@ -2951,6 +2998,16 @@ function deanimalizeErrorName(name) {
   } catch (err) {
   }
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+function notPromise(value) {
+  if (isPromise(value)) throw new Deadlock();
+  return value;
+}
+
+function showPosixError(err) {
+  console.error(err);
+  return err.code ?? PosixError.EPERM;
 }
 
 function isErrorJSON(arg) {
@@ -3079,6 +3136,10 @@ function getMemory(arg) {
 var baseline = mixin({
   init() {
     this.variables = [];
+    this.listeners = {
+      open: null,
+      log: (e) => console.log(e.message),
+    };
   },
   getSpecialExports() {
     const check = (v) => {
@@ -3088,11 +3149,15 @@ var baseline = mixin({
     return {
       init: (...args) => this.initialize?.(...args),
       abandon: () => this.abandonModule?.(),
-      connect: (console) => this.consoleObject = console,
+      redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
+      on: (event, cb) => this.addListener(event, cb),
     };
+  },
+  addListener(event, cb) {
+    this.listeners[event] = cb;
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
@@ -3492,10 +3557,7 @@ var callMarshalingOutbound = mixin({
       if (hasPointers) {
         this.updatePointerTargets(context, argStruct);
       }
-      if (this.libc) {
-        this.flushStdout?.();
-      }
-      this.flushConsole?.();
+      this.flushStreams?.();
       this.endContext();
     };
     if (isAsync) {
@@ -3554,13 +3616,6 @@ var callMarshalingOutbound = mixin({
   ...({
     mixinUsage: null,
     mixinUsageCapturing: null,
-    usingPromise: false,
-    usingGenerator: false,
-    usingAbortSignal: false,
-    usingJsAllocator: false,
-    usingVariables: false,
-    usingReader: false,
-    usingWriter: false,
 
     detectArgumentFeatures(argMembers) {
       for (const { structure: { purpose } } of argMembers) {
@@ -3578,11 +3633,19 @@ var callMarshalingOutbound = mixin({
             this.usingAbortSignal = true;
             break;
           case StructurePurpose.Reader:
-            this.usingReader = true;
+            this.usingReader = 
+            this.usingReaderConversion = true;
             break;
           case StructurePurpose.Writer:
-            this.usingWriter = true;
+            this.usingWriter = 
+            this.usingWriterConversion = true;
             break;
+          case StructurePurpose.File:
+            this.usingFile =
+            this.usingStreamRedirection =
+            this.usingStreamReposition =
+            this.usingReaderConversion = 
+            this.usingWriterConversion = true;
         }
       }
     }
@@ -3726,6 +3789,17 @@ var dataCopying = mixin({
       copy(dst, src);
     },
   } )
+});
+
+var file = mixin({
+  // create File struct for outbound call
+  createFile(arg) {
+    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
+      return arg;
+    }
+    const handle = this.createStreamHandle(arg);
+    return { handle };
+  },
 });
 
 var generator = mixin({
@@ -4199,6 +4273,10 @@ var memoryMapping = mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
+  obtainZigArray(address, len) {
+    const dv = this.obtainZigView(address, len, false);
+    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -4398,9 +4476,6 @@ var moduleLoading = mixin({
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
-            {
-              this.usingStream = true;
-            }
             wasiPreview[name] = this.getWASIHandler(name);
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? empty;
@@ -4721,76 +4796,187 @@ var promise = mixin({
   },
 });
 
+var readerConversion = mixin({
+  convertReader(arg) {
+    if (arg instanceof ReadableStreamDefaultReader) {
+      return new WebStreamReader(arg);
+    } else if(arg instanceof ReadableStreamBYOBReader) {
+      return new WebStreamReaderBYOB(arg);
+    } else if (arg instanceof Blob) {
+      return new BlobReader(arg);
+    } else if (arg instanceof Uint8Array) {
+      return new Uint8ArrayReader(arg);
+    } else if (arg === null) {
+      return new NullStream();
+    } else if (typeof(arg?.read) === 'function') {
+      return arg;
+    } else {
+      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
+    }
+  }
+});
+
+class WebStreamReader {
+  done = false;
+  leftover = null;
+  onClose = null;
+
+  constructor(reader) {
+    this.reader = reader;
+  }
+
+  async read(dest) {
+    let read = 0;
+    while (read < dest.length && !this.done) {
+      if (!this.leftover) {
+        const { done, value } = await this.reader.read();
+        this.done = done;
+        this.leftover = new Uint8Array(value);
+      } 
+      const len = Math.min(this.leftover.length, dest.length - read);
+      for (let i = 0; i < len; i++) dest[read + i] = this.leftover[i]; 
+      read += len;
+      if (this.leftover.length > len) {
+        this.leftover = this.leftover.slice(len);
+      } else {
+        this.leftover = null;
+        if (this.done) {
+          this.onClose?.();
+          break;
+        }
+      }
+    }
+    return read;
+  }
+
+  close() {
+    this.reader.cancel();
+  }
+}
+
+class WebStreamReaderBYOB extends WebStreamReader {
+  async read(dest) {
+    let read = 0;
+    if (!this.done) {
+      const { done, value } = await this.reader.read(dest);
+      this.done = done;
+      read = value.byteLength;
+    }
+    return read;
+  }
+}
+
+class BlobReader {
+  pos = 0;
+  onClose = null;
+
+  constructor(blob) {
+    this.blob = blob;
+    this.size = blob.size ?? blob.length;
+  }
+
+  async read(dest) {
+    const len = dest.length;
+    const slice = this.blob.slice(this.pos, this.pos + len);
+    const response = new Response(slice);
+    const buffer = await response.arrayBuffer();
+    return this.copy(dest, new Uint8Array(buffer));
+  }
+
+  copy(dest, src) {
+    const read = src.length;
+    for (let i = 0; i < read; i++) dest[i] = src[i];
+    this.pos += read;
+    if (this.pos === this.size) {
+      this.onClose?.();
+    }
+    return read;
+  }
+
+  tell() {
+    return this.pos;
+  }
+
+  seek(offset, whence) {
+    const { size } = this;
+    let pos = -1;
+    switch (whence) {
+      case 0: pos = offset; break;
+      case 1: pos = this.pos + offset; break;
+      case 2: pos = size + offset; break;
+    }
+    if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
+    return this.pos = pos;
+  }
+
+  close() {
+    this.onClose?.();
+  }
+}
+
+class Uint8ArrayReader extends BlobReader {
+  read(dest) {
+    return this.copy(dest, this.blob.slice(this.pos, this.pos + dest.length));
+  }
+}
+
+class NullStream {
+  read() {
+    return 0;
+  }
+
+  write() {}
+
+  close() {
+    this.onClose?.();
+  }
+}
+
 var reader = mixin({
   init() {
     this.readerCallback = null;
-    this.readerContextMap = new Map();
-    this.nextReaderContextId = usize(0x1000);
+    this.readerMap = new Map();
+    this.nextReaderId = usize(0x1000);
   },
   // create AnyReader struct for outbound call
-  createReader(reader) {
-    if (reader instanceof ReadableStreamDefaultReader || reader instanceof ReadableStreamBYOBReader) {
-      // create a handle referencing the reader 
-      const contextId = this.nextReaderContextId++;
-      const ptr = this.obtainZigView(contextId, 0, false);
-      this.readerContextMap.set(contextId, { reader, leftover: null, finished: false });
-      // use the same callback for all readers
-      let readFn = this.readerCallback;
-      if (!readFn) {
-        readFn = this.readerCallback = async (ptr, buffer) => {
-          const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-          const context = this.readerContextMap.get(contextId);
-          if (!context) return 0;    
-          try {
-            const view = buffer['*'][MEMORY];
-            const dest = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-            if (import.meta.env?.PROD !== true) {
-              checkInefficientAccess(context, 'read', dest.length);
-            }
-            let { reader, finished, leftover } = context;
-            let read = 0;
-            if (reader instanceof ReadableStreamBYOBReader) {
-              const { done, value } = await reader.read(dest);
-              read = value.byteLength;
-              finished = done;
-            } else {
-              while (read < dest.length && !finished) {
-                if (!leftover) {
-                  const { done, value } = await reader.read();
-                  finished = done;
-                  leftover = new Uint8Array(value);
-                } 
-                const len = Math.min(leftover.length, dest.length - read);
-                for (let i = 0; i < len; i++) dest[read + i] = leftover[i]; 
-                read += len;
-                if (leftover.length > len) {
-                  leftover = leftover.slice(len);
-                } else {
-                  leftover = null;
-                  if (finished) break;
-                }
-              }
-              context.leftover = leftover;
-              context.finished = finished;
-            }
-            if (finished) {
-              this.readerContextMap.delete(contextId);
-            }
-            return read;
-          } catch (err) {
-            this.readerContextMap.delete(contextId);
-            throw err;
-          }
-        };
-        this.destructors.push(() => this.freeFunction(readFn));
-      }
-      return { context: ptr, readFn };
-    } else {
-      if (typeof(reader) === 'object' && reader) {
-        if('context' in reader && 'readFn' in reader) return reader;
-      }
-      throw new TypeMismatch('ReadableStreamDefaultReader or ReadableStreamBYOBReader', reader);
+  createReader(arg) {
+    // check if argument isn't already an AnyReader struct
+    if (typeof(arg) === 'object' && arg) {
+      if('context' in arg && 'readFn' in arg) return arg;
     }
+    const reader = this.convertReader(arg);
+    // create a handle referencing the reader 
+    const readerId = this.nextReaderId++;
+    const context = this.obtainZigView(readerId, 0, false);
+    const onClose = reader.onClose = () => this.readerMap.delete(readerId);
+    this.readerMap.set(readerId, reader);
+    // use the same callback for all readers
+    let readFn = this.readerCallback;
+    if (!readFn) {
+      const onError = (err) => {
+        console.error(err);
+        onClose();
+        throw err;
+      };
+      readFn = this.readerCallback = (context, buffer) => {
+        const readerId = this.getViewAddress(context['*'][MEMORY]);
+        const reader = this.readerMap.get(readerId);
+        if (!reader) return 0;    
+        try {
+          const dv = buffer['*'][MEMORY];
+          const dest = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+          if (import.meta.env?.PROD !== true) {
+            // checkInefficientAccess(context, 'read', dest.length);
+          }
+          const result = reader.read(dest);
+          return isPromise(result) ? result.catch(onError) : result;
+        } catch (err) {
+          onError(err);
+        }
+      };
+      this.destructors.push(() => this.freeFunction(readFn));
+    }
+    return { context, readFn };
   },
 });
 
@@ -4830,50 +5016,123 @@ function getIntRange(member) {
 
 var streamRedirection = mixin({
   init() {
-    this.consoleObject = null;
-    this.consolePending = [];
-    this.consoleTimeout = 0;
+    const w1 = this.createLogWriter(1);
+    const w2 = this.createLogWriter(2);
+    this.logWriters = { 1: w1, 2: w2 };
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.flushRequestMap = new Map();
+    this.nextStreamHandle = 0x7fff_ffff;
   },
-  writeToConsole(dv) {
+  getStream(fd) {
+    const stream = this.streamMap.get(fd);
+    if (!stream) throw new InvalidFileDescriptor();
+    return stream;
+  },
+  createStreamHandle(arg) {
+    let stream;
     try {
-      // make copy of array, in case incoming buffer is pointing to stack memory
-      const array = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
-      // send text up to the last newline character
-      const index = array.lastIndexOf(0x0a);
-      if (index === -1) {
-        this.consolePending.push(array);
+      stream = this.convertReader(arg);
+    } catch {
+      try {
+        stream = this.convertWriter(arg);
+      } catch {
+        throw new TypeMismatch('reader or writer', arg);
+      }
+    }
+    const handle = this.nextStreamHandle++;
+    this.streamMap.set(handle, stream);
+    return handle;
+  },
+  writeBytes(fd, address, len) {
+    const array = this.obtainZigArray(address, len, false);
+    const copy = new Uint8Array(array);
+    const writer = this.getStream(fd);
+    return writer.write(copy);
+  },
+  readBytes(fd, address, len) {
+    const array = this.obtainZigArray(address, len, false);
+    const reader = this.getStream(fd);
+    return reader.read(array);
+  },
+  closeStream(fd) {
+    this.streamMap.delete(fd);
+  },
+  redirectStream(fd, arg) {
+    const map = this.streamMap;
+    const previous = map.get(fd);
+    if (arg !== undefined) {
+      if (fd === 0) {
+        map.set(fd, this.convertReader(arg));
+      } else if (fd === 1 || fd === 2) {
+        map.set(fd, this.convertWriter(arg));
       } else {
-        const beginning = array.subarray(0, index);
-        const remaining = array.subarray(index + 1);
-        this.writeToConsoleNow([ ...this.consolePending, beginning ]);
-        this.consolePending.splice(0);
-        if (remaining.length > 0) {
-          this.consolePending.push(remaining);
+        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+      }
+    } else {
+      map.delete(fd);
+    }
+    return previous;
+  },
+  createLogWriter(handle) {
+    const env = this;
+    return {
+      pending: [],
+
+      write(chunk) {
+          // send text up to the last newline character
+          const index = chunk.lastIndexOf(0x0a);
+          if (index === -1) {
+            this.pending.push(chunk);
+          } else {
+            const beginning = chunk.subarray(0, index);
+            const remaining = chunk.subarray(index + 1);
+            this.dispatch([ ...this.pending, beginning ]);
+            this.pending.splice(0);
+            if (remaining.length > 0) {
+              this.pending.push(remaining);
+            }
+          }
+          env.scheduleFlush(this, this.pending.length > 0, 250);
+      },
+
+      dispatch(array) {
+        const message = decodeText(array);
+        env.listeners.log?.({ handle, message });
+      },
+
+      flush() {
+        if (this.pending.length > 0) {
+          this.dispatch(this.pending);
+          this.pending.splice(0);
         }
       }
-      clearTimeout(this.consoleTimeout);
-      this.consoleTimeout = 0;
-      if (this.consolePending.length > 0) {
-        this.consoleTimeout = setTimeout(() => {
-          this.writeToConsoleNow(this.consolePending);
-          this.consolePending.splice(0);
-        }, 250);
-      }
-      return true;
-    } catch (err) {
-      console.error(err);
-      return false;
+    };
+  },
+  scheduleFlush(stream, active, delay) {
+    const map = this.flushRequestMap;
+    const timeout = map.get(stream);
+    if (timeout) {
+      clearTimeout(timeout);
+      map.delete(stream);
+    }
+    if (active) {
+      map.set(stream, setTimeout(() => {
+        stream.flush();
+        map.delete(stream);
+      }, delay));
     }
   },
-  writeToConsoleNow(array) {
-    const c = this.consoleObject ?? globalThis.console;
-    c.log?.call?.(c, decodeText(array));
-  },
-  flushConsole() {
-    if (this.consolePending.length > 0) {
-      this.writeToConsoleNow(this.consolePending);
-      this.consolePending.splice(0);
-      clearTimeout(this.consoleTimeout);
+  flushStreams() {
+    if (this.libc) {
+      this.flushStdout?.();
+    }
+    const map = this.flushRequestMap;
+    if (map.size > 0) {
+      for (const [ stream, timeout ] of map) {
+        stream.flush();
+        clearTimeout(timeout);
+      }
+      map.clear();
     }
   },
   ...({
@@ -4884,6 +5143,23 @@ var streamRedirection = mixin({
   ...({
     usingStream: false,
   } ),
+});
+
+var streamReposition = mixin({
+  changeStreamPointer(fd, offset, whence) {
+    const reader = this.getStream(fd);
+    if (typeof(reader.seek) !== 'function') {
+      throw new IllegalSeek();
+    }
+    return reader.seek(offset, whence);
+  },
+  getStreamPointer(fd) {
+    const reader = this.getStream(fd);
+    if (typeof(reader.tell) !== 'function') {
+      throw new IllegalSeek();
+    }
+    return reader.tell();
+  },
 });
 
 var structureAcquisition = mixin({
@@ -5555,7 +5831,99 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
-var wasiSupport = mixin({
+var wasiExit = mixin({
+  wasi_proc_exit(code) {
+    throw new Exit(code);
+  }
+});
+
+var wasiPrestatGet = mixin({
+  wasi_fd_prestat_get() {
+    return PosixError.EBADF;
+  }
+});
+
+var wasiRandomGet = mixin({
+  wasi_random_get(buf, buf_len) {
+    const dv = new DataView(this.memory.buffer, buf, buf_len);
+    for (let i = 0; i < buf_len; i++) {
+      dv.setUint8(i, Math.floor(256 * Math.random()));
+    }
+    return PosixError.NONE;
+  }
+});
+
+var wasiRead = mixin({
+  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr) {
+    const dv = new DataView(this.memory.buffer);
+    let read = 0;
+    for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+      const buf_ptr = dv.getUint32(p, true);
+      const buf_len = dv.getUint32(p + 4, true);
+      if (buf_len > 0) {
+        try {
+          read += notPromise(this.readBytes(fd, buf_ptr, buf_len));
+        } catch (err) {
+          return showPosixError(err);
+        }
+      }
+    }
+    dv.setUint32(read_ptr, read, true);
+    return PosixError.NONE;
+  }
+});
+
+var wasiSeek = mixin({
+  wasi_fd_seek(fd, offset, whence, newoffset_ptr) {
+    const dv = new DataView(this.memory.buffer);
+    try {
+      const pos = notPromise(this.changeStreamPointer(fd, offset, whence));
+      dv.setUint32(newoffset_ptr, pos, true);
+      return PosixError.NONE;
+    } catch (err) {
+      return showPosixError(err);
+    }
+  }
+});
+
+var wasiTell = mixin({
+  wasi_fd_tell(fd, newoffset_ptr) {
+    const dv = new DataView(this.memory.buffer);
+    try {
+      const pos = notPromise(this.getStreamPointer(fd));
+      dv.setUint32(newoffset_ptr, pos, true);              
+      return PosixError.NONE;
+    } catch (err) {
+      return showPosixError(err);
+    }
+  }
+});
+
+var wasiWrite = mixin({
+  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr) {
+    const dv = new DataView(this.memory.buffer);
+    let written = 0;
+    for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
+      const buf_ptr = dv.getUint32(p, true);
+      const buf_len = dv.getUint32(p + 4, true);
+      if (buf_len > 0) {
+        try {
+          // writeBytes() can return promise in the main stream only
+          // when a call is relayed from a thread, a synchronously wait occurs
+          // regardless of whether writeBytes() returns a promise or not
+          notPromise(this.writeBytes(fd, buf_ptr, buf_len));
+        } catch (err) {
+          return showPosixError(err);
+        }
+        written += buf_len;
+      }
+    }
+    dv.setUint32(written_ptr, written, true);
+    return PosixError.NONE;
+  }
+});
+
+var wasi = mixin({
   ...({
     init() {
       this.customWASI = null;
@@ -5567,50 +5935,31 @@ var wasiSupport = mixin({
       this.customWASI = wasi;
     },
     getWASIHandler(name) {
-      const custom = this.customWASI?.wasiImport?.[name];
-      if (custom) {
-        return custom;
+      {
+        this.usingWasi ??= {};
+        switch (name) {
+          case 'proc_exit': this.usingWasi.Exit = true; break;
+          case 'fd_prestat_get': this.usingWasi.PrestatGet = true; break;
+          case 'random_get': this.usingWasi.RandomGet = true; break;
+          case 'fd_write': this.usingWasi.Write = true; break;
+          case 'fd_read': this.usingWasi.Read = true; break;
+          case 'fd_seek': this.usingWasi.Seek = true; break;
+          case 'fd_tell': this.usingWasi.Tell = true; break;
+        }
+        switch (name) {
+          case 'fd_seek':
+          case 'fd_tell': 
+            this.usingStreamReposition = true;
+            /* fall through */
+          case 'fd_write':
+          case 'fd_read':
+            this.usingStreamRedirection = true;
+            break;
+        }
       }
-      const ENOSYS = 38;
-      const ENOBADF = 8;
-      switch (name) {
-        case 'fd_write':
-          return (fd, iovs_ptr, iovs_count, written_ptr) => {
-            if (fd === 1 || fd === 2) {
-              const dv = new DataView(this.memory.buffer);
-              let written = 0;
-              for (let i = 0, p = iovs_ptr; i < iovs_count; i++, p += 8) {
-                const buf_ptr = dv.getUint32(p, true);
-                const buf_len = dv.getUint32(p + 4, true);
-                if (buf_len > 0) {
-                  const buf = new DataView(this.memory.buffer, buf_ptr, buf_len);
-                  this.writeToConsole(buf);
-                  written += buf_len;
-                }
-              }
-              dv.setUint32(written_ptr, written, true);
-              return 0;
-            } else {
-              return ENOSYS;
-            }
-          };
-        case 'fd_prestat_get':
-          return () => ENOBADF;
-        case 'proc_exit':
-          return (code) => {
-            throw new Exit(code);
-          };
-        case 'random_get':
-          return (buf, buf_len) => {
-            const dv = new DataView(this.memory.buffer, buf, buf_len);
-            for (let i = 0; i < buf_len; i++) {
-              dv.setUint8(i, Math.floor(256 * Math.random()));
-            }
-            return 0;
-          };
-        default:
-          return () => ENOSYS;
-      }
+      return this.customWASI?.wasiImport?.[name] 
+          ?? this[`wasi_${name}`]?.bind?.(this)
+          ?? (() => PosixError.ENOSYS);
     },
   } ),
 });
@@ -5663,50 +6012,97 @@ function protectElements(array) {
   df(array, 'get', { value: getReadOnly });
 }
 
+var writerConversion = mixin({
+  convertWriter(arg) {
+    if (arg instanceof WritableStreamDefaultWriter) {
+      return new WebStreamWriter(arg);
+    } else if (Array.isArray(arg)) {
+      return new ArrayWriter(arg);
+    } else if (arg === null) {
+      return new NullStream();
+    } else if (typeof(arg?.write) === 'function') {
+      return arg;
+    } else {
+      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
+    }
+  },
+});
+
+class WebStreamWriter {
+  constructor(writer) {
+    this.writer = writer;
+  }
+
+  async write(bytes) {
+    await this.writer.write(bytes);
+  }
+
+  set onClose(cb) {
+    this.writer.closed.then(cb, cb);
+  }
+}
+
+class ArrayWriter {
+  constructor(array) {
+    this.array = array;
+    this.closeCB = null;
+  }
+
+  write(bytes) {
+    this.array.push(bytes);
+  }
+
+  close() {
+    this.onClose?.();
+  }
+}
+
 var writer = mixin({
   init() {
     this.writerCallback = null;
-    this.writerContextMap = new Map();
+    this.writerMap = new Map();
     this.nextWriterContextId = usize(0x2000);
   },
   // create AnyWriter struct for outbound call
-  createWriter(writer) {
-    if (writer instanceof WritableStreamDefaultWriter) {
-      // create a handle referencing the writer 
-      const writerId = this.nextWriterContextId++;
-      const ptr = this.obtainZigView(writerId, 0, false);
-      this.writerContextMap.set(writerId, { writer });
-      writer.closed.catch(empty).then(() => this.writerContextMap.delete(writerId));
-      // use the same callback for all writers
-      let writeFn = this.writerCallback;
-      if (!writeFn) {
-        writeFn = this.writerCallback = async (ptr, buffer) => {
-          const writerId = this.getViewAddress(ptr['*'][MEMORY]);
-          const context = this.writerContextMap.get(writerId);
-          if (!context) return 0;
-          try {
-            const view = buffer['*'][MEMORY];
-            const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-            if (import.meta.env?.PROD !== true) {
-              checkInefficientAccess(context, 'write', src.length);
-            }
-            const { writer } = context;
-            await writer.write(new Uint8Array(src));
-            return src.length;
-          } catch (err) {
-            this.writerContextMap.delete(writerId);
-            throw err;
-          }
-        };
-        this.destructors.push(() => this.freeFunction(writeFn));
-      }
-      return { context: ptr, writeFn };
-    } else {
-      if (typeof(writer) === 'object' && writer) {
-        if('context' in writer && 'writeFn' in writer) return writer;
-      }
-      throw new TypeMismatch('WritableStreamDefaultWriter', writer);
+  createWriter(arg) {
+    // check if argument isn't already an AnyWriter struct
+    if (typeof(arg) === 'object' && arg) {
+      if('context' in arg && 'writeFn' in arg) return arg;
     }
+    const writer = this.convertWriter(arg);
+    // create a handle referencing the writer 
+    const writerId = this.nextWriterContextId++;
+    const context = this.obtainZigView(writerId, 0, false);
+    const onClose = writer.onClose = () => this.writerMap.delete(writerId);
+    this.writerMap.set(writerId, writer);     
+    // use the same callback for all writers
+    let writeFn = this.writerCallback;
+    if (!writeFn) {
+      const onError = (err) => {
+        onClose();
+        throw err;
+      };
+      writeFn = this.writerCallback = (context, buffer) => {
+        const writerId = this.getViewAddress(context['*'][MEMORY]);
+        const writer = this.writerMap.get(writerId);
+        if (!writer) return 0;
+        try {
+          const dv = buffer['*'][MEMORY];
+          if (import.meta.env?.PROD !== true) {
+            checkInefficientAccess(context, 'write', dv.byteLength);
+          }
+          const len = dv.byteLength;
+          const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
+          const copy = new Uint8Array(src);
+          const result = writer.write(copy);
+          return isPromise(result) ? result.then(() => len, onError) : len;
+        } catch (err) {
+          onError(err);
+        }
+      };
+      this.destructors.push(() => this.freeFunction(writeFn));
+    }
+    return { context, writeFn };
   },
 });
 
@@ -8861,6 +9257,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
+  FeatureFile: file,
   FeatureGenerator: generator,
   FeatureIntConversion: intConversion,
   FeatureJsAllocator: jsAllocator,
@@ -8870,14 +9267,24 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeaturePointerSynchronization: pointerSynchronization,
   FeaturePromise: promise,
   FeatureReader: reader,
+  FeatureReaderConversion: readerConversion,
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamRedirection: streamRedirection,
+  FeatureStreamReposition: streamReposition,
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
-  FeatureWasiSupport: wasiSupport,
+  FeatureWasi: wasi,
+  FeatureWasiExit: wasiExit,
+  FeatureWasiPrestatGet: wasiPrestatGet,
+  FeatureWasiRandomGet: wasiRandomGet,
+  FeatureWasiRead: wasiRead,
+  FeatureWasiSeek: wasiSeek,
+  FeatureWasiTell: wasiTell,
+  FeatureWasiWrite: wasiWrite,
   FeatureWriteProtection: writeProtection,
   FeatureWriter: writer,
+  FeatureWriterConversion: writerConversion,
   IteratorForArray: forArray,
   IteratorForStruct: forStruct,
   IteratorForUnion: forUnion,
@@ -10364,11 +10771,18 @@ async function transpile(srcPath, options) {
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
-  usage.FeatureReader = env.usingReader;
-  usage.FeatureWriter = env.usingWriter;
+  usage.FeatureReader = usage.FeatureReaderConversion = env.usingReader;
+  usage.FeatureWriter = usage.FeatureWriterConversion = env.usingWriter;
   usage.FeatureObjectLinkage = env.usingVariables;
-  usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();
+  usage.FeatureStreamRedirection = env.usingStreamRedirection;
+  usage.FeatureStreamReposition = env.usingStreamReposition;
+  if (env.usingWasi) {
+    usage.FeatureWasi = true;
+    for (const [ name, using ] of Object.entries(env.usingWasi)) {
+      usage[`FeatureWasi${name}`] = true;
+    }
+  }
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
   } else {

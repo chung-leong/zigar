@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { notPromise, showPosixError } from '../errors.js';
 
-export default mixin({
+var wasiSeek = mixin({
   wasi_fd_seek(fd, offset, whence, newoffset_ptr) {
     const dv = new DataView(this.memory.buffer);
     try {
@@ -14,3 +14,5 @@ export default mixin({
     }
   }
 });
+
+export { wasiSeek as default };

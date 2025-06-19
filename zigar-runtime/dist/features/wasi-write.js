@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { notPromise, showPosixError } from '../errors.js';
 
-export default mixin({
+var wasiWrite = mixin({
   wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr) {
     const dv = new DataView(this.memory.buffer);
     let written = 0;
@@ -25,3 +25,5 @@ export default mixin({
     return PosixError.NONE;
   }
 });
+
+export { wasiWrite as default };

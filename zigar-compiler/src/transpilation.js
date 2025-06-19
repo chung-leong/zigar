@@ -56,11 +56,18 @@ export async function transpile(srcPath, options) {
   usage.FeaturePromise = env.usingPromise;
   usage.FeatureGenerator = env.usingGenerator;
   usage.FeatureAbortSignal = env.usingAbortSignal;
-  usage.FeatureReader = env.usingReader;
-  usage.FeatureWriter = env.usingWriter;
+  usage.FeatureReader = usage.FeatureReaderConversion = env.usingReader;
+  usage.FeatureWriter = usage.FeatureWriterConversion = env.usingWriter;
   usage.FeatureObjectLinkage = env.usingVariables;
-  usage.FeatureStreamRedirection = usage.FeatureWasiSupport = env.usingStream;
   usage.FeatureModuleLoading = env.hasMethods();
+  usage.FeatureStreamRedirection = env.usingStreamRedirection;
+  usage.FeatureStreamReposition = env.usingStreamReposition;
+  if (env.usingWasi) {
+    usage.FeatureWasi = true;
+    for (const [ name, using ] of Object.entries(env.usingWasi)) {
+      usage[`FeatureWasi${name}`] = true;
+    }
+  }
   if (nodeCompat) {
     usage.FeatureWorkerSupportCompat = multithreaded;
   } else {
