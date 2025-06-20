@@ -95,6 +95,22 @@ export function addTests(importModule, options) {
       const digest = hash(content);
       expect(digest.string).to.equal(correct);
     })
+    it('should open and read from file in main thread', async function() {
+      this.timeout(0);
+      const { __zigar, hash } = await importTest('open-and-read-from-file-in-main-thread');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return content;
+      });
+      const digest = hash('/hello/world');
+      expect(digest.string).to.equal(correct);
+    })
     it('should write to writer', async function() {
       this.timeout(0);
       const {

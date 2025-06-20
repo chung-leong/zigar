@@ -38,7 +38,9 @@ export { default as FeatureStreamReposition } from './features/stream-reposition
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';
 export { default as FeatureThunkAllocation } from './features/thunk-allocation.js';
 export { default as FeatureViewManagement } from './features/view-management.js';
+export { default as FeatureWasiClose } from './features/wasi-close.js';
 export { default as FeatureWasiExit } from './features/wasi-exit.js';
+export { default as FeatureWasiOpen } from './features/wasi-open.js';
 export { default as FeatureWasiPrestatGet } from './features/wasi-prestat-get.js';
 export { default as FeatureWasiRandomGet } from './features/wasi-random-get.js';
 export { default as FeatureWasiRead } from './features/wasi-read.js';

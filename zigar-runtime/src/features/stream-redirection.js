@@ -20,7 +20,8 @@ export default mixin({
     let stream;
     try {
       stream = this.convertReader(arg);
-    } catch {
+    } catch (err) {
+      console.error(err, arg);
       try {
         stream = this.convertWriter(arg);
       } catch {

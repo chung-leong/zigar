@@ -147,6 +147,7 @@ const VisitorFlag = {
 const PosixError = {
   NONE: 0,
   EPERM: 1,
+  ENOENT: 2,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
@@ -5014,7 +5015,8 @@ var streamRedirection = mixin({
     let stream;
     try {
       stream = this.convertReader(arg);
-    } catch {
+    } catch (err) {
+      console.error(err, arg);
       try {
         stream = this.convertWriter(arg);
       } catch {
@@ -5242,11 +5244,60 @@ var thunkAllocation = mixin({
   } ),
 });
 
+var wasiClose = mixin({
+  wasi_fd_close(fd) {
+    this.closeStream(fd);
+    return PosixError.NONE;
+  }
+});
+
 var wasiExit = mixin({
   wasi_proc_exit(code) {
     throw new Exit(code);
   }
 }) ;
+
+const OpenFlag = {
+  create: 1 << 0,
+  directory: 1 << 1,
+  exclusive: 1 << 2,
+  truncate: 1 << 3,
+};
+
+const Right = {
+  read: 1n << 1n,
+  write: 1n << 6n,
+};
+
+var wasiOpen = mixin({
+  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address) {
+    const pathArray = this.obtainZigArray(path_address, path_len);
+    const path = decodeText(pathArray);
+    const mode = (fs_rights_base & Right.read)
+    ? (fs_rights_base & Right.write)
+      ? 'readWrite'
+      : 'readOnly'
+    : (fs_rights_base & Right.write)
+      ? 'writeOnly'
+      : '';
+    const flags = {};
+    for (const [ name, value ] of Object.entries(OpenFlag)) {
+      if (oflags & value) {
+        flags[name] = true;
+      }
+    }
+    const { open } = this.listeners;
+    if (!open) {
+      console.error(`No listener for event 'open'`);
+      return PosixError.ENOENT;
+    }
+    const arg = open({ path, mode, flags });
+    const handle = this.createStreamHandle(arg);
+    const dv = this.obtainZigView(fd_address, 4);
+    dv.setUint32(0, handle, true);
+    return PosixError.NONE;
+  }
+});
 
 var wasiPrestatGet = mixin({
   wasi_fd_prestat_get() {
@@ -5837,20 +5888,30 @@ var structureAcquisition = mixin({
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         this.use(wasi);
         switch (name) {
-          case 'proc_exit': this.use(wasiExit); break;
+          case 'fd_close': this.use(wasiClose); break;
           case 'fd_prestat_get': this.use(wasiPrestatGet); break;
-          case 'random_get': this.use(wasiRandomGet); break;
-          case 'fd_write': this.use(wasiWrite); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
+          case 'fd_write': this.use(wasiWrite); break;
+          case 'path_open': this.use(wasiOpen); break;
+          case 'proc_exit': this.use(wasiExit); break;
+          case 'random_get': this.use(wasiRandomGet); break;
         }
         switch (name) {
+          case 'path_open':
+            this.use(readerConversion);
+            this.use(writerConversion);
+            this.use(streamRedirection);
+            break;
+          case 'fd_close':
+            this.use(streamRedirection);
+            break;
           case 'fd_seek':
           case 'fd_tell': 
             this.use(streamRedirection);
             this.use(streamReposition);
-            /* fall through */
+            break;
           case 'fd_write':
           case 'fd_read':
             this.use(streamRedirection);
@@ -9486,7 +9547,9 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
   FeatureWasi: wasi,
+  FeatureWasiClose: wasiClose,
   FeatureWasiExit: wasiExit,
+  FeatureWasiOpen: wasiOpen,
   FeatureWasiPrestatGet: wasiPrestatGet,
   FeatureWasiRandomGet: wasiRandomGet,
   FeatureWasiRead: wasiRead,

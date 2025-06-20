@@ -26,7 +26,9 @@ import readerConversion from './reader-conversion.js';
 import reader from './reader.js';
 import streamRedirection from './stream-redirection.js';
 import streamReposition from './stream-reposition.js';
+import wasiClose from './wasi-close.js';
 import wasiExit from './wasi-exit.js';
+import wasiOpen from './wasi-open.js';
 import wasiPrestatGet from './wasi-prestat-get.js';
 import wasiRandomGet from './wasi-random-get.js';
 import wasiRead from './wasi-read.js';
@@ -241,20 +243,30 @@ export default mixin({
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         this.use(wasi);
         switch (name) {
-          case 'proc_exit': this.use(wasiExit); break;
+          case 'fd_close': this.use(wasiClose); break;
           case 'fd_prestat_get': this.use(wasiPrestatGet); break;
-          case 'random_get': this.use(wasiRandomGet); break;
-          case 'fd_write': this.use(wasiWrite); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
+          case 'fd_write': this.use(wasiWrite); break;
+          case 'path_open': this.use(wasiOpen); break;
+          case 'proc_exit': this.use(wasiExit); break;
+          case 'random_get': this.use(wasiRandomGet); break;
         }
         switch (name) {
+          case 'path_open':
+            this.use(readerConversion);
+            this.use(writerConversion);
+            this.use(streamRedirection);
+            break;
+          case 'fd_close':
+            this.use(streamRedirection);
+            break;
           case 'fd_seek':
           case 'fd_tell': 
             this.use(streamRedirection);
             this.use(streamReposition);
-            /* fall through */
+            break;
           case 'fd_write':
           case 'fd_read':
             this.use(streamRedirection);

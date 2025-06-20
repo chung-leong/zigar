@@ -144,6 +144,7 @@ const VisitorFlag = {
 const PosixError = {
   NONE: 0,
   EPERM: 1,
+  ENOENT: 2,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
