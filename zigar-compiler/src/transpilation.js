@@ -42,41 +42,14 @@ export async function transpile(srcPath, options) {
   const definition = env.exportStructures();
   const usage = {};
   for (const [ name, mixin ] of Object.entries(mixins)) {
-    if (env.mixinUsage.get(mixin)) {
+    if (env.mixinUsage.get(mixin) && name !== 'FeatureStructureAcquisition') {
       usage[name] = true;
     }
   }
-  usage.FeatureBaseline = true;
-  usage.FeatureStructureAcquisition = false;
-  usage.FeatureCallMarshalingInbound = env.usingFunctionPointer;
-  usage.FeatureCallMarshalingOutbound = env.usingFunction;
-  usage.FeatureThunkAllocation = env.usingFunctionPointer && !multithreaded;
-  usage.FeaturePointerSynchronization = env.usingFunction || env.usingFunctionPointer;
-  usage.FeatureJsAllocator = env.usingJsAllocator;
-  usage.FeaturePromise = env.usingPromise;
-  usage.FeatureGenerator = env.usingGenerator;
-  usage.FeatureAbortSignal = env.usingAbortSignal;
-  usage.FeatureReader = usage.FeatureReaderConversion = env.usingReader;
-  usage.FeatureWriter = usage.FeatureWriterConversion = env.usingWriter;
-  usage.FeatureReaderConversion = env.usingReaderConversion;
-  usage.FeatureWriterConversion = env.usingWriterConversion;
-  usage.FeatureFile = env.usingFile;
-  usage.FeatureObjectLinkage = env.usingVariables;
-  usage.FeatureModuleLoading = env.hasMethods();
-  usage.FeatureStreamRedirection = env.usingStreamRedirection;
-  usage.FeatureStreamReposition = env.usingStreamReposition;
-  if (env.usingWasi) {
-    usage.FeatureWasi = true;
-    for (const [ name, using ] of Object.entries(env.usingWasi)) {
-      usage[`FeatureWasi${name}`] = true;
-    }
+  if (nodeCompat && usage.FeatureWorkerSupport) {
+    usage.FeatureWorkerSupportCompat = true;
+    usage.FeatureWorkerSupport = false;
   }
-  if (nodeCompat) {
-    usage.FeatureWorkerSupportCompat = multithreaded;
-  } else {
-    usage.FeatureWorkerSupport = multithreaded;
-  }
-  usage.AccessorAll = usage.AccessorInt = usage.FeatureDataCopying;
   const mixinPaths = [];
   for (const [ name, inUse ] of Object.entries(usage)) {
     if (inUse) {

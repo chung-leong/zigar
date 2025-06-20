@@ -1,6 +1,6 @@
 import { memberNames, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { defineProperty, getPrimitiveName, isPromise } from './utils.js';
+import { defineProperty, getPrimitiveName } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -526,11 +526,6 @@ export function deanimalizeErrorName(name) {
   }
   /* c8 ignore end */
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
-}
-
-export function notPromise(value) {
-  if (isPromise(value)) throw new Deadlock();
-  return value;
 }
 
 export function showPosixError(err) {

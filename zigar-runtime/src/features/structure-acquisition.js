@@ -1,12 +1,42 @@
 import {
   ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
 } from '../../src/symbols.js';
+import accessorAll from '../accessors/all.js';
+import accessorInt from '../accessors/int.js';
 import {
   ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag,
-  structureNames, StructureType,
+  structureNames, StructurePurpose, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
+import callMarshalingInbound from '../features/call-marshaling-inbound.js';
+import callMarshalingOutbound from '../features/call-marshaling-outbound.js';
+import pointerSynchronization from '../features/pointer-synchronization.js';
+import thunkAllocation from '../features/thunk-allocation.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
+import abortSignal from './abort-signal.js';
+import baseline from './baseline.js';
+import dataCopying from './data-copying.js';
+import file from './file.js';
+import generator from './generator.js';
+import jsAllocator from './js-allocator.js';
+import moduleLoading from './module-loading.js';
+import objectLinkage from './object-linkage.js';
+import promise from './promise.js';
+import readerConversion from './reader-conversion.js';
+import reader from './reader.js';
+import streamRedirection from './stream-redirection.js';
+import streamReposition from './stream-reposition.js';
+import wasiExit from './wasi-exit.js';
+import wasiPrestatGet from './wasi-prestat-get.js';
+import wasiRandomGet from './wasi-random-get.js';
+import wasiRead from './wasi-read.js';
+import wasiSeek from './wasi-seek.js';
+import wasiTell from './wasi-tell.js';
+import wasiWrite from './wasi-write.js';
+import wasi from './wasi.js';
+import workerSupport from './worker-support.js';
+import writerConversion from './writer-conversion.js';
+import writer from './writer.js';
 
 export default mixin({
   init() {
@@ -189,9 +219,90 @@ export default mixin({
     }
     /* c8 ignore start */
     if (process.env.MIXIN === 'track') {
+      this.use(baseline);
       if (list.length > 0) {
         // mixin "features/object-linkage" is used when there are objects linked to Zig memory
-        this.usingVariables = true;
+        this.use(objectLinkage);
+      }
+      if (this.hasMethods()) {
+        this.use(moduleLoading);
+        this.use(callMarshalingOutbound);
+        this.use(pointerSynchronization);
+      }
+      if (this.using(dataCopying)) {
+        this.use(accessorAll);
+        this.use(accessorInt);
+      }
+      for (const name of Object.keys(this.exportedModules.wasi)) {
+        switch (name) {
+          case 'thread-spawn': this.use(workerSupport); break;
+        }
+      }
+      for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
+        this.use(wasi);
+        switch (name) {
+          case 'proc_exit': this.use(wasiExit); break;
+          case 'fd_prestat_get': this.use(wasiPrestatGet); break;
+          case 'random_get': this.use(wasiRandomGet); break;
+          case 'fd_write': this.use(wasiWrite); break;
+          case 'fd_read': this.use(wasiRead); break;
+          case 'fd_seek': this.use(wasiSeek); break;
+          case 'fd_tell': this.use(wasiTell); break;
+        }
+        switch (name) {
+          case 'fd_seek':
+          case 'fd_tell': 
+            this.use(streamRedirection);
+            this.use(streamReposition);
+            /* fall through */
+          case 'fd_write':
+          case 'fd_read':
+            this.use(streamRedirection);
+            break;
+        }
+      }
+      for (const structure of this.structures) {
+        if (structure.type === StructureType.ArgStruct) {
+          for (const { structure: { purpose } } of structure.instance.members) {
+            switch (purpose) {
+              case StructurePurpose.Allocator:
+                this.use(jsAllocator);
+                break;
+              case StructurePurpose.Promise:
+                this.use(promise);
+                break;
+              case StructurePurpose.Generator:
+                this.use(generator);
+                break;
+              case StructurePurpose.AbortSignal:
+                this.use(abortSignal);
+                break;
+              case StructurePurpose.Reader:
+                this.use(reader);
+                this.use(readerConversion);
+                break;
+              case StructurePurpose.Writer:
+                this.use(writer);
+                this.use(writerConversion);
+                break;
+              case StructurePurpose.File:
+                this.use(file);
+                this.use(streamRedirection);
+                this.use(streamReposition);
+                this.use(readerConversion);
+                this.use(writerConversion);
+            }
+          }
+        } else if (structure.type === StructureType.Function) {
+          const { static: { template: jsThunkController } } = structure;
+          if (jsThunkController) {
+            this.use(callMarshalingInbound);
+            this.use(pointerSynchronization);
+            if (!this.use(workerSupport)) {
+              this.use(thunkAllocation);
+            }
+          }
+        }
       }
     }
     /* c8 ignore end */

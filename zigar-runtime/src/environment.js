@@ -31,6 +31,20 @@ export function defineClass(name, mixins) {
     for (const init of initFunctions) {
       init.call(this);
     }
+    /* c8 ignore start */
+    if (process.env.MIXIN === 'track') {
+      this.trackingMixins = false;
+      this.mixinUsage = new Map();
+      this.use = (mixin) => {
+        if (this.trackingMixins) {
+          this.mixinUsage.set(mixin, true);
+        }
+      };
+      this.using = (mixin) => {
+        return !!this.mixinUsage.get(mixin);
+      };
+    }
+    /* c8 inogre end */
     if (process.env.DEV) {
       const diag = globalThis.ZIGAR = Object.create(null);
       const descriptors = Object.getOwnPropertyDescriptors(prototype);
@@ -65,7 +79,7 @@ export function defineClass(name, mixins) {
           if (process.env.MIXIN === 'track') {
             const func = object;
             object = function(...args) {
-              this.mixinUsageCapturing?.set(mixin, true);
+              this.use?.(mixin);
               return func.call(this, ...args);
             }
           }

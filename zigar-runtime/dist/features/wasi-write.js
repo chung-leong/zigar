@@ -34,6 +34,6 @@ var wasiWrite = mixin({
     };
     return next();
   }
-});
+}) ;
 
 export { wasiWrite as default };

@@ -63,9 +63,6 @@ export default mixin({
     if (process.env.TARGET === 'wasm') {
       descriptors[COPY] = this.defineRetvalCopier(members[0]);
     }
-    if (process.env.MIXIN === 'track') {
-      this.detectArgumentFeatures(argMembers);
-    }
     return constructor;
   },
   finalizeArgStruct(structure, staticDescriptors) {

@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import {
   ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
-  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, STRING_RETVAL, TYPE, 
+  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, STRING_RETVAL, TYPE,
   TYPED_ARRAY, UPDATE
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';

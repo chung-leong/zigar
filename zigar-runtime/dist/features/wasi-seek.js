@@ -24,6 +24,6 @@ var wasiSeek = mixin({
       return showPosixError(err);
     }
   }
-});
+}) ;
 
 export { wasiSeek as default };

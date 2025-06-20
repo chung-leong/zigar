@@ -24,7 +24,7 @@ for (const subpath of readdirSync('./src', { recursive: true })) {
   const filename = basename(subpath);
   const folder = dirname(subpath);
   if (/\.js$/.test(filename)) {
-    if (folder !== '.' && filename !== `worker-support.js`) {
+    if (folder !== '.') {
       const prefix = folder.slice(0, -1).replace(/^./, m => m.toUpperCase());
       const name = prefix + filename.slice(0, -3)
                               .replace(/\-./g, m => m.slice(1).toUpperCase())

@@ -11,7 +11,7 @@ describe('Accessor: all', function() {
   describe('getAccessor', function() {
     it('should return builtin methods', function() {
       const env = new Env();
-      env.mixinUsageCapturing = new Map();
+      env.trackingMixins = true;
       const method1 = env.getAccessor('get', {
         type: MemberType.Uint,
         bitSize: 8,
@@ -40,7 +40,7 @@ describe('Accessor: all', function() {
         bitOffset: 0,
       });
       expect(method4).to.equal(DataView.prototype.setBigInt64);
-      expect(env.mixinUsageCapturing.get(AccessorAll)).to.be.true;
+      expect(env.mixinUsage.get(AccessorAll)).to.be.true;
     })
     if (process.env.TARGET === 'node') {
       it('should handle buffer fallback', function() {

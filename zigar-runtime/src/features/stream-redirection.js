@@ -135,10 +135,6 @@ export default mixin({
     imports: {
       flushStdout: null,
     },
-    /* c8 ignore start */
+    /* c8 ignore next */
   } : undefined),
-  ...(process.env.MIXIN === 'track' ? {
-    usingStream: false,
-  } : undefined),
-    /* c8 ignore end */
 });

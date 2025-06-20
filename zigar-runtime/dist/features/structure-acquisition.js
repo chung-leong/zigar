@@ -1,7 +1,37 @@
 import { SENTINEL, SLOTS, MEMORY, ZIG, ENVIRONMENT } from '../symbols.js';
+import '../accessors/all.js';
+import '../accessors/int.js';
 import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, StructFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
+import './call-marshaling-inbound.js';
+import './call-marshaling-outbound.js';
+import './pointer-synchronization.js';
+import './thunk-allocation.js';
 import { decodeText, findObjects, adjustAddress } from '../utils.js';
+import './abort-signal.js';
+import './baseline.js';
+import './data-copying.js';
+import './file.js';
+import './generator.js';
+import './js-allocator.js';
+import './module-loading.js';
+import './object-linkage.js';
+import './promise.js';
+import './reader-conversion.js';
+import './reader.js';
+import './stream-redirection.js';
+import './stream-reposition.js';
+import './wasi-exit.js';
+import './wasi-prestat-get.js';
+import './wasi-random-get.js';
+import './wasi-read.js';
+import './wasi-seek.js';
+import './wasi-tell.js';
+import './wasi-write.js';
+import './wasi.js';
+import './worker-support.js';
+import './writer-conversion.js';
+import './writer.js';
 
 var structureAcquisition = mixin({
   init() {

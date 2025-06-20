@@ -368,6 +368,7 @@ describe('Feature: structure-acquisition', function() {
   describe('exportStructures', function() {
     it('should return list of structures', function() {
       const env = new Env();
+      env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
       const s1 = {
         type: StructureType.Struct,
         instance: { members: [], methods: [] },
@@ -390,6 +391,7 @@ describe('Feature: structure-acquisition', function() {
   describe('prepareObjectsForExport', function() {
     it('should combine data views that overlaps the same memory region', function() {
       const env = new Env();
+      env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
       env.getViewAddress = (dv) => dv[ZIG].address;
       env.getMemoryOffset = (address) => Number(address);
       env.copyExternBytes = (dv, address, len) => {};
@@ -428,6 +430,7 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should attach export handle to object', function() {
       const env = new Env();
+      env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
       env.getViewAddress = (dv) => dv[ZIG].address;
       env.getMemoryOffset = (address) => Number(address);
       env.copyExternBytes = (dv, address, len) => {};

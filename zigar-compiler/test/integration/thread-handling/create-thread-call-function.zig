@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};

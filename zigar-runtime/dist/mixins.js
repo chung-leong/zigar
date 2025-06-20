@@ -45,6 +45,7 @@ export { default as FeatureWasiSeek } from './features/wasi-seek.js';
 export { default as FeatureWasiTell } from './features/wasi-tell.js';
 export { default as FeatureWasiWrite } from './features/wasi-write.js';
 export { default as FeatureWasi } from './features/wasi.js';
+export { default as FeatureWorkerSupport } from './features/worker-support.js';
 export { default as FeatureWriteProtection } from './features/write-protection.js';
 export { default as FeatureWriterConversion } from './features/writer-conversion.js';
 export { default as FeatureWriter } from './features/writer.js';

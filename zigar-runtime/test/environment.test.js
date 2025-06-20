@@ -135,11 +135,11 @@ describe('Environment class', function() {
       const Env = defineClass('Hello', [ mixin1, mixin2 ]);
       expect(Env).to.have.property('name', 'Hello');
       const env = new Env();
-      env.mixinUsageCapturing = new Map();
+      env.trackingMixins = true;
       env.hello();
       expect(log).to.eql([ 'hello' ]);
-      expect(env.mixinUsageCapturing.get(mixin1)).to.be.true;
-      expect(env.mixinUsageCapturing.get(mixin2)).to.be.undefined;
+      expect(env.mixinUsage.get(mixin1)).to.be.true;
+      expect(env.mixinUsage.get(mixin2)).to.be.undefined;
     })
     it('should omit mixin usage tracking when env variable is not set', function() {
       const before = process.env.MIXIN;

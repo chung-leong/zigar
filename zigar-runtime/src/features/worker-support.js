@@ -1,7 +1,7 @@
 import { isPromise } from 'util/types';
 import { mixin } from '../environment.js';
 
-export default mixin({
+export default (process.env.TARGET === 'wasm') ? mixin({
   init() {
     this.nextThreadId = 1;
     this.workers = [];
@@ -86,7 +86,7 @@ export default mixin({
     }
   } : undefined),
   /* c8 ignore end */
-});
+}) : undefined;
 
 function getWorkerCode() {
   const s = workerMain.toString();

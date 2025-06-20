@@ -61,7 +61,7 @@ var workerSupport = mixin({
     }
     return tid;
   },
-});
+}) ;
 
 function getWorkerCode() {
   const s = workerMain.toString();

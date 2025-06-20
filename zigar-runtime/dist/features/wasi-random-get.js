@@ -9,6 +9,6 @@ var wasiRandomGet = mixin({
     }
     return PosixError.NONE;
   }
-});
+}) ;
 
 export { wasiRandomGet as default };

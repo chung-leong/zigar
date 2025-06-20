@@ -53,31 +53,15 @@ export default mixin({
       Object.setPrototypeOf(self, constructor.prototype);
       self[MEMORY] = dv;
       cache.save(dv, self);
-      if (process.env.MIXIN === 'track') {
-        if (!creating) {
-          thisEnv.usingFunction = true;
-        }
-      }
       return self;
     };
     // make function type a superclass of Function
     Object.setPrototypeOf(constructor.prototype, Function.prototype);
     descriptors.valueOf = descriptors.toJSON = defineValue(getSelf);
-    if (process.env.MIXIN === 'track') {
-      if (jsThunkController) {
-        this.usingFunctionPointer = true;
-      }
-    }
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
-  /* c8 ignore start */
-  ...(process.env.MIXIN === 'track' ? {
-    usingFunction: false,
-    usingFunctionPointer: false,
-  } : undefined),
-  /* c8 ignore end */
 });

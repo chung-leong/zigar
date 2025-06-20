@@ -35,6 +35,6 @@ var wasiRead = mixin({
     };
     return next(0);
   }
-});
+}) ;
 
 export { wasiRead as default };

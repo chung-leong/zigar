@@ -24,6 +24,6 @@ var wasiTell = mixin({
       return showPosixError(err);
     }
   }
-});
+}) ;
 
 export { wasiTell as default };

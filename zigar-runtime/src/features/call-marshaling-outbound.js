@@ -116,10 +116,6 @@ export default mixin({
     ? (attrs) ? this.getShadowAddress(context, attrs) : 0
     : (attrs) ? this.getViewAddress(attrs[MEMORY]) : 0;
     this.updateShadows(context);
-    /* c8 ignore start */
-    if (process.env.MIXIN === 'track') {
-      this.mixinUsageCapturing = new Map();
-    }
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -132,16 +128,14 @@ export default mixin({
     if (isAsync) {
       argStruct[FINALIZE] = finalize;
     }
+    /* c8 ignore start */
+    if (process.env.MIXIN === 'track') {
+      this.trackingMixins = true;
+    }
     /* c8 ignore end */
     const success = (attrs)
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
-    /* c8 ignore start */
-    if (process.env.MIXIN === 'track') {
-      this.mixinUsage = this.mixinUsageCapturing;
-      this.mixinUsageCapturing = null;
-    }
-    /* c8 ignore end */
     if (!success) {
       finalize();
       throw new ZigError();
@@ -189,46 +183,8 @@ export default mixin({
       runThunk: null,
       runVariadicThunk: null,
     },
-  /* c8 ignore start */
+  /* c8 ignore next */
   } : undefined),
-  ...(process.env.MIXIN === 'track' ? {
-    mixinUsage: null,
-    mixinUsageCapturing: null,
-
-    detectArgumentFeatures(argMembers) {
-      for (const { structure: { purpose } } of argMembers) {
-        switch (purpose) {
-          case StructurePurpose.Allocator:
-            this.usingJsAllocator = true;
-            break;
-          case StructurePurpose.Promise:
-            this.usingPromise = true;
-            break;
-          case StructurePurpose.Generator:
-            this.usingGenerator = true;
-            break;
-          case StructurePurpose.AbortSignal:
-            this.usingAbortSignal = true;
-            break;
-          case StructurePurpose.Reader:
-            this.usingReader = 
-            this.usingReaderConversion = true;
-            break;
-          case StructurePurpose.Writer:
-            this.usingWriter = 
-            this.usingWriterConversion = true;
-            break;
-          case StructurePurpose.File:
-            this.usingFile =
-            this.usingStreamRedirection =
-            this.usingStreamReposition =
-            this.usingReaderConversion = 
-            this.usingWriterConversion = true;
-        }
-      }
-    }
-  } : undefined),
-  /* c8 ignore end */
   /* c8 ignore start */
   ...(process.env.DEV ? {
     outboundCallCount: 0,

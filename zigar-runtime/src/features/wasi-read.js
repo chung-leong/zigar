@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { Deadlock, showPosixError } from '../errors.js';
 import { isPromise } from '../utils.js';
 
-export default mixin({
+export default (process.env.TARGET === 'wasm') ? mixin({
   wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait = false) {
     const dv = new DataView(this.memory.buffer);
     let read = 0, i = 0, p = iovs_ptr;
@@ -35,4 +35,4 @@ export default mixin({
     };
     return next(0);
   }
-});
+}) : undefined;
