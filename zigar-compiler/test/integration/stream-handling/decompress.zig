@@ -1,9 +1,6 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
-
-// pub const List = std.ArrayList(u8);
-
-pub const Reader = std.io.AnyReader;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 

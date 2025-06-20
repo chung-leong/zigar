@@ -44,6 +44,17 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    it('should read from reader in main thread', async function() {
+      this.timeout(0);
+      const { hash } = await importTest('read-from-reader-in-main-thread');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      const digest = hash(content);
+      expect(digest.string).to.equal(correct);
+    })
     it('should read from file', async function() {
       this.timeout(0);
       const {
@@ -72,6 +83,17 @@ export function addTests(importModule, options) {
       } finally {
         await shutdown();
       }
+    })
+    it('should read from file in main thread', async function() {
+      this.timeout(0);
+      const { hash } = await importTest('read-from-file-in-main-thread');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      const digest = hash(content);
+      expect(digest.string).to.equal(correct);
     })
     it('should write to writer', async function() {
       this.timeout(0);
@@ -102,6 +124,17 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    it('should write to writer in main thread', async function() {
+      this.timeout(0);
+      const { save } = await importTest('write-to-writer-in-main-thread');
+      const chunks = [];
+      const len = save('This is a test', chunks);
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+    })
     it('should write to file', async function() {
       this.timeout(0);
       const {
@@ -130,6 +163,17 @@ export function addTests(importModule, options) {
       } finally {
         await shutdown();
       }
+    })
+    it('should write to file in main thread', async function() {
+      this.timeout(0);
+      const { save } = await importTest('write-to-file-in-main-thread');
+      const chunks = [];
+      const len =  save('This is a test', chunks);
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
     })
     it('should decompress xz file', async function() {
       this.timeout(0);
