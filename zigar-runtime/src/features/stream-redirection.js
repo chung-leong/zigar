@@ -21,7 +21,6 @@ export default mixin({
     try {
       stream = this.convertReader(arg);
     } catch (err) {
-      console.error(err, arg);
       try {
         stream = this.convertWriter(arg);
       } catch {

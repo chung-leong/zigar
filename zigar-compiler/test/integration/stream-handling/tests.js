@@ -110,6 +110,7 @@ export function addTests(importModule, options) {
       });
       const digest = hash('/hello/world');
       expect(digest.string).to.equal(correct);
+      expect(event).to.eql({ path: '/hello/world', mode: 'readOnly', flags: {} });
     })
     it('should write to writer', async function() {
       this.timeout(0);
@@ -190,6 +191,23 @@ export function addTests(importModule, options) {
       const blob = new Blob(chunks);
       const string = await blob.text();
       expect(string).to.equal('This is a test');
+    })
+    it('should open and write to file in main thread', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('open-and-write-to-file-in-main-thread');
+      const chunks = [];
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return chunks;
+      });
+      const len = save('/hello/world', 'This is a test');
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      expect(event).to.eql({ path: '/hello/world', mode: 'writeOnly', flags: { create: true, truncate: true } });
     })
     it('should decompress xz file', async function() {
       this.timeout(0);
