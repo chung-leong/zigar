@@ -149,6 +149,7 @@ const PosixError = {
   EPERM: 1,
   ENOENT: 2,
   EACCES: 13,
+  EEXIST: 17,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
@@ -3032,7 +3033,7 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function showPosixError(err, defCode) {
+function showPosixError(err) {
   console.error(err);
   return err.code ?? PosixError.EACCES;
 }
@@ -5290,7 +5291,7 @@ var wasiAll = mixin({
           return PosixError.EOPNOTSUPP;
         });
   },
-}) ;
+});
 
 var wasiClose = mixin({
   wasi_fd_close(fd, canWait = false) {
@@ -5327,7 +5328,7 @@ var wasiExit = mixin({
   wasi_proc_exit(code) {
     throw new Exit(code);
   }
-}) ;
+});
 
 const Right$1 = {
     fd_datasync: 1 << 0,
@@ -5412,8 +5413,12 @@ var wasiFilestat = mixin({
         if (err.code !== PosixError.ENOENT) throw err;
       }
     }
-    const stream = this.getStream(fd);
-    return this.wasiCopyStat({ size: stream.size }, buf_address);
+    try {
+      const stream = this.getStream(fd);
+      return this.wasiCopyStat({ size: stream.size }, buf_address);
+    } catch (err) {
+      return showPosixError(err);
+    }
   },
   wasi_path_filestat_get(fd, flags, path_address, path_len, buf_address, canWait = false) {
     const pathArray = this.obtainZigArray(path_address, path_len);
@@ -5436,9 +5441,7 @@ var wasiFilestat = mixin({
     }
   },
   wasiCopyStat(stat, buf_address) {
-    if (stat === false) {
-      return PosixError.ENOENT;
-    }
+    if (stat === false) return PosixError.ENOENT;
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch('object', stat);
     }
@@ -5452,6 +5455,24 @@ var wasiFilestat = mixin({
     dv.setBigUint64(buf_address + 48, BigInt(stat.mtime ?? 0), true);
     dv.setBigUint64(buf_address + 56, BigInt(stat.ctime ?? 0), true);
     return PosixError.NONE;
+  }
+});
+
+var wasiMkdir = mixin({
+  wasi_path_create_directory(fd, path_address, path_len) {
+    const pathArray = this.obtainZigArray(path_address, path_len);
+    const path = decodeText(pathArray);
+    const done = (succeeded) => succeeded ? PosixError.NONE : PosixError.ENOENT;
+    try {
+      const result = this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
+      if (isPromise(result)) {
+        return result.then(done, showPosixError);
+      } else {
+        return done(result);
+      }
+    } catch (err) {
+      return showPosixError(err);
+    }
   }
 });
 
@@ -5478,6 +5499,7 @@ var wasiOpen = mixin({
     const rights = decodeFlags(fs_rights_base, Right);
     const flags = decodeFlags(oflags, OpenFlag);
     const done = (arg) => {
+      if (arg === false) return PosixError.ENOENT;
       const handle = this.createStreamHandle(arg);
       this.wasi.pathMap.set(handle, path);
       dv.setUint32(fd_address, handle, true);
@@ -5524,7 +5546,7 @@ var wasiRandom = mixin({
     }
     return PosixError.NONE;
   }
-}) ;
+});
 
 var wasiRead = mixin({
   wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait = false) {
@@ -5559,6 +5581,24 @@ var wasiRead = mixin({
     return next(0);
   }
 }) ;
+
+var wasiRmdir = mixin({
+  wasi_path_remove_directory(fd, path_address, path_len) {
+    const pathArray = this.obtainZigArray(path_address, path_len);
+    const path = decodeText(pathArray);
+    const done = (succeeded) => succeeded ? PosixError.NONE : PosixError.ENOENT;
+    try {
+      const result = this.triggerEvent('rmdir', { path }, PosixError.ENOENT);
+      if (isPromise(result)) {
+        return result.then(done, showPosixError);
+      } else {
+        return done(result);
+      }
+    } catch (err) {
+      return showPosixError(err);
+    }
+  }
+});
 
 var wasiSeek = mixin({
   wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait = false) {
@@ -5699,7 +5739,7 @@ var workerSupport = mixin({
     }
     return tid;
   },
-}) ;
+});
 
 function getWorkerCode() {
   const s = workerMain.toString();
@@ -6094,6 +6134,8 @@ var structureAcquisition = mixin({
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
           case 'fd_write': this.use(wasiWrite); break;
+          case 'path_create_directory': this.use(wasiMkdir); break;
+          case 'path_remove_directory': this.use(wasiRmdir); break;
           case 'path_open': this.use(wasiOpen); break;
           case 'proc_exit': this.use(wasiExit); break;
           case 'random_get': this.use(wasiRandom); break;
@@ -9746,19 +9788,6 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
-  FeatureWasiAll: wasiAll,
-  FeatureWasiClose: wasiClose,
-  FeatureWasiEnv: wasiEnv,
-  FeatureWasiExit: wasiExit,
-  FeatureWasiFdstat: wasiFdstat,
-  FeatureWasiFilestat: wasiFilestat,
-  FeatureWasiOpen: wasiOpen,
-  FeatureWasiPrestat: wasiPrestat,
-  FeatureWasiRandom: wasiRandom,
-  FeatureWasiRead: wasiRead,
-  FeatureWasiSeek: wasiSeek,
-  FeatureWasiTell: wasiTell,
-  FeatureWasiWrite: wasiWrite,
   FeatureWorkerSupport: workerSupport,
   FeatureWriteProtection: writeProtection,
   FeatureWriter: writer,
@@ -9814,7 +9843,22 @@ var mixins = /*#__PURE__*/Object.freeze({
   VisitorInOptional: inOptional,
   VisitorInStruct: inStruct,
   VisitorInUnion: inUnion,
-  VisitorInVariadicStruct: inVariadicStruct
+  VisitorInVariadicStruct: inVariadicStruct,
+  WasiAll: wasiAll,
+  WasiClose: wasiClose,
+  WasiEnv: wasiEnv,
+  WasiExit: wasiExit,
+  WasiFdstat: wasiFdstat,
+  WasiFilestat: wasiFilestat,
+  WasiMkdir: wasiMkdir,
+  WasiOpen: wasiOpen,
+  WasiPrestat: wasiPrestat,
+  WasiRandom: wasiRandom,
+  WasiRead: wasiRead,
+  WasiRmdir: wasiRmdir,
+  WasiSeek: wasiSeek,
+  WasiTell: wasiTell,
+  WasiWrite: wasiWrite
 });
 
 const MagicNumber = 0x6d736100;
@@ -11248,7 +11292,8 @@ async function transpile(srcPath, options) {
     if (inUse) {
       // change name to snake_case
       const parts = name.replace(/\B([A-Z])/g, ' $1').toLowerCase().split(' ');
-      const dir = parts.shift() + 's';
+      const type = parts.shift();
+      const dir =  (type === 'wasi') ? 'wasi' : `${type}s`;
       const filename = parts.join('-') + '.js';
       mixinPaths.push(`${dir}/${filename}`);
     }

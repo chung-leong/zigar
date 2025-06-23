@@ -17,8 +17,12 @@ export default mixin({
         if (err.code !== PosixError.ENOENT) throw err;
       }
     }
-    const stream = this.getStream(fd);
-    return this.wasiCopyStat({ size: stream.size }, buf_address);
+    try {
+      const stream = this.getStream(fd);
+      return this.wasiCopyStat({ size: stream.size }, buf_address);
+    } catch (err) {
+      return showPosixError(err);
+    }
   },
   wasi_path_filestat_get(fd, flags, path_address, path_len, buf_address, canWait = false) {
     const pathArray = this.obtainZigArray(path_address, path_len);
@@ -41,9 +45,7 @@ export default mixin({
     }
   },
   wasiCopyStat(stat, buf_address) {
-    if (stat === false) {
-      return PosixError.ENOENT;
-    }
+    if (stat === false) return PosixError.ENOENT;
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch('object', stat);
     }

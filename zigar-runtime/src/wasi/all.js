@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-export default (process.env.TARGET === 'wasm') ? mixin({
+export default mixin({
   init() {
     this.customWASI = null;
     this.wasi = {};
@@ -36,4 +36,4 @@ export default (process.env.TARGET === 'wasm') ? mixin({
     }
   } : undefined),
   /* c8 ignore end */
-}) : undefined;
+});

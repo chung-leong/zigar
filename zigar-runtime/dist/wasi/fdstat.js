@@ -35,7 +35,7 @@ const Right = {
     sock_accept: 1 << 29,
 };
 
-var wasiFdstat = mixin({
+var fdstat = mixin({
   wasi_fd_fdstat_get(fd, buf_address, canWait = false) {
     try {
       const dv = new DataView(this.memory.buffer);
@@ -71,4 +71,4 @@ var wasiFdstat = mixin({
   },
 });
 
-export { wasiFdstat as default };
+export { fdstat as default };

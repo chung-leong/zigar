@@ -535,7 +535,7 @@ export function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-export function showPosixError(err, defCode) {
+export function showPosixError(err) {
   console.error(err);
   return err.code ?? PosixError.EACCES;
 }

@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { Deadlock, showPosixError } from '../errors.js';
 import { isPromise } from '../utils.js';
 
-var wasiClose = mixin({
+var close = mixin({
   wasi_fd_close(fd, canWait = false) {
     const done = () => PosixError.NONE;
     try {
@@ -22,4 +22,4 @@ var wasiClose = mixin({
   }
 });
 
-export { wasiClose as default };
+export { close as default };

@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-var wasiRandom = mixin({
+var random = mixin({
   wasi_random_get(buf_address, buf_len) {
     const dv = new DataView(this.memory.buffer);
     for (let i = 0; i < buf_len; i++) {
@@ -9,6 +9,6 @@ var wasiRandom = mixin({
     }
     return PosixError.NONE;
   }
-}) ;
+});
 
-export { wasiRandom as default };
+export { random as default };

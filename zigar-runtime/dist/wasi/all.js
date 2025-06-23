@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-var wasiAll = mixin({
+var all = mixin({
   init() {
     this.customWASI = null;
     this.wasi = {};
@@ -20,6 +20,6 @@ var wasiAll = mixin({
           return PosixError.EOPNOTSUPP;
         });
   },
-}) ;
+});
 
-export { wasiAll as default };
+export { all as default };

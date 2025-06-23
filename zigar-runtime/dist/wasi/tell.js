@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { Deadlock, showPosixError } from '../errors.js';
 import { isPromise } from '../utils.js';
 
-var wasiTell = mixin({
+var tell = mixin({
   wasi_fd_tell(fd, newoffset_ptr, canWait = false) {
     try {
       const dv = new DataView(this.memory.buffer);
@@ -26,4 +26,4 @@ var wasiTell = mixin({
   }
 }) ;
 
-export { wasiTell as default };
+export { tell as default };

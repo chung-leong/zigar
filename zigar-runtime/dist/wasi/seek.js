@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { Deadlock, showPosixError } from '../errors.js';
 import { isPromise } from '../utils.js';
 
-var wasiSeek = mixin({
+var seek = mixin({
   wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait = false) {
     try {
       const dv = new DataView(this.memory.buffer);
@@ -26,4 +26,4 @@ var wasiSeek = mixin({
   }
 }) ;
 
-export { wasiSeek as default };
+export { seek as default };

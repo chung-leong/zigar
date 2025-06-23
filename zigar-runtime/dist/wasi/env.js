@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-var wasiEnv = mixin({
+var env = mixin({
   wasi_environ_get(ctx, environ, environ_buf) {
     return PosixError.NONE;
   },
@@ -13,4 +13,4 @@ var wasiEnv = mixin({
   },
 });
 
-export { wasiEnv as default };
+export { env as default };

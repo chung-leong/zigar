@@ -1,10 +1,10 @@
 import { mixin } from '../environment.js';
 import { Exit } from '../errors.js';
 
-var wasiExit = mixin({
+var exit = mixin({
   wasi_proc_exit(code) {
     throw new Exit(code);
   }
-}) ;
+});
 
-export { wasiExit as default };
+export { exit as default };

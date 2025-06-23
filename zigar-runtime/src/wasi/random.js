@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-export default (process.env.TARGET === 'wasm') ? mixin({
+export default mixin({
   wasi_random_get(buf_address, buf_len) {
     const dv = new DataView(this.memory.buffer);
     for (let i = 0; i < buf_len; i++) {
@@ -9,4 +9,4 @@ export default (process.env.TARGET === 'wasm') ? mixin({
     }
     return PosixError.NONE;
   }
-}) : undefined;
+});

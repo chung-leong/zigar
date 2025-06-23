@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-var wasiPrestat = mixin({
+var prestat = mixin({
   wasi_fd_prestat_get(fd, buf_address) {
     if (fd === 3) {
       // descriptor 3 is the root directory, I think
@@ -18,4 +18,4 @@ var wasiPrestat = mixin({
   }
 }) ;
 
-export { wasiPrestat as default };
+export { prestat as default };

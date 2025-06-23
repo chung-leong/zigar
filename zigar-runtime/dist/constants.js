@@ -146,6 +146,7 @@ const PosixError = {
   EPERM: 1,
   ENOENT: 2,
   EACCES: 13,
+  EEXIST: 17,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,

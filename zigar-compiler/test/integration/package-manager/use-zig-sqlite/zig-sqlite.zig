@@ -30,6 +30,6 @@ pub fn search(keyword: []const u8) !void {
     defer stmt.deinit();
     var iterator = try stmt.iteratorAlloc(Album, allocator, .{keyword});
     while (try iterator.nextAlloc(allocator, .{})) |album| {
-        std.debug.print("{}\n", .{album});
+        std.debug.print("{s} - {s}\n", .{ album.Title, album.Artist });
     }
 }

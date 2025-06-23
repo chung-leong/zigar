@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { showPosixError } from '../errors.js';
-import { decodeText, decodeFlags, isPromise } from '../utils.js';
+import { decodeFlags, decodeText, isPromise } from '../utils.js';
 
 const OpenFlag = {
   create: 1 << 0,
@@ -15,7 +15,7 @@ const Right = {
   write: 1n << 6n,
 };
 
-var wasiOpen = mixin({
+export default mixin({
   init() {
     this.wasi.pathMap = new Map();
   },
@@ -26,6 +26,7 @@ var wasiOpen = mixin({
     const rights = decodeFlags(fs_rights_base, Right);
     const flags = decodeFlags(oflags, OpenFlag);
     const done = (arg) => {
+      if (arg === false) return PosixError.ENOENT;
       const handle = this.createStreamHandle(arg);
       this.wasi.pathMap.set(handle, path);
       dv.setUint32(fd_address, handle, true);
@@ -46,5 +47,3 @@ var wasiOpen = mixin({
     }
   }
 });
-
-export { wasiOpen as default };
