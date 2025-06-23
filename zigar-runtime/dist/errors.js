@@ -435,6 +435,13 @@ class Deadlock extends Error {
   }
 }
 
+class MissingEventListener extends Error {
+  constructor(name, code) {
+    super(`Missing event listener: ${name}`);
+    this.code = code;
+  }
+}
+
 class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {
@@ -526,9 +533,9 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function showPosixError(err) {
+function showPosixError(err, defCode) {
   console.error(err);
-  return err.code ?? PosixError.EPERM;
+  return err.code ?? PosixError.EACCES;
 }
 
 function isErrorJSON(arg) {
@@ -563,4 +570,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, showPosixError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, showPosixError, throwReadOnly };

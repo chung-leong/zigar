@@ -283,6 +283,16 @@ export function isPromise(object) {
   return typeof(object?.then) === 'function';
 }
 
+export function decodeFlags(flags, set) {
+  const object = {};
+  for (const [ name, value ] of Object.entries(set)) {
+    if (flags & value) {
+      object[name] = true;
+    }
+  }
+  return object;
+}
+
 export function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };

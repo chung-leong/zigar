@@ -8,7 +8,7 @@ export default (process.env.TARGET === 'wasm') ? mixin({
     try {
       const dv = new DataView(this.memory.buffer);
       const done = (pos) => {
-        dv.setUint32(newoffset_ptr, pos, true);              
+        dv.setBigUint64(newoffset_ptr, pos, true);
         return PosixError.NONE;
       };
       const result = this.getStreamPointer(fd);

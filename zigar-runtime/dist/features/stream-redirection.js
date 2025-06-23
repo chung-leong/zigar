@@ -82,12 +82,10 @@ var streamRedirection = mixin({
           }
           env.scheduleFlush(this, this.pending.length > 0, 250);
       },
-
       dispatch(array) {
         const message = decodeText(array);
-        env.listeners.log?.({ handle, message });
+        env.triggerEvent('log', { handle, message });
       },
-
       flush() {
         if (this.pending.length > 0) {
           this.dispatch(this.pending);

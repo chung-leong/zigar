@@ -1,9 +1,10 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
-var wasi = mixin({
+var wasiAll = mixin({
   init() {
     this.customWASI = null;
+    this.wasi = {};
   },
   setCustomWASI(wasi) {
     if (wasi && this.executable) {
@@ -14,8 +15,11 @@ var wasi = mixin({
   getWASIHandler(name) {
     return this.customWASI?.wasiImport?.[name] 
         ?? this[`wasi_${name}`]?.bind?.(this)
-        ?? (() => PosixError.ENOSYS);
+        ?? (() => {
+          console.error(`Not implemented: ${name}`);
+          return PosixError.EOPNOTSUPP;
+        });
   },
 }) ;
 
-export { wasi as default };
+export { wasiAll as default };

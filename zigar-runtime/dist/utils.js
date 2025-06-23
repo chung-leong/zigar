@@ -242,6 +242,16 @@ function isPromise(object) {
   return typeof(object?.then) === 'function';
 }
 
+function decodeFlags(flags, set) {
+  const object = {};
+  for (const [ name, value ] of Object.entries(set)) {
+    if (flags & value) {
+      object[name] = true;
+    }
+  }
+  return object;
+}
+
 function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
@@ -286,4 +296,4 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };

@@ -1,6 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText } from '../utils.js';
+import { showPosixError } from '../errors.js';
+import { decodeFlags, decodeText, isPromise } from '../utils.js';
 
 const OpenFlag = {
   create: 1 << 0,
@@ -15,31 +16,33 @@ const Right = {
 };
 
 export default mixin({
-  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address) {
+  init() {
+    this.wasi.pathMap = new Map();
+  },
+  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait = false) {
+    const dv = new DataView(this.memory.buffer);
     const pathArray = this.obtainZigArray(path_address, path_len);
     const path = decodeText(pathArray);
-    const mode = (fs_rights_base & Right.read)
-    ? (fs_rights_base & Right.write)
-      ? 'readWrite'
-      : 'readOnly'
-    : (fs_rights_base & Right.write)
-      ? 'writeOnly'
-      : '';
-    const flags = {};
-    for (const [ name, value ] of Object.entries(OpenFlag)) {
-      if (oflags & value) {
-        flags[name] = true;
+    const rights = decodeFlags(fs_rights_base, Right);
+    const flags = decodeFlags(oflags, OpenFlag);
+    const done = (arg) => {
+      const handle = this.createStreamHandle(arg);
+      this.wasi.pathMap.set(handle, path);
+      dv.setUint32(fd_address, handle, true);
+      return PosixError.NONE;
+    };
+    try {
+      const result = this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
+      if (isPromise(result)) {
+        if (!canWait) {
+          throw new Deadlock();
+        }
+        return result.then(done, showPosixError);
+      } else {
+        return done(result);
       }
+    } catch (err) {
+      return showPosixError(err);
     }
-    const { open } = this.listeners;
-    if (!open) {
-      console.error(`No listener for event 'open'`);
-      return PosixError.ENOENT;
-    }
-    const arg = open({ path, mode, flags });
-    const handle = this.createStreamHandle(arg);
-    const dv = this.obtainZigView(fd_address, 4);
-    dv.setUint32(0, handle, true);
-    return PosixError.NONE;
   }
 });

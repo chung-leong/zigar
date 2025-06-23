@@ -435,6 +435,13 @@ export class Deadlock extends Error {
   }
 }
 
+export class MissingEventListener extends Error {
+  constructor(name, code) {
+    super(`Missing event listener: ${name}`);
+    this.code = code;
+  }
+}
+
 export class ZigError extends Error {
   constructor(error, remove = 0) {
     if (error instanceof Error) {
@@ -528,9 +535,9 @@ export function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-export function showPosixError(err) {
+export function showPosixError(err, defCode) {
   console.error(err);
-  return err.code ?? PosixError.EPERM;
+  return err.code ?? PosixError.EACCES;
 }
 
 export function isErrorJSON(arg) {

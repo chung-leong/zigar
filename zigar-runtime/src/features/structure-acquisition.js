@@ -26,16 +26,19 @@ import readerConversion from './reader-conversion.js';
 import reader from './reader.js';
 import streamRedirection from './stream-redirection.js';
 import streamReposition from './stream-reposition.js';
+import wasiAll from './wasi-all.js';
 import wasiClose from './wasi-close.js';
+import wasiEnv from './wasi-env.js';
 import wasiExit from './wasi-exit.js';
+import wasiFdstat from './wasi-fdstat.js';
+import wasiFilestat from './wasi-filestat.js';
 import wasiOpen from './wasi-open.js';
-import wasiPrestatGet from './wasi-prestat-get.js';
-import wasiRandomGet from './wasi-random-get.js';
+import wasiPrestat from './wasi-prestat.js';
+import wasiRandom from './wasi-random.js';
 import wasiRead from './wasi-read.js';
 import wasiSeek from './wasi-seek.js';
 import wasiTell from './wasi-tell.js';
 import wasiWrite from './wasi-write.js';
-import wasi from './wasi.js';
 import workerSupport from './worker-support.js';
 import writerConversion from './writer-conversion.js';
 import writer from './writer.js';
@@ -241,17 +244,23 @@ export default mixin({
         }
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-        this.use(wasi);
+        this.use(wasiAll);
         switch (name) {
+          case 'environ_get': 
+          case 'environ_sizes_get': this.use(wasiEnv); break;
           case 'fd_close': this.use(wasiClose); break;
-          case 'fd_prestat_get': this.use(wasiPrestatGet); break;
+          case 'fd_fdstat_get': this.use(wasiFdstat); break;
+          case 'fd_filestat_get':
+          case 'path_filestat_get': this.use(wasiFilestat); break;
+          case 'fd_prestat_get': 
+          case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
           case 'fd_write': this.use(wasiWrite); break;
           case 'path_open': this.use(wasiOpen); break;
           case 'proc_exit': this.use(wasiExit); break;
-          case 'random_get': this.use(wasiRandomGet); break;
+          case 'random_get': this.use(wasiRandom); break;
         }
         switch (name) {
           case 'path_open':

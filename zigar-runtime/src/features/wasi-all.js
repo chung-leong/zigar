@@ -4,6 +4,7 @@ import { mixin } from '../environment.js';
 export default (process.env.TARGET === 'wasm') ? mixin({
   init() {
     this.customWASI = null;
+    this.wasi = {};
   },
   setCustomWASI(wasi) {
     if (wasi && this.executable) {
@@ -14,7 +15,10 @@ export default (process.env.TARGET === 'wasm') ? mixin({
   getWASIHandler(name) {
     return this.customWASI?.wasiImport?.[name] 
         ?? this[`wasi_${name}`]?.bind?.(this)
-        ?? (() => PosixError.ENOSYS);
+        ?? (() => {
+          console.error(`Not implemented: ${name}`);
+          return PosixError.EOPNOTSUPP;
+        });
   },
   /* c8 ignore start */
   ...(process.env.DEV ? {

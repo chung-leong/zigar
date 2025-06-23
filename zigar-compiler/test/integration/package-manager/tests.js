@@ -1,13 +1,14 @@
 import { expect } from 'chai';
+import { readFile } from 'fs/promises';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, compilerVersion } = options;
-  const importTest = async (name) => {
+  const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
-      return importModule(url);
+      return importModule(url, options);
   };
   describe('Package manager', function() {
     skip.if(target === 'wasm32').or(compilerVersion < '0.14.0').
@@ -26,19 +27,18 @@ export function addTests(importModule, options) {
         }
       }
     })
-    skip.if(target === 'wasm32').or(compilerVersion < '0.14.0').
     it('should link in zig-sqlite', async function() {
       this.timeout(0);
-      const { Db } = await importTest('use-zig-sqlite/zig-sqlite');
+      const { __zigar, search } = await importTest('use-zig-sqlite/zig-sqlite');
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
-      const db = Db.init({
-        mode: { File: path },
-        open_flags: {},
-        threading_mode: 'MultiThread',
+      const content = await readFile(path);
+      __zigar.on('open', ({ path }) => {
+        return content;
       });
-      const stmt = db.prepareDynamic(`SELECT * FROM albums`);
-      // we actually have no way of executing the statement
-      db.deinit();
+      __zigar.on('stat', ({ path }) => {
+        return { size: content.length };
+      });
+      search('love');
     })
     it('should correctly link in local package', async function() {
       this.timeout(0);

@@ -4,6 +4,7 @@ import { open, readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { platform } from 'os';
 import { fileURLToPath } from 'url';
+import { capture, captureError } from '../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -240,6 +241,52 @@ export function addTests(importModule, options) {
       } finally {
         await shutdown();
       }
+    })
+    it('should print stats of an Uint8Array passed as a file', async function() {
+      this.timeout(0);
+      const { print } = await importTest('stat-opened-file');
+      const array = new Uint8Array(17);
+      const lines = await capture(() => print(array));
+      expect(lines).to.eql([
+        'size = 17',
+        'ctime = 0',
+        'mtime = 0',
+        'atime = 0',
+      ]);
+    })
+    it('should print stats of file referenced by path', async function() {
+      this.timeout(0);
+      const { __zigar, print, show } = await importTest('stat-file-by-path');
+      const path = '/hello.txt';
+      let received;
+      __zigar.on('stat', (evt) => {
+        received = evt;
+        return {
+          size: 34,
+          ctime: 1234,
+          mtime: 4567,
+          atime: 9999,
+        }
+      });
+      const lines1 = await capture(() => print(path));
+      expect(received).to.eql({ path: '/hello.txt', flags: { symlinkFollow: true } });
+      expect(lines1).to.eql([
+        'size = 34',
+        'ctime = 1234',
+        'mtime = 4567',
+        'atime = 9999',
+      ]);
+      __zigar.on('stat', () => false);
+      const lines2 = await capture(() => print(path));
+      expect(lines2).to.eql([ 'error = error.AccessDenied' ])
+      __zigar.on('stat', () => {
+        throw new Error('Doh!');
+      });
+      const [ error ] = await captureError(async () => {
+        const lines3 = await capture(() => print(path));
+      });
+      expect(error).to.equal('Error: Doh!');
+      show();
     })
   })
 }

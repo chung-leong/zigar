@@ -72,17 +72,18 @@ class WebStreamReaderBYOB extends WebStreamReader {
 }
 
 class BlobReader {
-  pos = 0;
+  pos = 0n;
   onClose = null;
 
   constructor(blob) {
     this.blob = blob;
-    this.size = blob.size ?? blob.length;
+    this.size = BigInt(blob.size ?? blob.length);
   }
 
   async read(dest) {
     const len = dest.length;
-    const slice = this.blob.slice(this.pos, this.pos + len);
+    const pos = Number(this.pos);
+    const slice = this.blob.slice(pos, pos + len);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return this.copy(dest, new Uint8Array(buffer));
@@ -91,7 +92,7 @@ class BlobReader {
   copy(dest, src) {
     const read = src.length;
     for (let i = 0; i < read; i++) dest[i] = src[i];
-    this.pos += read;
+    this.pos += BigInt(read);
     if (this.pos === this.size) {
       this.onClose?.();
     }
@@ -104,13 +105,13 @@ class BlobReader {
 
   seek(offset, whence) {
     const { size } = this;
-    let pos = -1;
+    let pos = -1n;
     switch (whence) {
       case 0: pos = offset; break;
       case 1: pos = this.pos + offset; break;
       case 2: pos = size + offset; break;
     }
-    if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
+    if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
 
@@ -121,7 +122,8 @@ class BlobReader {
 
 class Uint8ArrayReader extends BlobReader {
   read(dest) {
-    return this.copy(dest, this.blob.slice(this.pos, this.pos + dest.length));
+    const pos = Number(this.pos);
+    return this.copy(dest, this.blob.slice(pos, pos + dest.length));
   }
 }
 

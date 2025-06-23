@@ -148,11 +148,12 @@ const PosixError = {
   NONE: 0,
   EPERM: 1,
   ENOENT: 2,
+  EACCES: 13,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
   EDEADLK: 35,
-  ENOSYS: 38,
+  EOPNOTSUPP: 95,
 };
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
@@ -458,6 +459,16 @@ function isCompatibleInstanceOf(object, Type) {
 
 function isPromise(object) {
   return typeof(object?.then) === 'function';
+}
+
+function decodeFlags(flags, set) {
+  const object = {};
+  for (const [ name, value ] of Object.entries(set)) {
+    if (flags & value) {
+      object[name] = true;
+    }
+  }
+  return object;
 }
 
 function markAsSpecial({ get, set }) {
@@ -2915,11 +2926,18 @@ class IllegalSeek extends Error {
   }
 }
 
-class Deadlock extends Error {
+let Deadlock$1 = class Deadlock extends Error {
   code = PosixError.EDEADLK;
 
   constructor() {
     super(`Unable to await promise`);
+  }
+};
+
+class MissingEventListener extends Error {
+  constructor(name, code) {
+    super(`Missing event listener: ${name}`);
+    this.code = code;
   }
 }
 
@@ -3014,9 +3032,9 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function showPosixError(err) {
+function showPosixError(err, defCode) {
   console.error(err);
-  return err.code ?? PosixError.EPERM;
+  return err.code ?? PosixError.EACCES;
 }
 
 function isErrorJSON(arg) {
@@ -3145,10 +3163,9 @@ function getMemory(arg) {
 var baseline = mixin({
   init() {
     this.variables = [];
-    this.listeners = {
-      open: null,
-      log: (e) => console.log(e.message),
-    };
+    this.listenerMap = new Map([
+      [ 'log', (e) => console.log(e.message) ],
+    ]);
   },
   getSpecialExports() {
     const check = (v) => {
@@ -3162,11 +3179,22 @@ var baseline = mixin({
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
-      on: (event, cb) => this.addListener(event, cb),
+      on: (name, cb) => this.addListener(name, cb),
     };
   },
-  addListener(event, cb) {
-    this.listeners[event] = cb;
+  addListener(name, cb) {
+    this.listenerMap.set(name, cb);
+  },
+  triggerEvent(name, event, errorCode) {
+    const listener = this.listenerMap.get(name);
+    if (!listener) {
+      if (errorCode) {
+        throw new MissingEventListener(name, errorCode);
+      } else {
+        return;
+      }
+    }
+    return listener(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
@@ -4838,17 +4866,18 @@ class WebStreamReaderBYOB extends WebStreamReader {
 }
 
 class BlobReader {
-  pos = 0;
+  pos = 0n;
   onClose = null;
 
   constructor(blob) {
     this.blob = blob;
-    this.size = blob.size ?? blob.length;
+    this.size = BigInt(blob.size ?? blob.length);
   }
 
   async read(dest) {
     const len = dest.length;
-    const slice = this.blob.slice(this.pos, this.pos + len);
+    const pos = Number(this.pos);
+    const slice = this.blob.slice(pos, pos + len);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return this.copy(dest, new Uint8Array(buffer));
@@ -4857,7 +4886,7 @@ class BlobReader {
   copy(dest, src) {
     const read = src.length;
     for (let i = 0; i < read; i++) dest[i] = src[i];
-    this.pos += read;
+    this.pos += BigInt(read);
     if (this.pos === this.size) {
       this.onClose?.();
     }
@@ -4870,13 +4899,13 @@ class BlobReader {
 
   seek(offset, whence) {
     const { size } = this;
-    let pos = -1;
+    let pos = -1n;
     switch (whence) {
       case 0: pos = offset; break;
       case 1: pos = this.pos + offset; break;
       case 2: pos = size + offset; break;
     }
-    if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
+    if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
 
@@ -4887,7 +4916,8 @@ class BlobReader {
 
 class Uint8ArrayReader extends BlobReader {
   read(dest) {
-    return this.copy(dest, this.blob.slice(this.pos, this.pos + dest.length));
+    const pos = Number(this.pos);
+    return this.copy(dest, this.blob.slice(pos, pos + dest.length));
   }
 }
 
@@ -5077,12 +5107,10 @@ var streamRedirection = mixin({
           }
           env.scheduleFlush(this, this.pending.length > 0, 250);
       },
-
       dispatch(array) {
         const message = decodeText(array);
-        env.listeners.log?.({ handle, message });
+        env.triggerEvent('log', { handle, message });
       },
-
       flush() {
         if (this.pending.length > 0) {
           this.dispatch(this.pending);
@@ -5243,11 +5271,56 @@ var thunkAllocation = mixin({
   } ),
 });
 
+var wasiAll = mixin({
+  init() {
+    this.customWASI = null;
+    this.wasi = {};
+  },
+  setCustomWASI(wasi) {
+    if (wasi && this.executable) {
+      throw new Error('Cannot set WASI interface after compilation has already begun');
+    }
+    this.customWASI = wasi;
+  },
+  getWASIHandler(name) {
+    return this.customWASI?.wasiImport?.[name] 
+        ?? this[`wasi_${name}`]?.bind?.(this)
+        ?? (() => {
+          console.error(`Not implemented: ${name}`);
+          return PosixError.EOPNOTSUPP;
+        });
+  },
+}) ;
+
 var wasiClose = mixin({
-  wasi_fd_close(fd) {
-    this.closeStream(fd);
-    return PosixError.NONE;
+  wasi_fd_close(fd, canWait = false) {
+    const done = () => PosixError.NONE;
+    try {
+      this.wasi.pathMap?.delete?.(fd);
+      const result = this.closeStream(fd);
+      if (isPromise(result)) {
+        if (canWait) {
+          throw new Deadlock$1();
+        }
+        return result.then(done, showPosixError);
+      }
+      return done(result);
+    } catch (err) {
+      return showPosixError(err);
+    }
   }
+});
+
+var wasiEnv = mixin({
+  wasi_environ_get(ctx, environ, environ_buf) {
+    return PosixError.NONE;
+  },
+  wasi_environ_sizes_get(ctx, environ_count_address, environ_buf_size_address) {
+    const dv = new DataView(this.memory.buffer);
+    dv.setUint32(environ_count_address, 0, true);
+    dv.setUint32(environ_buf_size_address, 0, true);
+    return PosixError.NONE;
+  },
 });
 
 var wasiExit = mixin({
@@ -5255,6 +5328,132 @@ var wasiExit = mixin({
     throw new Exit(code);
   }
 }) ;
+
+const Right$1 = {
+    fd_datasync: 1 << 0,
+    fd_read: 1 << 1,
+    fd_seek: 1 << 2,
+    fd_fdstat_set_flags: 1 << 3,
+    fd_sync: 1 << 4,
+    fd_tell: 1 << 5,
+    fd_write: 1 << 6,
+    fd_advise: 1 << 7,
+    fd_allocate: 1 << 8,
+    path_create_directory: 1 << 9,
+    path_create_file: 1 << 10,
+    path_link_source: 1 << 11,
+    path_link_target: 1 << 12,
+    path_open: 1 << 13,
+    fd_readdir: 1 << 14,
+    path_readlink: 1 << 15,
+    path_rename_source: 1 << 16,
+    path_rename_target: 1 << 17,
+    path_filestat_get: 1 << 18,
+    path_filestat_set_size: 1 << 19,
+    path_filestat_set_times: 1 << 20,
+    fd_filestat_get: 1 << 21,
+    fd_filestat_set_size: 1 << 22,
+    fd_filestat_set_times: 1 << 23,
+    path_symlink: 1 << 24,
+    path_remove_directory: 1 << 25,
+    path_unlink_file: 1 << 26,
+    poll_fd_readwrite: 1 << 27,
+    sock_shutdown: 1 << 28,
+    sock_accept: 1 << 29,
+};
+
+var wasiFdstat = mixin({
+  wasi_fd_fdstat_get(fd, buf_address, canWait = false) {
+    try {
+      const dv = new DataView(this.memory.buffer);
+      let type, flags = 0, rights;
+      if (fd === 3) {
+        type = 3;  // dir
+        rights = Right$1.path_open | Right$1.path_filestat_get;
+      } else {        
+        const stream = this.getStream(fd);
+        type = 4; // file
+        rights = Right$1.fd_filestat_get;
+        if (typeof(stream.read) === 'function') {
+          rights |= Right$1.read;
+        }
+        if (typeof(stream.write) === 'function') {
+          rights |= Right$1.write;
+        }
+        if (typeof(stream.seek) === 'function') {
+          rights |= Right$1.seek;
+        }
+        if (typeof(stream.tell) === 'function') {
+          rights |= Right$1.tell;
+        }
+      }
+      dv.setUint8(buf_address + 0, type);
+      dv.setUint16(buf_address + 2, flags);
+      dv.setBigUint64(buf_address + 8, BigInt(rights));
+      dv.setBigUint64(buf_address + 16, 0n);
+      return PosixError.NONE;
+    } catch (err) {
+      return showPosixError(err);
+    }
+  },
+});
+
+const LookupFlag = {
+  symlinkFollow: 1 << 0,
+};
+
+var wasiFilestat = mixin({
+  wasi_fd_filestat_get(fd, buf_address, canWait = false) {
+    const path = this.wasi.pathMap?.get?.(fd);
+    if (path) {
+      try {
+        return this.wasiGetStat(path, {}, buf_address, canWait);
+      } catch (err) {        
+        if (err.code !== PosixError.ENOENT) throw err;
+      }
+    }
+    const stream = this.getStream(fd);
+    return this.wasiCopyStat({ size: stream.size }, buf_address);
+  },
+  wasi_path_filestat_get(fd, flags, path_address, path_len, buf_address, canWait = false) {
+    const pathArray = this.obtainZigArray(path_address, path_len);
+    const path = decodeText(pathArray);
+    return this.wasiGetStat(path, decodeFlags(flags, LookupFlag), buf_address, canWait)
+  },
+  wasiGetStat(path, flags, buf_address, canWait) {
+    const done = (stat) => this.wasiCopyStat(stat, buf_address);
+    try {
+      const result = this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
+      if (isPromise(result)) {
+        if (!canWait) {
+          throw new Deadlock();
+        }
+        return result.then(done, showPosixError);
+      }
+      return done(result);
+    } catch (err) {
+      return showPosixError(err);
+    }
+  },
+  wasiCopyStat(stat, buf_address) {
+    if (stat === false) {
+      return PosixError.ENOENT;
+    }
+    if (typeof(stat) !== 'object' || !stat) {
+      throw new TypeMismatch('object', stat);
+    }
+    const dv = new DataView(this.memory.buffer);
+    dv.setBigUint64(buf_address + 0, 0n, true);  // dev
+    dv.setBigUint64(buf_address + 8, 0n, true);  // ino
+    dv.setUint8(buf_address + 16, 4); // filetype = regular file
+    dv.setBigUint64(buf_address + 24, 0n, true);  // nlink
+    dv.setBigUint64(buf_address + 32, BigInt(stat.size ?? 0), true);
+    dv.setBigUint64(buf_address + 40, BigInt(stat.atime ?? 0), true);
+    dv.setBigUint64(buf_address + 48, BigInt(stat.mtime ?? 0), true);
+    dv.setBigUint64(buf_address + 56, BigInt(stat.ctime ?? 0), true);
+    return PosixError.NONE;
+  }
+});
 
 const OpenFlag = {
   create: 1 << 0,
@@ -5269,46 +5468,59 @@ const Right = {
 };
 
 var wasiOpen = mixin({
-  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address) {
+  init() {
+    this.wasi.pathMap = new Map();
+  },
+  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait = false) {
+    const dv = new DataView(this.memory.buffer);
     const pathArray = this.obtainZigArray(path_address, path_len);
     const path = decodeText(pathArray);
-    const mode = (fs_rights_base & Right.read)
-    ? (fs_rights_base & Right.write)
-      ? 'readWrite'
-      : 'readOnly'
-    : (fs_rights_base & Right.write)
-      ? 'writeOnly'
-      : '';
-    const flags = {};
-    for (const [ name, value ] of Object.entries(OpenFlag)) {
-      if (oflags & value) {
-        flags[name] = true;
+    const rights = decodeFlags(fs_rights_base, Right);
+    const flags = decodeFlags(oflags, OpenFlag);
+    const done = (arg) => {
+      const handle = this.createStreamHandle(arg);
+      this.wasi.pathMap.set(handle, path);
+      dv.setUint32(fd_address, handle, true);
+      return PosixError.NONE;
+    };
+    try {
+      const result = this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
+      if (isPromise(result)) {
+        if (!canWait) {
+          throw new Deadlock();
+        }
+        return result.then(done, showPosixError);
+      } else {
+        return done(result);
       }
+    } catch (err) {
+      return showPosixError(err);
     }
-    const { open } = this.listeners;
-    if (!open) {
-      console.error(`No listener for event 'open'`);
-      return PosixError.ENOENT;
-    }
-    const arg = open({ path, mode, flags });
-    const handle = this.createStreamHandle(arg);
-    const dv = this.obtainZigView(fd_address, 4);
-    dv.setUint32(0, handle, true);
-    return PosixError.NONE;
   }
 });
 
-var wasiPrestatGet = mixin({
-  wasi_fd_prestat_get() {
-    return PosixError.EBADF;
+var wasiPrestat = mixin({
+  wasi_fd_prestat_get(fd, buf_address) {
+    if (fd === 3) {
+      // descriptor 3 is the root directory, I think
+      const dv = new DataView(this.memory.buffer);
+      dv.setUint8(buf_address, 0);
+      dv.setUint32(buf_address + 4, 0, true);
+      return PosixError.NONE;
+    } else {
+      return PosixError.EBADF;
+    }
+  },
+  wasi_fd_prestat_dir_name(fd, path_address, path_len) {
+    return PosixError.NONE;
   }
 }) ;
 
-var wasiRandomGet = mixin({
-  wasi_random_get(buf, buf_len) {
-    const dv = new DataView(this.memory.buffer, buf, buf_len);
+var wasiRandom = mixin({
+  wasi_random_get(buf_address, buf_len) {
+    const dv = new DataView(this.memory.buffer);
     for (let i = 0; i < buf_len; i++) {
-      dv.setUint8(i, Math.floor(256 * Math.random()));
+      dv.setUint8(buf_address + i, Math.floor(256 * Math.random()));
     }
     return PosixError.NONE;
   }
@@ -5330,7 +5542,7 @@ var wasiRead = mixin({
           const result = this.readBytes(fd, ptr, len);
           if (isPromise(result)) {
             if (!canWait) {
-              throw new Deadlock();
+              throw new Deadlock$1();
             }
             return result.then(next, showPosixError);
           } else {
@@ -5353,13 +5565,13 @@ var wasiSeek = mixin({
     try {
       const dv = new DataView(this.memory.buffer);
       const done = (pos) => {
-        dv.setUint32(newoffset_ptr, pos, true);
+        dv.setBigUint64(newoffset_ptr, pos, true);
         return PosixError.NONE;
       };
       const result = this.changeStreamPointer(fd, offset, whence);
       if (isPromise(result)) {
         if (!canWait) {
-          throw new Deadlock();
+          throw new Deadlock$1();
         }
         return result.then(done, showPosixError);
       } else {
@@ -5376,13 +5588,13 @@ var wasiTell = mixin({
     try {
       const dv = new DataView(this.memory.buffer);
       const done = (pos) => {
-        dv.setUint32(newoffset_ptr, pos, true);              
+        dv.setBigUint64(newoffset_ptr, pos, true);
         return PosixError.NONE;
       };
       const result = this.getStreamPointer(fd);
       if (isPromise(result)) {
         if (!canWait) {
-          throw new Deadlock();
+          throw new Deadlock$1();
         }
         return result.then(done, showPosixError);
       } else {
@@ -5409,7 +5621,7 @@ var wasiWrite = mixin({
           written += len;
           if (isPromise$1(result)) {
             if (!canWait) {
-              throw new Deadlock();
+              throw new Deadlock$1();
             }
             return result.then(next, showPosixError);
           } else {
@@ -5425,23 +5637,6 @@ var wasiWrite = mixin({
     };
     return next();
   }
-}) ;
-
-var wasi = mixin({
-  init() {
-    this.customWASI = null;
-  },
-  setCustomWASI(wasi) {
-    if (wasi && this.executable) {
-      throw new Error('Cannot set WASI interface after compilation has already begun');
-    }
-    this.customWASI = wasi;
-  },
-  getWASIHandler(name) {
-    return this.customWASI?.wasiImport?.[name] 
-        ?? this[`wasi_${name}`]?.bind?.(this)
-        ?? (() => PosixError.ENOSYS);
-  },
 }) ;
 
 var workerSupport = mixin({
@@ -5885,17 +6080,23 @@ var structureAcquisition = mixin({
         }
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-        this.use(wasi);
+        this.use(wasiAll);
         switch (name) {
+          case 'environ_get': 
+          case 'environ_sizes_get': this.use(wasiEnv); break;
           case 'fd_close': this.use(wasiClose); break;
-          case 'fd_prestat_get': this.use(wasiPrestatGet); break;
+          case 'fd_fdstat_get': this.use(wasiFdstat); break;
+          case 'fd_filestat_get':
+          case 'path_filestat_get': this.use(wasiFilestat); break;
+          case 'fd_prestat_get': 
+          case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
           case 'fd_write': this.use(wasiWrite); break;
           case 'path_open': this.use(wasiOpen); break;
           case 'proc_exit': this.use(wasiExit); break;
-          case 'random_get': this.use(wasiRandomGet); break;
+          case 'random_get': this.use(wasiRandom); break;
         }
         switch (name) {
           case 'path_open':
@@ -9545,12 +9746,15 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
-  FeatureWasi: wasi,
+  FeatureWasiAll: wasiAll,
   FeatureWasiClose: wasiClose,
+  FeatureWasiEnv: wasiEnv,
   FeatureWasiExit: wasiExit,
+  FeatureWasiFdstat: wasiFdstat,
+  FeatureWasiFilestat: wasiFilestat,
   FeatureWasiOpen: wasiOpen,
-  FeatureWasiPrestatGet: wasiPrestatGet,
-  FeatureWasiRandomGet: wasiRandomGet,
+  FeatureWasiPrestat: wasiPrestat,
+  FeatureWasiRandom: wasiRandom,
   FeatureWasiRead: wasiRead,
   FeatureWasiSeek: wasiSeek,
   FeatureWasiTell: wasiTell,

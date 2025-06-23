@@ -145,9 +145,10 @@ export const PosixError = {
   NONE: 0,
   EPERM: 1,
   ENOENT: 2,
+  EACCES: 13,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
   EDEADLK: 35,
-  ENOSYS: 38,
+  EOPNOTSUPP: 95,
 };

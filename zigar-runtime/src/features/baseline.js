@@ -1,14 +1,14 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
+import { MissingEventListener } from '../errors.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
 export default mixin({
   init() {
     this.variables = [];
-    this.listeners = {
-      open: null,
-      log: (e) => console.log(e.message),
-    };
+    this.listenerMap = new Map([
+      [ 'log', (e) => console.log(e.message) ],
+    ]);
   },
   getSpecialExports() {
     const check = (v) => {
@@ -22,11 +22,22 @@ export default mixin({
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
-      on: (event, cb) => this.addListener(event, cb),
+      on: (name, cb) => this.addListener(name, cb),
     };
   },
-  addListener(event, cb) {
-    this.listeners[event] = cb;
+  addListener(name, cb) {
+    this.listenerMap.set(name, cb);
+  },
+  triggerEvent(name, event, errorCode) {
+    const listener = this.listenerMap.get(name);
+    if (!listener) {
+      if (errorCode) {
+        throw new MissingEventListener(name, errorCode);
+      } else {
+        return;
+      }
+    }
+    return listener(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
