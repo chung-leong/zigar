@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, PointerFlag, StructFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, UndefinedArgument } from '../../src/errors.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { MEMORY, RETURN, VISIT } from '../../src/symbols.js';
 
 const Env = defineEnvironment();

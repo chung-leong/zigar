@@ -1,6 +1,6 @@
 import { memberNames, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { defineProperty, getPrimitiveName } from './utils.js';
+import { defineProperty, getPrimitiveName, isPromise } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -428,8 +428,6 @@ export class IllegalSeek extends Error {
 }
 
 export class Deadlock extends Error {
-  code = PosixError.EDEADLK;
-
   constructor() {
     super(`Unable to await promise`);
   }
@@ -535,9 +533,28 @@ export function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-export function showPosixError(err) {
-  console.error(err);
-  return err.code ?? PosixError.EACCES;
+export function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+  const fail = (err) => {
+    const result = (reject) ? reject() : console.error(err);
+    return result ?? err.code ?? defErrorCode;
+  };
+  const done = (value) => {
+    const result = resolve?.(value);
+    return result ?? PosixError.NONE;
+  };
+  try {
+    const result = run();
+    if (isPromise(result)) {
+      if (!canWait) {
+        throw new Deadlock();
+      }
+      return result.then(done, fail);
+    } else {
+      return done(result);
+    }
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 export function isErrorJSON(arg) {

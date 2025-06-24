@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi-random-get', function() {
+  describe('Wasi: random-get', function() {
     it('should provide a function that writes random bytes at memory location', function() {
       const env = new Env();
       env.memory = new WebAssembly.Memory({ initial: 128 });

@@ -1,36 +1,26 @@
-import { isPromise } from 'util/types';
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { Deadlock, showPosixError } from '../errors.js';
+import { catchPosixError } from '../errors.js';
 
 var write = mixin({
-  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait = false) {
+  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait) {
     const dv = new DataView(this.memory.buffer);
     let written = 0, i = 0, p = iovs_ptr;
     const next = () => {
-      try {
+      return catchPosixError(canWait, PosixError.EIO, () => {
+        const ptr = dv.getUint32(p, true);
+        const len = dv.getUint32(p + 4, true);
+        p += 8;
+        i++;
+        written += len;
+        return this.writeBytes(fd, ptr, len);
+      }, () => {
         if (i < iovs_count) {
-          const ptr = dv.getUint32(p, true);
-          const len = dv.getUint32(p + 4, true);
-          p += 8;
-          i++;
-          const result = this.writeBytes(fd, ptr, len);
-          written += len;
-          if (isPromise(result)) {
-            if (!canWait) {
-              throw new Deadlock();
-            }
-            return result.then(next, showPosixError);
-          } else {
-            return next();
-          }
+          next(); 
         } else {
           dv.setUint32(written_ptr, written, true);
-          return PosixError.NONE;
         }
-      } catch (err) {
-        return showPosixError(err);
-      }
+      });
     };
     return next();
   }

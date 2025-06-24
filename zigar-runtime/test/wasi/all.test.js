@@ -1,12 +1,13 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi', function() {
+  describe('Wasi: all', function() {
     describe('setCustomWASI', function() {
       it('should accept a custom interface object', function() {
         const env = new Env();
@@ -26,11 +27,14 @@ if (process.env.TARGET === 'wasm') {
       })
     })
     describe('getWASIHandler', function() {
-      it('should provide a function returning ENOSYS when handler is not implemented', function() {
+      it('should provide a function returning EOPNOTSUPP when handler is not implemented', async function() {
         const env = new Env();
-        const f = env.getWASIHandler('args_get');
+        const f = env.getWASIHandler('args_get')
         expect(f).to.be.a('function');
-        expect(f()).to.equal(PosixError.ENOSYS);
+        let result;
+        const [ error ] = await captureError(() => result = f());
+        expect(result).to.equal(PosixError.EOPNOTSUPP);
+        expect(error).to.contain('Not implemented');
       })
     })
  })

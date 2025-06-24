@@ -111,7 +111,7 @@ export function addTests(importModule, options) {
       });
       const digest = hash('/hello/world');
       expect(digest.string).to.equal(correct);
-      expect(event).to.eql({ path: '/hello/world', mode: 'readOnly', flags: {} });
+      expect(event).to.eql({ path: '/hello/world', rights: { read: true }, flags: {} });
     })
     it('should write to writer', async function() {
       this.timeout(0);
@@ -208,7 +208,7 @@ export function addTests(importModule, options) {
       const blob = new Blob(chunks);
       const string = await blob.text();
       expect(string).to.equal('This is a test');
-      expect(event).to.eql({ path: '/hello/world', mode: 'writeOnly', flags: { create: true, truncate: true } });
+      expect(event).to.eql({ path: '/hello/world', rights: { write: true }, flags: { create: true, truncate: true } });
     })
     it('should decompress xz file', async function() {
       this.timeout(0);
@@ -256,7 +256,7 @@ export function addTests(importModule, options) {
     })
     it('should print stats of file referenced by path', async function() {
       this.timeout(0);
-      const { __zigar, print, show } = await importTest('stat-file-by-path');
+      const { __zigar, print } = await importTest('stat-file-by-path');
       const path = '/hello.txt';
       let received;
       __zigar.on('stat', (evt) => {
@@ -286,7 +286,6 @@ export function addTests(importModule, options) {
         const lines3 = await capture(() => print(path));
       });
       expect(error).to.equal('Error: Doh!');
-      show();
     })
   })
 }

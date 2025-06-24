@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { CACHE, COPY, MEMORY, RESTORE, SLOTS, VISIT } from '../../src/symbols.js';
 import { defineProperties, ObjectCache } from '../../src/utils.js';
 import { delay, usize } from '../test-utils.js';

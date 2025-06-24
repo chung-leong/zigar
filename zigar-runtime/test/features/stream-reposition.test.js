@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { IllegalSeek } from '../../src/errors.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -27,8 +27,8 @@ describe('Feature: stream-redirection', function() {
       env.redirectStream(0, array);
       const address = usize(0x1000);
       const dv = env.obtainZigView(address, 4, false);
-      const pos = env.changeStreamPointer(0, -1, 2);
-      expect(pos).to.equal(9);
+      const pos = env.changeStreamPointer(0, -1n, 2);
+      expect(pos).to.equal(9n);
       const count = env.readBytes(0, address, dv.byteLength);
       expect(count).to.equal(1);
       expect(dv.getUint8(0)).to.equal(9);
@@ -80,7 +80,7 @@ describe('Feature: stream-redirection', function() {
       const dv = env.obtainZigView(address, 4, false);
       env.readBytes(0, address, dv.byteLength);
       const pos = env.getStreamPointer(0);
-      expect(pos).to.equal(4);
+      expect(pos).to.equal(4n);
     })
     it('should throw when reader is not seekable', async function() {
       const env = new Env();

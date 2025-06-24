@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { capture, captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi-write', function() {
+  describe('Wasi: write', function() {
     it('should provide a function that write to console', async function() {
       const env = new Env();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });

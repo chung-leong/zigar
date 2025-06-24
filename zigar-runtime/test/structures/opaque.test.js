@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType,
-  OptionalFlag, PointerFlag, StructureFlag, StructurePurpose, StructureType
+    MemberFlag, MemberType,
+    OptionalFlag, PointerFlag, StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 

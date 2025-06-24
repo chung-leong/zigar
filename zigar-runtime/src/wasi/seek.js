@@ -1,27 +1,12 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { Deadlock, showPosixError } from '../errors.js';
-import { isPromise } from '../utils.js';
+import { catchPosixError } from '../errors.js';
 
-export default (process.env.TARGET === 'wasm') ? mixin({
-  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait = false) {
-    try {
+export default mixin({
+  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => this.changeStreamPointer(fd, offset, whence), (pos) => {
       const dv = new DataView(this.memory.buffer);
-      const done = (pos) => {
-        dv.setBigUint64(newoffset_ptr, pos, true);
-        return PosixError.NONE;
-      };
-      const result = this.changeStreamPointer(fd, offset, whence);
-      if (isPromise(result)) {
-        if (!canWait) {
-          throw new Deadlock();
-        }
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
-  }
-}) : undefined;
+      dv.setBigUint64(newoffset_ptr, pos, true);
+    });
+  },
+});

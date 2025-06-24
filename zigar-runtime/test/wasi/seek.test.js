@@ -1,40 +1,41 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi-tell', function() {
-    it('should provide a function that returns the read position', async function() {
+  describe('Wasi: seek', function() {
+    it('should provide a function that changes the read position', async function() {
       const env = new Env();
       const encoder = new TextEncoder();
       const array = encoder.encode('Hello world');
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const seek = env.getWASIHandler('fd_seek');
-      const f = env.getWASIHandler('fd_tell');
+      const f = env.getWASIHandler('fd_seek');
       const posAddress = 128;
       const dv = new DataView(memory.buffer);
       env.redirectStream(0, array);
-      seek(0, 1, 1, posAddress)
-      seek(0, 1, 1, posAddress)
-      const result = f(0);
+      const result = f(0, -1n, 2, posAddress)
       expect(result).to.equal(PosixError.NONE);
-      const pos = dv.getUint32(posAddress, true);
-      expect(pos).to.equal(2);
+      const pos = dv.getBigUint64(posAddress, true);
+      expect(pos).to.equal(10n);
     })
-    it('should return an error code when handle is invalid', async function() {
+    it('should return an error code when whence value is invalid', async function() {
       const env = new Env();
+      const encoder = new TextEncoder();
+      const array = encoder.encode('Hello world');
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-      const f = env.getWASIHandler('fd_tell');
+      const f = env.getWASIHandler('fd_seek');
+      const posAddress = 128;
+      env.redirectStream(0, array);
       let result;
       const [ error ] = await captureError(() => { 
-        result = f(4)
+        result = f(0, -1n, 4, posAddress)
       });
-      expect(result).to.equal(PosixError.EBADF);
-      expect(error).to.contains('file descriptor');
+      expect(result).to.equal(PosixError.EINVAL);
+      expect(error).to.contains('Invalid argument');
     })
- })
+  })
 }

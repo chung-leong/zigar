@@ -148,12 +148,12 @@ const PosixError = {
   NONE: 0,
   EPERM: 1,
   ENOENT: 2,
+  EIO: 5,
   EACCES: 13,
   EEXIST: 17,
   EBADF: 8,
   EINVAL: 22,
   ESPIPE: 29,
-  EDEADLK: 35,
   EOPNOTSUPP: 95,
 };
 
@@ -2561,9 +2561,9 @@ class BufferExpected extends TypeError {
   constructor(structure) {
     const { type, byteSize, typedArray } = structure;
     const s = (byteSize !== 1) ? 's' : '';
-    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle$1);
     if (typedArray) {
-      acceptable.push(addArticle(typedArray.name));
+      acceptable.push(addArticle$1(typedArray.name));
     }
     let msg;
     if (type === StructureType.Slice) {
@@ -2639,12 +2639,12 @@ class InvalidInitializer extends TypeError {
     const acceptable = [];
     if (Array.isArray(expected)) {
       for (const type of expected) {
-        acceptable.push(addArticle(type));
+        acceptable.push(addArticle$1(type));
       }
     } else {
-      acceptable.push(addArticle(expected));
+      acceptable.push(addArticle$1(expected));
     }
-    const received = getDescription(arg);
+    const received = getDescription$1(arg);
     super(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
   }
 }
@@ -2788,12 +2788,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-class TypeMismatch extends TypeError {
+let TypeMismatch$2 = class TypeMismatch extends TypeError {
   constructor(expected, arg) {
-    const received = getDescription(arg);
-    super(`Expected ${addArticle(expected)}, received ${received}`);
+    const received = getDescription$1(arg);
+    super(`Expected ${addArticle$1(expected)}, received ${received}`);
   }
-}
+};
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -2819,7 +2819,7 @@ class InvalidPointerTarget extends TypeError {
     let target;
     if (arg != null) {
       const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
-      const a = article(noun);
+      const a = article$1(noun);
       target = `${a} ${noun}`;
     } else {
       target = arg + '';
@@ -2927,13 +2927,11 @@ class IllegalSeek extends Error {
   }
 }
 
-let Deadlock$1 = class Deadlock extends Error {
-  code = PosixError.EDEADLK;
-
+class Deadlock extends Error {
   constructor() {
     super(`Unable to await promise`);
   }
-};
+}
 
 class MissingEventListener extends Error {
   constructor(name, code) {
@@ -3033,16 +3031,35 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function showPosixError(err) {
-  console.error(err);
-  return err.code ?? PosixError.EACCES;
+function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+  const fail = (err) => {
+    const result = console.error(err);
+    return result ?? err.code ?? defErrorCode;
+  };
+  const done = (value) => {
+    const result = resolve?.(value);
+    return result ?? PosixError.NONE;
+  };
+  try {
+    const result = run();
+    if (isPromise(result)) {
+      if (!canWait) {
+        throw new Deadlock();
+      }
+      return result.then(done, fail);
+    } else {
+      return done(result);
+    }
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
-function getDescription(arg) {
+function getDescription$1(arg) {
   const type = typeof(arg);
   let s;
   if (type === 'object') {
@@ -3050,14 +3067,14 @@ function getDescription(arg) {
   } else {
     s = type;
   }
-  return addArticle(s);
+  return addArticle$1(s);
 }
 
-function addArticle(noun) {
-  return `${article(noun)} ${noun}`;
+function addArticle$1(noun) {
+  return `${article$1(noun)} ${noun}`;
 }
 
-function article(noun) {
+function article$1(noun) {
   return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
 }
 
@@ -3100,7 +3117,7 @@ var allocatorMethods = mixin({
         const { dv, align } = getMemory(arg);
         const zig = dv?.[ZIG];
         if (!zig) {
-          throw new TypeMismatch('object containing allocated Zig memory', arg);
+          throw new TypeMismatch$2('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
         if (address === usizeInvalid) {
@@ -3119,7 +3136,7 @@ var allocatorMethods = mixin({
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
+          throw new TypeMismatch$2('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
         copy(dest, src);
@@ -3812,7 +3829,7 @@ var generator = mixin({
     const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
+        throw new TypeMismatch$2('function', func);
       }
     } else {
       const generator = args[GENERATOR] = new AsyncGenerator();
@@ -4277,6 +4294,10 @@ var memoryMapping = mixin({
     const dv = this.obtainZigView(address, len, false);
     return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   },
+  obtainZigString(address, len) {
+    const array = this.obtainZigArray(address, len);
+    return decodeText(array);
+  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -4733,7 +4754,7 @@ var promise = mixin({
     const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
+        throw new TypeMismatch$2('function', func);
       }
     } else {
       args[PROMISE] = new Promise((resolve, reject) => {
@@ -4811,7 +4832,7 @@ var readerConversion = mixin({
     } else if (typeof(arg?.read) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
+      throw new TypeMismatch$2('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
     }
   }
 });
@@ -5050,7 +5071,7 @@ var streamRedirection = mixin({
       try {
         stream = this.convertWriter(arg);
       } catch {
-        throw new TypeMismatch('reader or writer', arg);
+        throw new TypeMismatch$2('reader or writer', arg);
       }
     }
     const handle = this.nextStreamHandle++;
@@ -5294,21 +5315,11 @@ var wasiAll = mixin({
 });
 
 var wasiClose = mixin({
-  wasi_fd_close(fd, canWait = false) {
-    const done = () => PosixError.NONE;
-    try {
+  wasi_fd_close(fd, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       this.wasi.pathMap?.delete?.(fd);
       const result = this.closeStream(fd);
-      if (isPromise(result)) {
-        if (canWait) {
-          throw new Deadlock$1();
-        }
-        return result.then(done, showPosixError);
-      }
-      return done(result);
-    } catch (err) {
-      return showPosixError(err);
-    }
+    });
   }
 });
 
@@ -5364,8 +5375,8 @@ const Right$1 = {
 };
 
 var wasiFdstat = mixin({
-  wasi_fd_fdstat_get(fd, buf_address, canWait = false) {
-    try {
+  wasi_fd_fdstat_get(fd, buf_address, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const dv = new DataView(this.memory.buffer);
       let type, flags = 0, rights;
       if (fd === 3) {
@@ -5392,10 +5403,7 @@ var wasiFdstat = mixin({
       dv.setUint16(buf_address + 2, flags);
       dv.setBigUint64(buf_address + 8, BigInt(rights));
       dv.setBigUint64(buf_address + 16, 0n);
-      return PosixError.NONE;
-    } catch (err) {
-      return showPosixError(err);
-    }
+    });
   },
 });
 
@@ -5404,46 +5412,31 @@ const LookupFlag = {
 };
 
 var wasiFilestat = mixin({
-  wasi_fd_filestat_get(fd, buf_address, canWait = false) {
-    const path = this.wasi.pathMap?.get?.(fd);
-    if (path) {
-      try {
-        return this.wasiGetStat(path, {}, buf_address, canWait);
-      } catch (err) {        
-        if (err.code !== PosixError.ENOENT) throw err;
-      }
-    }
-    try {
-      const stream = this.getStream(fd);
-      return this.wasiCopyStat({ size: stream.size }, buf_address);
-    } catch (err) {
-      return showPosixError(err);
-    }
-  },
-  wasi_path_filestat_get(fd, flags, path_address, path_len, buf_address, canWait = false) {
-    const pathArray = this.obtainZigArray(path_address, path_len);
-    const path = decodeText(pathArray);
-    return this.wasiGetStat(path, decodeFlags(flags, LookupFlag), buf_address, canWait)
-  },
-  wasiGetStat(path, flags, buf_address, canWait) {
-    const done = (stat) => this.wasiCopyStat(stat, buf_address);
-    try {
-      const result = this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
-      if (isPromise(result)) {
-        if (!canWait) {
-          throw new Deadlock();
+  wasi_fd_filestat_get(fd, buf_address, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const path = this.wasi.pathMap?.get?.(fd);
+      if (path) {
+        try {
+          return this.triggerEvent('stat', { path, flags: {} }, PosixError.EBADF);
+        } catch (err) {        
+          if (err.code !== PosixError.ENOENT) throw err;
         }
-        return result.then(done, showPosixError);
       }
-      return done(result);
-    } catch (err) {
-      return showPosixError(err);
-    }
+      const stream = this.getStream(fd);
+      return { size: stream.size };
+    }, (stat) => this.wasiCopyStat(stat, buf_address));
+  },
+  wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const path = this.obtainZigString(path_address, path_len);
+      const flags = decodeFlags(lookup_flags, LookupFlag);
+      return this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
+    }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
   wasiCopyStat(stat, buf_address) {
     if (stat === false) return PosixError.ENOENT;
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch('object', stat);
+      throw new TypeMismatch$2('object', stat);
     }
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev
@@ -5454,25 +5447,48 @@ var wasiFilestat = mixin({
     dv.setBigUint64(buf_address + 40, BigInt(stat.atime ?? 0), true);
     dv.setBigUint64(buf_address + 48, BigInt(stat.mtime ?? 0), true);
     dv.setBigUint64(buf_address + 56, BigInt(stat.ctime ?? 0), true);
-    return PosixError.NONE;
   }
 });
 
+globalThis[Symbol.for('ZIGAR')] ||= {};
+
+let TypeMismatch$1 = class TypeMismatch extends TypeError {
+  constructor(expected, arg) {
+    const received = getDescription(arg);
+    super(`Expected ${addArticle(expected)}, received ${received}`);
+  }
+};
+
+function getDescription(arg) {
+  const type = typeof(arg);
+  let s;
+  if (type === 'object') {
+    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
+  } else {
+    s = type;
+  }
+  return addArticle(s);
+}
+
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
+}
+
+function article(noun) {
+  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
+}
+
 var wasiMkdir = mixin({
-  wasi_path_create_directory(fd, path_address, path_len) {
-    const pathArray = this.obtainZigArray(path_address, path_len);
-    const path = decodeText(pathArray);
-    const done = (succeeded) => succeeded ? PosixError.NONE : PosixError.ENOENT;
-    try {
-      const result = this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
-      if (isPromise(result)) {
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
+  wasi_path_create_directory(fd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const path = this.obtainZigString(path_address, path_len);
+      return this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
+    }, (result) => {
+      if (result instanceof Map) return;
+      if (result === true) return PosixError.EEXIST;
+      if (result === false) return PosixError.ENOENT;
+      throw new TypeMismatch$1('map or boolean', result);
+    });
   }
 });
 
@@ -5492,33 +5508,20 @@ var wasiOpen = mixin({
   init() {
     this.wasi.pathMap = new Map();
   },
-  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait = false) {
-    const dv = new DataView(this.memory.buffer);
-    const pathArray = this.obtainZigArray(path_address, path_len);
-    const path = decodeText(pathArray);
-    const rights = decodeFlags(fs_rights_base, Right);
-    const flags = decodeFlags(oflags, OpenFlag);
-    const done = (arg) => {
+  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
+    const path = this.obtainZigString(path_address, path_len);
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const rights = decodeFlags(fs_rights_base, Right);
+      const flags = decodeFlags(oflags, OpenFlag);
+      return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
+    }, (arg) => {
       if (arg === false) return PosixError.ENOENT;
       const handle = this.createStreamHandle(arg);
       this.wasi.pathMap.set(handle, path);
+      const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
-      return PosixError.NONE;
-    };
-    try {
-      const result = this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
-      if (isPromise(result)) {
-        if (!canWait) {
-          throw new Deadlock();
-        }
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
-  }
+    });
+  },
 });
 
 var wasiPrestat = mixin({
@@ -5549,131 +5552,79 @@ var wasiRandom = mixin({
 });
 
 var wasiRead = mixin({
-  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait = false) {
+  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait) {
     const dv = new DataView(this.memory.buffer);
     let read = 0, i = 0, p = iovs_ptr;
     const next = (len) => {
-      try {
-        // add len from previous call
+      return catchPosixError(canWait, PosixError.EIO, () => {
+        const ptr = dv.getUint32(p, true);
+        const len = dv.getUint32(p + 4, true);
+        p += 8;
+        i++;
+        return this.readBytes(fd, ptr, len);
+      }, (len) => {
         read += len;
         if (i < iovs_count) {
-          const ptr = dv.getUint32(p, true);
-          const len = dv.getUint32(p + 4, true);
-          p += 8;
-          i++;
-          const result = this.readBytes(fd, ptr, len);
-          if (isPromise(result)) {
-            if (!canWait) {
-              throw new Deadlock$1();
-            }
-            return result.then(next, showPosixError);
-          } else {
-            return next(result);
-          }
+          next();
         } else {
           dv.setUint32(read_ptr, read, true);
-          return PosixError.NONE;
         }
-      } catch (err) {
-        return showPosixError(err);
-      }
+      });
     };
-    return next(0);
+    return next();
   }
 }) ;
 
 var wasiRmdir = mixin({
-  wasi_path_remove_directory(fd, path_address, path_len) {
-    const pathArray = this.obtainZigArray(path_address, path_len);
-    const path = decodeText(pathArray);
-    const done = (succeeded) => succeeded ? PosixError.NONE : PosixError.ENOENT;
-    try {
-      const result = this.triggerEvent('rmdir', { path }, PosixError.ENOENT);
-      if (isPromise(result)) {
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
+  wasi_path_remove_directory(fd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const path = this.obtainZigString(path_address, path_len);
+      return this.triggerEvent('rmdir', { path }, PosixError.ENOENT);
+    }, (result) => {
+      if (result === true) return PosixError.NONE 
+      if (result === false) return PosixError.ENOENT;
+      throw new TypeMismatch('boolean', result);
+    });
   }
 });
 
 var wasiSeek = mixin({
-  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait = false) {
-    try {
+  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => this.changeStreamPointer(fd, offset, whence), (pos) => {
       const dv = new DataView(this.memory.buffer);
-      const done = (pos) => {
-        dv.setBigUint64(newoffset_ptr, pos, true);
-        return PosixError.NONE;
-      };
-      const result = this.changeStreamPointer(fd, offset, whence);
-      if (isPromise(result)) {
-        if (!canWait) {
-          throw new Deadlock$1();
-        }
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
-  }
-}) ;
+      dv.setBigUint64(newoffset_ptr, pos, true);
+    });
+  },
+});
 
 var wasiTell = mixin({
-  wasi_fd_tell(fd, newoffset_ptr, canWait = false) {
-    try {
+  wasi_fd_tell(fd, newoffset_ptr, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => this.getStreamPointer(fd), (pos) => {
       const dv = new DataView(this.memory.buffer);
-      const done = (pos) => {
-        dv.setBigUint64(newoffset_ptr, pos, true);
-        return PosixError.NONE;
-      };
-      const result = this.getStreamPointer(fd);
-      if (isPromise(result)) {
-        if (!canWait) {
-          throw new Deadlock$1();
-        }
-        return result.then(done, showPosixError);
-      } else {
-        return done(result);
-      }
-    } catch (err) {
-      return showPosixError(err);
-    }
+      dv.setBigUint64(newoffset_ptr, pos, true);
+    });
   }
 }) ;
 
 var wasiWrite = mixin({
-  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait = false) {
+  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait) {
     const dv = new DataView(this.memory.buffer);
     let written = 0, i = 0, p = iovs_ptr;
     const next = () => {
-      try {
+      return catchPosixError(canWait, PosixError.EIO, () => {
+        const ptr = dv.getUint32(p, true);
+        const len = dv.getUint32(p + 4, true);
+        p += 8;
+        i++;
+        written += len;
+        return this.writeBytes(fd, ptr, len);
+      }, () => {
         if (i < iovs_count) {
-          const ptr = dv.getUint32(p, true);
-          const len = dv.getUint32(p + 4, true);
-          p += 8;
-          i++;
-          const result = this.writeBytes(fd, ptr, len);
-          written += len;
-          if (isPromise$1(result)) {
-            if (!canWait) {
-              throw new Deadlock$1();
-            }
-            return result.then(next, showPosixError);
-          } else {
-            return next();
-          }
+          next(); 
         } else {
           dv.setUint32(written_ptr, written, true);
-          return PosixError.NONE;
         }
-      } catch (err) {
-        return showPosixError(err);
-      }
+      });
     };
     return next();
   }
@@ -5826,7 +5777,7 @@ var writerConversion = mixin({
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
+      throw new TypeMismatch$2('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
     }
   },
 });
@@ -6901,7 +6852,7 @@ var base64 = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$2('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, allocator);
@@ -6927,7 +6878,7 @@ var clampedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
-          throw new TypeMismatch(ClampedArray.name, ta);
+          throw new TypeMismatch$2(ClampedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -6949,7 +6900,7 @@ var dataView = mixin({
       },
       set(dv, allocator) {
         if (dv?.[Symbol.toStringTag] !== 'DataView') {
-          throw new TypeMismatch('DataView', dv);
+          throw new TypeMismatch$2('DataView', dv);
         }
         thisEnv.assignView(this, dv, structure, true, allocator);
       },
@@ -7179,7 +7130,7 @@ var string = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$2('string', str);
         }
         const sentinelValue = this.constructor[SENTINEL]?.value;
         if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -7306,7 +7257,7 @@ var typedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
-          throw new TypeMismatch(TypedArray.name, ta);
+          throw new TypeMismatch$2(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -8325,7 +8276,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch('function', arg);
+          throw new TypeMismatch$2('function', arg);
         }
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();

@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi-exit', function() {
+  describe('Wasi: exit', function() {
     it('should throws an Exit exception', function() {
       const env = new Env();
       const f = env.getWASIHandler('proc_exit');

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { getIntRange } from '../../src/features/runtime-safety.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 
 const Env = defineEnvironment();
 

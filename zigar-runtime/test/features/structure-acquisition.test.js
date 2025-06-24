@@ -1,11 +1,11 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
-  StructureType,
+    ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
+    StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
 import { addressByteSize, addressSize, usize } from '../test-utils.js';
 

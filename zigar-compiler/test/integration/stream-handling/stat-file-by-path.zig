@@ -10,10 +10,3 @@ pub fn print(path: []const u8) void {
         std.debug.print("error = {}\n", .{err});
     }
 }
-
-pub fn show() void {
-    const T = std.os.wasi.fdstat_t;
-    inline for (std.meta.fields(T)) |field| {
-        std.debug.print("{s} = {d}\n", .{ field.name, @offsetOf(T, field.name) });
-    }
-}

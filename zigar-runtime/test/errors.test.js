@@ -1,4 +1,7 @@
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import ChaiAsPromised from 'chai-as-promised';
+
+use(ChaiAsPromised);
 
 import { MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../src/constants.js';
 import {
@@ -48,12 +51,12 @@ import {
   ZigMemoryTargetRequired,
   adjustArgumentError,
   article,
+  catchPosixError,
   checkInefficientAccess,
   deanimalizeErrorName,
   formatList,
   getDescription,
-  replaceRangeError,
-  showPosixError,
+  replaceRangeError
 } from '../src/errors.js';
 import { captureError } from './test-utils.js';
 
@@ -668,12 +671,11 @@ describe('Error functions', function() {
     })
   })
   describe('Deadlock', function() {
-    it('should have expected Posix error code', function() {
+    it('should not have a Posix error code attached', function() {
       const err = new Deadlock();
-      expect(err.code).to.equal(PosixError.EDEADLK);
+      expect(err).to.not.have.property('code');
     })
   })
-
   describe('adjustArgumentError', function() {
     it('should add argument number to an error', function() {
       const err1 = adjustArgumentError(new TypeError('Something'), 0);
@@ -764,18 +766,56 @@ describe('Error functions', function() {
         .with.property('message').that.contains('2 bytes.');
     }) 
   })
-  describe('showPosixError', function() {
+  describe('catchPosixError', function() {
     it('should return Posix error code of error object', async function() {
       let result;
-      const [ error ] = await captureError(() => result = showPosixError(new InvalidFileDescriptor()));
+      const [ error ] = await captureError(() => {
+        result = catchPosixError(false, PosixError.EACCES, () => {
+          throw new InvalidFileDescriptor();
+        });
+      });
       expect(result).to.equal(PosixError.EBADF);
       expect(error).to.contain('file descriptor');
     })
-    it('should return EPERM when given error without a code', async function() {
+    it('should return default error code when error does not have one', async function() {
       let result;
-      const [ error ] = await captureError(() => result = showPosixError(new Error('doh!')));
-      expect(result).to.equal(PosixError.EPERM);
-      expect(error).to.contain('doh');
+      const [ error ] = await captureError(() => {
+        result = catchPosixError(false, PosixError.EACCES, () => {
+          throw new Error('Doh!');
+        });
+      });
+      expect(result).to.equal(PosixError.EACCES);
+      expect(error).to.contain('Doh!');
+    })
+    it('should fail with deadlock message when promise is returned by callback and canWait is false', async function() {
+      let result;
+      const [ error ] = await captureError(() => {
+        result = catchPosixError(false, PosixError.EACCES, async () => {});
+      });
+      expect(result).to.equal(PosixError.EACCES);
+      expect(error).to.contain('promise');
+    })
+    it('should return 0 when no error occurred', async function() {
+      let result;
+      const [ error ] = await captureError(() => {
+        result = catchPosixError(false, PosixError.EACCES, () => {});
+      });
+      expect(result).to.equal(0);
+    })
+    it('should pass result to done callback', async function() {
+      let result;
+      const promise = catchPosixError(true, PosixError.EACCES, async () => 1234, (value) => { result = value });
+      await expect(promise).to.eventually.equal(0);
+      expect(result).to.equal(1234);
+    })
+    it('should pass error result to failure callback', async function() {
+      let error;
+      const promise = catchPosixError(true, PosixError.EACCES, async () => {
+        throw new Error()
+      }, () => {}, (err) => {
+        error = err;
+      });
+      await expect(promise).to.eventually.equal(PosixError.EACCES);
     })
   })
 })

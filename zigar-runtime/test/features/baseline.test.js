@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { capture, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();

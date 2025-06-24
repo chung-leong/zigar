@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 
 const Env = defineEnvironment();
 

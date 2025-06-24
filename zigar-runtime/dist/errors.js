@@ -1,6 +1,6 @@
 import { StructureType, memberNames, PosixError } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { getPrimitiveName, defineProperty } from './utils.js';
+import { getPrimitiveName, defineProperty, isPromise } from './utils.js';
 
 class MustBeOverridden extends Error {
   constructor() {
@@ -428,8 +428,6 @@ class IllegalSeek extends Error {
 }
 
 class Deadlock extends Error {
-  code = PosixError.EDEADLK;
-
   constructor() {
     super(`Unable to await promise`);
   }
@@ -533,9 +531,28 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function showPosixError(err) {
-  console.error(err);
-  return err.code ?? PosixError.EACCES;
+function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+  const fail = (err) => {
+    const result = (reject) ? reject() : console.error(err);
+    return result ?? err.code ?? defErrorCode;
+  };
+  const done = (value) => {
+    const result = resolve?.(value);
+    return result ?? PosixError.NONE;
+  };
+  try {
+    const result = run();
+    if (isPromise(result)) {
+      if (!canWait) {
+        throw new Deadlock();
+      }
+      return result.then(done, fail);
+    } else {
+      return done(result);
+    }
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 function isErrorJSON(arg) {
@@ -570,4 +587,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, showPosixError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, catchPosixError, checkInefficientAccess, deanimalizeErrorName, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };

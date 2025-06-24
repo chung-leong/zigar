@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { CACHE, MEMORY, RESTORE, ZIG } from '../../src/symbols.js';
 import { defineProperties, defineValue, ObjectCache } from '../../src/utils.js';
 

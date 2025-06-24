@@ -40,7 +40,7 @@ export function addTests(importModule, options) {
         if (path === 'chinook.db') return { size: content.length };
         return false;
       });
-      __zigar.on('mkdir', () => true);
+      __zigar.on('mkdir', () => new Map());
       __zigar.on('rmdir', () => true);
       const lines = await capture(() => search('music'));
       expect(lines).to.have.lengthOf(4);

@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { showPosixError } from '../errors.js';
+import { catchPosixError } from '../errors.js';
 
 const Right = {
     fd_datasync: 1 << 0,
@@ -36,8 +36,8 @@ const Right = {
 };
 
 export default mixin({
-  wasi_fd_fdstat_get(fd, buf_address, canWait = false) {
-    try {
+  wasi_fd_fdstat_get(fd, buf_address, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const dv = new DataView(this.memory.buffer);
       let type, flags = 0, rights;
       if (fd === 3) {
@@ -64,9 +64,6 @@ export default mixin({
       dv.setUint16(buf_address + 2, flags);
       dv.setBigUint64(buf_address + 8, BigInt(rights));
       dv.setBigUint64(buf_address + 16, 0n);
-      return PosixError.NONE;
-    } catch (err) {
-      return showPosixError(err);
-    }
+    });
   },
 });

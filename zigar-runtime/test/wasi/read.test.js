@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
-  describe('Feature: wasi-read', function() {
+  describe('Wasi: read', function() {
     it('should provide a function that read from a Uint8Array', async function() {
       const env = new Env();
       const encoder = new TextEncoder();
@@ -47,7 +47,7 @@ if (process.env.TARGET === 'wasm') {
       const [ error ] = await captureError(() => {
         result = f(0, bufferAddress, 1, readAddress);
       });
-      expect(result).to.equal(PosixError.EDEADLK);
+      expect(result).to.equal(PosixError.EIO);
       expect(error).to.contains('promise');
     })
  })

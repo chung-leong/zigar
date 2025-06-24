@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { AccessorAll } from '../../src/mixins.js';
+import { AccessorAll } from '../../src/mixins-wasi.js';
 import { FALLBACK } from '../../src/symbols.js';
 import { usize } from '../test-utils.js';
 

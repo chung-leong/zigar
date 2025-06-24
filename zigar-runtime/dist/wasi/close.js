@@ -1,24 +1,13 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { Deadlock, showPosixError } from '../errors.js';
-import { isPromise } from '../utils.js';
+import { catchPosixError } from '../errors.js';
 
 var close = mixin({
-  wasi_fd_close(fd, canWait = false) {
-    const done = () => PosixError.NONE;
-    try {
+  wasi_fd_close(fd, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       this.wasi.pathMap?.delete?.(fd);
-      const result = this.closeStream(fd);
-      if (isPromise(result)) {
-        if (canWait) {
-          throw new Deadlock();
-        }
-        return result.then(done, showPosixError);
-      }
-      return done(result);
-    } catch (err) {
-      return showPosixError(err);
-    }
+      this.closeStream(fd);
+    });
   }
 });
 

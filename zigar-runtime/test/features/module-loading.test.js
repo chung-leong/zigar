@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { ALIGN, COPY, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 import { captureError, usize } from '../test-utils.js';

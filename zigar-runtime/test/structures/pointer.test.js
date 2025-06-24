@@ -1,15 +1,15 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+    MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
-  UPDATE, VISIT, ZIG,
+    ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+    UPDATE, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineValue, usizeInvalid } from '../../src/utils.js';
+import { defineValue } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();

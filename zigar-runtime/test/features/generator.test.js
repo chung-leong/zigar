@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { FINALIZE, GENERATOR, MEMORY, RESET, RETURN, STRING_RETVAL, THROWING, YIELD } from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 

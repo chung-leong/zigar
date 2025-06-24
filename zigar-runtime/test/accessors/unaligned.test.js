@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { getBitAlignFunction } from '../../src/accessors/unaligned.js';
 import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 
 const Env = defineEnvironment();
 

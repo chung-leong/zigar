@@ -3,7 +3,7 @@ import ChaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidArgument } from '../../src/errors.js';
-import '../../src/mixins.js';
+import '../../src/mixins-wasi.js';
 import { delay } from '../test-utils.js';
 
 use(ChaiAsPromised);
@@ -57,18 +57,18 @@ describe('Feature: reader-conversion', function() {
       const res3 = reader.read(buffer);
       expect(res3).to.equal(1);
       expect(buffer).to.eql(new Uint8Array([ 9, 6, 7, 8 ]));
-      reader.seek(3, 0);
+      reader.seek(3n, 0);
       const res4 = reader.read(buffer);
       expect(res4).to.equal(4);
       expect(buffer).to.eql(new Uint8Array([ 4, 5, 6, 7 ]));
       const res5 = reader.tell();
-      expect(res5).to.equal(7);
-      reader.seek(-2, 1);
+      expect(res5).to.equal(7n);
+      reader.seek(-2n, 1);
       const res6 = reader.tell();
-      expect(res6).to.equal(5);
-      reader.seek(-1, 2);
+      expect(res6).to.equal(5n);
+      reader.seek(-1n, 2);
       const res7 = reader.tell();
-      expect(res7).to.equal(8);
+      expect(res7).to.equal(8n);
       expect(() => reader.seek(1000, 0)).to.throw(InvalidArgument);
       let called = false;
       reader.onClose = () => called = true;
@@ -92,12 +92,12 @@ describe('Feature: reader-conversion', function() {
       const res3 = await reader.read(buffer);
       expect(res3).to.equal(1);
       expect(buffer).to.eql(new Uint8Array([ 9, 6, 7, 8 ]));
-      reader.seek(3, 0);
+      reader.seek(3n, 0);
       const res4 = await reader.read(buffer);
       expect(res4).to.equal(4);
       expect(buffer).to.eql(new Uint8Array([ 4, 5, 6, 7 ]));
       const res5 = reader.tell();
-      expect(res5).to.equal(7);
+      expect(res5).to.equal(7n);
       reader.close();
     })
     it('should convert null to a reader', async function() {
