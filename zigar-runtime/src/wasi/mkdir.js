@@ -1,7 +1,6 @@
-import { TypeMismatch } from '../../dist/errors.js';
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, TypeMismatch } from '../errors.js';
 
 export default mixin({
   wasi_path_create_directory(fd, path_address, path_len, canWait) {

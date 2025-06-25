@@ -1,6 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
+import { hasMethod } from '../utils.js';
 
 const Right = {
     fd_datasync: 1 << 0,
@@ -48,18 +49,18 @@ export default mixin({
         type = 4; // file
         rights = Right.fd_filestat_get;
         if (this.listenerMap.get('set_times')) {
-          rights |= Rights.fd_filestat_set_times;
+          rights |= Right.fd_filestat_set_times;
         }
         for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
           if (hasMethod(stream, name)) {
-            rights |= Rights[`fd_${name}`];
+            rights |= Right[`fd_${name}`];
           }
         }
       }
       dv.setUint8(buf_address + 0, type);
-      dv.setUint16(buf_address + 2, flags);
-      dv.setBigUint64(buf_address + 8, BigInt(rights));
-      dv.setBigUint64(buf_address + 16, 0n);
+      dv.setUint16(buf_address + 2, flags, true);
+      dv.setBigUint64(buf_address + 8, BigInt(rights), true);
+      dv.setBigUint64(buf_address + 16, 0n, true);
     });
   },
 });

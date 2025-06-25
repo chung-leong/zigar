@@ -35,7 +35,7 @@ export default mixin({
       return this.triggerEvent('set_times', { path, times }, PosixError.EBADF);
     }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);
   },
-  path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+  wasi_path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const path = this.obtainZigString(path_address, path_len);
       const times = extractTimes(st_atim, st_mtim, fst_flags);

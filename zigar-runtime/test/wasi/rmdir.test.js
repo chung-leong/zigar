@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -28,6 +29,24 @@ if (process.env.TARGET === 'wasm') {
       expect(event).to.eql({ path: '/world' });
       const result2 = f(3, pathAddress, pathLen);
       expect(result2).to.equal(PosixError.ENOENT);
+    })
+    it('should display error when listener does not return a boolean', async function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 128 });
+      env.addListener('rmdir', () => undefined);
+      const encoder = new TextEncoder();
+      const src = encoder.encode('/world');
+      const pathAddress = 0x1000;
+      const pathLen = src.length;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      const f = env.getWASIHandler('path_remove_directory');
+      let result 
+      const [ error ] = await captureError(() => {
+        result = f(3, pathAddress, pathLen);
+      });
+      expect(result).to.equal(PosixError.ENOENT);
+      expect(error).to.contain('boolean');
     })
   })
 }
