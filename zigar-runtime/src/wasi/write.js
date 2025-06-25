@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 
-export default (process.env.TARGET === 'wasm') ? mixin({
+export default mixin({
   wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait) {
     const dv = new DataView(this.memory.buffer);
     let written = 0, i = 0, p = iovs_ptr;
@@ -24,4 +24,4 @@ export default (process.env.TARGET === 'wasm') ? mixin({
     };
     return next();
   }
-}) : undefined;
+});

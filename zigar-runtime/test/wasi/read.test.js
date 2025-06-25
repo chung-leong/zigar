@@ -8,7 +8,7 @@ const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
   describe('Wasi: read', function() {
-    it('should provide a function that read from a Uint8Array', async function() {
+    it('should read from a Uint8Array', async function() {
       const env = new Env();
       const encoder = new TextEncoder();
       const array = encoder.encode('Hello world');

@@ -279,6 +279,10 @@ export function isCompatibleInstanceOf(object, Type) {
   return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
 }
 
+export function hasMethod(object, name) {
+  return typeof(object?.[name]) === 'function';
+}
+
 export function isPromise(object) {
   return typeof(object?.then) === 'function';
 }

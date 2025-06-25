@@ -8,7 +8,7 @@ const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
   describe('Wasi: seek', function() {
-    it('should provide a function that changes the read position', async function() {
+    it('should change the read position', async function() {
       const env = new Env();
       const encoder = new TextEncoder();
       const array = encoder.encode('Hello world');

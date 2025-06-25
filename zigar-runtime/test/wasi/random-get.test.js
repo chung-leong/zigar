@@ -7,7 +7,7 @@ const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
   describe('Wasi: random-get', function() {
-    it('should provide a function that writes random bytes at memory location', function() {
+    it('should write random bytes at memory location', function() {
       const env = new Env();
       env.memory = new WebAssembly.Memory({ initial: 128 });
       const f = env.getWASIHandler('random_get');

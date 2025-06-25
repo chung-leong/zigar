@@ -9,6 +9,6 @@ var tell = mixin({
       dv.setBigUint64(newoffset_ptr, pos, true);
     });
   }
-}) ;
+});
 
 export { tell as default };

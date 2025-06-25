@@ -24,6 +24,6 @@ var write = mixin({
     };
     return next();
   }
-}) ;
+});
 
 export { write as default };

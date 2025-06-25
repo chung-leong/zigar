@@ -47,17 +47,13 @@ export default mixin({
         const stream = this.getStream(fd);
         type = 4; // file
         rights = Right.fd_filestat_get;
-        if (typeof(stream.read) === 'function') {
-          rights |= Right.read;
+        if (this.listenerMap.get('set_times')) {
+          rights |= Rights.fd_filestat_set_times;
         }
-        if (typeof(stream.write) === 'function') {
-          rights |= Right.write;
-        }
-        if (typeof(stream.seek) === 'function') {
-          rights |= Right.seek;
-        }
-        if (typeof(stream.tell) === 'function') {
-          rights |= Right.tell;
+        for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
+          if (hasMethod(stream, name)) {
+            rights |= Rights[`fd_${name}`];
+          }
         }
       }
       dv.setUint8(buf_address + 0, type);

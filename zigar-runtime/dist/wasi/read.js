@@ -24,6 +24,6 @@ var read = mixin({
     };
     return next();
   }
-}) ;
+});
 
 export { read as default };

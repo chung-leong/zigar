@@ -16,6 +16,6 @@ var prestat = mixin({
   wasi_fd_prestat_dir_name(fd, path_address, path_len) {
     return PosixError.NONE;
   }
-}) ;
+});
 
 export { prestat as default };

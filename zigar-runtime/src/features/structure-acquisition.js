@@ -13,8 +13,11 @@ import callMarshalingOutbound from '../features/call-marshaling-outbound.js';
 import pointerSynchronization from '../features/pointer-synchronization.js';
 import thunkAllocation from '../features/thunk-allocation.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
+import wasiAdvise from '../wasi/advise.js';
 import wasiAll from '../wasi/all.js';
+import wasiAllocate from '../wasi/allocate.js';
 import wasiClose from '../wasi/close.js';
+import wasiDatasync from '../wasi/datasync.js';
 import wasiEnv from '../wasi/env.js';
 import wasiExit from '../wasi/exit.js';
 import wasiFdstat from '../wasi/fdstat.js';
@@ -26,7 +29,10 @@ import wasiRandom from '../wasi/random.js';
 import wasiRead from '../wasi/read.js';
 import wasiRmdir from '../wasi/rmdir.js';
 import wasiSeek from '../wasi/seek.js';
+import wasiSetTime from '../wasi/set-times.js';
+import wasiSync from '../wasi/sync.js';
 import wasiTell from '../wasi/tell.js';
+import wasiUnlink from '../wasi/unlink.js';
 import wasiWrite from '../wasi/write.js';
 import abortSignal from './abort-signal.js';
 import baseline from './baseline.js';
@@ -250,12 +256,18 @@ export default mixin({
         switch (name) {
           case 'environ_get': 
           case 'environ_sizes_get': this.use(wasiEnv); break;
+          case 'fd_advise': this.use(wasiAdvise); break;
+          case 'fd_allocate': this.use(wasiAllocate); break;
           case 'fd_close': this.use(wasiClose); break;
+          case 'fd_datasync': this.use(wasiDatasync); break;
           case 'fd_fdstat_get': this.use(wasiFdstat); break;
           case 'fd_filestat_get':
           case 'path_filestat_get': this.use(wasiFilestat); break;
+          case 'fd_filestat_set_times': 
+          case 'path_filestat_set_times': this.use(wasiSetTime); break;
           case 'fd_prestat_get': 
           case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
+          case 'fd_sync': this.use(wasiSync); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
@@ -263,6 +275,7 @@ export default mixin({
           case 'path_create_directory': this.use(wasiMkdir); break;
           case 'path_remove_directory': this.use(wasiRmdir); break;
           case 'path_open': this.use(wasiOpen); break;
+          case 'path_unlink': this.use(wasiUnlink); break;
           case 'proc_exit': this.use(wasiExit); break;
           case 'random_get': this.use(wasiRandom); break;
         }

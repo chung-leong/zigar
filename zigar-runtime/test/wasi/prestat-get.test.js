@@ -7,7 +7,7 @@ const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
   describe('Wasi: prestat-get', function() {
-    it('should provide a function returning EBADF', function() {
+    it('should return EBADF', function() {
       const env = new Env();
       const f = env.getWASIHandler('fd_prestat_get');
       expect(f).to.be.a('function');

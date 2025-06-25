@@ -8,7 +8,7 @@ const Env = defineEnvironment();
 
 if (process.env.TARGET === 'wasm') {
   describe('Wasi: write', function() {
-    it('should provide a function that write to console', async function() {
+    it('should write to console', async function() {
       const env = new Env();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const f = env.getWASIHandler('fd_write');

@@ -1,5 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch, InvalidArgument } from '../errors.js';
+import { hasMethod } from '../utils.js';
 
 var readerConversion = mixin({
   convertReader(arg) {
@@ -13,7 +14,7 @@ var readerConversion = mixin({
       return new Uint8ArrayReader(arg);
     } else if (arg === null) {
       return new NullStream();
-    } else if (typeof(arg?.read) === 'function') {
+    } else if (hasMethod(arg, 'read')) {
       return arg;
     } else {
       throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
