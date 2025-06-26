@@ -19,9 +19,11 @@ if (process.env.TARGET === 'wasm') {
       const readAddress = 128;
       const dv = new DataView(memory.buffer);
       dv.setUint32(bufferAddress, stringAddress, true);
-      dv.setUint32(bufferAddress + 4, array.length, true);
+      dv.setUint32(bufferAddress + 4, 4, true);
+      dv.setUint32(bufferAddress + 8, stringAddress + 4, true);
+      dv.setUint32(bufferAddress + 12, array.length - 4, true);
       env.redirectStream(0, array);
-      const result = f(0, bufferAddress, 1, readAddress)
+      const result = f(0, bufferAddress, 2, readAddress)
       expect(result).to.equal(PosixError.NONE);
       const string = new Uint8Array(memory.buffer, stringAddress, array.length);
       expect(string).to.eql(array);

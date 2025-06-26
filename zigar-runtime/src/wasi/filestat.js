@@ -13,9 +13,11 @@ export default mixin({
       const path = this.wasi.pathMap?.get?.(fd);
       if (path) {
         try {
-          return this.triggerEvent('stat', { path, flags: {} }, PosixError.EBADF);
+          return this.triggerEvent('stat', { path, flags: {} }, PosixError.ENOENT);
         } catch (err) {        
-          if (err.code !== PosixError.ENOENT) throw err;
+          if (err.code !== PosixError.ENOENT) {
+            throw err;
+          }
         }
       }
       const stream = this.getStream(fd);
@@ -30,9 +32,11 @@ export default mixin({
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
   wasiCopyStat(stat, buf_address) {
-    if (stat === false) return PosixError.ENOENT;
+    if (stat === false) {
+      return PosixError.ENOENT;
+    }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch('object', stat);
+      throw new TypeMismatch('object or false', stat);
     }
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev

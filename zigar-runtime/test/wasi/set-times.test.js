@@ -52,7 +52,7 @@ if (process.env.TARGET === 'wasm') {
     })
     it('should call listener with correct path when a descriptor is used', async function() {
       const env = new Env();
-      env.memory = new WebAssembly.Memory({ initial: 128 });
+      env.memory = new WebAssembly.Memory({ initial: 1 });
       env.addListener('open', () => {
         return new Uint8Array(32);
       });
@@ -78,6 +78,14 @@ if (process.env.TARGET === 'wasm') {
       const result2 = f(fd, 123n, 456n, 1 << 0 | 1 << 2);
       expect(result2).to.equal(0);
       expect(event).to.eql({ path: '/hello.txt', times: { atime: 123n, mtime: 456n } });
+    })
+    it('should fail when file descriptor does not have a path', async function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const fd = 1;
+      const f = env.getWASIHandler('fd_filestat_set_times');
+      const result = f(fd, 123n, 456n, 1 << 0 | 1 << 2);
+      expect(result).to.equal(PosixError.EBADF);
     })
   })
 }

@@ -26,7 +26,9 @@ export default mixin({
       const flags = decodeFlags(oflags, OpenFlag);
       return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
-      if (arg === false) return PosixError.ENOENT;
+      if (arg === false) {
+        return PosixError.ENOENT;
+      }
       const handle = this.createStreamHandle(arg);
       this.wasi.pathMap.set(handle, path);
       const dv = new DataView(this.memory.buffer);

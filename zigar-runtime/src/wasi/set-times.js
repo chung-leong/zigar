@@ -30,7 +30,9 @@ export default mixin({
   wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const path = this.wasi.pathMap?.get?.(fd);
-      if (!path) return false;
+      if (!path) {
+        return false;
+      }
       const times = extractTimes(st_atim, st_mtim, fst_flags);
       return this.triggerEvent('set_times', { path, times }, PosixError.EBADF);
     }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);

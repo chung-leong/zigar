@@ -22,14 +22,17 @@ if (process.env.TARGET === 'wasm') {
       }
       dv.setUint32(bufferAddress, stringAddress, true);
       dv.setUint32(bufferAddress + 4, text.length, true);
+      dv.setUint32(bufferAddress + 8, stringAddress, true);
+      dv.setUint32(bufferAddress + 12, text.length, true);
       let result;
-      const [ line ] = await capture(() => {
-        result = f(1, bufferAddress, 1, writtenAddress);
+      const [ line1, line2 ] = await capture(() => {
+        result = f(1, bufferAddress, 2, writtenAddress);
       });
       expect(result).to.equal(PosixError.NONE);
-      expect(line).to.equal(text.trim());
+      expect(line1).to.equal(text.trim());
+      expect(line2).to.equal(text.trim());
       const written = dv.getUint32(writtenAddress, true);
-      expect(written).to.equal(4);
+      expect(written).to.equal(8);
     })
     it('should write to console when call to fd_write is directed at stderr', async function() {
       const env = new Env();

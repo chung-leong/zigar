@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, TypeMismatch } from '../errors.js';
 
 export default mixin({
   wasi_path_unlink_file(fd, path_address, path_len, canWait) {
