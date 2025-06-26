@@ -37,6 +37,7 @@ import wasiWrite from '../wasi/write.js';
 import abortSignal from './abort-signal.js';
 import baseline from './baseline.js';
 import dataCopying from './data-copying.js';
+import envVariables from './env-variables.js';
 import file from './file.js';
 import generator from './generator.js';
 import jsAllocator from './js-allocator.js';
@@ -283,6 +284,10 @@ export default mixin({
           this.use(streamRedirection);
         }
         switch (name) {
+          case 'environ_get': 
+          case 'environ_sizes_get': 
+            this.use(envVariables); 
+          break;
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
