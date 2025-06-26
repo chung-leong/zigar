@@ -48,7 +48,7 @@ export default mixin({
         const stream = this.getStream(fd);
         type = 4; // file
         rights = Right.fd_filestat_get;
-        if (this.listenerMap.get('set_times')) {
+        if (this.listenerMap.get('set_times') && this.getStreamPath?.(fd)) {
           rights |= Right.fd_filestat_set_times;
         }
         for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {

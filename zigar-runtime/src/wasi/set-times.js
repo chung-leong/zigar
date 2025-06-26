@@ -29,7 +29,7 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
 export default mixin({
   wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.wasi.pathMap?.get?.(fd);
+      const path = this.getStreamPath?.(fd);
       if (!path) {
         return false;
       }
@@ -39,7 +39,7 @@ export default mixin({
   },
   wasi_path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       const times = extractTimes(st_atim, st_mtim, fst_flags);
       return this.triggerEvent('set_times', { path, times }, PosixError.ENOENT);
     }, (success) => (success) ? PosixError.NONE : PosixError.ENOENT);

@@ -2,7 +2,8 @@ import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
 import { ALIGN, FALLBACK, MEMORY, ZIG } from '../symbols.js';
 import {
-  adjustAddress, alignForward, decodeText, findSortedIndex, isInvalidAddress, isMisaligned, usizeInvalid,
+  adjustAddress, alignForward,
+  findSortedIndex, isInvalidAddress, isMisaligned, usizeInvalid,
   usizeMax,
   usizeMin
 } from '../utils.js';
@@ -192,10 +193,6 @@ export default mixin({
   obtainZigArray(address, len) {
     const dv = this.obtainZigView(address, len, false);
     return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  },
-  obtainZigString(address, len) {
-    const array = this.obtainZigArray(address, len);
-    return decodeText(array);
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {

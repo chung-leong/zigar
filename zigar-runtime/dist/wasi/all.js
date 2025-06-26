@@ -4,7 +4,6 @@ import { mixin } from '../environment.js';
 var all = mixin({
   init() {
     this.customWASI = null;
-    this.wasi = {};
   },
   setCustomWASI(wasi) {
     if (wasi && this.executable) {

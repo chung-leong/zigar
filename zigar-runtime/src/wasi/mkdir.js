@@ -5,7 +5,7 @@ import { catchPosixError, TypeMismatch } from '../errors.js';
 export default mixin({
   wasi_path_create_directory(fd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       return this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
     }, (result) => {
       if (result instanceof Map) return;

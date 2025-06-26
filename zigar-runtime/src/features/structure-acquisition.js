@@ -45,8 +45,8 @@ import objectLinkage from './object-linkage.js';
 import promise from './promise.js';
 import readerConversion from './reader-conversion.js';
 import reader from './reader.js';
+import streamLocation from './stream-location.js';
 import streamRedirection from './stream-redirection.js';
-import streamReposition from './stream-reposition.js';
 import workerSupport from './worker-support.js';
 import writerConversion from './writer-conversion.js';
 import writer from './writer.js';
@@ -279,11 +279,14 @@ export default mixin({
           case 'proc_exit': this.use(wasiExit); break;
           case 'random_get': this.use(wasiRandom); break;
         }
+        if (name.startsWith('path_') || name.includes('filestat')) {
+          this.use(streamRedirection);
+        }
         switch (name) {
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
-            this.use(streamRedirection);
+            this.use(streamLocation);
             break;
           case 'fd_close':
             this.use(streamRedirection);
@@ -291,7 +294,7 @@ export default mixin({
           case 'fd_seek':
           case 'fd_tell': 
             this.use(streamRedirection);
-            this.use(streamReposition);
+            this.use(streamPosition);
             break;
           case 'fd_write':
           case 'fd_read':
@@ -326,7 +329,7 @@ export default mixin({
               case StructurePurpose.File:
                 this.use(file);
                 this.use(streamRedirection);
-                this.use(streamReposition);
+                this.use(streamPosition);
                 this.use(readerConversion);
                 this.use(writerConversion);
             }

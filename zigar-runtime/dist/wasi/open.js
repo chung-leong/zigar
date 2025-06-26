@@ -16,19 +16,18 @@ const Right = {
 };
 
 var open = mixin({
-  init() {
-    this.wasi.pathMap = new Map();
-  },
   wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
-    const path = this.obtainZigString(path_address, path_len);
+    const path = this.resolvePath(dirfd, path_address, path_len);
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const rights = decodeFlags(fs_rights_base, Right);
       const flags = decodeFlags(oflags, OpenFlag);
       return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
-      if (arg === false) return PosixError.ENOENT;
+      if (arg === false) {
+        return PosixError.ENOENT;
+      }
       const handle = this.createStreamHandle(arg);
-      this.wasi.pathMap.set(handle, path);
+      this.setStreamPath(handle, path);
       const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
     });

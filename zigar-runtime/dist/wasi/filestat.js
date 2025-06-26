@@ -10,12 +10,14 @@ const LookupFlag = {
 var filestat = mixin({
   wasi_fd_filestat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.wasi.pathMap?.get?.(fd);
+      const path = this.getStreamPath?.(fd);
       if (path) {
         try {
-          return this.triggerEvent('stat', { path, flags: {} }, PosixError.EBADF);
+          return this.triggerEvent('stat', { path, flags: {} }, PosixError.ENOENT);
         } catch (err) {        
-          if (err.code !== PosixError.ENOENT) throw err;
+          if (err.code !== PosixError.ENOENT) {
+            throw err;
+          }
         }
       }
       const stream = this.getStream(fd);
@@ -24,15 +26,17 @@ var filestat = mixin({
   },
   wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       const flags = decodeFlags(lookup_flags, LookupFlag);
       return this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
   wasiCopyStat(stat, buf_address) {
-    if (stat === false) return PosixError.ENOENT;
+    if (stat === false) {
+      return PosixError.ENOENT;
+    }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch('object', stat);
+      throw new TypeMismatch('object or false', stat);
     }
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev

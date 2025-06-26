@@ -10,7 +10,7 @@ const LookupFlag = {
 export default mixin({
   wasi_fd_filestat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.wasi.pathMap?.get?.(fd);
+      const path = this.getStreamPath?.(fd);
       if (path) {
         try {
           return this.triggerEvent('stat', { path, flags: {} }, PosixError.ENOENT);
@@ -26,7 +26,7 @@ export default mixin({
   },
   wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       const flags = decodeFlags(lookup_flags, LookupFlag);
       return this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
     }, (stat) => this.wasiCopyStat(stat, buf_address));

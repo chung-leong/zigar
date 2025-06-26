@@ -6,7 +6,7 @@ import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
-describe('Feature: stream-redirection', function() {
+describe('Feature: stream-position', function() {
   describe('changeStreamPointer', function() {
     it('should change the position of an array reader', async function() {
       const env = new Env();
