@@ -20,5 +20,12 @@ export function addTests(importModule, options) {
       expect(lines).to.include('HELLO = 1');
       expect(lines).to.include('WORLD = 123');
     });
+    it('should print random numbers', async function () {
+      this.timeout(0);
+      const { print } = await importTest('print-random');
+      const [ line ] = await capture(() => print());
+      const list = line.slice(1, -1).trim().split(/\s*,\s*/);
+      expect(list).to.have.lengthOf(16);
+    })
   })
 }
