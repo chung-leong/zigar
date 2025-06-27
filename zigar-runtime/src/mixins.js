@@ -21,6 +21,7 @@ export { default as FeatureBaseline } from './features/baseline.js';
 export { default as FeatureCallMarshalingInbound } from './features/call-marshaling-inbound.js';
 export { default as FeatureCallMarshalingOutbound } from './features/call-marshaling-outbound.js';
 export { default as FeatureDataCopying } from './features/data-copying.js';
+export { default as FeatureEnvVariables } from './features/env-variables.js';
 export { default as FeatureFile } from './features/file.js';
 export { default as FeatureGenerator } from './features/generator.js';
 export { default as FeatureIntConversion } from './features/int-conversion.js';

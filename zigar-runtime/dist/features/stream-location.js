@@ -13,10 +13,10 @@ var streamLocation = mixin({
     }
     const parts = path.trim().split('/');
     const list = [];
-    if (dirHandle && parts[0].length !== '') {
+    if (dirHandle && parts[0] !== '') {
       const parentPath = this.getStreamPath(dirHandle);
       if (parentPath !== undefined) {
-        list.push(parentPath.split('/'));
+        list.push(...parentPath.split('/'));
       }
     }
     for (const part of parts) {

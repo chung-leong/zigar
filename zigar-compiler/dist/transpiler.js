@@ -458,6 +458,10 @@ function isCompatibleInstanceOf(object, Type) {
   return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
 }
 
+function hasMethod(object, name) {
+  return typeof(object?.[name]) === 'function';
+}
+
 function isPromise(object) {
   return typeof(object?.then) === 'function';
 }
@@ -2561,9 +2565,9 @@ class BufferExpected extends TypeError {
   constructor(structure) {
     const { type, byteSize, typedArray } = structure;
     const s = (byteSize !== 1) ? 's' : '';
-    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle$1);
+    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
     if (typedArray) {
-      acceptable.push(addArticle$1(typedArray.name));
+      acceptable.push(addArticle(typedArray.name));
     }
     let msg;
     if (type === StructureType.Slice) {
@@ -2639,12 +2643,12 @@ class InvalidInitializer extends TypeError {
     const acceptable = [];
     if (Array.isArray(expected)) {
       for (const type of expected) {
-        acceptable.push(addArticle$1(type));
+        acceptable.push(addArticle(type));
       }
     } else {
-      acceptable.push(addArticle$1(expected));
+      acceptable.push(addArticle(expected));
     }
-    const received = getDescription$1(arg);
+    const received = getDescription(arg);
     super(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
   }
 }
@@ -2788,12 +2792,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-let TypeMismatch$2 = class TypeMismatch extends TypeError {
+class TypeMismatch extends TypeError {
   constructor(expected, arg) {
-    const received = getDescription$1(arg);
-    super(`Expected ${addArticle$1(expected)}, received ${received}`);
+    const received = getDescription(arg);
+    super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-};
+}
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -2819,7 +2823,7 @@ class InvalidPointerTarget extends TypeError {
     let target;
     if (arg != null) {
       const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
-      const a = article$1(noun);
+      const a = article(noun);
       target = `${a} ${noun}`;
     } else {
       target = arg + '';
@@ -3059,7 +3063,7 @@ function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }
 
-function getDescription$1(arg) {
+function getDescription(arg) {
   const type = typeof(arg);
   let s;
   if (type === 'object') {
@@ -3067,14 +3071,14 @@ function getDescription$1(arg) {
   } else {
     s = type;
   }
-  return addArticle$1(s);
+  return addArticle(s);
 }
 
-function addArticle$1(noun) {
-  return `${article$1(noun)} ${noun}`;
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
 }
 
-function article$1(noun) {
+function article(noun) {
   return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
 }
 
@@ -3117,7 +3121,7 @@ var allocatorMethods = mixin({
         const { dv, align } = getMemory(arg);
         const zig = dv?.[ZIG];
         if (!zig) {
-          throw new TypeMismatch$2('object containing allocated Zig memory', arg);
+          throw new TypeMismatch('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
         if (address === usizeInvalid) {
@@ -3136,7 +3140,7 @@ var allocatorMethods = mixin({
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch$2('string, DataView, typed array, or Zig object', arg);
+          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
         copy(dest, src);
@@ -3808,6 +3812,25 @@ var dataCopying = mixin({
   } )
 });
 
+var envVariables = mixin({
+  getEnvVariables() {
+    let env = this.envVariables;
+    if (!env) {
+      const listener = this.listenerMap.get('env');
+      const result = listener?.() ?? {};
+      if (typeof(result) !== 'object') {
+        throw TypeMismatch('object', result);
+      }
+      env = this.envVariables = [];
+      for (const [ name, value ] of Object.entries(result)) {
+        const array = encodeText(`${name}=${value}`);
+        env.push(array);
+      }
+    }
+    return env;
+  },
+});
+
 var file = mixin({
   // create File struct for outbound call
   createFile(arg) {
@@ -3829,7 +3852,7 @@ var generator = mixin({
     const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch$2('function', func);
+        throw new TypeMismatch('function', func);
       }
     } else {
       const generator = args[GENERATOR] = new AsyncGenerator();
@@ -4294,10 +4317,6 @@ var memoryMapping = mixin({
     const dv = this.obtainZigView(address, len, false);
     return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   },
-  obtainZigString(address, len) {
-    const array = this.obtainZigArray(address, len);
-    return decodeText(array);
-  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -4754,7 +4773,7 @@ var promise = mixin({
     const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch$2('function', func);
+        throw new TypeMismatch('function', func);
       }
     } else {
       args[PROMISE] = new Promise((resolve, reject) => {
@@ -4829,10 +4848,10 @@ var readerConversion = mixin({
       return new Uint8ArrayReader(arg);
     } else if (arg === null) {
       return new NullStream();
-    } else if (typeof(arg?.read) === 'function') {
+    } else if (hasMethod(arg, 'read')) {
       return arg;
     } else {
-      throw new TypeMismatch$2('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
+      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
     }
   }
 });
@@ -5049,6 +5068,63 @@ function getIntRange(member) {
   }
 }
 
+var streamLocation = mixin({
+  init() {
+    this.streamPathMap = new Map([ [ 3, '' ]]);
+  },
+  resolvePath(dirHandle, pathAddress, pathLen) {
+    const pathArray = this.obtainZigArray(pathAddress, pathLen);
+    let path = decodeText(pathArray).trim();
+    if (path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+    const parts = path.trim().split('/');
+    const list = [];
+    if (dirHandle && parts[0] !== '') {
+      const parentPath = this.getStreamPath(dirHandle);
+      if (parentPath !== undefined) {
+        list.push(...parentPath.split('/'));
+      }
+    }
+    for (const part of parts) {
+      if (part === '..') {
+        list.pop();
+      } else if (part !== '.') {
+        list.push(part);
+      }
+    }
+    return list.join('/');
+  },
+  getStreamPath(fd) {
+    return this.streamPathMap.get(fd);
+  },
+  setStreamPath(fd, path) {
+    const m = this.streamPathMap;
+    if (path) {
+      m.set(fd, path);
+    } else {
+      m.delete(fd);
+    }
+  },
+});
+
+var streamPosition$1 = mixin({
+  changeStreamPointer(fd, offset, whence) {
+    const reader = this.getStream(fd);
+    if (typeof(reader.seek) !== 'function') {
+      throw new IllegalSeek();
+    }
+    return reader.seek(offset, whence);
+  },
+  getStreamPointer(fd) {
+    const reader = this.getStream(fd);
+    if (typeof(reader.tell) !== 'function') {
+      throw new IllegalSeek();
+    }
+    return reader.tell();
+  },
+});
+
 var streamRedirection = mixin({
   init() {
     const w1 = this.createLogWriter(1);
@@ -5071,7 +5147,7 @@ var streamRedirection = mixin({
       try {
         stream = this.convertWriter(arg);
       } catch {
-        throw new TypeMismatch$2('reader or writer', arg);
+        throw new TypeMismatch('reader or writer', arg);
       }
     }
     const handle = this.nextStreamHandle++;
@@ -5175,23 +5251,6 @@ var streamRedirection = mixin({
   } ),
 });
 
-var streamReposition = mixin({
-  changeStreamPointer(fd, offset, whence) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.seek) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.seek(offset, whence);
-  },
-  getStreamPointer(fd) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.tell) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.tell();
-  },
-});
-
 var thunkAllocation = mixin({
   ...({
     exports: {
@@ -5293,10 +5352,28 @@ var thunkAllocation = mixin({
   } ),
 });
 
+const Advice = {
+  normal: 0,
+  sequential: 1,
+  random: 2,
+  willNeed: 3,
+  dontNeed: 4,
+  noReuse: 5,
+};
+
+var wasiAdvise = mixin({
+  wasi_fd_advise(fd, offset, len, advice, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      const adviceKeys = Object.keys(Advice);
+      return stream.advise?.(offset, len, adviceKeys[advice]);
+    });
+  }
+});
+
 var wasiAll = mixin({
   init() {
     this.customWASI = null;
-    this.wasi = {};
   },
   setCustomWASI(wasi) {
     if (wasi && this.executable) {
@@ -5314,23 +5391,54 @@ var wasiAll = mixin({
   },
 });
 
+var wasiAllocate = mixin({
+  wasi_fd_allocate(fd, offset, len, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      return stream.allocate(offset, len);
+    });
+  }
+});
+
 var wasiClose = mixin({
   wasi_fd_close(fd, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => this.closeStream(fd));
+  }
+});
+
+var wasiDatasync = mixin({
+  wasi_fd_datasync(fd, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      this.wasi.pathMap?.delete?.(fd);
-      const result = this.closeStream(fd);
+      const stream = this.getStream(fd);
+      return stream.datasync?.();
     });
   }
 });
 
 var wasiEnv = mixin({
-  wasi_environ_get(ctx, environ, environ_buf) {
+  wasi_environ_get(environ_address, environ_buf_address) {
+    const dv = new DataView(this.memory.buffer);
+    const env = this.getEnvVariables();
+    let p = environ_address, b = environ_buf_address;
+    for (const array of env) {
+      dv.setUint32(p, b, true);      
+      for (let i = 0; i < array.length; i++) {
+        dv.setUint8(b++, array[i]);
+      }
+      dv.setUint8(b++, 0);
+      p += 4;
+    }
     return PosixError.NONE;
   },
-  wasi_environ_sizes_get(ctx, environ_count_address, environ_buf_size_address) {
+  wasi_environ_sizes_get(environ_count_address, environ_buf_size_address) {
     const dv = new DataView(this.memory.buffer);
-    dv.setUint32(environ_count_address, 0, true);
-    dv.setUint32(environ_buf_size_address, 0, true);
+    const env = this.getEnvVariables();
+    let size = 0;
+    for (const array of env) {
+      size += array.length + 1;
+    }
+    dv.setUint32(environ_count_address, env.length, true);
+    dv.setUint32(environ_buf_size_address, size, true);
     return PosixError.NONE;
   },
 });
@@ -5386,23 +5494,19 @@ var wasiFdstat = mixin({
         const stream = this.getStream(fd);
         type = 4; // file
         rights = Right$1.fd_filestat_get;
-        if (typeof(stream.read) === 'function') {
-          rights |= Right$1.read;
+        if (this.listenerMap.get('set_times') && this.getStreamPath?.(fd)) {
+          rights |= Right$1.fd_filestat_set_times;
         }
-        if (typeof(stream.write) === 'function') {
-          rights |= Right$1.write;
-        }
-        if (typeof(stream.seek) === 'function') {
-          rights |= Right$1.seek;
-        }
-        if (typeof(stream.tell) === 'function') {
-          rights |= Right$1.tell;
+        for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
+          if (hasMethod(stream, name)) {
+            rights |= Right$1[`fd_${name}`];
+          }
         }
       }
       dv.setUint8(buf_address + 0, type);
-      dv.setUint16(buf_address + 2, flags);
-      dv.setBigUint64(buf_address + 8, BigInt(rights));
-      dv.setBigUint64(buf_address + 16, 0n);
+      dv.setUint16(buf_address + 2, flags, true);
+      dv.setBigUint64(buf_address + 8, BigInt(rights), true);
+      dv.setBigUint64(buf_address + 16, 0n, true);
     });
   },
 });
@@ -5414,12 +5518,14 @@ const LookupFlag = {
 var wasiFilestat = mixin({
   wasi_fd_filestat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.wasi.pathMap?.get?.(fd);
+      const path = this.getStreamPath?.(fd);
       if (path) {
         try {
-          return this.triggerEvent('stat', { path, flags: {} }, PosixError.EBADF);
+          return this.triggerEvent('stat', { path, flags: {} }, PosixError.ENOENT);
         } catch (err) {        
-          if (err.code !== PosixError.ENOENT) throw err;
+          if (err.code !== PosixError.ENOENT) {
+            throw err;
+          }
         }
       }
       const stream = this.getStream(fd);
@@ -5428,15 +5534,17 @@ var wasiFilestat = mixin({
   },
   wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       const flags = decodeFlags(lookup_flags, LookupFlag);
       return this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
   wasiCopyStat(stat, buf_address) {
-    if (stat === false) return PosixError.ENOENT;
+    if (stat === false) {
+      return PosixError.ENOENT;
+    }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch$2('object', stat);
+      throw new TypeMismatch('object or false', stat);
     }
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev
@@ -5450,44 +5558,16 @@ var wasiFilestat = mixin({
   }
 });
 
-globalThis[Symbol.for('ZIGAR')] ||= {};
-
-let TypeMismatch$1 = class TypeMismatch extends TypeError {
-  constructor(expected, arg) {
-    const received = getDescription(arg);
-    super(`Expected ${addArticle(expected)}, received ${received}`);
-  }
-};
-
-function getDescription(arg) {
-  const type = typeof(arg);
-  let s;
-  if (type === 'object') {
-    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
-  } else {
-    s = type;
-  }
-  return addArticle(s);
-}
-
-function addArticle(noun) {
-  return `${article(noun)} ${noun}`;
-}
-
-function article(noun) {
-  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
-}
-
 var wasiMkdir = mixin({
   wasi_path_create_directory(fd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       return this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
     }, (result) => {
       if (result instanceof Map) return;
       if (result === true) return PosixError.EEXIST;
       if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch$1('map or boolean', result);
+      throw new TypeMismatch('map or boolean', result);
     });
   }
 });
@@ -5505,19 +5585,18 @@ const Right = {
 };
 
 var wasiOpen = mixin({
-  init() {
-    this.wasi.pathMap = new Map();
-  },
   wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
-    const path = this.obtainZigString(path_address, path_len);
+    const path = this.resolvePath(dirfd, path_address, path_len);
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const rights = decodeFlags(fs_rights_base, Right);
       const flags = decodeFlags(oflags, OpenFlag);
       return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
-      if (arg === false) return PosixError.ENOENT;
+      if (arg === false) {
+        return PosixError.ENOENT;
+      }
       const handle = this.createStreamHandle(arg);
-      this.wasi.pathMap.set(handle, path);
+      this.setStreamPath(handle, path);
       const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
     });
@@ -5539,7 +5618,7 @@ var wasiPrestat = mixin({
   wasi_fd_prestat_dir_name(fd, path_address, path_len) {
     return PosixError.NONE;
   }
-}) ;
+});
 
 var wasiRandom = mixin({
   wasi_random_get(buf_address, buf_len) {
@@ -5573,12 +5652,12 @@ var wasiRead = mixin({
     };
     return next();
   }
-}) ;
+});
 
 var wasiRmdir = mixin({
   wasi_path_remove_directory(fd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.obtainZigString(path_address, path_len);
+      const path = this.resolvePath(fd, path_address, path_len);
       return this.triggerEvent('rmdir', { path }, PosixError.ENOENT);
     }, (result) => {
       if (result === true) return PosixError.NONE 
@@ -5597,6 +5676,59 @@ var wasiSeek = mixin({
   },
 });
 
+const TimeFlag = {
+  atime: 1 << 0,
+  atime_now: 1 << 1,
+  mtime: 1 << 2,
+  mtime_now: 1 << 3,
+};
+
+const now = () => new Date() * 1000;
+
+function extractTimes(st_atim, st_mtim, fst_flags) {
+  const times = {};
+  if (fst_flags & TimeFlag.atime) {
+    times.atime = st_atim;
+  } else if (fst_flags & TimeFlag.atime_now) {
+    times.atime = now();
+  }
+  if (fst_flags & TimeFlag.mtime) {
+    times.mtime = st_mtim;
+  } else if (fst_flags & TimeFlag.mtime_now) {
+    times.mtime = now();
+  }
+  return times;
+}
+
+var wasiSetTime = mixin({
+  wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const path = this.getStreamPath?.(fd);
+      if (!path) {
+        return false;
+      }
+      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      return this.triggerEvent('set_times', { path, times }, PosixError.EBADF);
+    }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);
+  },
+  wasi_path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const path = this.resolvePath(fd, path_address, path_len);
+      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      return this.triggerEvent('set_times', { path, times }, PosixError.ENOENT);
+    }, (success) => (success) ? PosixError.NONE : PosixError.ENOENT);
+  },
+});
+
+var wasiSync = mixin({
+  wasi_fd_sync(fd, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      return stream.sync?.();
+    });
+  }
+});
+
 var wasiTell = mixin({
   wasi_fd_tell(fd, newoffset_ptr, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => this.getStreamPointer(fd), (pos) => {
@@ -5604,7 +5736,20 @@ var wasiTell = mixin({
       dv.setBigUint64(newoffset_ptr, pos, true);
     });
   }
-}) ;
+});
+
+var wasiUnlink = mixin({
+  wasi_path_unlink_file(fd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const path = this.resolvePath(fd, path_address, path_len);
+      return this.triggerEvent('unlink', { path }, PosixError.ENOENT);
+    }, (result) => {
+      if (result === true) return PosixError.NONE 
+      if (result === false) return PosixError.ENOENT;
+      throw new TypeMismatch('boolean', result);
+    });
+  }
+});
 
 var wasiWrite = mixin({
   wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait) {
@@ -5628,7 +5773,7 @@ var wasiWrite = mixin({
     };
     return next();
   }
-}) ;
+});
 
 var workerSupport = mixin({
   init() {
@@ -5777,7 +5922,7 @@ var writerConversion = mixin({
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch$2('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
+      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
     }
   },
 });
@@ -6075,12 +6220,18 @@ var structureAcquisition = mixin({
         switch (name) {
           case 'environ_get': 
           case 'environ_sizes_get': this.use(wasiEnv); break;
+          case 'fd_advise': this.use(wasiAdvise); break;
+          case 'fd_allocate': this.use(wasiAllocate); break;
           case 'fd_close': this.use(wasiClose); break;
+          case 'fd_datasync': this.use(wasiDatasync); break;
           case 'fd_fdstat_get': this.use(wasiFdstat); break;
           case 'fd_filestat_get':
           case 'path_filestat_get': this.use(wasiFilestat); break;
+          case 'fd_filestat_set_times': 
+          case 'path_filestat_set_times': this.use(wasiSetTime); break;
           case 'fd_prestat_get': 
           case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
+          case 'fd_sync': this.use(wasiSync); break;
           case 'fd_read': this.use(wasiRead); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
@@ -6088,14 +6239,22 @@ var structureAcquisition = mixin({
           case 'path_create_directory': this.use(wasiMkdir); break;
           case 'path_remove_directory': this.use(wasiRmdir); break;
           case 'path_open': this.use(wasiOpen); break;
+          case 'path_unlink': this.use(wasiUnlink); break;
           case 'proc_exit': this.use(wasiExit); break;
           case 'random_get': this.use(wasiRandom); break;
         }
+        if (name.startsWith('path_') || name.includes('filestat')) {
+          this.use(streamRedirection);
+        }
         switch (name) {
+          case 'environ_get': 
+          case 'environ_sizes_get': 
+            this.use(envVariables); 
+          break;
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
-            this.use(streamRedirection);
+            this.use(streamLocation);
             break;
           case 'fd_close':
             this.use(streamRedirection);
@@ -6103,7 +6262,7 @@ var structureAcquisition = mixin({
           case 'fd_seek':
           case 'fd_tell': 
             this.use(streamRedirection);
-            this.use(streamReposition);
+            this.use(streamPosition);
             break;
           case 'fd_write':
           case 'fd_read':
@@ -6138,7 +6297,7 @@ var structureAcquisition = mixin({
               case StructurePurpose.File:
                 this.use(file);
                 this.use(streamRedirection);
-                this.use(streamReposition);
+                this.use(streamPosition);
                 this.use(readerConversion);
                 this.use(writerConversion);
             }
@@ -6852,7 +7011,7 @@ var base64 = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch$2('string', str);
+          throw new TypeMismatch('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, allocator);
@@ -6878,7 +7037,7 @@ var clampedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
-          throw new TypeMismatch$2(ClampedArray.name, ta);
+          throw new TypeMismatch(ClampedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -6900,7 +7059,7 @@ var dataView = mixin({
       },
       set(dv, allocator) {
         if (dv?.[Symbol.toStringTag] !== 'DataView') {
-          throw new TypeMismatch$2('DataView', dv);
+          throw new TypeMismatch('DataView', dv);
         }
         thisEnv.assignView(this, dv, structure, true, allocator);
       },
@@ -7130,7 +7289,7 @@ var string = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch$2('string', str);
+          throw new TypeMismatch('string', str);
         }
         const sentinelValue = this.constructor[SENTINEL]?.value;
         if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -7257,7 +7416,7 @@ var typedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
-          throw new TypeMismatch$2(TypedArray.name, ta);
+          throw new TypeMismatch(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -8276,7 +8435,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch$2('function', arg);
+          throw new TypeMismatch('function', arg);
         }
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();
@@ -9722,6 +9881,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
+  FeatureEnvVariables: envVariables,
   FeatureFile: file,
   FeatureGenerator: generator,
   FeatureIntConversion: intConversion,
@@ -9734,8 +9894,9 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureReader: reader,
   FeatureReaderConversion: readerConversion,
   FeatureRuntimeSafety: runtimeSafety,
+  FeatureStreamLocation: streamLocation,
+  FeatureStreamPosition: streamPosition$1,
   FeatureStreamRedirection: streamRedirection,
-  FeatureStreamReposition: streamReposition,
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
@@ -9795,8 +9956,11 @@ var mixins = /*#__PURE__*/Object.freeze({
   VisitorInStruct: inStruct,
   VisitorInUnion: inUnion,
   VisitorInVariadicStruct: inVariadicStruct,
+  WasiAdvise: wasiAdvise,
   WasiAll: wasiAll,
+  WasiAllocate: wasiAllocate,
   WasiClose: wasiClose,
+  WasiDatasync: wasiDatasync,
   WasiEnv: wasiEnv,
   WasiExit: wasiExit,
   WasiFdstat: wasiFdstat,
@@ -9808,7 +9972,10 @@ var mixins = /*#__PURE__*/Object.freeze({
   WasiRead: wasiRead,
   WasiRmdir: wasiRmdir,
   WasiSeek: wasiSeek,
+  WasiSetTimes: wasiSetTime,
+  WasiSync: wasiSync,
   WasiTell: wasiTell,
+  WasiUnlink: wasiUnlink,
   WasiWrite: wasiWrite
 });
 

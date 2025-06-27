@@ -7,7 +7,7 @@ export default mixin({
     const env = this.getEnvVariables();
     let p = environ_address, b = environ_buf_address;
     for (const array of env) {
-      dv.setUint32(p, b, true);      
+      dv.setUint32(p, b, true);
       for (let i = 0; i < array.length; i++) {
         dv.setUint8(b++, array[i]);
       }

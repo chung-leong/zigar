@@ -10,8 +10,9 @@ import * as Iterator from './iterator/tests.js';
 import * as MemoryAllocation from './memory-allocation/tests.js';
 import * as Options from './options/tests.js';
 import * as PackageManager from './package-manager/tests.js';
-import * as ThreadHandling from './thread-handling/tests.js';
 import * as StreamHandling from './stream-handling/tests.js';
+import * as SystemFunctions from './system-functions/tests.js';
+import * as ThreadHandling from './thread-handling/tests.js';
 import * as TypeHandling from './type-handling/tests.js';
 
 export function addTests(importModule, options) {
@@ -29,5 +30,6 @@ export function addTests(importModule, options) {
   PackageManager.addTests(importModule, options);
   ThreadHandling.addTests(importModule, options);
   StreamHandling.addTests(importModule, options);
+  SystemFunctions.addTests(importModule, options);
   TypeHandling.addTests(importModule, options);
 }

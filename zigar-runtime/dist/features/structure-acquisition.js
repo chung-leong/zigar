@@ -32,6 +32,7 @@ import '../wasi/write.js';
 import './abort-signal.js';
 import './baseline.js';
 import './data-copying.js';
+import './env-variables.js';
 import './file.js';
 import './generator.js';
 import './js-allocator.js';
