@@ -25,6 +25,7 @@ const StructurePurpose = {
   Reader: 6,
   Writer: 7,
   File: 8,
+  Directory: 9,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -154,4 +155,15 @@ const PosixError = {
   EOPNOTSUPP: 95,
 };
 
-export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+const PosixFileType = {
+  unknown: 0,
+  blockDevice: 1,
+  characterDevice: 2,
+  directory: 3,
+  file: 4,
+  socketDgram: 5,
+  socketStream: 6,
+  symbolicLink: 7,
+};
+
+export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PosixFileType, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

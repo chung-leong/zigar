@@ -36,6 +36,7 @@ const StructurePurpose = {
   Reader: 6,
   Writer: 7,
   File: 8,
+  Directory: 9,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -155,6 +156,17 @@ const PosixError = {
   EINVAL: 22,
   ESPIPE: 29,
   EOPNOTSUPP: 95,
+};
+
+const PosixFileType = {
+  unknown: 0,
+  blockDevice: 1,
+  characterDevice: 2,
+  directory: 3,
+  file: 4,
+  socketDgram: 5,
+  socketStream: 6,
+  symbolicLink: 7,
 };
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
@@ -2792,12 +2804,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-class TypeMismatch extends TypeError {
+let TypeMismatch$1 = class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-}
+};
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -3121,7 +3133,7 @@ var allocatorMethods = mixin({
         const { dv, align } = getMemory(arg);
         const zig = dv?.[ZIG];
         if (!zig) {
-          throw new TypeMismatch('object containing allocated Zig memory', arg);
+          throw new TypeMismatch$1('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
         if (address === usizeInvalid) {
@@ -3140,7 +3152,7 @@ var allocatorMethods = mixin({
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
+          throw new TypeMismatch$1('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
         copy(dest, src);
@@ -3575,6 +3587,9 @@ var callMarshalingOutbound = mixin({
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
             break;
+          case StructurePurpose.Directory:
+            arg = this.createDirectory(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {
@@ -3812,6 +3827,51 @@ var dataCopying = mixin({
   } )
 });
 
+var dirConversion = mixin({
+  convertDirectory(arg) {
+    if (arg instanceof Map) {
+      return new MapDirectory(arg);
+    } else if (arg?.[Symbol.toStringTag] === 'Generator') {
+      return new GeneratorDirectory(arg);
+    } else {
+      throw new TypeMismatch$1('map, generator, or object with directory interface', arg);
+    }
+  }
+});
+
+class MapDirectory {
+  constructor(map) {
+    this.map = map;
+  }
+
+  *readdir() {
+    for (const [ name, stat ] of this.map) {
+      yield { name, ...stat };
+    }
+  }
+}
+
+class GeneratorDirectory {
+  constructor(generator) {
+    this.generator = generator;
+  }
+
+  readdir() {
+    return this.generator;
+  }
+}
+
+var dir = mixin({
+  // create Dir struct for outbound call
+  createDirectory(arg) {
+    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
+      return arg;
+    }
+    const fd = this.createStreamHandle(arg, 'readdir');
+    return { fd };
+  },
+});
+
 var envVariables = mixin({
   getEnvVariables() {
     let env = this.envVariables;
@@ -3819,7 +3879,7 @@ var envVariables = mixin({
       const listener = this.listenerMap.get('env');
       const result = listener?.() ?? {};
       if (typeof(result) !== 'object') {
-        throw TypeMismatch('object', result);
+        throw TypeMismatch$1('object', result);
       }
       env = this.envVariables = [];
       for (const [ name, value ] of Object.entries(result)) {
@@ -3837,7 +3897,16 @@ var file = mixin({
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
-    const handle = this.createStreamHandle(arg);
+    let handle;
+    for (const type of [ 'read', 'write' ]) {
+      try {
+        handle = this.createStreamHandle(arg, type);
+      } catch {
+      }     
+    }
+    if (!handle) {
+      throw new TypeMismatch$1('reader or writer', arg);
+    }
     return { handle };
   },
 });
@@ -3852,7 +3921,7 @@ var generator = mixin({
     const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
+        throw new TypeMismatch$1('function', func);
       }
     } else {
       const generator = args[GENERATOR] = new AsyncGenerator();
@@ -4773,7 +4842,7 @@ var promise = mixin({
     const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
+        throw new TypeMismatch$1('function', func);
       }
     } else {
       args[PROMISE] = new Promise((resolve, reject) => {
@@ -4851,7 +4920,7 @@ var readerConversion = mixin({
     } else if (hasMethod(arg, 'read')) {
       return arg;
     } else {
-      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
+      throw new TypeMismatch$1('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
     }
   }
 });
@@ -5139,16 +5208,12 @@ var streamRedirection = mixin({
     if (!stream) throw new InvalidFileDescriptor();
     return stream;
   },
-  createStreamHandle(arg) {
-    let stream;
-    try {
-      stream = this.convertReader(arg);
-    } catch (err) {
-      try {
-        stream = this.convertWriter(arg);
-      } catch {
-        throw new TypeMismatch('reader or writer', arg);
-      }
+  createStreamHandle(arg, type) {
+    let stream;    
+    switch (type) {
+      case 'read': stream = this.convertReader(arg); break;
+      case 'write': stream = this.convertWriter(arg); break;
+      case 'readdir': stream = this.convertDirectory(arg); break;
     }
     const handle = this.nextStreamHandle++;
     this.streamMap.set(handle, stream);
@@ -5421,7 +5486,7 @@ var wasiEnv = mixin({
     const env = this.getEnvVariables();
     let p = environ_address, b = environ_buf_address;
     for (const array of env) {
-      dv.setUint32(p, b, true);      
+      dv.setUint32(p, b, true);
       for (let i = 0; i < array.length; i++) {
         dv.setUint8(b++, array[i]);
       }
@@ -5544,12 +5609,13 @@ var wasiFilestat = mixin({
       return PosixError.ENOENT;
     }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch('object or false', stat);
+      throw new TypeMismatch$1('object or false', stat);
     }
+    const type = PosixFileType[stat.type] ?? PosixFileType.file;
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev
     dv.setBigUint64(buf_address + 8, 0n, true);  // ino
-    dv.setUint8(buf_address + 16, 4); // filetype = regular file
+    dv.setUint8(buf_address + 16, type); // filetype
     dv.setBigUint64(buf_address + 24, 0n, true);  // nlink
     dv.setBigUint64(buf_address + 32, BigInt(stat.size ?? 0), true);
     dv.setBigUint64(buf_address + 40, BigInt(stat.atime ?? 0), true);
@@ -5567,7 +5633,7 @@ var wasiMkdir = mixin({
       if (result instanceof Map) return;
       if (result === true) return PosixError.EEXIST;
       if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('map or boolean', result);
+      throw new TypeMismatch$1('map or boolean', result);
     });
   }
 });
@@ -5654,6 +5720,90 @@ var wasiRead = mixin({
   }
 });
 
+var wasiReaddir = mixin({
+  init() {
+    this.wasiCookieMap = new Map();
+    this.wasiNextCookie = 1n;
+  },
+  wasi_fd_readdir(fd, buf_address, buf_len, cookie, bufused_address, canWait) {
+    if (buf_len < 24) {
+      return PosixError.EINVAL;
+    }
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      if (cookie === 0n) {
+        const stream = this.getStream(fd);
+        return stream.readdir();
+      }
+    }, (generator) => {
+      let context;
+      if (cookie === 0n) {
+        const iterator = generator[Symbol.iterator]();
+        context = { iterator, count: 0, entry: null };
+        cookie = this.wasiNextCookie++;
+        this.wasiCookieMap.set(cookie, context);
+      } else {
+        context = this.wasiCookieMap.get(cookie);
+      }
+      let dv = new DataView(this.memory.buffer);
+      let remaining = buf_len;
+      let p = buf_address;
+      let used;
+      if (context) {
+        let { iterator, entry } = context;
+        if (entry) {
+          context.entry = null;
+        }
+        const typeKeys = Object.keys(PosixFileType);
+        while (remaining >= 24) {
+          if (!entry) {
+            if (++context.count <= 2) {
+              entry = { 
+                value: { name: '.'.repeat(context.count), type: 'directory' },
+                done: false,
+              };
+            } else {
+              entry = iterator.next();
+            }
+          }
+          const { value, done } = entry;
+          if (done) {
+            break;
+          }
+          const { name, type, ino = 0 } = value;
+          const array = encodeText(name);
+          let typeIndex = typeKeys.indexOf(type);
+          if (typeIndex === -1) {
+            if (type !== undefined) {
+              throw new TypeMismatch(typeKeys.map(k => `'${k}'`).join(', '), type);
+            }
+            typeIndex = PosixFileType.unknown;
+          }
+          dv.setBigUint64(p, cookie, true);
+          dv.setBigUint64(p + 8, BigInt(ino ?? 0n), true);
+          dv.setUint32(p + 16, array.length, true);
+          dv.setUint8(p + 20, typeIndex);
+          p += 24;
+          remaining -= 24;
+          if (remaining < array.length) {
+            context.entry = entry;
+            break;
+          }
+          for (let i = 0; i < array.length; i++, p++) {
+            dv.setUint8(p, array[i]);
+          }
+          remaining -= array.length;
+          entry = null;
+        }
+      }
+      used = p - buf_address;
+      dv.setUint32(bufused_address, used, true);
+      if (used === 0) {
+        this.wasiCookieMap.delete(cookie);
+      }
+    })
+  }
+});
+
 var wasiRmdir = mixin({
   wasi_path_remove_directory(fd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
@@ -5662,7 +5812,7 @@ var wasiRmdir = mixin({
     }, (result) => {
       if (result === true) return PosixError.NONE 
       if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('boolean', result);
+      throw new TypeMismatch$1('boolean', result);
     });
   }
 });
@@ -5746,7 +5896,7 @@ var wasiUnlink = mixin({
     }, (result) => {
       if (result === true) return PosixError.NONE 
       if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('boolean', result);
+      throw new TypeMismatch$1('boolean', result);
     });
   }
 });
@@ -5922,7 +6072,7 @@ var writerConversion = mixin({
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
+      throw new TypeMismatch$1('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
     }
   },
 });
@@ -6218,7 +6368,7 @@ var structureAcquisition = mixin({
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         this.use(wasiAll);
         switch (name) {
-          case 'environ_get': 
+          case 'environ_get':
           case 'environ_sizes_get': this.use(wasiEnv); break;
           case 'fd_advise': this.use(wasiAdvise); break;
           case 'fd_allocate': this.use(wasiAllocate); break;
@@ -6227,12 +6377,13 @@ var structureAcquisition = mixin({
           case 'fd_fdstat_get': this.use(wasiFdstat); break;
           case 'fd_filestat_get':
           case 'path_filestat_get': this.use(wasiFilestat); break;
-          case 'fd_filestat_set_times': 
+          case 'fd_filestat_set_times':
           case 'path_filestat_set_times': this.use(wasiSetTime); break;
-          case 'fd_prestat_get': 
+          case 'fd_prestat_get':
           case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
           case 'fd_sync': this.use(wasiSync); break;
           case 'fd_read': this.use(wasiRead); break;
+          case 'fd_readdir': this.use(wasiReaddir); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
           case 'fd_write': this.use(wasiWrite); break;
@@ -6247,10 +6398,10 @@ var structureAcquisition = mixin({
           this.use(streamRedirection);
         }
         switch (name) {
-          case 'environ_get': 
-          case 'environ_sizes_get': 
-            this.use(envVariables); 
-          break;
+          case 'environ_get':
+          case 'environ_sizes_get':
+            this.use(envVariables);
+            break;
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
@@ -6260,7 +6411,7 @@ var structureAcquisition = mixin({
             this.use(streamRedirection);
             break;
           case 'fd_seek':
-          case 'fd_tell': 
+          case 'fd_tell':
             this.use(streamRedirection);
             this.use(streamPosition);
             break;
@@ -6300,6 +6451,13 @@ var structureAcquisition = mixin({
                 this.use(streamPosition);
                 this.use(readerConversion);
                 this.use(writerConversion);
+                break;
+              case StructurePurpose.Directory:
+                this.use(dir);
+                this.use(dirConversion);
+                this.use(streamRedirection);
+                this.use(streamLocation);
+                break;
             }
           }
         } else if (structure.type === StructureType.Function) {
@@ -6336,7 +6494,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [ member ] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, static: { template }, flags } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -6363,11 +6521,11 @@ var structureAcquisition = mixin({
     }
   },
   getArrayName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
-    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+    for (const name of ['Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
       if (s.flags & StructFlag[`Is${name}`]) return name;
     }
     return `S${this.structureCounters.struct++}`;
@@ -6376,7 +6534,7 @@ var structureAcquisition = mixin({
     return `U${this.structureCounters.union++}`;
   },
   getErrorUnionName(s) {
-    const { instance: { members: [ payload, errorSet ] } } = s;
+    const { instance: { members: [payload, errorSet] } } = s;
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
@@ -6386,11 +6544,11 @@ var structureAcquisition = mixin({
     return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
-    const { instance: { members: [ payload ] } } = s;
+    const { instance: { members: [payload] } } = s;
     return `?${payload.structure.name}`;
   },
   getPointerName(s) {
-    const { instance: { members: [ target ] }, flags } = s;
+    const { instance: { members: [target] }, flags } = s;
     let prefix = '*';
     let targetName = target.structure.name;
     if (target.structure.type === StructureType.Slice) {
@@ -6418,11 +6576,11 @@ var structureAcquisition = mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [ element ] }, flags } = s;
+    const { instance: { members: [element] }, flags } = s;
     return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
@@ -6445,7 +6603,7 @@ var structureAcquisition = mixin({
     return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
-    const { instance: { members: [ args ] } } = s;
+    const { instance: { members: [args] } } = s;
     const argName = args.structure.name;
     return argName.slice(4, -1);
   },
@@ -7011,7 +7169,7 @@ var base64 = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$1('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, allocator);
@@ -7037,7 +7195,7 @@ var clampedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
-          throw new TypeMismatch(ClampedArray.name, ta);
+          throw new TypeMismatch$1(ClampedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -7059,7 +7217,7 @@ var dataView = mixin({
       },
       set(dv, allocator) {
         if (dv?.[Symbol.toStringTag] !== 'DataView') {
-          throw new TypeMismatch('DataView', dv);
+          throw new TypeMismatch$1('DataView', dv);
         }
         thisEnv.assignView(this, dv, structure, true, allocator);
       },
@@ -7289,7 +7447,7 @@ var string = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$1('string', str);
         }
         const sentinelValue = this.constructor[SENTINEL]?.value;
         if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -7416,7 +7574,7 @@ var typedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
-          throw new TypeMismatch(TypedArray.name, ta);
+          throw new TypeMismatch$1(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -8435,7 +8593,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch('function', arg);
+          throw new TypeMismatch$1('function', arg);
         }
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();
@@ -9881,6 +10039,8 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
+  FeatureDir: dir,
+  FeatureDirConversion: dirConversion,
   FeatureEnvVariables: envVariables,
   FeatureFile: file,
   FeatureGenerator: generator,
@@ -9970,6 +10130,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   WasiPrestat: wasiPrestat,
   WasiRandom: wasiRandom,
   WasiRead: wasiRead,
+  WasiReaddir: wasiReaddir,
   WasiRmdir: wasiRmdir,
   WasiSeek: wasiSeek,
   WasiSetTimes: wasiSetTime,

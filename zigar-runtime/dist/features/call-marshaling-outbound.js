@@ -71,6 +71,9 @@ var callMarshalingOutbound = mixin({
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
             break;
+          case StructurePurpose.Directory:
+            arg = this.createDirectory(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {

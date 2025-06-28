@@ -22,6 +22,7 @@ import '../wasi/open.js';
 import '../wasi/prestat.js';
 import '../wasi/random.js';
 import '../wasi/read.js';
+import '../wasi/readdir.js';
 import '../wasi/rmdir.js';
 import '../wasi/seek.js';
 import '../wasi/set-times.js';
@@ -32,6 +33,8 @@ import '../wasi/write.js';
 import './abort-signal.js';
 import './baseline.js';
 import './data-copying.js';
+import './dir-conversion.js';
+import './dir.js';
 import './env-variables.js';
 import './file.js';
 import './generator.js';
@@ -246,7 +249,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [ member ] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, static: { template }, flags } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -273,11 +276,11 @@ var structureAcquisition = mixin({
     }
   },
   getArrayName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
-    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+    for (const name of ['Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
       if (s.flags & StructFlag[`Is${name}`]) return name;
     }
     return `S${this.structureCounters.struct++}`;
@@ -286,7 +289,7 @@ var structureAcquisition = mixin({
     return `U${this.structureCounters.union++}`;
   },
   getErrorUnionName(s) {
-    const { instance: { members: [ payload, errorSet ] } } = s;
+    const { instance: { members: [payload, errorSet] } } = s;
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
@@ -296,11 +299,11 @@ var structureAcquisition = mixin({
     return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
-    const { instance: { members: [ payload ] } } = s;
+    const { instance: { members: [payload] } } = s;
     return `?${payload.structure.name}`;
   },
   getPointerName(s) {
-    const { instance: { members: [ target ] }, flags } = s;
+    const { instance: { members: [target] }, flags } = s;
     let prefix = '*';
     let targetName = target.structure.name;
     if (target.structure.type === StructureType.Slice) {
@@ -328,11 +331,11 @@ var structureAcquisition = mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [ element ] }, flags } = s;
+    const { instance: { members: [element] }, flags } = s;
     return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
@@ -355,7 +358,7 @@ var structureAcquisition = mixin({
     return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
-    const { instance: { members: [ args ] } } = s;
+    const { instance: { members: [args] } } = s;
     const argName = args.structure.name;
     return argName.slice(4, -1);
   },

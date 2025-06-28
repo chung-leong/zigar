@@ -287,6 +287,24 @@ export function addTests(importModule, options) {
       });
       expect(error).to.equal('Error: Doh!');
     })
+    it('should print directory contents', async function() {
+      this.timeout(0);
+      const { print } = await importTest('read-directory');
+      const map1 = new Map([
+        [ 'hello.txt', { type: 'file' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      const lines1 = await capture(() => print(map1));
+      expect(lines1).to.eql([ 'hello.txt file', 'world directory' ]);
+      const initializers = [];
+      for (let i = 0; i < 100; i++) {
+        const name = 'x'.repeat(i + 1) + '.txt';
+        initializers.push([ name, { type: 'file' } ]);
+      }
+      const map2 = new Map(initializers)
+      const lines2 = await capture(() => print(map2));
+      expect(lines2).to.have.lengthOf(100);
+    })
   })
 }
 

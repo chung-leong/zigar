@@ -1,4 +1,4 @@
-import { PosixError } from '../constants.js';
+import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { TypeMismatch, catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
@@ -38,10 +38,11 @@ var filestat = mixin({
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch('object or false', stat);
     }
+    const type = PosixFileType[stat.type] ?? PosixFileType.file;
     const dv = new DataView(this.memory.buffer);
     dv.setBigUint64(buf_address + 0, 0n, true);  // dev
     dv.setBigUint64(buf_address + 8, 0n, true);  // ino
-    dv.setUint8(buf_address + 16, 4); // filetype = regular file
+    dv.setUint8(buf_address + 16, type); // filetype
     dv.setBigUint64(buf_address + 24, 0n, true);  // nlink
     dv.setBigUint64(buf_address + 32, BigInt(stat.size ?? 0), true);
     dv.setBigUint64(buf_address + 40, BigInt(stat.atime ?? 0), true);

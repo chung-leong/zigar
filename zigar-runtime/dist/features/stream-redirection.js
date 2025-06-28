@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { TypeMismatch, InvalidFileDescriptor } from '../errors.js';
+import { InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 var streamRedirection = mixin({
@@ -16,16 +16,12 @@ var streamRedirection = mixin({
     if (!stream) throw new InvalidFileDescriptor();
     return stream;
   },
-  createStreamHandle(arg) {
-    let stream;
-    try {
-      stream = this.convertReader(arg);
-    } catch (err) {
-      try {
-        stream = this.convertWriter(arg);
-      } catch {
-        throw new TypeMismatch('reader or writer', arg);
-      }
+  createStreamHandle(arg, type) {
+    let stream;    
+    switch (type) {
+      case 'read': stream = this.convertReader(arg); break;
+      case 'write': stream = this.convertWriter(arg); break;
+      case 'readdir': stream = this.convertDirectory(arg); break;
     }
     const handle = this.nextStreamHandle++;
     this.streamMap.set(handle, stream);

@@ -27,6 +27,7 @@ import wasiOpen from '../wasi/open.js';
 import wasiPrestat from '../wasi/prestat.js';
 import wasiRandom from '../wasi/random.js';
 import wasiRead from '../wasi/read.js';
+import wasiReaddir from '../wasi/readdir.js';
 import wasiRmdir from '../wasi/rmdir.js';
 import wasiSeek from '../wasi/seek.js';
 import wasiSetTime from '../wasi/set-times.js';
@@ -37,6 +38,8 @@ import wasiWrite from '../wasi/write.js';
 import abortSignal from './abort-signal.js';
 import baseline from './baseline.js';
 import dataCopying from './data-copying.js';
+import dirConversion from './dir-conversion.js';
+import dir from './dir.js';
 import envVariables from './env-variables.js';
 import file from './file.js';
 import generator from './generator.js';
@@ -255,7 +258,7 @@ export default mixin({
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         this.use(wasiAll);
         switch (name) {
-          case 'environ_get': 
+          case 'environ_get':
           case 'environ_sizes_get': this.use(wasiEnv); break;
           case 'fd_advise': this.use(wasiAdvise); break;
           case 'fd_allocate': this.use(wasiAllocate); break;
@@ -264,12 +267,13 @@ export default mixin({
           case 'fd_fdstat_get': this.use(wasiFdstat); break;
           case 'fd_filestat_get':
           case 'path_filestat_get': this.use(wasiFilestat); break;
-          case 'fd_filestat_set_times': 
+          case 'fd_filestat_set_times':
           case 'path_filestat_set_times': this.use(wasiSetTime); break;
-          case 'fd_prestat_get': 
+          case 'fd_prestat_get':
           case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
           case 'fd_sync': this.use(wasiSync); break;
           case 'fd_read': this.use(wasiRead); break;
+          case 'fd_readdir': this.use(wasiReaddir); break;
           case 'fd_seek': this.use(wasiSeek); break;
           case 'fd_tell': this.use(wasiTell); break;
           case 'fd_write': this.use(wasiWrite); break;
@@ -284,10 +288,10 @@ export default mixin({
           this.use(streamRedirection);
         }
         switch (name) {
-          case 'environ_get': 
-          case 'environ_sizes_get': 
-            this.use(envVariables); 
-          break;
+          case 'environ_get':
+          case 'environ_sizes_get':
+            this.use(envVariables);
+            break;
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
@@ -297,7 +301,7 @@ export default mixin({
             this.use(streamRedirection);
             break;
           case 'fd_seek':
-          case 'fd_tell': 
+          case 'fd_tell':
             this.use(streamRedirection);
             this.use(streamPosition);
             break;
@@ -337,6 +341,13 @@ export default mixin({
                 this.use(streamPosition);
                 this.use(readerConversion);
                 this.use(writerConversion);
+                break;
+              case StructurePurpose.Directory:
+                this.use(dir);
+                this.use(dirConversion);
+                this.use(streamRedirection);
+                this.use(streamLocation);
+                break;
             }
           }
         } else if (structure.type === StructureType.Function) {
@@ -374,7 +385,7 @@ export default mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [ member ] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, static: { template }, flags } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -401,11 +412,11 @@ export default mixin({
     }
   },
   getArrayName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `[${length}]${element.structure.name}`;
   },
   getStructName(s) {
-    for (const name of [ 'Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
+    for (const name of ['Allocator', 'Promise', 'Generator', 'Read', 'Writer']) {
       if (s.flags & StructFlag[`Is${name}`]) return name;
     }
     return `S${this.structureCounters.struct++}`;
@@ -414,7 +425,7 @@ export default mixin({
     return `U${this.structureCounters.union++}`;
   },
   getErrorUnionName(s) {
-    const { instance: { members: [ payload, errorSet ] } } = s;
+    const { instance: { members: [payload, errorSet] } } = s;
     return `${errorSet.structure.name}!${payload.structure.name}`;
   },
   getErrorSetName(s) {
@@ -424,11 +435,11 @@ export default mixin({
     return `EN${this.structureCounters.enum++}`;
   },
   getOptionalName(s) {
-    const { instance: { members: [ payload ] } } = s;
+    const { instance: { members: [payload] } } = s;
     return `?${payload.structure.name}`;
   },
   getPointerName(s) {
-    const { instance: { members: [ target ] }, flags } = s;
+    const { instance: { members: [target] }, flags } = s;
     let prefix = '*'
     let targetName = target.structure.name;
     if (target.structure.type === StructureType.Slice) {
@@ -456,11 +467,11 @@ export default mixin({
     return prefix + targetName;
   },
   getSliceName(s) {
-    const { instance: { members: [ element ] }, flags } = s;
+    const { instance: { members: [element] }, flags } = s;
     return (flags & SliceFlag.IsOpaque) ? 'anyopaque' : `[_]${element.structure.name}`;
   },
   getVectorName(s) {
-    const { instance: { members: [ element ] }, length } = s;
+    const { instance: { members: [element] }, length } = s;
     return `@Vector(${length}, ${element.structure.name})`;
   },
   getOpaqueName(s) {
@@ -483,7 +494,7 @@ export default mixin({
     return `Arg(fn (${argNames.join(', ')}, ...) ${rvName})`;
   },
   getFunctionName(s) {
-    const { instance: { members: [ args ] } } = s;
+    const { instance: { members: [args] } } = s;
     const argName = args.structure.name;
     return argName.slice(4, -1);
   },
@@ -551,6 +562,6 @@ export default mixin({
       getFactoryThunk: null,
       getModuleAttributes: null,
     },
-  /* c8 ignore next */
+    /* c8 ignore next */
   } : undefined),
 });

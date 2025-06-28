@@ -25,6 +25,7 @@ export const StructurePurpose = {
   Reader: 6,
   Writer: 7,
   File: 8,
+  Directory: 9,
 };
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {
@@ -152,4 +153,15 @@ export const PosixError = {
   EINVAL: 22,
   ESPIPE: 29,
   EOPNOTSUPP: 95,
+};
+
+export const PosixFileType = {
+  unknown: 0,
+  blockDevice: 1,
+  characterDevice: 2,
+  directory: 3,
+  file: 4,
+  socketDgram: 5,
+  socketStream: 6,
+  symbolicLink: 7,
 };

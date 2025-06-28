@@ -1,4 +1,5 @@
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 
 export default mixin({
   // create File struct for outbound call
@@ -11,7 +12,16 @@ export default mixin({
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
-    const handle = this.createStreamHandle(arg);
+    let handle;
+    for (const type of [ 'read', 'write' ]) {
+      try {
+        handle = this.createStreamHandle(arg, type);
+      } catch {
+      }     
+    }
+    if (!handle) {
+      throw new TypeMismatch('reader or writer', arg);
+    }
     return { handle };
   },
 });
