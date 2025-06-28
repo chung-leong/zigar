@@ -86,3 +86,5 @@ export const setUsize = (process.env.BITS === '64')
 : (process.env.BITS === '32')
 ? DataView.prototype.setUint32
 : undefined;
+
+export const RootDescriptor = 3;

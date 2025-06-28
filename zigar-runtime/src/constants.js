@@ -165,3 +165,5 @@ export const PosixFileType = {
   socketStream: 6,
   symbolicLink: 7,
 };
+
+export const RootDescriptor = 3;

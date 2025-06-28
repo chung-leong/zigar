@@ -169,6 +169,8 @@ const PosixFileType = {
   symbolicLink: 7,
 };
 
+const RootDescriptor = 3;
+
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {
@@ -232,6 +234,571 @@ const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
 const YIELD = symbol('yield');
+
+class InvalidIntConversion extends SyntaxError {
+  constructor(arg) {
+    super(`Cannot convert ${arg} to an Int`);
+  }
+}
+
+class Unsupported extends TypeError {
+  constructor() {
+    super(`Unsupported`);
+  }
+}
+
+class NoInitializer extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
+  }
+}
+
+class BufferSizeMismatch extends TypeError {
+  constructor(structure, dv, target = null) {
+    const { name, type, byteSize } = structure;
+    const actual = dv.byteLength;
+    const s = (byteSize !== 1) ? 's' : '';
+    let msg;
+    if (type === StructureType.Slice && !target) {
+      msg = `${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`;
+    } else {
+      const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
+      msg = `${name} has ${total} byte${s}, received ${actual}`;
+    }
+    super(msg);
+  }
+}
+
+class BufferExpected extends TypeError {
+  constructor(structure) {
+    const { type, byteSize, typedArray } = structure;
+    const s = (byteSize !== 1) ? 's' : '';
+    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
+    if (typedArray) {
+      acceptable.push(addArticle(typedArray.name));
+    }
+    let msg;
+    if (type === StructureType.Slice) {
+      msg = `Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`;
+    } else {
+      msg = `Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`;
+    }
+    super(msg);
+  }
+}
+
+class EnumExpected extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    let msg;
+    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
+      msg = `Value given does not correspond to an item of enum ${name}: ${arg}`;
+    } else {
+      msg = `Enum item of the type ${name} expected, received ${arg}`;
+    }
+    super(msg);
+  }
+}
+
+class ErrorExpected extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    const type = typeof(arg);
+    let msg;
+    if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
+      if (isErrorJSON(arg)) {
+        arg = `{ error: ${JSON.stringify(arg.error)} }`;
+      }
+      msg = `Error ${type} does not corresponds to any error in error set ${name}: ${arg}`;
+    } else {
+      msg = `Error of the type ${name} expected, received ${arg}`;
+    }
+    super(msg);
+  }
+}
+
+class NotInErrorSet extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Error given is not a part of error set ${name}`);
+  }
+}
+
+class MultipleUnionInitializers extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Only one property of ${name} can be given a value`);
+  }
+}
+
+class InactiveUnionProperty extends TypeError {
+  constructor(structure, name, currentName) {
+    super(`Accessing property ${name} when ${currentName} is active`);
+  }
+}
+
+class MissingUnionInitializer extends TypeError {
+  constructor(structure, arg, exclusion) {
+    const { name, instance: { members } } = structure;
+    const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
+    super(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
+  }
+}
+
+class InvalidInitializer extends TypeError {
+  constructor(structure, expected, arg) {
+    const { name } = structure;
+    const acceptable = [];
+    if (Array.isArray(expected)) {
+      for (const type of expected) {
+        acceptable.push(addArticle(type));
+      }
+    } else {
+      acceptable.push(addArticle(expected));
+    }
+    const received = getDescription(arg);
+    super(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
+  }
+}
+
+class InvalidArrayInitializer extends InvalidInitializer {
+  constructor(structure, arg, shapeless = false) {
+    const { instance: { members: [ member ] }, type, constructor } = structure;
+    const acceptable = [];
+    const primitive = getPrimitiveName(member);
+    if (primitive) {
+      let object;
+      switch (member.structure?.type) {
+        case StructureType.Enum: object = 'enum item'; break;
+        case StructureType.ErrorSet: object = 'error'; break;
+        default: object = primitive;
+      }
+      acceptable.push(`array of ${object}s`);
+    } else {
+      acceptable.push(`array of objects`);
+    }
+    if (constructor[TYPED_ARRAY]) {
+      acceptable.push(constructor[TYPED_ARRAY].name);
+    }
+    if (type === StructureType.Slice && shapeless) {
+      acceptable.push(`length`);
+    }
+    super(structure, acceptable.join(' or '), arg);
+  }
+}
+
+class ArrayLengthMismatch extends TypeError {
+  constructor(structure, target, arg) {
+    const { name, length, instance: { members: [ member ] } } = structure;
+    const { structure: { constructor: elementConstructor} } = member;
+    const { length: argLength, constructor: argConstructor } = arg;
+    // get length from object whech it's a slice
+    const actualLength = target?.length ?? length;
+    const s = (actualLength !== 1) ? 's' : '';
+    let received;
+    if (argConstructor === elementConstructor) {
+      received = `only a single one`;
+    } else if (argConstructor.child === elementConstructor) {
+      received = `a slice/array that has ${argLength}`;
+    } else {
+      received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
+    }
+    super(`${name} has ${actualLength} element${s}, received ${received}`);
+  }
+}
+
+class InvalidSliceLength extends TypeError {
+  constructor(length, max) {
+    if (length < 0) {
+      super(`Length of slice cannot be negative`);
+    } else {
+      super(`Length of slice can be ${max} or less, received ${length}`);
+    }
+  }
+}
+
+class MissingInitializers extends TypeError {
+  constructor(structure, missing) {
+    const { name } = structure;
+    super(`Missing initializers for ${name}: ${missing.join(', ')}`);
+  }
+}
+
+class NoProperty extends TypeError {
+  constructor(structure, propName) {
+    const { name, instance: { members } } = structure;
+    const member = members.find(m => m.name === propName);
+    let msg;
+    if (member) {
+      msg = `Comptime value cannot be changed: ${propName}`;
+    } else {
+      msg = `${name} does not have a property with that name: ${propName}`;
+    }
+    super(msg);
+  }
+}
+
+class ArgumentCountMismatch extends Error {
+  constructor(expected, received, variadic = false) {
+    super();
+    const updateText = (argOffset) => {
+      expected -= argOffset;
+      received -= argOffset;
+      const s = (expected !== 1) ? 's' : '';
+      const p = (variadic) ? 'at least ' : '';
+      this.message = `Expecting ${p}${expected} argument${s}, received ${received}`;
+      this.stack = adjustStack(this.stack, 'new Arg(');
+    };
+    updateText(0);
+    defineProperty(this, UPDATE, { value: updateText, enumerable: false });
+  }
+}
+
+class UndefinedArgument extends Error {
+  constructor() {
+    super(`Undefined argument`);
+  }
+}
+
+class NoCastingToPointer extends TypeError {
+  constructor() {
+    super(`Non-slice pointers can only be created with the help of the new operator`);
+  }
+}
+
+class NoCastingToFunction extends TypeError {
+  constructor() {
+    super(`Casting to function is not allowed`);
+  }
+}
+
+class ConstantConstraint extends TypeError {
+  constructor(structure, pointer) {
+    const { name: target } = structure;
+    const { constructor: { name } } = pointer;
+    super(`Conversion of ${name} to ${target} requires an explicit cast`);
+  }
+}
+
+class MisplacedSentinel extends TypeError {
+  constructor(structure, value, index, length) {
+    const { name } = structure;
+    super(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
+  }
+}
+
+class MissingSentinel extends TypeError {
+  constructor(structure, value, length) {
+    const { name } = structure;
+    super(`${name} expects the sentinel value ${value} at ${length - 1}`);
+  }
+}
+
+class AlignmentConflict extends TypeError {
+  constructor(align1, align2) {
+    super(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
+  }
+}
+
+let TypeMismatch$1 = class TypeMismatch extends TypeError {
+  constructor(expected, arg) {
+    const received = getDescription(arg);
+    super(`Expected ${addArticle(expected)}, received ${received}`);
+  }
+};
+
+class InaccessiblePointer extends TypeError {
+  constructor() {
+    super(`Pointers within an untagged union are not accessible`);
+  }
+}
+
+class NullPointer extends TypeError {
+  constructor() {
+    super(`Null pointer`);
+  }
+}
+
+class PreviouslyFreed extends TypeError {
+  constructor(arg) {
+    super(`Object has been freed already: ${arg.constructor.name}`);
+  }
+}
+
+class InvalidPointerTarget extends TypeError {
+  constructor(structure, arg) {
+    const { name } = structure;
+    let target;
+    if (arg != null) {
+      const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
+      const a = article(noun);
+      target = `${a} ${noun}`;
+    } else {
+      target = arg + '';
+    }
+    super(`${name} cannot point to ${target}`);
+  }
+}
+
+class ZigMemoryTargetRequired extends TypeError {
+  constructor() {
+    super(`Pointers in Zig memory cannot point to garbage-collected object`);
+  }
+}
+
+class Overflow extends TypeError {
+  constructor(member, value) {
+    const { type, bitSize } = member;
+    const name = (bitSize > 32 ? 'Big' : '') + memberNames[type] + bitSize;
+    super(`${name} cannot represent the value given: ${value}`);
+  }
+}
+
+class OutOfBound extends RangeError {
+  constructor(member, index) {
+    const { name } = member;
+    super(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
+  }
+}
+
+class NotUndefined extends TypeError {
+  constructor(member) {
+    const { name } = member;
+    const rvalue = (name !== undefined) ? `Property ${name}` : `Element`;
+    super(`${rvalue} can only be undefined`);
+  }
+}
+
+class NotOnByteBoundary extends TypeError {
+  constructor(member) {
+    const { name, structure: { name: struct } } = member;
+    super(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
+  }
+}
+
+class ReadOnly extends TypeError {
+  constructor() {
+    super(`Unable to modify read-only object`);
+  }
+}
+
+class ReadOnlyTarget extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`${name} cannot point to a read-only object`);
+  }
+}
+
+class AccessingOpaque extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Unable to access opaque structure ${name}`);
+  }
+}
+
+class CreatingOpaque extends TypeError {
+  constructor(structure) {
+    const { name } = structure;
+    super(`Unable to create instance of ${name}, as it is opaque`);
+  }
+}
+
+class InvalidVariadicArgument extends TypeError {
+  constructor() {
+    super(`Arguments passed to variadic function must be casted to a Zig type`);
+  }
+}
+
+class UnexpectedGenerator extends TypeError {
+  constructor() {
+    super(`Unexpected async generator`);
+  }
+}
+
+class InvalidFileDescriptor extends Error {
+  code = PosixError.EBADF;
+
+  constructor() {
+    super(`Invalid file descriptor`);
+  }
+}
+
+class InvalidArgument extends Error {
+  code = PosixError.EINVAL;
+
+  constructor() {
+    super(`Invalid argument`);
+  }
+}
+
+class IllegalSeek extends Error {
+  code = PosixError.ESPIPE;
+
+  constructor() {
+    super(`Illegal seek`);
+  }
+}
+
+class Deadlock extends Error {
+  constructor() {
+    super(`Unable to await promise`);
+  }
+}
+
+class MissingEventListener extends Error {
+  constructor(name, code) {
+    super(`Missing event listener: ${name}`);
+    this.code = code;
+  }
+}
+
+class ZigError extends Error {
+  constructor(error, remove = 0) {
+    if (error instanceof Error) {
+      super(error.message);
+      error.stack = adjustStack(this.stack, remove);
+      return error;
+    } else {
+      super(error ?? 'Error encountered in Zig code');
+    }
+  }
+}
+
+class Exit extends ZigError {
+  constructor(code) {
+    super('Program exited');
+    this.code = code;
+  }
+}
+
+function adjustArgumentError(err, argIndex) {
+  const updateText = (argOffset) => {
+    argIndex -= argOffset;
+    err.message = `args[${argIndex}]: ${err.message}`;
+    err.stack = adjustStack(err.stack, 'new Arg(');
+  };
+  updateText(0);
+  defineProperty(err, UPDATE, { value: updateText, enumerable: false });
+  return err;
+}
+
+function adjustStack(stack, search) {
+  if (typeof(stack) === 'string') {
+    const lines = stack.split('\n');
+    const index = lines.findIndex(s => s.includes(search));
+    if (index !== -1) {
+      lines.splice(1, index);
+      stack = lines.join('\n');
+    }
+  }
+  return stack;
+}
+
+function replaceRangeError(member, index, err) {
+  if (err instanceof RangeError && !(err instanceof OutOfBound)) {
+    err = new OutOfBound(member, index);
+  }
+  return err;
+}
+
+function throwReadOnly() {
+  throw new ReadOnly();
+}
+
+function checkInefficientAccess(progress, access, len) {
+  if (progress.bytes === undefined) {
+    progress.bytes = progress.calls = 0;
+  }
+  progress.bytes += len;
+  progress.calls++;
+  if (progress.calls === 100) {
+    const bytesPerCall = progress.bytes / progress.calls;
+    if (bytesPerCall < 8) {
+      const s = bytesPerCall !== 1 ? 's' : '';
+      const action = (access === 'read') ? 'reading' : 'writing';
+      const name = (access === 'read') ? 'Reader' : 'Writer';
+      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
+    }
+  }
+}
+
+function deanimalizeErrorName(name) {
+  // deal with snake_case first
+  let s = name.replace(/_/g, ' ');
+  // then camelCase, using a try block in case Unicode regex fails
+  try {
+    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
+      if (m1.length === 1) {
+        return ` ${m1.toLocaleLowerCase()}${m2}`;
+      } else {
+        if (m2) {
+          return m0;
+        } else {
+          return ` ${m1}`;
+        }
+      }
+    }).trimStart();
+  } catch (err) {
+  }
+  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
+}
+
+function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+  const fail = (err) => {
+    const result = console.error(err);
+    return result ?? err.code ?? defErrorCode;
+  };
+  const done = (value) => {
+    const result = resolve?.(value);
+    return result ?? PosixError.NONE;
+  };
+  try {
+    const result = run();
+    if (isPromise(result)) {
+      if (!canWait) {
+        throw new Deadlock();
+      }
+      return result.then(done, fail);
+    } else {
+      return done(result);
+    }
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+function isErrorJSON(arg) {
+  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
+}
+
+function getDescription(arg) {
+  const type = typeof(arg);
+  let s;
+  if (type === 'object') {
+    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
+  } else {
+    s = type;
+  }
+  return addArticle(s);
+}
+
+function addArticle(noun) {
+  return `${article(noun)} ${noun}`;
+}
+
+function article(noun) {
+  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
+}
+
+function formatList(list, conj = 'or') {
+  const sep = ` ${conj} `;
+  if (list.length > 2) {
+    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
+  } else {
+    return list.join(sep);
+  }
+}
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -2538,571 +3105,6 @@ var abortSignal = mixin({
   },
 });
 
-class InvalidIntConversion extends SyntaxError {
-  constructor(arg) {
-    super(`Cannot convert ${arg} to an Int`);
-  }
-}
-
-class Unsupported extends TypeError {
-  constructor() {
-    super(`Unsupported`);
-  }
-}
-
-class NoInitializer extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`An initializer must be provided to the constructor of ${name}, even when the intended value is undefined`);
-  }
-}
-
-class BufferSizeMismatch extends TypeError {
-  constructor(structure, dv, target = null) {
-    const { name, type, byteSize } = structure;
-    const actual = dv.byteLength;
-    const s = (byteSize !== 1) ? 's' : '';
-    let msg;
-    if (type === StructureType.Slice && !target) {
-      msg = `${name} has elements that are ${byteSize} byte${s} in length, received ${actual}`;
-    } else {
-      const total = (type === StructureType.Slice) ? target.length * byteSize : byteSize;
-      msg = `${name} has ${total} byte${s}, received ${actual}`;
-    }
-    super(msg);
-  }
-}
-
-class BufferExpected extends TypeError {
-  constructor(structure) {
-    const { type, byteSize, typedArray } = structure;
-    const s = (byteSize !== 1) ? 's' : '';
-    const acceptable = [ 'ArrayBuffer', 'DataView' ].map(addArticle);
-    if (typedArray) {
-      acceptable.push(addArticle(typedArray.name));
-    }
-    let msg;
-    if (type === StructureType.Slice) {
-      msg = `Expecting ${formatList(acceptable)} that can accommodate items ${byteSize} byte${s} in length`;
-    } else {
-      msg = `Expecting ${formatList(acceptable)} that is ${byteSize} byte${s} in length`;
-    }
-    super(msg);
-  }
-}
-
-class EnumExpected extends TypeError {
-  constructor(structure, arg) {
-    const { name } = structure;
-    let msg;
-    if (typeof(arg) === 'number' || typeof(arg) === 'bigint') {
-      msg = `Value given does not correspond to an item of enum ${name}: ${arg}`;
-    } else {
-      msg = `Enum item of the type ${name} expected, received ${arg}`;
-    }
-    super(msg);
-  }
-}
-
-class ErrorExpected extends TypeError {
-  constructor(structure, arg) {
-    const { name } = structure;
-    const type = typeof(arg);
-    let msg;
-    if (type === 'string' || type === 'number' || isErrorJSON(arg)) {
-      if (isErrorJSON(arg)) {
-        arg = `{ error: ${JSON.stringify(arg.error)} }`;
-      }
-      msg = `Error ${type} does not corresponds to any error in error set ${name}: ${arg}`;
-    } else {
-      msg = `Error of the type ${name} expected, received ${arg}`;
-    }
-    super(msg);
-  }
-}
-
-class NotInErrorSet extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`Error given is not a part of error set ${name}`);
-  }
-}
-
-class MultipleUnionInitializers extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`Only one property of ${name} can be given a value`);
-  }
-}
-
-class InactiveUnionProperty extends TypeError {
-  constructor(structure, name, currentName) {
-    super(`Accessing property ${name} when ${currentName} is active`);
-  }
-}
-
-class MissingUnionInitializer extends TypeError {
-  constructor(structure, arg, exclusion) {
-    const { name, instance: { members } } = structure;
-    const missing = members.slice(0, exclusion ? -1 : undefined).map(m => m.name);
-    super(`${name} needs an initializer for one of its union properties: ${missing.join(', ')}`);
-  }
-}
-
-class InvalidInitializer extends TypeError {
-  constructor(structure, expected, arg) {
-    const { name } = structure;
-    const acceptable = [];
-    if (Array.isArray(expected)) {
-      for (const type of expected) {
-        acceptable.push(addArticle(type));
-      }
-    } else {
-      acceptable.push(addArticle(expected));
-    }
-    const received = getDescription(arg);
-    super(`${name} expects ${formatList(acceptable)} as argument, received ${received}`);
-  }
-}
-
-class InvalidArrayInitializer extends InvalidInitializer {
-  constructor(structure, arg, shapeless = false) {
-    const { instance: { members: [ member ] }, type, constructor } = structure;
-    const acceptable = [];
-    const primitive = getPrimitiveName(member);
-    if (primitive) {
-      let object;
-      switch (member.structure?.type) {
-        case StructureType.Enum: object = 'enum item'; break;
-        case StructureType.ErrorSet: object = 'error'; break;
-        default: object = primitive;
-      }
-      acceptable.push(`array of ${object}s`);
-    } else {
-      acceptable.push(`array of objects`);
-    }
-    if (constructor[TYPED_ARRAY]) {
-      acceptable.push(constructor[TYPED_ARRAY].name);
-    }
-    if (type === StructureType.Slice && shapeless) {
-      acceptable.push(`length`);
-    }
-    super(structure, acceptable.join(' or '), arg);
-  }
-}
-
-class ArrayLengthMismatch extends TypeError {
-  constructor(structure, target, arg) {
-    const { name, length, instance: { members: [ member ] } } = structure;
-    const { structure: { constructor: elementConstructor} } = member;
-    const { length: argLength, constructor: argConstructor } = arg;
-    // get length from object whech it's a slice
-    const actualLength = target?.length ?? length;
-    const s = (actualLength !== 1) ? 's' : '';
-    let received;
-    if (argConstructor === elementConstructor) {
-      received = `only a single one`;
-    } else if (argConstructor.child === elementConstructor) {
-      received = `a slice/array that has ${argLength}`;
-    } else {
-      received = `${argLength} initializer${argLength > 1 ? 's' : ''}`;
-    }
-    super(`${name} has ${actualLength} element${s}, received ${received}`);
-  }
-}
-
-class InvalidSliceLength extends TypeError {
-  constructor(length, max) {
-    if (length < 0) {
-      super(`Length of slice cannot be negative`);
-    } else {
-      super(`Length of slice can be ${max} or less, received ${length}`);
-    }
-  }
-}
-
-class MissingInitializers extends TypeError {
-  constructor(structure, missing) {
-    const { name } = structure;
-    super(`Missing initializers for ${name}: ${missing.join(', ')}`);
-  }
-}
-
-class NoProperty extends TypeError {
-  constructor(structure, propName) {
-    const { name, instance: { members } } = structure;
-    const member = members.find(m => m.name === propName);
-    let msg;
-    if (member) {
-      msg = `Comptime value cannot be changed: ${propName}`;
-    } else {
-      msg = `${name} does not have a property with that name: ${propName}`;
-    }
-    super(msg);
-  }
-}
-
-class ArgumentCountMismatch extends Error {
-  constructor(expected, received, variadic = false) {
-    super();
-    const updateText = (argOffset) => {
-      expected -= argOffset;
-      received -= argOffset;
-      const s = (expected !== 1) ? 's' : '';
-      const p = (variadic) ? 'at least ' : '';
-      this.message = `Expecting ${p}${expected} argument${s}, received ${received}`;
-      this.stack = adjustStack(this.stack, 'new Arg(');
-    };
-    updateText(0);
-    defineProperty(this, UPDATE, { value: updateText, enumerable: false });
-  }
-}
-
-class UndefinedArgument extends Error {
-  constructor() {
-    super(`Undefined argument`);
-  }
-}
-
-class NoCastingToPointer extends TypeError {
-  constructor() {
-    super(`Non-slice pointers can only be created with the help of the new operator`);
-  }
-}
-
-class NoCastingToFunction extends TypeError {
-  constructor() {
-    super(`Casting to function is not allowed`);
-  }
-}
-
-class ConstantConstraint extends TypeError {
-  constructor(structure, pointer) {
-    const { name: target } = structure;
-    const { constructor: { name } } = pointer;
-    super(`Conversion of ${name} to ${target} requires an explicit cast`);
-  }
-}
-
-class MisplacedSentinel extends TypeError {
-  constructor(structure, value, index, length) {
-    const { name } = structure;
-    super(`${name} expects the sentinel value ${value} at ${length - 1}, found at ${index}`);
-  }
-}
-
-class MissingSentinel extends TypeError {
-  constructor(structure, value, length) {
-    const { name } = structure;
-    super(`${name} expects the sentinel value ${value} at ${length - 1}`);
-  }
-}
-
-class AlignmentConflict extends TypeError {
-  constructor(align1, align2) {
-    super(`Unable to simultaneously align memory to ${align2}-byte and ${align1}-byte boundary`);
-  }
-}
-
-let TypeMismatch$1 = class TypeMismatch extends TypeError {
-  constructor(expected, arg) {
-    const received = getDescription(arg);
-    super(`Expected ${addArticle(expected)}, received ${received}`);
-  }
-};
-
-class InaccessiblePointer extends TypeError {
-  constructor() {
-    super(`Pointers within an untagged union are not accessible`);
-  }
-}
-
-class NullPointer extends TypeError {
-  constructor() {
-    super(`Null pointer`);
-  }
-}
-
-class PreviouslyFreed extends TypeError {
-  constructor(arg) {
-    super(`Object has been freed already: ${arg.constructor.name}`);
-  }
-}
-
-class InvalidPointerTarget extends TypeError {
-  constructor(structure, arg) {
-    const { name } = structure;
-    let target;
-    if (arg != null) {
-      const noun = (arg instanceof Object && arg.constructor !== Object) ? `${arg.constructor.name} object`: typeof(arg);
-      const a = article(noun);
-      target = `${a} ${noun}`;
-    } else {
-      target = arg + '';
-    }
-    super(`${name} cannot point to ${target}`);
-  }
-}
-
-class ZigMemoryTargetRequired extends TypeError {
-  constructor() {
-    super(`Pointers in Zig memory cannot point to garbage-collected object`);
-  }
-}
-
-class Overflow extends TypeError {
-  constructor(member, value) {
-    const { type, bitSize } = member;
-    const name = (bitSize > 32 ? 'Big' : '') + memberNames[type] + bitSize;
-    super(`${name} cannot represent the value given: ${value}`);
-  }
-}
-
-class OutOfBound extends RangeError {
-  constructor(member, index) {
-    const { name } = member;
-    super(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
-  }
-}
-
-class NotUndefined extends TypeError {
-  constructor(member) {
-    const { name } = member;
-    const rvalue = (name !== undefined) ? `Property ${name}` : `Element`;
-    super(`${rvalue} can only be undefined`);
-  }
-}
-
-class NotOnByteBoundary extends TypeError {
-  constructor(member) {
-    const { name, structure: { name: struct } } = member;
-    super(`Unable to create ${struct} as it is not situated on a byte boundary: ${name}`);
-  }
-}
-
-class ReadOnly extends TypeError {
-  constructor() {
-    super(`Unable to modify read-only object`);
-  }
-}
-
-class ReadOnlyTarget extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`${name} cannot point to a read-only object`);
-  }
-}
-
-class AccessingOpaque extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`Unable to access opaque structure ${name}`);
-  }
-}
-
-class CreatingOpaque extends TypeError {
-  constructor(structure) {
-    const { name } = structure;
-    super(`Unable to create instance of ${name}, as it is opaque`);
-  }
-}
-
-class InvalidVariadicArgument extends TypeError {
-  constructor() {
-    super(`Arguments passed to variadic function must be casted to a Zig type`);
-  }
-}
-
-class UnexpectedGenerator extends TypeError {
-  constructor() {
-    super(`Unexpected async generator`);
-  }
-}
-
-class InvalidFileDescriptor extends Error {
-  code = PosixError.EBADF;
-
-  constructor() {
-    super(`Invalid file descriptor`);
-  }
-}
-
-class InvalidArgument extends Error {
-  code = PosixError.EINVAL;
-
-  constructor() {
-    super(`Invalid argument`);
-  }
-}
-
-class IllegalSeek extends Error {
-  code = PosixError.ESPIPE;
-
-  constructor() {
-    super(`Illegal seek`);
-  }
-}
-
-class Deadlock extends Error {
-  constructor() {
-    super(`Unable to await promise`);
-  }
-}
-
-class MissingEventListener extends Error {
-  constructor(name, code) {
-    super(`Missing event listener: ${name}`);
-    this.code = code;
-  }
-}
-
-class ZigError extends Error {
-  constructor(error, remove = 0) {
-    if (error instanceof Error) {
-      super(error.message);
-      error.stack = adjustStack(this.stack, remove);
-      return error;
-    } else {
-      super(error ?? 'Error encountered in Zig code');
-    }
-  }
-}
-
-class Exit extends ZigError {
-  constructor(code) {
-    super('Program exited');
-    this.code = code;
-  }
-}
-
-function adjustArgumentError(err, argIndex) {
-  const updateText = (argOffset) => {
-    argIndex -= argOffset;
-    err.message = `args[${argIndex}]: ${err.message}`;
-    err.stack = adjustStack(err.stack, 'new Arg(');
-  };
-  updateText(0);
-  defineProperty(err, UPDATE, { value: updateText, enumerable: false });
-  return err;
-}
-
-function adjustStack(stack, search) {
-  if (typeof(stack) === 'string') {
-    const lines = stack.split('\n');
-    const index = lines.findIndex(s => s.includes(search));
-    if (index !== -1) {
-      lines.splice(1, index);
-      stack = lines.join('\n');
-    }
-  }
-  return stack;
-}
-
-function replaceRangeError(member, index, err) {
-  if (err instanceof RangeError && !(err instanceof OutOfBound)) {
-    err = new OutOfBound(member, index);
-  }
-  return err;
-}
-
-function throwReadOnly() {
-  throw new ReadOnly();
-}
-
-function checkInefficientAccess(progress, access, len) {
-  if (progress.bytes === undefined) {
-    progress.bytes = progress.calls = 0;
-  }
-  progress.bytes += len;
-  progress.calls++;
-  if (progress.calls === 100) {
-    const bytesPerCall = progress.bytes / progress.calls;
-    if (bytesPerCall < 8) {
-      const s = bytesPerCall !== 1 ? 's' : '';
-      const action = (access === 'read') ? 'reading' : 'writing';
-      const name = (access === 'read') ? 'Reader' : 'Writer';
-      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
-    }
-  }
-}
-
-function deanimalizeErrorName(name) {
-  // deal with snake_case first
-  let s = name.replace(/_/g, ' ');
-  // then camelCase, using a try block in case Unicode regex fails
-  try {
-    s = s.replace(/(\p{Uppercase}+)(\p{Lowercase}*)/gu, (m0, m1, m2) => {
-      if (m1.length === 1) {
-        return ` ${m1.toLocaleLowerCase()}${m2}`;
-      } else {
-        if (m2) {
-          return m0;
-        } else {
-          return ` ${m1}`;
-        }
-      }
-    }).trimStart();
-  } catch (err) {
-  }
-  return s.charAt(0).toLocaleUpperCase() + s.substring(1);
-}
-
-function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
-  const fail = (err) => {
-    const result = console.error(err);
-    return result ?? err.code ?? defErrorCode;
-  };
-  const done = (value) => {
-    const result = resolve?.(value);
-    return result ?? PosixError.NONE;
-  };
-  try {
-    const result = run();
-    if (isPromise(result)) {
-      if (!canWait) {
-        throw new Deadlock();
-      }
-      return result.then(done, fail);
-    } else {
-      return done(result);
-    }
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-function isErrorJSON(arg) {
-  return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
-}
-
-function getDescription(arg) {
-  const type = typeof(arg);
-  let s;
-  if (type === 'object') {
-    s = (arg) ? Object.prototype.toString.call(arg) : 'null';
-  } else {
-    s = type;
-  }
-  return addArticle(s);
-}
-
-function addArticle(noun) {
-  return `${article(noun)} ${noun}`;
-}
-
-function article(noun) {
-  return /^\W*[aeiou]/i.test(noun) ? 'an' : 'a';
-}
-
-function formatList(list, conj = 'or') {
-  const sep = ` ${conj} `;
-  if (list.length > 2) {
-    return list.slice(0, -1).join(', ') + sep + list[list.length - 1];
-  } else {
-    return list.join(sep);
-  }
-}
-
 var allocatorMethods = mixin({
   defineAlloc() {
     return {
@@ -3831,10 +3833,8 @@ var dirConversion = mixin({
   convertDirectory(arg) {
     if (arg instanceof Map) {
       return new MapDirectory(arg);
-    } else if (arg?.[Symbol.toStringTag] === 'Generator') {
-      return new GeneratorDirectory(arg);
     } else {
-      throw new TypeMismatch$1('map, generator, or object with directory interface', arg);
+      throw new TypeMismatch$1('map or object with directory interface', arg);
     }
   }
 });
@@ -3849,15 +3849,9 @@ class MapDirectory {
       yield { name, ...stat };
     }
   }
-}
 
-class GeneratorDirectory {
-  constructor(generator) {
-    this.generator = generator;
-  }
-
-  readdir() {
-    return this.generator;
+  valueOf() {
+    return this.map;
   }
 }
 
@@ -4959,7 +4953,9 @@ class WebStreamReader {
   }
 
   close() {
-    this.reader.cancel();
+    if (!this.done) {
+      this.reader.cancel();
+    }
   }
 }
 
@@ -5139,9 +5135,9 @@ function getIntRange(member) {
 
 var streamLocation = mixin({
   init() {
-    this.streamPathMap = new Map([ [ 3, '' ]]);
+    this.streamLocationMap = new Map([ [ RootDescriptor, '' ]]);
   },
-  resolvePath(dirHandle, pathAddress, pathLen) {
+  obtainStreamLocation(dirfd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
@@ -5149,31 +5145,30 @@ var streamLocation = mixin({
     }
     const parts = path.trim().split('/');
     const list = [];
-    if (dirHandle && parts[0] !== '') {
-      const parentPath = this.getStreamPath(dirHandle);
-      if (parentPath !== undefined) {
-        list.push(...parentPath.split('/'));
-      }
-    }
     for (const part of parts) {
       if (part === '..') {
         list.pop();
-      } else if (part !== '.') {
+      } else if (part !== '.' && part != '') {
         list.push(part);
       }
     }
-    return list.join('/');
+    const stream = this.getStream(dirfd);
+    return { parent: stream.valueOf(), path: list.join('/') };
   },
-  getStreamPath(fd) {
-    return this.streamPathMap.get(fd);
+  getStreamLocation(fd) {
+    return this.streamLocationMap.get(fd);
   },
-  setStreamPath(fd, path) {
-    const m = this.streamPathMap;
+  setStreamLocation(fd, path) {
+    const m = this.streamLocationMap;
     if (path) {
       m.set(fd, path);
     } else {
       m.delete(fd);
     }
+  },
+  getDirectoryEntries(fd) {
+    const dir = this.getStream(fd);
+    return dir.readdir();
   },
 });
 
@@ -5198,14 +5193,23 @@ var streamRedirection = mixin({
   init() {
     const w1 = this.createLogWriter(1);
     const w2 = this.createLogWriter(2);
+    const root = {
+      *readdir() {        
+      },
+      valueOf() {
+        return null;
+      }
+    };
     this.logWriters = { 1: w1, 2: w2 };
-    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ], [ RootDescriptor, root ] ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = 0xffff;
   },
   getStream(fd) {
     const stream = this.streamMap.get(fd);
-    if (!stream) throw new InvalidFileDescriptor();
+    if (!stream) {
+      throw new InvalidFileDescriptor();
+    }
     return stream;
   },
   createStreamHandle(arg, type) {
@@ -5241,6 +5245,8 @@ var streamRedirection = mixin({
         map.set(fd, this.convertReader(arg));
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
+      } else if (fd === 3) {
+        map.set(RootDescriptor, this.convertWriter(arg));
       } else {
         throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
       }
@@ -5467,7 +5473,10 @@ var wasiAllocate = mixin({
 
 var wasiClose = mixin({
   wasi_fd_close(fd, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => this.closeStream(fd));
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      this.setStreamLocation(fd); 
+      return this.closeStream(fd);
+    });
   }
 });
 
@@ -5551,22 +5560,28 @@ var wasiFdstat = mixin({
   wasi_fd_fdstat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const dv = new DataView(this.memory.buffer);
-      let type, flags = 0, rights;
-      if (fd === 3) {
-        type = 3;  // dir
-        rights = Right$1.path_open | Right$1.path_filestat_get;
-      } else {        
-        const stream = this.getStream(fd);
-        type = 4; // file
-        rights = Right$1.fd_filestat_get;
-        if (this.listenerMap.get('set_times') && this.getStreamPath?.(fd)) {
-          rights |= Right$1.fd_filestat_set_times;
+      const stream = this.getStream(fd);
+      let rights = 0, flags = 0, type;
+      rights = Right$1.fd_filestat_get;
+      if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
+        rights |= Right$1.fd_filestat_set_times;
+      }
+      for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
+        if (hasMethod(stream, name)) {
+          rights |= Right$1[`fd_${name}`];
         }
-        for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
-          if (hasMethod(stream, name)) {
-            rights |= Right$1[`fd_${name}`];
-          }
+      }
+      if (stream.type) {
+        type = decodeEnum(stream.type, PosixFileType);
+      } else {
+        if (rights & (Right$1.fd_read | Right$1.fd_write)) {
+          type = PosixFileType.file;
+        } else {
+          type = PosixFileType.directory;
         }
+      }
+      if (type === PosixFileType.directory) {
+        rights |= Right$1.path_open | Right$1.path_filestat_get;
       }
       dv.setUint8(buf_address + 0, type);
       dv.setUint16(buf_address + 2, flags, true);
@@ -5583,10 +5598,10 @@ const LookupFlag = {
 var wasiFilestat = mixin({
   wasi_fd_filestat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.getStreamPath?.(fd);
-      if (path) {
+      const loc = this.getStreamLocation?.(fd);
+      if (loc) {
         try {
-          return this.triggerEvent('stat', { path, flags: {} }, PosixError.ENOENT);
+          return this.triggerEvent('stat', { ...loc, flags: {} }, PosixError.ENOENT);
         } catch (err) {        
           if (err.code !== PosixError.ENOENT) {
             throw err;
@@ -5597,11 +5612,11 @@ var wasiFilestat = mixin({
       return { size: stream.size };
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
-  wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
+  wasi_path_filestat_get(dirfd, lookup_flags, path_address, path_len, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
       const flags = decodeFlags(lookup_flags, LookupFlag);
-      return this.triggerEvent('stat', { path, flags }, PosixError.ENOENT);
+      return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
   wasiCopyStat(stat, buf_address) {
@@ -5625,10 +5640,10 @@ var wasiFilestat = mixin({
 });
 
 var wasiMkdir = mixin({
-  wasi_path_create_directory(fd, path_address, path_len, canWait) {
+  wasi_path_create_directory(dirfd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
-      return this.triggerEvent('mkdir', { path }, PosixError.ENOENT);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result instanceof Map) return;
       if (result === true) return PosixError.EEXIST;
@@ -5648,21 +5663,32 @@ const OpenFlag = {
 const Right = {
   read: 1n << 1n,
   write: 1n << 6n,
+  readdir: 1n << 14n,
 };
 
 var wasiOpen = mixin({
   wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
-    const path = this.resolvePath(dirfd, path_address, path_len);
+    const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+    const rights = decodeFlags(fs_rights_base, Right);
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const rights = decodeFlags(fs_rights_base, Right);
       const flags = decodeFlags(oflags, OpenFlag);
-      return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
+      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      const handle = this.createStreamHandle(arg);
-      this.setStreamPath(handle, path);
+      let type;
+      for (const name of Object.keys(Right)) {
+        if (rights[name]) {
+          type = name;
+          break;
+        }
+      }
+      if (type === undefined) {
+        throw new InvalidArgument();
+      }
+      const handle = this.createStreamHandle(arg, type);
+      this.setStreamLocation?.(handle, loc);
       const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
     });
@@ -5731,8 +5757,7 @@ var wasiReaddir = mixin({
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
       if (cookie === 0n) {
-        const stream = this.getStream(fd);
-        return stream.readdir();
+        return this.getDirectoryEntries(fd);
       }
     }, (generator) => {
       let context;
@@ -5778,16 +5803,16 @@ var wasiReaddir = mixin({
             }
             typeIndex = PosixFileType.unknown;
           }
+          if (remaining < 24 + array.length) {
+            context.entry = entry;
+            break;
+          }
           dv.setBigUint64(p, cookie, true);
           dv.setBigUint64(p + 8, BigInt(ino ?? 0n), true);
           dv.setUint32(p + 16, array.length, true);
           dv.setUint8(p + 20, typeIndex);
           p += 24;
           remaining -= 24;
-          if (remaining < array.length) {
-            context.entry = entry;
-            break;
-          }
           for (let i = 0; i < array.length; i++, p++) {
             dv.setUint8(p, array[i]);
           }
@@ -5805,10 +5830,10 @@ var wasiReaddir = mixin({
 });
 
 var wasiRmdir = mixin({
-  wasi_path_remove_directory(fd, path_address, path_len, canWait) {
+  wasi_path_remove_directory(dirfd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
-      return this.triggerEvent('rmdir', { path }, PosixError.ENOENT);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('rmdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === true) return PosixError.NONE 
       if (result === false) return PosixError.ENOENT;
@@ -5853,19 +5878,19 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
 var wasiSetTime = mixin({
   wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.getStreamPath?.(fd);
-      if (!path) {
+      const loc = this.getStreamLocation?.(fd);
+      if (!loc) {
         return false;
       }
       const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { path, times }, PosixError.EBADF);
+      return this.triggerEvent('set_times', { ...loc, times }, PosixError.EBADF);
     }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);
   },
-  wasi_path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+  wasi_path_filestat_set_times(dirfd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
       const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { path, times }, PosixError.ENOENT);
+      return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
     }, (success) => (success) ? PosixError.NONE : PosixError.ENOENT);
   },
 });
@@ -5889,10 +5914,10 @@ var wasiTell = mixin({
 });
 
 var wasiUnlink = mixin({
-  wasi_path_unlink_file(fd, path_address, path_len, canWait) {
+  wasi_path_unlink_file(dirfd, path_address, path_len, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
-      return this.triggerEvent('unlink', { path }, PosixError.ENOENT);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('unlink', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === true) return PosixError.NONE 
       if (result === false) return PosixError.ENOENT;

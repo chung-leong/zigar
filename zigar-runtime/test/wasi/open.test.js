@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
+import { RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -35,13 +36,14 @@ if (process.env.TARGET === 'wasm') {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_open');
-      const result = f(3, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
+      const result = f(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
       expect(result).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
       expect(fd).to.not.equal(0);
       expect(event).to.eql({
-        path: '/hello.txt',
+        parent: null,
+        path: 'hello.txt',
         rights: { read: true },
         flags: { exclusive: true }
       });
@@ -58,7 +60,7 @@ if (process.env.TARGET === 'wasm') {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_open');
-      const result = f(3, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
+      const result = f(RootDescriptor, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
       expect(result).to.equal(PosixError.ENOENT);
     })
   })

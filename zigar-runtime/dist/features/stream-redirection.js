@@ -1,3 +1,4 @@
+import { RootDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
@@ -6,8 +7,12 @@ var streamRedirection = mixin({
   init() {
     const w1 = this.createLogWriter(1);
     const w2 = this.createLogWriter(2);
+    const root = {
+      *readdir() {        
+      }
+    };
     this.logWriters = { 1: w1, 2: w2 };
-    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ], [ RootDescriptor, root ] ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = 0xffff;
   },

@@ -14,8 +14,7 @@ export default mixin({
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
       if (cookie === 0n) {
-        const stream = this.getStream(fd);
-        return stream.readdir();
+        return this.getDirectoryEntries(fd);
       }
     }, (generator) => {
       let context;

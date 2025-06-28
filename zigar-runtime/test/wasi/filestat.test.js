@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
-import { captureError } from '../test-utils.js';
+import { captureError, RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -25,9 +25,13 @@ if (process.env.TARGET === 'wasm') {
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_filestat_get');
       const flags = 1;
-      const result = f(3, flags, pathAddress, pathLen, bufAddress);
+      const result = f(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
       expect(result).to.equal(0);
-      expect(event).to.eql({ path: '/hello.txt', flags: { symlinkFollow: true } });
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello.txt', 
+        flags: { symlinkFollow: true } 
+      });
     })
     it('should return ENOENT when listener returns false', async function() {
       const env = new Env();
@@ -42,7 +46,7 @@ if (process.env.TARGET === 'wasm') {
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_filestat_get');
       const flags = 1;
-      const result = f(3, flags, pathAddress, pathLen, bufAddress);
+      const result = f(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
       expect(result).to.equal(PosixError.ENOENT);
     })
     it('should display error when listener returns unexpected type', async function() {
@@ -60,7 +64,7 @@ if (process.env.TARGET === 'wasm') {
       const flags = 1;
       let result;
       const [ error ] = await captureError(() => {
-        result = f(3, flags, pathAddress, pathLen, bufAddress);
+        result = f(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
       });
       expect(result).to.equal(PosixError.ENOENT);
       expect(error).to.contain('object');
@@ -84,7 +88,7 @@ if (process.env.TARGET === 'wasm') {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(3, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -92,7 +96,11 @@ if (process.env.TARGET === 'wasm') {
       const f = env.getWASIHandler('fd_filestat_get');
       const result2 = f(fd, bufAddress);
       expect(result2).to.equal(0);
-      expect(event).to.eql({ path: '/hello.txt', flags: {} });
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello.txt', 
+        flags: {} 
+      });
       const size = dv.getBigUint64(bufAddress + 32, true);
       expect(size).to.equal(123n);
     })

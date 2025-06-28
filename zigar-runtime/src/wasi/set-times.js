@@ -29,19 +29,19 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
 export default mixin({
   wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const path = this.getStreamPath?.(fd);
-      if (!path) {
+      const loc = this.getStreamLocation?.(fd);
+      if (!loc) {
         return false;
       }
       const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { path, times }, PosixError.EBADF);
+      return this.triggerEvent('set_times', { ...loc, times }, PosixError.EBADF);
     }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);
   },
-  wasi_path_filestat_set_times(fd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+  wasi_path_filestat_set_times(dirfd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const path = this.resolvePath(fd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
       const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { path, times }, PosixError.ENOENT);
+      return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
     }, (success) => (success) ? PosixError.NONE : PosixError.ENOENT);
   },
 });

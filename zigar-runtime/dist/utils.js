@@ -1,4 +1,5 @@
 import { MemberType } from './constants.js';
+import { TypeMismatch } from './errors.js';
 import { SIGNATURE, ENVIRONMENT, LENGTH, PROXY } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
@@ -256,6 +257,16 @@ function decodeFlags(flags, set) {
   return object;
 }
 
+function decodeEnum(string, set) {
+  for (const [ name, value ] of Object.entries(set)) {
+    if (name === string) {
+      return value;
+    }
+  }
+  const names = Object.keys(set).map(k => `'${key}'`);
+  throw new TypeMismatch(names.join(', '), string);
+}
+
 function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
@@ -300,4 +311,4 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };

@@ -1,3 +1,4 @@
+import { RootDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
@@ -6,14 +7,23 @@ export default mixin({
   init() {
     const w1 = this.createLogWriter(1);
     const w2 = this.createLogWriter(2);
+    const root = {
+      *readdir() {        
+      },
+      valueOf() {
+        return null;
+      }
+    };
     this.logWriters = { 1: w1, 2: w2 };
-    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ] ]);
+    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ], [ RootDescriptor, root ] ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = 0xffff;
   },
   getStream(fd) {
     const stream = this.streamMap.get(fd);
-    if (!stream) throw new InvalidFileDescriptor();
+    if (!stream) {
+      throw new InvalidFileDescriptor();
+    }
     return stream;
   },
   createStreamHandle(arg, type) {
@@ -49,6 +59,8 @@ export default mixin({
         map.set(fd, this.convertReader(arg));
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
+      } else if (fd === 3) {
+        map.set(RootDescriptor, this.convertWriter(arg));
       } else {
         throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
       }

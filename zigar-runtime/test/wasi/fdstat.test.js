@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
+import { RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -47,8 +48,8 @@ if (process.env.TARGET === 'wasm') {
       const result = f(1, bufAddress);
       expect(result).to.equal(0);
       const dv = new DataView(env.memory.buffer);
-      const flags = dv.getBigUint64(bufAddress + 8, true);
-      expect(flags & BigInt(Right.fd_write)).to.not.equal(0n);
+      const rights = dv.getBigUint64(bufAddress + 8, true);
+      expect(rights & BigInt(Right.fd_write)).to.not.equal(0n);
     })
     it('should obtain information from a descriptor', async function() {
       const env = new Env();
@@ -64,7 +65,7 @@ if (process.env.TARGET === 'wasm') {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(3, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -72,8 +73,8 @@ if (process.env.TARGET === 'wasm') {
       const f = env.getWASIHandler('fd_fdstat_get');
       const result2 = f(fd, bufAddress);
       expect(result2).to.equal(0);
-      const flags = dv.getBigUint64(bufAddress + 8, true);
-      expect(flags & BigInt(Right.fd_read)).to.not.equal(0n);
+      const rights = dv.getBigUint64(bufAddress + 8, true);
+      expect(rights & BigInt(Right.fd_read)).to.not.equal(0n);
     })
     it('should include right to set times when there is a handler for the operation', async function() {
       const env = new Env();
@@ -90,7 +91,7 @@ if (process.env.TARGET === 'wasm') {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(3, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -98,8 +99,8 @@ if (process.env.TARGET === 'wasm') {
       const f = env.getWASIHandler('fd_fdstat_get');
       const result2 = f(fd, bufAddress);
       expect(result2).to.equal(0);
-      const flags = dv.getBigUint64(bufAddress + 8, true);
-      expect(flags & BigInt(Right.fd_filestat_set_times)).to.not.equal(0n);
+      const rights = dv.getBigUint64(bufAddress + 8, true);
+      expect(rights & BigInt(Right.fd_filestat_set_times)).to.not.equal(0n);
     })
   })
 }

@@ -1,4 +1,4 @@
-import { PosixError } from '../constants.js';
+import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { hasMethod } from '../utils.js';
@@ -40,22 +40,28 @@ export default mixin({
   wasi_fd_fdstat_get(fd, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const dv = new DataView(this.memory.buffer);
-      let type, flags = 0, rights;
-      if (fd === 3) {
-        type = 3;  // dir
-        rights = Right.path_open | Right.path_filestat_get;
-      } else {        
-        const stream = this.getStream(fd);
-        type = 4; // file
-        rights = Right.fd_filestat_get;
-        if (this.listenerMap.get('set_times') && this.getStreamPath?.(fd)) {
-          rights |= Right.fd_filestat_set_times;
+      const stream = this.getStream(fd);
+      let rights = 0, flags = 0, type;
+      rights = Right.fd_filestat_get;
+      if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
+        rights |= Right.fd_filestat_set_times;
+      }
+      for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
+        if (hasMethod(stream, name)) {
+          rights |= Right[`fd_${name}`];
         }
-        for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
-          if (hasMethod(stream, name)) {
-            rights |= Right[`fd_${name}`];
-          }
+      }
+      if (stream.type) {
+        type = decodeEnum(stream.type, PosixFileType);
+      } else {
+        if (rights & (Right.fd_read | Right.fd_write)) {
+          type = PosixFileType.file;
+        } else {
+          type = PosixFileType.directory;
         }
+      }
+      if (type === PosixFileType.directory) {
+        rights |= Right.path_open | Right.path_filestat_get;
       }
       dv.setUint8(buf_address + 0, type);
       dv.setUint16(buf_address + 2, flags, true);

@@ -13,21 +13,29 @@ const OpenFlag = {
 const Right = {
   read: 1n << 1n,
   write: 1n << 6n,
+  readdir: 1n << 14n,
 };
 
 var open = mixin({
   wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
-    const path = this.resolvePath(dirfd, path_address, path_len);
+    const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+    const rights = decodeFlags(fs_rights_base, Right);
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const rights = decodeFlags(fs_rights_base, Right);
       const flags = decodeFlags(oflags, OpenFlag);
-      return this.triggerEvent('open', { path, rights, flags }, PosixError.ENOENT);
+      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      const handle = this.createStreamHandle(arg);
-      this.setStreamPath(handle, path);
+      let type;
+      for (const name of Object.keys(Right)) {
+        if (rights[name]) {
+          type = name;
+          break;
+        }
+      }
+      const handle = this.createStreamHandle(arg, type);
+      this.setStreamLocation?.(handle, loc);
       const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
     });

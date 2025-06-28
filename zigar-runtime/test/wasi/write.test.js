@@ -74,7 +74,7 @@ if (process.env.TARGET === 'wasm') {
       let result;
       const [ line ] = await capture(async () => {
         const [ error ] = await captureError(async () => {
-          result = f(3, bufferAddress, 1, writtenAddress);
+          result = f(5, bufferAddress, 1, writtenAddress);
         })
       });
       expect(result).to.equal(PosixError.EBADF);

@@ -1,11 +1,12 @@
+import { RootDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
-    this.streamPathMap = new Map([ [ 3, '' ]]);
+    this.streamLocationMap = new Map([ [ RootDescriptor, '' ]]);
   },
-  resolvePath(dirHandle, pathAddress, pathLen) {
+  obtainStreamLocation(dirfd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
@@ -13,30 +14,29 @@ export default mixin({
     }
     const parts = path.trim().split('/');
     const list = [];
-    if (dirHandle && parts[0] !== '') {
-      const parentPath = this.getStreamPath(dirHandle);
-      if (parentPath !== undefined) {
-        list.push(...parentPath.split('/'));
-      }
-    }
     for (const part of parts) {
       if (part === '..') {
         list.pop();
-      } else if (part !== '.') {
+      } else if (part !== '.' && part != '') {
         list.push(part);
       }
     }
-    return list.join('/');
+    const stream = this.getStream(dirfd);
+    return { parent: stream.valueOf(), path: list.join('/') };
   },
-  getStreamPath(fd) {
-    return this.streamPathMap.get(fd);
+  getStreamLocation(fd) {
+    return this.streamLocationMap.get(fd);
   },
-  setStreamPath(fd, path) {
-    const m = this.streamPathMap;
+  setStreamLocation(fd, path) {
+    const m = this.streamLocationMap;
     if (path) {
       m.set(fd, path)
     } else {
       m.delete(fd);
     }
+  },
+  getDirectoryEntries(fd) {
+    const dir = this.getStream(fd);
+    return dir.readdir();
   },
 });

@@ -226,7 +226,7 @@ describe('Feature: stream-redirection', function() {
         }
       });
       const reader = stream.getReader();
-      const handle = env.createStreamHandle(reader);
+      const handle = env.createStreamHandle(reader, 'read');
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
@@ -236,19 +236,19 @@ describe('Feature: stream-redirection', function() {
         async write() {}
       });
       const writer = stream.getWriter();
-      const handle = env.createStreamHandle(writer);
+      const handle = env.createStreamHandle(writer, 'write');
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
     it('should create a handle from null', async function() {
       const env = new Env();
-      const handle = env.createStreamHandle(null);
+      const handle = env.createStreamHandle(null, 'write');
       expect(handle).to.be.a('number');
       env.closeStream(handle);
     })
     it('should throw when invalid input is given', async function() {
       const env = new Env();
-      expect(() => env.createStreamHandle(1234)).to.throw(TypeError);
+      expect(() => env.createStreamHandle(1234, 'read')).to.throw(TypeError);
     })
   })
   describe('flushStreams', function() {
