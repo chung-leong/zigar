@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
-import { hasMethod } from '../utils.js';
+import { catchPosixError, InvalidEnumValue } from '../errors.js';
+import { decodeEnum, hasMethod } from '../utils.js';
 
 const Right = {
     fd_datasync: 1 << 0,
@@ -53,6 +53,9 @@ export default mixin({
       }
       if (stream.type) {
         type = decodeEnum(stream.type, PosixFileType);
+        if (type === undefined) {
+          throw new InvalidEnumValue(PosixFileType, stream.type);
+        }
       } else {
         if (rights & (Right.fd_read | Right.fd_write)) {
           type = PosixFileType.file;

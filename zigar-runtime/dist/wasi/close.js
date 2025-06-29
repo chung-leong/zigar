@@ -4,7 +4,10 @@ import { catchPosixError } from '../errors.js';
 
 var close = mixin({
   wasi_fd_close(fd, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => this.closeStream(fd));
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      this.setStreamLocation(fd); 
+      return this.closeStream(fd);
+    });
   }
 });
 

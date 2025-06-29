@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
-import { encodeText } from '../utils.js';
+import { catchPosixError, InvalidEnumValue } from '../errors.js';
+import { encodeText, decodeEnum } from '../utils.js';
 
 var readdir = mixin({
   init() {
@@ -35,7 +35,6 @@ var readdir = mixin({
         if (entry) {
           context.entry = null;
         }
-        const typeKeys = Object.keys(PosixFileType);
         while (remaining >= 24) {
           if (!entry) {
             if (++context.count <= 2) {
@@ -53,12 +52,9 @@ var readdir = mixin({
           }
           const { name, type, ino = 0 } = value;
           const array = encodeText(name);
-          let typeIndex = typeKeys.indexOf(type);
-          if (typeIndex === -1) {
-            if (type !== undefined) {
-              throw new TypeMismatch(typeKeys.map(k => `'${k}'`).join(', '), type);
-            }
-            typeIndex = PosixFileType.unknown;
+          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
+          if (typeIndex === undefined) {
+            throw new InvalidEnumValue(PosixFileType, type);
           }
           if (remaining < 24 + array.length) {
             context.entry = entry;

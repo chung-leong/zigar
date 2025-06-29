@@ -4,7 +4,7 @@ import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
 import { MEMORY } from '../../src/symbols.js';
-import { delay } from '../test-utils.js';
+import { captureError, delay } from '../test-utils.js';
 
 use(ChaiAsPromised);
 
@@ -92,9 +92,11 @@ describe('Feature: writer', function() {
       }
       let error;
       try {
-        for (let i = 0; i < 200; i++) {
-          await writeFn(ptr, buffer);
-        }
+        await captureError(async () => {
+          for (let i = 0; i < 200; i++) {
+            await writeFn(ptr, buffer);
+          }
+        })
       } catch (err) {
         error = err;
       }
@@ -119,7 +121,9 @@ describe('Feature: writer', function() {
       const buffer = {
         '*': { [MEMORY]: dv }
       }
-      await expect(writeFn(ptr, buffer)).to.eventually.be.rejected;
+      await captureError(async () => {
+        await expect(writeFn(ptr, buffer)).to.eventually.be.rejected;
+      });
     })
     it('should return an object if it has the properties of a writer', async function() {
       const env = new Env();

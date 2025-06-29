@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
 import { capture, usize } from '../test-utils.js';
@@ -325,6 +325,24 @@ describe('Feature: baseline', function() {
       env.addListener('log', (evt) => event = evt);
       env.writeBytes(1, address, dv.byteLength);
       expect(event).to.eql({ handle: 1, message: 'Hello world' });
+    })
+  })
+  describe('triggerEvent', function() {
+    it('should call listener', function() {
+      const env = new Env();
+      let event;
+      env.addListener('log', (evt) => event = evt);
+      env.triggerEvent('log', { message: 'hello' });
+      expect(event).to.eql({ message: 'hello' });
+    })
+    it('should ignore missing listener when no error code is given', function() {
+      const env = new Env();
+      env.triggerEvent('cow', { message: 'hello' });
+    })
+    it('should throw if an error code is provided', function() {
+      const env = new Env();
+      expect(() => env.triggerEvent('cow', { message: 'hello' }, PosixError.EACCES))
+        .to.throw(Error).that.has.property('code', PosixError.EACCES);
     })
   })
   describe('getSpecialExports', function() {

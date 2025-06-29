@@ -192,6 +192,24 @@ describe('Feature: stream-redirection', function() {
       const lines = await capture(() => env.writeBytes(1, address, dv.byteLength));
       expect(lines).to.have.lengthOf(0);
     })
+    it('should redirect root dir to a map', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = (address, len) => {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const map = new Map;
+      env.redirectStream(3, map);
+    })
     it('should close a stream when undefined is given', function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {

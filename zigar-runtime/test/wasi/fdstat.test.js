@@ -1,7 +1,8 @@
 import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
-import { RootDescriptor } from '../test-utils.js';
+import { captureError, RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -51,7 +52,7 @@ if (process.env.TARGET === 'wasm') {
       const rights = dv.getBigUint64(bufAddress + 8, true);
       expect(rights & BigInt(Right.fd_write)).to.not.equal(0n);
     })
-    it('should obtain information from a descriptor', async function() {
+    it('should obtain information from a file descriptor', async function() {
       const env = new Env();
       env.memory = new WebAssembly.Memory({ initial: 1 });
       env.addListener('open', () => {
@@ -75,6 +76,89 @@ if (process.env.TARGET === 'wasm') {
       expect(result2).to.equal(0);
       const rights = dv.getBigUint64(bufAddress + 8, true);
       expect(rights & BigInt(Right.fd_read)).to.not.equal(0n);
+    })
+    it('should obtain information from a directory descriptor', async function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      env.addListener('open', () => {
+        return new Map();
+      });
+      const encoder = new TextEncoder();
+      const src = encoder.encode('/hello.txt');
+      const pathAddress = 0x1000;
+      const pathLen = src.length;
+      const fdAddress = 0x2000;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      const open = env.getWASIHandler('path_open');
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      expect(result1).to.equal(0);
+      const dv = new DataView(env.memory.buffer);
+      const fd = dv.getUint32(fdAddress, true);
+      const bufAddress = 0x3000;
+      const f = env.getWASIHandler('fd_fdstat_get');
+      const result2 = f(fd, bufAddress);
+      expect(result2).to.equal(0);
+      const rights = dv.getBigUint64(bufAddress + 8, true);
+      expect(rights & BigInt(Right.fd_readdir)).to.not.equal(0n);
+    })
+    it('should use stream type', async function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      env.addListener('open', () => {
+        return {
+          type: 'directory',
+          readdir() {}
+        };
+      });
+      const encoder = new TextEncoder();
+      const src = encoder.encode('/hello.txt');
+      const pathAddress = 0x1000;
+      const pathLen = src.length;
+      const fdAddress = 0x2000;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      const open = env.getWASIHandler('path_open');
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      expect(result1).to.equal(0);
+      const dv = new DataView(env.memory.buffer);
+      const fd = dv.getUint32(fdAddress, true);
+      const bufAddress = 0x3000;
+      const f = env.getWASIHandler('fd_fdstat_get');
+      const result2 = f(fd, bufAddress);
+      expect(result2).to.equal(0);
+      const rights = dv.getBigUint64(bufAddress + 8, true);
+      expect(rights & BigInt(Right.fd_readdir)).to.not.equal(0n);
+    })
+    it('should return EINVAL if stream type is incorrect', async function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      env.addListener('open', () => {
+        return {
+          type: 'dir',
+          readdir() {}
+        };
+      });
+      const encoder = new TextEncoder();
+      const src = encoder.encode('/hello.txt');
+      const pathAddress = 0x1000;
+      const pathLen = src.length;
+      const fdAddress = 0x2000;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      const open = env.getWASIHandler('path_open');
+      const result1 = open(RootDescriptor, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      expect(result1).to.equal(0);
+      const dv = new DataView(env.memory.buffer);
+      const fd = dv.getUint32(fdAddress, true);
+      const bufAddress = 0x3000;
+      const f = env.getWASIHandler('fd_fdstat_get');
+      let result2;
+      const [ error ] = await captureError(() => {
+        result2 = f(fd, bufAddress);
+      })
+      expect(result2).to.equal(PosixError.EINVAL);
+      expect(error).to.contain('dir');
     })
     it('should include right to set times when there is a handler for the operation', async function() {
       const env = new Env();

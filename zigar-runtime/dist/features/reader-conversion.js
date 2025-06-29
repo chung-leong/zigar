@@ -56,7 +56,9 @@ class WebStreamReader {
   }
 
   close() {
-    this.reader.cancel();
+    if (!this.done) {
+      this.reader.cancel();
+    }
   }
 }
 

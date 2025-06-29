@@ -1,6 +1,6 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, InvalidEnumValue } from '../errors.js';
 import { hasMethod } from '../utils.js';
 
 const Right = {
@@ -41,6 +41,7 @@ var fdstat = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const dv = new DataView(this.memory.buffer);
       const stream = this.getStream(fd);
+      let rights = 0, flags = 0, type;
       rights = Right.fd_filestat_get;
       if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
         rights |= Right.fd_filestat_set_times;
@@ -50,18 +51,20 @@ var fdstat = mixin({
           rights |= Right[`fd_${name}`];
         }
       }
-      let type;
       if (stream.type) {
         type = decodeEnum(stream.type, PosixFileType);
+        if (type === undefined) {
+          throw new InvalidEnumValue(PosixFileType, stream.type);
+        }
       } else {
-        if (rights & (Right.fd_read | rights.fd_write)) {
+        if (rights & (Right.fd_read | Right.fd_write)) {
           type = PosixFileType.file;
         } else {
           type = PosixFileType.directory;
         }
       }
       if (type === PosixFileType.directory) {
-        rights = Right.path_open | Right.path_filestat_get;
+        rights |= Right.path_open | Right.path_filestat_get;
       }
       dv.setUint8(buf_address + 0, type);
       dv.setUint16(buf_address + 2, flags, true);

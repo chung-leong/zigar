@@ -168,6 +168,16 @@ export class InvalidArrayInitializer extends InvalidInitializer {
   }
 }
 
+export class InvalidEnumValue extends TypeError {
+  code = PosixError.EINVAL;
+
+  constructor(set, arg) {
+    const keys = Object.keys(set);
+    const list = keys.map(k => `${k}\n`).join('');
+    super(`Received '${arg}', which is not among the following possible values:\n\n${list}`);
+  }
+}
+
 export class ArrayLengthMismatch extends TypeError {
   constructor(structure, target, arg) {
     const { name, length, instance: { members: [ member ] } } = structure;
@@ -494,9 +504,6 @@ export function throwReadOnly() {
 }
 
 export function checkInefficientAccess(progress, access, len) {
-  if (progress.bytes === undefined) {
-    progress.bytes = progress.calls = 0;
-  }
   progress.bytes += len;
   progress.calls++;
   if (progress.calls === 100) {

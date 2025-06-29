@@ -6,10 +6,10 @@ const Env = defineEnvironment();
 
 describe('Feature: dir-conversion', function() {
   describe('convertDirectory', function() {
-    it('convert Map to directory', function() {
+    it('should convert Map to directory', function() {
       const env = new Env();
       const map = new Map([
-        [ 'hello.txt', {} ],
+        [ 'hello.txt', { type: 'file' } ],
       ]);
       const dir = env.convertDirectory(map);
       const list = [];
@@ -17,7 +17,24 @@ describe('Feature: dir-conversion', function() {
         list.push(entry);
       }
       expect(list).to.have.lengthOf(1);
-      expect(list[0]).to.eql({ name: 'hello.txt' });
+      expect(list[0]).to.eql({ name: 'hello.txt', type: 'file' });
+    })
+    it('should return same object if it has a readdir method', function() {
+      const env = new Env();
+      const object = {
+        *readdir() {
+          for (let i = 0; i < 5; i++) {
+            yield { name: `file${i}.txt`, type: 'file' };
+          }
+        },
+      };
+      const dir = env.convertDirectory(object);
+      const list = [];
+      for (const entry of dir.readdir()) {
+        list.push(entry);
+      }
+      expect(list).to.have.lengthOf(5);
+      expect(list[0]).to.eql({ name: 'file0.txt', type: 'file' });
     })
   })
 })

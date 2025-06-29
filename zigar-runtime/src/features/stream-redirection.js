@@ -60,9 +60,9 @@ export default mixin({
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
       } else if (fd === 3) {
-        map.set(RootDescriptor, this.convertWriter(arg));
+        map.set(RootDescriptor, this.convertDirectory(arg));
       } else {
-        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+        throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
     } else {
       map.delete(fd);

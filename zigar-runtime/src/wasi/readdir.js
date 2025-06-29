@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
-import { encodeText } from '../utils.js';
+import { catchPosixError, InvalidEnumValue } from '../errors.js';
+import { decodeEnum, encodeText } from '../utils.js';
 
 export default mixin({
   init() {
@@ -35,7 +35,6 @@ export default mixin({
         if (entry) {
           context.entry = null;
         }
-        const typeKeys = Object.keys(PosixFileType);
         while (remaining >= 24) {
           if (!entry) {
             if (++context.count <= 2) {
@@ -53,19 +52,16 @@ export default mixin({
           }
           const { name, type, ino = 0 } = value;
           const array = encodeText(name);
-          let typeIndex = typeKeys.indexOf(type);
-          if (typeIndex === -1) {
-            if (type !== undefined) {
-              throw new TypeMismatch(typeKeys.map(k => `'${k}'`).join(', '), type);
-            }
-            typeIndex = PosixFileType.unknown;
-          }
           if (remaining < 24 + array.length) {
             context.entry = entry;
             break;
           }
+          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
+          if (typeIndex === undefined) {
+            throw new InvalidEnumValue(PosixFileType, type);
+          }
           dv.setBigUint64(p, cookie, true);
-          dv.setBigUint64(p + 8, BigInt(ino ?? 0n), true);
+          dv.setBigUint64(p + 8, BigInt(ino), true);
           dv.setUint32(p + 16, array.length, true);
           dv.setUint8(p + 20, typeIndex);
           p += 24;

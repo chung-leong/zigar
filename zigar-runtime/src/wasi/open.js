@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError, InvalidArgument } from '../errors.js';
+import { catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 
 const OpenFlag = {
@@ -27,15 +27,12 @@ export default mixin({
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      let type;
+      let type = 'read';
       for (const name of Object.keys(Right)) {
         if (rights[name]) {
           type = name;
           break;
         }
-      }
-      if (type === undefined) {
-        throw new InvalidArgument();
       }
       const handle = this.createStreamHandle(arg, type);
       this.setStreamLocation?.(handle, loc);

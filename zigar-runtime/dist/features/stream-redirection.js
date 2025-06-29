@@ -9,6 +9,9 @@ var streamRedirection = mixin({
     const w2 = this.createLogWriter(2);
     const root = {
       *readdir() {        
+      },
+      valueOf() {
+        return null;
       }
     };
     this.logWriters = { 1: w1, 2: w2 };
@@ -18,7 +21,9 @@ var streamRedirection = mixin({
   },
   getStream(fd) {
     const stream = this.streamMap.get(fd);
-    if (!stream) throw new InvalidFileDescriptor();
+    if (!stream) {
+      throw new InvalidFileDescriptor();
+    }
     return stream;
   },
   createStreamHandle(arg, type) {
@@ -54,6 +59,8 @@ var streamRedirection = mixin({
         map.set(fd, this.convertReader(arg));
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
+      } else if (fd === 3) {
+        map.set(RootDescriptor, this.convertWriter(arg));
       } else {
         throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
       }

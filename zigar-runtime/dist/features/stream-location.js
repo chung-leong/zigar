@@ -6,7 +6,7 @@ var streamLocation = mixin({
   init() {
     this.streamLocationMap = new Map([ [ RootDescriptor, '' ]]);
   },
-  obtainStreamLocation(fd, pathAddress, pathLen) {
+  obtainStreamLocation(dirfd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
@@ -21,7 +21,7 @@ var streamLocation = mixin({
         list.push(part);
       }
     }
-    const stream = this.getStream(fd);
+    const stream = this.getStream(dirfd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },
   getStreamLocation(fd) {

@@ -45,6 +45,7 @@ import './promise.js';
 import './reader-conversion.js';
 import './reader.js';
 import './stream-location.js';
+import './stream-position.js';
 import './stream-redirection.js';
 import './worker-support.js';
 import './writer-conversion.js';

@@ -1,5 +1,4 @@
 import { MemberType } from './constants.js';
-import { TypeMismatch } from './errors.js';
 import { ENVIRONMENT, LENGTH, PROXY, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
@@ -304,8 +303,6 @@ export function decodeEnum(string, set) {
       return value;
     }
   }
-  const names = Object.keys(set).map(k => `'${key}'`);
-  throw new TypeMismatch(names.join(', '), string);
 }
 
 export function markAsSpecial({ get, set }) {

@@ -24,9 +24,9 @@ var filestat = mixin({
       return { size: stream.size };
     }, (stat) => this.wasiCopyStat(stat, buf_address));
   },
-  wasi_path_filestat_get(fd, lookup_flags, path_address, path_len, buf_address, canWait) {
+  wasi_path_filestat_get(dirfd, lookup_flags, path_address, path_len, buf_address, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(fd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
       const flags = decodeFlags(lookup_flags, LookupFlag);
       return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
     }, (stat) => this.wasiCopyStat(stat, buf_address));

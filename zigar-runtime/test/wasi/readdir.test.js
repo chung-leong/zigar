@@ -1,6 +1,8 @@
 import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -15,11 +17,11 @@ if (process.env.TARGET === 'wasm') {
       ]);
       const fd = env.createStreamHandle(map, 'readdir');
       const bufAddress = 0x1000;
-      const bufLen = 24 + 1 + 24 + 2;
+      const bufLen = 24 + 1 + 24 + 2 + 10;
       const usedAddress = 0x2000;
       const f = env.getWASIHandler('fd_readdir');
       let cookie = 0n;
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 4; i++) {
         const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
         expect(result).to.equal(0);
         const dv = new DataView(memory.buffer);
@@ -44,6 +46,44 @@ if (process.env.TARGET === 'wasm') {
         }
         cookie = dv.getBigUint64(bufAddress + 0, true);
       }
+    })
+    it('should return EINVAL when entry type is incorrect', async function() {
+      const env = new Env();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', ino: 1n } ],
+        [ 'hello-world.txt', { type: 'fil' } ],
+      ]);
+      const fd = env.createStreamHandle(map, 'readdir');
+      const bufAddress = 0x1000;
+      const bufLen = 24 + 1 + 24 + 2 + 10;
+      const usedAddress = 0x2000;
+      const f = env.getWASIHandler('fd_readdir');
+      let cookie = 0n;
+      for (let i = 0; i < 3; i++) {
+        let result;
+        const [ error ] = await captureError(() => {
+          result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+        });
+        const dv = new DataView(memory.buffer);
+        switch (i) {
+          case 0:
+          case 1:
+            expect(result).to.equal(0);
+            break;
+          case 2:
+            expect(result).to.equal(PosixError.EINVAL);
+            expect(error).to.contain('fil');
+            break;
+        }
+        cookie = dv.getBigUint64(bufAddress + 0, true);
+      }
+    })
+    it('should return error code when buffer is too small', async function() {
+      const env = new Env();
+      const f = env.getWASIHandler('fd_readdir');
+      const result = f(3, 0x1000, 20, 0n, 0x2000);
+      expect(result).to.equal(PosixError.EINVAL);
     })
  })
 }

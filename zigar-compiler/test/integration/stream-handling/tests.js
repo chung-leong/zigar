@@ -305,6 +305,28 @@ export function addTests(importModule, options) {
       const lines2 = await capture(() => print(map2));
       expect(lines2).to.have.lengthOf(100);
     })
+    it('should print contents of files in directory', async function() {
+      this.timeout(0);
+      const { __zigar, print } = await importTest('open-file-from-directory');
+      __zigar.on('open', ({ parent, path }) => {
+        const entry = parent.get(path);
+        const text = entry.content;
+        const encoder = new TextEncoder();
+        return encoder.encode(text);
+      })
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      const lines = await capture(() => print(map));
+      expect(lines).to.eql([
+        'hello.txt:',
+        'Hello world',
+        'test.txt:',
+        'This is a test and this is only a test',        
+      ])
+    })
   })
 }
 

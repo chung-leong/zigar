@@ -1,10 +1,13 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
+import { hasMethod } from '../utils.js';
 
 export default mixin({
   convertDirectory(arg) {
     if (arg instanceof Map) {
       return new MapDirectory(arg);
+    } else if (hasMethod(arg, 'readdir')) {
+      return arg;
     } else {
       throw new TypeMismatch('map or object with directory interface', arg);
     }

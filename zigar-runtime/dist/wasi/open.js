@@ -27,7 +27,7 @@ var open = mixin({
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      let type;
+      let type = 'read';
       for (const name of Object.keys(Right)) {
         if (rights[name]) {
           type = name;

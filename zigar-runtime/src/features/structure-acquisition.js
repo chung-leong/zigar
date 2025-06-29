@@ -50,6 +50,7 @@ import promise from './promise.js';
 import readerConversion from './reader-conversion.js';
 import reader from './reader.js';
 import streamLocation from './stream-location.js';
+import streamPosition from './stream-position.js';
 import streamRedirection from './stream-redirection.js';
 import workerSupport from './worker-support.js';
 import writerConversion from './writer-conversion.js';

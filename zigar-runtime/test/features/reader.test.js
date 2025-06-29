@@ -3,6 +3,7 @@ import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
 import { MEMORY } from '../../src/symbols.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -146,7 +147,9 @@ describe('Feature: reader', function() {
       const buffer = {
         '*': { [MEMORY]: dv }
       }
-      await expect(readFn(ptr, buffer)).to.eventually.be.rejected;
+      const [ error ] = await captureError(async () => {
+        await expect(readFn(ptr, buffer)).to.eventually.be.rejected;
+      });
     })
     it('should rethrow the error when the stream throws one synchronously', async function() {
       const env = new Env();
@@ -166,7 +169,9 @@ describe('Feature: reader', function() {
       const buffer = {
         '*': { [MEMORY]: dv }
       }
-      expect(() => readFn(ptr, buffer)).to.throw();
+      const [ error ] = await captureError(() => {
+        expect(() => readFn(ptr, buffer)).to.throw();
+      });
     })
     it('should return an object if it has the properties of a reader', async function() {
       const env = new Env();

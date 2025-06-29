@@ -52,7 +52,7 @@ describe('Feature: stream-location', function() {
       }
       const dirMap = new Map();
       env.streamMap.set(4, env.convertDirectory(dirMap));
-      const path = './world.txt';
+      const path = './hello/../world.txt';
       const pathAddress = usize(0x1000);
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
