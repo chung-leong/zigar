@@ -8,6 +8,7 @@ export default mixin({
     this.readerCallback = null;
     this.readerMap = new Map();
     this.nextReaderId = usize(0x1000);
+    /* c8 ignore next */
     if (import.meta.env?.PROD !== true) {
       this.readerProgressMap = new Map();
     }
@@ -24,11 +25,13 @@ export default mixin({
     const context = this.obtainZigView(readerId, 0, false);
     const onClose = reader.onClose = () => {
       this.readerMap.delete(readerId);
+      /* c8 ignore next */
       if (import.meta.env?.PROD !== true) {
         this.readerProgressMap.delete(readerId);
       }
     };
     this.readerMap.set(readerId, reader);
+    /* c8 ignore next */
     if (import.meta.env?.PROD !== true) {
       this.readerProgressMap.set(readerId, { bytes: 0, calls: 0 });
     }

@@ -29,6 +29,10 @@ class WebStreamReader {
 
   constructor(reader) {
     this.reader = reader;
+    reader.closed.catch(() => {
+      this.done = true;
+      this.onClose?.();
+    });
   }
 
   async read(dest) {
@@ -55,7 +59,7 @@ class WebStreamReader {
     return read;
   }
 
-  close() {
+  destroy() {
     if (!this.done) {
       this.reader.cancel();
     }
@@ -81,6 +85,7 @@ class BlobReader {
   constructor(blob) {
     this.blob = blob;
     this.size = BigInt(blob.size ?? blob.length);
+    blob.close = () => this.onClose?.();
   }
 
   async read(dest) {
@@ -117,10 +122,6 @@ class BlobReader {
     if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
-
-  close() {
-    this.onClose?.();
-  }
 }
 
 class Uint8ArrayReader extends BlobReader {
@@ -136,8 +137,4 @@ export class NullStream {
   }
 
   write() {}
-
-  close() {
-    this.onClose?.();
-  }
 }

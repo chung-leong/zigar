@@ -18,6 +18,10 @@ describe('Feature: dir-conversion', function() {
       }
       expect(list).to.have.lengthOf(1);
       expect(list[0]).to.eql({ name: 'hello.txt', type: 'file' });
+      let called = false;
+      dir.onClose = () => called = true;
+      map.close();
+      expect(called).to.be.true;
     })
     it('should return same object if it has a readdir method', function() {
       const env = new Env();
@@ -35,6 +39,11 @@ describe('Feature: dir-conversion', function() {
       }
       expect(list).to.have.lengthOf(5);
       expect(list[0]).to.eql({ name: 'file0.txt', type: 'file' });
+    })
+    it('should throw error when conversion is not possible', function() {
+      const env = new Env();
+      expect(() => env.convertDirectory(1234)).to.throw(TypeError)
+        .with.property('message').that.contains('map or object');
     })
   })
 })

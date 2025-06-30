@@ -1,15 +1,15 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
-    ErrorSetFlag,
-    MemberType, PointerFlag, SliceFlag,
-    StructureFlag, StructurePurpose, StructureType
+  ErrorSetFlag,
+  MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins-wasi.js';
 import {
-    ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty } from '../../src/utils.js';
 import { addressByteSize, addressSize, usize } from '../test-utils.js';
@@ -1182,7 +1182,7 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(dest[1]).to.have.property('context').that.is.an.instanceOf(DataView);
       expect(dest[1]).to.have.property('readFn').that.is.a('function');
     })
-    it('should convert web stream reader to AnyWriter struct', function() {
+    it('should convert web stream writer to AnyWriter struct', function() {
       const env = new Env();
       const usizeStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1428,6 +1428,139 @@ describe('Feature: call-marshaling-outbound', function() {
       expect(dest[0]).to.equal(1);
       expect(dest[1]).to.have.property('context').that.is.an.instanceOf(DataView);
       expect(dest[1]).to.have.property('writeFn').that.is.a('function');
+    })
+    it('should convert web stream writer to File struct', function() {
+      const env = new Env();
+      const usizeStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: addressByteSize,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(usizeStructure, {
+        type: MemberType.Int,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.defineStructure(usizeStructure);
+      env.endStructure(usizeStructure);
+      const fileStructure = env.beginStructure({
+        type: StructureType.Struct,
+        purpose: StructurePurpose.File,
+        byteSize: addressByteSize,
+        flags: 0,
+      });
+      env.attachMember(fileStructure, {
+        name: 'handle',
+        type: MemberType.Uint,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: {},
+      });
+      env.defineStructure(fileStructure);
+      env.endStructure(fileStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: usizeStructure.byteSize * 8,
+          bitOffset: 0,
+          byteSize: usizeStructure.byteSize,
+          structure: usizeStructure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: fileStructure.byteSize * 8,
+          bitOffset: 64,
+          byteSize: fileStructure.byteSize,
+          structure: fileStructure,
+        },
+      ];
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
+      const stream = new WritableStream({
+        async write(buf) {}
+      });
+      const writer = stream.getWriter();
+      const src = [ 1n, writer ];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      env.copyArguments(dest, src, members, {});
+      expect(dest[0]).to.equal(1n);
+      expect(dest[1]).to.have.property('handle').that.is.a('number');
+    })
+    it('should convert Map to Dir struct', function() {
+      const env = new Env();
+      const usizeStructure = env.beginStructure({
+        type: StructureType.Primitive,
+        byteSize: addressByteSize,
+        flags: StructureFlag.HasValue,
+      });
+      env.attachMember(usizeStructure, {
+        type: MemberType.Int,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: usizeStructure,
+      });
+      env.defineStructure(usizeStructure);
+      env.endStructure(usizeStructure);
+      const dirStructure = env.beginStructure({
+        type: StructureType.Struct,
+        purpose: StructurePurpose.Directory,
+        byteSize: addressByteSize,
+        flags: 0,
+      });
+      env.attachMember(dirStructure, {
+        name: 'handle',
+        type: MemberType.Uint,
+        bitSize: addressSize,
+        bitOffset: 0,
+        byteSize: addressByteSize,
+        structure: {},
+      });
+      env.defineStructure(dirStructure);
+      env.endStructure(dirStructure);
+      const members = [
+        {
+          name: '0',
+          type: MemberType.Int,
+          bitSize: usizeStructure.byteSize * 8,
+          bitOffset: 0,
+          byteSize: usizeStructure.byteSize,
+          structure: usizeStructure,
+        },
+        {
+          name: '1',
+          type: MemberType.Object,
+          bitSize: dirStructure.byteSize * 8,
+          bitOffset: 64,
+          byteSize: dirStructure.byteSize,
+          structure: dirStructure,
+        },
+      ];
+      const ArgStruct = class {};
+      ArgStruct.prototype[SETTERS] = {
+        0: function(v) { this[0] = v },
+        1: function(v) { this[1] = v },
+      };
+      const dest = new ArgStruct();
+      const map = new Map();
+      const src = [ 2n, map ];
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      }      
+      env.copyArguments(dest, src, members, {});
+      expect(dest[0]).to.equal(2n);
+      expect(dest[1]).to.have.property('fd').that.is.a('number');
     })
   })
   describe('invokeThunk', function() {

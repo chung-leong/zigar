@@ -8,6 +8,7 @@ export default mixin({
     this.writerCallback = null;
     this.writerMap = new Map();
     this.nextWriterContextId = usize(0x2000);
+    /* c8 ignore next */
     if (import.meta.env?.PROD !== true) {
       this.writerProgressMap = new Map();
     }
@@ -24,11 +25,13 @@ export default mixin({
     const context = this.obtainZigView(writerId, 0, false);
     const onClose = writer.onClose = () => {
       this.writerMap.delete(writerId);
+      /* c8 ignore next */
       if (import.meta.env?.PROD !== true) {
         this.writerProgressMap.delete(writerId);
       }
-    }
-    this.writerMap.set(writerId, writer);     
+    };
+    this.writerMap.set(writerId, writer);
+    /* c8 ignore next */
     if (import.meta.env?.PROD !== true) {
       this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
     }

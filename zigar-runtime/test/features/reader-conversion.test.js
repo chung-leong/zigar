@@ -41,7 +41,6 @@ describe('Feature: reader-conversion', function() {
       expect(buffer).to.eql(new Uint8Array([ 9, 6, 7, 8 ]));
       await delay(0);
       expect(called).to.be.true;
-      reader.close();
     })
     it('should convert an Uint8Array to a reader', async function() {
       const env = new Env();
@@ -72,7 +71,7 @@ describe('Feature: reader-conversion', function() {
       expect(() => reader.seek(1000, 0)).to.throw(InvalidArgument);
       let called = false;
       reader.onClose = () => called = true;
-      reader.close();
+      array.close();
       expect(called).to.be.true;
     })
     it('should convert a Blob to a reader', async function() {
@@ -98,7 +97,7 @@ describe('Feature: reader-conversion', function() {
       expect(buffer).to.eql(new Uint8Array([ 4, 5, 6, 7 ]));
       const res5 = reader.tell();
       expect(res5).to.equal(7n);
-      reader.close();
+      blob.close();
     })
     it('should convert null to a reader', async function() {
       const env = new Env();
@@ -107,10 +106,6 @@ describe('Feature: reader-conversion', function() {
       const res = await reader.read(buffer);
       expect(res).to.equal(0);
       expect(buffer).to.eql(new Uint8Array([ 0, 0, 0, 0 ]));
-      let called = false;
-      reader.onClose = () => called = true;
-      reader.close();
-      expect(called).to.be.true;
     })
     it('should return the same object when it contains a read function', async function() {
       const env = new Env();

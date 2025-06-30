@@ -9,7 +9,7 @@ export default mixin({
       const listener = this.listenerMap.get('env');
       const result = listener?.() ?? {};
       if (typeof(result) !== 'object') {
-        throw TypeMismatch('object', result);
+        throw new TypeMismatch('object', result);
       }
       env = this.envVariables = [];
       for (const [ name, value ] of Object.entries(result)) {

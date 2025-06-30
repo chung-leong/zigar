@@ -28,7 +28,7 @@ var writer = mixin({
         this.writerProgressMap.delete(writerId);
       }
     };
-    this.writerMap.set(writerId, writer);     
+    this.writerMap.set(writerId, writer);
     if (import.meta.env?.PROD !== true) {
       this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
     }

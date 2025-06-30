@@ -6,7 +6,8 @@ var dir = mixin({
     if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
       return arg;
     }
-    const fd = this.createStreamHandle(arg, 'readdir');
+    const dir = this.convertDirectory(arg);
+    const fd = this.createStreamHandle(dir);
     return { fd };
   },
 });

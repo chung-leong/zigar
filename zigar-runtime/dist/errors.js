@@ -1,4 +1,4 @@
-import { StructureType, memberNames, PosixError } from './constants.js';
+import { StructureType, PosixError, memberNames } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
 import { getPrimitiveName, defineProperty, isPromise } from './utils.js';
 
@@ -169,11 +169,12 @@ class InvalidArrayInitializer extends InvalidInitializer {
 }
 
 class InvalidEnumValue extends TypeError {
+  code = PosixError.EINVAL;
+
   constructor(set, arg) {
     const keys = Object.keys(set);
-    super(`Received '${arg}', which is not among the following possible values:
-
-${keys.join(k => `\t${k}\n`)}`);
+    const list = keys.map(k => `${k}\n`).join('');
+    super(`Received '${arg}', which is not among the following possible values:\n\n${list}`);
   }
 }
 
@@ -503,9 +504,6 @@ function throwReadOnly() {
 }
 
 function checkInefficientAccess(progress, access, len) {
-  if (progress.bytes === undefined) {
-    progress.bytes = progress.calls = 0;
-  }
   progress.bytes += len;
   progress.calls++;
   if (progress.calls === 100) {

@@ -33,12 +33,24 @@ describe('Feature: file', function() {
       ])
       const file = env.createFile(blob);
       expect(file.handle).to.be.a('number');
+      expect(blob.close).to.be.a('function');
+    })
+    it('should create a file struct from an array', async function() {
+      const env = new Env();
+      const array = [];
+      const file = env.createFile(array);
+      expect(file.handle).to.be.a('number');
+      expect(array.close).to.be.a('function');
     })
     it('should return the same object if it has a handle property', async function() {
       const env = new Env();
       const object = { handle: 1234 };
       const file = env.createFile(object);
       expect(file).to.equal(object);
+    })
+    it('should throw error when argument cannot be converted', async function() {
+      const env = new Env();
+      expect(() => env.createFile(1234)).to.throw(Error);
     })
     if (process.env.TARGET === 'node') {
       it('should copy handle from Node FileHandle object', async function() {

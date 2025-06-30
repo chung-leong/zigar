@@ -490,7 +490,7 @@ function decodeFlags(flags, set) {
   return object;
 }
 
-function decodeEnum$1(string, set) {
+function decodeEnum(string, set) {
   for (const [ name, value ] of Object.entries(set)) {
     if (name === string) {
       return value;
@@ -2702,11 +2702,12 @@ class InvalidArrayInitializer extends InvalidInitializer {
 }
 
 class InvalidEnumValue extends TypeError {
+  code = PosixError.EINVAL;
+
   constructor(set, arg) {
     const keys = Object.keys(set);
-    super(`Received '${arg}', which is not among the following possible values:
-
-${keys.join(k => `\t${k}\n`)}`);
+    const list = keys.map(k => `${k}\n`).join('');
+    super(`Received '${arg}', which is not among the following possible values:\n\n${list}`);
   }
 }
 
@@ -3029,9 +3030,6 @@ function throwReadOnly() {
 }
 
 function checkInefficientAccess(progress, access, len) {
-  if (progress.bytes === undefined) {
-    progress.bytes = progress.calls = 0;
-  }
   progress.bytes += len;
   progress.calls++;
   if (progress.calls === 100) {
@@ -3850,6 +3848,8 @@ var dirConversion = mixin({
   convertDirectory(arg) {
     if (arg instanceof Map) {
       return new MapDirectory(arg);
+    } else if (hasMethod(arg, 'readdir')) {
+      return arg;
     } else {
       throw new TypeMismatch('map or object with directory interface', arg);
     }
@@ -3857,8 +3857,11 @@ var dirConversion = mixin({
 });
 
 class MapDirectory {
+  onClose = null;
+
   constructor(map) {
     this.map = map;
+    map.close = () => this.onClose?.();
   }
 
   *readdir() {
@@ -3878,7 +3881,8 @@ var dir = mixin({
     if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
       return arg;
     }
-    const fd = this.createStreamHandle(arg, 'readdir');
+    const dir = this.convertDirectory(arg);
+    const fd = this.createStreamHandle(dir);
     return { fd };
   },
 });
@@ -3890,7 +3894,7 @@ var envVariables = mixin({
       const listener = this.listenerMap.get('env');
       const result = listener?.() ?? {};
       if (typeof(result) !== 'object') {
-        throw TypeMismatch('object', result);
+        throw new TypeMismatch('object', result);
       }
       env = this.envVariables = [];
       for (const [ name, value ] of Object.entries(result)) {
@@ -3908,16 +3912,17 @@ var file = mixin({
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
-    let handle;
-    for (const type of [ 'read', 'write' ]) {
+    let file;
+    try {
+      file = this.convertReader(arg);
+    } catch (err) {
       try {
-        handle = this.createStreamHandle(arg, type);
+        file = this.convertWriter(arg);
       } catch {
-      }     
+        throw err;
+      }
     }
-    if (!handle) {
-      throw new TypeMismatch('reader or writer', arg);
-    }
+    const handle = this.createStreamHandle(file);
     return { handle };
   },
 });
@@ -4943,6 +4948,10 @@ class WebStreamReader {
 
   constructor(reader) {
     this.reader = reader;
+    reader.closed.catch(() => {
+      this.done = true;
+      this.onClose?.();
+    });
   }
 
   async read(dest) {
@@ -4969,7 +4978,7 @@ class WebStreamReader {
     return read;
   }
 
-  close() {
+  destroy() {
     if (!this.done) {
       this.reader.cancel();
     }
@@ -4995,6 +5004,7 @@ class BlobReader {
   constructor(blob) {
     this.blob = blob;
     this.size = BigInt(blob.size ?? blob.length);
+    blob.close = () => this.onClose?.();
   }
 
   async read(dest) {
@@ -5031,10 +5041,6 @@ class BlobReader {
     if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
-
-  close() {
-    this.onClose?.();
-  }
 }
 
 class Uint8ArrayReader extends BlobReader {
@@ -5050,10 +5056,6 @@ class NullStream {
   }
 
   write() {}
-
-  close() {
-    this.onClose?.();
-  }
 }
 
 var reader = mixin({
@@ -5229,16 +5231,11 @@ var streamRedirection = mixin({
     }
     return stream;
   },
-  createStreamHandle(arg, type) {
-    let stream;    
-    switch (type) {
-      case 'read': stream = this.convertReader(arg); break;
-      case 'write': stream = this.convertWriter(arg); break;
-      case 'readdir': stream = this.convertDirectory(arg); break;
-    }
-    const handle = this.nextStreamHandle++;
-    this.streamMap.set(handle, stream);
-    return handle;
+  createStreamHandle(stream) {
+    const fd = this.nextStreamHandle++;
+    this.streamMap.set(fd, stream);
+    stream.onClose = () => this.closeStream(fd);
+    return fd;
   },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
@@ -5252,6 +5249,8 @@ var streamRedirection = mixin({
     return reader.read(array);
   },
   closeStream(fd) {
+    const stream = this.streamMap.get(fd);
+    stream?.destroy?.();
     this.streamMap.delete(fd);
   },
   redirectStream(fd, arg) {
@@ -5263,9 +5262,9 @@ var streamRedirection = mixin({
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
       } else if (fd === 3) {
-        map.set(RootDescriptor, this.convertWriter(arg));
+        map.set(RootDescriptor, this.convertDirectory(arg));
       } else {
-        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+        throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
     } else {
       map.delete(fd);
@@ -5688,8 +5687,9 @@ const Right = {
 
 var wasiOpen = mixin({
   wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
+    const fs_rights = fs_rights_base | fs_rights_inheriting;
     const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-    const rights = decodeFlags(fs_rights_base, Right);
+    const rights = decodeFlags(fs_rights, Right);
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const flags = decodeFlags(oflags, OpenFlag);
       return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
@@ -5697,14 +5697,15 @@ var wasiOpen = mixin({
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      let type = 'read';
-      for (const name of Object.keys(Right)) {
-        if (rights[name]) {
-          type = name;
-          break;
-        }
+      let resource;
+      if (rights.read || fs_rights === 0) {
+        resource = this.convertReader(arg);
+      } else if (rights.write) {
+        resource = this.convertWriter(arg);
+      } else if (rights.readdir) {
+        resource = this.convertDirectory(arg);
       }
-      const handle = this.createStreamHandle(arg, type);
+      const handle = this.createStreamHandle(resource);
       this.setStreamLocation?.(handle, loc);
       const dv = new DataView(this.memory.buffer);
       dv.setUint32(fd_address, handle, true);
@@ -5790,6 +5791,7 @@ var wasiReaddir = mixin({
       let remaining = buf_len;
       let p = buf_address;
       let used;
+      const defaultEntryCount = (fd !== RootDescriptor) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {
@@ -5797,7 +5799,7 @@ var wasiReaddir = mixin({
         }
         while (remaining >= 24) {
           if (!entry) {
-            if (++context.count <= 2) {
+            if (++context.count <= defaultEntryCount) {
               entry = { 
                 value: { name: '.'.repeat(context.count), type: 'directory' },
                 done: false,
@@ -5812,16 +5814,16 @@ var wasiReaddir = mixin({
           }
           const { name, type, ino = 0 } = value;
           const array = encodeText(name);
-          const typeIndex = (type !== undefined) ? decodeEnum$1(type, PosixFileType) : PosixFileType.unknown;
-          if (typeIndex === undefined) {
-            throw new InvalidEnumValue(PosixFileType, type);
-          }
           if (remaining < 24 + array.length) {
             context.entry = entry;
             break;
           }
+          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
+          if (typeIndex === undefined) {
+            throw new InvalidEnumValue(PosixFileType, type);
+          }
           dv.setBigUint64(p, cookie, true);
-          dv.setBigUint64(p + 8, BigInt(ino ?? 0n), true);
+          dv.setBigUint64(p + 8, BigInt(ino), true);
           dv.setUint32(p + 16, array.length, true);
           dv.setUint8(p + 20, typeIndex);
           p += 24;
@@ -6110,22 +6112,31 @@ var writerConversion = mixin({
     } else if (typeof(arg?.write) === 'function') {
       return arg;
     } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, console, null, or object with writer interface', arg);
+      throw new TypeMismatch('WritableStreamDefaultWriter, array, null, or object with writer interface', arg);
     }
   },
 });
 
 class WebStreamWriter {
+  onClose = null;
+  done = false;
+
   constructor(writer) {
     this.writer = writer;
+    writer.closed.catch(empty).then(() => {
+      this.done = true;
+      this.onClose?.();
+    });
   }
 
   async write(bytes) {
     await this.writer.write(bytes);
   }
 
-  set onClose(cb) {
-    this.writer.closed.then(cb, cb);
+  destroy() {
+    if (!this.done) {
+      this.writer.close();
+    }
   }
 }
 
@@ -6133,14 +6144,11 @@ class ArrayWriter {
   constructor(array) {
     this.array = array;
     this.closeCB = null;
+    array.close = () => this.onClose?.();
   }
 
   write(bytes) {
     this.array.push(bytes);
-  }
-
-  close() {
-    this.onClose?.();
   }
 }
 
@@ -6169,7 +6177,7 @@ var writer = mixin({
         this.writerProgressMap.delete(writerId);
       }
     };
-    this.writerMap.set(writerId, writer);     
+    this.writerMap.set(writerId, writer);
     if (import.meta.env?.PROD !== true) {
       this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
     }

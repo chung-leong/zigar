@@ -26,16 +26,11 @@ export default mixin({
     }
     return stream;
   },
-  createStreamHandle(arg, type) {
-    let stream;    
-    switch (type) {
-      case 'read': stream = this.convertReader(arg); break;
-      case 'write': stream = this.convertWriter(arg); break;
-      case 'readdir': stream = this.convertDirectory(arg); break;
-    }
-    const handle = this.nextStreamHandle++;
-    this.streamMap.set(handle, stream);
-    return handle;
+  createStreamHandle(stream) {
+    const fd = this.nextStreamHandle++;
+    this.streamMap.set(fd, stream);
+    stream.onClose = () => this.closeStream(fd);
+    return fd;
   },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
@@ -49,6 +44,8 @@ export default mixin({
     return reader.read(array);
   },
   closeStream(fd) {
+    const stream = this.streamMap.get(fd);
+    stream?.destroy?.();
     this.streamMap.delete(fd);
   },
   redirectStream(fd, arg) {

@@ -39,7 +39,7 @@ describe('Feature: writer-conversion', function() {
       expect(chunks).to.have.lengthOf(1);
       let called = false;
       writer.onClose = () => called = true;
-      writer.close();
+      chunks.close();
       await delay(0);
       expect(called).to.be.true;
     })
@@ -48,7 +48,6 @@ describe('Feature: writer-conversion', function() {
       const writer = env.convertWriter(null);
       const bytes = new Uint8Array([ 0, 1, 2, 3 ]);
       writer.write(bytes);
-      writer.close();
     })
     it('should return the same object when it contains a write function', async function() {
       const env = new Env();

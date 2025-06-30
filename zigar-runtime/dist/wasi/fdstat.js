@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { hasMethod } from '../utils.js';
+import { hasMethod, decodeEnum } from '../utils.js';
 
 const Right = {
     fd_datasync: 1 << 0,

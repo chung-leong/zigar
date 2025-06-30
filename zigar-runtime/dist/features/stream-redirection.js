@@ -26,16 +26,11 @@ var streamRedirection = mixin({
     }
     return stream;
   },
-  createStreamHandle(arg, type) {
-    let stream;    
-    switch (type) {
-      case 'read': stream = this.convertReader(arg); break;
-      case 'write': stream = this.convertWriter(arg); break;
-      case 'readdir': stream = this.convertDirectory(arg); break;
-    }
-    const handle = this.nextStreamHandle++;
-    this.streamMap.set(handle, stream);
-    return handle;
+  createStreamHandle(stream) {
+    const fd = this.nextStreamHandle++;
+    this.streamMap.set(fd, stream);
+    stream.onClose = () => this.closeStream(fd);
+    return fd;
   },
   writeBytes(fd, address, len) {
     const array = this.obtainZigArray(address, len, false);
@@ -49,6 +44,8 @@ var streamRedirection = mixin({
     return reader.read(array);
   },
   closeStream(fd) {
+    const stream = this.streamMap.get(fd);
+    stream?.destroy?.();
     this.streamMap.delete(fd);
   },
   redirectStream(fd, arg) {
@@ -60,9 +57,9 @@ var streamRedirection = mixin({
       } else if (fd === 1 || fd === 2) {
         map.set(fd, this.convertWriter(arg));
       } else if (fd === 3) {
-        map.set(RootDescriptor, this.convertWriter(arg));
+        map.set(RootDescriptor, this.convertDirectory(arg));
       } else {
-        throw new Error(`Expecting 0, 1, or 2, received ${fd}`);
+        throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
     } else {
       map.delete(fd);

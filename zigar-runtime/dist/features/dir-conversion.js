@@ -1,10 +1,13 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
+import { hasMethod } from '../utils.js';
 
 var dirConversion = mixin({
   convertDirectory(arg) {
     if (arg instanceof Map) {
       return new MapDirectory(arg);
+    } else if (hasMethod(arg, 'readdir')) {
+      return arg;
     } else {
       throw new TypeMismatch('map or object with directory interface', arg);
     }
@@ -12,8 +15,11 @@ var dirConversion = mixin({
 });
 
 class MapDirectory {
+  onClose = null;
+
   constructor(map) {
     this.map = map;
+    map.close = () => this.onClose?.();
   }
 
   *readdir() {

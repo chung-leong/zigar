@@ -15,8 +15,11 @@ export default mixin({
 });
 
 class MapDirectory {
+  onClose = null;
+
   constructor(map) {
     this.map = map;
+    map.close = () => this.onClose?.();
   }
 
   *readdir() {

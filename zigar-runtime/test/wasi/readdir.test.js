@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins-wasi.js';
-import { captureError } from '../test-utils.js';
+import { captureError, RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -15,7 +15,8 @@ if (process.env.TARGET === 'wasm') {
         [ 'hello.txt', {} ],
         [ 'hello-world.txt', {} ],
       ]);
-      const fd = env.createStreamHandle(map, 'readdir');
+      const dir = env.convertDirectory(map);
+      const fd = env.createStreamHandle(dir);
       const bufAddress = 0x1000;
       const bufLen = 24 + 1 + 24 + 2 + 10;
       const usedAddress = 0x2000;
@@ -47,6 +48,23 @@ if (process.env.TARGET === 'wasm') {
         cookie = dv.getBigUint64(bufAddress + 0, true);
       }
     })
+    it('should work with default root directory', async function() {
+      const env = new Env();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const fd = RootDescriptor;
+      const bufAddress = 0x1000;
+      const bufLen = 24 + 1 + 24 + 2 + 10;
+      const usedAddress = 0x2000;
+      const f = env.getWASIHandler('fd_readdir');
+      let cookie = 0n;
+      const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+      expect(result).to.equal(0);
+      const dv = new DataView(memory.buffer);
+      const used = dv.getUint32(usedAddress, true);
+      const len = dv.getUint32(bufAddress + 16, true);
+      expect(used).to.equal(25);
+      expect(len).to.equal(1);
+    })
     it('should return EINVAL when entry type is incorrect', async function() {
       const env = new Env();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -54,7 +72,8 @@ if (process.env.TARGET === 'wasm') {
         [ 'hello.txt', { type: 'file', ino: 1n } ],
         [ 'hello-world.txt', { type: 'fil' } ],
       ]);
-      const fd = env.createStreamHandle(map, 'readdir');
+      const dir = env.convertDirectory(map);
+      const fd = env.createStreamHandle(dir);
       const bufAddress = 0x1000;
       const bufLen = 24 + 1 + 24 + 2 + 10;
       const usedAddress = 0x2000;

@@ -1,4 +1,4 @@
-import { PosixError, PosixFileType } from '../constants.js';
+import { PosixError, PosixFileType, RootDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
 import { encodeText, decodeEnum } from '../utils.js';
@@ -30,6 +30,7 @@ var readdir = mixin({
       let remaining = buf_len;
       let p = buf_address;
       let used;
+      const defaultEntryCount = (fd !== RootDescriptor) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {
@@ -37,7 +38,7 @@ var readdir = mixin({
         }
         while (remaining >= 24) {
           if (!entry) {
-            if (++context.count <= 2) {
+            if (++context.count <= defaultEntryCount) {
               entry = { 
                 value: { name: '.'.repeat(context.count), type: 'directory' },
                 done: false,
@@ -52,16 +53,16 @@ var readdir = mixin({
           }
           const { name, type, ino = 0 } = value;
           const array = encodeText(name);
-          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
-          if (typeIndex === undefined) {
-            throw new InvalidEnumValue(PosixFileType, type);
-          }
           if (remaining < 24 + array.length) {
             context.entry = entry;
             break;
           }
+          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
+          if (typeIndex === undefined) {
+            throw new InvalidEnumValue(PosixFileType, type);
+          }
           dv.setBigUint64(p, cookie, true);
-          dv.setBigUint64(p + 8, BigInt(ino ?? 0n), true);
+          dv.setBigUint64(p + 8, BigInt(ino), true);
           dv.setUint32(p + 16, array.length, true);
           dv.setUint8(p + 20, typeIndex);
           p += 24;
