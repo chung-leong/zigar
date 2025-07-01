@@ -11,10 +11,57 @@
 #else
     #include <unistd.h>
 #endif
+#include <redirect.h>
 
-typedef uint32_t (*override_callback)(const void*, size_t);
+typedef uint32_t (*override_callback)(syscall_struct*);
 
 override_callback override = NULL;
+
+bool is_applicable_handle(size_t fd) {
+    return fd >= fd_min || fd == 0 || fd == 1 || fd == 2;
+}
+
+bool override_write(size_t fd,
+                    const unsigned char* buffer,
+                    size_t len) {
+    syscall_struct call;
+    call.cmd = sc_write;
+    call.u.write.fd = fd;
+    call.u.write.bytes = buffer;
+    call.u.write.len = len;
+    // return value of zero means success
+    return (override && override(&call) == 0) ? true : false;
+}
+
+bool override_vfprintf(FILE* s,
+                       const char* f,
+                       va_list arg,
+                       int *written) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
+        // attempt with fixed-size buffer, using a copy of arg
+        va_list arg_copy;
+        va_copy(arg_copy, arg);
+        char fixed_buffer[1024];
+        char* buffer = fixed_buffer;
+        int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
+        bool too_large = len + 1 > sizeof(fixed_buffer);
+        if (too_large) {
+            va_copy(arg_copy, arg);
+            buffer = malloc(len + 1);
+            vsnprintf(buffer, len + 1, f, arg_copy);
+        }
+        bool overrode = override_write(fd, buffer, len) == 0;
+        if (too_large) {
+            free(s);
+        }
+        if (overrode) {
+            *written = len;
+            return true;
+        }
+    }
+    return false;
+}
 
 #if defined(_WIN32)
 BOOL WINAPI write_file_hook(HANDLE handle,
@@ -22,16 +69,9 @@ BOOL WINAPI write_file_hook(HANDLE handle,
                             DWORD len,
                             LPDWORD written,
                             LPOVERLAPPED overlapped) {
-    static HANDLE handle1 = NULL, handle2 = NULL;
-    if (!handle1) {
-        handle1 = GetStdHandle(STD_OUTPUT_HANDLE);
-    }
-    if (!handle2) {
-        handle2 = GetStdHandle(STD_ERROR_HANDLE);
-    }
-    if ((handle == handle1 || handle == handle2) && override) {
-        // return value of zero means success
-        if (override(buffer, len) == 0) {
+    // return value of zero means success
+    if (is_applicable_handle(handle)) {
+        if (override_write(handle, buffer, len)) {
             *written = len;
             if (overlapped) {
                 SetEvent(overlapped->hEvent);
@@ -46,10 +86,8 @@ BOOL WINAPI write_file_hook(HANDLE handle,
 ssize_t write_hook(int fd,
                    const void* buffer,
                    size_t len) {
-    // 1 = stdout, 2 = stderr
-    if ((fd == 1 || fd == 2) && override) {
-        // return value of zero means success
-        if (override(buffer, len) == 0) {
+    if (is_applicable_handle(fd)) {
+        if (override_write(fd, buffer, len)) {
             return len;
         }
     }
@@ -60,8 +98,9 @@ size_t fwrite_hook(const void *ptr,
                    size_t size,
 		           size_t n,
                    FILE* s) {
-    if ((s == stdout || s == stderr) && override) {
-        if (override(ptr, size * n) == 0) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
+        if (override_write(fd, ptr, size * n)) {
             return n;
         }
     }
@@ -70,9 +109,10 @@ size_t fwrite_hook(const void *ptr,
 
 int fputs_hook(const char *t,
                FILE* s) {
-    if ((s == stdout || s == stderr) && override) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
         size_t len = strlen(t);
-        if (override(t, len) == 0) {
+        if (override_write(fd, t, len)) {
             return len;
         }
     }
@@ -81,8 +121,8 @@ int fputs_hook(const char *t,
 
 int puts_hook(const char *t) {
     size_t len = strlen(t);
-    if (override && override(t, len) == 0) {
-        override("\n", 1);
+    if (override_write(1, t, len)) {
+        override_write(1, "\n", 1);
         return 1;
     }
     return puts(t);
@@ -90,9 +130,10 @@ int puts_hook(const char *t) {
 
 int fputc_hook(int c,
                FILE* s) {
-    if ((s == stdout || s == stderr) && override) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
         unsigned char b = c;
-        if (override(&b, 1) == 0) {
+        if (override_write(fd, &b, 1)) {
             return 1;
         }
     }
@@ -103,38 +144,14 @@ int putchar_hook(int c) {
     return fputc_hook(c, stdout);
 }
 
-int vfprintf_hook_impl(FILE* s,
-                       const char* f,
-                       va_list arg) {
-    if ((s == stdout || s == stderr) && override) {
-        // attempt with fixed-size buffer, using a copy of arg
-        va_list arg_copy;
-        va_copy(arg_copy, arg);
-        char fixed_buffer[1024];
-        char* s = fixed_buffer;
-        int len = vsnprintf(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
-        bool too_large = len + 1 > sizeof(fixed_buffer);
-        if (too_large) {
-            va_copy(arg_copy, arg);
-            s = malloc(len + 1);
-            vsnprintf(s, len + 1, f, arg_copy);
-        }
-        bool overrode = override(s, len) == 0;
-        if (too_large) {
-            free(s);
-        }
-        if (overrode) {
-            return len;
-        }
-    }
-    return -1;
-}
-
 int vfprintf_hook(FILE* s,
                   const char* f,
                   va_list arg) {
-    int len = vfprintf_hook_impl(s, f, arg);
-    return (len >= 0) ? len : vfprintf(s, f, arg);
+    int len;
+    if (override_vfprintf(s, f, arg, &len)) {
+        return len;
+    }
+    return vfprintf(s, f, arg);
 }
 
 int vprintf_hook(const char* f,
@@ -171,8 +188,11 @@ int stdio_common_vfprintf_hook(unsigned __int64 options,
                                char const* f,
                                _locale_t locale,
                                va_list arg) {
-    int len = vfprintf_hook_impl(s, f, arg);
-    return (len >= 0) ? len : __stdio_common_vfprintf(options, s, f, locale, arg);
+    int len;
+    if (override_vfprintf(s, f, arg, &len)) {
+        return len;
+    }
+    return __stdio_common_vfprintf(options, s, f, locale, arg);
 }
 #elif defined(__GLIBC__)
 int vfprintf_chk_hook(FILE* s,

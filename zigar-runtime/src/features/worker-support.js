@@ -1,5 +1,5 @@
-import { isPromise } from 'util/types';
 import { mixin } from '../environment.js';
+import { isPromise } from '../utils.js';
 
 export default mixin({
   init() {

@@ -9,6 +9,7 @@ const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
 const redirect = @import("redirect.zig");
+const SysCall = redirect.SysCall;
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);
@@ -38,8 +39,8 @@ const ModuleHost = struct {
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
         handle_js_call: ?ThreadsafeFunction = null,
+        handle_sys_call: ?ThreadsafeFunction = null,
         release_function: ?ThreadsafeFunction = null,
-        write_bytes: ?ThreadsafeFunction = null,
     } = .{},
 
     var module_count: i32 = 0;
@@ -186,7 +187,7 @@ const ModuleHost = struct {
         var lib = try std.DynLib.open(path_bytes);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
-        if (module.version != 5) return error.IncorrectVersion;
+        if (module.version != 6) return error.IncorrectVersion;
         self.module = module;
         self.base_address = get: {
             switch (builtin.target.os.tag) {
@@ -210,7 +211,7 @@ const ModuleHost = struct {
         };
         try self.exportFunctionsToModule();
         if (module.exports.initialize(self) != .ok) return error.Unexpected;
-        try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_write));
+        try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_sys_call));
         self.library = lib;
     }
 
@@ -386,12 +387,9 @@ const ModuleHost = struct {
 
     fn finalizeAsyncCall(self: *@This(), futex_handle: Value, async_result: Value) !void {
         const env = self.env;
-        const module = self.module orelse return error.NoLoadedModule;
-        const result = module.exports.wake_caller(
-            try env.getValueUsize(futex_handle),
-            try env.getValueUint32(async_result),
-        );
-        if (result != .ok) return error.Unexpected;
+        const handle = try env.getValueUsize(futex_handle);
+        const value = try env.getValueUint32(async_result);
+        try Futex.wake(handle, @enumFromInt(value));
     }
 
     fn getNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value) !Value {
@@ -507,8 +505,8 @@ const ModuleHost = struct {
             "enable_multithread",
             "disable_multithread",
             "handle_js_call",
+            "handle_sys_call",
             "release_function",
-            "write_bytes",
         };
         const module = self.module orelse return error.NoLoadedModule;
         inline for (names) |name| {
@@ -721,7 +719,7 @@ const ModuleHost = struct {
         );
     }
 
-    fn handleJsCall(self: *@This(), call: *const JsCall, in_main_thread: bool) !void {
+    fn handleJsCall(self: *@This(), call: *JsCall, in_main_thread: bool) !void {
         if (in_main_thread) {
             const env = self.env;
             const status = try env.callFunction(
@@ -741,8 +739,41 @@ const ModuleHost = struct {
             };
         } else {
             const func = self.ts.handle_js_call orelse return error.Disabled;
+            var futex: Futex = undefined;
+            call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(@constCast(call)), .nonblocking);
+            try futex.wait();
         }
+    }
+
+    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !void {
+        if (in_main_thread) {
+            call.futex_handle = 0;
+            switch (call.cmd) {
+                .write => try self.handleWrite(call),
+            }
+        } else {
+            const func = self.ts.handle_sys_call orelse return error.Disabled;
+            var futex: Futex = undefined;
+            call.futex_handle = futex.init();
+            try napi.callThreadsafeFunction(func, @ptrCast(call), .nonblocking);
+            try futex.wait();
+        }
+    }
+
+    fn handleWrite(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.write;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.write_bytes orelse return error.Unexpected),
+            &.{
+                try env.createUint32(@as(u32, @truncate(u.fd))),
+                try env.createUsize(@intFromPtr(u.bytes)),
+                try env.createUint32(@as(u32, @truncate(u.len))),
+                try env.createUsize(call.futex_handle),
+            },
+        );
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
@@ -758,35 +789,6 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.release_function orelse return error.Disabled;
             try napi.callThreadsafeFunction(func, @ptrFromInt(fn_id), .nonblocking);
-        }
-    }
-
-    fn writeBytes(self: *@This(), mem: *const Memory, in_main_thread: bool) !void {
-        if (in_main_thread) {
-            const env = self.env;
-            const status = try env.callFunction(
-                try env.getNull(),
-                try env.getReferenceValue(self.js.write_bytes orelse return error.Unexpected),
-                &.{
-                    try env.createUsize(@intFromPtr(mem.bytes)),
-                    try env.createUint32(@as(u32, @truncate(mem.len))),
-                },
-            );
-            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
-                .ok => {},
-                else => error.Unexpected,
-            };
-        } else {
-            const func = self.ts.write_bytes orelse return error.Disabled;
-            const data = try allocator.alloc(u8, @sizeOf(Memory) + mem.len);
-            const copy: *Memory = @ptrCast(@alignCast(data));
-            copy.* = .{
-                .bytes = data.ptr + @sizeOf(Memory),
-                .len = mem.len,
-                .attributes = mem.attributes,
-            };
-            @memcpy(copy.bytes.?[0..copy.len], mem.bytes.?[0..mem.len]);
-            try napi.callThreadsafeFunction(func, @ptrCast(data), .nonblocking);
         }
     }
 
@@ -807,12 +809,18 @@ const ModuleHost = struct {
     const threadsafe_callback = struct {
         fn handle_js_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
-            const call: *const JsCall = @ptrCast(@alignCast(data));
+            const call: *JsCall = @ptrCast(@alignCast(data));
             handleJsCall(self, call, true) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
-                if (self.module) |module| {
-                    _ = module.exports.wake_caller(call.futex_handle, @intFromEnum(Result.failure));
-                }
+                Futex.wake(call.futex_handle, Result.failure) catch {};
+            };
+        }
+
+        fn handle_sys_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+            const self: *ModuleHost = @ptrCast(@alignCast(context));
+            const call: *SysCall = @ptrCast(@alignCast(data));
+            handleSysCall(self, call, true) catch {
+                Futex.wake(call.futex_handle, Result.failure) catch {};
             };
         }
 
@@ -820,15 +828,6 @@ const ModuleHost = struct {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const fn_id = @intFromPtr(data);
             releaseFunction(self, fn_id, true) catch {};
-        }
-
-        fn write_bytes(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
-            const self: *ModuleHost = @ptrCast(@alignCast(context));
-            const mem: *const Memory = @ptrCast(@alignCast(data));
-            writeBytes(self, mem, true) catch {};
-            const bytes: [*]u8 = @ptrCast(data);
-            const len = mem.len + @sizeOf(Memory);
-            allocator.free(bytes[0..len]);
         }
 
         fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.C) void {
@@ -891,7 +890,7 @@ const MemberType = enum(u32) {
     undefined,
     unsupported,
 };
-const JsCall = struct {
+const JsCall = extern struct {
     fn_id: usize,
     arg_address: usize,
     arg_size: usize,
@@ -911,9 +910,9 @@ const Imports = extern struct {
     create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) Result,
     enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) Result,
     disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) Result,
-    handle_js_call: *const fn (*ModuleHost, *const JsCall, bool) callconv(.C) Result,
+    handle_js_call: *const fn (*ModuleHost, *JsCall, bool) callconv(.C) Result,
+    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) Result,
     release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) Result,
-    write_bytes: *const fn (*ModuleHost, *const Memory, bool) callconv(.C) Result,
 };
 const Exports = extern struct {
     initialize: *const fn (*ModuleHost) callconv(.C) Result,
@@ -924,7 +923,7 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
+    override_sys_call: *const fn (*const SysCall) callconv(.C) Result,
     wake_caller: *const fn (usize, u32) callconv(.C) Result,
 };
 const Module = extern struct {
@@ -955,6 +954,31 @@ const Result = enum(u32) {
     failure,
     failure_deadlock,
     failure_disabled,
+};
+const Futex = struct {
+    const initial_value = 0xffff_ffff;
+
+    value: std.atomic.Value(u32),
+    handle: usize,
+
+    pub fn init(self: *@This()) usize {
+        self.value = std.atomic.Value(u32).init(initial_value);
+        self.handle = @intFromPtr(self);
+        return self.handle;
+    }
+
+    pub fn wait(self: *@This()) !void {
+        std.Thread.Futex.wait(&self.value, initial_value);
+        const result: Result = @enumFromInt(self.value.load(.acquire));
+        if (result != .ok) return error.Unexpected;
+    }
+
+    pub fn wake(handle: usize, result: Result) !void {
+        const ptr: *Futex = @ptrFromInt(handle);
+        if (ptr.handle != handle) return error.Unexpected;
+        ptr.value.store(@intFromEnum(result), .release);
+        std.Thread.Futex.wake(&ptr.value, 1);
+    }
 };
 
 fn throwError(env: *Env, fmt: []const u8, args: anytype) void {

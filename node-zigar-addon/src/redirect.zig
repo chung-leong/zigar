@@ -1,7 +1,43 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const Callback = *const fn ([*]const u8, usize) callconv(.c) u32;
+const h = @cImport({
+    @cInclude("redirect.h");
+});
+
+pub const SysCall = extern struct {
+    cmd: SysCallCommand,
+    u: h.syscall_union,
+    futex_handle: usize,
+};
+pub const SysCallCommand: type = define: {
+    // derive Zig enum from C enum
+    @setEvalBranchQuota(100000);
+    var count: usize = 0;
+    for (std.meta.declarations(h)) |decl| {
+        if (std.mem.startsWith(u8, decl.name, "sc_")) count += 1;
+    }
+    var fields: [count]std.builtin.Type.EnumField = undefined;
+    var i: usize = 0;
+    for (std.meta.declarations(h)) |decl| {
+        if (std.mem.startsWith(u8, decl.name, "sc_")) {
+            fields[i] = .{
+                .name = decl.name[3..],
+                .value = @field(h, decl.name),
+            };
+            i += 1;
+        }
+    }
+    break :define @Type(.{
+        .@"enum" = .{
+            .tag_type = c_int,
+            .fields = &fields,
+            .decls = &.{},
+            .is_exhaustive = true,
+        },
+    });
+};
+pub const Callback = *const fn (*SysCall) callconv(.c) u32;
 
 extern fn find_hook([*:0]const u8) callconv(.c) ?*const anyopaque;
 extern fn set_override(?Callback) void;

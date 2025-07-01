@@ -58,17 +58,14 @@ fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-const Futex = struct {
-    value: std.atomic.Value(u32),
-    handle: usize = undefined,
-};
-
-const JSCall = struct {
+const JsCall = extern struct {
     fn_id: usize,
     arg_address: usize,
     arg_size: usize,
-    futex_handle: usize,
+    futex_handle: usize = 0,
 };
+
+const SysCall = opaque {};
 
 const MainThread = struct {
     thread_id: std.Thread.Id,
@@ -240,27 +237,12 @@ pub fn createMessage(err: anyerror) ?Value {
 pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
     const md: *ModuleData = @ptrCast(ptr);
     const in_main_thread = main_thread != null;
-    const initial_value = 0xffff_ffff;
-    var futex: Futex = undefined;
-    const call: JSCall = .{
+    const call: JsCall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
-        .futex_handle = switch (in_main_thread) {
-            true => 0,
-            false => init: {
-                futex.value = std.atomic.Value(u32).init(initial_value);
-                futex.handle = @intFromPtr(&futex);
-                break :init futex.handle;
-            },
-        },
     };
-    var result = imports.handle_js_call(md, &call, in_main_thread);
-    if (!in_main_thread and result == .ok) {
-        std.Thread.Futex.wait(&futex.value, initial_value);
-        result = @enumFromInt(futex.value.load(.acquire));
-    }
-    return result;
+    return imports.handle_js_call(md, &call, in_main_thread);
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
@@ -314,11 +296,10 @@ fn deinitialize() callconv(.C) Result {
     return .failure;
 }
 
-fn overrideWrite(bytes: [*]const u8, len: usize) callconv(.C) Result {
+fn overrideSysCall(call: *SysCall) callconv(.C) Result {
     const mt, const in_main_thread = getMainThread() catch return .failure;
     const md = mt.module_data;
-    const memory: Memory = .{ .bytes = @constCast(bytes), .len = len };
-    return imports.write_bytes(md, &memory, in_main_thread);
+    return imports.handle_sys_call(md, call, in_main_thread);
 }
 
 pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) Result {
@@ -378,15 +359,6 @@ fn destroyJsThunk(
     return .ok;
 }
 
-fn wakeCaller(futex_handle: usize, value: u32) callconv(.C) Result {
-    // make sure futex address is valid
-    const ptr: *Futex = @ptrFromInt(futex_handle);
-    if (ptr.handle != futex_handle) return .failure;
-    ptr.value.store(value, .release);
-    std.Thread.Futex.wake(&ptr.value, 1);
-    return .ok;
-}
-
 // pointer table that's filled on the C side
 const Imports = extern struct {
     capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
@@ -402,9 +374,9 @@ const Imports = extern struct {
     create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
     enable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
     disable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
-    handle_js_call: *const fn (*ModuleData, *const JSCall, bool) callconv(.C) Result,
+    handle_js_call: *const fn (*ModuleData, *JsCall, bool) callconv(.C) Result,
+    handle_sys_call: *const fn (*ModuleData, *SysCall, bool) callconv(.C) Result,
     release_function: *const fn (*ModuleData, usize, bool) callconv(.C) Result,
-    write_bytes: *const fn (*ModuleData, *const Memory, bool) callconv(.C) Result,
 };
 
 // pointer table that's used on the C side
@@ -417,8 +389,7 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    override_write: *const fn ([*]const u8, usize) callconv(.C) Result,
-    wake_caller: *const fn (usize, u32) callconv(.C) Result,
+    override_sys_call: *const fn (*SysCall) callconv(.C) Result,
 };
 
 const Module = extern struct {
@@ -437,7 +408,7 @@ pub fn createModule(comptime module: type) Module {
         }
     };
     return .{
-        .version = 5,
+        .version = 6,
         .attributes = exporter.getModuleAttributes(),
         .imports = &imports,
         .exports = &.{
@@ -449,8 +420,7 @@ pub fn createModule(comptime module: type) Module {
             .run_variadic_thunk = runVariadicThunk,
             .create_js_thunk = createJsThunk,
             .destroy_js_thunk = destroyJsThunk,
-            .override_write = overrideWrite,
-            .wake_caller = wakeCaller,
+            .override_sys_call = overrideSysCall,
         },
     };
 }
