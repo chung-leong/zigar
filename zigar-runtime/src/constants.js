@@ -119,13 +119,6 @@ export const MemberFlag = {
   IsString:         0x0080,
 };
 
-export const CallResult = {
-  OK: 0,
-  Failure: 1,
-  Deadlock: 2,
-  Disabled: 3,
-};
-
 export const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
@@ -149,6 +142,7 @@ export const PosixError = {
   EBADF: 8,
   EDEADLK: 16,
   EEXIST: 20,
+  EFAULT: 21,
   EINVAL: 28,
   EIO: 29,
   ENOENT: 44,

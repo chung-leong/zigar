@@ -1,5 +1,6 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
+const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const exporter = @import("exporter.zig");
@@ -7,7 +8,6 @@ const thunk_js = @import("thunk-js.zig");
 const thunk_zig = @import("thunk-zig.zig");
 const types = @import("types.zig");
 const Value = types.Value;
-const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
 pub const Promise = types.Promise;
@@ -107,7 +107,7 @@ fn getMainThread() !std.meta.Tuple(&.{ *MainThread, bool }) {
 pub fn captureString(memory: Memory) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.capture_string(md, &memory, &value) != .ok) {
+    if (imports.capture_string(md, &memory, &value) != .SUCCESS) {
         return Error.UnableToCreateObject;
     }
     return value;
@@ -116,7 +116,7 @@ pub fn captureString(memory: Memory) !Value {
 pub fn captureView(memory: Memory, export_handle: ?usize) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.capture_view(md, &memory, export_handle orelse 0, &value) != .ok) {
+    if (imports.capture_view(md, &memory, export_handle orelse 0, &value) != .SUCCESS) {
         return Error.UnableToCreateDataView;
     }
     return value;
@@ -125,7 +125,7 @@ pub fn captureView(memory: Memory, export_handle: ?usize) !Value {
 pub fn castView(memory: Memory, structure: Value, export_handle: ?usize) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.cast_view(md, &memory, structure, export_handle orelse 0, &value) != .ok) {
+    if (imports.cast_view(md, &memory, structure, export_handle orelse 0, &value) != .SUCCESS) {
         return Error.UnableToCreateObject;
     }
     return value;
@@ -143,7 +143,7 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
 pub fn readSlot(target: ?Value, id: usize) !Value {
     const md = try getModuleData();
     var result: Value = undefined;
-    if (imports.read_slot(md, target, id, &result) != .ok) {
+    if (imports.read_slot(md, target, id, &result) != .SUCCESS) {
         return Error.UnableToRetrieveObject;
     }
     return result;
@@ -151,7 +151,7 @@ pub fn readSlot(target: ?Value, id: usize) !Value {
 
 pub fn writeSlot(target: ?Value, id: usize, value: ?Value) !void {
     const md = try getModuleData();
-    if (imports.write_slot(md, target, id, value) != .ok) {
+    if (imports.write_slot(md, target, id, value) != .SUCCESS) {
         return Error.UnableToInsertObject;
     }
 }
@@ -169,7 +169,7 @@ pub fn beginStructure(def: types.Structure) !Value {
         .alignment = def.alignment orelse missing(u16),
     };
     var structure: Value = undefined;
-    if (imports.begin_structure(md, &def_c, &structure) != .ok) {
+    if (imports.begin_structure(md, &def_c, &structure) != .SUCCESS) {
         return Error.UnableToStartStructureDefinition;
     }
     return structure;
@@ -187,7 +187,7 @@ pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !vo
         .slot = member.slot orelse missing(usize),
         .structure = member.structure,
     };
-    if (imports.attach_member(md, structure, &member_c, is_static) != .ok) {
+    if (imports.attach_member(md, structure, &member_c, is_static) != .SUCCESS) {
         if (is_static) {
             return Error.UnableToAddStaticMember;
         } else {
@@ -198,7 +198,7 @@ pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !vo
 
 pub fn attachTemplate(structure: Value, template: Value, is_static: bool) !void {
     const md = try getModuleData();
-    if (imports.attach_template(md, structure, template, is_static) != .ok) {
+    if (imports.attach_template(md, structure, template, is_static) != .SUCCESS) {
         return Error.UnableToAddStructureTemplate;
     }
 }
@@ -206,7 +206,7 @@ pub fn attachTemplate(structure: Value, template: Value, is_static: bool) !void 
 pub fn defineStructure(structure: Value) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.define_structure(md, structure, &value) != .ok) {
+    if (imports.define_structure(md, structure, &value) != .SUCCESS) {
         return Error.UnableToDefineStructure;
     }
     return value;
@@ -214,7 +214,7 @@ pub fn defineStructure(structure: Value) !Value {
 
 pub fn endStructure(structure: Value) !void {
     const md = try getModuleData();
-    if (imports.end_structure(md, structure) != .ok) {
+    if (imports.end_structure(md, structure) != .SUCCESS) {
         return Error.UnableToDefineStructure;
     }
 }
@@ -222,7 +222,7 @@ pub fn endStructure(structure: Value) !void {
 pub fn createTemplate(dv: ?Value) !Value {
     const md = try getModuleData();
     var value: Value = undefined;
-    if (imports.create_template(md, dv, &value) != .ok) {
+    if (imports.create_template(md, dv, &value) != .SUCCESS) {
         return Error.UnableToCreateStructureTemplate;
     }
     return value;
@@ -234,7 +234,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     const md: *ModuleData = @ptrCast(ptr);
     const in_main_thread = main_thread != null;
     const call: JsCall = .{
@@ -261,7 +261,7 @@ pub fn startMultithread() !void {
     const prev_count = mt.multithread_count.fetchAdd(1, .monotonic);
     errdefer _ = mt.multithread_count.fetchSub(1, .monotonic);
     if (prev_count == 0) {
-        if (imports.enable_multithread(mt.module_data, in_main_thread) != .ok) {
+        if (imports.enable_multithread(mt.module_data, in_main_thread) != .SUCCESS) {
             return Error.UnableToUseThread;
         }
     }
@@ -275,37 +275,37 @@ pub fn stopMultithread() void {
     }
 }
 
-fn initialize(md: *ModuleData) callconv(.C) Result {
+fn initialize(md: *ModuleData) callconv(.C) E {
     main_thread = .{
         .thread_id = std.Thread.getCurrentId(),
         .module_data = md,
         .multithread_count = std.atomic.Value(usize).init(0),
     };
-    main_thread_list.append(&main_thread.?) catch return .failure;
-    return .ok;
+    main_thread_list.append(&main_thread.?) catch return .NOMEM;
+    return .SUCCESS;
 }
 
-fn deinitialize() callconv(.C) Result {
+fn deinitialize() callconv(.C) E {
     for (main_thread_list.items, 0..) |mt, index| {
         if (mt == &main_thread.?) {
             _ = main_thread_list.swapRemove(index);
-            return .ok;
+            return .SUCCESS;
         }
     }
     main_thread = null;
-    return .failure;
+    return .NOENT;
 }
 
-fn overrideSysCall(call: *SysCall) callconv(.C) Result {
-    const mt, const in_main_thread = getMainThread() catch return .failure;
+fn overrideSysCall(call: *SysCall) callconv(.C) E {
+    const mt, const in_main_thread = getMainThread() catch return .FAULT;
     const md = mt.module_data;
     return imports.handle_sys_call(md, call, in_main_thread);
 }
 
-pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) Result {
+pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) E {
     const f: *const fn () usize = @ptrFromInt(handle);
     dest.* = f();
-    return .ok;
+    return .SUCCESS;
 }
 
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
@@ -314,11 +314,11 @@ fn runThunk(
     thunk_address: usize,
     fn_address: usize,
     arg_address: usize,
-) callconv(.C) Result {
+) callconv(.C) E {
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
-    return if (thunk(fn_ptr, arg_ptr)) .ok else |_| .failure;
+    return if (thunk(fn_ptr, arg_ptr)) .SUCCESS else |_| .FAULT;
 }
 
 fn runVariadicThunk(
@@ -327,69 +327,69 @@ fn runVariadicThunk(
     arg_address: usize,
     attr_address: usize,
     arg_count: usize,
-) callconv(.C) Result {
+) callconv(.C) E {
     const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *const anyopaque = @ptrFromInt(attr_address);
-    return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) .ok else |_| .failure;
+    return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) .SUCCESS else |_| .FAULT;
 }
 
 fn createJsThunk(
     controller_address: usize,
     fn_id: usize,
     dest: *usize,
-) callconv(.C) Result {
+) callconv(.C) E {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const md = getModuleData() catch return .failure;
-    const thunk_address = controller(md, .create, fn_id) catch return .failure;
+    const md = getModuleData() catch return .FAULT;
+    const thunk_address = controller(md, .create, fn_id) catch return .FAULT;
     dest.* = thunk_address;
-    return .ok;
+    return .SUCCESS;
 }
 
 fn destroyJsThunk(
     controller_address: usize,
     fn_address: usize,
     dest: *usize,
-) callconv(.C) Result {
+) callconv(.C) E {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
-    const md = getModuleData() catch return .failure;
-    const fn_id = controller(md, .destroy, fn_address) catch return .failure;
+    const md = getModuleData() catch return .FAULT;
+    const fn_id = controller(md, .destroy, fn_address) catch return .FAULT;
     dest.* = fn_id;
-    return .ok;
+    return .SUCCESS;
 }
 
 // pointer table that's filled on the C side
 const Imports = extern struct {
-    capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) Result,
-    capture_view: *const fn (*ModuleData, *const Memory, usize, *Value) callconv(.C) Result,
-    cast_view: *const fn (*ModuleData, *const Memory, Value, usize, *Value) callconv(.C) Result,
-    read_slot: *const fn (*ModuleData, ?Value, usize, *Value) callconv(.C) Result,
-    write_slot: *const fn (*ModuleData, ?Value, usize, ?Value) callconv(.C) Result,
-    begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) Result,
-    attach_member: *const fn (*ModuleData, Value, *const MemberC, bool) callconv(.C) Result,
-    attach_template: *const fn (*ModuleData, Value, Value, bool) callconv(.C) Result,
-    define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) Result,
-    end_structure: *const fn (*ModuleData, Value) callconv(.C) Result,
-    create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) Result,
-    enable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
-    disable_multithread: *const fn (*ModuleData, bool) callconv(.C) Result,
-    handle_js_call: *const fn (*ModuleData, *JsCall, bool) callconv(.C) Result,
-    handle_sys_call: *const fn (*ModuleData, *SysCall, bool) callconv(.C) Result,
-    release_function: *const fn (*ModuleData, usize, bool) callconv(.C) Result,
+    capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) E,
+    capture_view: *const fn (*ModuleData, *const Memory, usize, *Value) callconv(.C) E,
+    cast_view: *const fn (*ModuleData, *const Memory, Value, usize, *Value) callconv(.C) E,
+    read_slot: *const fn (*ModuleData, ?Value, usize, *Value) callconv(.C) E,
+    write_slot: *const fn (*ModuleData, ?Value, usize, ?Value) callconv(.C) E,
+    begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) E,
+    attach_member: *const fn (*ModuleData, Value, *const MemberC, bool) callconv(.C) E,
+    attach_template: *const fn (*ModuleData, Value, Value, bool) callconv(.C) E,
+    define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) E,
+    end_structure: *const fn (*ModuleData, Value) callconv(.C) E,
+    create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) E,
+    enable_multithread: *const fn (*ModuleData, bool) callconv(.C) E,
+    disable_multithread: *const fn (*ModuleData, bool) callconv(.C) E,
+    handle_js_call: *const fn (*ModuleData, *JsCall, bool) callconv(.C) E,
+    handle_sys_call: *const fn (*ModuleData, *SysCall, bool) callconv(.C) E,
+    release_function: *const fn (*ModuleData, usize, bool) callconv(.C) E,
 };
 
 // pointer table that's used on the C side
 const Exports = extern struct {
-    initialize: *const fn (*ModuleData) callconv(.C) Result,
-    deinitialize: *const fn () callconv(.C) Result,
-    get_export_address: *const fn (usize, *usize) callconv(.C) Result,
-    get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
-    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
-    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    override_sys_call: *const fn (*SysCall) callconv(.C) Result,
+    initialize: *const fn (*ModuleData) callconv(.C) E,
+    deinitialize: *const fn () callconv(.C) E,
+    get_export_address: *const fn (usize, *usize) callconv(.C) E,
+    get_factory_thunk: *const fn (*usize) callconv(.C) E,
+    run_thunk: *const fn (usize, usize, usize) callconv(.C) E,
+    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
+    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
+    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
+    override_sys_call: *const fn (*SysCall) callconv(.C) E,
 };
 
 const Module = extern struct {
@@ -402,9 +402,9 @@ const Module = extern struct {
 pub fn createModule(comptime module: type) Module {
     const host = @This();
     const ns = struct {
-        fn getFactoryThunk(dest: *usize) callconv(.C) Result {
+        fn getFactoryThunk(dest: *usize) callconv(.C) E {
             dest.* = @intFromPtr(exporter.getFactoryThunk(host, module));
-            return .ok;
+            return .SUCCESS;
         }
     };
     return .{

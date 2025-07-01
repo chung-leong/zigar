@@ -1,5 +1,6 @@
 const std = @import("std");
 const allocator = std.heap.wasm_allocator;
+const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const exporter = @import("exporter.zig");
@@ -9,7 +10,6 @@ const ActionResult = thunk_js.ActionResult;
 const thunk_zig = @import("thunk-zig.zig");
 const types = @import("types.zig");
 const Value = types.Value;
-const Result = types.Result;
 const Memory = types.Memory;
 const Error = types.Error;
 pub const Promise = types.Promise;
@@ -44,7 +44,7 @@ extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
-extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) Result;
+extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) E;
 extern fn _releaseFunction(id: usize) void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
@@ -296,7 +296,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     const initial_value = 0xffff_ffff;
     var futex: Futex = undefined;
     const futex_handle = switch (in_main_thread) {
@@ -308,7 +308,7 @@ pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size:
         },
     };
     var result = _handleJsCall(fn_id, arg_ptr, arg_size, futex_handle);
-    if (!in_main_thread and result == .ok) {
+    if (!in_main_thread and result == .SUCCESS) {
         if (comptime builtin.single_threaded) unreachable;
         // inlining of wait() causes problem in ReleaseFast when target is WASM
         @call(.never_inline, std.Thread.Futex.wait, .{ &futex.value, initial_value });

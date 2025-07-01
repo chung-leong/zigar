@@ -1,4 +1,4 @@
-import { CallResult, MemberType, StructurePurpose, StructureType } from '../constants.js';
+import { MemberType, PosixError, StructurePurpose, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { UnexpectedGenerator } from '../errors.js';
 import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';
@@ -39,7 +39,7 @@ export default mixin({
       if (process.env.DEV) {
         this.inboundCallCount++;
       }
-      let result = CallResult.OK;
+      let result = PosixError.NONE;
       let awaiting = false;
       try {
         const argStruct = ArgStruct(dv);
@@ -62,7 +62,7 @@ export default mixin({
               throw err;
             }
           } catch (_) {
-            result = CallResult.Failure;
+            result = PosixError.EFAULT;
             console.error(err);
           }
         };
@@ -72,7 +72,7 @@ export default mixin({
             // it'd invoke the callback
             argStruct[RETURN](value);
           } catch (err) {
-            result = CallResult.Failure;
+            result = PosixError.EFAULT;
             console.error(err);
           }
         };
@@ -88,14 +88,14 @@ export default mixin({
                 promise.then(() => this.finalizeAsyncCall(futexHandle, result));
               }
               awaiting = true;
-              result = CallResult.OK;
+              result = PosixError.NONE;
             } else {
-              result = CallResult.Deadlock;
+              result = PosixError.EDEADLK;
             }
           } else if (retval?.[Symbol.asyncIterator]) {
             if (argStruct.hasOwnProperty(YIELD)) {
               this.pipeContents(retval, argStruct);
-              result = CallResult.OK;
+              result = PosixError.NONE;
             } else {
               throw new UnexpectedGenerator();
             }
@@ -107,7 +107,7 @@ export default mixin({
         }
       } catch(err) {
         console.error(err);
-        result = CallResult.Failure;
+        result = PosixError.EFAULT;
       }
       if (futexHandle && !awaiting) {
         this.finalizeAsyncCall(futexHandle, result);
@@ -188,7 +188,7 @@ export default mixin({
   handleJsCall(id, argAddress, argSize, futexHandle = 0) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
-    return (caller) ? caller(dv, futexHandle) : CallResult.Failure;
+    return (caller) ? caller(dv, futexHandle) : PosixError.EFAULT;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);

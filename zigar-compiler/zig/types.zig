@@ -5,13 +5,6 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 
-pub const Result = enum(u32) {
-    ok,
-    failure,
-    failure_deadlock,
-    failure_disabled,
-};
-
 pub const Error = error{
     Unknown,
     UnableToAllocateMemory,

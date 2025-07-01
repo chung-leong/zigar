@@ -2,12 +2,12 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const fn_transform = @import("fn-transform.zig");
 const types = @import("types.zig");
 const Memory = types.Memory;
-const Result = types.Result;
 
 pub const Action = enum(u32) {
     create,
@@ -79,12 +79,12 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
                 if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
-                    return .ok;
+                    return .SUCCESS;
                 } else {
-                    return .failure;
+                    return .FAULT;
                 }
             }
         };
@@ -165,12 +165,12 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
-                    return .ok;
+                    return .SUCCESS;
                 } else {
-                    return .failure;
+                    return .FAULT;
                 }
             }
         };
@@ -225,18 +225,18 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             const fn_id = args[ch.params.len - 1];
             const result = host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct));
             switch (result) {
-                .ok => {},
-                .failure_deadlock => {
+                .SUCCESS => {},
+                .DEADLK => {
                     if (comptime findError(RT, .{ error.Deadlock, error.Unexpected })) |err| {
                         return err;
                     } else @panic("Promise encountered in main thread");
                 },
-                .failure_disabled => {
+                .PERM => {
                     if (comptime findError(RT, .{ error.Disabled, error.Unexpected })) |err| {
                         return err;
                     } else @panic("Multithreading not enabled");
                 },
-                .failure => {
+                else => {
                     if (comptime findError(RT, .{error.Unexpected})) |err| {
                         return err;
                     } else @panic("JavaScript function failed");
@@ -252,12 +252,12 @@ test "getJsCallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) Result {
+        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) E {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
-                return .ok;
+                return .SUCCESS;
             } else {
-                return .failure;
+                return .FAULT;
             }
         }
     };
@@ -272,8 +272,8 @@ test "getJsCallHandler (error handling)" {
             return .{};
         }
 
-        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) Result {
-            return .failure;
+        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) E {
+            return .FAULT;
         }
     };
     const ES1 = error{ Unexpected, Cow };

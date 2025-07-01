@@ -1,5 +1,6 @@
 const std = @import("std");
 const allocator = std.heap.c_allocator;
+const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const fn_transform = @import("code-gen/fn-transform.zig");
@@ -210,7 +211,7 @@ const ModuleHost = struct {
             }
         };
         try self.exportFunctionsToModule();
-        if (module.exports.initialize(self) != .ok) return error.Unexpected;
+        if (module.exports.initialize(self) != .SUCCESS) return error.Unexpected;
         try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_sys_call));
         self.library = lib;
     }
@@ -325,7 +326,7 @@ const ModuleHost = struct {
             try env.getValueUsize(fn_address),
             try env.getValueUsize(arg_address),
         );
-        return try env.getBoolean(result == .ok);
+        return try env.getBoolean(result == .SUCCESS);
     }
 
     fn runVariadicThunk(
@@ -345,7 +346,7 @@ const ModuleHost = struct {
             try env.getValueUsize(attr_address),
             try env.getValueUint32(arg_len),
         );
-        return try env.getBoolean(result == .ok);
+        return try env.getBoolean(result == .SUCCESS);
     }
 
     fn createJsThunk(self: *@This(), controller_address: Value, fn_id: Value) !Value {
@@ -381,7 +382,7 @@ const ModuleHost = struct {
             self.base_address + handle_value,
             &new_address,
         );
-        if (result != .ok) return error.Unexpected;
+        if (result != .SUCCESS) return error.Unexpected;
         return try env.createUsize(new_address);
     }
 
@@ -536,7 +537,7 @@ const ModuleHost = struct {
                 break :define @Type(new_args_info);
             };
             const ns = struct {
-                fn call(new_args: NewArgs) Result {
+                fn call(new_args: NewArgs) E {
                     var args: Args = undefined;
                     inline for (&args, 0..) |*arg_ptr, i| {
                         arg_ptr.* = new_args[i];
@@ -544,9 +545,9 @@ const ModuleHost = struct {
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
                         if (new_args.len > args.len) new_args[args.len].* = payload;
-                        return .ok;
+                        return .SUCCESS;
                     } else |_| {
-                        return .failure;
+                        return .FAULT;
                     }
                 }
             };
@@ -732,9 +733,9 @@ const ModuleHost = struct {
                     try env.createUsize(call.futex_handle),
                 },
             );
-            return switch (try std.meta.intToEnum(Result, try env.getValueUint32(status))) {
-                .ok => {},
-                .failure_deadlock => error.Deadlock,
+            return switch (try std.meta.intToEnum(E, try env.getValueUint32(status))) {
+                .SUCCESS => {},
+                .DEADLK => error.Deadlock,
                 else => error.Unexpected,
             };
         } else {
@@ -812,7 +813,7 @@ const ModuleHost = struct {
             const call: *JsCall = @ptrCast(@alignCast(data));
             handleJsCall(self, call, true) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
-                Futex.wake(call.futex_handle, Result.failure) catch {};
+                Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }
 
@@ -820,7 +821,7 @@ const ModuleHost = struct {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *SysCall = @ptrCast(@alignCast(data));
             handleSysCall(self, call, true) catch {
-                Futex.wake(call.futex_handle, Result.failure) catch {};
+                Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }
 
@@ -897,34 +898,34 @@ const JsCall = extern struct {
     futex_handle: usize,
 };
 const Imports = extern struct {
-    capture_string: *const fn (*ModuleHost, *const Memory, *Value) callconv(.C) Result,
-    capture_view: *const fn (*ModuleHost, *const Memory, usize, *Value) callconv(.C) Result,
-    cast_view: *const fn (*ModuleHost, *const Memory, Value, usize, *Value) callconv(.C) Result,
-    read_slot: *const fn (*ModuleHost, ?Value, usize, *Value) callconv(.C) Result,
-    write_slot: *const fn (*ModuleHost, ?Value, usize, ?Value) callconv(.C) Result,
-    begin_structure: *const fn (*ModuleHost, *const Structure, *Value) callconv(.C) Result,
-    attach_member: *const fn (*ModuleHost, Value, *const Member, bool) callconv(.C) Result,
-    attach_template: *const fn (*ModuleHost, Value, Value, bool) callconv(.C) Result,
-    define_structure: *const fn (*ModuleHost, Value, *Value) callconv(.C) Result,
-    end_structure: *const fn (*ModuleHost, Value) callconv(.C) Result,
-    create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) Result,
-    enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) Result,
-    disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) Result,
-    handle_js_call: *const fn (*ModuleHost, *JsCall, bool) callconv(.C) Result,
-    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) Result,
-    release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) Result,
+    capture_string: *const fn (*ModuleHost, *const Memory, *Value) callconv(.C) E,
+    capture_view: *const fn (*ModuleHost, *const Memory, usize, *Value) callconv(.C) E,
+    cast_view: *const fn (*ModuleHost, *const Memory, Value, usize, *Value) callconv(.C) E,
+    read_slot: *const fn (*ModuleHost, ?Value, usize, *Value) callconv(.C) E,
+    write_slot: *const fn (*ModuleHost, ?Value, usize, ?Value) callconv(.C) E,
+    begin_structure: *const fn (*ModuleHost, *const Structure, *Value) callconv(.C) E,
+    attach_member: *const fn (*ModuleHost, Value, *const Member, bool) callconv(.C) E,
+    attach_template: *const fn (*ModuleHost, Value, Value, bool) callconv(.C) E,
+    define_structure: *const fn (*ModuleHost, Value, *Value) callconv(.C) E,
+    end_structure: *const fn (*ModuleHost, Value) callconv(.C) E,
+    create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) E,
+    enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
+    disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
+    handle_js_call: *const fn (*ModuleHost, *JsCall, bool) callconv(.C) E,
+    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) E,
+    release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
 };
 const Exports = extern struct {
-    initialize: *const fn (*ModuleHost) callconv(.C) Result,
-    deinitialize: *const fn () callconv(.C) Result,
-    get_export_address: *const fn (usize, *usize) callconv(.C) Result,
-    get_factory_thunk: *const fn (*usize) callconv(.C) Result,
-    run_thunk: *const fn (usize, usize, usize) callconv(.C) Result,
-    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) Result,
-    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) Result,
-    override_sys_call: *const fn (*const SysCall) callconv(.C) Result,
-    wake_caller: *const fn (usize, u32) callconv(.C) Result,
+    initialize: *const fn (*ModuleHost) callconv(.C) E,
+    deinitialize: *const fn () callconv(.C) E,
+    get_export_address: *const fn (usize, *usize) callconv(.C) E,
+    get_factory_thunk: *const fn (*usize) callconv(.C) E,
+    run_thunk: *const fn (usize, usize, usize) callconv(.C) E,
+    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
+    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
+    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
+    override_sys_call: *const fn (*const SysCall) callconv(.C) E,
+    wake_caller: *const fn (usize, u32) callconv(.C) E,
 };
 const Module = extern struct {
     version: u32,
@@ -949,12 +950,6 @@ const MemoryAttributes = packed struct {
     is_comptime: bool = false,
     _: u14 = 0,
 };
-const Result = enum(u32) {
-    ok,
-    failure,
-    failure_deadlock,
-    failure_disabled,
-};
 const Futex = struct {
     const initial_value = 0xffff_ffff;
 
@@ -969,11 +964,11 @@ const Futex = struct {
 
     pub fn wait(self: *@This()) !void {
         std.Thread.Futex.wait(&self.value, initial_value);
-        const result: Result = @enumFromInt(self.value.load(.acquire));
-        if (result != .ok) return error.Unexpected;
+        const result: E = @enumFromInt(self.value.load(.acquire));
+        if (result != .SUCCESS) return error.Unexpected;
     }
 
-    pub fn wake(handle: usize, result: Result) !void {
+    pub fn wake(handle: usize, result: E) !void {
         const ptr: *Futex = @ptrFromInt(handle);
         if (ptr.handle != handle) return error.Unexpected;
         ptr.value.store(@intFromEnum(result), .release);
