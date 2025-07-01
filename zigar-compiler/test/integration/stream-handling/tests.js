@@ -71,7 +71,8 @@ export function addTests(importModule, options) {
         const path = absolute('./data/test.txt');
         const fd = await open(path);
         const stream = fd.readableWebStream();
-        const digest1 = await hash(stream.getReader());
+        const reader = stream.getReader();
+        const digest1 = await hash(reader);
         expect(digest1.string).to.equal(correct);
         // Uint8Array as input
         const content = await readFile(path);
@@ -81,6 +82,7 @@ export function addTests(importModule, options) {
         const blob = new Blob([ content ]);
         const digest3 = await hash(content);
         expect(digest3.string).to.equal(correct);
+        // reader.close();
       } finally {
         await shutdown();
       }
@@ -111,7 +113,12 @@ export function addTests(importModule, options) {
       });
       const digest = hash('/hello/world');
       expect(digest.string).to.equal(correct);
-      expect(event).to.eql({ path: '/hello/world', rights: { read: true }, flags: {} });
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { read: true }, 
+        flags: {} 
+      });
     })
     it('should write to writer', async function() {
       this.timeout(0);
@@ -208,7 +215,12 @@ export function addTests(importModule, options) {
       const blob = new Blob(chunks);
       const string = await blob.text();
       expect(string).to.equal('This is a test');
-      expect(event).to.eql({ path: '/hello/world', rights: { write: true }, flags: { create: true, truncate: true } });
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { write: true }, 
+        flags: { create: true, truncate: true } 
+      });
     })
     it('should decompress xz file', async function() {
       this.timeout(0);
@@ -269,7 +281,11 @@ export function addTests(importModule, options) {
         }
       });
       const lines1 = await capture(() => print(path));
-      expect(received).to.eql({ path: '/hello.txt', flags: { symlinkFollow: true } });
+      expect(received).to.eql({ 
+        parent: null,
+        path: 'hello.txt', 
+        flags: { symlinkFollow: true } 
+      });
       expect(lines1).to.eql([
         'size = 34',
         'ctime = 1234',
@@ -278,7 +294,7 @@ export function addTests(importModule, options) {
       ]);
       __zigar.on('stat', () => false);
       const lines2 = await capture(() => print(path));
-      expect(lines2).to.eql([ 'error = error.AccessDenied' ])
+      expect(lines2).to.eql([ 'error = error.FileNotFound' ])
       __zigar.on('stat', () => {
         throw new Error('Doh!');
       });

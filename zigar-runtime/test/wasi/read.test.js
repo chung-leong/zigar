@@ -49,7 +49,7 @@ if (process.env.TARGET === 'wasm') {
       const [ error ] = await captureError(() => {
         result = f(0, bufferAddress, 1, readAddress);
       });
-      expect(result).to.equal(PosixError.EIO);
+      expect(result).to.equal(PosixError.EDEADLK);
       expect(error).to.contains('promise');
     })
  })

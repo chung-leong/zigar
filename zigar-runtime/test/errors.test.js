@@ -671,9 +671,9 @@ describe('Error functions', function() {
     })
   })
   describe('Deadlock', function() {
-    it('should not have a Posix error code attached', function() {
+    it('should have expected Posix error code', function() {
       const err = new Deadlock();
-      expect(err).to.not.have.property('code');
+      expect(err.code).to.equal(PosixError.EDEADLK);
     })
   })
   describe('adjustArgumentError', function() {
@@ -792,7 +792,7 @@ describe('Error functions', function() {
       const [ error ] = await captureError(() => {
         result = catchPosixError(false, PosixError.EACCES, async () => {});
       });
-      expect(result).to.equal(PosixError.EACCES);
+      expect(result).to.equal(PosixError.EDEADLK);
       expect(error).to.contain('promise');
     })
     it('should return 0 when no error occurred', async function() {

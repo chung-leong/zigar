@@ -142,17 +142,18 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
+// values here mirror std.os.wasi.errno_t
 const PosixError = {
-  NONE: 0,
-  EPERM: 1,
-  ENOENT: 2,
-  EIO: 5,
-  EACCES: 13,
-  EEXIST: 17,
+  NONE: 0,  
+  EACCES: 2,
   EBADF: 8,
-  EINVAL: 22,
-  ESPIPE: 29,
-  EOPNOTSUPP: 95,
+  EDEADLK: 16,
+  EEXIST: 20,
+  EINVAL: 28,
+  EIO: 29,
+  ENOENT: 44,
+  ENOTSUP: 58,
+  ESPIPE: 70,
 };
 
 const PosixFileType = {

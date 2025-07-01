@@ -438,6 +438,8 @@ export class IllegalSeek extends Error {
 }
 
 export class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
   constructor() {
     super(`Unable to await promise`);
   }
@@ -543,7 +545,14 @@ export function deanimalizeErrorName(name) {
 export function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
     const result = (reject) ? reject() : console.error(err);
-    return result ?? err.code ?? defErrorCode;
+    let { code } = err;
+    if (process.env.TARGET === 'wasm') {
+      // EDEADLK is usually not expected
+      if (code === PosixError.EDEADLK) {
+        code = PosixError.ENOTSUP;
+      }
+    }
+    return result ?? code ?? defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);

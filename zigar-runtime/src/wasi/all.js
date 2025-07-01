@@ -16,7 +16,7 @@ export default mixin({
         ?? this[`wasi_${name}`]?.bind?.(this)
         ?? (() => {
           console.error(`Not implemented: ${name}`);
-          return PosixError.EOPNOTSUPP;
+          return PosixError.ENOTSUP;
         });
   },
   /* c8 ignore start */

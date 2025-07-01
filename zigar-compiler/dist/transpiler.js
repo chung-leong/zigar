@@ -7,7 +7,6 @@ import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } fr
 import { fileURLToPath, URL as URL$1 } from 'node:url';
 import { promisify } from 'node:util';
 import { writeFileSync } from 'node:fs';
-import { isPromise as isPromise$1 } from 'util/types';
 
 const StructureType = {
   Primitive: 0,
@@ -145,17 +144,18 @@ const VisitorFlag = {
   IgnoreRetval:     0x0020,
 };
 
+// values here mirror std.os.wasi.errno_t
 const PosixError = {
-  NONE: 0,
-  EPERM: 1,
-  ENOENT: 2,
-  EIO: 5,
-  EACCES: 13,
-  EEXIST: 17,
+  NONE: 0,  
+  EACCES: 2,
   EBADF: 8,
-  EINVAL: 22,
-  ESPIPE: 29,
-  EOPNOTSUPP: 95,
+  EDEADLK: 16,
+  EEXIST: 20,
+  EINVAL: 28,
+  EIO: 29,
+  ENOENT: 44,
+  ENOTSUP: 58,
+  ESPIPE: 70,
 };
 
 const PosixFileType = {
@@ -2964,6 +2964,8 @@ class IllegalSeek extends Error {
 }
 
 class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
   constructor() {
     super(`Unable to await promise`);
   }
@@ -3067,7 +3069,14 @@ function deanimalizeErrorName(name) {
 function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
     const result = console.error(err);
-    return result ?? err.code ?? defErrorCode;
+    let { code } = err;
+    {
+      // EDEADLK is usually not expected
+      if (code === PosixError.EDEADLK) {
+        code = PosixError.ENOTSUP;
+      }
+    }
+    return result ?? code ?? defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -4942,16 +4951,13 @@ var readerConversion = mixin({
 });
 
 class WebStreamReader {
-  done = false;
+  done = false;  
   leftover = null;
   onClose = null;
 
   constructor(reader) {
     this.reader = reader;
-    reader.closed.catch(() => {
-      this.done = true;
-      this.onClose?.();
-    });
+    reader.close = () => this.onClose?.();
   }
 
   async read(dest) {
@@ -4969,10 +4975,6 @@ class WebStreamReader {
         this.leftover = this.leftover.slice(len);
       } else {
         this.leftover = null;
-        if (this.done) {
-          this.onClose?.();
-          break;
-        }
       }
     }
     return read;
@@ -5020,9 +5022,6 @@ class BlobReader {
     const read = src.length;
     for (let i = 0; i < read; i++) dest[i] = src[i];
     this.pos += BigInt(read);
-    if (this.pos === this.size) {
-      this.onClose?.();
-    }
     return read;
   }
 
@@ -5473,7 +5472,7 @@ var wasiAll = mixin({
         ?? this[`wasi_${name}`]?.bind?.(this)
         ?? (() => {
           console.error(`Not implemented: ${name}`);
-          return PosixError.EOPNOTSUPP;
+          return PosixError.ENOTSUP;
         });
   },
 });
@@ -5999,7 +5998,7 @@ var workerSupport = mixin({
             Atomics.notify(array, 0, 1);
           }
         };
-        if (isPromise$1(result)) {
+        if (isPromise(result)) {
           result.then(finish);
         } else {
           finish(result);
@@ -6441,7 +6440,7 @@ var structureAcquisition = mixin({
           case 'random_get': this.use(wasiRandom); break;
         }
         if (name.startsWith('path_') || name.includes('filestat')) {
-          this.use(streamRedirection);
+          this.use(streamLocation);
         }
         switch (name) {
           case 'environ_get':
@@ -6451,7 +6450,6 @@ var structureAcquisition = mixin({
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
-            this.use(streamLocation);
             break;
           case 'fd_close':
             this.use(streamRedirection);

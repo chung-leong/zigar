@@ -16,7 +16,7 @@ var all = mixin({
         ?? this[`wasi_${name}`]?.bind?.(this)
         ?? (() => {
           console.error(`Not implemented: ${name}`);
-          return PosixError.EOPNOTSUPP;
+          return PosixError.ENOTSUP;
         });
   },
 });

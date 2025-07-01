@@ -286,7 +286,7 @@ export default mixin({
           case 'random_get': this.use(wasiRandom); break;
         }
         if (name.startsWith('path_') || name.includes('filestat')) {
-          this.use(streamRedirection);
+          this.use(streamLocation);
         }
         switch (name) {
           case 'environ_get':
@@ -296,7 +296,6 @@ export default mixin({
           case 'path_open':
             this.use(readerConversion);
             this.use(writerConversion);
-            this.use(streamLocation);
             break;
           case 'fd_close':
             this.use(streamRedirection);

@@ -23,16 +23,13 @@ var readerConversion = mixin({
 });
 
 class WebStreamReader {
-  done = false;
+  done = false;  
   leftover = null;
   onClose = null;
 
   constructor(reader) {
     this.reader = reader;
-    reader.closed.catch(() => {
-      this.done = true;
-      this.onClose?.();
-    });
+    reader.close = () => this.onClose?.();
   }
 
   async read(dest) {
@@ -50,10 +47,6 @@ class WebStreamReader {
         this.leftover = this.leftover.slice(len);
       } else {
         this.leftover = null;
-        if (this.done) {
-          this.onClose?.();
-          break;
-        }
       }
     }
     return read;
@@ -101,9 +94,6 @@ class BlobReader {
     const read = src.length;
     for (let i = 0; i < read; i++) dest[i] = src[i];
     this.pos += BigInt(read);
-    if (this.pos === this.size) {
-      this.onClose?.();
-    }
     return read;
   }
 
