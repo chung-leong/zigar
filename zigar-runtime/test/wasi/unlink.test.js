@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { captureError, RootDescriptor } from '../test-utils.js';
 
 const Env = defineEnvironment();

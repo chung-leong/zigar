@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
 import { defineProperties } from '../../src/utils.js';
 

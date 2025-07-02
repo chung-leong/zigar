@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { IllegalSeek } from '../../src/errors.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();

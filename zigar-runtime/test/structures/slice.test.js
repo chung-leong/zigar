@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 import {
-    MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 import { usize } from '../test-utils.js';

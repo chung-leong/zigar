@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { defineEnvironment } from '../../zigar-runtime/src/environment.js';
-import * as mixins from '../../zigar-runtime/src/mixins-wasi.js';
+import * as mixins from '../../zigar-runtime/src/mixins.js';
 import { generateCode } from './code-generation.js';
 import { compile } from './compilation.js';
 import { extractLimits, stripUnused } from './wasm-decoding.js';

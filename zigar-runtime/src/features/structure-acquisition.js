@@ -35,26 +35,26 @@ import wasiSync from '../wasi/sync.js';
 import wasiTell from '../wasi/tell.js';
 import wasiUnlink from '../wasi/unlink.js';
 import wasiWrite from '../wasi/write.js';
-import abortSignal from './abort-signal.js';
 import baseline from './baseline.js';
 import dataCopying from './data-copying.js';
-import dirConversion from './dir-conversion.js';
-import dir from './dir.js';
 import envVariables from './env-variables.js';
-import file from './file.js';
-import generator from './generator.js';
-import jsAllocator from './js-allocator.js';
 import moduleLoading from './module-loading.js';
 import objectLinkage from './object-linkage.js';
-import promise from './promise.js';
-import readerConversion from './reader-conversion.js';
-import reader from './reader.js';
+import streamConversionDir from './stream-conversion-dir.js';
+import streamConversionReader from './stream-conversion-reader.js';
+import streamConversionWriter from './stream-conversion-writer.js';
 import streamLocation from './stream-location.js';
 import streamPosition from './stream-position.js';
 import streamRedirection from './stream-redirection.js';
+import structAbortSignal from './struct-abort-signal.js';
+import structAllocator from './struct-allocator.js';
+import structDir from './struct-dir.js';
+import structFile from './struct-file.js';
+import structGenerator from './struct-generator.js';
+import structPromise from './struct-promise.js';
+import structReader from './struct-reader.js';
+import structWriter from './struct-writer.js';
 import workerSupport from './worker-support.js';
-import writerConversion from './writer-conversion.js';
-import writer from './writer.js';
 
 export default mixin({
   init() {
@@ -139,7 +139,7 @@ export default mixin({
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
-        this.copyExternBytes(dv, address, len);
+        this.copyExternBytes(dv, address);
       }
       return dv;
     } else {
@@ -294,8 +294,8 @@ export default mixin({
             this.use(envVariables);
             break;
           case 'path_open':
-            this.use(readerConversion);
-            this.use(writerConversion);
+            this.use(streamConversionReader);
+            this.use(streamConversionWriter);
             break;
           case 'fd_close':
             this.use(streamRedirection);
@@ -316,35 +316,35 @@ export default mixin({
           for (const { structure: { purpose } } of structure.instance.members) {
             switch (purpose) {
               case StructurePurpose.Allocator:
-                this.use(jsAllocator);
+                this.use(structAllocator);
                 break;
               case StructurePurpose.Promise:
-                this.use(promise);
+                this.use(structPromise);
                 break;
               case StructurePurpose.Generator:
-                this.use(generator);
+                this.use(structGenerator);
                 break;
               case StructurePurpose.AbortSignal:
-                this.use(abortSignal);
+                this.use(structAbortSignal);
                 break;
               case StructurePurpose.Reader:
-                this.use(reader);
-                this.use(readerConversion);
+                this.use(structReader);
+                this.use(streamConversionReader);
                 break;
               case StructurePurpose.Writer:
-                this.use(writer);
-                this.use(writerConversion);
+                this.use(structWriter);
+                this.use(streamConversionWriter);
                 break;
               case StructurePurpose.File:
-                this.use(file);
+                this.use(structFile);
                 this.use(streamRedirection);
                 this.use(streamPosition);
-                this.use(readerConversion);
-                this.use(writerConversion);
+                this.use(streamConversionReader);
+                this.use(streamConversionWriter);
                 break;
               case StructurePurpose.Directory:
-                this.use(dir);
-                this.use(dirConversion);
+                this.use(structDir);
+                this.use(streamConversionDir);
                 this.use(streamRedirection);
                 this.use(streamLocation);
                 break;

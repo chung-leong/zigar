@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { CallResult, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
 import { defineProperty } from '../../src/utils.js';
 import { usize } from '../test-utils.js';

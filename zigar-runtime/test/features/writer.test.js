@@ -2,7 +2,7 @@ import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { MEMORY } from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 

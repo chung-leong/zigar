@@ -1,11 +1,12 @@
 import { mixin } from '../environment.js';
+import { createView } from '../utils.js';
 
 // handles f80
 
 var float80 = mixin({
   getAccessorFloat80(access, member) {
     const { byteSize } = member;
-    const buf = new DataView(new ArrayBuffer(8));
+    const buf = createView(8);
     const get = function(offset, littleEndian) {
       const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
       const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));

@@ -119,13 +119,6 @@ const MemberFlag = {
   IsString:         0x0080,
 };
 
-const CallResult = {
-  OK: 0,
-  Failure: 1,
-  Deadlock: 2,
-  Disabled: 3,
-};
-
 const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
@@ -149,6 +142,7 @@ const PosixError = {
   EBADF: 8,
   EDEADLK: 16,
   EEXIST: 20,
+  EFAULT: 21,
   EINVAL: 28,
   EIO: 29,
   ENOENT: 44,
@@ -169,4 +163,4 @@ const PosixFileType = {
 
 const RootDescriptor = 3;
 
-export { ArgStructFlag, ArrayFlag, CallResult, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PosixFileType, PrimitiveFlag, RootDescriptor, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PosixFileType, PrimitiveFlag, RootDescriptor, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

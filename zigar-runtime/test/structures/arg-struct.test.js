@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import {
-    ArgStructFlag, MemberType, PointerFlag, SliceFlag,
-    StructureFlag, StructurePurpose, StructureType,
-    VisitorFlag
+  ArgStructFlag, MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType,
+  VisitorFlag
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { MEMORY, VISIT, ZIG } from '../../src/symbols.js';
 import { addressByteSize, addressSize, usize } from '../test-utils.js';
 

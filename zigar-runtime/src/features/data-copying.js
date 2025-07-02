@@ -133,15 +133,21 @@ export default mixin({
         };
       }
     },
-    copyExternBytes(dst, address, len) {
+    moveExternBytes(jsDV, address, to) {
       const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
       const copy = this.getCopyFunction(len);
-      copy(dst, src);
+      copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
-      copyExternBytes: null,
+      moveExternBytes: {},
     },
   /* c8 ignore next */
   } : undefined)

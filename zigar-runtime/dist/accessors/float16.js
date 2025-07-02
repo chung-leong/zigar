@@ -1,10 +1,11 @@
 import { mixin } from '../environment.js';
+import { createView } from '../utils.js';
 
 // handles f16
 
 var float16 = mixin({
   getAccessorFloat16(access, member) {
-    const buf = new DataView(new ArrayBuffer(4));
+    const buf = createView(4);
     const set = DataView.prototype.setUint16;
     const get = DataView.prototype.getUint16;
     if (access === 'get') {

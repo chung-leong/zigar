@@ -158,6 +158,8 @@ const usize = function(arg) {
   }
 ;
 
+const usizeByteSize = 4;
+
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
@@ -269,6 +271,10 @@ function markAsSpecial({ get, set }) {
   return { get, set };
 }
 
+function createView(size) {
+  return new DataView(new ArrayBuffer(size));
+}
+
 function getSelf() {
   return this;
 }
@@ -308,4 +314,4 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { MEMORY, TYPE, ZIG } from '../../src/symbols.js';
 import { defineProperties, usize } from '../../src/utils.js';
 

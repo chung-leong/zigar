@@ -30,26 +30,26 @@ import '../wasi/sync.js';
 import '../wasi/tell.js';
 import '../wasi/unlink.js';
 import '../wasi/write.js';
-import './abort-signal.js';
 import './baseline.js';
 import './data-copying.js';
-import './dir-conversion.js';
-import './dir.js';
 import './env-variables.js';
-import './file.js';
-import './generator.js';
-import './js-allocator.js';
 import './module-loading.js';
 import './object-linkage.js';
-import './promise.js';
-import './reader-conversion.js';
-import './reader.js';
+import './stream-conversion-dir.js';
+import './stream-conversion-reader.js';
+import './stream-conversion-writer.js';
 import './stream-location.js';
 import './stream-position.js';
 import './stream-redirection.js';
+import './struct-abort-signal.js';
+import './struct-allocator.js';
+import './struct-dir.js';
+import './struct-file.js';
+import './struct-generator.js';
+import './struct-promise.js';
+import './struct-reader.js';
+import './struct-writer.js';
 import './worker-support.js';
-import './writer-conversion.js';
-import './writer.js';
 
 var structureAcquisition = mixin({
   init() {
@@ -134,7 +134,7 @@ var structureAcquisition = mixin({
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
-        this.copyExternBytes(dv, address, len);
+        this.copyExternBytes(dv, address);
       }
       return dv;
     } else {

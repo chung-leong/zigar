@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { ALIGN, MEMORY, RESET, SIZE, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 

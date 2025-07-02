@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidFileDescriptor } from '../../src/errors.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { capture, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();

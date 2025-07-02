@@ -147,7 +147,7 @@ const ModuleHost = struct {
             "getModuleAttributes",
             "getBufferAddress",
             "obtainExternBuffer",
-            "copyExternBytes",
+            "moveExternBytes",
             "findSentinel",
             "getFactoryThunk",
             "runThunk",
@@ -275,14 +275,20 @@ const ModuleHost = struct {
         buffer_count -= 1;
     }
 
-    fn copyExternBytes(self: *@This(), view: Value, address: Value, len: Value) !void {
+    fn moveExternBytes(self: *@This(), view: Value, address: Value, to: Value) !void {
         const env = self.env;
-        const src_bytes: [*]const u8 = @ptrFromInt(try env.getValueUsize(address));
-        const src_len: usize = @intFromFloat(try env.getValueDouble(len));
-        const dst_len, const dest_opaque, _, _ = try env.getDataviewInfo(view);
-        const dst_bytes: [*]u8 = @ptrCast(dest_opaque);
-        if (dst_len != src_len) return error.LengthMismatch;
-        @memcpy(dst_bytes[0..src_len], src_bytes[0..src_len]);
+        const len, const js_opaque, _, _ = try env.getDataviewInfo(view) catch ta: {
+            _, const len, const ptr, const ab, const offset = try env.getTypedarrayInfo(view);
+            break :ta .{ len, ptr, ab, offset };
+        };
+        if (len > 0) {
+            const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
+            const js_bytes: [*]u8 = @ptrCast(js_opaque);
+            const zig_to_js = try env.getBoolean(to);
+            const src = if (zig_to_js) zig_bytes else js_bytes;
+            const dst = if (zig_to_js) js_bytes else zig_bytes;
+            @memcpy(dst[0..len], src[0..len]);
+        }
     }
 
     fn findSentinel(self: *@This(), address: Value, sentinel: Value) !Value {

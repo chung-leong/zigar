@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import {
-    ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag,
-    StructureFlag, StructurePurpose, StructureType
+  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, RETURN, SIZE, SLOTS, THROWING, YIELD, ZIG } from '../../src/symbols.js';
 import {
-    addressByteSize, addressSize, capture, captureError, delay, usize
+  addressByteSize, addressSize, capture, captureError, delay, usize
 } from '../test-utils.js';
 
 const Env = defineEnvironment();

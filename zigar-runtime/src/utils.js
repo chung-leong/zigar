@@ -154,23 +154,19 @@ export const isMisaligned = (process.env.BITS === '64')
 ? function(address, align) {
     return (align) ? !!(address & BigInt(align - 1)) : false;
   }
-: (process.env.BITS === '32')
-? function(address, align) {
+: function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
-  /* c8 ignore next */
-: undefined;
+;
 
 export const alignForward = (process.env.BITS === '64')
 ? function(address, align) {
     return (address + BigInt(align - 1)) & ~BigInt(align - 1);
   }
-: (process.env.BITS === '32')
-? function(address, align) {
+: function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-  /* c8 ignore next */
-: undefined;
+;
 
 export const usizeMin = (process.env.BITS === '64') ? 0n : 0;
 export const usizeMax = (process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
@@ -180,12 +176,12 @@ export const usize = (process.env.BITS === '64')
 ? function(arg) {
     return BigInt(arg);
   }
-: (process.env.BITS === '32')
-? function(arg) {
+: function(arg) {
     return Number(arg);
   }
-  /* c8 ignore next */
-: undefined;
+;
+
+export const usizeByteSize = (process.env.BITS === '64') ? 8 : 4;
 
 export const isInvalidAddress = (process.env.BITS === '64')
 ? function(address) {
@@ -308,6 +304,10 @@ export function decodeEnum(string, set) {
 export function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
+}
+
+export function createView(size) {
+  return new DataView(new ArrayBuffer(size));
 }
 
 export function getSelf() {

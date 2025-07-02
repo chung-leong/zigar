@@ -1,5 +1,6 @@
 
 import { mixin } from '../environment.js';
+import { createView } from '../utils.js';
 
 // handle unaligned ints and floats by copying the bits into a
 // temporary buffer, aligning them
@@ -9,7 +10,7 @@ export default mixin({
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
-    const buf = new DataView(new ArrayBuffer(byteSize));
+    const buf = createView(byteSize);
     if (access === 'get') {
       const getAligned = this.getAccessor('get', { ...member, byteSize });
       const copyBits = getBitAlignFunction(bitPos, bitSize, true);

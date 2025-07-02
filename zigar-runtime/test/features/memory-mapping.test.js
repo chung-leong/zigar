@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { MemoryType } from '../../src/features/memory-mapping.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import { ALIGN, COPY, MEMORY, ZIG } from '../../src/symbols.js';
 import { adjustAddress, defineProperty } from '../../src/utils.js';
 import { addressSize, usize } from '../test-utils.js';

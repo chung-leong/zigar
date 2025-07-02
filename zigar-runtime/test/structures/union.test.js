@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import {
-    MemberFlag, MemberType, PointerFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag,
-    VisitorFlag,
+  MemberFlag, MemberType, PointerFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag,
+  VisitorFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import '../../src/mixins-wasi.js';
+import '../../src/mixins.js';
 import {
-    ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT, ZIG,
+  ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, encodeBase64 } from '../../src/utils.js';
 import { usize } from '../test-utils.js';
